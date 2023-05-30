@@ -1,0 +1,61 @@
+<mxfile host="app.diagrams.net" modified="2023-05-10T15:43:51.596Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/112.0" etag="iwwIiZoPaD9gvphzgKfc" version="21.2.9" type="device">
+  <diagram name="Page-1" id="k6NqOKNg5OKlCDOoK9iQ">
+    <mxGraphModel dx="1224" dy="797" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-22" value="App" style="rounded=0;whiteSpace=wrap;html=1;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" vertex="1" parent="1">
+          <mxGeometry x="200" y="60" width="320" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-11" value="SDK" style="rounded=0;whiteSpace=wrap;html=1;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="170" width="300" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-14" value="&lt;div&gt;Translate data to/from storage format&lt;/div&gt;&lt;div&gt;and version&lt;br&gt;&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=classic;startFill=1;" edge="1" parent="1" source="m1k9peQSAi5fLtXwIl5u-8" target="m1k9peQSAi5fLtXwIl5u-13">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="360" y="370" />
+              <mxPoint x="360" y="370" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-8" value="Client" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="260" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="m1k9peQSAi5fLtXwIl5u-9" target="m1k9peQSAi5fLtXwIl5u-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-9" value="Store" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="380" y="180" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;startArrow=classic;startFill=1;" edge="1" parent="1" source="m1k9peQSAi5fLtXwIl5u-10" target="m1k9peQSAi5fLtXwIl5u-8">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-10" value="Event-Based Operator" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="220" y="180" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-13" value="Storage System (e.g. kubernetes API server)" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="410" width="320" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.137;exitY=1.033;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;startArrow=classic;startFill=1;exitPerimeter=0;" edge="1" parent="1" source="m1k9peQSAi5fLtXwIl5u-17" target="m1k9peQSAi5fLtXwIl5u-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-21" value="React to events" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="m1k9peQSAi5fLtXwIl5u-19">
+          <mxGeometry x="0.0909" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-20" value="Add/Update/Delete/List" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.9;exitY=1.017;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitPerimeter=0;" edge="1" parent="1" source="m1k9peQSAi5fLtXwIl5u-17" target="m1k9peQSAi5fLtXwIl5u-9">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="480" y="160" />
+              <mxPoint x="440" y="160" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="m1k9peQSAi5fLtXwIl5u-17" value="App Business Logic" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="210" y="70" width="300" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

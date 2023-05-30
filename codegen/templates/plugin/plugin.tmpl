@@ -1,0 +1,58 @@
+package plugin
+
+import (
+    "context"
+	"net/http"
+
+	"{{.Repo}}/pkg/plugin/secure"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
+	"github.com/grafana/grafana-app-sdk/plugin/router"
+)
+
+type Service interface { {{ range .Resources }}
+    Get{{ .Name }}Service(context.Context) ({{.Name}}Service, error){{end}}
+}
+
+// Plugin is the backend plugin
+type Plugin struct {
+	router      *router.JSONRouter
+	namespace   string
+	service     Service
+}
+
+// Start has the plugin's router start listening over gRPC, and blocks until an unrecoverable error occurs
+func (p *Plugin) Start() error {
+	return p.router.ListenAndServe()
+}
+
+func New(namespace string, service Service) (*Plugin, error) {
+	p := &Plugin{
+	    router: router.NewJSONRouter(log.DefaultLogger),
+			namespace: namespace,
+	    service: service,
+	}
+
+	p.router.Use(
+		kubeconfig.LoadingMiddleware(),
+		router.MiddlewareFunc(secure.Middleware))
+
+	// V1 Routes
+	v1Subrouter := p.router.Subroute("v1/")
+	{{ range .Resources }}
+	// {{.Name}} subrouter
+	{{.MachineName}}Subrouter := v1Subrouter.Subroute("{{.PluralMachineName}}/")
+	v1Subrouter.Handle("{{.PluralMachineName}}", p.handle{{.Name}}List, http.MethodGet)
+	v1Subrouter.HandleWithCode("{{.PluralMachineName}}", p.handle{{.Name}}Create, http.StatusCreated, http.MethodPost)
+	{{.MachineName}}Subrouter.Handle("{name}", p.handle{{.Name}}Get, http.MethodGet)
+	{{.MachineName}}Subrouter.Handle("{name}", p.handle{{.Name}}Update, http.MethodPut)
+	{{.MachineName}}Subrouter.HandleWithCode("{name}", p.handle{{.Name}}Delete, http.StatusNoContent, http.MethodDelete)
+	{{ end }}
+
+	return p, nil
+}
+
+type errWithStatusCode interface {
+	error
+	StatusCode() int
+}

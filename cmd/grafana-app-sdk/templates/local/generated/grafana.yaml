@@ -1,0 +1,165 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana
+  namespace: default
+---
+{{ range $.CRDs }}apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana:{{.MachineName}}-user-rolebinding
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{.MachineName}}-user
+subjects:
+  - kind: ServiceAccount
+    name: grafana
+    namespace: default
+---
+{{end}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: default
+  labels:
+    name: grafana
+data:
+  grafana.ini: "[analytics]\nreporting_enabled = false\n[auth.anonymous]\nenabled = true\norg_role = Admin\n[log.frontend]\nenabled
+     = true\n[plugins]\nallow_loading_unsigned_plugins = {{.PluginID}}\n[server]\nhttp_port = 3000\nroot_url = \nrouter_logging
+     = true\n[unified_alerting]\nenabled = true\n[users]\ndefault_theme = dark\n"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{.PluginIDKube}}-provisioning
+  namespace: default
+  labels:
+    name: grafana
+data:
+  gas-local-env-app-app.yaml: |
+    apiVersion: 1
+    apps:
+      - type: {{.PluginID}}
+        org_id: 1
+        org_name: Main Org.
+        disabled: false
+        jsonData:{{ range $key, $value := .JSONData }}
+          {{ $key }}: {{ $value }}{{end}}
+        secureJsonData:{{ range $key, $value := .SecureJSONData }}
+          {{ $key }}: {{ $value }}{{end}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: default
+  labels:
+    name: grafana
+spec:
+  ports:
+    - name: grafana-grafana-metrics
+      port: 3000
+      targetPort: 3000
+    - name: http
+      port: 80
+      targetPort: 3000
+  selector:
+    name: grafana
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: grafana
+  template:
+    metadata:
+      labels:
+        name: grafana
+    spec:
+      containers:
+        - env:
+            - name: GF_INSTALL_PLUGINS
+            - name: GF_PATHS_CONFIG
+              value: /etc/grafana-config/grafana.ini
+          image: grafana/grafana-enterprise:8.4.5
+          imagePullPolicy: IfNotPresent
+          name: grafana
+          ports:
+            - containerPort: 3000
+              name: grafana-metrics
+          resources:
+            requests:
+              cpu: 10m
+              memory: 40Mi
+          volumeMounts:
+            - mountPath: /etc/grafana-config
+              name: grafana-config
+            - mountPath: /etc/grafana/provisioning/plugins
+              name: {{.PluginIDKube}}-provisioning
+            - mountPath: /var/lib/grafana/plugins/{{.PluginID}}
+              name: {{.PluginIDKube}}
+              readOnly: true
+            - mountPath: /etc/grafana/provisioning/datasources
+              name: grafana-datasources
+      serviceAccount: grafana
+      volumes:
+        - configMap:
+            name: grafana-config
+          name: grafana-config
+        - configMap:
+            name: {{.PluginIDKube}}-provisioning
+          name: {{.PluginIDKube}}-provisioning
+        - hostPath:
+            path: /tmp/k3d/mounted-files/plugin/dist
+          name: {{.PluginIDKube}}
+        - configMap:
+            name: grafana-datasources
+          name: grafana-datasources
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana-ingress
+  namespace: default
+spec:
+  rules:
+    - host: grafana.k3d.localhost
+      http:
+        paths:
+          - backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  labels:
+    name: grafana
+  name: grafana-datasources
+  namespace: default
+data:
+  Cortex.yml: |
+    apiVersion: 1
+    datasources:{{ range .Datasources }}
+        - access: {{.Access}}
+          editable: false
+          isDefault: {{.IsDefault}}
+          name: {{.Name}}
+          type: {{.Type}}
+          uid: {{.UID}}
+          url: {{.URL}}
+          version: 1{{end}}

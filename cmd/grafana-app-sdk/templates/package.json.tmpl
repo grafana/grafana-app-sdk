@@ -1,0 +1,40 @@
+{
+  "name": "{{.PluginName}}",
+  "version": "1.0.0",
+  "description": "{{.PluginName}}",
+  "scripts": {
+    "build": "grafana-toolkit plugin:build",
+    "test": "grafana-toolkit plugin:test",
+    "dev": "grafana-toolkit plugin:dev",
+    "watch": "grafana-toolkit plugin:dev --watch",
+    "sign": "grafana-toolkit plugin:sign",
+    "start": "yarn watch"
+  },
+  "author": "{{.PluginAuthor}}",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@grafana/data": "latest",
+    "@grafana/runtime": "latest",
+    "@grafana/toolkit": "latest",
+    "@grafana/ui": "latest",
+    "@types/lodash": "latest",
+    "@types/react": "^18.0.25",
+    "@types/react-router-dom": "^5.3.3",
+    "@types/uuid": "^8.3.4",
+    "prettier": "^2.5.1"
+  },
+  "dependencies": {
+    "@emotion/css": "^11.10.5",
+    "@grafana/data": "latest",
+    "@grafana/runtime": "latest",
+    "@grafana/ui": "latest",
+    "react": "17.0.2",
+    "react-dom": "17.0.2"
+  },
+  "resolutions": {
+    "rxjs": "7.5.6"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}

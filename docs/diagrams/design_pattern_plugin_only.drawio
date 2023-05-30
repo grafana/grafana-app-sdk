@@ -1,0 +1,54 @@
+<mxfile host="app.diagrams.net" modified="2023-05-23T19:46:14.353Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/113.0" etag="EM9TFyQ7kwp_tZRS4VR2" version="21.2.9" type="device">
+  <diagram name="Page-1" id="_qVOIC-qQzXSMaZPwBjb">
+    <mxGraphModel dx="1224" dy="756" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="nUGaBGL7-HPu7o74AodA-1" value="Grafana" style="rounded=0;whiteSpace=wrap;html=1;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" parent="1" vertex="1">
+          <mxGeometry x="40" y="180" width="270" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-3" value="Plugin Backend" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="200" y="190" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-4" value="Plugin Frontend" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="50" y="190" width="100" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-5" value="Storage System (ex. kubernetes CRDs)" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="40" y="320" width="270" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-7" value="&lt;div&gt;Create/Read/Update/Delete/List&lt;/div&gt;&lt;div&gt;Resources (kinds)&lt;br&gt;&lt;/div&gt;" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.778;entryY=0.05;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-3" target="nUGaBGL7-HPu7o74AodA-5" edge="1">
+          <mxGeometry x="0.1103" y="-20" width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="310" y="460" as="sourcePoint" />
+            <mxPoint x="240" y="320" as="targetPoint" />
+            <Array as="points" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-8" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" parent="1" vertex="1">
+          <mxGeometry x="85" y="60" width="30" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-9" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-8" target="nUGaBGL7-HPu7o74AodA-4" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="-60" y="380" as="sourcePoint" />
+            <mxPoint x="-10" y="330" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-11" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-3" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="410" y="160" as="sourcePoint" />
+            <mxPoint x="250" y="140" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-12" value="&lt;div&gt;Other Services&lt;/div&gt;&lt;div&gt;(or Grafana APIs)&lt;br&gt;&lt;/div&gt;" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="190" y="60" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-13" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-4" target="nUGaBGL7-HPu7o74AodA-3" edge="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="120" y="310" as="sourcePoint" />
+            <mxPoint x="170" y="260" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

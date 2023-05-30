@@ -1,0 +1,7 @@
+apiVersion: example.grafana.com/v1
+kind: BasicCustomResource
+metadata:
+  name: "test-resource"
+spec:
+  numField: 2
+  stringField: "foo"

@@ -1,0 +1,68 @@
+<mxfile host="app.diagrams.net" modified="2023-05-24T11:57:03.619Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/113.0" etag="8RopYb8iE9iG-ysHZ65I" version="21.2.9" type="device">
+  <diagram name="Page-1" id="_qVOIC-qQzXSMaZPwBjb">
+    <mxGraphModel dx="1166" dy="759" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="nUGaBGL7-HPu7o74AodA-2" value="Operator" style="rounded=0;whiteSpace=wrap;html=1;labelPosition=center;verticalLabelPosition=top;align=center;verticalAlign=bottom;" parent="1" vertex="1">
+          <mxGeometry x="330" y="180" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-5" value="Kubernetes API Server" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="240" y="320" width="340" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-10" value="&lt;div&gt;Notify Create/Update/Delete events&lt;/div&gt;&lt;div&gt;for any kinds, make changes&lt;br&gt;&lt;/div&gt;" style="endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;exitX=0.865;exitY=-0.079;exitDx=0;exitDy=0;exitPerimeter=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-5" target="nUGaBGL7-HPu7o74AodA-16" edge="1">
+          <mxGeometry x="0.0871" y="-15" width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="410" y="300" as="sourcePoint" />
+            <mxPoint x="580" y="390" as="targetPoint" />
+            <Array as="points" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-12" value="&lt;div&gt;Other Services&lt;/div&gt;&lt;div&gt;(or Grafana APIs)&lt;br&gt;&lt;/div&gt;" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="470" y="60" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-14" value="Admission Webhooks" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="340" y="190" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-15" value="Version Resolution Webhook" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="420" y="190" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.55;entryY=0.95;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-16" target="nUGaBGL7-HPu7o74AodA-12" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-16" value="Operator Loop" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="500" y="190" width="70" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-17" value="&lt;div&gt;Admission control&lt;/div&gt;&lt;div&gt;for owned kinds&lt;br&gt;&lt;/div&gt;" style="endArrow=classic;html=1;rounded=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" parent="1" target="nUGaBGL7-HPu7o74AodA-14" edge="1">
+          <mxGeometry x="0.1429" width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="375" y="320" as="sourcePoint" />
+            <mxPoint x="420" y="270" as="targetPoint" />
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.204;entryY=0.048;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="nUGaBGL7-HPu7o74AodA-19" target="nUGaBGL7-HPu7o74AodA-5" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-21" value="&lt;div&gt;Create/Read/Update/Delete/List&lt;/div&gt;&lt;div&gt;Resources (kinds)&lt;br&gt;&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" parent="nUGaBGL7-HPu7o74AodA-20" vertex="1" connectable="0">
+          <mxGeometry x="-0.77" relative="1" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="nUGaBGL7-HPu7o74AodA-19" value="User or Kubernetes Tooling" style="rounded=1;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+          <mxGeometry x="250" y="60" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="tuZybpgw1pK41obiuJkq-1" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.629;exitY=0.001;exitDx=0;exitDy=0;exitPerimeter=0;" edge="1" parent="1" source="nUGaBGL7-HPu7o74AodA-5" target="nUGaBGL7-HPu7o74AodA-2">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="690" y="290" as="sourcePoint" />
+            <mxPoint x="740" y="240" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="tuZybpgw1pK41obiuJkq-2" value="&lt;div&gt;Version conversion&lt;/div&gt;&lt;div&gt;for owned kinds&lt;br&gt;&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="tuZybpgw1pK41obiuJkq-1">
+          <mxGeometry x="-0.4914" y="-2" relative="1" as="geometry">
+            <mxPoint x="-6" as="offset" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

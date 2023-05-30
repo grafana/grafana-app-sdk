@@ -1,0 +1,77 @@
+package main
+
+import (
+    "os"
+    "os/signal"
+    "syscall"
+
+    {{$repo := .Repo}}{{$codegenPath := .CodegenPath}}{{ range .Resources }}
+	"{{$repo}}/{{$codegenPath}}/resource/{{.MachineName}}"{{ end}}{{ if ne .WatcherPackage "" }}
+	"{{$repo}}/pkg/{{.WatcherPackage}}"{{end}}
+
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/k8s"
+)
+
+func main() {
+    // Load the kube config
+    kubeConfig, err := LoadInClusterConfig()
+    if err != nil {
+        panic(err)
+    }
+
+    // Create our client generator, using kubernetes as a store
+    clientGenerator := k8s.NewClientRegistry(kubeConfig.RestConfig, k8s.ClientConfig{})
+
+    // Create the controller which we'll attach our informer(s) and watcher(s) to
+    controller := operator.NewInformerController()
+
+    // Wrap our resource watchers in OpinionatedWatchers, then add them to the controller
+    {{ $p := .WatcherPackage }}{{ range .Resources }}{{.MachineName}}Client, err := clientGenerator.ClientFor({{.MachineName}}.Schema())
+    if err != nil {
+        panic(err)
+    }
+    {{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Name}}Watcher()
+    if err != nil {
+        panic(err)
+    }
+    {{.MachineName}}OpinionatedWatcher, err := operator.NewOpinionatedWatcher({{.MachineName}}.Schema(), {{.MachineName}}Client)
+    if err != nil {
+        panic(err)
+    }
+    {{.MachineName}}OpinionatedWatcher.Wrap({{.MachineName}}Watcher, false)
+    {{.MachineName}}OpinionatedWatcher.SyncFunc = {{.MachineName}}Watcher.Sync
+    err = controller.AddWatcher({{.MachineName}}OpinionatedWatcher, {{.MachineName}}.Schema().Kind())
+    if err != nil {
+        panic(err)
+    }
+    {{ end }}
+
+    // Add informers for each of our resource types
+    {{ range .Resources }}{{.MachineName}}Informer, err := operator.NewKubernetesBasedInformer({{.MachineName}}.Schema(), {{.MachineName}}Client, kubeConfig.Namespace)
+    if err != nil {
+        panic(err)
+    }
+    err = controller.AddInformer({{.MachineName}}Informer, {{.MachineName}}.Schema().Kind())
+    if err != nil {
+        panic(err)
+    }
+    {{ end }}
+
+    // Create our operator
+    op := operator.New()
+    op.AddController(controller)
+
+    stopCh := make(chan struct{})
+
+    // Signal channel
+    sigCh := make(chan os.Signal, 1)
+    signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+    go func() {
+        <- sigCh
+        stopCh <- struct{}{}
+    }()
+
+    // Run
+    op.Run(stopCh)
+}

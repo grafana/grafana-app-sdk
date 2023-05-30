@@ -1,0 +1,235 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cortex-config
+  namespace: default
+data:
+  config.yaml: |
+    # Configuration for running Cortex in single-process mode.
+    # This configuration should not be used in production.
+    # It is only for getting started and development.
+
+    # Disable the requirement that every request to Cortex has a
+    # X-Scope-OrgID header. `fake` will be substituted in instead.
+    auth_enabled: false
+
+    server:
+      http_listen_port: 9009
+      grpc_listen_port: 9095
+
+      # Configure the server to allow messages up to 100MB.
+      grpc_server_max_recv_msg_size: 104857600
+      grpc_server_max_send_msg_size: 104857600
+      grpc_server_max_concurrent_streams: 1000
+
+    distributor:
+      shard_by_all_labels: true
+      pool:
+        health_check_ingesters: true
+
+    ingester_client:
+      grpc_client_config:
+        # Configure the client to allow messages up to 100MB.
+        max_recv_msg_size: 104857600
+        max_send_msg_size: 104857600
+        grpc_compression: gzip
+
+    ingester:
+      # We want our ingesters to flush chunks at the same time to optimise
+      # deduplication opportunities.
+      spread_flushes: true
+      chunk_age_jitter: 0
+
+      walconfig:
+        wal_enabled: true
+        recover_from_wal: true
+        wal_dir: /tmp/cortex/wal
+
+      lifecycler:
+        # The address to advertise for this ingester.  Will be autodiscovered by
+        # looking up address on eth0 or en0; can be specified if this fails.
+        # address: 127.0.0.1
+
+        # We want to start immediately and flush on shutdown.
+        join_after: 0
+        min_ready_duration: 0s
+        final_sleep: 0s
+        num_tokens: 512
+        tokens_file_path: /tmp/cortex/wal/tokens
+
+        # Use an in memory ring store, so we don't need to launch a Consul.
+        ring:
+          kvstore:
+            store: inmemory
+          replication_factor: 1
+
+    storage:
+      engine: blocks
+
+    blocks_storage:
+      tsdb:
+        dir: /tmp/cortex/tsdb
+      bucket_store:
+        sync_dir: /tmp/cortex/tsdb-sync
+
+      backend: filesystem
+      filesystem:
+        dir: /tmp/cortex/blocks
+
+    purger:
+      object_store_type: filesystem
+
+    frontend_worker:
+      # Configure the frontend worker in the querier to match worker count
+      # to max_concurrent on the queriers.
+      match_max_concurrent: true
+
+    # Configure the ruler to scan the /tmp/cortex/rules directory for prometheus
+    # rules: https://prometheus.io/docs/prometheus/latest/configuration/recording_rules/#recording-rules
+    ruler:
+      enable_api: true
+      enable_sharding: false
+      storage:
+        type: s3
+        s3:
+          s3: http://minio:minio123@minio.default.svc.cluster.local:9000
+          bucketnames: cortex
+          s3forcepathstyle: true
+
+    querier:
+      at_modifier_enabled: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: cortex
+  name: cortex
+  namespace: default
+spec:
+  ports:
+    - name: cortex-http
+      port: 9009
+      targetPort: 9009
+    - name: cortex-grpc
+      port: 9095
+      targetPort: 9095
+  selector:
+    name: cortex
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cortex
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: cortex
+  template:
+    metadata:
+      annotations:
+        cortex-config-hash: 128d9bf6025033e3552baff9d5bb7715
+      labels:
+        name: cortex
+    spec:
+      containers:
+        - args:
+            - -config.file=/etc/cortex/config.yaml
+          env:
+            - name: JAEGER_AGENT_HOST
+              value: tempo
+            - name: JAEGER_ENDPOINT
+              value: http://agent.default.svc.cluster.local:14268/api/traces
+            - name: JAEGER_SAMPLER_TYPE
+              value: const
+            - name: JAEGER_SAMPLER_PARAM
+              value: "1"
+          image: cortexproject/cortex:v1.9.0
+          imagePullPolicy: IfNotPresent
+          name: cortex
+          ports:
+            - containerPort: 9009
+              name: http
+            - containerPort: 9095
+              name: grpc
+          volumeMounts:
+            - mountPath: /etc/cortex
+              name: cortex-config
+      volumes:
+        - configMap:
+            name: cortex-config
+          name: cortex-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: minio
+  name: minio
+  namespace: default
+spec:
+  ports:
+    - name: minio-minio
+      port: 9000
+      targetPort: 9000
+  selector:
+    name: minio
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: minio
+  template:
+    metadata:
+      labels:
+        name: minio
+    spec:
+      containers:
+        - args:
+            - mkdir -p /data/cortex && mkdir -p /data/loki && /usr/bin/minio server /data
+          command:
+            - /bin/bash
+            - -c
+          env:
+            - name: MINIO_ACCESS_KEY
+              value: minio
+            - name: MINIO_SECRET_KEY
+              value: minio123
+            - name: MINIO_PROMETHEUS_AUTH_TYPE
+              value: public
+          image: minio/minio:RELEASE.2021-06-07T21-40-51Z
+          imagePullPolicy: IfNotPresent
+          name: minio
+          ports:
+            - containerPort: 9000
+              name: minio
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cortex-ingress
+  namespace: default
+spec:
+  rules:
+    - host: cortex.k3d.localhost
+      http:
+        paths:
+          - backend:
+              service:
+                name: cortex
+                port:
+                  number: 9009
+            path: /
+            pathType: Prefix
