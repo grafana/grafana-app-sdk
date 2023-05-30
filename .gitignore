@@ -1,4 +1,4 @@
-i# Binaries for programs and plugins
+# Binaries for programs and plugins
 *.exe
 *.exe~
 *.dll
