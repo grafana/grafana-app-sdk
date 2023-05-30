@@ -102,7 +102,7 @@ If you use the generated code, you must take a project dependency on [thema](htt
 ## Further Reading
 
 Please see the [/docs](docs/README.md) directory for full documentation,
-or take a look at the [SDK Use Cases](docs/use-cases.md), [Kubernetes Concepts](docs/kubernetes.md), or [FAQ](docs/faq.md) for high-level overviews.
+or take a look at the [Design Patterns](docs/design-patterns.md), [Kubernetes Concepts](docs/kubernetes.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
 
 The `examples` directory contains runnable example projects that use different SDK components.
 
