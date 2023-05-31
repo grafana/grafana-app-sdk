@@ -21,7 +21,7 @@ vendor/
 target/**
 
 # Vendored dependencies
-# vendor/
+vendor/
 
 # gorelease dist dir
 dist/
