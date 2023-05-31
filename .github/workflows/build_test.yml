@@ -1,0 +1,31 @@
+name: PR
+
+on:
+  push:
+    branches: [ $default-branch ]
+  pull_request:
+    branches: [ $default-branch ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.20
+    
+    - name: Vendor
+      run: go mod vendor
+
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+
+    - name: Build
+      run: go build -v cmd/grafana-app-sdk/*.go
+
+    - name: Test
+      run: go test -v ./...
