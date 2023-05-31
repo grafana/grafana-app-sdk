@@ -12,7 +12,7 @@
 *.out
 
 # Dependency directories (remove the comment below to include it)
-# vendor/
+vendor/
 
 # IDE files
 .idea
@@ -21,7 +21,7 @@
 target/**
 
 # Vendored dependencies
-vendor/
+# vendor/
 
 # gorelease dist dir
 dist/
