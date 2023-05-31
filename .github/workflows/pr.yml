@@ -9,8 +9,21 @@ on:
     - main
 
 jobs:
-
-  lint_build_test:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/setup-go@v4
+      with:
+        go-version: '1.20'
+        cache: false
+    - uses: actions/checkout@v3
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --timeout 3m
+  
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -19,15 +32,6 @@ jobs:
       uses: actions/setup-go@v3
       with:
         go-version: "1.20"
-    
-    - name: Vendor
-      run: go mod vendor
-
-    - name: golangci-lint
-      uses: golangci/golangci-lint-action@v3
-      with:
-        version: latest
-        args: --timeout 3m --verbose
 
     - name: Build
       run: go build -v cmd/grafana-app-sdk/*.go
