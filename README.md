@@ -1,6 +1,7 @@
 # grafana-app-sdk
 
-![Build Status](https://github.com/IfSentient/grafana-app-sdk/actions/workflows/main.yml/badge.svg)
+![Build Status](https://github.com/IfSentient/grafana-app-sdk/actions/workflows/main.yml/badge.svg) 
+![Release Status](https://github.com/IfSentient/grafana-app-sdk/actions/workflows/release.yml/badge.svg)
 
 <hr/>
 
