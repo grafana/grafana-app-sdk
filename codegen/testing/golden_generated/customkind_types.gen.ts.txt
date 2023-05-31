@@ -1,34 +1,34 @@
-interface InnerObject1 {
+export interface InnerObject1 {
   innerField1: string;
   innerField2: string[];
   innerField3: Array<InnerObject2>;
 }
 
-const defaultInnerObject1: Partial<InnerObject1> = {
+export const defaultInnerObject1: Partial<InnerObject1> = {
   innerField2: [],
   innerField3: [],
 };
 
-interface InnerObject2 {
+export interface InnerObject2 {
   details: Record<string, unknown>;
   name: string;
 }
 
-interface Type1 {
+export interface Type1 {
   group: string;
   options?: string[];
 }
 
-const defaultType1: Partial<Type1> = {
+export const defaultType1: Partial<Type1> = {
   options: [],
 };
 
-interface Type2 {
+export interface Type2 {
   details: Record<string, unknown>;
   group: string;
 }
 
-type UnionType = (Type1 | Type2);
+export type UnionType = (Type1 | Type2);
 
 export interface CustomKind {
   /**

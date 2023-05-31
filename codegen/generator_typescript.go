@@ -29,6 +29,7 @@ func (j TSTypesJenny) Generate(decl kindsys.Custom) (*codejen.File, error) {
 		Group:    false,
 		CuetsyConfig: &cuetsy.Config{
 			ImportMapper: cuetsy.IgnoreImportMapper,
+			Export:       true,
 		},
 	})
 	if err != nil {
