@@ -1,5 +1,7 @@
 # grafana-app-sdk
 
+![Build Status](https://github.com/IfSentient/grafana-app-sdk/actions/workflows/main.yml/badge.svg)
+
 <hr/>
 
 **This repository is currently *experimental*, which means that interfaces and behavior may change as it evolves.**
