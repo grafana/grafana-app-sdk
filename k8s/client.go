@@ -2,15 +2,8 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"reflect"
-	"strings"
-	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -221,108 +214,6 @@ func (c *Client) Watch(ctx context.Context, namespace string, options resource.W
 // RESTClient returns the underlying rest.Interface used to communicate with kubernetes
 func (c *Client) RESTClient() rest.Interface {
 	return c.client.client
-}
-
-type convertedObject struct {
-	metav1.TypeMeta `json:",inline"`
-	Metadata        metav1.ObjectMeta `json:"metadata"`
-	Spec            any               `json:"spec"`
-	Status          any               `json:"status,omitempty"`
-	Scale           any               `json:"scale,omitempty"`
-}
-
-func marshalJSON(obj resource.Object, extraLabels map[string]string, cfg ClientConfig) ([]byte, error) {
-	co := convertedObject{
-		TypeMeta: metav1.TypeMeta{
-			Kind: obj.StaticMetadata().Kind,
-			APIVersion: schema.GroupVersion{
-				Group:   obj.StaticMetadata().Group,
-				Version: obj.StaticMetadata().Version,
-			}.Identifier(),
-		},
-		Metadata: getV1ObjectMeta(obj, cfg),
-		Spec:     obj.SpecObject(),
-	}
-	if co.Metadata.Labels == nil {
-		co.Metadata.Labels = make(map[string]string)
-	}
-	for k, v := range extraLabels {
-		co.Metadata.Labels[k] = v
-	}
-
-	// Status and Scale subresources, if applicable
-	if status, ok := obj.Subresources()[string(resource.SubresourceStatus)]; ok {
-		co.Status = status
-	}
-	if scale, ok := obj.Subresources()[string(resource.SubresourceScale)]; ok {
-		co.Scale = scale
-	}
-
-	return json.Marshal(co)
-}
-
-func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
-	cMeta := obj.CommonMetadata()
-	meta := metav1.ObjectMeta{
-		Name:            obj.StaticMetadata().Name,
-		Namespace:       obj.StaticMetadata().Namespace,
-		UID:             types.UID(cMeta.UID),
-		ResourceVersion: cMeta.ResourceVersion,
-		Labels:          cMeta.Labels,
-		Finalizers:      cMeta.Finalizers,
-		Annotations:     make(map[string]string),
-	}
-	// Rest of the metadata in ExtraFields
-	for k, v := range cMeta.ExtraFields {
-		switch strings.ToLower(k) {
-		case "generation": // TODO: should generation be non-implementation-specific metadata?
-			if i, ok := v.(int64); ok {
-				meta.Generation = i
-			}
-			if i, ok := v.(int); ok {
-				meta.Generation = int64(i)
-			}
-		case "ownerReferences":
-			if o, ok := v.([]metav1.OwnerReference); ok {
-				meta.OwnerReferences = o
-			}
-		case "managedFields":
-			if m, ok := v.([]metav1.ManagedFieldsEntry); ok {
-				meta.ManagedFields = m
-			}
-		}
-	}
-	// Common metadata which isn't a part of kubernetes metadata
-	meta.Annotations["createdBy"] = cMeta.CreatedBy
-	meta.Annotations["updatedBy"] = cMeta.UpdatedBy
-	meta.Annotations["updatedTimestamp"] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
-
-	// The non-common metadata needs to be converted into annotations
-	for k, v := range obj.CustomMetadata().MapFields() {
-		if cfg.CustomMetadataIsAnyType {
-			meta.Annotations[annotationPrefix+k] = toString(v)
-		} else {
-			meta.Annotations[annotationPrefix+k] = v.(string)
-		}
-	}
-
-	return meta
-}
-
-func toString(t any) string {
-	v := reflect.ValueOf(t)
-	for v.Kind() == reflect.Ptr {
-		v = v.Elem()
-	}
-	switch v.Kind() {
-	case reflect.String, reflect.Int, reflect.Int32, reflect.Int64, reflect.Float32, reflect.Float64, reflect.Bool:
-		return fmt.Sprintf("%v", v.Interface())
-	case reflect.Chan, reflect.Func, reflect.UnsafePointer:
-		return "" // Invalid kind to encode
-	default:
-		bytes, _ := json.Marshal(t)
-		return string(bytes)
-	}
 }
 
 type listImpl struct {
