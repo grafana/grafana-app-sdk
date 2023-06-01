@@ -7,10 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type k8sObject struct {
@@ -26,8 +27,6 @@ type k8sListWithItems struct {
 	Metadata        metav1.ListMeta   `json:"metadata"`
 	Items           []json.RawMessage `json:"items"`
 }
-
-var nilRO resource.Object = nil
 
 // this is janky
 //
