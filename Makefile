@@ -9,7 +9,7 @@ COVOUT  := coverage.out
 
 BIN_DIR := target
 
-all: deps lint test build drone
+all: deps lint test build
 
 deps: $(GOSUM)
 $(GOSUM): $(SOURCES) $(GOMOD)
@@ -34,25 +34,9 @@ test:
 coverage: test
 	go tool cover -html=$(COVOUT)
 
-DRONE_YAML    := .drone.yml
-DRONE_JSONNET := .drone/drone.jsonnet
-DRONE_FILES   := $(shell find .drone -type f)
-DRONE_DOCKER  := @docker run --rm -e DRONE_SERVER -e DRONE_TOKEN -v ${PWD}:${PWD} -w "${PWD}" us.gcr.io/kubernetes-dev/drone-cli:1.4.0 drone
-
-$(JSONNET_FMT): $(DRONE_FILES)
-	@jsonnetfmt -i $^
-	@touch $@
-
-$(DRONE_YAML): $(DRONE_FILES)
-	$(DRONE_DOCKER) jsonnet --format --stream --source $(DRONE_JSONNET) --target $@
-	$(DRONE_DOCKER) sign grafana/grafana-app-sdk --save
-
-drone: $(JSONNET_FMT) $(DRONE_YAML)
-
 .PHONY: clean
 clean:
 	@rm -f $(COVOUT)
-	@rm -f $(DRONE_YAML)
 	@rm -rf $(VENDOR)
 
 .PHONY: build

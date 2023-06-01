@@ -1,0 +1,33 @@
+# Make sure to check the documentation at https://goreleaser.com
+project_name: grafana-app-sdk
+before:
+  hooks:
+    # TODO:
+    # We currently don't use code generation in the SDK itself
+    # but we do use it in the examples and that breaks since it requires
+    # the SDK binary to be present in the first place.
+    # - go generate ./...
+    - go mod tidy
+builds:
+  - id: grafana-app-sdk
+    binary: grafana-app-sdk
+    main: ./cmd/grafana-app-sdk
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'

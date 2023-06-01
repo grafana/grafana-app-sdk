@@ -27,14 +27,6 @@ type Schema interface {
 	ZeroValue() Object
 	// Scope returns the scope of the schema object
 	Scope() SchemaScope
-	/**
-	For future (use Thema in implementation):
-	// AllVersions returns a list of all versions of this Schema that can be converted into this one
-	AllVersions() []string
-	// FromRaw takes in an Object where the spec and subresources are in JSON-encoded []byte form,
-	// and returns an Object which is converted to this version.
-	FromRaw(raw Object, version string) (Object, error)
-	*/
 }
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
