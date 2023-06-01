@@ -30,7 +30,7 @@ type k8sListWithItems struct {
 
 // this is janky
 //
-//nolint:funlen
+// nolint:funlen
 func rawToObject(raw []byte, into resource.Object) error {
 	if into == nil {
 		return fmt.Errorf("into cannot be nil")
