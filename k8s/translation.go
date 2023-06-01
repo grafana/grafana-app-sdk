@@ -119,11 +119,8 @@ func rawToListWithParser(raw []byte, into resource.ListObject, itemParser func([
 	if err != nil {
 		return err
 	}
-	into.SetListMetadata(resource.ListMetadata{
-		ResourceVersion:    um.Metadata.ResourceVersion,
-		Continue:           um.Metadata.Continue,
-		RemainingItemCount: um.Metadata.RemainingItemCount,
-	})
+	// Attempt to parse all items in the list before setting the parsed metadata,
+	// as the parser could return an error, and we don't want to _partially_ unmarshal the list (just metadata) into `into`
 	items := make([]resource.Object, 0)
 	for _, item := range um.Items {
 		parsed, err := itemParser(item)
@@ -132,6 +129,11 @@ func rawToListWithParser(raw []byte, into resource.ListObject, itemParser func([
 		}
 		items = append(items, parsed)
 	}
+	into.SetListMetadata(resource.ListMetadata{
+		ResourceVersion:    um.Metadata.ResourceVersion,
+		Continue:           um.Metadata.Continue,
+		RemainingItemCount: um.Metadata.RemainingItemCount,
+	})
 	into.SetItems(items)
 	return nil
 }

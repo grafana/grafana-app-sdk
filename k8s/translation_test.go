@@ -159,7 +159,80 @@ func TestRawToObject(t *testing.T) {
 }
 
 func TestRawToListWithParser(t *testing.T) {
+	ric := int64(2)
+	completeList := k8sListWithItems{
+		TypeMeta: metav1.TypeMeta{},
+		Metadata: metav1.ListMeta{
+			ResourceVersion:    "12345",
+			Continue:           "abc",
+			RemainingItemCount: &ric,
+		},
+		Items: []json.RawMessage{[]byte(`["a"]`), []byte(`["b"]`), []byte(`["c"]`)},
+	}
+	completeListJSON, _ := json.Marshal(completeList)
 
+	tests := []struct {
+		name          string
+		raw           []byte
+		into          resource.ListObject
+		parser        func([]byte) (resource.Object, error)
+		expectedList  resource.ListObject
+		expectedError error
+	}{
+		// TODO: add nil param test cases if this method becomes exported (possibility in the future)
+		{
+			name: "parser error",
+			raw:  completeListJSON,
+			into: &listImpl{},
+			parser: func(bytes []byte) (resource.Object, error) {
+				return nil, fmt.Errorf("I AM ERROR")
+			},
+			expectedList:  &listImpl{},
+			expectedError: fmt.Errorf("I AM ERROR"),
+		},
+		{
+			name: "success",
+			raw:  completeListJSON,
+			into: &listImpl{},
+			parser: func(bytes []byte) (resource.Object, error) {
+				// We're not testing the unmarshal of the objects, so let's just put the raw bytes of the list item
+				// into the spec of a simpleobject. We can check against a SimpleObject with a spec of the bytes
+				// in our expectedList.Items
+				return &resource.SimpleObject[[]byte]{
+					Spec: bytes,
+				}, nil
+			},
+			expectedList: &listImpl{
+				lmd: resource.ListMetadata{
+					ResourceVersion:    completeList.Metadata.ResourceVersion,
+					Continue:           completeList.Metadata.Continue,
+					RemainingItemCount: completeList.Metadata.RemainingItemCount,
+				},
+				items: []resource.Object{
+					&resource.SimpleObject[[]byte]{
+						Spec: []byte(`["a"]`),
+					}, &resource.SimpleObject[[]byte]{
+						Spec: []byte(`["b"]`),
+					}, &resource.SimpleObject[[]byte]{
+						Spec: []byte(`["c"]`),
+					},
+				},
+			},
+			expectedError: nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := rawToListWithParser(test.raw, test.into, test.parser)
+			assert.Equal(t, test.expectedError, err)
+			assert.Equal(t, test.expectedList.ListMetadata(), test.into.ListMetadata())
+			// Compare list items as JSON, as the lists are slices of pointers and will be unequal
+			expectedJSON, _ := json.Marshal(test.expectedList.ListItems())
+			actualJSON, _ := json.Marshal(test.into.ListItems())
+			assert.JSONEq(t, string(expectedJSON), string(actualJSON))
+		})
+	}
 }
 
 type testKubernetesObject struct {
