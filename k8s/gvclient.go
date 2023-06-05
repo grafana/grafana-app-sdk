@@ -153,7 +153,7 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 //nolint:revive,unused
 func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Identifier, plural string,
 	patch resource.PatchRequest, into resource.Object, _ resource.PatchOptions) error {
-	bytes, err := json.Marshal(patch.Operations)
+	bytes, err := marshalJSONPatch(patch)
 	if err != nil {
 		return err
 	}

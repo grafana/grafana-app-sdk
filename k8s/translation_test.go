@@ -313,6 +313,128 @@ func TestMarshalJSON(t *testing.T) {
 	}
 }
 
+func TestMarshalJSONPatch(t *testing.T) {
+	tests := []struct {
+		name          string
+		patch         resource.PatchRequest
+		expectedJSON  []byte
+		expectedError error
+	}{
+		{
+			name:          "empty request",
+			patch:         resource.PatchRequest{},
+			expectedJSON:  []byte("null"),
+			expectedError: nil,
+		},
+		{
+			name: "zero-length operations",
+			patch: resource.PatchRequest{
+				Operations: []resource.PatchOperation{},
+			},
+			expectedJSON:  []byte("[]"),
+			expectedError: nil,
+		},
+		{
+			name: "try to replace entire metadata object",
+			patch: resource.PatchRequest{
+				Operations: []resource.PatchOperation{
+					{
+						Path:      "/metadata",
+						Operation: resource.PatchOpReplace,
+					},
+				},
+			},
+			expectedJSON:  nil,
+			expectedError: fmt.Errorf("cannot patch entire metadata object"),
+		},
+		{
+			name: "non-kubernetes metadata keys",
+			patch: resource.PatchRequest{
+				Operations: []resource.PatchOperation{
+					{
+						Path:      "/metadata/createdBy",
+						Operation: resource.PatchOpReplace,
+						Value:     "foo",
+					}, {
+						Path:      "/metadata/customKey",
+						Operation: resource.PatchOpReplace,
+						Value:     "bar",
+					},
+				},
+			},
+			expectedJSON: []byte(`[
+						{"path":"/metadata/annotations/grafana.com~1createdBy","op":"replace","value":"foo"},
+						{"path":"/metadata/annotations/grafana.com~1customKey","op":"replace","value":"bar"}]`),
+			expectedError: nil,
+		},
+		{
+			name: "mixed metadata",
+			patch: resource.PatchRequest{
+				Operations: []resource.PatchOperation{
+					{
+						Path:      "/metadata/createdBy",
+						Operation: resource.PatchOpReplace,
+						Value:     "foo",
+					}, {
+						Path:      "/metadata/finalizers",
+						Operation: resource.PatchOpAdd,
+						Value:     "bar",
+					},
+				},
+			},
+			expectedJSON: []byte(`[
+						{"path":"/metadata/annotations/grafana.com~1createdBy","op":"replace","value":"foo"},
+						{"path":"/metadata/finalizers","op":"add","value":"bar"}]`),
+			expectedError: nil,
+		},
+		{
+			name: "using extraFields",
+			patch: resource.PatchRequest{
+				Operations: []resource.PatchOperation{
+					{
+						Path:      "/metadata/extraFields/generation",
+						Operation: resource.PatchOpReplace,
+						Value:     "12345",
+					}, {
+						Path:      "/metadata/extraFields/managedFields/manager",
+						Operation: resource.PatchOpReplace,
+						Value:     "new",
+					},
+				},
+			},
+			expectedJSON: []byte(`[
+						{"path":"/metadata/generation","op":"replace","value":"12345"},
+						{"path":"/metadata/managedFields/manager","op":"replace","value":"new"}]`),
+			expectedError: nil,
+		},
+		{
+			name: "try to replace entire metadata/extraFields object",
+			patch: resource.PatchRequest{
+				Operations: []resource.PatchOperation{
+					{
+						Path:      "/metadata/extraFields",
+						Operation: resource.PatchOpReplace,
+					},
+				},
+			},
+			expectedJSON:  nil,
+			expectedError: fmt.Errorf("cannot patch entire extraFields, please patch fields in extraFields instead"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual, err := marshalJSONPatch(test.patch)
+			assert.Equal(t, test.expectedError, err)
+			if test.expectedJSON == nil {
+				assert.Nil(t, actual)
+			} else {
+				assert.JSONEq(t, string(test.expectedJSON), string(actual))
+			}
+		})
+	}
+}
+
 type TestResourceObject struct {
 	StaticMeta    resource.StaticMetadata
 	Metadata      TestResourceObjectMetadata
