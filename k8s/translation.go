@@ -231,8 +231,8 @@ func getV1ObjectMetaFields() map[string]struct{} {
 		if len(jsonTag) == 0 || jsonTag[0] == '-' || jsonTag[0] == ',' {
 			continue
 		}
-		if strings.Index(jsonTag, ",") > 0 {
-			jsonTag = jsonTag[:strings.Index(jsonTag, ",")]
+		if idx := strings.Index(jsonTag, ","); idx > 0 {
+			jsonTag = jsonTag[:idx]
 		}
 		fields[jsonTag] = struct{}{}
 	}
