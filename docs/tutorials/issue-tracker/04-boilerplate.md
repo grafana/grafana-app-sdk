@@ -16,6 +16,10 @@ Usage: grafana-app-sdk project component add [options] <components>
 
 Since we're building out everything we can as part of this tutorial, let's go ahead and add all three project components.
 ```shell
+grafana-app-sdk project component add frontend backend operator
+```
+But this gives us an error:
+```shell
 $ grafana-app-sdk project component add frontend backend operator
 plugin-id is required
 ```
@@ -39,6 +43,10 @@ Global Flags:
 We can leave all the global flags empty, like we have for other commands, but it's good to know how we can find information about the CLI commands. 
 
 Let's give our plugin an ID (I'm going to use `issue-tracker-project`, but you can use anything you want as long as it won't conflict with another plugin), and run the command again:
+```shell
+grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
+```
+Just like with any other command that writes files, the output is a list of all written files:
 ```shell
 $ grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
  * Writing file plugin/README.md

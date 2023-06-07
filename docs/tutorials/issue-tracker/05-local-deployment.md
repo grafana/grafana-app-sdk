@@ -17,12 +17,15 @@ make: *** [build/plugin-backend] Error 1
 
 Hang on, something isn't right. Well, we generated code, and build out boilerplate, but go doesn't know about any of the libraries our boilerplate and generated code need to import. You could run `go get` for all the go files, but our Makefile, again, has us covered:
 ```shell
-$ make deps
-go: finding module for package github.com/grafana/grafana-app-sdk/k8s
-...trimmed output...
+make deps
 ```
+This will `go get` all the go modules we use, and then vendor them in the `vendor` directory.
 
 Now we can run our biuld successfully:
+```shell
+make build
+```
+We get _a lot_ of output for this command:
 ```shell
 $ make build
 Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.GenerateManifestFile-fm
