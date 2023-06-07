@@ -20,8 +20,6 @@ $ curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-
 ```cue
 package kinds
 
-import "github.com/grafana/thema"
-
 issue: {
 	name: "Issue"
 	crd: {}
@@ -49,7 +47,7 @@ issue: {
 
 Alright, let's break down what we just wrote.
 
-Like with go code, any cue file needs to start with a package declaration. In this case, our package is `kinds`. We also have an import statement for thema. Normally, with CUE imports, the process is a bit messy and you need to manually pull down some files into a directory in your `cue.mod`, but the codegen tooling has an embedded Thema dependency, so we don't have to here.
+Like with Go code, any cue file needs to start with a package declaration. In this case, our package is `kinds`. After the package declaration, we can optionally import other CUE packages (for example, `time` if you wanted to use `time.Time` types) using the same syntax as one might with Go. After that, you declare fields. With the grafana-app-sdk, we assume that every top-level field is a kind, and adheres to the [kindsys.Custom](https://github.com/grafana/kindsys/blob/df4488cce33697eccba0536970114fff02b81020/kindcat_custom.cue#L106) kind. That's what our `issue` field is--a Custom kind declaration.
 
 Now, we get to the actual definition of our `issue` model:
 ```cue
