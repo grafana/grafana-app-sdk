@@ -14,7 +14,7 @@ While the SDK technically will work with any objects you define so long as they 
 
 Either copy-and-paste the following CUE into a file called `kinds/issue.cue`, or pull down [`cue/issue-v1.cue`](cue/issue-v1.cue) by running:
 ```shell
-$ curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/cue/issue-v1.cue
+curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/cue/issue-v1.cue
 ```
 
 ```cue
