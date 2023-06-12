@@ -10,7 +10,7 @@ type SchemaScope string
 
 const (
 	NamespacedScope = SchemaScope("Namespaced")
-	ClusterScope    = SchemaScope("Clustered")
+	ClusterScope    = SchemaScope("Cluster")
 )
 
 // Schema represents a schema object
