@@ -1,9 +1,11 @@
 package kubeconfig
 
 import (
+	"encoding/base64"
 	"errors"
 	"hash"
 	"hash/crc32"
+	"strings"
 	"sync"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -203,6 +205,16 @@ func LoadRawConfig(src map[string]string) (cfg string, ns string, err error) {
 	nval, ok := src[KeyNamespace]
 	if !ok {
 		return "", "", ErrConfigMissing
+	}
+
+	// AppInstallation controller uses standard base64 encoding for setting kubeconfig / namespace values,
+	// so we try to decode them here and if it fails we fall back gracefully to unencoded values.
+	if dec, err := base64.StdEncoding.DecodeString(cval); err == nil {
+		cval = string(dec)
+	}
+
+	if dec, err := base64.StdEncoding.DecodeString(nval); err == nil {
+		nval = strings.TrimSpace(string(dec))
 	}
 
 	return cval, nval, nil
