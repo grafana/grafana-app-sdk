@@ -42,6 +42,8 @@ yaml_objects = []
 for filename in listdir('generated'):
   if filename.lower().endswith(('.yaml', '.yml')):
     decoded = decode(read_file(filename))
+    if decoded['kind'] == 'ValidatingWebhookConfiguration':
+        decoded['resource_deps'] = ['webhook-test-app-operator']
     yaml_objects += decoded
 # Next, allow for additional yamls which can optionally override the generated yamls
 for filename in listdir('additional'):
@@ -63,3 +65,9 @@ k8s_yaml(bundle)
 # Group CRD's together
 crds = [r for r in yaml_objects if (r['kind'] == 'CustomResourceDefinition')]
 k8s_resource(new_name='CustomResourceDefinitions', objects=[('%s' % name(r)) for r in yaml_objects if (r['kind'] == 'CustomResourceDefinition')], resource_deps=['uncategorized'])
+
+# Make webhooks dependent on all services starting
+services = [('%s' % name(r)) for r in yaml_objects if r['kind'] == 'Service']
+webhooks = [r for r in yaml_objects if (r['kind'] == 'ValidatingWebhookConfiguration' or r['kind'] == 'MutatingWebhookConfiguration')]
+print(webhooks)
+k8s_resource(new_name='Webhooks', objects=[('%s' % name(r)) for r in webhooks], resource_deps=services)

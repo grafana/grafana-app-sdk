@@ -1,75 +1,44 @@
 package k8s
 
 import (
-	"encoding/json"
 	"fmt"
-
-	"gomodules.xyz/jsonpatch/v2"
-	admission "k8s.io/api/admission/v1beta1"
+	"net/http"
+	"time"
 
 	"github.com/grafana/grafana-app-sdk/resource"
+	"gomodules.xyz/jsonpatch/v2"
 )
 
-// AdmissionRequest contains information from a kubernetes Admission request and decoded object(s).
-type AdmissionRequest struct {
-	Action    string
-	Kind      string
-	Group     string
-	Version   string
-	UserInfo  AdmissionUserInfo
-	Object    resource.Object
-	OldObject resource.Object
-}
+const (
+	ErrReasonFieldNotAllowed = "field not allowed"
+)
 
-// AdmissionUserInfo contains user information for an admission request
-type AdmissionUserInfo struct {
-	Username string
-	UID      string
-	Groups   []string
-	Extra    map[string]any
-}
-
-// AdmissionError is an interface which extends error to add more details for admission request rejections
-type AdmissionError interface {
+type SimpleAdmissionError struct {
 	error
-	// StatusCode should return an HTTP status code to reject with
-	StatusCode() int
-	// Reason should be a machine-readable reason for the rejection
-	Reason() string
+	statusCode int
+	reason     string
 }
 
-// MutatingResponse is the mutation to perform on a request
-type MutatingResponse struct {
-	// PatchOperations is the list of patch ops to perform on the request as part of the mutation
-	PatchOperations []resource.PatchOperation
-	// corrected is a flag to dictate whether the patch has already been corrected from resource.Object representation into kubernetes representation
-	// if true, we can avoid the costlier marshalJSONPatch call (calling it wouldn't alter the patch in this case)
-	corrected bool
+func (s *SimpleAdmissionError) StatusCode() int {
+	return s.statusCode
 }
 
-// ValidatingAdmissionController is an interface that describes any object which should validate admission of
-// a request to manipulate a resource.Object.
-type ValidatingAdmissionController interface {
-	// Validate consumes an AdmissionRequest, then returns an error if the request should be denied.
-	// The returned error SHOULD satisfy the AdmissionError interface, but callers will fallback
-	// to using only the information in a simple error if not.
-	Validate(request *AdmissionRequest) error
+func (s *SimpleAdmissionError) Reason() string {
+	return s.reason
 }
 
-// MutatingAdmissionController is an interface that describes any object which should mutate a request to
-// manipulate a resource.Object.
-type MutatingAdmissionController interface {
-	// Mutate consumes an AdmissionRequest, then returns a MutatingResponse with the relevant patch operations
-	// to apply. If the request should not be admitted, ths function should return an error.
-	// The returned error SHOULD satisfy the AdmissionError interface, but callers will fallback
-	// to using only the information in a simple error if not.
-	Mutate(request *AdmissionRequest) (*MutatingResponse, error)
+func NewAdmissionError(err error, statusCode int, reason string) *SimpleAdmissionError {
+	return &SimpleAdmissionError{
+		error:      err,
+		statusCode: statusCode,
+		reason:     reason,
+	}
 }
 
 // NewMutatingResponseFromChange returns a pointer to a new MutatingResponse containing PatchOperations based on the
 // change between `from` and `to` Objects.
 // Note that if you already know the exact nature of your change, this operation is costlier than writing the PatchOperations yourself.
-func NewMutatingResponseFromChange(from, to resource.Object) (*MutatingResponse, error) {
+func NewMutatingResponseFromChange(from, to resource.Object) (*resource.MutatingResponse, error) {
 	fromJSON, err := marshalJSON(from, nil, ClientConfig{})
 	if err != nil {
 		return nil, err
@@ -82,9 +51,8 @@ func NewMutatingResponseFromChange(from, to resource.Object) (*MutatingResponse,
 	if err != nil {
 		return nil, err
 	}
-	resp := MutatingResponse{
+	resp := resource.MutatingResponse{
 		PatchOperations: make([]resource.PatchOperation, len(patch)),
-		corrected:       true,
 	}
 	for idx, op := range patch {
 		resp.PatchOperations[idx] = resource.PatchOperation{
@@ -96,46 +64,127 @@ func NewMutatingResponseFromChange(from, to resource.Object) (*MutatingResponse,
 	return &resp, nil
 }
 
-func unmarshalKubernetesAdmissionReview(bytes []byte, format resource.WireFormat) (*admission.AdmissionReview, error) {
-	if format != resource.WireFormatJSON {
-		return nil, fmt.Errorf("unsupported WireFormat '%s'", fmt.Sprint(format))
-	}
-
-	rev := admission.AdmissionReview{}
-	err := json.Unmarshal(bytes, &rev)
-	if err != nil {
-		return nil, err
-	}
-	return &rev, nil
+// OpinionatedMutatingAdmissionController is a MutatingAdmissionController which wraps an optional user-defined
+// Mutate() function with a set of additional PatchOperations which set metadata and label properties.
+type OpinionatedMutatingAdmissionController struct {
+	MutateFunc func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error)
 }
 
-func translateKubernetesAdmissionRequest(req *admission.AdmissionRequest, schema resource.Schema) (*AdmissionRequest, error) {
-	var obj, old resource.Object
+// now is used to wrap time.Now so it can be altered for testing
+var now = func() time.Time {
+	return time.Now()
+}
 
-	obj = schema.ZeroValue()
-	err := rawToObject(req.Object.Raw, obj)
-	if err != nil {
-		return nil, err
-	}
-	if len(req.OldObject.Raw) > 0 {
-		old = schema.ZeroValue()
-		err = rawToObject(req.OldObject.Raw, old)
+// Mutate runs the underlying MutateFunc() function (if non-nil), and if that returns successfully,
+// appends additional patch operations to the MutatingResponse for CommonMetadata fields not in kubernetes standard metadata,
+// and labels internally used by the SDK, such as the stored version.
+func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+	// Get the response from the underlying controller, if it exists
+	var err error
+	var resp *resource.MutatingResponse
+	if o.MutateFunc != nil {
+		resp, err = o.MutateFunc(request)
 		if err != nil {
-			return nil, err
+			return resp, err
+		}
+	}
+	if resp == nil || resp.PatchOperations == nil {
+		resp = &resource.MutatingResponse{
+			PatchOperations: make([]resource.PatchOperation, 0),
 		}
 	}
 
-	return &AdmissionRequest{
-		Action:  string(req.Operation),
-		Kind:    req.Kind.Kind,
-		Group:   req.Kind.Group,
-		Version: req.Kind.Version,
-		UserInfo: AdmissionUserInfo{
-			Username: req.UserInfo.Username,
-			UID:      req.UserInfo.UID,
-			Groups:   req.UserInfo.Groups,
-		},
-		Object:    obj,
-		OldObject: old,
-	}, nil
+	switch request.Action {
+	case resource.AdmissionActionCreate:
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+			Path:      "/metadata/createdBy", // Set createdBy to the request user
+			Operation: resource.PatchOpReplace,
+			Value:     request.UserInfo.Username,
+		}, resource.PatchOperation{
+			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
+			Operation: resource.PatchOpReplace,
+			Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
+		}, resource.PatchOperation{
+			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
+			Operation: resource.PatchOpReplace,
+			Value:     request.Version,
+		})
+	case resource.AdmissionActionUpdate:
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+			Path:      "/metadata/updatedBy", // Set updatedBy to the request user
+			Operation: resource.PatchOpReplace,
+			Value:     request.UserInfo.Username,
+		}, resource.PatchOperation{
+			Path:      "/metadata/updateTimestamp", // Set updateTimestamp to the current time
+			Operation: resource.PatchOpReplace,
+			Value:     now().Format(time.RFC3339Nano),
+		}, resource.PatchOperation{
+			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
+			Operation: resource.PatchOpReplace,
+			Value:     request.Version,
+		})
+	default:
+		// Do nothing
+	}
+	return resp, nil
+}
+
+// NewOpinionatedMutatingAdmissionController creates a pointer to a new OpinionatedMutatingAdmissionController wrapping the
+// provided mutateFunc (nil mutateFunc argument is allowed, and will cause the controller to not call the underlying function)
+func NewOpinionatedMutatingAdmissionController(mutateFunc func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error)) *OpinionatedMutatingAdmissionController {
+	return &OpinionatedMutatingAdmissionController{
+		MutateFunc: mutateFunc,
+	}
+}
+
+type OpinionatedValidatingAdmissionController struct {
+	ValidateFunc func(*resource.AdmissionRequest) error
+}
+
+func (o *OpinionatedValidatingAdmissionController) Validate(request *resource.AdmissionRequest) error {
+	// Check that none of the protected metadata in annotations has been changed
+	switch request.Action {
+	case resource.AdmissionActionCreate:
+		// Not allowed to set createdBy, updatedBy, or updateTimestamp
+		// createdBy can be set, but only to the username of the request
+		if request.Object.CommonMetadata().CreatedBy != "" && request.Object.CommonMetadata().CreatedBy != request.UserInfo.Username {
+			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+annotationPrefix+"createdBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+		}
+		// updatedBy can be set, but only to the username of the request
+		if request.Object.CommonMetadata().UpdatedBy != "" && request.Object.CommonMetadata().UpdatedBy != request.UserInfo.Username {
+			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+annotationPrefix+"updatedBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+		}
+		emptyTime := time.Time{}
+		// updateTimestamp cannot be set
+		if request.Object.CommonMetadata().UpdateTimestamp != emptyTime {
+			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+annotationPrefix+"updateTimestamp"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+		}
+	case resource.AdmissionActionUpdate:
+		// Not allowed to set createdBy, updatedBy, or updateTimestamp
+		// createdBy can be set, but only to the username of the request
+		if request.Object.CommonMetadata().CreatedBy != request.OldObject.CommonMetadata().CreatedBy {
+			return NewAdmissionError(fmt.Errorf("cannot change /metadata/annotations/"+annotationPrefix+"createdBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+		}
+		// updatedBy can be set, but only to the username of the request
+		if request.Object.CommonMetadata().UpdatedBy != request.OldObject.CommonMetadata().UpdatedBy && request.Object.CommonMetadata().UpdatedBy != request.UserInfo.Username {
+			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+annotationPrefix+"updatedBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+		}
+		// updateTimestamp cannot be set
+		if request.Object.CommonMetadata().UpdateTimestamp != request.OldObject.CommonMetadata().UpdateTimestamp {
+			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+annotationPrefix+"updateTimestamp"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+		}
+	default:
+		// Do nothing
+	}
+	// Return the result of the underlying func, if it exists
+	if o.ValidateFunc != nil {
+		return o.ValidateFunc(request)
+	}
+	return nil
+}
+
+func NewOpinionatedValidatingAdmissionController(validateFunc func(*resource.AdmissionRequest) error) *OpinionatedValidatingAdmissionController {
+	return &OpinionatedValidatingAdmissionController{
+		ValidateFunc: validateFunc,
+	}
 }

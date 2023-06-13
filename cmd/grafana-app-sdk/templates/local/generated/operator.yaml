@@ -18,6 +18,17 @@ subjects:
     name: operator
     namespace: default
 ---
+{{end}}{{ if .WebhookProperties.Enabled }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: webhook-tls-certs
+  namespace: default
+type: kubernetes.io/tls
+data:
+  tls.crt: {{.WebhookProperties.Base64Cert}}
+  tls.key: {{.WebhookProperties.Base64Key}}
+---
 {{end}}
 apiVersion: apps/v1
 kind: Deployment
@@ -39,5 +50,76 @@ spec:
       containers:
         - image: {{.OperatorImage}}
           imagePullPolicy: IfNotPresent
-          name: {{.PluginID}}-operator
+          name: {{.PluginID}}-operator{{ if .WebhookProperties.Enabled }}
+          ports:
+            - containerPort: {{ .WebhookProperties.Port }}
+              name: webhook-api
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /run/secrets/tls
+              readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: webhook-tls-certs{{ end }}
       serviceAccount: operator
+{{ if .WebhookProperties.Enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{.PluginID}}-operator
+  namespace: default
+spec:
+  selector:
+    name: {{.PluginID}}-operator
+  ports:
+    - port: 443
+      targetPort: webhook-api
+{{ if ne .WebhookProperties.Mutating "" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: {{.PluginID}}-operator-mut-webhook
+webhooks:
+  - name: {{.PluginID}}-operator.default.svc
+    sideEffects: None
+    admissionReviewVersions: ["v1","v1beta1"]
+    clientConfig:
+      service:
+        name: {{.PluginID}}-operator
+        namespace: default
+        path: "/mutate"
+      caBundle: {{.WebhookProperties.Base64CA}}
+    rules:{{range .CRDs}}
+      - operations: ["CREATE","UPDATE","DELETE"]
+        apiGroups: ["{{.Group}}"]
+        apiVersions: {{range .Versions}}
+          - {{.}}{{end}}
+        resources: ["{{.PluralMachineName}}"]{{end}}
+{{ end }}
+  {{ if ne .WebhookProperties.Mutating "" }}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: {{.PluginID}}-operator-val-webhook
+webhooks:
+  - name: {{.PluginID}}-operator.default.svc
+    sideEffects: None
+    admissionReviewVersions: ["v1","v1beta1"]
+    clientConfig:
+      service:
+        name: {{.PluginID}}-operator
+        namespace: default
+        path: "/validate"
+      caBundle: {{.WebhookProperties.Base64CA}}
+    rules:{{range .CRDs}}
+    - operations: ["CREATE","UPDATE","DELETE"]
+      apiGroups: ["{{.Group}}"]
+      apiVersions: {{range .Versions}}
+        - {{.}}{{end}}
+      resources: ["{{.PluralMachineName}}"]{{end}}
+  {{ end }}
+{{ end }}

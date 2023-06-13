@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -301,4 +302,60 @@ func toString(t any) string {
 		bytes, _ := json.Marshal(t)
 		return string(bytes)
 	}
+}
+
+func unmarshalKubernetesAdmissionReview(bytes []byte, format resource.WireFormat) (*admission.AdmissionReview, error) {
+	if format != resource.WireFormatJSON {
+		return nil, fmt.Errorf("unsupported WireFormat '%s'", fmt.Sprint(format))
+	}
+
+	rev := admission.AdmissionReview{}
+	err := json.Unmarshal(bytes, &rev)
+	if err != nil {
+		return nil, err
+	}
+	return &rev, nil
+}
+
+func translateKubernetesAdmissionRequest(req *admission.AdmissionRequest, schema resource.Schema) (*resource.AdmissionRequest, error) {
+	var obj, old resource.Object
+
+	obj = schema.ZeroValue()
+	err := rawToObject(req.Object.Raw, obj)
+	if err != nil {
+		return nil, err
+	}
+	if len(req.OldObject.Raw) > 0 {
+		old = schema.ZeroValue()
+		err = rawToObject(req.OldObject.Raw, old)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var action resource.AdmissionAction
+	switch req.Operation {
+	case admission.Create:
+		action = resource.AdmissionActionCreate
+	case admission.Update:
+		action = resource.AdmissionActionUpdate
+	case admission.Delete:
+		action = resource.AdmissionActionDelete
+	case admission.Connect:
+		action = resource.AdmissionActionConnect
+	}
+
+	return &resource.AdmissionRequest{
+		Action:  action,
+		Kind:    req.Kind.Kind,
+		Group:   req.Kind.Group,
+		Version: req.Kind.Version,
+		UserInfo: resource.AdmissionUserInfo{
+			Username: req.UserInfo.Username,
+			UID:      req.UserInfo.UID,
+			Groups:   req.UserInfo.Groups,
+		},
+		Object:    obj,
+		OldObject: old,
+	}, nil
 }
