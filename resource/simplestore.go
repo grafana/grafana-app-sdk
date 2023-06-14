@@ -131,6 +131,21 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 	object := SimpleObject[T]{
 		Spec: obj,
 	}
+	// Before we can run the opts on the metadata, we need the current metadata
+	// TODO: should this whole thing instead be serialized to a patch?
+	// It could affect expected behavior, though, as WithResourceVersion makes sure it matches the RV you supply
+	current, err := s.Get(ctx, identifier)
+	if err != nil {
+		return nil, err
+	}
+	object.CommonMeta = current.CommonMetadata
+	customFields := current.CustomMetadata.MapFields()
+	if len(customFields) > 0 {
+		object.CustomMeta = make(SimpleCustomMetadata)
+		for f, v := range customFields {
+			object.CustomMeta[f] = v
+		}
+	}
 	for _, opt := range opts {
 		opt(&object.CommonMeta)
 	}
