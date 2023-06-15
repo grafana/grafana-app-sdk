@@ -225,3 +225,27 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 		})
 	}
 }
+
+func TestNewMutatingAdmissionHandler(t *testing.T) {
+
+}
+
+func TestMutatingAdmissionHandler_AddController(t *testing.T) {
+
+}
+
+func TestMutatingAdmissionHandler_HTTPHandler(t *testing.T) {
+
+}
+
+func TestNewValidatingAdmissionHandler(t *testing.T) {
+
+}
+
+func TestValidatingAdmissionHandler_AddController(t *testing.T) {
+
+}
+
+func TestValidatingAdmissionHandler_HTTPHandler(t *testing.T) {
+
+}
