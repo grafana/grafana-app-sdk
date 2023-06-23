@@ -253,6 +253,8 @@ func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
 							retryAfter: time.Now().Add(after),
 							retryFunc:  val.retryFunc,
 						})
+					} else {
+						c.toRetry.Delete(key)
 					}
 				}
 				return true
