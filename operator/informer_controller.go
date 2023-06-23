@@ -56,10 +56,11 @@ type InformerController struct {
 	// as retry logic is covered by the RetryPolicy.
 	ErrorHandler func(error)
 	// RetryPolicy is a user-specified retry logic function which will be used when ResourceWatcher function calls fail.
-	RetryPolicy RetryPolicy
-	informers   *ListMap[string, Informer]
-	watchers    *ListMap[string, ResourceWatcher]
-	toRetry     *xsync.MapOf[string, retryInfo]
+	RetryPolicy         RetryPolicy
+	informers           *ListMap[string, Informer]
+	watchers            *ListMap[string, ResourceWatcher]
+	toRetry             *xsync.MapOf[string, retryInfo]
+	retryTickerInterval time.Duration
 }
 
 type retryInfo struct {
@@ -71,10 +72,11 @@ type retryInfo struct {
 // NewInformerController creates a new controller
 func NewInformerController() *InformerController {
 	return &InformerController{
-		RetryPolicy: DefaultRetryPolicy,
-		informers:   NewListMap[Informer](),
-		watchers:    NewListMap[ResourceWatcher](),
-		toRetry:     xsync.NewMapOf[retryInfo](),
+		RetryPolicy:         DefaultRetryPolicy,
+		informers:           NewListMap[Informer](),
+		watchers:            NewListMap[ResourceWatcher](),
+		toRetry:             xsync.NewMapOf[retryInfo](),
+		retryTickerInterval: time.Second,
 	}
 }
 
@@ -227,7 +229,7 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 // It checks if there are function calls to be retried every second, and, if there are any, calls the function.
 // If the function returns an error, it schedules a new retry according to the RetryPolicy.
 func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(c.retryTickerInterval)
 	defer ticker.Stop()
 	for {
 		select {
