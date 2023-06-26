@@ -56,10 +56,11 @@ type InformerController struct {
 	// as retry logic is covered by the RetryPolicy.
 	ErrorHandler func(error)
 	// RetryPolicy is a user-specified retry logic function which will be used when ResourceWatcher function calls fail.
-	RetryPolicy RetryPolicy
-	informers   *ListMap[string, Informer]
-	watchers    *ListMap[string, ResourceWatcher]
-	toRetry     *xsync.MapOf[string, retryInfo]
+	RetryPolicy         RetryPolicy
+	informers           *ListMap[string, Informer]
+	watchers            *ListMap[string, ResourceWatcher]
+	toRetry             *xsync.MapOf[string, retryInfo]
+	retryTickerInterval time.Duration
 }
 
 type retryInfo struct {
@@ -71,10 +72,11 @@ type retryInfo struct {
 // NewInformerController creates a new controller
 func NewInformerController() *InformerController {
 	return &InformerController{
-		RetryPolicy: DefaultRetryPolicy,
-		informers:   NewListMap[Informer](),
-		watchers:    NewListMap[ResourceWatcher](),
-		toRetry:     xsync.NewMapOf[retryInfo](),
+		RetryPolicy:         DefaultRetryPolicy,
+		informers:           NewListMap[Informer](),
+		watchers:            NewListMap[ResourceWatcher](),
+		toRetry:             xsync.NewMapOf[retryInfo](),
+		retryTickerInterval: time.Second,
 	}
 }
 
@@ -99,6 +101,11 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 	err := informer.AddEventHandler(&SimpleWatcher{
 		AddFunc: func(ctx context.Context, obj resource.Object) error {
 			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
+				// Generate the unique key for this object
+				retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
+				// If we've got a retry queued for this object, stop it
+				c.toRetry.Delete(retryKey)
+				// Do the watcher's Add, check for error
 				err := watcher.Add(ctx, obj)
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(err) // TODO: improve ErrorHandler
@@ -110,7 +117,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 						// What?
 						return
 					}
-					c.queueRetry(c.keyForWatcherEvent(resourceKind, idx, obj), err, func() error {
+					c.queueRetry(retryKey, err, func() error {
 						return closureWatcher.Add(ctx, obj)
 					})
 				}
@@ -119,6 +126,11 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		},
 		UpdateFunc: func(ctx context.Context, oldObj, newObj resource.Object) error {
 			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
+				// Generate the unique key for this object
+				retryKey := c.keyForWatcherEvent(resourceKind, idx, newObj)
+				// If we've got a retry queued for this object, stop it
+				c.toRetry.Delete(retryKey)
+				// Do the watcher's Update, check for error
 				err := watcher.Update(ctx, oldObj, newObj)
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(err)
@@ -130,7 +142,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 						// What?
 						return
 					}
-					c.queueRetry(c.keyForWatcherEvent(resourceKind, idx, newObj), err, func() error {
+					c.queueRetry(retryKey, err, func() error {
 						return closureWatcher.Update(ctx, oldObj, newObj)
 					})
 				}
@@ -139,6 +151,11 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		},
 		DeleteFunc: func(ctx context.Context, obj resource.Object) error {
 			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
+				// Generate the unique key for this object
+				retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
+				// If we've got a retry queued for this object, stop it
+				c.toRetry.Delete(retryKey)
+				// Do the watcher's Delete, check for error
 				err := watcher.Delete(ctx, obj)
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(err)
@@ -150,7 +167,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 						// What?
 						return
 					}
-					c.queueRetry(c.keyForWatcherEvent(resourceKind, idx, obj), err, func() error {
+					c.queueRetry(retryKey, err, func() error {
 						return closureWatcher.Delete(ctx, obj)
 					})
 				}
@@ -212,7 +229,7 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 // It checks if there are function calls to be retried every second, and, if there are any, calls the function.
 // If the function returns an error, it schedules a new retry according to the RetryPolicy.
 func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
-	ticker := time.NewTicker(time.Second)
+	ticker := time.NewTicker(c.retryTickerInterval)
 	defer ticker.Stop()
 	for {
 		select {
@@ -238,6 +255,8 @@ func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
 							retryAfter: time.Now().Add(after),
 							retryFunc:  val.retryFunc,
 						})
+					} else {
+						c.toRetry.Delete(key)
 					}
 				}
 				return true
