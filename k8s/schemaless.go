@@ -30,6 +30,8 @@ type SchemalessClient struct {
 
 // NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
 func NewSchemalessClient(kubeConfig rest.Config, clientConfig ClientConfig) *SchemalessClient {
+	kubeConfig.NegotiatedSerializer = &GenericNegotiatedSerializer{}
+	kubeConfig.UserAgent = rest.DefaultKubernetesUserAgent()
 	return &SchemalessClient{
 		kubeConfig:   kubeConfig,
 		clientConfig: clientConfig,
