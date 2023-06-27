@@ -34,11 +34,15 @@ build/plugin: build/plugin-backend build/plugin-frontend
 
 .PHONY: build/plugin-frontend
 build/plugin-frontend:
+ifeq ("$(wildcard plugin/plugin.json)","plugin/plugin.json")
 	@cd plugin && yarn install && yarn build
+endif
 
 .PHONY: build/plugin-backend
 build/plugin-backend:
+ifeq ("$(wildcard plugin/Magefile.go)","plugin/Magefile.go")
 	@cd plugin && mage -v
+endif
 
 .PHONY: build/operator
 build/operator:
