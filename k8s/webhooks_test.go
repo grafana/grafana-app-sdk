@@ -13,15 +13,168 @@ import (
 )
 
 func TestNewWebhookServer(t *testing.T) {
+	t.Run("empty config", func(t *testing.T) {
+		srv, err := NewWebhookServer(WebhookServerConfig{})
+		assert.Nil(t, srv)
+		assert.Equal(t, fmt.Errorf("config.Port must be a valid port number (between 1 and 65536)"), err)
+	})
 
+	t.Run("empty TLSConfig", func(t *testing.T) {
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port: 1234,
+		})
+		assert.Nil(t, srv)
+		assert.Equal(t, fmt.Errorf("config.TLSConfig.CertPath is required"), err)
+	})
+
+	t.Run("empty TLSConfig.KeyPath", func(t *testing.T) {
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port: 1234,
+			TLSConfig: TLSConfig{
+				CertPath: "foo",
+			},
+		})
+		assert.Nil(t, srv)
+		assert.Equal(t, fmt.Errorf("config.TLSConfig.KeyPath is required"), err)
+	})
+
+	t.Run("minimum config", func(t *testing.T) {
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port: 1234,
+			TLSConfig: TLSConfig{
+				CertPath: "foo",
+				KeyPath:  "bar",
+			},
+		})
+		assert.Nil(t, err)
+		assert.Equal(t, 1234, srv.port)
+		assert.Equal(t, TLSConfig{
+			CertPath: "foo",
+			KeyPath:  "bar",
+		}, srv.tlsConfig)
+	})
+
+	t.Run("set controllers", func(t *testing.T) {
+		defVal := &testValidatingAdmissionController{}
+		defMut := &testMutatingAdmissionController{}
+		schVal := &testValidatingAdmissionController{}
+		schMut := &testMutatingAdmissionController{}
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port: 1234,
+			TLSConfig: TLSConfig{
+				CertPath: "foo",
+				KeyPath:  "bar",
+			},
+			DefaultValidatingController: defVal,
+			DefaultMutatingController:   defMut,
+			ValidatingControllers: map[resource.Schema]resource.ValidatingAdmissionController{
+				testSchema: schVal,
+			},
+			MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
+				testSchema: schMut,
+			},
+		})
+
+		assert.Nil(t, err)
+		assert.Equal(t, defVal, srv.DefaultValidatingController)
+		assert.Equal(t, defMut, srv.DefaultMutatingController)
+		assert.Equal(t, map[string]validatingAdmissionControllerTuple{
+			gk(testSchema.Group(), testSchema.Kind()): {
+				schema:     testSchema,
+				controller: schVal,
+			},
+		}, srv.validatingControllers)
+		assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
+			gk(testSchema.Group(), testSchema.Kind()): {
+				schema:     testSchema,
+				controller: schMut,
+			},
+		}, srv.mutatingControllers)
+	})
 }
 
 func TestWebhookServer_AddMutatingAdmissionController(t *testing.T) {
+	srv, err := NewWebhookServer(WebhookServerConfig{
+		Port: 1234,
+		TLSConfig: TLSConfig{
+			CertPath: "foo",
+			KeyPath:  "bar",
+		},
+	})
+	require.Nil(t, err)
+	c1 := &testMutatingAdmissionController{}
+	c2 := &testMutatingAdmissionController{}
+	c3 := &testMutatingAdmissionController{}
+	sch1 := resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar"))
+	sch2 := resource.NewSimpleSchema("bar", "v1", &TestResourceObject{}, resource.WithKind("foo"))
 
+	assert.Empty(t, srv.mutatingControllers)
+	srv.AddMutatingAdmissionController(c1, sch1)
+	srv.AddMutatingAdmissionController(c2, sch2)
+	assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
+		gk("foo", "bar"): {
+			schema:     sch1,
+			controller: c1,
+		},
+		gk("bar", "foo"): {
+			schema:     sch2,
+			controller: c2,
+		},
+	}, srv.mutatingControllers)
+	// Overwrite
+	srv.AddMutatingAdmissionController(c3, sch1)
+	assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
+		gk("foo", "bar"): {
+			schema:     sch1,
+			controller: c3,
+		},
+		gk("bar", "foo"): {
+			schema:     sch2,
+			controller: c2,
+		},
+	}, srv.mutatingControllers)
 }
 
 func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
+	srv, err := NewWebhookServer(WebhookServerConfig{
+		Port: 1234,
+		TLSConfig: TLSConfig{
+			CertPath: "foo",
+			KeyPath:  "bar",
+		},
+	})
+	require.Nil(t, err)
+	c1 := &testValidatingAdmissionController{}
+	c2 := &testValidatingAdmissionController{}
+	c3 := &testValidatingAdmissionController{}
+	sch1 := resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar"))
+	sch2 := resource.NewSimpleSchema("bar", "v1", &TestResourceObject{}, resource.WithKind("foo"))
 
+	assert.Empty(t, srv.validatingControllers)
+	srv.AddValidatingAdmissionController(c1, sch1)
+	srv.AddValidatingAdmissionController(c2, sch2)
+	assert.Equal(t, map[string]validatingAdmissionControllerTuple{
+		gk("foo", "bar"): {
+			schema:     sch1,
+			controller: c1,
+		},
+		gk("bar", "foo"): {
+			schema:     sch2,
+			controller: c2,
+		},
+	}, srv.validatingControllers)
+	// Overwrite
+	srv.AddValidatingAdmissionController(c3, sch1)
+	assert.Equal(t, map[string]validatingAdmissionControllerTuple{
+		gk("foo", "bar"): {
+			schema:     sch1,
+			controller: c3,
+		},
+		gk("bar", "foo"): {
+			schema:     sch2,
+			controller: c2,
+		},
+	}, srv.validatingControllers)
 }
 
 var admissionRequestObject = &TestResourceObject{}
@@ -262,10 +415,6 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			assert.Equal(t, test.expectedStatusCode, resp.Code)
 		})
 	}
-}
-
-func TestWebhookServer_Run(t *testing.T) {
-
 }
 
 type testValidatingAdmissionController struct {

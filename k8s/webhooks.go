@@ -13,6 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// WebhookServerConfig is the configuration object for a WebhookServer, used with NewWebhookServer.
 type WebhookServerConfig struct {
 	// The Port to run the HTTPS server on
 	Port int
@@ -30,20 +31,32 @@ type WebhookServerConfig struct {
 	DefaultMutatingController resource.MutatingAdmissionController
 }
 
+// TLSConfig describes a set of TLS files
 type TLSConfig struct {
+	// CertPath is the path to the on-disk cert file
 	CertPath string
-	KeyPath  string
+	// KeyPath is the path to the on-disk key file for the cert
+	KeyPath string
 }
 
+// WebhookServer is a kubernetes webhook server, which exposes /validate and /mutate HTTPS endpoints.
+// It implements operator.Controller and can be run as a controller in an operator, or as a standalone process.
 type WebhookServer struct {
+	// DefaultValidatingController is the default ValidatingAdmissionController to use if one is not defined for the schema in the request.
+	// If this is empty, the request will be rejected.
 	DefaultValidatingController resource.ValidatingAdmissionController
-	DefaultMutatingController   resource.MutatingAdmissionController
-	validatingControllers       map[string]validatingAdmissionControllerTuple
-	mutatingControllers         map[string]mutatingAdmissionControllerTuple
-	port                        int
-	tlsConfig                   TLSConfig
+	// DefaultMutatingController is the default MutatingAdmissionController to use if one is not defined for the schema in the request.
+	// If this is empty, the request will be rejected.
+	DefaultMutatingController resource.MutatingAdmissionController
+	validatingControllers     map[string]validatingAdmissionControllerTuple
+	mutatingControllers       map[string]mutatingAdmissionControllerTuple
+	port                      int
+	tlsConfig                 TLSConfig
 }
 
+// NewWebhookServer creates a new WebhookServer using the provided configuration.
+// The only required parts of the config are the Port and TLSConfig, as all other parts
+// (default controllers, schema-specific controllers) can be set post-initialization.
 func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	if config.Port < 1 || config.Port > 65536 {
 		return nil, fmt.Errorf("config.Port must be a valid port number (between 1 and 65536)")
@@ -75,6 +88,9 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	return &ws, nil
 }
 
+// AddValidatingAdmissionController adds a resource.ValidatingAdmissionController to the WebhookServer, associated with a given schema.
+// The schema association associates all incoming requests of the same group and kind of the schema to the schema's ZeroValue object.
+// If a ValidatingAdmissionController already exists for the provided schema, the one provided in this call will be used instead of the extant one.
 func (w *WebhookServer) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, schema resource.Schema) {
 	if w.validatingControllers == nil {
 		w.validatingControllers = make(map[string]validatingAdmissionControllerTuple)
@@ -85,6 +101,9 @@ func (w *WebhookServer) AddValidatingAdmissionController(controller resource.Val
 	}
 }
 
+// AddMutatingAdmissionController adds a resource.MutatingAdmissionController to the WebhookServer, associated with a given schema.
+// The schema association associates all incoming requests of the same group and kind of the schema to the schema's ZeroValue object.
+// If a MutatingAdmissionController already exists for the provided schema, the one provided in this call will be used instead of the extant one.
 func (w *WebhookServer) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, schema resource.Schema) {
 	if w.mutatingControllers == nil {
 		w.mutatingControllers = make(map[string]mutatingAdmissionControllerTuple)
@@ -95,6 +114,9 @@ func (w *WebhookServer) AddMutatingAdmissionController(controller resource.Mutat
 	}
 }
 
+// Run establishes an HTTPS server on the configured port and exposes `/validate` and `/mutate` paths for kubernetes
+// validating and mutating webhooks, respectively. It will block until either closeChan is closed (in which case it returns nil),
+// or the server encounters an unrecoverable error (in which case it returns the error).
 func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/validate", w.HandleValidateHTTP)
@@ -120,6 +142,7 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	return err
 }
 
+// HandleValidateHTTP is the HTTP HandlerFunc for a kubernetes validating webhook call
 func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
@@ -194,6 +217,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	writer.Write(bytes)
 }
 
+// HandleMutateHTTP is the HTTP HandlerFunc for a kubernetes mutating webhook call
 func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {

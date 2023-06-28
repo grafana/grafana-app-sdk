@@ -101,33 +101,66 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 		}
 	}
 
+	annotations, ok := request.Object.CommonMetadata().ExtraFields["annotations"].(map[string]string)
+	if !ok {
+		// Bad annotations, just use an empty map
+		annotations = make(map[string]string)
+	}
+
 	switch request.Action {
 	case resource.AdmissionActionCreate:
+		op := resource.PatchOpReplace
+		if _, ok := annotations[annotationPrefix+"createdBy"]; !ok {
+			op = resource.PatchOpAdd
+		}
 		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/createdBy",   // Set createdBy to the request user
-			Operation: resource.PatchOpReplace, // TODO: only make this a replace if it exists
+			Path:      "/metadata/createdBy", // Set createdBy to the request user
+			Operation: op,
 			Value:     request.UserInfo.Username,
-		}, resource.PatchOperation{
+		})
+		op = resource.PatchOpReplace
+		if _, ok := annotations[annotationPrefix+"updateTimestamp"]; !ok {
+			op = resource.PatchOpAdd
+		}
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
 			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-			Operation: resource.PatchOpReplace,     // TODO: only make this a replace if it exists
+			Operation: op,
 			Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
-		}, resource.PatchOperation{
+		})
+		op = resource.PatchOpReplace
+		if _, ok := request.Object.CommonMetadata().Labels[versionLabel]; !ok {
+			op = resource.PatchOpAdd
+		}
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
 			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-			Operation: resource.PatchOpReplace,            // TODO: only make this a replace if it exists
+			Operation: op,
 			Value:     request.Version,
 		})
 	case resource.AdmissionActionUpdate:
+		op := resource.PatchOpReplace
+		if _, ok := annotations[annotationPrefix+"updatedBy"]; !ok {
+			op = resource.PatchOpAdd
+		}
 		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/updatedBy",   // Set updatedBy to the request user
-			Operation: resource.PatchOpReplace, // TODO: only make this a replace if it exists
+			Path:      "/metadata/updatedBy", // Set updatedBy to the request user
+			Operation: op,
 			Value:     request.UserInfo.Username,
-		}, resource.PatchOperation{
+		})
+		op = resource.PatchOpReplace
+		if _, ok := annotations[annotationPrefix+"updateTimestamp"]; !ok {
+			op = resource.PatchOpAdd
+		}
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
 			Path:      "/metadata/updateTimestamp", // Set updateTimestamp to the current time
-			Operation: resource.PatchOpReplace,     // TODO: only make this a replace if it exists
+			Operation: op,
 			Value:     now().Format(time.RFC3339Nano),
-		}, resource.PatchOperation{
+		})
+		if _, ok := request.Object.CommonMetadata().Labels[versionLabel]; !ok {
+			op = resource.PatchOpAdd
+		}
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
 			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-			Operation: resource.PatchOpReplace,            // TODO: only make this a replace if it exists
+			Operation: op,
 			Value:     request.Version,
 		})
 	default:

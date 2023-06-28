@@ -225,3 +225,11 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 		})
 	}
 }
+
+func TestNewOpinionatedValidatingAdmissionController(t *testing.T) {
+	// TODO
+}
+
+func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
+	// TODO
+}
