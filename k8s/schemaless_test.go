@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -429,13 +430,12 @@ func getSchemalessClientTestSetup(gvs ...schema.GroupVersion) (*SchemalessClient
 	}))
 	s.Server = server
 
-	client := SchemalessClient{
-		clients: make(map[string]*groupVersionClient),
-	}
+	client := NewSchemalessClient(rest.Config{}, ClientConfig{CustomMetadataIsAnyType: false})
+
 	for _, gv := range gvs {
 		client.clients[gv.Identifier()] = &groupVersionClient{
 			client: getMockClient(server.URL, gv.Group, gv.Version),
 		}
 	}
-	return &client, &s
+	return client, &s
 }
