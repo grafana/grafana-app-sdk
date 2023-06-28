@@ -158,8 +158,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
-	oldGen := o.getGeneration(old)
-	newGen := o.getGeneration(new)
+	oldGen := getGeneration(old)
+	newGen := getGeneration(new)
 	if newGen > 0 && oldGen == newGen {
 		return nil
 	}
@@ -286,7 +286,7 @@ func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {
 	return make([]string, 0)
 }
 
-func (*OpinionatedWatcher) getGeneration(object resource.Object) int64 {
+func getGeneration(object resource.Object) int64 {
 	g, ok := object.CommonMetadata().ExtraFields["generation"]
 	if !ok {
 		return 0
