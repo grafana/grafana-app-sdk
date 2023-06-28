@@ -73,5 +73,9 @@ func main() {
     }()
 
     // Run
-    op.Run(stopCh)
+    err = op.Run(stopCh)
+    if err != nil {
+		panic(err)
+	}
+
 }

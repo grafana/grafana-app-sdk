@@ -22,6 +22,7 @@ package kinds
 
 issue: {
 	name: "Issue"
+        group: "issue-tracker-project"
 	crd: {}
 	codegen: {
 		frontend: true
