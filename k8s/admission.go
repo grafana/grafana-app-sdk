@@ -1,16 +1,12 @@
 package k8s
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	"gomodules.xyz/jsonpatch/v2"
-	admission "k8s.io/api/admission/v1beta1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -108,30 +104,30 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 	switch request.Action {
 	case resource.AdmissionActionCreate:
 		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/createdBy", // Set createdBy to the request user
-			Operation: resource.PatchOpReplace,
+			Path:      "/metadata/createdBy",   // Set createdBy to the request user
+			Operation: resource.PatchOpReplace, // TODO: only make this a replace if it exists
 			Value:     request.UserInfo.Username,
 		}, resource.PatchOperation{
 			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-			Operation: resource.PatchOpReplace,
+			Operation: resource.PatchOpReplace,     // TODO: only make this a replace if it exists
 			Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
 		}, resource.PatchOperation{
 			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-			Operation: resource.PatchOpReplace,
+			Operation: resource.PatchOpReplace,            // TODO: only make this a replace if it exists
 			Value:     request.Version,
 		})
 	case resource.AdmissionActionUpdate:
 		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/updatedBy", // Set updatedBy to the request user
-			Operation: resource.PatchOpReplace,
+			Path:      "/metadata/updatedBy",   // Set updatedBy to the request user
+			Operation: resource.PatchOpReplace, // TODO: only make this a replace if it exists
 			Value:     request.UserInfo.Username,
 		}, resource.PatchOperation{
 			Path:      "/metadata/updateTimestamp", // Set updateTimestamp to the current time
-			Operation: resource.PatchOpReplace,
+			Operation: resource.PatchOpReplace,     // TODO: only make this a replace if it exists
 			Value:     now().Format(time.RFC3339Nano),
 		}, resource.PatchOperation{
 			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-			Operation: resource.PatchOpReplace,
+			Operation: resource.PatchOpReplace,            // TODO: only make this a replace if it exists
 			Value:     request.Version,
 		})
 	default:
@@ -203,263 +199,5 @@ func (o *OpinionatedValidatingAdmissionController) Validate(request *resource.Ad
 func NewOpinionatedValidatingAdmissionController(validateFunc func(*resource.AdmissionRequest) error) *OpinionatedValidatingAdmissionController {
 	return &OpinionatedValidatingAdmissionController{
 		ValidateFunc: validateFunc,
-	}
-}
-
-// ValidatingAdmissionHandler provides multi-resource.ValidatingAdmissionController handling for admission requests.
-// ValidatingAdmissionControllers are added in conjunction with a resource.Schema, and/or a DefaultController may be provided.
-// The type exposes functions to use in admission control, such as HTTPHandler, which exposes a http.HandlerFunc.
-// TODO: include other handler functions as needed
-type ValidatingAdmissionHandler struct {
-	DefaultController resource.ValidatingAdmissionController
-	controllers       map[string]validatingAdmissionControllerTuple
-}
-
-type validatingAdmissionControllerTuple struct {
-	schema     resource.Schema
-	controller resource.ValidatingAdmissionController
-}
-
-// NewValidatingAdmissionHandler returns a pointer to a new ValidatingAdmissionHandler which has been properly initialized.
-func NewValidatingAdmissionHandler() *ValidatingAdmissionHandler {
-	return &ValidatingAdmissionHandler{
-		controllers: make(map[string]validatingAdmissionControllerTuple),
-	}
-}
-
-// AddController registers a ValidatingAdmissionController to be associated with a specific Schema.
-// Only one ValidatingAdmissionController can be associated to a Schema. If a subsequent AddController call
-// uses the same Schema, the associated ValidatingAdmissionController will be overwritten.
-func (v *ValidatingAdmissionHandler) AddController(controller resource.ValidatingAdmissionController, schema resource.Schema) {
-	if v.controllers == nil {
-		v.controllers = make(map[string]validatingAdmissionControllerTuple)
-	}
-	v.controllers[gk(schema.Group(), schema.Kind())] = validatingAdmissionControllerTuple{
-		schema:     schema,
-		controller: controller,
-	}
-}
-
-// HTTPHandler returns a http.HandlerFunc which will handle HTTP kubernetes admission requests.
-// It parses the payload, unmarshals the object to the appropriate Schema's resource.Object type,
-// and then calls the correlated resource.ValidatingAdmissionController.
-// If there is no correlated resource.ValidatingAdmissionController, the DefaultController will be used instead,
-// and the resource.Object underlying type in the resource.AdmissionRequest will be a *resource.SimpleObject.
-// If no DefaultController is provided, a 500 error is returned with the content of errStringNoAdmissionControllerDefined.
-// TODO: should it be a successful response instead?
-func (v *ValidatingAdmissionHandler) HTTPHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Only POST is allowed
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Read the body
-		body, err := io.ReadAll(r.Body)
-		defer r.Body.Close()
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// Unmarshal the admission review
-		admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// Look up the schema and controller
-		var schema resource.Schema
-		var controller resource.ValidatingAdmissionController
-		if tpl, ok := v.controllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
-			schema = tpl.schema
-			controller = tpl.controller
-		} else {
-			// If we have a default controller, create a SimpleObject schema and use the default controller
-			if v.DefaultController != nil {
-				schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
-				controller = v.DefaultController
-			}
-		}
-
-		// If we didn't get a controller, return a failure
-		if controller == nil {
-			w.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, admRev.APIVersion, admRev.Kind, "validating")))
-			w.WriteHeader(http.StatusInternalServerError)
-		}
-
-		// Translate the kubernetes admission request to one with a resource.Object in it, using the schema
-		admReq, err := translateKubernetesAdmissionRequest(admRev.Request, schema)
-		if err != nil {
-			// TODO: different error?
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		// Run the controller
-		err = controller.Validate(admReq)
-		adResp := admission.AdmissionResponse{
-			UID:     admRev.Request.UID,
-			Allowed: true,
-		}
-		if err != nil {
-			addAdmissionError(&adResp, err)
-		}
-		bytes, err := json.Marshal(&admission.AdmissionReview{
-			TypeMeta: admRev.TypeMeta,
-			Response: &adResp,
-		})
-		if err != nil {
-			// Bad news
-			w.Write([]byte(err.Error())) // TODO: better
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		w.Write(bytes)
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-// MutatingAdmissionHandler provides multi-resource.MutatingAdmissionController handling for admission requests.
-// MutatingAdmissionControllers are added in conjunction with a resource.Schema, and/or a DefaultController may be provided.
-// The type exposes functions to use in admission control, such as HTTPHandler, which exposes a http.HandlerFunc.
-// TODO: include other handler functions as needed
-type MutatingAdmissionHandler struct {
-	DefaultController resource.MutatingAdmissionController
-	controllers       map[string]mutatingAdmissionControllerTuple
-}
-
-type mutatingAdmissionControllerTuple struct {
-	schema     resource.Schema
-	controller resource.MutatingAdmissionController
-}
-
-// NewMutatingAdmissionHandler returns a pointer to a new MutatingAdmissionHandler which has been properly initialized.
-func NewMutatingAdmissionHandler() *MutatingAdmissionHandler {
-	return &MutatingAdmissionHandler{
-		controllers: make(map[string]mutatingAdmissionControllerTuple),
-	}
-}
-
-// AddController registers a resource.MutatingAdmissionController to be associated with a specific Schema.
-// Only one ValidatingAdmissionController can be associated to a Schema. If a subsequent AddController call
-// uses the same Schema, the associated MutatingAdmissionController will be overwritten.
-func (m *MutatingAdmissionHandler) AddController(controller resource.MutatingAdmissionController, schema resource.Schema) {
-	if m.controllers == nil {
-		m.controllers = make(map[string]mutatingAdmissionControllerTuple)
-	}
-	m.controllers[gk(schema.Group(), schema.Kind())] = mutatingAdmissionControllerTuple{
-		schema:     schema,
-		controller: controller,
-	}
-}
-
-// HTTPHandler returns a http.HandlerFunc which will handle HTTP kubernetes admission requests.
-// It parses the payload, unmarshals the object to the appropriate Schema's resource.Object type,
-// and then calls the correlated resource.ValidatingAdmissionController.
-// If there is no correlated resource.MutatingAdmissionController, the DefaultController will be used instead,
-// and the resource.Object underlying type in the resource.AdmissionRequest will be a *resource.SimpleObject.
-// If no DefaultController is provided, a 500 error is returned with the content of errStringNoAdmissionControllerDefined.
-// TODO: should it be a successful response with no mutations instead?
-func (m *MutatingAdmissionHandler) HTTPHandler(w http.ResponseWriter, r *http.Request) {
-	// Only POST is allowed
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Read the body
-	body, err := io.ReadAll(r.Body)
-	defer r.Body.Close()
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Unmarshal the admission review
-	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
-	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Look up the schema and controller
-	var schema resource.Schema
-	var controller resource.MutatingAdmissionController
-	if tpl, ok := m.controllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
-		schema = tpl.schema
-		controller = tpl.controller
-	} else {
-		// If we have a default controller, create a SimpleObject schema and use the default controller
-		if m.DefaultController != nil {
-			schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
-			controller = m.DefaultController
-		}
-	}
-
-	// If we didn't get a controller, return a failure
-	if controller == nil {
-		w.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, admRev.APIVersion, admRev.Kind, "mutating")))
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-
-	// Translate the kubernetes admission request to one with a resource.Object in it, using the schema
-	admReq, err := translateKubernetesAdmissionRequest(admRev.Request, schema)
-	if err != nil {
-		// TODO: different error?
-		w.WriteHeader(http.StatusBadRequest)
-		return
-	}
-
-	// Run the controller
-	mResp, err := controller.Mutate(admReq)
-	adResp := admission.AdmissionResponse{
-		UID:     admRev.Request.UID,
-		Allowed: true,
-	}
-	if err == nil && len(mResp.PatchOperations) > 0 {
-		pt := admission.PatchTypeJSONPatch
-		adResp.PatchType = &pt
-		// Re-use err here, because if we error on the JSON marshal, we'll return an error
-		// admission response, rather than silently fail the patch.
-		adResp.Patch, err = marshalJSONPatch(resource.PatchRequest{
-			Operations: mResp.PatchOperations,
-		})
-	}
-	if err != nil {
-		addAdmissionError(&adResp, err)
-	}
-	bytes, err := json.Marshal(&admission.AdmissionReview{
-		TypeMeta: admRev.TypeMeta,
-		Response: &adResp,
-	})
-	if err != nil {
-		// Bad news
-		w.Write([]byte(err.Error())) // TODO: better
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Write(bytes)
-	w.WriteHeader(http.StatusOK)
-}
-
-func gk(group, kind string) string {
-	return fmt.Sprintf("%s.%s", kind, group)
-}
-
-func addAdmissionError(resp *admission.AdmissionResponse, err error) {
-	if err == nil || resp == nil {
-		return
-	}
-	resp.Allowed = false
-	resp.Result = &metav1.Status{
-		Status:  "Failure",
-		Message: err.Error(),
-	}
-	if cast, ok := err.(resource.AdmissionError); ok {
-		resp.Result.Code = int32(cast.StatusCode())
-		resp.Result.Reason = metav1.StatusReason(cast.Reason())
 	}
 }

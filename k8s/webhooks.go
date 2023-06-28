@@ -2,11 +2,15 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/resource"
+	admission "k8s.io/api/admission/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type WebhookServerConfig struct {
@@ -24,9 +28,6 @@ type WebhookServerConfig struct {
 	// DefaultMutatingController is called for any /validate requests received which don't have an entry in MutatingControllers.
 	// If left nil, an error will be returned to the caller instead.
 	DefaultMutatingController resource.MutatingAdmissionController
-	// WrapControllers instructs the WebhookServerController to wrap the provided Validating and Mutating AdmissionControllers
-	// in their Opinionated variants. This is done at setup time.
-	WrapControllers bool
 }
 
 type TLSConfig struct {
@@ -34,81 +35,77 @@ type TLSConfig struct {
 	KeyPath  string
 }
 
-func NewWebhookServer(config WebhookServerConfig) (*WebhookServerController, error) {
-	validatingHandler := NewValidatingAdmissionHandler()
+type WebhookServer struct {
+	DefaultValidatingController resource.ValidatingAdmissionController
+	DefaultMutatingController   resource.MutatingAdmissionController
+	validatingControllers       map[string]validatingAdmissionControllerTuple
+	mutatingControllers         map[string]mutatingAdmissionControllerTuple
+	port                        int
+	tlsConfig                   TLSConfig
+}
+
+func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
+	if config.Port < 1 || config.Port > 65536 {
+		return nil, fmt.Errorf("config.Port must be a valid port number (between 1 and 65536)")
+	}
+	if config.TLSConfig.CertPath == "" {
+		return nil, fmt.Errorf("config.TLSConfig.CertPath is required")
+	}
+	if config.TLSConfig.KeyPath == "" {
+		return nil, fmt.Errorf("config.TLSConfig.KeyPath is required")
+	}
+
+	ws := WebhookServer{
+		DefaultValidatingController: config.DefaultValidatingController,
+		DefaultMutatingController:   config.DefaultMutatingController,
+		validatingControllers:       make(map[string]validatingAdmissionControllerTuple),
+		mutatingControllers:         make(map[string]mutatingAdmissionControllerTuple),
+		port:                        config.Port,
+		tlsConfig:                   config.TLSConfig,
+	}
+
 	for sch, controller := range config.ValidatingControllers {
-		if config.WrapControllers {
-			controller = NewOpinionatedValidatingAdmissionController(controller.Validate)
-		}
-		validatingHandler.AddController(controller, sch)
+		ws.AddValidatingAdmissionController(controller, sch)
 	}
-	validatingHandler.DefaultController = config.DefaultValidatingController
-	mutatingHandler := NewMutatingAdmissionHandler()
+
 	for sch, controller := range config.MutatingControllers {
-		if config.WrapControllers {
-			controller = NewOpinionatedMutatingAdmissionController(controller.Mutate)
-		}
-		mutatingHandler.AddController(controller, sch)
+		ws.AddMutatingAdmissionController(controller, sch)
 	}
-	mutatingHandler.DefaultController = config.DefaultMutatingController
-	return &WebhookServerController{
-		validatingHandler: validatingHandler,
-		mutatingHandler:   mutatingHandler,
-		certPath:          config.TLSConfig.CertPath,
-		keyPath:           config.TLSConfig.KeyPath,
-		addr:              fmt.Sprintf(":%d", config.Port),
-	}, nil
+
+	return &ws, nil
 }
 
-func NewWebhookServerController(tlsConfig TLSConfig, port int) *WebhookServerController {
-	return &WebhookServerController{
-		validatingHandler: NewValidatingAdmissionHandler(),
-		mutatingHandler:   NewMutatingAdmissionHandler(),
-		certPath:          tlsConfig.CertPath,
-		keyPath:           tlsConfig.KeyPath,
-		addr:              fmt.Sprintf(":%d", port),
+func (w *WebhookServer) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, schema resource.Schema) {
+	if w.validatingControllers == nil {
+		w.validatingControllers = make(map[string]validatingAdmissionControllerTuple)
+	}
+	w.validatingControllers[gk(schema.Group(), schema.Kind())] = validatingAdmissionControllerTuple{
+		schema:     schema,
+		controller: controller,
 	}
 }
 
-// WebhookServerController is an HTTPS server that exposes webhooks for kubernetes admission.
-// It wraps ValidatingAdmissionHandler and MutatingAdmissionHandler and exposes their HTTPHandler() methods
-// as paths in an HTTPS webserver.
-// It implements operator.Controller and can be added to an operator.Operator and run alongside your other controllers.
-type WebhookServerController struct {
-	validatingHandler *ValidatingAdmissionHandler
-	mutatingHandler   *MutatingAdmissionHandler
-	certPath          string
-	keyPath           string
-	addr              string
-}
-
-func (s *WebhookServerController) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, schema resource.Schema) {
-	if s.validatingHandler == nil {
-		s.validatingHandler = NewValidatingAdmissionHandler()
+func (w *WebhookServer) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, schema resource.Schema) {
+	if w.mutatingControllers == nil {
+		w.mutatingControllers = make(map[string]mutatingAdmissionControllerTuple)
 	}
-	s.validatingHandler.AddController(controller, schema)
-}
-
-func (s *WebhookServerController) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, schema resource.Schema) {
-	if s.mutatingHandler == nil {
-		s.mutatingHandler = NewMutatingAdmissionHandler()
+	w.mutatingControllers[gk(schema.Group(), schema.Kind())] = mutatingAdmissionControllerTuple{
+		schema:     schema,
+		controller: controller,
 	}
-	s.mutatingHandler.AddController(controller, schema)
 }
 
-// Run implements the operator.Controller interface and runs the HTTPS server until either the closeCh is closed,
-// or the HTTPS server's process returns an error.
-func (s *WebhookServerController) Run(closeChan <-chan struct{}) error {
+func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/validate", s.validatingHandler.HTTPHandler())
-	mux.HandleFunc("/mutate", s.mutatingHandler.HTTPHandler)
+	mux.HandleFunc("/validate", w.HandleValidateHTTP)
+	mux.HandleFunc("/mutate", w.HandleMutateHTTP)
 	server := &http.Server{
-		Addr:    s.addr,
+		Addr:    fmt.Sprintf(":%d", w.port),
 		Handler: mux,
 	}
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- server.ListenAndServeTLS(s.certPath, s.keyPath)
+		errCh <- server.ListenAndServeTLS(w.tlsConfig.CertPath, w.tlsConfig.KeyPath)
 	}()
 	go func() {
 		for range closeChan {
@@ -121,4 +118,190 @@ func (s *WebhookServerController) Run(closeChan <-chan struct{}) error {
 	}()
 	err := <-errCh
 	return err
+}
+
+func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http.Request) {
+	// Only POST is allowed
+	if req.Method != http.MethodPost {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read the body
+	body, err := io.ReadAll(req.Body)
+	defer req.Body.Close()
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Unmarshal the admission review
+	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Look up the schema and controller
+	var schema resource.Schema
+	var controller resource.ValidatingAdmissionController
+	if tpl, ok := w.validatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
+		schema = tpl.schema
+		controller = tpl.controller
+	} else {
+		// If we have a default controller, create a SimpleObject schema and use the default controller
+		if w.DefaultValidatingController != nil {
+			schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+			controller = w.DefaultValidatingController
+		}
+	}
+
+	// If we didn't get a controller, return a failure
+	if controller == nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		writer.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, "validating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)))
+		return
+	}
+
+	// Translate the kubernetes admission request to one with a resource.Object in it, using the schema
+	admReq, err := translateKubernetesAdmissionRequest(admRev.Request, schema)
+	if err != nil {
+		// TODO: different error?
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Run the controller
+	err = controller.Validate(admReq)
+	adResp := admission.AdmissionResponse{
+		UID:     admRev.Request.UID,
+		Allowed: true,
+	}
+	if err != nil {
+		addAdmissionError(&adResp, err)
+	}
+	bytes, err := json.Marshal(&admission.AdmissionReview{
+		TypeMeta: admRev.TypeMeta,
+		Response: &adResp,
+	})
+	if err != nil {
+		// Bad news
+		writer.WriteHeader(http.StatusInternalServerError)
+		writer.Write([]byte(err.Error())) // TODO: better
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+	writer.Write(bytes)
+}
+
+func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.Request) {
+	// Only POST is allowed
+	if req.Method != http.MethodPost {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read the body
+	body, err := io.ReadAll(req.Body)
+	defer req.Body.Close()
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Unmarshal the admission review
+	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Look up the schema and controller
+	var schema resource.Schema
+	var controller resource.MutatingAdmissionController
+	if tpl, ok := w.mutatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
+		schema = tpl.schema
+		controller = tpl.controller
+	} else {
+		// If we have a default controller, create a SimpleObject schema and use the default controller
+		if w.DefaultMutatingController != nil {
+			schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+			controller = w.DefaultMutatingController
+		}
+	}
+
+	// If we didn't get a controller, return a failure
+	if controller == nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		writer.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, "mutating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)))
+		return
+	}
+
+	// Translate the kubernetes admission request to one with a resource.Object in it, using the schema
+	admReq, err := translateKubernetesAdmissionRequest(admRev.Request, schema)
+	if err != nil {
+		// TODO: different error?
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Run the controller
+	mResp, err := controller.Mutate(admReq)
+	adResp := admission.AdmissionResponse{
+		UID:     admRev.Request.UID,
+		Allowed: true,
+	}
+	if err == nil && len(mResp.PatchOperations) > 0 {
+		pt := admission.PatchTypeJSONPatch
+		adResp.PatchType = &pt
+		// Re-use err here, because if we error on the JSON marshal, we'll return an error
+		// admission response, rather than silently fail the patch.
+		adResp.Patch, err = marshalJSONPatch(resource.PatchRequest{
+			Operations: mResp.PatchOperations,
+		})
+	}
+	if err != nil {
+		addAdmissionError(&adResp, err)
+	}
+	bytes, err := json.Marshal(&admission.AdmissionReview{
+		TypeMeta: admRev.TypeMeta,
+		Response: &adResp,
+	})
+	if err != nil {
+		// Bad news
+		writer.WriteHeader(http.StatusInternalServerError)
+		writer.Write([]byte(err.Error())) // TODO: better
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+	writer.Write(bytes)
+}
+
+type validatingAdmissionControllerTuple struct {
+	schema     resource.Schema
+	controller resource.ValidatingAdmissionController
+}
+
+type mutatingAdmissionControllerTuple struct {
+	schema     resource.Schema
+	controller resource.MutatingAdmissionController
+}
+
+func gk(group, kind string) string {
+	return fmt.Sprintf("%s.%s", kind, group)
+}
+
+func addAdmissionError(resp *admission.AdmissionResponse, err error) {
+	if err == nil || resp == nil {
+		return
+	}
+	resp.Allowed = false
+	resp.Result = &metav1.Status{
+		Status:  "Failure",
+		Message: err.Error(),
+	}
+	if cast, ok := err.(resource.AdmissionError); ok {
+		resp.Result.Code = int32(cast.StatusCode())
+		resp.Result.Reason = metav1.StatusReason(cast.Reason())
+	}
 }
