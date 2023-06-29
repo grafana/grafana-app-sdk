@@ -320,14 +320,16 @@ func unmarshalKubernetesAdmissionReview(bytes []byte, format resource.WireFormat
 func translateKubernetesAdmissionRequest(req *admission.AdmissionRequest, schema resource.Schema) (*resource.AdmissionRequest, error) {
 	var obj, old resource.Object
 
-	obj = schema.ZeroValue()
-	err := rawToObject(req.Object.Raw, obj)
-	if err != nil {
-		return nil, err
+	if len(req.Object.Raw) > 0 {
+		obj = schema.ZeroValue()
+		err := rawToObject(req.Object.Raw, obj)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if len(req.OldObject.Raw) > 0 {
 		old = schema.ZeroValue()
-		err = rawToObject(req.OldObject.Raw, old)
+		err := rawToObject(req.OldObject.Raw, old)
 		if err != nil {
 			return nil, err
 		}

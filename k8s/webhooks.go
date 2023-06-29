@@ -275,7 +275,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 		UID:     admRev.Request.UID,
 		Allowed: true,
 	}
-	if err == nil && len(mResp.PatchOperations) > 0 {
+	if err == nil && mResp != nil && len(mResp.PatchOperations) > 0 {
 		pt := admission.PatchTypeJSONPatch
 		adResp.PatchType = &pt
 		// Re-use err here, because if we error on the JSON marshal, we'll return an error

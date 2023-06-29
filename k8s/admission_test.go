@@ -153,6 +153,11 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 					Metadata: TestResourceObjectMetadata{
 						CommonMetadata: resource.CommonMetadata{
 							CreationTimestamp: nowTime,
+							ExtraFields: map[string]any{
+								"annotations": map[string]string{
+									annotationPrefix + "createdBy": "no one",
+								},
+							},
 						},
 					},
 				},
@@ -175,7 +180,37 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 				},
 			},
 		},
-
+		{
+			name:       "no underlying, add action",
+			mutateFunc: nil,
+			request: resource.AdmissionRequest{
+				Action:  resource.AdmissionActionCreate,
+				Version: "v1-0",
+				UserInfo: resource.AdmissionUserInfo{
+					Username: "me",
+				},
+				Object: &TestResourceObject{
+					Metadata: TestResourceObjectMetadata{},
+				},
+			},
+			expected: &resource.MutatingResponse{
+				PatchOperations: []resource.PatchOperation{
+					{
+						Path:      "/metadata/createdBy", // Set createdBy to the request user
+						Operation: resource.PatchOpAdd,
+						Value:     "me",
+					}, {
+						Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
+						Operation: resource.PatchOpAdd,
+						Value:     nowTime.Format(time.RFC3339Nano),
+					}, {
+						Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
+						Operation: resource.PatchOpAdd,
+						Value:     "v1-0",
+					},
+				},
+			},
+		},
 		{
 			name:       "no underlying, update action",
 			mutateFunc: nil,

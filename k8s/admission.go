@@ -3,6 +3,7 @@ package k8s
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -109,25 +110,50 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 
 	switch request.Action {
 	case resource.AdmissionActionCreate:
+		// Patch is tricky when it comes to add vs replace operations for maps, like labels and annotations
+		if len(annotations) == 0 {
+			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+				Path:      "/metadata/annotations",
+				Operation: resource.PatchOpAdd,
+				Value: map[string]string{
+					annotationPrefix + "createdBy":       request.UserInfo.Username,
+					annotationPrefix + "updateTimestamp": request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
+				},
+			})
+		} else {
+			if _, ok := annotations[annotationPrefix+"createdBy"]; ok {
+				resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+					Path:      "/metadata/createdBy", // Set createdBy to the request user
+					Operation: resource.PatchOpReplace,
+					Value:     request.UserInfo.Username,
+				})
+			} else {
+				resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+					Path:      "/metadata/annotations/" + strings.Replace(annotationPrefix+"createdBy", "/", "~1", -1),
+					Operation: resource.PatchOpAdd,
+					Value:     request.UserInfo.Username,
+				})
+			}
+			op := resource.PatchOpReplace
+			if _, ok := annotations[annotationPrefix+"createdBy"]; !ok {
+				op = resource.PatchOpAdd
+			}
+			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+				Path:      "/metadata/createdBy", // Set createdBy to the request user
+				Operation: op,
+				Value:     request.UserInfo.Username,
+			})
+			op = resource.PatchOpReplace
+			if _, ok := annotations[annotationPrefix+"updateTimestamp"]; !ok {
+				op = resource.PatchOpAdd
+			}
+			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+				Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
+				Operation: op,
+				Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
+			})
+		}
 		op := resource.PatchOpReplace
-		if _, ok := annotations[annotationPrefix+"createdBy"]; !ok {
-			op = resource.PatchOpAdd
-		}
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/createdBy", // Set createdBy to the request user
-			Operation: op,
-			Value:     request.UserInfo.Username,
-		})
-		op = resource.PatchOpReplace
-		if _, ok := annotations[annotationPrefix+"updateTimestamp"]; !ok {
-			op = resource.PatchOpAdd
-		}
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-			Operation: op,
-			Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
-		})
-		op = resource.PatchOpReplace
 		if _, ok := request.Object.CommonMetadata().Labels[versionLabel]; !ok {
 			op = resource.PatchOpAdd
 		}
