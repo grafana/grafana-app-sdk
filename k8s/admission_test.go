@@ -150,46 +150,6 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: nowTime,
-							ExtraFields: map[string]any{
-								"annotations": map[string]string{
-									annotationPrefix + "createdBy": "no one",
-								},
-							},
-						},
-					},
-				},
-			},
-			expected: &resource.MutatingResponse{
-				PatchOperations: []resource.PatchOperation{
-					{
-						Path:      "/metadata/createdBy", // Set createdBy to the request user
-						Operation: resource.PatchOpReplace,
-						Value:     "me",
-					}, {
-						Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-						Operation: resource.PatchOpReplace,
-						Value:     nowTime.Format(time.RFC3339Nano),
-					}, {
-						Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-						Operation: resource.PatchOpReplace,
-						Value:     "v1-0",
-					},
-				},
-			},
-		},
-		{
-			name:       "no underlying, add action",
-			mutateFunc: nil,
-			request: resource.AdmissionRequest{
-				Action:  resource.AdmissionActionCreate,
-				Version: "v1-0",
-				UserInfo: resource.AdmissionUserInfo{
-					Username: "me",
-				},
-				Object: &TestResourceObject{
 					Metadata: TestResourceObjectMetadata{},
 				},
 			},
@@ -197,16 +157,18 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 				PatchOperations: []resource.PatchOperation{
 					{
 						Path:      "/metadata/createdBy", // Set createdBy to the request user
-						Operation: resource.PatchOpAdd,
+						Operation: resource.PatchOpReplace,
 						Value:     "me",
 					}, {
 						Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-						Operation: resource.PatchOpAdd,
-						Value:     nowTime.Format(time.RFC3339Nano),
+						Operation: resource.PatchOpReplace,
+						Value:     time.Time{}.Format(time.RFC3339Nano),
 					}, {
-						Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
+						Path:      "/metadata/labels", // Set the internal version label to the version of the endpoint
 						Operation: resource.PatchOpAdd,
-						Value:     "v1-0",
+						Value: map[string]string{
+							versionLabel: "v1-0",
+						},
 					},
 				},
 			},
@@ -224,6 +186,9 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 					Metadata: TestResourceObjectMetadata{
 						CommonMetadata: resource.CommonMetadata{
 							CreationTimestamp: nowTime,
+							Labels: map[string]string{
+								"foo": "bar",
+							},
 						},
 					},
 				},
@@ -240,7 +205,7 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 						Value:     nowTime.Format(time.RFC3339Nano),
 					}, {
 						Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-						Operation: resource.PatchOpReplace,
+						Operation: resource.PatchOpAdd,
 						Value:     "v1-1",
 					},
 				},
