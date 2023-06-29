@@ -483,6 +483,121 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 	})
 }
 
+func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
+	// Because these tests take more time, isolate them to their own test function
+	t.Run("linear retry, don't dequeue", func(t *testing.T) {
+		addError := errors.New("I AM ERROR")
+		addAttempt := 0
+		updateAttempt := 0
+		wg := sync.WaitGroup{}
+		inf := &testInformer{
+			handlers: make([]ResourceWatcher, 0),
+			onStop: func() {
+				wg.Done()
+			},
+		}
+		c := NewInformerController()
+		// Make the retry ticker interval a half-second so we can run this test faster
+		c.retryTickerInterval = time.Millisecond * 500
+		// 500-ms linear retry policy
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			return true, time.Millisecond * 500
+		}
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		c.AddInformer(inf, "foo")
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addAttempt++
+				return addError
+			},
+			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				updateAttempt++
+				return nil
+			},
+		}, "foo")
+		wg.Add(2)
+
+		stopCh := make(chan struct{})
+		go func() {
+			err := c.Run(stopCh)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		inf.FireAdd(context.Background(), nil)
+		// Wait for what should be four retries
+		time.Sleep(time.Millisecond * 2300)
+		// Fire an update, which in this case should not interrupt the add retries
+		inf.FireUpdate(context.Background(), nil, nil)
+		go func() {
+			time.Sleep(time.Second)
+			close(stopCh)
+		}()
+		wg.Wait()
+		// We should have six total attempts, though we may be off-by-one because timing is hard,
+		// so we actually check that 5 <= attempts <= 7
+		assert.LessOrEqual(t, 5, addAttempt)
+		assert.GreaterOrEqual(t, 7, addAttempt)
+		assert.Equal(t, 1, updateAttempt)
+	})
+	// Because these tests take more time, isolate them to their own test function
+	t.Run("linear retry, don't dequeue, overlapping retries", func(t *testing.T) {
+		addError := errors.New("I AM ERROR")
+		updateError := errors.New("JE SUIS ERROR")
+		addAttempt := 0
+		updateAttempt := 0
+		wg := sync.WaitGroup{}
+		inf := &testInformer{
+			handlers: make([]ResourceWatcher, 0),
+			onStop: func() {
+				wg.Done()
+			},
+		}
+		c := NewInformerController()
+		// Make the retry ticker interval a half-second so we can run this test faster
+		c.retryTickerInterval = time.Millisecond * 500
+		// 500-ms linear retry policy
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 6 {
+				return false, 0
+			}
+			return true, time.Millisecond * 450
+		}
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		c.AddInformer(inf, "foo")
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addAttempt++
+				return addError
+			},
+			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				updateAttempt++
+				return updateError
+			},
+		}, "foo")
+		wg.Add(2)
+
+		stopCh := make(chan struct{})
+		go func() {
+			err := c.Run(stopCh)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		inf.FireAdd(context.Background(), nil)
+		// Wait for what should be four retries
+		time.Sleep(time.Millisecond * 2300)
+		// Fire an update, which in this case should not interrupt the add retries
+		inf.FireUpdate(context.Background(), nil, nil)
+		go func() {
+			time.Sleep(time.Millisecond * 4000)
+			close(stopCh)
+		}()
+		wg.Wait()
+		// We should have seven total attempts (six retries + initial)
+		assert.Equal(t, 7, addAttempt)
+		assert.Equal(t, 7, updateAttempt)
+	})
+}
+
 type mockInformer struct {
 	AddEventHandlerFunc func(handler ResourceWatcher)
 	RunFunc             func(stopCh <-chan struct{}) error
