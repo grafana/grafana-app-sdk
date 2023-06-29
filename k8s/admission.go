@@ -3,7 +3,6 @@ package k8s
 import (
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -102,93 +101,65 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 		}
 	}
 
-	annotations, ok := request.Object.CommonMetadata().ExtraFields["annotations"].(map[string]string)
-	if !ok {
-		// Bad annotations, just use an empty map
-		annotations = make(map[string]string)
-	}
-
 	switch request.Action {
 	case resource.AdmissionActionCreate:
 		// Patch is tricky when it comes to add vs replace operations for maps, like labels and annotations
-		if len(annotations) == 0 {
-			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-				Path:      "/metadata/annotations",
+		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+			Path:      "/metadata/createdBy", // Set createdBy to the request user
+			Operation: resource.PatchOpReplace,
+			Value:     request.UserInfo.Username,
+		}, resource.PatchOperation{
+			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
+			Operation: resource.PatchOpReplace,
+			Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
+		})
+		// TODO: unsure on this
+		if len(request.Object.CommonMetadata().Labels) == 0 {
+			ops := append(make([]resource.PatchOperation, 0), resource.PatchOperation{
+				Path:      "/metadata/labels",
 				Operation: resource.PatchOpAdd,
 				Value: map[string]string{
-					annotationPrefix + "createdBy":       request.UserInfo.Username,
-					annotationPrefix + "updateTimestamp": request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
+					versionLabel: request.Version,
 				},
 			})
+			ops = append(ops, resp.PatchOperations...)
+			resp.PatchOperations = ops
 		} else {
-			if _, ok := annotations[annotationPrefix+"createdBy"]; ok {
-				resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-					Path:      "/metadata/createdBy", // Set createdBy to the request user
-					Operation: resource.PatchOpReplace,
-					Value:     request.UserInfo.Username,
-				})
-			} else {
-				resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-					Path:      "/metadata/annotations/" + strings.Replace(annotationPrefix+"createdBy", "/", "~1", -1),
-					Operation: resource.PatchOpAdd,
-					Value:     request.UserInfo.Username,
-				})
-			}
-			op := resource.PatchOpReplace
-			if _, ok := annotations[annotationPrefix+"createdBy"]; !ok {
-				op = resource.PatchOpAdd
-			}
 			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-				Path:      "/metadata/createdBy", // Set createdBy to the request user
-				Operation: op,
-				Value:     request.UserInfo.Username,
-			})
-			op = resource.PatchOpReplace
-			if _, ok := annotations[annotationPrefix+"updateTimestamp"]; !ok {
-				op = resource.PatchOpAdd
-			}
-			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-				Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-				Operation: op,
-				Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
+				Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
+				Operation: resource.PatchOpAdd,
+				Value:     request.Version,
 			})
 		}
-		op := resource.PatchOpReplace
-		if _, ok := request.Object.CommonMetadata().Labels[versionLabel]; !ok {
-			op = resource.PatchOpAdd
-		}
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-			Operation: op,
-			Value:     request.Version,
-		})
 	case resource.AdmissionActionUpdate:
-		op := resource.PatchOpReplace
-		if _, ok := annotations[annotationPrefix+"updatedBy"]; !ok {
-			op = resource.PatchOpAdd
-		}
+		// Patch is tricky when it comes to add vs replace operations for maps, like labels and annotations
 		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/updatedBy", // Set updatedBy to the request user
-			Operation: op,
+			Path:      "/metadata/updatedBy", // Set createdBy to the request user
+			Operation: resource.PatchOpReplace,
 			Value:     request.UserInfo.Username,
-		})
-		op = resource.PatchOpReplace
-		if _, ok := annotations[annotationPrefix+"updateTimestamp"]; !ok {
-			op = resource.PatchOpAdd
-		}
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/updateTimestamp", // Set updateTimestamp to the current time
-			Operation: op,
+		}, resource.PatchOperation{
+			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
+			Operation: resource.PatchOpReplace,
 			Value:     now().Format(time.RFC3339Nano),
 		})
-		if _, ok := request.Object.CommonMetadata().Labels[versionLabel]; !ok {
-			op = resource.PatchOpAdd
+		// TODO: unsure on this
+		if len(request.Object.CommonMetadata().Labels) == 0 {
+			ops := append(make([]resource.PatchOperation, 0), resource.PatchOperation{
+				Path:      "/metadata/labels",
+				Operation: resource.PatchOpAdd,
+				Value: map[string]string{
+					versionLabel: request.Version,
+				},
+			})
+			ops = append(ops, resp.PatchOperations...)
+			resp.PatchOperations = ops
+		} else {
+			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
+				Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
+				Operation: resource.PatchOpAdd,
+				Value:     request.Version,
+			})
 		}
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-			Operation: op,
-			Value:     request.Version,
-		})
 	default:
 		// Do nothing
 	}

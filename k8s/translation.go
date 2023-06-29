@@ -102,6 +102,9 @@ func rawToObject(raw []byte, into resource.Object) error {
 	if len(kubeObject.ObjectMetadata.ManagedFields) > 0 {
 		cmd.ExtraFields["managedFields"] = kubeObject.ObjectMetadata.ManagedFields
 	}
+	if len(kubeObject.ObjectMetadata.Annotations) > 0 {
+		cmd.ExtraFields["annotations"] = kubeObject.ObjectMetadata.Annotations
+	}
 	cmd.CreationTimestamp = kubeObject.ObjectMetadata.CreationTimestamp.Time
 	if kubeObject.ObjectMetadata.DeletionTimestamp != nil {
 		t := kubeObject.ObjectMetadata.DeletionTimestamp.Time
@@ -218,10 +221,62 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 			// And replace '/' with '~1' for encoding into a patch path
 			endPart := strings.Join(parts[1:], "~1") // If there were slashes, we need to encode them
 			op.Path = fmt.Sprintf("/metadata/annotations/%s%s", strings.ReplaceAll(annotationPrefix, "/", "~1"), endPart)
+			if op.Operation == resource.PatchOpReplace {
+				op.Operation = resource.PatchOpAdd // We change this for safety--they behave the same within a map, but if they key is absent, replace won't work
+			}
 		}
 		patch.Operations[idx] = op
 	}
 	return json.Marshal(patch.Operations)
+}
+
+func translateJSONPatch(patch resource.PatchRequest) (*resource.PatchRequest, error) {
+	translated := resource.PatchRequest{
+		Operations: make([]resource.PatchOperation, len(patch.Operations)),
+	}
+	for idx, op := range patch.Operations {
+		// We don't allow a patch on the metadata object as a whole
+		if op.Path == "/metadata" {
+			return nil, fmt.Errorf("cannot patch entire metadata object")
+		}
+
+		// We only need to (possibly) correct patch operations for the metadata
+		if len(op.Path) < len("/metadata/") || op.Path[:len("/metadata/")] != "/metadata/" {
+			translated.Operations[idx] = op
+			continue
+		}
+		// If the next part of the path isn't a key in metav1.ObjectMeta, then we put it in annotations
+		parts := strings.Split(strings.Trim(op.Path, "/"), "/")
+		if len(parts) <= 1 {
+			return nil, fmt.Errorf("invalid patch path")
+		}
+		if _, ok := metaV1Fields[parts[1]]; ok {
+			// Normal kube metadata
+			translated.Operations[idx] = op
+			continue
+		}
+		// UNLESS it's extraFields, which holds implementation-specific extra fields
+		if parts[1] == "extraFields" {
+			if len(parts) < 3 {
+				return nil, fmt.Errorf("cannot patch entire extraFields, please patch fields in extraFields instead")
+			}
+			// Just take the remaining part of the path and put it after /metadata
+			// If it's not a valid kubernetes metadata object, that's because the user has done something funny with extraFields,
+			// and it wouldn't be properly encoded/decoded by the translator anyway
+			op.Path = "/metadata/" + strings.Join(parts[2:], "/")
+		} else {
+			// Otherwise, update the path to be in annotations, as that's where all the custom and non-kubernetes common metadata goes
+			// We just have to prefix the remaining part of the path with the annotationPrefix
+			// And replace '/' with '~1' for encoding into a patch path
+			endPart := strings.Join(parts[1:], "~1") // If there were slashes, we need to encode them
+			op.Path = fmt.Sprintf("/metadata/annotations/%s%s", strings.ReplaceAll(annotationPrefix, "/", "~1"), endPart)
+			if op.Operation == resource.PatchOpReplace {
+				op.Operation = resource.PatchOpAdd // We change this for safety--they behave the same within a map, but if they key is absent, replace won't work
+			}
+		}
+		translated.Operations[idx] = op
+	}
+	return &translated, nil
 }
 
 func getV1ObjectMetaFields() map[string]struct{} {
