@@ -157,6 +157,13 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		return fmt.Errorf("new cannot be nil")
 	}
 
+	// Only fire off Update if the generation has changed (so skip subresource updates)
+	oldGen := getGeneration(old)
+	newGen := getGeneration(new)
+	if newGen > 0 && oldGen == newGen {
+		return nil
+	}
+
 	// TODO: finalizers part of object metadata?
 	oldFinalizers := o.getFinalizers(old)
 	newFinalizers := o.getFinalizers(new)
@@ -172,14 +179,6 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		if err != nil {
 			return fmt.Errorf("error adding finalizer: %w", err)
 		}
-	}
-
-	// Compare generations.
-	// If the generation is the same, then nothing we care about has changed and we can ignore this event.
-	oldGen := o.getGeneration(old)
-	newGen := o.getGeneration(new)
-	if newGen > 0 && oldGen == newGen {
-		return nil
 	}
 
 	// Check if the deletion timestamp is non-nil.
@@ -287,7 +286,7 @@ func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {
 	return make([]string, 0)
 }
 
-func (*OpinionatedWatcher) getGeneration(object resource.Object) int64 {
+func getGeneration(object resource.Object) int64 {
 	g, ok := object.CommonMetadata().ExtraFields["generation"]
 	if !ok {
 		return 0

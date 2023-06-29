@@ -38,9 +38,6 @@ func (l *ListMap[K, V]) ItemAt(key K, index int) (V, bool) {
 // `index` is the index within the list, and `value` is the value pointer, as in a normal `range` operation.
 func (l *ListMap[K, V]) RangeAll(rangeFunc func(key K, index int, value V)) {
 	l.internal.Range(func(key K, value []V) bool {
-		mux, _ := l.muxes.LoadOrStore(key, &sync.RWMutex{})
-		mux.RLock()
-		defer mux.RUnlock()
 		l.Range(key, func(i int, v V) {
 			rangeFunc(key, i, v)
 		})
@@ -79,8 +76,8 @@ func (l *ListMap[K, V]) KeySize(key K) int {
 func (l *ListMap[K, V]) Range(key K, rangeFunc func(index int, value V)) {
 	mux, _ := l.muxes.LoadOrStore(key, &sync.RWMutex{})
 	mux.RLock()
-	defer mux.RUnlock()
 	list, ok := l.internal.Load(key)
+	mux.RUnlock()
 	if !ok {
 		return
 	}
@@ -140,6 +137,36 @@ func (l *ListMap[K, V]) RemoveItem(key K, match func(V) bool) bool {
 		}
 	}
 	return false
+}
+
+// RemoveItems removes the first N (`limit`) items in the list for a key which satisfies the `match` function.
+// If `limit` is less than 1, there is no limit to the number of items which can be removed.
+// If the key does not exist, or no item in the list satisfies the `match` function, it is a no-op.
+// The function returns the number of removed items.
+// The delete preserves list order after delete, meaning that all items subsequent to the index are left-shifted.
+func (l *ListMap[K, V]) RemoveItems(key K, match func(V) bool, limit int) int {
+	mux, _ := l.muxes.LoadOrStore(key, &sync.RWMutex{})
+	mux.Lock()
+	defer mux.Unlock()
+	list, ok := l.internal.Load(key)
+	if !ok {
+		return 0
+	}
+	toRemove := make([]int, 0)
+	for i := 0; i < len(list); i++ {
+		if match(list[i]) {
+			toRemove = append(toRemove, i)
+			if limit > 0 && len(toRemove) >= limit {
+				break
+			}
+		}
+	}
+	// Traverse the toRemove list backwards, so we preserve indices as we delete from the list
+	for i := len(toRemove) - 1; i >= 0; i-- {
+		list = l.remove(list, toRemove[i])
+	}
+	l.internal.Store(key, list)
+	return len(toRemove)
 }
 
 func (*ListMap[K, V]) remove(list []V, i int) []V {

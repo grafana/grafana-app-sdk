@@ -7,18 +7,18 @@ require (
 	github.com/dave/dst v0.27.2
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.9
-	github.com/grafana/grafana-plugin-sdk-go v0.163.0
+	github.com/grafana/grafana-plugin-sdk-go v0.166.0
 	github.com/grafana/kindsys v0.0.0-20230508162304-452481b63482
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/puzpuzpuz/xsync/v2 v2.4.0
+	github.com/puzpuzpuz/xsync/v2 v2.4.1
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
 	gomodules.xyz/jsonpatch/v2 v2.3.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.27.2
-	k8s.io/apimachinery v0.27.2
-	k8s.io/client-go v0.27.2
+	k8s.io/api v0.27.3
+	k8s.io/apimachinery v0.27.3
+	k8s.io/client-go v0.27.3
 	k8s.io/utils v0.0.0-20230209194617-a36077c30491
 )
 

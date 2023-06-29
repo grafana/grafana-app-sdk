@@ -28,6 +28,17 @@ type SchemalessClient struct {
 	mutex sync.Mutex
 }
 
+// NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
+func NewSchemalessClient(kubeConfig rest.Config, clientConfig ClientConfig) *SchemalessClient {
+	kubeConfig.NegotiatedSerializer = &GenericNegotiatedSerializer{}
+	kubeConfig.UserAgent = rest.DefaultKubernetesUserAgent()
+	return &SchemalessClient{
+		kubeConfig:   kubeConfig,
+		clientConfig: clientConfig,
+		clients:      make(map[string]*groupVersionClient),
+	}
+}
+
 // Get gets a resource from kubernetes with the Kind and GroupVersion determined from the FullIdentifier,
 // using the namespace and name in FullIdentifier. If identifier.Plural is present, it will use that,
 // otherwise, LOWER(identifier.Kind) + s is used for the resource.

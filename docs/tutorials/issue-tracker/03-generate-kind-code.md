@@ -2,6 +2,10 @@
 
 Now that we have our kind and schema defined, we want to generate code from them that we can use. In the future, we'll want to re-generate this code whenever we change anything in our `kinds` directory. The SDK provides a command for this: `grafana-app-sdk generate`, but our project init also gave us a make target which will do the same thing, so you can run either. Here, I'm running the make target:
 ```shell
+make generate
+```
+This command should ouput a list of all the files it writes:
+```shell
 $ make generate
  * Writing file pkg/generated/resource/issue/cue.mod/module.cue
  * Writing file pkg/generated/resource/issue/issue_lineage.cue
@@ -108,7 +112,7 @@ with `metadata` or `status`, they will also show up in the `Metadata` or `Status
 ## Generated TypeScript Code
 
 ```shell
-tree plugin
+$ tree plugin
 plugin
 └── src
     └── generated
@@ -126,7 +130,7 @@ Note that this is a CRD of the kind, not just the schema, so the CRD will contai
 This can be used to set up kubernetes as our storage layer for our project.
 
 ```shell
-tree definitions
+$ tree definitions
 definitions
 └── issue.unknown-plugin.plugins.grafana.com.json
 

@@ -194,6 +194,176 @@ func TestLoader_Load(t *testing.T) {
 	}
 }
 
+func TestLoader_LoadFromSettings(t *testing.T) {
+	tests := []struct {
+		name     string
+		settings backend.AppInstanceSettings
+		want     kubeconfig.NamespacedConfig
+		wantErr  bool
+	}{
+		{
+			name: "when valid config keys are passed as raw strings",
+			settings: backend.AppInstanceSettings{
+				DecryptedSecureJSONData: map[string]string{
+					kubeconfig.KeyNamespace: "custom",
+					kubeconfig.KeyConfig: `{
+						"kind": "Config",
+						"apiVersion": "v1",
+						"preferences": {},
+						"clusters": [
+							{
+								"name": "testcluster",
+								"cluster": {
+									"server": "https://localhost:6443",
+									"certificate-authority-data": "ZGF0YQo="
+								}
+							}
+						],
+						"users": [
+							{
+								"name": "admin",
+								"user": {
+									"client-certificate-data": "ZGF0YQo=",
+									"client-key-data": "ZGF0YQo="
+								}
+							}
+						],
+						"contexts": [
+							{
+								"name": "default",
+								"context": {
+									"cluster": "testcluster",
+									"user": "admin"
+								}
+							}
+						],
+						"current-context": "default"
+					}`,
+				},
+			},
+			want: kubeconfig.NamespacedConfig{
+				CRC32:     1362417121,
+				Namespace: "custom",
+				RestConfig: rest.Config{
+					Host:    "https://localhost:6443",
+					APIPath: "/apis",
+					TLSClientConfig: rest.TLSClientConfig{
+						CAData:   []byte{100, 97, 116, 97, 10},
+						CertData: []byte{100, 97, 116, 97, 10},
+						KeyData:  []byte{100, 97, 116, 97, 10},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "when valid config keys are passed as raw strings and config is in YAML",
+			settings: backend.AppInstanceSettings{
+				DecryptedSecureJSONData: map[string]string{
+					kubeconfig.KeyNamespace: "custom",
+					kubeconfig.KeyConfig: `
+kind: Config
+apiVersion: v1
+preferences: {}
+clusters:
+  - name: testcluster
+    cluster:
+      server: https://localhost:6443
+      certificate-authority-data: ZGF0YQo=
+users:
+  - name: admin
+    user:
+      client-certificate-data: ZGF0YQo=
+      client-key-data: ZGF0YQo=
+contexts:
+  - name: default
+    context:
+      cluster: testcluster
+      user: admin
+current-context: default
+`,
+				},
+			},
+			want: kubeconfig.NamespacedConfig{
+				CRC32:     3859317101,
+				Namespace: "custom",
+				RestConfig: rest.Config{
+					Host:    "https://localhost:6443",
+					APIPath: "/apis",
+					TLSClientConfig: rest.TLSClientConfig{
+						CAData:   []byte{100, 97, 116, 97, 10},
+						CertData: []byte{100, 97, 116, 97, 10},
+						KeyData:  []byte{100, 97, 116, 97, 10},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "when valid config keys are passed as base64-encoded strings",
+			settings: backend.AppInstanceSettings{
+				DecryptedSecureJSONData: map[string]string{
+					kubeconfig.KeyNamespace: "Y3VzdG9t",
+					kubeconfig.KeyConfig:    "ewogICJraW5kIjogIkNvbmZpZyIsCiAgImFwaVZlcnNpb24iOiAidjEiLAogICJwcmVmZXJlbmNlcyI6IHt9LAogICJjbHVzdGVycyI6IFsKICAgIHsKICAgICAgIm5hbWUiOiAidGVzdGNsdXN0ZXIiLAogICAgICAiY2x1c3RlciI6IHsKICAgICAgICAic2VydmVyIjogImh0dHBzOi8vbG9jYWxob3N0OjY0NDMiLAogICAgICAgICJjZXJ0aWZpY2F0ZS1hdXRob3JpdHktZGF0YSI6ICJaR0YwWVFvPSIKICAgICAgfQogICAgfQogIF0sCiAgInVzZXJzIjogWwogICAgewogICAgICAibmFtZSI6ICJhZG1pbiIsCiAgICAgICJ1c2VyIjogewogICAgICAgICJjbGllbnQtY2VydGlmaWNhdGUtZGF0YSI6ICJaR0YwWVFvPSIsCiAgICAgICAgImNsaWVudC1rZXktZGF0YSI6ICJaR0YwWVFvPSIKICAgICAgfQogICAgfQogIF0sCiAgImNvbnRleHRzIjogWwogICAgewogICAgICAibmFtZSI6ICJkZWZhdWx0IiwKICAgICAgImNvbnRleHQiOiB7CiAgICAgICAgImNsdXN0ZXIiOiAidGVzdGNsdXN0ZXIiLAogICAgICAgICJ1c2VyIjogImFkbWluIgogICAgICB9CiAgICB9CiAgXSwKICAiY3VycmVudC1jb250ZXh0IjogImRlZmF1bHQiCn0K",
+				},
+			},
+			want: kubeconfig.NamespacedConfig{
+				CRC32:     1920780822,
+				Namespace: "custom",
+				RestConfig: rest.Config{
+					Host:    "https://localhost:6443",
+					APIPath: "/apis",
+					TLSClientConfig: rest.TLSClientConfig{
+						CAData:   []byte{100, 97, 116, 97, 10},
+						CertData: []byte{100, 97, 116, 97, 10},
+						KeyData:  []byte{100, 97, 116, 97, 10},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "when valid config keys are passed as base64-encoded strings and config is in YAML",
+			settings: backend.AppInstanceSettings{
+				DecryptedSecureJSONData: map[string]string{
+					kubeconfig.KeyNamespace: "Y3VzdG9t",
+					kubeconfig.KeyConfig:    "a2luZDogQ29uZmlnCmFwaVZlcnNpb246IHYxCnByZWZlcmVuY2VzOiB7fQpjbHVzdGVyczoKICAtIG5hbWU6IHRlc3RjbHVzdGVyCiAgICBjbHVzdGVyOgogICAgICBzZXJ2ZXI6IGh0dHBzOi8vbG9jYWxob3N0OjY0NDMKICAgICAgY2VydGlmaWNhdGUtYXV0aG9yaXR5LWRhdGE6IFpHRjBZUW89CnVzZXJzOgogIC0gbmFtZTogYWRtaW4KICAgIHVzZXI6CiAgICAgIGNsaWVudC1jZXJ0aWZpY2F0ZS1kYXRhOiBaR0YwWVFvPQogICAgICBjbGllbnQta2V5LWRhdGE6IFpHRjBZUW89CmNvbnRleHRzOgogIC0gbmFtZTogZGVmYXVsdAogICAgY29udGV4dDoKICAgICAgY2x1c3RlcjogdGVzdGNsdXN0ZXIKICAgICAgdXNlcjogYWRtaW4KY3VycmVudC1jb250ZXh0OiBkZWZhdWx0Cg==",
+				},
+			},
+			want: kubeconfig.NamespacedConfig{
+				CRC32:     3872305992,
+				Namespace: "custom",
+				RestConfig: rest.Config{
+					Host:    "https://localhost:6443",
+					APIPath: "/apis",
+					TLSClientConfig: rest.TLSClientConfig{
+						CAData:   []byte{100, 97, 116, 97, 10},
+						CertData: []byte{100, 97, 116, 97, 10},
+						KeyData:  []byte{100, 97, 116, 97, 10},
+					},
+				},
+			},
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := kubeconfig.NewLoader()
+
+			var res kubeconfig.NamespacedConfig
+			err := l.LoadFromSettings(tt.settings, &res)
+
+			assert.Equal(t, tt.want, res)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestCachingLoader_Load(t *testing.T) {
 	t.Run("should forward errors", func(t *testing.T) {
 		assert.Error(

@@ -170,8 +170,21 @@ func TestSimpleStore_Update(t *testing.T) {
 		Name:      "test",
 	}
 
-	t.Run("error", func(t *testing.T) {
+	t.Run("get error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return nil, cerr
+		}
+		ret, err := store.Update(ctx, id, "")
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("update error", func(t *testing.T) {
+		cerr := fmt.Errorf("SOY ERROR")
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return retObj, nil
+		}
 		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			return nil, cerr
 		}
@@ -181,6 +194,9 @@ func TestSimpleStore_Update(t *testing.T) {
 	})
 
 	t.Run("success, no metadata options", func(t *testing.T) {
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return retObj, nil
+		}
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
@@ -198,6 +214,9 @@ func TestSimpleStore_Update(t *testing.T) {
 		lbls := map[string]string{
 			"field": "value",
 		}
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return retObj, nil
+		}
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
@@ -214,6 +233,9 @@ func TestSimpleStore_Update(t *testing.T) {
 
 	t.Run("success, with resourceVersion option", func(t *testing.T) {
 		rv := "12345"
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return retObj, nil
+		}
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
