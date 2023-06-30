@@ -598,6 +598,261 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 	})
 }
 
+func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
+	t.Run("subsequent delete, should dequeue", func(t *testing.T) {
+		addError := errors.New("I AM ERROR")
+		addAttempts := 0
+		wg := sync.WaitGroup{}
+		inf := &testInformer{
+			handlers: make([]ResourceWatcher, 0),
+			onStop: func() {
+				wg.Done()
+			},
+		}
+		c := NewInformerController()
+		// Make the retry ticker interval 100ms so we can run this test faster
+		c.retryTickerInterval = time.Millisecond * 100
+		// 100-ms linear retry policy
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 6 {
+				return false, 0
+			}
+			return true, time.Millisecond * 99
+		}
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		c.AddInformer(inf, "foo")
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addAttempts++
+				return addError
+			},
+			DeleteFunc: func(ctx context.Context, object resource.Object) error {
+				return nil
+			},
+		}, "foo")
+		wg.Add(2)
+
+		stopCh := make(chan struct{})
+		go func() {
+			err := c.Run(stopCh)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		inf.FireAdd(context.Background(), nil)
+		// Wait for what should be four retries
+		time.Sleep(time.Millisecond * 450)
+		// Fire a delete, which should dequeue the add retries
+		inf.FireDelete(context.Background(), nil)
+		go func() {
+			time.Sleep(time.Millisecond * 500)
+			close(stopCh)
+		}()
+		wg.Wait()
+		// We should have five total attempts, though we may be off-by-one because timing is hard,
+		// so we actually check that 5 <= attempts <= 7
+		assert.LessOrEqual(t, 4, addAttempts)
+		assert.GreaterOrEqual(t, 6, addAttempts)
+	})
+	t.Run("different actions, shouldn't dequeue", func(t *testing.T) {
+		addError := errors.New("I AM ERROR")
+		addAttempts := 0
+		wg := sync.WaitGroup{}
+		inf := &testInformer{
+			handlers: make([]ResourceWatcher, 0),
+			onStop: func() {
+				wg.Done()
+			},
+		}
+		c := NewInformerController()
+		// Make the retry ticker interval 100ms so we can run this test faster
+		c.retryTickerInterval = time.Millisecond * 100
+		// 100-ms linear retry policy
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 6 {
+				return false, 0
+			}
+			return true, time.Millisecond * 99
+		}
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		c.AddInformer(inf, "foo")
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addAttempts++
+				return addError
+			},
+			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				return nil
+			},
+		}, "foo")
+		wg.Add(2)
+
+		stopCh := make(chan struct{})
+		go func() {
+			err := c.Run(stopCh)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		inf.FireAdd(context.Background(), nil)
+		// Wait for what should be four retries
+		time.Sleep(time.Millisecond * 450)
+		// Fire a delete, which should NOT dequeue the add retries
+		inf.FireUpdate(context.Background(), nil, nil)
+		go func() {
+			time.Sleep(time.Millisecond * 500)
+			close(stopCh)
+		}()
+		wg.Wait()
+		// We should have eight total attempts (initial + 7 retries (max))
+		assert.Equal(t, 8, addAttempts)
+	})
+	t.Run("same generations, shouldn't dequeue", func(t *testing.T) {
+		updateError := errors.New("I AM ERROR")
+		updateAttempts := 0
+		wg := sync.WaitGroup{}
+		inf := &testInformer{
+			handlers: make([]ResourceWatcher, 0),
+			onStop: func() {
+				wg.Done()
+			},
+		}
+		c := NewInformerController()
+		// Make the retry ticker interval 100ms so we can run this test faster
+		c.retryTickerInterval = time.Millisecond * 100
+		// 100-ms linear retry policy
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 6 {
+				return false, 0
+			}
+			return true, time.Millisecond * 99
+		}
+		obj1 := &resource.SimpleObject[string]{
+			BasicMetadataObject: resource.BasicMetadataObject{
+				StaticMeta: resource.StaticMetadata{
+					Name: "foo",
+				},
+				CommonMeta: resource.CommonMetadata{
+					ExtraFields: map[string]any{
+						"generation": int64(1),
+					},
+				},
+			},
+		}
+		obj2 := obj1.Copy().(*resource.SimpleObject[string])
+		obj3 := obj1.Copy().(*resource.SimpleObject[string])
+		obj3.CommonMeta.ResourceVersion = "100"
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		c.AddInformer(inf, "foo")
+		c.AddWatcher(&SimpleWatcher{
+			UpdateFunc: func(ctx context.Context, oldObj resource.Object, newObj resource.Object) error {
+				if newObj.CommonMetadata().ResourceVersion == "100" {
+					return nil
+				}
+				updateAttempts++
+				return updateError
+			},
+		}, "foo")
+		wg.Add(2)
+
+		stopCh := make(chan struct{})
+		go func() {
+			err := c.Run(stopCh)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		inf.FireUpdate(context.Background(), obj1, obj2)
+		// Wait for what should be four retries
+		time.Sleep(time.Millisecond * 450)
+		// Fire another update with the same generation in the object, which should NOT dequeue the existing update retry
+		inf.FireUpdate(context.Background(), obj2, obj3)
+		go func() {
+			time.Sleep(time.Millisecond * 500)
+			close(stopCh)
+		}()
+		wg.Wait()
+		// We should have eight total attempts (initial + 7 retries (max))
+		assert.Equal(t, 8, updateAttempts)
+	})
+	t.Run("different generations, should dequeue", func(t *testing.T) {
+		updateError := errors.New("I AM ERROR")
+		updateAttempts := 0
+		wg := sync.WaitGroup{}
+		inf := &testInformer{
+			handlers: make([]ResourceWatcher, 0),
+			onStop: func() {
+				wg.Done()
+			},
+		}
+		c := NewInformerController()
+		// Make the retry ticker interval 100ms so we can run this test faster
+		c.retryTickerInterval = time.Millisecond * 100
+		// 100-ms linear retry policy
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 6 {
+				return false, 0
+			}
+			return true, time.Millisecond * 99
+		}
+		obj1 := &resource.SimpleObject[string]{
+			BasicMetadataObject: resource.BasicMetadataObject{
+				StaticMeta: resource.StaticMetadata{
+					Name: "foo",
+				},
+				CommonMeta: resource.CommonMetadata{
+					ExtraFields: map[string]any{
+						"generation": int64(1),
+					},
+				},
+			},
+		}
+		obj2 := obj1.Copy().(*resource.SimpleObject[string])
+		obj3 := &resource.SimpleObject[string]{
+			BasicMetadataObject: resource.BasicMetadataObject{
+				StaticMeta: resource.StaticMetadata{
+					Name: "foo",
+				},
+				CommonMeta: resource.CommonMetadata{
+					ExtraFields: map[string]any{
+						"generation": int64(2),
+					},
+				},
+			},
+		}
+		c.RetryDequeuePolicy = OpinionatedRetryDequeuePolicy
+		c.AddInformer(inf, "foo")
+		c.AddWatcher(&SimpleWatcher{
+			UpdateFunc: func(ctx context.Context, oldObj resource.Object, newObj resource.Object) error {
+				if newObj.CommonMetadata().ExtraFields["generation"] == int64(2) {
+					return nil
+				}
+				updateAttempts++
+				return updateError
+			},
+		}, "foo")
+		wg.Add(2)
+
+		stopCh := make(chan struct{})
+		go func() {
+			err := c.Run(stopCh)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		inf.FireUpdate(context.Background(), obj1, obj2)
+		// Wait for what should be four retries
+		time.Sleep(time.Millisecond * 450)
+		// Fire another update with the same generation in the object, which should NOT dequeue the existing update retry
+		inf.FireUpdate(context.Background(), obj2, obj3)
+		go func() {
+			time.Sleep(time.Millisecond * 500)
+			close(stopCh)
+		}()
+		wg.Wait()
+		// We should have five total attempts, though we may be off-by-one because timing is hard,
+		// so we actually check that 4 <= attempts <= 6
+		assert.LessOrEqual(t, 4, updateAttempts)
+		assert.GreaterOrEqual(t, 6, updateAttempts)
+	})
+}
+
 type mockInformer struct {
 	AddEventHandlerFunc func(handler ResourceWatcher)
 	RunFunc             func(stopCh <-chan struct{}) error
