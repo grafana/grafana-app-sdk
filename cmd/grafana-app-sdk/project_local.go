@@ -422,10 +422,6 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 	return output.Bytes(), err
 }
 
-type operatorDeploymentProps struct {
-	yamlGenProperties
-}
-
 //nolint:revive
 func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlGenProperties, out io.Writer) error {
 	datasource = strings.ToLower(datasource)
@@ -579,16 +575,22 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}
 
 	caPEM := new(bytes.Buffer)
-	pem.Encode(caPEM, &pem.Block{
+	err = pem.Encode(caPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: caCertBytes,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	caPrivKeyPEM := new(bytes.Buffer)
-	pem.Encode(caPrivKeyPEM, &pem.Block{
+	err = pem.Encode(caPrivKeyPEM, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(caPrivateKey),
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	certPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
 	if err != nil {
@@ -601,16 +603,22 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}
 
 	certPEM := new(bytes.Buffer)
-	pem.Encode(certPEM, &pem.Block{
+	err = pem.Encode(certPEM, &pem.Block{
 		Type:  "CERTIFICATE",
 		Bytes: certBytes,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	certPrivKeyPEM := new(bytes.Buffer)
-	pem.Encode(certPrivKeyPEM, &pem.Block{
+	err = pem.Encode(certPrivKeyPEM, &pem.Block{
 		Type:  "RSA PRIVATE KEY",
 		Bytes: x509.MarshalPKCS1PrivateKey(certPrivKey),
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	return &certBundle{
 		cert: certPEM.Bytes(),

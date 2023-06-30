@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"gomodules.xyz/jsonpatch/v2"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 const (
@@ -78,9 +79,7 @@ type OpinionatedMutatingAdmissionController struct {
 }
 
 // now is used to wrap time.Now so it can be altered for testing
-var now = func() time.Time {
-	return time.Now()
-}
+var now = time.Now
 
 // Mutate runs the underlying MutateFunc() function (if non-nil), and if that returns successfully,
 // appends additional patch operations to the MutatingResponse for CommonMetadata fields not in kubernetes standard metadata,

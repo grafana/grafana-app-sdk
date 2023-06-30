@@ -9,9 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // WebhookServerConfig is the configuration object for a WebhookServer, used with NewWebhookServer.
@@ -123,8 +124,9 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	mux.HandleFunc("/validate", w.HandleValidateHTTP)
 	mux.HandleFunc("/mutate", w.HandleMutateHTTP)
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", w.port),
-		Handler: mux,
+		Addr:              fmt.Sprintf(":%d", w.port),
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errCh := make(chan error, 1)
 	go func() {
@@ -144,6 +146,7 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 }
 
 // HandleValidateHTTP is the HTTP HandlerFunc for a kubernetes validating webhook call
+// nolint:errcheck,revive
 func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
@@ -172,12 +175,10 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	if tpl, ok := w.validatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
-	} else {
+	} else if w.DefaultValidatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		if w.DefaultValidatingController != nil {
-			schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
-			controller = w.DefaultValidatingController
-		}
+		schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		controller = w.DefaultValidatingController
 	}
 
 	// If we didn't get a controller, return a failure
@@ -219,6 +220,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 }
 
 // HandleMutateHTTP is the HTTP HandlerFunc for a kubernetes mutating webhook call
+// nolint:errcheck,revive,funlen
 func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
@@ -247,12 +249,10 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	if tpl, ok := w.mutatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
-	} else {
+	} else if w.DefaultMutatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		if w.DefaultMutatingController != nil {
-			schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
-			controller = w.DefaultMutatingController
-		}
+		schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		controller = w.DefaultMutatingController
 	}
 
 	// If we didn't get a controller, return a failure
@@ -295,7 +295,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 				// Fix the patch if necessary
 				for idx, op := range patch.Operations {
 					if len(op.Path) > 22 && op.Path[:21] == "/metadata/annotations" {
-						key := strings.Replace(op.Path[22:], "~1", "/", -1)
+						key := strings.ReplaceAll(op.Path[22:], "~1", "/")
 						val := op.Value.(string)
 						op.Path = "/metadata/annotations"
 						op.Value = map[string]string{
