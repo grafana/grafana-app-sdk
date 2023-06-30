@@ -72,7 +72,7 @@ var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject res
 	if newAction != retryAction {
 		return false
 	}
-	if getGeneration(newObject) != getGeneration(retryObject) {
+	if getGeneration(newObject) == getGeneration(retryObject) {
 		return false
 	}
 	return true
