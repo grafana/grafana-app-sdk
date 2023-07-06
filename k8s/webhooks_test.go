@@ -190,6 +190,25 @@ var admissionRequestBytes = []byte(`{
 		"object": ` + string(admissionRequestObjectBytes) + `
 	}
 }`)
+var admissionRequestBytesNoDefaults = []byte(`{
+	"request": {
+		"uid": "foo",
+		"requestKind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
+		"object": {
+			"kind": "Test",
+			"metadata": {
+				"creationTimestamp": "2023-07-06T20:49:10Z"
+			},
+			"spec": {
+				"foo": "bar"
+			}
+		}
+	}
+}`)
 
 func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 	tests := []struct {
@@ -233,23 +252,24 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			serverConfig: WebhookServerConfig{
 				DefaultMutatingController: &testMutatingAdmissionController{
 					MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						obj := request.Object
+						cmd := obj.CommonMetadata()
+						cmd.CreatedBy = "me"
+						cmd.UpdatedBy = "you"
+						cmd.UpdateTimestamp = cmd.CreationTimestamp
+						obj.SetCommonMetadata(cmd)
 						return &resource.MutatingResponse{
-							PatchOperations: []resource.PatchOperation{
-								{
-									Path:      "/foo/bar",
-									Operation: resource.PatchOpReplace,
-									Value:     "foobar",
-								},
-							},
+							UpdatedObject: obj,
 						}, nil
 					},
 				},
 			},
 			reqMethod: http.MethodPost,
-			payload:   admissionRequestBytes,
+			payload:   admissionRequestBytesNoDefaults,
 			// Patch is base64-encoded
-			// [{"path":"/foo/bar","op":"replace","value":"foobar"}] => W3sicGF0aCI6Ii9mb28vYmFyIiwib3AiOiJyZXBsYWNlIiwidmFsdWUiOiJmb29iYXIifV0=
-			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W3sicGF0aCI6Ii9mb28vYmFyIiwib3AiOiJyZXBsYWNlIiwidmFsdWUiOiJmb29iYXIifV0="}}`),
+			// [{"op":"add","path":"/metadata/annotations","value":{"grafana.com/createdBy":"me","grafana.com/updateTimestamp":"2023-07-06T16:49:10-04:00","grafana.com/updatedBy":"you"}}] =>
+			// W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb25zIiwidmFsdWUiOnsiZ3JhZmFuYS5jb20vY3JlYXRlZEJ5IjoibWUiLCJncmFmYW5hLmNvbS91cGRhdGVUaW1lc3RhbXAiOiIyMDIzLTA3LTA2VDE2OjQ5OjEwLTA0OjAwIiwiZ3JhZmFuYS5jb20vdXBkYXRlZEJ5IjoieW91In19XQ==
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb25zIiwidmFsdWUiOnsiZ3JhZmFuYS5jb20vY3JlYXRlZEJ5IjoibWUiLCJncmFmYW5hLmNvbS91cGRhdGVUaW1lc3RhbXAiOiIyMDIzLTA3LTA2VDE2OjQ5OjEwLTA0OjAwIiwiZ3JhZmFuYS5jb20vdXBkYXRlZEJ5IjoieW91In19XQ=="}}`),
 			expectedStatusCode: http.StatusOK,
 		},
 		{
@@ -257,14 +277,10 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			serverConfig: WebhookServerConfig{
 				DefaultMutatingController: &testMutatingAdmissionController{
 					MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						obj := request.Object.(*TestResourceObject)
+						obj.Spec.StringField = "foobar"
 						return &resource.MutatingResponse{
-							PatchOperations: []resource.PatchOperation{
-								{
-									Path:      "/foo/bar",
-									Operation: resource.PatchOpReplace,
-									Value:     "foobar",
-								},
-							},
+							UpdatedObject: obj,
 						}, nil
 					},
 				},
@@ -279,6 +295,33 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
 			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":false,"status":{"metadata":{},"status":"Failure","message":"I AM ERROR","reason":"err_reason","code":409}}}`),
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "schema-specific success with patch",
+			serverConfig: WebhookServerConfig{
+				DefaultMutatingController: &testMutatingAdmissionController{
+					MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						return nil, NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
+					},
+				},
+				MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
+					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testMutatingAdmissionController{
+						MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+							obj := request.Object.(*TestResourceObject)
+							obj.Spec.StringField = "foobar"
+							return &resource.MutatingResponse{
+								UpdatedObject: obj,
+							}, nil
+						},
+					},
+				},
+			},
+			reqMethod: http.MethodPost,
+			payload:   admissionRequestBytes,
+			// Patch is base64-encoded
+			// [{"op":"replace","path":"/spec/stringField","value":"foobar"}] => W3sib3AiOiJyZXBsYWNlIiwicGF0aCI6Ii9zcGVjL3N0cmluZ0ZpZWxkIiwidmFsdWUiOiJmb29iYXIifV0=
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W3sib3AiOiJyZXBsYWNlIiwicGF0aCI6Ii9zcGVjL3N0cmluZ0ZpZWxkIiwidmFsdWUiOiJmb29iYXIifV0="}}`),
 			expectedStatusCode: http.StatusOK,
 		},
 		{

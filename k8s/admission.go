@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"gomodules.xyz/jsonpatch/v2"
-
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -43,39 +41,10 @@ func NewAdmissionError(err error, statusCode int, reason string) *SimpleAdmissio
 	}
 }
 
-// NewMutatingResponseFromChange returns a pointer to a new MutatingResponse containing PatchOperations based on the
-// change between `from` and `to` Objects.
-// Note that if you already know the exact nature of your change, this operation is costlier than writing the PatchOperations yourself.
-func NewMutatingResponseFromChange(from, to resource.Object) (*resource.MutatingResponse, error) {
-	fromJSON, err := marshalJSON(from, nil, ClientConfig{})
-	if err != nil {
-		return nil, err
-	}
-	toJSON, err := marshalJSON(to, nil, ClientConfig{})
-	if err != nil {
-		return nil, err
-	}
-	patch, err := jsonpatch.CreatePatch(fromJSON, toJSON)
-	if err != nil {
-		return nil, err
-	}
-	resp := resource.MutatingResponse{
-		PatchOperations: make([]resource.PatchOperation, len(patch)),
-	}
-	for idx, op := range patch {
-		resp.PatchOperations[idx] = resource.PatchOperation{
-			Path:      op.Path,
-			Operation: resource.PatchOp(op.Operation),
-			Value:     op.Value,
-		}
-	}
-	return &resp, nil
-}
-
 // OpinionatedMutatingAdmissionController is a MutatingAdmissionController which wraps an optional user-defined
 // Mutate() function with a set of additional PatchOperations which set metadata and label properties.
 type OpinionatedMutatingAdmissionController struct {
-	MutateFunc func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error)
+	Underlying resource.MutatingAdmissionController
 }
 
 // now is used to wrap time.Now so it can be altered for testing
@@ -88,77 +57,34 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 	// Get the response from the underlying controller, if it exists
 	var err error
 	var resp *resource.MutatingResponse
-	if o.MutateFunc != nil {
-		resp, err = o.MutateFunc(request)
+	if o.Underlying != nil {
+		resp, err = o.Underlying.Mutate(request)
 		if err != nil {
 			return resp, err
 		}
 	}
-	if resp == nil || resp.PatchOperations == nil {
+	if resp == nil || resp.UpdatedObject == nil {
 		resp = &resource.MutatingResponse{
-			PatchOperations: make([]resource.PatchOperation, 0),
+			UpdatedObject: request.Object,
 		}
 	}
 
+	// Get the CommonMetadata, so we can update it
+	cmd := resp.UpdatedObject.CommonMetadata()
+
+	if cmd.Labels == nil {
+		cmd.Labels = make(map[string]string)
+	}
+	cmd.Labels[versionLabel] = request.Version
+
+	// Operation-based changes
 	switch request.Action {
 	case resource.AdmissionActionCreate:
-		// Patch is tricky when it comes to add vs replace operations for maps, like labels and annotations
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/createdBy", // Set createdBy to the request user
-			Operation: resource.PatchOpReplace,
-			Value:     request.UserInfo.Username,
-		}, resource.PatchOperation{
-			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-			Operation: resource.PatchOpReplace,
-			Value:     request.Object.CommonMetadata().CreationTimestamp.Format(time.RFC3339Nano),
-		})
-		// TODO: unsure on this
-		if len(request.Object.CommonMetadata().Labels) == 0 {
-			ops := append(make([]resource.PatchOperation, 0), resource.PatchOperation{
-				Path:      "/metadata/labels",
-				Operation: resource.PatchOpAdd,
-				Value: map[string]string{
-					versionLabel: request.Version,
-				},
-			})
-			ops = append(ops, resp.PatchOperations...)
-			resp.PatchOperations = ops
-		} else {
-			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-				Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-				Operation: resource.PatchOpAdd,
-				Value:     request.Version,
-			})
-		}
+		cmd.CreatedBy = request.UserInfo.Username
+		cmd.UpdateTimestamp = cmd.CreationTimestamp
 	case resource.AdmissionActionUpdate:
-		// Patch is tricky when it comes to add vs replace operations for maps, like labels and annotations
-		resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-			Path:      "/metadata/updatedBy", // Set createdBy to the request user
-			Operation: resource.PatchOpReplace,
-			Value:     request.UserInfo.Username,
-		}, resource.PatchOperation{
-			Path:      "/metadata/updateTimestamp", // Set the updateTimestamp to the creationTimestamp
-			Operation: resource.PatchOpReplace,
-			Value:     now().Format(time.RFC3339Nano),
-		})
-		// TODO: unsure on this
-		if len(request.Object.CommonMetadata().Labels) == 0 {
-			ops := append(make([]resource.PatchOperation, 0), resource.PatchOperation{
-				Path:      "/metadata/labels",
-				Operation: resource.PatchOpAdd,
-				Value: map[string]string{
-					versionLabel: request.Version,
-				},
-			})
-			ops = append(ops, resp.PatchOperations...)
-			resp.PatchOperations = ops
-		} else {
-			resp.PatchOperations = append(resp.PatchOperations, resource.PatchOperation{
-				Path:      "/metadata/labels/" + versionLabel, // Set the internal version label to the version of the endpoint
-				Operation: resource.PatchOpAdd,
-				Value:     request.Version,
-			})
-		}
+		cmd.UpdatedBy = request.UserInfo.Username
+		cmd.UpdateTimestamp = now()
 	default:
 		// Do nothing
 	}
@@ -167,9 +93,9 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 
 // NewOpinionatedMutatingAdmissionController creates a pointer to a new OpinionatedMutatingAdmissionController wrapping the
 // provided mutateFunc (nil mutateFunc argument is allowed, and will cause the controller to not call the underlying function)
-func NewOpinionatedMutatingAdmissionController(mutateFunc func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error)) *OpinionatedMutatingAdmissionController {
+func NewOpinionatedMutatingAdmissionController(wrap resource.MutatingAdmissionController) *OpinionatedMutatingAdmissionController {
 	return &OpinionatedMutatingAdmissionController{
-		MutateFunc: mutateFunc,
+		Underlying: wrap,
 	}
 }
 
@@ -177,7 +103,7 @@ func NewOpinionatedMutatingAdmissionController(mutateFunc func(request *resource
 // validation on reserved metadata fields which are stores as annotations in kubernetes, ensuring that if any changes are made,
 // they are allowed, before calling the underlying admission validate function.
 type OpinionatedValidatingAdmissionController struct {
-	ValidateFunc func(*resource.AdmissionRequest) error
+	Underlying resource.ValidatingAdmissionController
 }
 
 // Validate performs validation on metadata-as-annotations fields before calling the underlying admission validate function.
@@ -217,16 +143,16 @@ func (o *OpinionatedValidatingAdmissionController) Validate(request *resource.Ad
 		// Do nothing
 	}
 	// Return the result of the underlying func, if it exists
-	if o.ValidateFunc != nil {
-		return o.ValidateFunc(request)
+	if o.Underlying != nil {
+		return o.Underlying.Validate(request)
 	}
 	return nil
 }
 
 // NewOpinionatedValidatingAdmissionController returns a new OpinionatedValidatingAdmissionController which wraps the provided
 // validateFunc. If validateFunc is nil, no extra validation after the opinionated initial validation will be performed.
-func NewOpinionatedValidatingAdmissionController(validateFunc func(*resource.AdmissionRequest) error) *OpinionatedValidatingAdmissionController {
+func NewOpinionatedValidatingAdmissionController(wrap resource.ValidatingAdmissionController) *OpinionatedValidatingAdmissionController {
 	return &OpinionatedValidatingAdmissionController{
-		ValidateFunc: validateFunc,
+		Underlying: wrap,
 	}
 }

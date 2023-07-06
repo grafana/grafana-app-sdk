@@ -298,13 +298,14 @@ func getV1ObjectMetaFields() map[string]struct{} {
 func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 	cMeta := obj.CommonMetadata()
 	meta := metav1.ObjectMeta{
-		Name:            obj.StaticMetadata().Name,
-		Namespace:       obj.StaticMetadata().Namespace,
-		UID:             types.UID(cMeta.UID),
-		ResourceVersion: cMeta.ResourceVersion,
-		Labels:          cMeta.Labels,
-		Finalizers:      cMeta.Finalizers,
-		Annotations:     make(map[string]string),
+		Name:              obj.StaticMetadata().Name,
+		Namespace:         obj.StaticMetadata().Namespace,
+		UID:               types.UID(cMeta.UID),
+		ResourceVersion:   cMeta.ResourceVersion,
+		CreationTimestamp: metav1.NewTime(cMeta.CreationTimestamp),
+		Labels:            cMeta.Labels,
+		Finalizers:        cMeta.Finalizers,
+		Annotations:       make(map[string]string),
 	}
 	// Rest of the metadata in ExtraFields
 	for k, v := range cMeta.ExtraFields {
@@ -323,6 +324,12 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 		case "managedFields":
 			if m, ok := v.([]metav1.ManagedFieldsEntry); ok {
 				meta.ManagedFields = m
+			}
+		case "annotations":
+			if a, ok := v.(map[string]string); ok {
+				for key, val := range a {
+					meta.Annotations[key] = val
+				}
 			}
 		}
 	}

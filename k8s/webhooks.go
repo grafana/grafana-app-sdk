@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
+	"gomodules.xyz/jsonpatch/v2"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -239,6 +239,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// Unmarshal the admission review
 	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
 	if err != nil {
+		fmt.Println(err)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -276,44 +277,11 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 		UID:     admRev.Request.UID,
 		Allowed: true,
 	}
-	if err == nil && mResp != nil && len(mResp.PatchOperations) > 0 {
+	if err == nil && mResp != nil && mResp.UpdatedObject != nil {
 		pt := admission.PatchTypeJSONPatch
 		adResp.PatchType = &pt
-		// We have to do a couple of things here to make the JSON patch work right:
-		// 1. Translate the patch into one that works with the kubernetes API server expression of the kind
-		// 2. Handle the fact that an empty annotations map can't accept new keys with a traditional /metadata/annotation/key
-		//    path. Instead, we need to seed it with at least the first key/value as a map.
-		// We only need to do #2 if the annotations in the provided object are empty, so let's check that first:
-		if len(getAnnotations(admReq.Object)) == 0 {
-			// Re-use err here, because if we error on the JSON marshal, we'll return an error
-			// admission response, rather than silently fail the patch.
-			var patch *resource.PatchRequest
-			patch, err = translateJSONPatch(resource.PatchRequest{
-				Operations: mResp.PatchOperations,
-			})
-			if err == nil {
-				// Fix the patch if necessary
-				for idx, op := range patch.Operations {
-					if len(op.Path) > 22 && op.Path[:21] == "/metadata/annotations" {
-						key := strings.ReplaceAll(op.Path[22:], "~1", "/")
-						val := op.Value.(string)
-						op.Path = "/metadata/annotations"
-						op.Value = map[string]string{
-							key: val,
-						}
-						patch.Operations[idx] = op
-						break
-					}
-				}
-				adResp.Patch, err = json.Marshal(patch.Operations)
-			}
-		} else {
-			// Re-use err here, because if we error on the JSON marshal, we'll return an error
-			// admission response, rather than silently fail the patch.
-			adResp.Patch, err = marshalJSONPatch(resource.PatchRequest{
-				Operations: mResp.PatchOperations,
-			})
-		}
+		// Re-use `err` here, we handle it below
+		adResp.Patch, err = w.generatePatch(admRev, mResp.UpdatedObject)
 	}
 	if err != nil {
 		addAdmissionError(&adResp, err)
@@ -330,6 +298,21 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	}
 	writer.WriteHeader(http.StatusOK)
 	writer.Write(bytes)
+}
+
+func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredObject resource.Object) ([]byte, error) {
+	// We need to generate a list of JSONPatch operations for updating the existing object to the provided one.
+	// To start, we need to translate the provided object into its kubernetes bytes representation
+	newObjBytes, err := marshalJSON(alteredObject, nil, ClientConfig{})
+	if err != nil {
+		return nil, err
+	}
+	// Now, we generate a patch using the bytes provided to us in the admission request
+	patch, err := jsonpatch.CreatePatch(admRev.Request.Object.Raw, newObjBytes)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(patch)
 }
 
 func getAnnotations(obj resource.Object) map[string]string {

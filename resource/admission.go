@@ -50,8 +50,8 @@ type AdmissionError interface {
 
 // MutatingResponse is the mutation to perform on a request
 type MutatingResponse struct {
-	// PatchOperations is the list of patch ops to perform on the request as part of the mutation
-	PatchOperations []PatchOperation
+	// UpdatedObject is an updated version of the object which was passed to the MutatingAdmissionController.
+	UpdatedObject Object
 }
 
 // ValidatingAdmissionController is an interface that describes any object which should validate admission of
