@@ -315,21 +315,6 @@ func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredOb
 	return json.Marshal(patch)
 }
 
-func getAnnotations(obj resource.Object) map[string]string {
-	if obj == nil {
-		return map[string]string{}
-	}
-	av, ok := obj.CommonMetadata().ExtraFields["annotations"]
-	if !ok {
-		return map[string]string{}
-	}
-	annotations, ok := av.(map[string]string)
-	if !ok {
-		return map[string]string{}
-	}
-	return annotations
-}
-
 type validatingAdmissionControllerTuple struct {
 	schema     resource.Schema
 	controller resource.ValidatingAdmissionController

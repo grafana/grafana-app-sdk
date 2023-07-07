@@ -88,6 +88,7 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.Admiss
 	default:
 		// Do nothing
 	}
+	resp.UpdatedObject.SetCommonMetadata(cmd)
 	return resp, nil
 }
 

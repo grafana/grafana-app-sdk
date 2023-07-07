@@ -72,3 +72,42 @@ type MutatingAdmissionController interface {
 	// to using only the information in a simple error if not.
 	Mutate(request *AdmissionRequest) (*MutatingResponse, error)
 }
+
+// SimpleValidatingAdmissionController is a simple ValidatingAdmissionController which has an exported
+// ValidateFunc which is called on the Validate() method
+type SimpleValidatingAdmissionController struct {
+	// ValidateFunc consumes an AdmissionRequest and returns an error if the request should be rejected.
+	// The returned error SHOULD satisfy the AdmissionError interface.
+	ValidateFunc func(request *AdmissionRequest) error
+}
+
+// Validate consumes an AdmissionRequest and returns an error if the request should be rejected
+func (sv *SimpleValidatingAdmissionController) Validate(request *AdmissionRequest) error {
+	if sv.ValidateFunc != nil {
+		return sv.ValidateFunc(request)
+	}
+	return nil
+}
+
+// Interface compliance compile-time check
+var _ ValidatingAdmissionController = &SimpleValidatingAdmissionController{}
+
+// SimpleMutatingAdmissionController is a simple MutatingAdmissionController which has an exported
+// MutateFunc which is called on the Mutate() method
+type SimpleMutatingAdmissionController struct {
+	// MutateFunc consumes an AdmissionRequest and returns a MutatingResponse containing an updated version
+	// of the object passed in the AdmissionRequest, or an error if the request should be rejected.
+	// The returned error SHOULD satisfy the AdmissionError interface.
+	MutateFunc func(request *AdmissionRequest) (*MutatingResponse, error)
+}
+
+// Mutate consumes an AdmissionRequest and returns a MutatingResponse or an error
+func (sm *SimpleMutatingAdmissionController) Mutate(request *AdmissionRequest) (*MutatingResponse, error) {
+	if sm.MutateFunc != nil {
+		return sm.MutateFunc(request)
+	}
+	return nil, nil
+}
+
+// Interface compliance compile-time check
+var _ MutatingAdmissionController = &SimpleMutatingAdmissionController{}
