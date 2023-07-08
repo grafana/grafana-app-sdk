@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -251,7 +252,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			name: "use default",
 			serverConfig: WebhookServerConfig{
 				DefaultMutatingController: &testMutatingAdmissionController{
-					MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 						obj := request.Object
 						cmd := obj.CommonMetadata()
 						cmd.CreatedBy = "me"
@@ -276,7 +277,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			name: "use schema-specific",
 			serverConfig: WebhookServerConfig{
 				DefaultMutatingController: &testMutatingAdmissionController{
-					MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 						obj := request.Object.(*TestResourceObject)
 						obj.Spec.StringField = "foobar"
 						return &resource.MutatingResponse{
@@ -286,7 +287,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 				},
 				MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
 					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testMutatingAdmissionController{
-						MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 							return nil, NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 						},
 					},
@@ -301,13 +302,13 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			name: "schema-specific success with patch",
 			serverConfig: WebhookServerConfig{
 				DefaultMutatingController: &testMutatingAdmissionController{
-					MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 						return nil, NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 					},
 				},
 				MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
 					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testMutatingAdmissionController{
-						MutateFunc: func(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 							obj := request.Object.(*TestResourceObject)
 							obj.Spec.StringField = "foobar"
 							return &resource.MutatingResponse{
@@ -397,7 +398,7 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			name: "use default",
 			serverConfig: WebhookServerConfig{
 				DefaultValidatingController: &testValidatingAdmissionController{
-					ValidateFunc: func(request *resource.AdmissionRequest) error {
+					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 						return NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 					},
 				},
@@ -411,13 +412,13 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			name: "use schema-specific",
 			serverConfig: WebhookServerConfig{
 				DefaultValidatingController: &testValidatingAdmissionController{
-					ValidateFunc: func(request *resource.AdmissionRequest) error {
+					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 						return NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 					},
 				},
 				ValidatingControllers: map[resource.Schema]resource.ValidatingAdmissionController{
 					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testValidatingAdmissionController{
-						ValidateFunc: func(request *resource.AdmissionRequest) error {
+						ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 							return nil
 						},
 					},
@@ -461,23 +462,23 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 }
 
 type testValidatingAdmissionController struct {
-	ValidateFunc func(*resource.AdmissionRequest) error
+	ValidateFunc func(context.Context, *resource.AdmissionRequest) error
 }
 
-func (tvac *testValidatingAdmissionController) Validate(request *resource.AdmissionRequest) error {
+func (tvac *testValidatingAdmissionController) Validate(ctx context.Context, request *resource.AdmissionRequest) error {
 	if tvac.ValidateFunc != nil {
-		return tvac.ValidateFunc(request)
+		return tvac.ValidateFunc(ctx, request)
 	}
 	return nil
 }
 
 type testMutatingAdmissionController struct {
-	MutateFunc func(*resource.AdmissionRequest) (*resource.MutatingResponse, error)
+	MutateFunc func(context.Context, *resource.AdmissionRequest) (*resource.MutatingResponse, error)
 }
 
-func (tmac *testMutatingAdmissionController) Mutate(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+func (tmac *testMutatingAdmissionController) Mutate(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 	if tmac.MutateFunc != nil {
-		return tmac.MutateFunc(request)
+		return tmac.MutateFunc(ctx, request)
 	}
 	return nil, nil
 }

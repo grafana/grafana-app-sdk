@@ -1,5 +1,7 @@
 package resource
 
+import "context"
+
 type AdmissionAction string
 
 const (
@@ -60,7 +62,7 @@ type ValidatingAdmissionController interface {
 	// Validate consumes an AdmissionRequest, then returns an error if the request should be denied.
 	// The returned error SHOULD satisfy the AdmissionError interface, but callers will fallback
 	// to using only the information in a simple error if not.
-	Validate(request *AdmissionRequest) error
+	Validate(ctx context.Context, request *AdmissionRequest) error
 }
 
 // MutatingAdmissionController is an interface that describes any object which should mutate a request to
@@ -70,7 +72,7 @@ type MutatingAdmissionController interface {
 	// to apply. If the request should not be admitted, ths function should return an error.
 	// The returned error SHOULD satisfy the AdmissionError interface, but callers will fallback
 	// to using only the information in a simple error if not.
-	Mutate(request *AdmissionRequest) (*MutatingResponse, error)
+	Mutate(ctx context.Context, request *AdmissionRequest) (*MutatingResponse, error)
 }
 
 // SimpleValidatingAdmissionController is a simple ValidatingAdmissionController which has an exported
@@ -78,13 +80,13 @@ type MutatingAdmissionController interface {
 type SimpleValidatingAdmissionController struct {
 	// ValidateFunc consumes an AdmissionRequest and returns an error if the request should be rejected.
 	// The returned error SHOULD satisfy the AdmissionError interface.
-	ValidateFunc func(request *AdmissionRequest) error
+	ValidateFunc func(ctx context.Context, request *AdmissionRequest) error
 }
 
 // Validate consumes an AdmissionRequest and returns an error if the request should be rejected
-func (sv *SimpleValidatingAdmissionController) Validate(request *AdmissionRequest) error {
+func (sv *SimpleValidatingAdmissionController) Validate(ctx context.Context, request *AdmissionRequest) error {
 	if sv.ValidateFunc != nil {
-		return sv.ValidateFunc(request)
+		return sv.ValidateFunc(ctx, request)
 	}
 	return nil
 }
@@ -98,13 +100,13 @@ type SimpleMutatingAdmissionController struct {
 	// MutateFunc consumes an AdmissionRequest and returns a MutatingResponse containing an updated version
 	// of the object passed in the AdmissionRequest, or an error if the request should be rejected.
 	// The returned error SHOULD satisfy the AdmissionError interface.
-	MutateFunc func(request *AdmissionRequest) (*MutatingResponse, error)
+	MutateFunc func(ctx context.Context, request *AdmissionRequest) (*MutatingResponse, error)
 }
 
 // Mutate consumes an AdmissionRequest and returns a MutatingResponse or an error
-func (sm *SimpleMutatingAdmissionController) Mutate(request *AdmissionRequest) (*MutatingResponse, error) {
+func (sm *SimpleMutatingAdmissionController) Mutate(ctx context.Context, request *AdmissionRequest) (*MutatingResponse, error) {
 	if sm.MutateFunc != nil {
-		return sm.MutateFunc(request)
+		return sm.MutateFunc(ctx, request)
 	}
 	return nil, nil
 }

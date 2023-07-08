@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -17,7 +18,7 @@ func TestNewOpinionatedMutatingAdmissionController(t *testing.T) {
 	})
 
 	t.Run("wrap", func(t *testing.T) {
-		wrapped := &resource.SimpleMutatingAdmissionController{}
+		wrapped := &testMutatingAdmissionController{}
 		m := NewOpinionatedMutatingAdmissionController(wrapped)
 		assert.Equal(t, wrapped, m.Underlying)
 	})
@@ -32,7 +33,7 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 
 	tests := []struct {
 		name        string
-		mutateFunc  func(*resource.AdmissionRequest) (*resource.MutatingResponse, error)
+		mutateFunc  func(context.Context, *resource.AdmissionRequest) (*resource.MutatingResponse, error)
 		request     resource.AdmissionRequest
 		expected    *resource.MutatingResponse
 		expectedErr error
@@ -109,9 +110,9 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			actual, err := NewOpinionatedMutatingAdmissionController(&resource.SimpleMutatingAdmissionController{
+			actual, err := NewOpinionatedMutatingAdmissionController(&testMutatingAdmissionController{
 				MutateFunc: test.mutateFunc,
-			}).Mutate(&test.request)
+			}).Mutate(context.Background(), &test.request)
 			assert.Equal(t, test.expectedErr, err)
 			if test.expected != nil {
 				assert.Equal(t, test.expected.UpdatedObject, actual.UpdatedObject)
@@ -129,7 +130,7 @@ func TestNewOpinionatedValidatingAdmissionController(t *testing.T) {
 	})
 
 	t.Run("wrap", func(t *testing.T) {
-		wrapped := &resource.SimpleValidatingAdmissionController{}
+		wrapped := &testValidatingAdmissionController{}
 		v := NewOpinionatedValidatingAdmissionController(wrapped)
 		assert.Equal(t, wrapped, v.Underlying)
 	})
@@ -141,7 +142,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		validateFunc func(*resource.AdmissionRequest) error
+		validateFunc func(context.Context, *resource.AdmissionRequest) error
 		request      resource.AdmissionRequest
 		expected     error
 	}{
@@ -208,7 +209,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 		},
 		{
 			name: "add action, underlying failure",
-			validateFunc: func(request *resource.AdmissionRequest) error {
+			validateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 				return admErr
 			},
 			request: resource.AdmissionRequest{
@@ -229,7 +230,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 		},
 		{
 			name: "add action, success",
-			validateFunc: func(request *resource.AdmissionRequest) error {
+			validateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 				return nil
 			},
 			request: resource.AdmissionRequest{
@@ -337,7 +338,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 		},
 		{
 			name: "update action, underlying failure",
-			validateFunc: func(request *resource.AdmissionRequest) error {
+			validateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 				return admErr
 			},
 			request: resource.AdmissionRequest{
@@ -367,7 +368,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 		},
 		{
 			name: "update action, success",
-			validateFunc: func(request *resource.AdmissionRequest) error {
+			validateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 				return nil
 			},
 			request: resource.AdmissionRequest{
@@ -399,9 +400,9 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := NewOpinionatedValidatingAdmissionController(&resource.SimpleValidatingAdmissionController{
+			err := NewOpinionatedValidatingAdmissionController(&testValidatingAdmissionController{
 				ValidateFunc: test.validateFunc,
-			}).Validate(&test.request)
+			}).Validate(context.Background(), &test.request)
 			assert.Equal(t, test.expected, err)
 		})
 	}

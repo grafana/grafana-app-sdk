@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -53,12 +54,12 @@ var now = time.Now
 // Mutate runs the underlying MutateFunc() function (if non-nil), and if that returns successfully,
 // appends additional patch operations to the MutatingResponse for CommonMetadata fields not in kubernetes standard metadata,
 // and labels internally used by the SDK, such as the stored version.
-func (o *OpinionatedMutatingAdmissionController) Mutate(request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+func (o *OpinionatedMutatingAdmissionController) Mutate(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 	// Get the response from the underlying controller, if it exists
 	var err error
 	var resp *resource.MutatingResponse
 	if o.Underlying != nil {
-		resp, err = o.Underlying.Mutate(request)
+		resp, err = o.Underlying.Mutate(ctx, request)
 		if err != nil {
 			return resp, err
 		}
@@ -100,6 +101,9 @@ func NewOpinionatedMutatingAdmissionController(wrap resource.MutatingAdmissionCo
 	}
 }
 
+// Compile-time interface compliance check
+var _ resource.MutatingAdmissionController = &OpinionatedMutatingAdmissionController{}
+
 // OpinionatedValidatingAdmissionController implements resource.ValidatingAdmissionController and performs initial
 // validation on reserved metadata fields which are stores as annotations in kubernetes, ensuring that if any changes are made,
 // they are allowed, before calling the underlying admission validate function.
@@ -108,7 +112,7 @@ type OpinionatedValidatingAdmissionController struct {
 }
 
 // Validate performs validation on metadata-as-annotations fields before calling the underlying admission validate function.
-func (o *OpinionatedValidatingAdmissionController) Validate(request *resource.AdmissionRequest) error {
+func (o *OpinionatedValidatingAdmissionController) Validate(ctx context.Context, request *resource.AdmissionRequest) error {
 	// Check that none of the protected metadata in annotations has been changed
 	switch request.Action {
 	case resource.AdmissionActionCreate:
@@ -145,7 +149,7 @@ func (o *OpinionatedValidatingAdmissionController) Validate(request *resource.Ad
 	}
 	// Return the result of the underlying func, if it exists
 	if o.Underlying != nil {
-		return o.Underlying.Validate(request)
+		return o.Underlying.Validate(ctx, request)
 	}
 	return nil
 }
@@ -157,3 +161,6 @@ func NewOpinionatedValidatingAdmissionController(wrap resource.ValidatingAdmissi
 		Underlying: wrap,
 	}
 }
+
+// Compile-time interface compliance check
+var _ resource.ValidatingAdmissionController = &OpinionatedValidatingAdmissionController{}

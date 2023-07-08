@@ -197,7 +197,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	}
 
 	// Run the controller
-	err = controller.Validate(admReq)
+	err = controller.Validate(context.Background(), admReq)
 	adResp := admission.AdmissionResponse{
 		UID:     admRev.Request.UID,
 		Allowed: true,
@@ -272,7 +272,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	}
 
 	// Run the controller
-	mResp, err := controller.Mutate(admReq)
+	mResp, err := controller.Mutate(context.Background(), admReq)
 	adResp := admission.AdmissionResponse{
 		UID:     admRev.Request.UID,
 		Allowed: true,
