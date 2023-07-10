@@ -112,6 +112,28 @@ Successfully tagged localhost/issue-tracker-project:latest
 ```
 (some parts of this trimmed for readability)
 
+You will get an error at the end of the output:
+```shell
+No longer supported. Use grafana create-plugin https://github.com/grafana/plugin-tools/tree/main/packages/create-plugin
+
+make: *** [build/plugin-frontend] Error 1
+```
+To fix this error, go ahead and execute:
+```shell
+shell $ cd plugin/
+shell $ npx @grafana/create-plugin@latest migrate
+```
+Default to answering "yes" to all the prompts. 
+
+After that, run:
+```shell
+make build/plugin-frontend
+```
+It should end with a message similar to this:
+```shell
+webpack 5.88.1 compiled successfully in 1421 ms
+```
+
 So what's with all the output? Well, `make build` is doing three separate things, just chained together.
 1. Build the backend plugin binary (using `Magefile`)
 2. Build the frontend plugin (using `yarn`)
