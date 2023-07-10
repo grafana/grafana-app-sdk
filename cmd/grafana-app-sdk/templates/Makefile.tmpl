@@ -34,7 +34,7 @@ build/plugin: build/plugin-backend build/plugin-frontend
 
 .PHONY: build/plugin-frontend
 build/plugin-frontend:
-ifeq ("$(wildcard plugin/plugin.json)","plugin/plugin.json")
+ifeq ("$(wildcard plugin/src/plugin.json)","plugin/src/plugin.json")
 	@cd plugin && yarn install && yarn build
 else
 	@echo "No plugin.json found, skipping frontend build"
