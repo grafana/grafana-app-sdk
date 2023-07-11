@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -624,6 +625,7 @@ func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addAttempts++
+				fmt.Println("ADDDDDD")
 				return addError
 			},
 			DeleteFunc: func(ctx context.Context, object resource.Object) error {

@@ -72,7 +72,8 @@ func (l *ListMap[K, V]) KeySize(key K) int {
 
 // Range performs a range operation for a given key's list.
 // It consumes a rangeFunc, which takes arguments identical to a traditional go `range` function:
-// `index` is the index within the list of the current item, and `value` is the reused pointer to the item.
+// `index` is the index within the list of the current item, and `value` is the list item at that index.
+// `value` is safe to use beyond the list iteration as it is not a re-used pointer like in a typical `range` operation.
 func (l *ListMap[K, V]) Range(key K, rangeFunc func(index int, value V)) {
 	mux, _ := l.muxes.LoadOrStore(key, &sync.RWMutex{})
 	mux.RLock()
@@ -81,8 +82,8 @@ func (l *ListMap[K, V]) Range(key K, rangeFunc func(index int, value V)) {
 	if !ok {
 		return
 	}
-	for idx, item := range list {
-		rangeFunc(idx, item)
+	for i := 0; i < len(list); i++ {
+		rangeFunc(i, list[i])
 	}
 }
 
