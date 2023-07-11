@@ -257,7 +257,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 						cmd := obj.CommonMetadata()
 						cmd.CreatedBy = "me"
 						cmd.UpdatedBy = "you"
-						cmd.UpdateTimestamp = cmd.CreationTimestamp
+						cmd.UpdateTimestamp = cmd.CreationTimestamp.UTC()
 						obj.SetCommonMetadata(cmd)
 						return &resource.MutatingResponse{
 							UpdatedObject: obj,
@@ -270,7 +270,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			// Patch is base64-encoded
 			// [{"op":"add","path":"/metadata/annotations","value":{"grafana.com/createdBy":"me","grafana.com/updateTimestamp":"2023-07-06T16:49:10-04:00","grafana.com/updatedBy":"you"}}] =>
 			// W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb25zIiwidmFsdWUiOnsiZ3JhZmFuYS5jb20vY3JlYXRlZEJ5IjoibWUiLCJncmFmYW5hLmNvbS91cGRhdGVUaW1lc3RhbXAiOiIyMDIzLTA3LTA2VDE2OjQ5OjEwLTA0OjAwIiwiZ3JhZmFuYS5jb20vdXBkYXRlZEJ5IjoieW91In19XQ==
-			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb25zIiwidmFsdWUiOnsiZ3JhZmFuYS5jb20vY3JlYXRlZEJ5IjoibWUiLCJncmFmYW5hLmNvbS91cGRhdGVUaW1lc3RhbXAiOiIyMDIzLTA3LTA2VDE2OjQ5OjEwLTA0OjAwIiwiZ3JhZmFuYS5jb20vdXBkYXRlZEJ5IjoieW91In19XQ=="}}`),
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W3sib3AiOiJhZGQiLCJwYXRoIjoiL21ldGFkYXRhL2Fubm90YXRpb25zIiwidmFsdWUiOnsiZ3JhZmFuYS5jb20vY3JlYXRlZEJ5IjoibWUiLCJncmFmYW5hLmNvbS91cGRhdGVUaW1lc3RhbXAiOiIyMDIzLTA3LTA2VDIwOjQ5OjEwWiIsImdyYWZhbmEuY29tL3VwZGF0ZWRCeSI6InlvdSJ9fV0="}}`),
 			expectedStatusCode: http.StatusOK,
 		},
 		{
