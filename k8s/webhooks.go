@@ -239,7 +239,6 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// Unmarshal the admission review
 	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
 	if err != nil {
-		fmt.Println(err)
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
