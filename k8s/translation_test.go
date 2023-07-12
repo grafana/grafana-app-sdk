@@ -15,6 +15,9 @@ import (
 
 var _ resource.Object = &TestResourceObject{}
 
+var createdTime = time.Now().Truncate(time.Second)
+var updatedTime = time.Now()
+
 // complexObject is a fully-filled-out TestResourceObject
 var complexObject = TestResourceObject{
 	StaticMeta: resource.StaticMetadata{
@@ -29,13 +32,20 @@ var complexObject = TestResourceObject{
 			UID:               "abc",
 			ResourceVersion:   "12345",
 			Labels:            map[string]string{"foo": "bar"},
-			CreationTimestamp: time.Now().Truncate(time.Second),
+			CreationTimestamp: createdTime,
 			Finalizers:        []string{"finalizer"},
-			UpdateTimestamp:   time.Now(),
+			UpdateTimestamp:   updatedTime,
 			CreatedBy:         "me",
 			UpdatedBy:         "you",
 			ExtraFields: map[string]any{
 				"generation": int64(1),
+				"annotations": map[string]string{
+					fmt.Sprintf("%screatedBy", annotationPrefix):       "me",
+					fmt.Sprintf("%supdatedBy", annotationPrefix):       "you",
+					fmt.Sprintf("%supdateTimestamp", annotationPrefix): updatedTime.Format(time.RFC3339Nano),
+					fmt.Sprintf("%scustomField1", annotationPrefix):    "foo",
+					fmt.Sprintf("%scustomField2", annotationPrefix):    "bar",
+				},
 			},
 		},
 		CustomField1: "foo",
@@ -254,11 +264,12 @@ func TestMarshalJSON(t *testing.T) {
 			}.String(),
 		},
 		Metadata: metav1.ObjectMeta{
-			Name:            complexObject.StaticMeta.Name,
-			Namespace:       complexObject.StaticMeta.Namespace,
-			UID:             types.UID(complexObject.Metadata.UID),
-			ResourceVersion: complexObject.Metadata.ResourceVersion,
-			Labels:          complexObject.Metadata.Labels,
+			Name:              complexObject.StaticMeta.Name,
+			Namespace:         complexObject.StaticMeta.Namespace,
+			UID:               types.UID(complexObject.Metadata.UID),
+			ResourceVersion:   complexObject.Metadata.ResourceVersion,
+			CreationTimestamp: metav1.NewTime(complexObject.Metadata.CreationTimestamp),
+			Labels:            complexObject.Metadata.Labels,
 			//CreationTimestamp: metav1.Time{complexObject.Metadata.CreationTimestamp},
 			Finalizers: complexObject.Metadata.Finalizers,
 			Generation: complexObject.Metadata.ExtraFields["generation"].(int64),
@@ -363,8 +374,8 @@ func TestMarshalJSONPatch(t *testing.T) {
 				},
 			},
 			expectedJSON: []byte(`[
-						{"path":"/metadata/annotations/grafana.com~1createdBy","op":"replace","value":"foo"},
-						{"path":"/metadata/annotations/grafana.com~1customKey","op":"replace","value":"bar"}]`),
+						{"path":"/metadata/annotations/grafana.com~1createdBy","op":"add","value":"foo"},
+						{"path":"/metadata/annotations/grafana.com~1customKey","op":"add","value":"bar"}]`),
 			expectedError: nil,
 		},
 		{
@@ -383,7 +394,7 @@ func TestMarshalJSONPatch(t *testing.T) {
 				},
 			},
 			expectedJSON: []byte(`[
-						{"path":"/metadata/annotations/grafana.com~1createdBy","op":"replace","value":"foo"},
+						{"path":"/metadata/annotations/grafana.com~1createdBy","op":"add","value":"foo"},
 						{"path":"/metadata/finalizers","op":"add","value":"bar"}]`),
 			expectedError: nil,
 		},

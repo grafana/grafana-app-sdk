@@ -14,6 +14,10 @@ pluginSecureJson:
   baz: foo
 # Standalone operator docker image. Leave this empty to not deploy an operator
 operatorImage: "{{.OperatorImage}}:latest"
+webhooks:
+  validating: true
+  mutating: true
+  port: 8443
 # Non-standard or additional datasources you want to automatically include in grafana's provisioned list
 # The actual datasources need to be set up manually (arbitrary kubernetes yamls can be added to the local setup via the 'additional' folder),
 # but you can predefine the connection details so they'll be added to the local grafana.

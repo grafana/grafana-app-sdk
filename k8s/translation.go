@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,6 +101,9 @@ func rawToObject(raw []byte, into resource.Object) error {
 	}
 	if len(kubeObject.ObjectMetadata.ManagedFields) > 0 {
 		cmd.ExtraFields["managedFields"] = kubeObject.ObjectMetadata.ManagedFields
+	}
+	if len(kubeObject.ObjectMetadata.Annotations) > 0 {
+		cmd.ExtraFields["annotations"] = kubeObject.ObjectMetadata.Annotations
 	}
 	cmd.CreationTimestamp = kubeObject.ObjectMetadata.CreationTimestamp.Time
 	if kubeObject.ObjectMetadata.DeletionTimestamp != nil {
@@ -217,6 +221,9 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 			// And replace '/' with '~1' for encoding into a patch path
 			endPart := strings.Join(parts[1:], "~1") // If there were slashes, we need to encode them
 			op.Path = fmt.Sprintf("/metadata/annotations/%s%s", strings.ReplaceAll(annotationPrefix, "/", "~1"), endPart)
+			if op.Operation == resource.PatchOpReplace {
+				op.Operation = resource.PatchOpAdd // We change this for safety--they behave the same within a map, but if they key is absent, replace won't work
+			}
 		}
 		patch.Operations[idx] = op
 	}
@@ -242,13 +249,14 @@ func getV1ObjectMetaFields() map[string]struct{} {
 func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 	cMeta := obj.CommonMetadata()
 	meta := metav1.ObjectMeta{
-		Name:            obj.StaticMetadata().Name,
-		Namespace:       obj.StaticMetadata().Namespace,
-		UID:             types.UID(cMeta.UID),
-		ResourceVersion: cMeta.ResourceVersion,
-		Labels:          cMeta.Labels,
-		Finalizers:      cMeta.Finalizers,
-		Annotations:     make(map[string]string),
+		Name:              obj.StaticMetadata().Name,
+		Namespace:         obj.StaticMetadata().Namespace,
+		UID:               types.UID(cMeta.UID),
+		ResourceVersion:   cMeta.ResourceVersion,
+		CreationTimestamp: metav1.NewTime(cMeta.CreationTimestamp),
+		Labels:            cMeta.Labels,
+		Finalizers:        cMeta.Finalizers,
+		Annotations:       make(map[string]string),
 	}
 	// Rest of the metadata in ExtraFields
 	for k, v := range cMeta.ExtraFields {
@@ -267,6 +275,12 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 		case "managedFields":
 			if m, ok := v.([]metav1.ManagedFieldsEntry); ok {
 				meta.ManagedFields = m
+			}
+		case "annotations":
+			if a, ok := v.(map[string]string); ok {
+				for key, val := range a {
+					meta.Annotations[key] = val
+				}
 			}
 		}
 	}
@@ -301,4 +315,62 @@ func toString(t any) string {
 		bytes, _ := json.Marshal(t)
 		return string(bytes)
 	}
+}
+
+func unmarshalKubernetesAdmissionReview(bytes []byte, format resource.WireFormat) (*admission.AdmissionReview, error) {
+	if format != resource.WireFormatJSON {
+		return nil, fmt.Errorf("unsupported WireFormat '%s'", fmt.Sprint(format))
+	}
+
+	rev := admission.AdmissionReview{}
+	err := json.Unmarshal(bytes, &rev)
+	if err != nil {
+		return nil, err
+	}
+	return &rev, nil
+}
+
+func translateKubernetesAdmissionRequest(req *admission.AdmissionRequest, sch resource.Schema) (*resource.AdmissionRequest, error) {
+	var obj, old resource.Object
+
+	if len(req.Object.Raw) > 0 {
+		obj = sch.ZeroValue()
+		err := rawToObject(req.Object.Raw, obj)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if len(req.OldObject.Raw) > 0 {
+		old = sch.ZeroValue()
+		err := rawToObject(req.OldObject.Raw, old)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	var action resource.AdmissionAction
+	switch req.Operation {
+	case admission.Create:
+		action = resource.AdmissionActionCreate
+	case admission.Update:
+		action = resource.AdmissionActionUpdate
+	case admission.Delete:
+		action = resource.AdmissionActionDelete
+	case admission.Connect:
+		action = resource.AdmissionActionConnect
+	}
+
+	return &resource.AdmissionRequest{
+		Action:  action,
+		Kind:    req.Kind.Kind,
+		Group:   req.Kind.Group,
+		Version: req.Kind.Version,
+		UserInfo: resource.AdmissionUserInfo{
+			Username: req.UserInfo.Username,
+			UID:      req.UserInfo.UID,
+			Groups:   req.UserInfo.Groups,
+		},
+		Object:    obj,
+		OldObject: old,
+	}, nil
 }
