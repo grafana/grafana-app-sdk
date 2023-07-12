@@ -2,16 +2,25 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
+	"math/big"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/thema"
@@ -26,13 +35,14 @@ var localEnvFiles embed.FS
 
 // localEnvConfig is the configuration object used for the generation of local dev env resources
 type localEnvConfig struct {
-	Port              int                `json:"port" yaml:"port"`
-	KubePort          int                `json:"kubePort" yaml:"kubePort"`
-	Datasources       []string           `json:"datasources" yaml:"datasources"`
-	DatasourceConfigs []dataSourceConfig `json:"datasourceConfigs" yaml:"datasourceConfigs"`
-	PluginJSON        map[string]any     `json:"pluginJson" yaml:"pluginJson"`
-	PluginSecureJSON  map[string]any     `json:"pluginSecureJson" yaml:"pluginSecureJson"`
-	OperatorImage     string             `json:"operatorImage" yaml:"operatorImage"`
+	Port              int                   `json:"port" yaml:"port"`
+	KubePort          int                   `json:"kubePort" yaml:"kubePort"`
+	Datasources       []string              `json:"datasources" yaml:"datasources"`
+	DatasourceConfigs []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
+	PluginJSON        map[string]any        `json:"pluginJson" yaml:"pluginJson"`
+	PluginSecureJSON  map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
+	OperatorImage     string                `json:"operatorImage" yaml:"operatorImage"`
+	Webhooks          localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
 }
 
 type dataSourceConfig struct {
@@ -43,6 +53,12 @@ type dataSourceConfig struct {
 	Type      string `json:"type" yaml:"type"`
 	UID       string `json:"uid" yaml:"uid"`
 	URL       string `json:"url" yaml:"url"`
+}
+
+type localEnvWebhookConfig struct {
+	Mutating   bool `json:"mutating" yaml:"mutating"`
+	Validating bool `json:"validating" yaml:"validating"`
+	Port       int  `json:"port" yaml:"port"`
 }
 
 func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
@@ -238,24 +254,36 @@ func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error
 }
 
 type yamlGenProperties struct {
-	PluginID       string
-	PluginIDKube   string
-	CRDs           []yamlGenPropsCRD
-	Services       []yamlGenPropsService
-	JSONData       map[string]string
-	SecureJSONData map[string]string
-	Datasources    []dataSourceConfig
-	OperatorImage  string
+	PluginID          string
+	PluginIDKube      string
+	CRDs              []yamlGenPropsCRD
+	Services          []yamlGenPropsService
+	JSONData          map[string]string
+	SecureJSONData    map[string]string
+	Datasources       []dataSourceConfig
+	OperatorImage     string
+	WebhookProperties yamlGenPropsWebhooks
 }
 
 type yamlGenPropsCRD struct {
 	MachineName       string
 	PluralMachineName string
 	Group             string
+	Versions          []string
 }
 
 type yamlGenPropsService struct {
 	KubeName string
+}
+
+type yamlGenPropsWebhooks struct {
+	Enabled    bool
+	Port       int
+	Mutating   string
+	Validating string
+	Base64Cert string
+	Base64Key  string
+	Base64CA   string
 }
 
 type crdYAML struct {
@@ -265,6 +293,10 @@ type crdYAML struct {
 			Kind   string `yaml:"kind"`
 			Plural string `yaml:"plural"`
 		} `yaml:"names"`
+		Versions []struct {
+			Name   string `yaml:"name"`
+			Served bool   `yaml:"served"`
+		} `yaml:"versions"`
 	} `yaml:"spec"`
 }
 
@@ -282,6 +314,9 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		JSONData:       make(map[string]string),
 		SecureJSONData: make(map[string]string),
 		OperatorImage:  config.OperatorImage,
+		WebhookProperties: yamlGenPropsWebhooks{
+			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating,
+		},
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
@@ -296,6 +331,28 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		props.OperatorImage = fmt.Sprintf("localhost/%s", props.OperatorImage)
 	}
 
+	if props.WebhookProperties.Enabled {
+		if config.Webhooks.Port > 0 {
+			props.WebhookProperties.Port = config.Webhooks.Port
+		} else {
+			props.WebhookProperties.Port = 8443
+		}
+		if config.Webhooks.Mutating {
+			props.WebhookProperties.Mutating = "/mutate"
+		}
+		if config.Webhooks.Validating {
+			props.WebhookProperties.Validating = "/validate"
+		}
+		// Generate cert bundle
+		bundle, err := generateCerts(fmt.Sprintf("%s-operator.default.svc", props.PluginID))
+		if err != nil {
+			return nil, err
+		}
+		props.WebhookProperties.Base64Cert = base64.StdEncoding.EncodeToString(bundle.cert)
+		props.WebhookProperties.Base64Key = base64.StdEncoding.EncodeToString(bundle.key)
+		props.WebhookProperties.Base64CA = base64.StdEncoding.EncodeToString(bundle.ca)
+	}
+
 	// Generate CRD YAML files, add the CRD metadata to the props
 	crdFiles, err := generateCRDs(parser, "", "yaml", []string{})
 	if err != nil {
@@ -308,10 +365,17 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		if err != nil {
 			return nil, err
 		}
+		versions := make([]string, 0)
+		for _, v := range yml.Spec.Versions {
+			if v.Served {
+				versions = append(versions, v.Name)
+			}
+		}
 		props.CRDs = append(props.CRDs, yamlGenPropsCRD{
 			MachineName:       strings.ToLower(yml.Spec.Names.Kind),
 			PluralMachineName: strings.ToLower(yml.Spec.Names.Plural),
 			Group:             yml.Spec.Group,
+			Versions:          versions,
 		})
 	}
 
@@ -452,4 +516,113 @@ func generateTiltfile() ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), err
+}
+
+var ca = &x509.Certificate{
+	SerialNumber: big.NewInt(2019),
+	Subject: pkix.Name{
+		Organization:  []string{"Grafana-App-SDK Generated Local Environment CA"},
+		Country:       []string{"US"},
+		Province:      []string{""},
+		Locality:      []string{"San Francisco"},
+		StreetAddress: []string{"Golden Gate Bridge"},
+		PostalCode:    []string{"94016"},
+	},
+	NotBefore:             time.Now(),
+	NotAfter:              time.Now().AddDate(10, 0, 0),
+	IsCA:                  true,
+	ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+	KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+	BasicConstraintsValid: true,
+}
+
+func serverCert(dnsNames []string) *x509.Certificate {
+	return &x509.Certificate{
+		SerialNumber: big.NewInt(1658),
+		Subject: pkix.Name{
+			Organization:  []string{"Grafana-App-SDK Generated Local Environment Webhook Server Cert"},
+			Country:       []string{"US"},
+			Province:      []string{""},
+			Locality:      []string{"San Francisco"},
+			StreetAddress: []string{"Golden Gate Bridge"},
+			PostalCode:    []string{"94016"},
+		},
+		IPAddresses:  []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
+		NotBefore:    time.Now(),
+		NotAfter:     time.Now().AddDate(10, 0, 0),
+		SubjectKeyId: []byte{1, 2, 3, 4, 6},
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		DNSNames:     dnsNames,
+	}
+}
+
+type certBundle struct {
+	cert []byte
+	key  []byte
+	ca   []byte
+}
+
+func generateCerts(dnsName string) (*certBundle, error) {
+	caPrivateKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return nil, err
+	}
+
+	caCertBytes, err := x509.CreateCertificate(rand.Reader, ca, ca, &caPrivateKey.PublicKey, caPrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	caPEM := new(bytes.Buffer)
+	err = pem.Encode(caPEM, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: caCertBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	caPrivKeyPEM := new(bytes.Buffer)
+	err = pem.Encode(caPrivKeyPEM, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(caPrivateKey),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	certPrivKey, err := rsa.GenerateKey(rand.Reader, 4096)
+	if err != nil {
+		return nil, err
+	}
+
+	certBytes, err := x509.CreateCertificate(rand.Reader, serverCert([]string{dnsName}), ca, &certPrivKey.PublicKey, caPrivateKey)
+	if err != nil {
+		return nil, err
+	}
+
+	certPEM := new(bytes.Buffer)
+	err = pem.Encode(certPEM, &pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certBytes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	certPrivKeyPEM := new(bytes.Buffer)
+	err = pem.Encode(certPrivKeyPEM, &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(certPrivKey),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &certBundle{
+		cert: certPEM.Bytes(),
+		key:  certPrivKeyPEM.Bytes(),
+		ca:   caPEM.Bytes(),
+	}, nil
 }
