@@ -43,7 +43,7 @@ func NewAdmissionError(err error, statusCode int, reason string) *SimpleAdmissio
 }
 
 // OpinionatedMutatingAdmissionController is a MutatingAdmissionController which wraps an optional user-defined
-// Mutate() function with a set of additional PatchOperations which set metadata and label properties.
+// MutatingAdmissionController with a set of additional changes to the response's UpdatedObject which set metadata and label properties.
 type OpinionatedMutatingAdmissionController struct {
 	Underlying resource.MutatingAdmissionController
 }
@@ -51,7 +51,7 @@ type OpinionatedMutatingAdmissionController struct {
 // now is used to wrap time.Now so it can be altered for testing
 var now = time.Now
 
-// Mutate runs the underlying MutateFunc() function (if non-nil), and if that returns successfully,
+// Mutate runs the Mutate function of the Underlying MutatingAdmissionController (if non-nil), and if that returns successfully,
 // appends additional patch operations to the MutatingResponse for CommonMetadata fields not in kubernetes standard metadata,
 // and labels internally used by the SDK, such as the stored version.
 func (o *OpinionatedMutatingAdmissionController) Mutate(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
@@ -94,7 +94,7 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(ctx context.Context, req
 }
 
 // NewOpinionatedMutatingAdmissionController creates a pointer to a new OpinionatedMutatingAdmissionController wrapping the
-// provided mutateFunc (nil mutateFunc argument is allowed, and will cause the controller to not call the underlying function)
+// provided MutatingAdmissionController. If `wrap` is nil, it will not be used in the Mutate call.
 func NewOpinionatedMutatingAdmissionController(wrap resource.MutatingAdmissionController) *OpinionatedMutatingAdmissionController {
 	return &OpinionatedMutatingAdmissionController{
 		Underlying: wrap,
@@ -111,7 +111,8 @@ type OpinionatedValidatingAdmissionController struct {
 	Underlying resource.ValidatingAdmissionController
 }
 
-// Validate performs validation on metadata-as-annotations fields before calling the underlying admission validate function.
+// Validate performs validation on metadata-as-annotations fields before calling Validate on Underlying, if non-nil.
+// If the Opinionated validation fails, Validate is never called on Underlying.
 func (o *OpinionatedValidatingAdmissionController) Validate(ctx context.Context, request *resource.AdmissionRequest) error {
 	// Check that none of the protected metadata in annotations has been changed
 	switch request.Action {
@@ -155,7 +156,7 @@ func (o *OpinionatedValidatingAdmissionController) Validate(ctx context.Context,
 }
 
 // NewOpinionatedValidatingAdmissionController returns a new OpinionatedValidatingAdmissionController which wraps the provided
-// validateFunc. If validateFunc is nil, no extra validation after the opinionated initial validation will be performed.
+// ValidatingAdmissionController. If `wrap` is nil, no extra validation after the opinionated initial validation will be performed.
 func NewOpinionatedValidatingAdmissionController(wrap resource.ValidatingAdmissionController) *OpinionatedValidatingAdmissionController {
 	return &OpinionatedValidatingAdmissionController{
 		Underlying: wrap,
