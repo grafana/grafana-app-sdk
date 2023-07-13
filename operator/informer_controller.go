@@ -67,7 +67,6 @@ type RetryDequeuePolicy func(newAction ResourceAction, newObject resource.Object
 // 4. Otherwise, dequeue the retry
 var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject resource.Object, retryAction ResourceAction, retryObject resource.Object, retryError error) bool {
 	if newAction == ResourceActionDelete {
-		fmt.Println("return true")
 		return true
 	}
 	if newAction != retryAction {
@@ -76,7 +75,6 @@ var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject res
 	if getGeneration(newObject) == getGeneration(retryObject) {
 		return false
 	}
-	fmt.Println("return true")
 	return true
 }
 
@@ -193,6 +191,7 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
+// nolint:dupl
 func (c *InformerController) informerAddFunc(resourceKind string) func(context.Context, resource.Object) error {
 	return func(ctx context.Context, obj resource.Object) error {
 		// Handle all watchers for the add for this resource kind
@@ -233,6 +232,7 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 	}
 }
 
+// nolint:dupl
 func (c *InformerController) informerUpdateFunc(resourceKind string) func(context.Context, resource.Object, resource.Object) error {
 	return func(ctx context.Context, oldObj resource.Object, newObj resource.Object) error {
 		// Handle all watchers for the update for this resource kind
@@ -273,6 +273,7 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 	}
 }
 
+// nolint:dupl
 func (c *InformerController) informerDeleteFunc(resourceKind string) func(context.Context, resource.Object) error {
 	return func(ctx context.Context, obj resource.Object) error {
 		// Handle all watchers for the add for this resource kind
@@ -315,12 +316,9 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 
 func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectState resource.Object, action ResourceAction) {
 	if c.RetryDequeuePolicy != nil {
-		fmt.Println("before keys: ", c.toRetry.KeySize(retryKey))
 		c.toRetry.RemoveItems(retryKey, func(info retryInfo) bool {
-			fmt.Println("check for dequeue: ", action, info.action, info.attempt)
 			return c.RetryDequeuePolicy(action, currentObjectState, info.action, info.object, info.err)
 		}, -1)
-		fmt.Println("after keys: ", c.toRetry.KeySize(retryKey))
 	} else {
 		// If no RetryDequeuePolicy exists, dequeue all retries for the object
 		c.toRetry.RemoveKey(retryKey)
@@ -328,8 +326,14 @@ func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectSta
 }
 
 func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconciler, req ReconcileRequest, retryKey string) {
+	// Do the reconcile
 	res, err := reconciler.Reconcile(ctx, req)
+	// If the response contains a state, add it to the request for future retries
+	if res.State != nil {
+		req.State = res.State
+	}
 	if res.RequeueAfter != nil {
+		// If RequeueAfter is non-nil, add a retry to the queue for now+RequeueAfter
 		c.toRetry.AddItem(retryKey, retryInfo{
 			retryAfter: time.Now().Add(*res.RequeueAfter),
 			retryFunc: func() (*time.Duration, error) {
@@ -341,6 +345,7 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 			err:    err,
 		})
 	} else if err != nil {
+		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
 		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
 			res, err := reconciler.Reconcile(ctx, req)
 			return res.RequeueAfter, err
@@ -406,8 +411,10 @@ func (*InformerController) keyForWatcherEvent(resourceKind string, watcherIndex 
 }
 
 func (*InformerController) keyForReconcilerEvent(resourceKind string, reconcilerIndex int, obj resource.Object) string {
-	// TODO
-	return ""
+	if obj == nil {
+		return fmt.Sprintf("reconcile:%s:%d:nil:nil", resourceKind, reconcilerIndex)
+	}
+	return fmt.Sprintf("reconcile:%s:%d:%s:%s", resourceKind, reconcilerIndex, obj.StaticMetadata().Namespace, obj.StaticMetadata().Name)
 }
 
 func (c *InformerController) queueRetry(key string, err error, toRetry func() (*time.Duration, error), action ResourceAction, obj resource.Object) {

@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/utils/strings/slices"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // ReconcileAction describes the action that triggered reconciliation.
 type ReconcileAction int
 
 const (
+	// ReconcileActionUnknown represents an Unknown ReconcileAction
 	ReconcileActionUnknown ReconcileAction = iota
 
 	// ReconcileActionCreated indicates that the resource to reconcile has been created.
@@ -45,8 +47,15 @@ const (
 // Controllers such as InformerController contain logic to dequeue ReconcileRequests if subsequent actions
 // are received for the same object.
 type ReconcileRequest struct {
+	// Action is the action that triggered this ReconcileRequest
 	Action ReconcileAction
+	// Object is the object art the time of the received action
 	Object resource.Object
+	// State is a user-defined map of state values that can be provided on retried ReconcileRequests.
+	// See State in ReconcileResult. It will always be nil on an initial Reconcile call,
+	// and will only be non-nil if a prior Reconcile call with this ReconcileRequest returned a State
+	// in its ReconcileResult alongside either a RequeueAfter or an error.
+	State map[string]any
 }
 
 // ReconcileResult is the status of a successful Reconcile action.
@@ -57,6 +66,10 @@ type ReconcileResult struct {
 	// RequeueAfter is a duration after which the Reconcile action which returned this result should be retried.
 	// If nil, the Reconcile action will not be requeued.
 	RequeueAfter *time.Duration
+	// State can be used alongside RequeueAfter to add the provided state map to the ReconcileRequest supplied in the
+	// future Reconcile call. This allows a Reconcile to "partially complete" and not have to re-do tasks
+	// if it needs to wait on an additional bit of information or if a particular call results in a transient failure.
+	State map[string]any
 }
 
 // Reconciler is an interface which describes an object which implements simple Reconciliation behavior.
@@ -70,6 +83,8 @@ type Reconciler interface {
 	Reconcile(ctx context.Context, req ReconcileRequest) (ReconcileResult, error)
 }
 
+// ReconcileActionFromResourceAction returns the equivalent ReconcileAction from a provided ResourceAction.
+// If there is no equivalent, it returns ReconcileActionUnknown.
 func ReconcileActionFromResourceAction(action ResourceAction) ReconcileAction {
 	switch action {
 	case ResourceActionCreate:
@@ -83,6 +98,8 @@ func ReconcileActionFromResourceAction(action ResourceAction) ReconcileAction {
 	}
 }
 
+// ResourceActionFromReconcileAction returns the equivalent ResourceAction from a provided ReconcileAction.
+// If there is no equivalent, it returns an empty ResourceAction.
 func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 	switch action {
 	case ReconcileActionCreated:
@@ -102,6 +119,8 @@ type OpinionatedReconciler struct {
 	client        PatchClient
 }
 
+const opinionatedReconcilerPatchStateKey = "grafana-app-sdk-opinionated-reconciler-create-patch-status"
+
 func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
 	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
@@ -109,10 +128,14 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 		return o.ReconcileFunc(ctx, request)
 	}
 	if request.Action == ReconcileActionCreated {
-		// Delegate
-		resp, err := o.wrappedReconcile(ctx, request)
-		if err != nil || resp.RequeueAfter != nil {
-			return resp, err
+		resp := ReconcileResult{}
+		if request.State == nil || request.State[opinionatedReconcilerPatchStateKey] == nil {
+			// Delegate
+			var err error
+			resp, err = o.wrappedReconcile(ctx, request)
+			if err != nil || resp.RequeueAfter != nil {
+				return resp, err
+			}
 		}
 
 		// Attach the finalizer on success
@@ -123,10 +146,13 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 				Value:     []string{o.finalizer},
 			}},
 		}, resource.PatchOptions{}, request.Object)
-		// What to do with patch error???
-		// TODO
-		fmt.Println(patchErr)
-		return resp, err
+		if patchErr != nil {
+			if resp.State == nil {
+				resp.State = make(map[string]any)
+			}
+			resp.State[opinionatedReconcilerPatchStateKey] = patchErr
+		}
+		return resp, patchErr
 	}
 	if request.Action == ReconcileActionUpdated && request.Object.CommonMetadata().DeletionTimestamp != nil && slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
 		patchErr := o.client.PatchInto(ctx, request.Object.StaticMetadata().Identifier(), resource.PatchRequest{
