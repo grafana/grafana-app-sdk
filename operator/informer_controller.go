@@ -176,6 +176,33 @@ func (c *InformerController) RemoveAllWatchersForResource(resourceKind string) {
 	c.watchers.RemoveKey(resourceKind)
 }
 
+// AddReconciler adds a reconciler to an informer with a matching `resourceKind`.
+// Any time the informer sees an add, update, or delete, it will call reconciler.Reconcile.
+// Multiple reconcilers can exist for the same resource kind. If multiple reconcilers exist,
+// they will be run in the order they were added to the informer.
+func (c *InformerController) AddReconciler(reconciler Reconciler, resourceKind string) error {
+	if reconciler == nil {
+		return fmt.Errorf("reconciler cannot be nil")
+	}
+	if resourceKind == "" {
+		return fmt.Errorf("resourceKind cannot be empty")
+	}
+	c.reconcilers.AddItem(resourceKind, reconciler)
+	return nil
+}
+
+// RemoveReconciler removes the given Reconciler from the list for the resourceKind, provided it exists in the list.
+func (c *InformerController) RemoveReconciler(reconciler Reconciler, resourceKind string) {
+	c.reconcilers.RemoveItem(resourceKind, func(r Reconciler) bool {
+		return reconciler == r
+	})
+}
+
+// RemoveAllReconcilersForResource removes all Reconcilers for a specific resourceKind
+func (c *InformerController) RemoveAllReconcilersForResource(resourceKind string) {
+	c.reconcilers.RemoveKey(resourceKind)
+}
+
 // Run runs the controller, which starts all informers, until stopCh is closed
 //
 //nolint:errcheck

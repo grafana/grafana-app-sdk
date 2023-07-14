@@ -113,6 +113,22 @@ func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 	}
 }
 
+func NewOpinionatedReconciler(client PatchClient, finalizer string) (*OpinionatedReconciler, error) {
+	if client == nil {
+		return nil, fmt.Errorf("client cannot be nil")
+	}
+	if finalizer == "" {
+		return nil, fmt.Errorf("finalizer cannot be empty")
+	}
+	return &OpinionatedReconciler{
+		finalizer: finalizer,
+		client:    client,
+	}, nil
+}
+
+// OpinionatedReconciler wraps an ordinary Reconciler with finalizer-based logic to convert "Created" events into
+// "resync" events on start-up when the reconciler has handled the "created" event on a previous run,
+// and ensures that "delete" events are not missed during reconciler down-time by using the finalizer.
 type OpinionatedReconciler struct {
 	ReconcileFunc func(context.Context, ReconcileRequest) (ReconcileResult, error)
 	finalizer     string
@@ -121,6 +137,11 @@ type OpinionatedReconciler struct {
 
 const opinionatedReconcilerPatchStateKey = "grafana-app-sdk-opinionated-reconciler-create-patch-status"
 
+// Reconcile consumes a ReconcileRequest and passes it off to the underlying ReconcileFunc, using the following criteria to modify or drop the request if needed:
+//   - If the action is a Create, and the OpinionatedReconciler's finalizer is in the finalizer list, update the action to a Resync
+//   - If the action is a Create, and the OpinionatedReconciler's finalizer is missing, add the finalizer after the delegated Reconcile request returns successfully
+//   - If the action is an Update, and the DeletionTimestamp is non-nil, remove the OpinionatedReconciler's finalizer, and do not delegate (the subsequent Delete will be delegated)
+//   - If the action is an Update, and the OpinionatedReconciler's finalizer is missing (and DeletionTimestamp is nil), add the finalizer, and do not delegate (the subsequent update action will delegate)
 func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
 	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
@@ -184,9 +205,72 @@ func (o *OpinionatedReconciler) wrappedReconcile(ctx context.Context, request Re
 	return ReconcileResult{}, nil
 }
 
+// Wrap wraps the provided Reconciler's Reconcile function with this OpinionatedReconciler
 func (o *OpinionatedReconciler) Wrap(reconciler Reconciler) {
 	o.ReconcileFunc = reconciler.Reconcile
 }
 
 // Compile-time interface compliance check
 var _ Reconciler = &OpinionatedReconciler{}
+
+// SimpleReconciler is a simple Reconciler implementation that calls ReconcileFunc if non-nil on Reconcile requests.
+type SimpleReconciler struct {
+	ReconcileFunc func(context.Context, ReconcileRequest) (ReconcileResult, error)
+}
+
+// Reconcile calls ReconcileFunc if non-nil and returns the response, or returns an empty ReconcileResult and nil error
+// if ReconcileFunc is nil.
+func (s *SimpleReconciler) Reconcile(ctx context.Context, req ReconcileRequest) (ReconcileResult, error) {
+	if s.ReconcileFunc != nil {
+		return s.ReconcileFunc(ctx, req)
+	}
+	return ReconcileResult{}, nil
+}
+
+// Compile-time interface compliance check
+var _ Reconciler = &SimpleReconciler{}
+
+// TypedReconcileRequest is a variation of ReconcileRequest which uses a concretely-typed Object,
+// rather than the interface resource.Object. It is used by TypedReconciler in its ReconcileFunc.
+type TypedReconcileRequest[T resource.Object] struct {
+	// Action is the actions which triggered this TypedReconcileRequest
+	Action ReconcileAction
+	// Object is the object on which the Action was performed, at the point in time of that Action
+	Object T
+	// State is a user-defined map of state values that can be provided on retried ReconcileRequests.
+	// See State in ReconcileResult. It will always be nil on an initial Reconcile call,
+	// and will only be non-nil if a prior Reconcile call with this TypedReconcileRequest returned a State
+	// in its ReconcileResult alongside either a RequeueAfter or an error.
+	State map[string]any
+}
+
+// TypedReconciler is a variant of SimpleReconciler in which a user can specify the underlying type of the resource.Object
+// which is in the provided ReconcileRequest. Reconcile() will then attempt to cast the resource.Object in the
+// ReconcileRequest into the provided T type and produce a TypedReconcileRequest, which will be passed to ReconcileFunc.
+type TypedReconciler[T resource.Object] struct {
+	// ReconcileFunc is called by TypedReconciler.Reconcile using the T-typed Object instead of a resource.Object.
+	ReconcileFunc func(context.Context, TypedReconcileRequest[T]) (ReconcileResult, error)
+}
+
+// Reconcile tries to cast the Object in ReconcileRequest into the T-typed resource.Object,
+// then creates a TypedReconcileRequest with the cast object and the same Action and State,
+// which is passed to ReconcileFunc. If the Object cannot be cast, it returns an empty
+// ReconcileResult with an error of type *CannotCastError. If ReconcileFunc is nil,
+// it returns an empty ReconcileResult with a nil error.
+func (t *TypedReconciler[T]) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+	if t.ReconcileFunc == nil {
+		return ReconcileResult{}, nil
+	}
+	cast, ok := request.Object.(T)
+	if !ok {
+		return ReconcileResult{}, NewCannotCastError(request.Object.StaticMetadata())
+	}
+	return t.ReconcileFunc(ctx, TypedReconcileRequest[T]{
+		Action: request.Action,
+		Object: cast,
+		State:  request.State,
+	})
+}
+
+// Compile-time interface compliance check
+var _ Reconciler = &TypedReconciler[resource.Object]{}
