@@ -153,6 +153,148 @@ func TestInformerController_RemoveAllWatchersForResource(t *testing.T) {
 	})
 }
 
+func TestInformerController_AddReconciler(t *testing.T) {
+	t.Run("nil reconciler", func(t *testing.T) {
+		c := NewInformerController()
+		err := c.AddReconciler(nil, "")
+		assert.Equal(t, errors.New("reconciler cannot be nil"), err)
+	})
+
+	t.Run("empty resourceKind", func(t *testing.T) {
+		c := NewInformerController()
+		err := c.AddReconciler(&SimpleReconciler{}, "")
+		assert.Equal(t, errors.New("resourceKind cannot be empty"), err)
+	})
+
+	t.Run("first reconciler", func(t *testing.T) {
+		c := NewInformerController()
+		r := &SimpleReconciler{}
+		k := "foo"
+		err := c.AddReconciler(r, k)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, c.reconcilers.KeySize(k))
+		iw, _ := c.reconcilers.ItemAt(k, 0)
+		assert.Equal(t, r, iw)
+	})
+
+	t.Run("existing reconcilers", func(t *testing.T) {
+		c := NewInformerController()
+		r1 := &SimpleReconciler{}
+		r2 := &SimpleReconciler{}
+		k := "foo"
+		err := c.AddReconciler(r1, k)
+		assert.Nil(t, err)
+		assert.Equal(t, 1, c.reconcilers.KeySize(k))
+		ir1, _ := c.reconcilers.ItemAt(k, 0)
+		assert.Equal(t, r1, ir1)
+		err = c.AddReconciler(r2, k)
+		assert.Nil(t, err)
+		assert.Equal(t, 2, c.reconcilers.KeySize(k))
+		ir1, _ = c.reconcilers.ItemAt(k, 0)
+		ir2, _ := c.reconcilers.ItemAt(k, 1)
+		assert.Equal(t, r1, ir1)
+		assert.Equal(t, r2, ir2)
+	})
+}
+
+func TestInformerController_RemoveReconciler(t *testing.T) {
+	t.Run("nil reconciler", func(t *testing.T) {
+		c := NewInformerController()
+		// Ensure no panics
+		c.RemoveReconciler(nil, "")
+	})
+
+	t.Run("empty resourceKind", func(t *testing.T) {
+		c := NewInformerController()
+		// Ensure no panics
+		c.RemoveReconciler(&SimpleReconciler{}, "")
+	})
+
+	t.Run("not in list", func(t *testing.T) {
+		c := NewInformerController()
+		r1 := &SimpleReconciler{}
+		r2 := &SimpleReconciler{}
+		k := "foo"
+		c.AddReconciler(r1, k)
+		c.RemoveReconciler(r2, k)
+		assert.Equal(t, 1, c.reconcilers.KeySize(k))
+	})
+
+	t.Run("only reconciler in list", func(t *testing.T) {
+		c := NewInformerController()
+		r := &SimpleReconciler{}
+		k := "foo"
+		c.AddReconciler(r, k)
+		c.RemoveReconciler(r, k)
+		assert.Equal(t, 0, c.reconcilers.KeySize(k))
+	})
+
+	t.Run("preserve order", func(t *testing.T) {
+		r1 := &SimpleReconciler{}
+		r2 := &SimpleReconciler{}
+		r3 := &SimpleReconciler{}
+		r4 := &SimpleReconciler{}
+		resourceKind := "foo"
+		c := NewInformerController()
+		c.AddReconciler(r1, resourceKind)
+		c.AddReconciler(r2, resourceKind)
+		c.AddReconciler(r3, resourceKind)
+		c.AddReconciler(r4, resourceKind)
+
+		// Do removes from the middle, beginning, and end of the list to make sure order is preserved
+		c.RemoveReconciler(r3, resourceKind)
+		assert.Equal(t, 3, c.reconcilers.KeySize(resourceKind))
+		ir1, _ := c.reconcilers.ItemAt(resourceKind, 0)
+		ir2, _ := c.reconcilers.ItemAt(resourceKind, 1)
+		ir3, _ := c.reconcilers.ItemAt(resourceKind, 2)
+		assert.Equal(t, r1, ir1)
+		assert.Equal(t, r2, ir2)
+		assert.Equal(t, r4, ir3)
+
+		c.RemoveReconciler(r1, resourceKind)
+		assert.Equal(t, 2, c.reconcilers.KeySize(resourceKind))
+		ir1, _ = c.reconcilers.ItemAt(resourceKind, 0)
+		ir2, _ = c.reconcilers.ItemAt(resourceKind, 1)
+		assert.Equal(t, r2, ir1)
+		assert.Equal(t, r4, ir2)
+
+		c.RemoveReconciler(r4, resourceKind)
+		assert.Equal(t, 1, c.reconcilers.KeySize(resourceKind))
+		ir1, _ = c.reconcilers.ItemAt(resourceKind, 0)
+		assert.Equal(t, r2, ir1)
+	})
+}
+
+func TestInformerController_RemoveAllReconcilersForResource(t *testing.T) {
+	t.Run("empty key", func(t *testing.T) {
+		c := NewInformerController()
+		// Ensure no panics
+		c.RemoveAllReconcilersForResource("")
+	})
+
+	t.Run("no watchers", func(t *testing.T) {
+		c := NewInformerController()
+		// Ensure no panics
+		c.RemoveAllReconcilersForResource("foo")
+	})
+
+	t.Run("watchers", func(t *testing.T) {
+		r1 := &SimpleReconciler{}
+		r2 := &SimpleReconciler{}
+		r3 := &SimpleReconciler{}
+		k1 := "foo"
+		k2 := "bar"
+		c := NewInformerController()
+		c.AddReconciler(r1, k1)
+		c.AddReconciler(r2, k1)
+		c.AddReconciler(r3, k2)
+		assert.Equal(t, 2, c.reconcilers.Size()) // 2 keys
+		c.RemoveAllReconcilersForResource(k1)
+		assert.Equal(t, 1, c.reconcilers.Size()) // 1 key
+		assert.Equal(t, 1, c.reconcilers.KeySize(k2))
+	})
+}
+
 func TestInformerController_AddInformer(t *testing.T) {
 	t.Run("nil informer", func(t *testing.T) {
 		c := NewInformerController()
@@ -264,6 +406,257 @@ func TestInformerController_Run(t *testing.T) {
 			close(stopCh)
 		}()
 		wg.Wait()
+	})
+}
+
+func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
+	t.Run("no errors", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := NewInformerController()
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				return nil
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		stopCh := make(chan struct{})
+		go c.Run(stopCh)
+		inf.FireAdd(context.Background(), nil)
+		close(stopCh)
+		assert.Equal(t, 1, addCalls)
+		assert.Equal(t, 1, reconcileCalls)
+	})
+
+	t.Run("watcher error, one retry", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := NewInformerController()
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				wg.Done()
+				return errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		stopCh := make(chan struct{})
+		go c.Run(stopCh)
+		inf.FireAdd(context.Background(), nil)
+		wg.Wait()
+		close(stopCh)
+		assert.Equal(t, 2, addCalls)
+		assert.Equal(t, 1, reconcileCalls)
+	})
+
+	t.Run("no errors, reconciler retry", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := NewInformerController()
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				return nil
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				wg.Done()
+				if len(request.State) > 0 {
+					return ReconcileResult{}, nil
+				}
+				after := time.Millisecond * 100
+				return ReconcileResult{
+					State: map[string]any{
+						"retry": true,
+					},
+					RequeueAfter: &after,
+				}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		stopCh := make(chan struct{})
+		go c.Run(stopCh)
+		inf.FireAdd(context.Background(), nil)
+		wg.Wait()
+		close(stopCh)
+		assert.Equal(t, 1, addCalls)
+		assert.Equal(t, 2, reconcileCalls)
+	})
+
+	t.Run("watcher error, reconciler retry", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := NewInformerController()
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(4)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				wg.Done()
+				return errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				wg.Done()
+				if len(request.State) > 0 {
+					return ReconcileResult{}, nil
+				}
+				after := time.Millisecond * 100
+				return ReconcileResult{
+					State: map[string]any{
+						"retry": true,
+					},
+					RequeueAfter: &after,
+				}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		stopCh := make(chan struct{})
+		go c.Run(stopCh)
+		inf.FireAdd(context.Background(), nil)
+		wg.Wait()
+		close(stopCh)
+		assert.Equal(t, 2, addCalls)
+		assert.Equal(t, 2, reconcileCalls)
+	})
+
+	t.Run("reconciler error, one retry", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := NewInformerController()
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				return nil
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				wg.Done()
+				return ReconcileResult{}, errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		stopCh := make(chan struct{})
+		go c.Run(stopCh)
+		inf.FireAdd(context.Background(), nil)
+		wg.Wait()
+		close(stopCh)
+		assert.Equal(t, 1, addCalls)
+		assert.Equal(t, 2, reconcileCalls)
+	})
+
+	t.Run("reconciler and watcher errors, one retry", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := NewInformerController()
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(4)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				wg.Done()
+				return errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				wg.Done()
+				return ReconcileResult{}, errors.New("ICH BIN ERROR")
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		stopCh := make(chan struct{})
+		go c.Run(stopCh)
+		inf.FireAdd(context.Background(), nil)
+		wg.Wait()
+		close(stopCh)
+		assert.Equal(t, 2, addCalls)
+		assert.Equal(t, 2, reconcileCalls)
 	})
 }
 
