@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"testing"
 
+	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,8 +20,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/flowcontrol"
-
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 var (
@@ -65,7 +65,7 @@ func TestClient_Get(t *testing.T) {
 		resp, err := client.Get(ctx, id)
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -113,7 +113,7 @@ func TestClient_GetInto(t *testing.T) {
 		err := client.GetInto(ctx, id, &into)
 		assert.Equal(t, resource.SimpleObject[any]{}, into)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -162,7 +162,7 @@ func TestClient_Create(t *testing.T) {
 		resp, err := client.Create(ctx, id, getTestObject(), resource.CreateOptions{})
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -225,7 +225,7 @@ func TestClient_CreateInto(t *testing.T) {
 
 		err := client.CreateInto(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.SimpleObject[any]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -282,7 +282,7 @@ func TestClient_Update(t *testing.T) {
 		resp, err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{})
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -403,7 +403,7 @@ func TestClient_UpdateInto(t *testing.T) {
 
 		err := client.UpdateInto(ctx, id, getTestObject(), resource.UpdateOptions{}, getTestObject())
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -509,7 +509,7 @@ func TestClient_Delete(t *testing.T) {
 
 		err := client.Delete(ctx, id)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -552,7 +552,7 @@ func TestClient_List(t *testing.T) {
 		list, err := client.List(ctx, ns, resource.ListOptions{})
 		assert.Nil(t, list)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})

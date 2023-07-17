@@ -3,6 +3,9 @@ package resource
 import (
 	"context"
 	"fmt"
+	"net/http"
+
+	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 )
 
 // TODO: rewrite the godocs, this is all copied from crd/store.go
@@ -154,6 +157,53 @@ func (s *Store) UpdateSubresource(
 	})
 }
 
+// Upsert updates/creates the provided object.
+// Keep in mind that an Upsert will completely overwrite the object,
+// so nil or missing values will be removed, not ignored.
+// It is usually best to use the result of a Get call, change the appropriate values, and then call Update with that.
+// The update will fail if no ResourceVersion is provided, or if the ResourceVersion does not match the current one.
+// It returns the updated/created Object from the storage system.
+func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
+	if obj.StaticMetadata().Kind == "" {
+		return nil, fmt.Errorf("obj.StaticMetadata().Kind must not be empty")
+	}
+	if obj.StaticMetadata().Namespace == "" {
+		return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
+	}
+	if obj.StaticMetadata().Name == "" {
+		return nil, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
+	}
+
+	client, err := s.getClient(obj.StaticMetadata().Kind)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Get(ctx, obj.StaticMetadata().Identifier())
+
+	if err != nil {
+		cast, ok := err.(*k8sErrors.ServerResponseError)
+		if !ok {
+			return nil, err
+		} else if cast.StatusCode() != http.StatusNotFound {
+			return nil, err
+		}
+	}
+
+	if resp != nil {
+		return client.Update(ctx, Identifier{
+			Namespace: obj.StaticMetadata().Namespace,
+			Name:      obj.StaticMetadata().Name,
+		}, obj, UpdateOptions{
+			ResourceVersion: obj.CommonMetadata().ResourceVersion,
+		})
+	}
+	return client.Create(ctx, Identifier{
+		Namespace: obj.StaticMetadata().Namespace,
+		Name:      obj.StaticMetadata().Name,
+	}, obj, CreateOptions{})
+}
+
 // Delete deletes a resource with the given Identifier and kind.
 func (s *Store) Delete(ctx context.Context, kind string, identifier Identifier) error {
 	client, err := s.getClient(kind)
@@ -162,6 +212,21 @@ func (s *Store) Delete(ctx context.Context, kind string, identifier Identifier) 
 	}
 
 	return client.Delete(ctx, identifier)
+}
+
+// Delete deletes a resource with the given Identifier and kind, ignores client 404 errors.
+func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identifier) error {
+	client, err := s.getClient(kind)
+	if err != nil {
+		return err
+	}
+
+	err = client.Delete(ctx, identifier)
+
+	if cast, ok := err.(*k8sErrors.ServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+		return nil
+	}
+	return err
 }
 
 // List lists all resources of kind in the provided namespace, with optional label filters.

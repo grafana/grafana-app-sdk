@@ -3,7 +3,10 @@ package resource
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"reflect"
+
+	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 )
 
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
@@ -85,6 +88,42 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 	return t.cast(ret)
 }
 
+// Upsert updates an existing resource or creates a new one if none exists, and returns the new version.
+// Keep in mind that an Upsert will completely overwrite the object,
+// so nil or missing values will be removed, not ignored.
+// It is usually best to use the result of a Get call, change the appropriate values, and then call Upsert with that.
+// The update will fail if no ResourceVersion is provided, or if the ResourceVersion does not match the current one.
+// It returns the updated Object from the storage system.
+func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T) (T, error) {
+	resp, err := t.client.Get(ctx, identifier)
+
+	if err != nil {
+		var n T
+		cast, ok := err.(*k8sErrors.ServerResponseError)
+		if !ok {
+			return n, err
+		} else if cast.StatusCode() != http.StatusNotFound {
+			return n, err
+		}
+	}
+	var ret Object
+
+	if resp != nil {
+		ret, err = t.client.Update(ctx, identifier, obj, UpdateOptions{})
+	} else {
+		ret, err = t.client.Create(ctx, Identifier{
+			Namespace: obj.StaticMetadata().Namespace,
+			Name:      obj.StaticMetadata().Name,
+		}, obj, CreateOptions{})
+	}
+	if err != nil {
+		var n T
+		return n, err
+	}
+
+	return t.cast(ret)
+}
+
 // UpdateSubresource updates a subresource of an object.
 // The provided obj parameter must have the specified subresource,
 // and only that subresource will be updated in the storage system.
@@ -103,6 +142,17 @@ func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identi
 // Delete deletes a resource with the provided identifier
 func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error {
 	return t.client.Delete(ctx, identifier)
+}
+
+// Delete deletes a resource with the provided identifier
+func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
+	err := t.client.Delete(ctx, identifier)
+
+	if cast, ok := err.(*k8sErrors.ServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+		return nil
+	}
+
+	return err
 }
 
 // TypedStoreList is the ListObject-implementing struct returned from TypedStore.List calls

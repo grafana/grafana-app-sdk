@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
+	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -67,7 +68,7 @@ func TestSchemalessClient_Get(t *testing.T) {
 		err := client.Get(ctx, id2, &into)
 		assert.Equal(t, resource.SimpleObject[any]{}, into)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -142,7 +143,7 @@ func TestSchemalessClient_Create(t *testing.T) {
 
 		err := client.Create(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.SimpleObject[any]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -209,7 +210,7 @@ func TestSchemalessClient_Update(t *testing.T) {
 
 		err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{}, getTestObject())
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -318,7 +319,7 @@ func TestSchemalessClient_Delete(t *testing.T) {
 
 		err := client.Delete(ctx, id)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -367,7 +368,7 @@ func TestSchemalessClient_List(t *testing.T) {
 		into := resource.SimpleList[*resource.SimpleObject[testSpec]]{}
 		err := client.List(ctx, id, resource.ListOptions{}, &into, &resource.SimpleObject[testSpec]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(*k8sErrors.ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})

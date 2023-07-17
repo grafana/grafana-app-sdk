@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 
+	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -82,7 +83,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 		Do(ctx).StatusCode(&sc).Into(&existing)
 	if err != nil && sc != http.StatusNotFound {
 		if sc >= 300 {
-			return NewServerResponseError(err, sc)
+			return k8sErrors.NewServerResponseError(err, sc)
 		}
 		return err
 	}
@@ -125,7 +126,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 	err = m.client.Put().Resource("customresourcedefinitions").Body(bytes).Do(ctx).StatusCode(&sc).Error()
 	if err != nil {
 		if sc >= 300 {
-			return NewServerResponseError(err, sc)
+			return k8sErrors.NewServerResponseError(err, sc)
 		}
 		return err
 	}
@@ -166,7 +167,7 @@ func (m *ResourceManager) create(ctx context.Context, schema resource.Schema, na
 	sc := 0
 	err = m.client.Post().Resource("customresourcedefinitions").Body(bytes).Do(ctx).StatusCode(&sc).Error()
 	if sc >= 300 {
-		return NewServerResponseError(err, sc)
+		return k8sErrors.NewServerResponseError(err, sc)
 	}
 	return err
 }

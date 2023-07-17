@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -508,6 +509,166 @@ func TestStore_UpdateSubresource(t *testing.T) {
 	})
 }
 
+func TestStore_Upsert(t *testing.T) {
+	client := &mockClient{}
+	generator := &mockClientGenerator{}
+	store := NewStore(generator)
+	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
+	store.Register(schema)
+	ctx := context.TODO()
+	obj := &SimpleObject[any]{
+		BasicMetadataObject: BasicMetadataObject{
+			StaticMeta: StaticMetadata{
+				Kind:      schema.Kind(),
+				Namespace: "ns",
+				Name:      "test",
+			},
+		},
+	}
+
+	t.Run("empty kind", func(t *testing.T) {
+		ret, err := store.Update(ctx, &SimpleObject[any]{})
+		require.Nil(t, ret)
+		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Kind must not be empty"), err)
+	})
+
+	t.Run("empty namespace", func(t *testing.T) {
+		ret, err := store.Update(ctx, &SimpleObject[any]{
+			BasicMetadataObject: BasicMetadataObject{
+				StaticMeta: StaticMetadata{
+					Kind: schema.Kind() + "no",
+				},
+			},
+		})
+		require.Nil(t, ret)
+		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty"), err)
+	})
+
+	t.Run("empty name", func(t *testing.T) {
+		ret, err := store.Update(ctx, &SimpleObject[any]{
+			BasicMetadataObject: BasicMetadataObject{
+				StaticMeta: StaticMetadata{
+					Kind:      schema.Kind() + "no",
+					Namespace: "ns",
+				},
+			},
+		})
+		require.Nil(t, ret)
+		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Name must not be empty"), err)
+	})
+
+	t.Run("unregistered Schema", func(t *testing.T) {
+		ret, err := store.Update(ctx, &SimpleObject[any]{
+			BasicMetadataObject: BasicMetadataObject{
+				StaticMeta: StaticMetadata{
+					Kind:      schema.Kind() + "no",
+					Namespace: "ns",
+					Name:      "test",
+				},
+			},
+		})
+		require.Nil(t, ret)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+	})
+
+	t.Run("ClientGenerator error", func(t *testing.T) {
+		cerr := fmt.Errorf("I AM ERROR")
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return nil, cerr
+		}
+		ret, err := store.Upsert(ctx, obj.Copy())
+		require.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("client get error", func(t *testing.T) {
+		cerr := fmt.Errorf("JE SUIS ERROR")
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return nil, cerr
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		ret, err := store.Upsert(ctx, obj.Copy())
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("client get error http 503", func(t *testing.T) {
+		cerr := k8sErrors.NewServerResponseError(fmt.Errorf("Internal Server Error"), 503)
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return nil, cerr
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		ret, err := store.Upsert(ctx, obj.Copy())
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("client update error", func(t *testing.T) {
+		cerr := fmt.Errorf("JE SUIS ERROR")
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			return obj, nil
+		}
+		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			return nil, cerr
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		ret, err := store.Upsert(ctx, obj.Copy())
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("success, get 404", func(t *testing.T) {
+		resp := &SimpleObject[int]{}
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			return nil, k8sErrors.NewServerResponseError(fmt.Errorf("Not Found"), 404)
+		}
+		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			return resp, nil
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		ret, err := store.Upsert(ctx, obj.Copy())
+		assert.Nil(t, err)
+		assert.Equal(t, resp, ret)
+	})
+	t.Run("success", func(t *testing.T) {
+		resp := &SimpleObject[int]{}
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			return resp, nil
+		}
+		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, "", options.ResourceVersion)
+			assert.Equal(t, "", options.Subresource)
+			return resp, nil
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		ret, err := store.Upsert(ctx, obj.Copy())
+		assert.Nil(t, err)
+		assert.Equal(t, resp, ret)
+	})
+}
+
 func TestStore_Delete(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
@@ -558,6 +719,74 @@ func TestStore_Delete(t *testing.T) {
 		err := store.Delete(ctx, schema.Kind(), id)
 		assert.Nil(t, err)
 	})
+}
+
+func TestStore_ForceDelete(t *testing.T) {
+	client := &mockClient{}
+	generator := &mockClientGenerator{}
+	store := NewStore(generator)
+	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
+	store.Register(schema)
+	ctx := context.TODO()
+
+	t.Run("unregistered Schema", func(t *testing.T) {
+		err := store.Delete(ctx, schema.Kind()+"no", Identifier{})
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+	})
+
+	t.Run("ClientGenerator error", func(t *testing.T) {
+		cerr := fmt.Errorf("I AM ERROR")
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return nil, cerr
+		}
+		err := store.ForceDelete(ctx, schema.Kind(), Identifier{})
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("client error", func(t *testing.T) {
+		cerr := fmt.Errorf("JE SUIS ERROR")
+		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+			return cerr
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		err := store.ForceDelete(ctx, schema.Kind(), Identifier{})
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("success with 404", func(t *testing.T) {
+		cerr := k8sErrors.NewServerResponseError(fmt.Errorf("Not Found"), 404)
+		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+			return cerr
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		err := store.ForceDelete(ctx, schema.Kind(), Identifier{})
+		assert.Equal(t, nil, err)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		id := Identifier{
+			Namespace: "foo",
+			Name:      "bar",
+		}
+		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, id, identifier)
+			return nil
+		}
+		generator.ClientForFunc = func(schema Schema) (Client, error) {
+			return client, nil
+		}
+		err := store.ForceDelete(ctx, schema.Kind(), id)
+		assert.Nil(t, err)
+	})
+}
+
+func NewServerResponseError(s string, i int) {
+	panic("unimplemented")
 }
 
 func TestStore_Client(t *testing.T) {
