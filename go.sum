@@ -252,8 +252,8 @@ github.com/grafana/codejen v0.0.3 h1:tAWxoTUuhgmEqxJPOLtJoxlPBbMULFwKFOcRsPRPXDw
 github.com/grafana/codejen v0.0.3/go.mod h1:zmwwM/DRyQB7pfuBjTWII3CWtxcXh8LTwAYGfDfpR6s=
 github.com/grafana/cuetsy v0.1.10 h1:+W9/7roI8LorL+D1RJhKGdhsTZ81adrK9dHS0r7qsXs=
 github.com/grafana/cuetsy v0.1.10/go.mod h1:Ix97+CPD8ws9oSSxR3/Lf4ahU1I4Np83kjJmDVnLZvc=
-github.com/grafana/grafana-plugin-sdk-go v0.169.0 h1:xCOyQF+pMRGeZ2WghnB3OUiwmtNLtdq4/Re4WAqaz6U=
-github.com/grafana/grafana-plugin-sdk-go v0.169.0/go.mod h1:4jbsFzZvseLhsEmsPhI18fZG40mkJ2xIKPj9UopNz/8=
+github.com/grafana/grafana-plugin-sdk-go v0.170.0 h1:6vT+AcruJ7do4uISu+sXJCB8DSJh85SWNzClyM1caOU=
+github.com/grafana/grafana-plugin-sdk-go v0.170.0/go.mod h1:4jbsFzZvseLhsEmsPhI18fZG40mkJ2xIKPj9UopNz/8=
 github.com/grafana/kindsys v0.0.0-20230508162304-452481b63482 h1:1YNoeIhii4UIIQpCPU+EXidnqf449d0C3ZntAEt4KSo=
 github.com/grafana/kindsys v0.0.0-20230508162304-452481b63482/go.mod h1:GNcfpy5+SY6RVbNGQW264gC0r336Dm+0zgQ5vt6+M8Y=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26 h1:HX927q4X1n451pnGb8U0wq74i8PCzuxVjzv7TyD10kc=
