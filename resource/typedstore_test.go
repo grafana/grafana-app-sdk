@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"testing"
 
-	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -240,7 +239,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 	})
 
 	t.Run("error get 503", func(t *testing.T) {
-		cerr := k8sErrors.NewServerResponseError(fmt.Errorf("Internal Server Error"), 503)
+		cerr := &testAPIError{fmt.Errorf("Internal Server Error"), http.StatusInternalServerError}
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
@@ -266,7 +265,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 
 	t.Run("success, get 404", func(t *testing.T) {
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
-			return nil, k8sErrors.NewServerResponseError(fmt.Errorf("Not Found"), http.StatusNotFound)
+			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
 		}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
@@ -420,7 +419,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			return k8sErrors.NewServerResponseError(fmt.Errorf("Not Found"), http.StatusNotFound)
+			return &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
 		}
 		err := store.ForceDelete(ctx, id)
 		assert.Nil(t, err)

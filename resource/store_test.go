@@ -3,9 +3,9 @@ package resource
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 
-	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -595,7 +595,8 @@ func TestStore_Upsert(t *testing.T) {
 	})
 
 	t.Run("client get error http 503", func(t *testing.T) {
-		cerr := k8sErrors.NewServerResponseError(fmt.Errorf("Internal Server Error"), 503)
+		cerr := &testAPIError{fmt.Errorf("Internal Server Error"), http.StatusInternalServerError}
+
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
@@ -629,7 +630,7 @@ func TestStore_Upsert(t *testing.T) {
 	t.Run("success, get 404", func(t *testing.T) {
 		resp := &SimpleObject[int]{}
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
-			return nil, k8sErrors.NewServerResponseError(fmt.Errorf("Not Found"), 404)
+			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
 		}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
@@ -756,7 +757,7 @@ func TestStore_ForceDelete(t *testing.T) {
 	})
 
 	t.Run("success with 404", func(t *testing.T) {
-		cerr := k8sErrors.NewServerResponseError(fmt.Errorf("Not Found"), 404)
+		cerr := &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
 		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
 			return cerr
 		}
@@ -990,4 +991,17 @@ func (c *mockClient) Watch(ctx context.Context, namespace string, options WatchO
 		return c.WatchFunc(ctx, namespace, options)
 	}
 	return nil, nil
+}
+
+type testAPIError struct {
+	err        error
+	statusCode int
+}
+
+func (t *testAPIError) Error() string {
+	return t.err.Error()
+}
+
+func (t *testAPIError) StatusCode() int {
+	return t.statusCode
 }
