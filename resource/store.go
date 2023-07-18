@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-
-	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 )
 
 // TODO: rewrite the godocs, this is all copied from crd/store.go
@@ -22,6 +20,11 @@ const (
 	SubresourceStatus = SubresourceName("status")
 	SubresourceScale  = SubresourceName("scale")
 )
+
+type APIServerResponseError interface {
+	error
+	StatusCode() int
+}
 
 // Store presents Schema's resource Objects as a simple Key-Value store,
 // abstracting the need to track clients or issue requests.
@@ -182,7 +185,7 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	resp, err := client.Get(ctx, obj.StaticMetadata().Identifier())
 
 	if err != nil {
-		cast, ok := err.(*k8sErrors.ServerResponseError)
+		cast, ok := err.(APIServerResponseError)
 		if !ok {
 			return nil, err
 		} else if cast.StatusCode() != http.StatusNotFound {
@@ -223,7 +226,7 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 
 	err = client.Delete(ctx, identifier)
 
-	if cast, ok := err.(*k8sErrors.ServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
 		return nil
 	}
 	return err

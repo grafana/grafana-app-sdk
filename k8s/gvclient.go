@@ -12,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 
-	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -79,7 +78,7 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 			return false, nil
 		}
 		if sc > 0 {
-			return false, k8sErrors.NewServerResponseError(err, sc)
+			return false, NewServerResponseError(err, sc)
 		}
 		return false, err
 	}
@@ -180,7 +179,7 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 	err := request.
 		Do(ctx).StatusCode(&sc).Error()
 	if err != nil && sc >= 300 {
-		return k8sErrors.NewServerResponseError(err, sc)
+		return NewServerResponseError(err, sc)
 	}
 	return err
 }
@@ -319,7 +318,7 @@ type k8sErrBody struct {
 // by using the body and status code from the request. The normal k8s error string is very generic
 // (typically: "the server rejected our request for an unknown reason (<METHOD> <GV> <NAME>)"),
 // but the response body often has more details about the nature of the failure (for example, missing a required field).
-// Ths method will parse the response body for a better error message if available, and return a *k8s.ServerResponseError
+// Ths method will parse the response body for a better error message if available, and return a *ServerResponseError
 // if the status code is a non-success (>= 300).
 func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
 	if len(responseBytes) > 0 {
@@ -331,7 +330,7 @@ func parseKubernetesError(responseBytes []byte, statusCode int, err error) error
 	}
 	// HTTP error?
 	if statusCode >= 300 {
-		return k8sErrors.NewServerResponseError(err, statusCode)
+		return NewServerResponseError(err, statusCode)
 	}
 	return err
 }

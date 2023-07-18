@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -29,7 +28,7 @@ func TestResourceManager_RegisterSchema(t *testing.T) {
 		}
 		err := manager.RegisterSchema(ctx, testSchema, resource.RegisterSchemaOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*k8sErrors.ServerResponseError)
+		cast, ok := err.(*ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -170,7 +169,7 @@ func TestResourceManager_RegisterSchema(t *testing.T) {
 		}
 		err := manager.RegisterSchema(ctx, testSchema, resource.RegisterSchemaOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*k8sErrors.ServerResponseError)
+		cast, ok := err.(*ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})
@@ -197,7 +196,7 @@ func TestResourceManager_RegisterSchema(t *testing.T) {
 			UpdateOnConflict: true,
 		})
 		require.NotNil(t, err)
-		cast, ok := err.(*k8sErrors.ServerResponseError)
+		cast, ok := err.(*ServerResponseError)
 		require.True(t, ok)
 		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
 	})

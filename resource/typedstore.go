@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-
-	k8sErrors "github.com/grafana/grafana-app-sdk/k8s/errors"
 )
 
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
@@ -99,7 +97,7 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 
 	if err != nil {
 		var n T
-		cast, ok := err.(*k8sErrors.ServerResponseError)
+		cast, ok := err.(APIServerResponseError)
 		if !ok {
 			return n, err
 		} else if cast.StatusCode() != http.StatusNotFound {
@@ -148,7 +146,7 @@ func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error
 func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
 	err := t.client.Delete(ctx, identifier)
 
-	if cast, ok := err.(*k8sErrors.ServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
 		return nil
 	}
 
