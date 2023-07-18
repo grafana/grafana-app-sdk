@@ -42,8 +42,6 @@ yaml_objects = []
 for filename in listdir('generated'):
   if filename.lower().endswith(('.yaml', '.yml')):
     decoded = decode(read_file(filename))
-    if decoded['kind'] == 'ValidatingWebhookConfiguration':
-        decoded['resource_deps'] = ['webhook-test-app-operator']
     yaml_objects += decoded
 # Next, allow for additional yamls which can optionally override the generated yamls
 for filename in listdir('additional'):
