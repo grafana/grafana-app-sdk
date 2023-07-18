@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -195,6 +196,109 @@ func TestTypedStore_Update(t *testing.T) {
 	})
 }
 
+func TestTypedStore_Upsert(t *testing.T) {
+	store, client := getTypedStoreTestSetup()
+	ctx := context.TODO()
+	updateObj := &SimpleObject[string]{
+		BasicMetadataObject: BasicMetadataObject{
+			StaticMeta: StaticMetadata{
+				Namespace: "ns",
+				Name:      "test",
+			},
+			CommonMeta: CommonMetadata{
+				ResourceVersion: "abc",
+			},
+		},
+		Spec: "bar",
+	}
+
+	retObj := &SimpleObject[string]{
+		BasicMetadataObject: BasicMetadataObject{
+			StaticMeta: StaticMetadata{
+				Name: "test",
+			},
+			CommonMeta: CommonMetadata{
+				ResourceVersion: "123",
+			},
+		},
+		Spec: "foo",
+	}
+	id := Identifier{
+		Namespace: "ns",
+		Name:      "test",
+	}
+
+	t.Run("error get", func(t *testing.T) {
+		cerr := fmt.Errorf("I AM ERROR")
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return nil, cerr
+		}
+		ret, err := store.Upsert(ctx, id, updateObj)
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("error get 503", func(t *testing.T) {
+		cerr := &testAPIError{fmt.Errorf("Internal Server Error"), http.StatusInternalServerError}
+		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
+			return nil, cerr
+		}
+		ret, err := store.Upsert(ctx, id, updateObj)
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("error update", func(t *testing.T) {
+		cerr := fmt.Errorf("I AM ERROR")
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, id, identifier)
+			return updateObj, nil
+		}
+		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			return nil, cerr
+		}
+		ret, err := store.Upsert(ctx, id, updateObj)
+		assert.Nil(t, ret)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("success, get 404", func(t *testing.T) {
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+		}
+		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, updateObj.StaticMeta.Name, identifier.Name)
+			assert.Equal(t, updateObj.StaticMeta.Namespace, identifier.Namespace)
+			assert.Equal(t, updateObj, obj)
+			return retObj, nil
+		}
+		ret, err := store.Upsert(ctx, id, updateObj)
+		assert.Nil(t, err)
+		assert.Equal(t, retObj, ret)
+	})
+	t.Run("success, no metadata options", func(t *testing.T) {
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, id, identifier)
+			return updateObj, nil
+		}
+		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, updateObj.StaticMeta.Name, identifier.Name)
+			assert.Equal(t, updateObj.StaticMeta.Namespace, identifier.Namespace)
+			assert.Equal(t, updateObj, obj)
+			assert.Equal(t, "", options.ResourceVersion)
+			assert.Equal(t, "", options.Subresource)
+			return retObj, nil
+		}
+		ret, err := store.Upsert(ctx, id, updateObj)
+		assert.Nil(t, err)
+		assert.Equal(t, retObj, ret)
+	})
+}
+
 func TestTypedStore_UpdateSubresource(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()
@@ -278,6 +382,46 @@ func TestTypedStore_Delete(t *testing.T) {
 			return nil
 		}
 		err := store.Delete(ctx, id)
+		assert.Nil(t, err)
+	})
+}
+
+func TestTypedStore_ForceDelete(t *testing.T) {
+	store, client := getTypedStoreTestSetup()
+	ctx := context.TODO()
+	id := Identifier{
+		Namespace: "ns",
+		Name:      "test",
+	}
+
+	t.Run("error", func(t *testing.T) {
+		cerr := fmt.Errorf("I AM ERROR")
+		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, id, identifier)
+			return cerr
+		}
+		err := store.ForceDelete(ctx, id)
+		assert.Equal(t, cerr, err)
+	})
+
+	t.Run("success", func(t *testing.T) {
+		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, id, identifier)
+			return nil
+		}
+		err := store.ForceDelete(ctx, id)
+		assert.Nil(t, err)
+	})
+
+	t.Run("success with 404", func(t *testing.T) {
+		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, id, identifier)
+			return &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+		}
+		err := store.ForceDelete(ctx, id)
 		assert.Nil(t, err)
 	})
 }
