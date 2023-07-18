@@ -14,9 +14,13 @@ pluginSecureJson:
   baz: foo
 # Standalone operator docker image. Leave this empty to not deploy an operator
 operatorImage: "{{.OperatorImage}}:latest"
+# Governs whether the local setup generates kubernetes manifests for varying kinds of webhooks attached to your operator and each CRD
 webhooks:
-  validating: true
-  mutating: true
+  # If true, expects a /validating endpoint to be exposed by your operator on `port`
+  validating: false
+  # If true, expects a /mutating endpoint to be exposed by your operator on `port`
+  mutating: false
+  # The port the operator exposes an HTTPS server with the webhook endpoint(s) on
   port: 8443
 # Non-standard or additional datasources you want to automatically include in grafana's provisioned list
 # The actual datasources need to be set up manually (arbitrary kubernetes yamls can be added to the local setup via the 'additional' folder),
