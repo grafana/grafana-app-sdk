@@ -217,7 +217,7 @@ func (s *Store) Delete(ctx context.Context, kind string, identifier Identifier) 
 	return client.Delete(ctx, identifier)
 }
 
-// Delete deletes a resource with the given Identifier and kind, ignores client 404 errors.
+// ForceDelete deletes a resource with the given Identifier and kind, ignores client 404 errors.
 func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identifier) error {
 	client, err := s.getClient(kind)
 	if err != nil {

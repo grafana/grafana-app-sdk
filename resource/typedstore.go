@@ -142,7 +142,7 @@ func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error
 	return t.client.Delete(ctx, identifier)
 }
 
-// Delete deletes a resource with the provided identifier
+// ForceDelete deletes a resource with the provided identifier, ignores 404 errors
 func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
 	err := t.client.Delete(ctx, identifier)
 
