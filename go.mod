@@ -7,7 +7,7 @@ require (
 	github.com/dave/dst v0.27.2
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
-	github.com/grafana/grafana-plugin-sdk-go v0.168.0
+	github.com/grafana/grafana-plugin-sdk-go v0.171.0
 	github.com/grafana/kindsys v0.0.0-20230508162304-452481b63482
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
@@ -85,7 +85,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.14.0 // indirect
 	github.com/prometheus/client_model v0.3.0 // indirect
-	github.com/prometheus/common v0.40.0 // indirect
+	github.com/prometheus/common v0.42.0 // indirect
 	github.com/prometheus/procfs v0.9.0 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20220428173112-74888fd59c2b // indirect
 	github.com/rivo/uniseg v0.3.4 // indirect
@@ -106,15 +106,15 @@ require (
 	go.opentelemetry.io/otel/sdk v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
-	golang.org/x/crypto v0.4.0 // indirect
+	golang.org/x/crypto v0.11.0 // indirect
 	golang.org/x/exp v0.0.0-20210126221216-84987778548c // indirect
 	golang.org/x/mod v0.9.0 // indirect
-	golang.org/x/net v0.9.0 // indirect
+	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/oauth2 v0.6.0 // indirect
 	golang.org/x/sync v0.1.0 // indirect
-	golang.org/x/sys v0.7.0 // indirect
-	golang.org/x/term v0.7.0 // indirect
-	golang.org/x/text v0.9.0 // indirect
+	golang.org/x/sys v0.10.0 // indirect
+	golang.org/x/term v0.10.0 // indirect
+	golang.org/x/text v0.11.0 // indirect
 	golang.org/x/time v0.2.0 // indirect
 	golang.org/x/tools v0.7.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
