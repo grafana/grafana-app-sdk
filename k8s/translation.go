@@ -58,9 +58,21 @@ func rawToObject(raw []byte, into resource.Object) error {
 			meta[k[len(annotationPrefix):]] = v
 		}
 	}
+	// All the (required) CommonMetadata fields--thema parse gets mad otherwise
+	// TODO: overhaul this whole thing so we can just set everything in the metadata without a two-step process
 	if _, ok := meta["updateTimestamp"]; !ok {
 		meta["updateTimestamp"] = kubeObject.ObjectMetadata.CreationTimestamp.Format(time.RFC3339Nano)
 	}
+	if _, ok := meta["createdBy"]; !ok {
+		meta["createdBy"] = ""
+	}
+	if _, ok := meta["updatedBy"]; !ok {
+		meta["updatedBy"] = ""
+	}
+	meta["resourceVersion"] = kubeObject.ObjectMetadata.ResourceVersion
+	meta["uid"] = kubeObject.ObjectMetadata.UID
+	meta["creationTimestamp"] = kubeObject.ObjectMetadata.CreationTimestamp
+
 	amd, err := json.Marshal(meta)
 	if err != nil {
 		return err
