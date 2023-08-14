@@ -113,6 +113,9 @@ func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 	}
 }
 
+// NewOpinionatedReconciler creates a new OpinionatedReconciler.
+// To have the new OpinionatedReconciler wrap an existing reconciler,
+// set the `OpinionatedReconciler.Reconciler` value or use `OpinionatedReconciler.Wrap()`
 func NewOpinionatedReconciler(client PatchClient, finalizer string) (*OpinionatedReconciler, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
@@ -130,9 +133,9 @@ func NewOpinionatedReconciler(client PatchClient, finalizer string) (*Opinionate
 // "resync" events on start-up when the reconciler has handled the "created" event on a previous run,
 // and ensures that "delete" events are not missed during reconciler down-time by using the finalizer.
 type OpinionatedReconciler struct {
-	ReconcileFunc func(context.Context, ReconcileRequest) (ReconcileResult, error)
-	finalizer     string
-	client        PatchClient
+	Reconciler Reconciler
+	finalizer  string
+	client     PatchClient
 }
 
 const opinionatedReconcilerPatchStateKey = "grafana-app-sdk-opinionated-reconciler-create-patch-status"
@@ -146,7 +149,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
 	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
 		request.Action = ReconcileActionResynced
-		return o.ReconcileFunc(ctx, request)
+		return o.wrappedReconcile(ctx, request)
 	}
 	if request.Action == ReconcileActionCreated {
 		resp := ReconcileResult{}
@@ -199,15 +202,15 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 }
 
 func (o *OpinionatedReconciler) wrappedReconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
-	if o.ReconcileFunc != nil {
-		return o.ReconcileFunc(ctx, request)
+	if o.Reconciler != nil {
+		return o.Reconciler.Reconcile(ctx, request)
 	}
 	return ReconcileResult{}, nil
 }
 
 // Wrap wraps the provided Reconciler's Reconcile function with this OpinionatedReconciler
 func (o *OpinionatedReconciler) Wrap(reconciler Reconciler) {
-	o.ReconcileFunc = reconciler.Reconcile
+	o.Reconciler = reconciler
 }
 
 // Compile-time interface compliance check

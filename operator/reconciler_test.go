@@ -72,10 +72,12 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 				"foo": "bar",
 			},
 		}
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
-			assert.Equal(t, req, request)
-			return result, nil
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Equal(t, ctx, c)
+				assert.Equal(t, req, request)
+				return result, nil
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, result, res)
@@ -104,10 +106,12 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			RequeueAfter: &after,
 		}
 		resErr := errors.New("I AM ERROR")
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
-			assert.Equal(t, req, request)
-			return result, resErr
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Equal(t, ctx, c)
+				assert.Equal(t, req, request)
+				return result, resErr
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, result, res)
@@ -148,10 +152,12 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 				"foo": "bar",
 			},
 		}
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
-			assert.Equal(t, req, request)
-			return result, nil
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Equal(t, ctx, c)
+				assert.Equal(t, req, request)
+				return result, nil
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, patchErr, err)
@@ -186,9 +192,11 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			},
 		}, finalizer)
 		require.Nil(t, err)
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Fail(t, "Reconcile shouldn't be called")
-			return ReconcileResult{}, nil
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Fail(t, "Reconcile shouldn't be called")
+				return ReconcileResult{}, nil
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, ReconcileResult{}, res)
@@ -223,12 +231,14 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			RequeueAfter: &after,
 		}
 		resErr := errors.New("I AM ERROR")
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
-			assert.Equal(t, ReconcileActionResynced, request.Action)
-			assert.Equal(t, req.Object, request.Object)
-			assert.Equal(t, req.State, request.State)
-			return result, resErr
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Equal(t, ctx, c)
+				assert.Equal(t, ReconcileActionResynced, request.Action)
+				assert.Equal(t, req.Object, request.Object)
+				assert.Equal(t, req.State, request.State)
+				return result, resErr
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, result, res)
@@ -262,10 +272,12 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			RequeueAfter: &after,
 		}
 		resErr := errors.New("I AM ERROR")
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
-			assert.Equal(t, req, request)
-			return result, resErr
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Equal(t, ctx, c)
+				assert.Equal(t, req, request)
+				return result, resErr
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, result, res)
@@ -298,9 +310,11 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			},
 		}, finalizer)
 		require.Nil(t, err)
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Fail(t, "Reconcile shouldn't be called")
-			return ReconcileResult{}, nil
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Fail(t, "Reconcile shouldn't be called")
+				return ReconcileResult{}, nil
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, ReconcileResult{}, res)
@@ -342,9 +356,11 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			},
 		}, finalizer)
 		require.Nil(t, err)
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Fail(t, "Reconcile shouldn't be called")
-			return ReconcileResult{}, nil
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Fail(t, "Reconcile shouldn't be called")
+				return ReconcileResult{}, nil
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, ReconcileResult{}, res)
@@ -373,10 +389,12 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			RequeueAfter: &after,
 		}
 		resErr := errors.New("I AM ERROR")
-		op.ReconcileFunc = func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
-			assert.Equal(t, req, request)
-			return result, resErr
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				assert.Equal(t, ctx, c)
+				assert.Equal(t, req, request)
+				return result, resErr
+			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, result, res)
@@ -405,7 +423,7 @@ func TestOpinionatedReconciler_Wrap(t *testing.T) {
 	op, err := NewOpinionatedReconciler(&mockPatchClient{}, "foo")
 	assert.Nil(t, err)
 	op.Wrap(myRec)
-	res, err := op.ReconcileFunc(ctx, rreq)
+	res, err := op.Reconciler.Reconcile(ctx, rreq)
 	assert.Nil(t, err)
 	assert.Equal(t, rr, res)
 }
