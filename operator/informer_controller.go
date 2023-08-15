@@ -92,13 +92,14 @@ type InformerController struct {
 	RetryDequeuePolicy  RetryDequeuePolicy
 	informers           *ListMap[string, Informer]
 	watchers            *ListMap[string, ResourceWatcher]
+	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
 	retryTickerInterval time.Duration
 }
 
 type retryInfo struct {
 	retryAfter time.Time
-	retryFunc  func() error
+	retryFunc  func() (*time.Duration, error)
 	attempt    int
 	action     ResourceAction
 	object     resource.Object
@@ -111,6 +112,7 @@ func NewInformerController() *InformerController {
 		RetryPolicy:         DefaultRetryPolicy,
 		informers:           NewListMap[Informer](),
 		watchers:            NewListMap[ResourceWatcher](),
+		reconcilers:         NewListMap[Reconciler](),
 		toRetry:             NewListMap[retryInfo](),
 		retryTickerInterval: time.Second,
 	}
@@ -135,108 +137,9 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 	}
 
 	err := informer.AddEventHandler(&SimpleWatcher{
-		AddFunc: func(ctx context.Context, obj resource.Object) error {
-			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
-				// Generate the unique key for this object
-				retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
-
-				// Dequeue retries according to the RetryDequeuePolicy
-				if c.RetryDequeuePolicy != nil {
-					c.toRetry.RemoveItems(retryKey, func(info retryInfo) bool {
-						return c.RetryDequeuePolicy(ResourceActionCreate, obj, info.action, info.object, info.err)
-					}, -1)
-				} else {
-					// If no RetryDequeuePolicy exists, dequeue all retries for the object
-					c.toRetry.RemoveKey(retryKey)
-				}
-
-				// Do the watcher's Add, check for error
-				err := watcher.Add(ctx, obj)
-				if err != nil && c.ErrorHandler != nil {
-					c.ErrorHandler(err) // TODO: improve ErrorHandler
-				}
-				if err != nil && c.RetryPolicy != nil {
-					// Grab the exact watcher (rather than the range pointer) to use in the closure
-					closureWatcher, ok := c.watchers.ItemAt(resourceKind, idx)
-					if !ok {
-						// What?
-						return
-					}
-					c.queueRetry(retryKey, err, func() error {
-						return closureWatcher.Add(ctx, obj)
-					}, ResourceActionCreate, obj)
-				}
-			})
-			return nil
-		},
-		UpdateFunc: func(ctx context.Context, oldObj, newObj resource.Object) error {
-			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
-				// Generate the unique key for this object
-				retryKey := c.keyForWatcherEvent(resourceKind, idx, newObj)
-
-				// Dequeue retries according to the RetryDequeuePolicy
-				if c.RetryDequeuePolicy != nil {
-					c.toRetry.RemoveItems(retryKey, func(info retryInfo) bool {
-						return c.RetryDequeuePolicy(ResourceActionUpdate, newObj, info.action, info.object, info.err)
-					}, -1)
-				} else {
-					// If no RetryDequeuePolicy exists, dequeue all retries for the object
-					c.toRetry.RemoveKey(retryKey)
-				}
-
-				// Do the watcher's Update, check for error
-				err := watcher.Update(ctx, oldObj, newObj)
-				if err != nil && c.ErrorHandler != nil {
-					c.ErrorHandler(err)
-				}
-				if err != nil && c.RetryPolicy != nil {
-					// Grab the exact watcher (rather than the range pointer) to use in the closure
-					closureWatcher, ok := c.watchers.ItemAt(resourceKind, idx)
-					if !ok {
-						// What?
-						return
-					}
-					c.queueRetry(retryKey, err, func() error {
-						return closureWatcher.Update(ctx, oldObj, newObj)
-					}, ResourceActionUpdate, newObj)
-				}
-			})
-			return nil
-		},
-		DeleteFunc: func(ctx context.Context, obj resource.Object) error {
-			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
-				// Generate the unique key for this object
-				retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
-
-				// Dequeue retries according to the RetryDequeuePolicy
-				if c.RetryDequeuePolicy != nil {
-					c.toRetry.RemoveItems(retryKey, func(info retryInfo) bool {
-						return c.RetryDequeuePolicy(ResourceActionDelete, obj, info.action, info.object, info.err)
-					}, -1)
-				} else {
-					// If no RetryDequeuePolicy exists, dequeue all retries for the object
-					c.toRetry.RemoveKey(retryKey)
-				}
-
-				// Do the watcher's Delete, check for error
-				err := watcher.Delete(ctx, obj)
-				if err != nil && c.ErrorHandler != nil {
-					c.ErrorHandler(err)
-				}
-				if err != nil && c.RetryPolicy != nil {
-					// Grab the exact watcher (rather than the range pointer) to use in the closure
-					closureWatcher, ok := c.watchers.ItemAt(resourceKind, idx)
-					if !ok {
-						// What?
-						return
-					}
-					c.queueRetry(retryKey, err, func() error {
-						return closureWatcher.Delete(ctx, obj)
-					}, ResourceActionDelete, obj)
-				}
-			})
-			return nil
-		},
+		AddFunc:    c.informerAddFunc(resourceKind),
+		UpdateFunc: c.informerUpdateFunc(resourceKind),
+		DeleteFunc: c.informerDeleteFunc(resourceKind),
 	})
 	if err != nil {
 		return err
@@ -273,6 +176,33 @@ func (c *InformerController) RemoveAllWatchersForResource(resourceKind string) {
 	c.watchers.RemoveKey(resourceKind)
 }
 
+// AddReconciler adds a reconciler to an informer with a matching `resourceKind`.
+// Any time the informer sees an add, update, or delete, it will call reconciler.Reconcile.
+// Multiple reconcilers can exist for the same resource kind. If multiple reconcilers exist,
+// they will be run in the order they were added to the informer.
+func (c *InformerController) AddReconciler(reconciler Reconciler, resourceKind string) error {
+	if reconciler == nil {
+		return fmt.Errorf("reconciler cannot be nil")
+	}
+	if resourceKind == "" {
+		return fmt.Errorf("resourceKind cannot be empty")
+	}
+	c.reconcilers.AddItem(resourceKind, reconciler)
+	return nil
+}
+
+// RemoveReconciler removes the given Reconciler from the list for the resourceKind, provided it exists in the list.
+func (c *InformerController) RemoveReconciler(reconciler Reconciler, resourceKind string) {
+	c.reconcilers.RemoveItem(resourceKind, func(r Reconciler) bool {
+		return reconciler == r
+	})
+}
+
+// RemoveAllReconcilersForResource removes all Reconcilers for a specific resourceKind
+func (c *InformerController) RemoveAllReconcilersForResource(resourceKind string) {
+	c.reconcilers.RemoveKey(resourceKind)
+}
+
 // Run runs the controller, which starts all informers, until stopCh is closed
 //
 //nolint:errcheck
@@ -286,6 +216,168 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 	<-stopCh
 
 	return nil
+}
+
+// nolint:dupl
+func (c *InformerController) informerAddFunc(resourceKind string) func(context.Context, resource.Object) error {
+	return func(ctx context.Context, obj resource.Object) error {
+		// Handle all watchers for the add for this resource kind
+		c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
+			// Generate the unique key for this object
+			retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
+
+			// Dequeue retries according to the RetryDequeuePolicy
+			c.dequeueIfRequired(retryKey, obj, ResourceActionCreate)
+
+			// Do the watcher's Add, check for error
+			err := watcher.Add(ctx, obj)
+			if err != nil && c.ErrorHandler != nil {
+				c.ErrorHandler(err) // TODO: improve ErrorHandler
+			}
+			if err != nil && c.RetryPolicy != nil {
+				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					return nil, watcher.Add(ctx, obj)
+				}, ResourceActionCreate, obj)
+			}
+		})
+		// Handle all reconcilers for the add for this resource kind
+		c.reconcilers.Range(resourceKind, func(idx int, reconciler Reconciler) {
+			// Generate the unique key for this object
+			retryKey := c.keyForReconcilerEvent(resourceKind, idx, obj)
+
+			// Dequeue retries according to the RetryDequeuePolicy
+			c.dequeueIfRequired(retryKey, obj, ResourceActionCreate)
+
+			// Do the reconciler's add, check for error or a response with a specified RetryAfter
+			req := ReconcileRequest{
+				Action: ReconcileActionCreated,
+				Object: obj,
+			}
+			c.doReconcile(ctx, reconciler, req, retryKey)
+		})
+		return nil
+	}
+}
+
+// nolint:dupl
+func (c *InformerController) informerUpdateFunc(resourceKind string) func(context.Context, resource.Object, resource.Object) error {
+	return func(ctx context.Context, oldObj resource.Object, newObj resource.Object) error {
+		// Handle all watchers for the update for this resource kind
+		c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
+			// Generate the unique key for this object
+			retryKey := c.keyForWatcherEvent(resourceKind, idx, newObj)
+
+			// Dequeue retries according to the RetryDequeuePolicy
+			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
+
+			// Do the watcher's Update, check for error
+			err := watcher.Update(ctx, oldObj, newObj)
+			if err != nil && c.ErrorHandler != nil {
+				c.ErrorHandler(err)
+			}
+			if err != nil && c.RetryPolicy != nil {
+				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					return nil, watcher.Update(ctx, oldObj, newObj)
+				}, ResourceActionUpdate, newObj)
+			}
+		})
+		// Handle all reconcilers for the update for this resource kind
+		c.reconcilers.Range(resourceKind, func(index int, reconciler Reconciler) {
+			// Generate the unique key for this object
+			retryKey := c.keyForReconcilerEvent(resourceKind, index, newObj)
+
+			// Dequeue retries according to the RetryDequeuePolicy
+			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
+
+			// Do the reconciler's update, check for error or a response with a specified RetryAfter
+			req := ReconcileRequest{
+				Action: ReconcileActionUpdated,
+				Object: newObj,
+			}
+			c.doReconcile(ctx, reconciler, req, retryKey)
+		})
+		return nil
+	}
+}
+
+// nolint:dupl
+func (c *InformerController) informerDeleteFunc(resourceKind string) func(context.Context, resource.Object) error {
+	return func(ctx context.Context, obj resource.Object) error {
+		// Handle all watchers for the add for this resource kind
+		c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
+			// Generate the unique key for this object
+			retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
+
+			// Dequeue retries according to the RetryDequeuePolicy
+			c.dequeueIfRequired(retryKey, obj, ResourceActionDelete)
+
+			// Do the watcher's Add, check for error
+			err := watcher.Add(ctx, obj)
+			if err != nil && c.ErrorHandler != nil {
+				c.ErrorHandler(err) // TODO: improve ErrorHandler
+			}
+			if err != nil && c.RetryPolicy != nil {
+				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					return nil, watcher.Delete(ctx, obj)
+				}, ResourceActionDelete, obj)
+			}
+		})
+		// Handle all reconcilers for the add for this resource kind
+		c.reconcilers.Range(resourceKind, func(idx int, reconciler Reconciler) {
+			// Generate the unique key for this object
+			retryKey := c.keyForReconcilerEvent(resourceKind, idx, obj)
+
+			// Dequeue retries according to the RetryDequeuePolicy
+			c.dequeueIfRequired(retryKey, obj, ResourceActionDelete)
+
+			// Do the reconciler's add, check for error or a response with a specified RetryAfter
+			req := ReconcileRequest{
+				Action: ReconcileActionDeleted,
+				Object: obj,
+			}
+			c.doReconcile(ctx, reconciler, req, retryKey)
+		})
+		return nil
+	}
+}
+
+func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectState resource.Object, action ResourceAction) {
+	if c.RetryDequeuePolicy != nil {
+		c.toRetry.RemoveItems(retryKey, func(info retryInfo) bool {
+			return c.RetryDequeuePolicy(action, currentObjectState, info.action, info.object, info.err)
+		}, -1)
+	} else {
+		// If no RetryDequeuePolicy exists, dequeue all retries for the object
+		c.toRetry.RemoveKey(retryKey)
+	}
+}
+
+func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconciler, req ReconcileRequest, retryKey string) {
+	// Do the reconcile
+	res, err := reconciler.Reconcile(ctx, req)
+	// If the response contains a state, add it to the request for future retries
+	if res.State != nil {
+		req.State = res.State
+	}
+	if res.RequeueAfter != nil {
+		// If RequeueAfter is non-nil, add a retry to the queue for now+RequeueAfter
+		c.toRetry.AddItem(retryKey, retryInfo{
+			retryAfter: time.Now().Add(*res.RequeueAfter),
+			retryFunc: func() (*time.Duration, error) {
+				res, err := reconciler.Reconcile(ctx, req)
+				return res.RequeueAfter, err
+			},
+			action: ResourceActionFromReconcileAction(req.Action),
+			object: req.Object,
+			err:    err,
+		})
+	} else if err != nil {
+		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
+		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+			res, err := reconciler.Reconcile(ctx, req)
+			return res.RequeueAfter, err
+		}, ResourceActionFromReconcileAction(req.Action), req.Object)
+	}
 }
 
 // retryTicker blocks until stopCh is closed or receives a message.
@@ -303,8 +395,16 @@ func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
 				toAdd := make([]retryInfo, 0)
 				c.toRetry.RemoveItems(key, func(val retryInfo) bool {
 					if t.After(val.retryAfter) {
-						err := val.retryFunc()
-						if err != nil && c.RetryPolicy != nil {
+						specifiedRetry, err := val.retryFunc()
+						if specifiedRetry != nil {
+							toAdd = append(toAdd, retryInfo{
+								attempt:    val.attempt, // TODO: whether or not this should trigger an attempt increase
+								retryAfter: t.Add(*specifiedRetry),
+								retryFunc:  val.retryFunc,
+								action:     val.action,
+								object:     val.object,
+							})
+						} else if err != nil && c.RetryPolicy != nil {
 							ok, after := c.RetryPolicy(err, val.attempt+1)
 							if ok {
 								toAdd = append(toAdd, retryInfo{
@@ -337,7 +437,14 @@ func (*InformerController) keyForWatcherEvent(resourceKind string, watcherIndex 
 	return fmt.Sprintf("%s:%d:%s:%s", resourceKind, watcherIndex, obj.StaticMetadata().Namespace, obj.StaticMetadata().Name)
 }
 
-func (c *InformerController) queueRetry(key string, err error, toRetry func() error, action ResourceAction, obj resource.Object) {
+func (*InformerController) keyForReconcilerEvent(resourceKind string, reconcilerIndex int, obj resource.Object) string {
+	if obj == nil {
+		return fmt.Sprintf("reconcile:%s:%d:nil:nil", resourceKind, reconcilerIndex)
+	}
+	return fmt.Sprintf("reconcile:%s:%d:%s:%s", resourceKind, reconcilerIndex, obj.StaticMetadata().Namespace, obj.StaticMetadata().Name)
+}
+
+func (c *InformerController) queueRetry(key string, err error, toRetry func() (*time.Duration, error), action ResourceAction, obj resource.Object) {
 	if c.RetryPolicy == nil {
 		return
 	}
