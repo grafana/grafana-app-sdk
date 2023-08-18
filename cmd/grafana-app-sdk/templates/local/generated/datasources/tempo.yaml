@@ -1,0 +1,83 @@
+﻿apiVersion: v1
+data:
+  config.yaml: "server:\r\n  http_listen_port: 3100\r\n\r\nsearch_enabled: true\r\n\r\ndistributor:\r\n
+    \ receivers:\r\n    jaeger:\r\n      protocols:\r\n        grpc:\r\n        thrift_compact:\r\n
+    \       thrift_http:\r\n    otlp:\r\n      protocols:\r\n        grpc:\r\n        http:\r\n\r\ningester:\r\n
+    \ trace_idle_period: 10s               # the length of time after a trace has
+    not received spans to consider it complete and flush it\r\n  max_block_bytes:
+    1_000_000           # cut the head block when it hits this size or ...\r\n  max_block_duration:
+    5m               #   this much time passes\r\n\r\ncompactor:\r\n  compaction:\r\n
+    \   compaction_window: 1h              # blocks in this time window will be compacted
+    together\r\n    max_block_bytes: 100_000_000        # maximum size of compacted
+    blocks\r\n    block_retention: 1h\r\n    compacted_block_retention: 10m\r\n\r\nstorage:\r\n
+    \ trace:\r\n    backend: local                     # backend configuration to
+    use\r\n    block:\r\n      bloom_filter_false_positive: .05 # bloom filter false
+    positive rate.  lower values create larger filters but fewer false positives\r\n
+    \     index_downsample_bytes: 1000     # number of bytes per index record\r\n
+    \     encoding: zstd                   # block encoding/compression.  options:
+    none, gzip, lz4-64k, lz4-256k, lz4-1M, lz4, snappy, zstd\r\n    wal:\r\n      path:
+    /tmp/tempo/wal             # where to store the the wal locally\r\n      encoding:
+    none                   # wal encoding/compression.  options: none, gzip, lz4-64k,
+    lz4-256k, lz4-1M, lz4, snappy, zstd\r\n    local:\r\n      path: /tmp/tempo/blocks\r\n
+    \   pool:\r\n      max_workers: 100                 # the worker pool mainly drives
+    querying, but is also used for polling the blocklist\r\n      queue_depth: 10000\r\n"
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: tempo
+  template:
+    metadata:
+      annotations:
+        tempo-config-hash: 1a64b8ef2f49f5c9e8057582936f2f7b
+      labels:
+        name: tempo
+    spec:
+      containers:
+      - args:
+        - -config.file=/etc/tempo/config.yaml
+        image: grafana/tempo:1.2.1
+        imagePullPolicy: IfNotPresent
+        name: tempo
+        ports:
+        - containerPort: 3100
+          name: http
+        - containerPort: 4317
+          name: otlp-http
+        volumeMounts:
+        - mountPath: /etc/tempo
+          name: tempo-config
+      volumes:
+      - configMap:
+          name: tempo-config
+        name: tempo-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: tempo
+  name: tempo
+  namespace: default
+spec:
+  ports:
+  - name: tempo-http
+    port: 3100
+    targetPort: 3100
+  - name: tempo-otlp-http
+    port: 4317
+    targetPort: 4317
+  selector:
+    name: tempo

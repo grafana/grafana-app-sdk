@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -32,26 +34,50 @@ type groupVersionClient struct {
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
 	into resource.Object) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-get")
+	defer span.End()
 	sc := 0
 	request := g.client.Get().Resource(plural).Name(identifier.Name)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
 	bytes, err := request.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", request.URL().Hostname()),
+		attribute.String("server.port", request.URL().Port()),
+		attribute.String("url.full", request.URL().String()),
+	)
 	if err != nil {
-		return parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	return rawToObject(bytes, into)
+	err = rawToObject(bytes, into)
+	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
+	}
+	return err
 }
 
 func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resource.Identifier, plural string) (
 	*k8sObject, error) {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-getmetadata")
+	defer span.End()
 	sc := 0
 	request := g.client.Get().Resource(plural).Name(identifier.Name)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
 	bytes, err := request.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", request.URL().Hostname()),
+		attribute.String("server.port", request.URL().Port()),
+		attribute.String("url.full", request.URL().String()),
+	)
 	if err != nil {
 		return nil, parseKubernetesError(bytes, sc, err)
 	}
@@ -66,12 +92,21 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 //nolint:unused
 func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Identifier, plural string) (
 	bool, error) {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-exists")
+	defer span.End()
 	sc := 0
 	request := g.client.Get().Resource(plural).Name(identifier.Name)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
 	err := request.Do(ctx).StatusCode(&sc).Error()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", request.URL().Hostname()),
+		attribute.String("server.port", request.URL().Port()),
+		attribute.String("url.full", request.URL().String()),
+	)
 	if err != nil {
 		// HTTP error?
 		if sc == http.StatusNotFound {
@@ -87,6 +122,8 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 
 func (g *groupVersionClient) create(ctx context.Context, plural string, obj resource.Object,
 	into resource.Object) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-create")
+	defer span.End()
 	bytes, err := marshalJSON(obj, map[string]string{
 		versionLabel: g.version,
 	}, g.config)
@@ -100,6 +137,13 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 		request = request.Namespace(obj.StaticMetadata().Namespace)
 	}
 	bytes, err = request.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodPost),
+		attribute.String("server.address", request.URL().Hostname()),
+		attribute.String("server.port", request.URL().Port()),
+		attribute.String("url.full", request.URL().String()),
+	)
 	if err != nil {
 		return parseKubernetesError(bytes, sc, err)
 	}
@@ -108,6 +152,8 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 
 func (g *groupVersionClient) update(ctx context.Context, plural string, obj resource.Object,
 	into resource.Object, _ resource.UpdateOptions) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-update")
+	defer span.End()
 	bytes, err := marshalJSON(obj, map[string]string{
 		versionLabel: g.version,
 	}, g.config)
@@ -122,6 +168,13 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 	}
 	sc := 0
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodPut),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
 	if err != nil {
 		return parseKubernetesError(raw, sc, err)
 	}
@@ -130,6 +183,8 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 
 func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subresource string, obj resource.Object,
 	into resource.Object, _ resource.UpdateOptions) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-update-subresource")
+	defer span.End()
 	bytes, err := marshalJSON(obj, map[string]string{
 		versionLabel: g.version,
 	}, g.config)
@@ -144,6 +199,13 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 	}
 	sc := 0
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodPut),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
 	if err != nil {
 		return parseKubernetesError(raw, sc, err)
 	}
@@ -153,6 +215,8 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 //nolint:revive,unused
 func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Identifier, plural string,
 	patch resource.PatchRequest, into resource.Object, _ resource.PatchOptions) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-patch")
+	defer span.End()
 	bytes, err := marshalJSONPatch(patch)
 	if err != nil {
 		return err
@@ -164,6 +228,13 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 	}
 	sc := 0
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodPatch),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
 	if err != nil {
 		return parseKubernetesError(raw, sc, err)
 	}
@@ -171,13 +242,21 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 }
 
 func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Identifier, plural string) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-delete")
+	defer span.End()
 	sc := 0
 	request := g.client.Delete().Resource(plural).Name(identifier.Name)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
-	err := request.
-		Do(ctx).StatusCode(&sc).Error()
+	err := request.Do(ctx).StatusCode(&sc).Error()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodDelete),
+		attribute.String("server.address", request.URL().Hostname()),
+		attribute.String("server.port", request.URL().Port()),
+		attribute.String("url.full", request.URL().String()),
+	)
 	if err != nil && sc >= 300 {
 		return NewServerResponseError(err, sc)
 	}
@@ -186,6 +265,8 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 
 func (g *groupVersionClient) list(ctx context.Context, namespace, plural string, into resource.ListObject,
 	options resource.ListOptions, itemParser func([]byte) (resource.Object, error)) error {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-list")
+	defer span.End()
 	req := g.client.Get().Resource(plural)
 	if strings.TrimSpace(namespace) != "" {
 		req = req.Namespace(namespace)
@@ -201,6 +282,13 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	}
 	sc := 0
 	bytes, err := req.Do(ctx).StatusCode(&sc).Raw()
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
 	if err != nil {
 		return parseKubernetesError(bytes, sc, err)
 	}
@@ -210,6 +298,8 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 //nolint:revive
 func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string,
 	exampleObject resource.Object, options resource.WatchOptions) (*WatchResponse, error) {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-watch")
+	defer span.End()
 	g.client.Get()
 	req := g.client.Get().Resource(plural).
 		Param("watch", "1")
@@ -224,8 +314,16 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	}
 	resp, err := req.Watch(ctx)
 	if err != nil {
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", http.StatusOK),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
 	channelBufferSize := options.EventBufferSize
 	if channelBufferSize <= 0 {
 		channelBufferSize = 1
