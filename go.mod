@@ -11,7 +11,7 @@ require (
 	github.com/grafana/kindsys v0.0.0-20230508162304-452481b63482
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/puzpuzpuz/xsync/v2 v2.4.1
+	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
 	gomodules.xyz/jsonpatch/v2 v2.4.0
