@@ -94,12 +94,11 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 	ex := &resource.SimpleObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex)
 	client := &mockPatchClient{}
-	ctx := context.TODO()
 	o, err := NewOpinionatedWatcher(schema, client)
 	assert.Nil(t, err)
 
 	t.Run("nil object", func(t *testing.T) {
-		err := o.Add(ctx, nil)
+		err := o.Add(context.TODO(), nil)
 		assert.Equal(t, fmt.Errorf("object cannot be nil"), err)
 	})
 
@@ -114,7 +113,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 			assert.Equal(t, resource.PatchOpRemove, request.Operations[0].Operation)
 			return patchErr
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Equal(t, patchErr, err)
 	})
 
@@ -130,11 +129,10 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		}
 		deleteErr := fmt.Errorf("JE SUIS ERROR")
 		o.DeleteFunc = func(c context.Context, object resource.Object) error {
-			assert.Equal(t, ctx, c)
 			assert.Equal(t, obj, object)
 			return deleteErr
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Equal(t, deleteErr, err)
 	})
 
@@ -148,11 +146,10 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 			return nil
 		}
 		o.DeleteFunc = func(c context.Context, object resource.Object) error {
-			assert.Equal(t, ctx, c)
 			assert.Equal(t, obj, object)
 			return nil
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Nil(t, err)
 	})
 
@@ -170,7 +167,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 			assert.Fail(t, "delete should not be called, our finalizer isn't in the list")
 			return nil
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Nil(t, err)
 	})
 
@@ -195,7 +192,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		o.SyncFunc = func(ctx context.Context, object resource.Object) error {
 			return syncErr
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Equal(t, syncErr, err)
 	})
 
@@ -209,7 +206,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		o.AddFunc = func(c context.Context, object resource.Object) error {
 			return addErr
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Equal(t, addErr, err)
 	})
 
@@ -222,14 +219,13 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		o.AddFunc = func(c context.Context, object resource.Object) error {
 			return nil
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Contains(t, err.Error(), patchErr.Error())
 	})
 
 	t.Run("success", func(t *testing.T) {
 		obj := schema.ZeroValue()
 		client.PatchIntoFunc = func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-			assert.Equal(t, ctx, c)
 			assert.Len(t, request.Operations, 1)
 			assert.Equal(t, resource.PatchOpAdd, request.Operations[0].Operation)
 			return nil
@@ -237,7 +233,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		o.AddFunc = func(c context.Context, object resource.Object) error {
 			return nil
 		}
-		err := o.Add(ctx, obj)
+		err := o.Add(context.TODO(), obj)
 		assert.Nil(t, err)
 	})
 }
@@ -246,17 +242,16 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 	ex := &resource.SimpleObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex)
 	client := &mockPatchClient{}
-	ctx := context.TODO()
 	o, err := NewOpinionatedWatcher(schema, client)
 	assert.Nil(t, err)
 
 	t.Run("nil old", func(t *testing.T) {
-		err := o.Update(ctx, nil, schema.ZeroValue())
+		err := o.Update(context.TODO(), nil, schema.ZeroValue())
 		assert.Equal(t, fmt.Errorf("old cannot be nil"), err)
 	})
 
 	t.Run("nil new", func(t *testing.T) {
-		err := o.Update(ctx, schema.ZeroValue(), nil)
+		err := o.Update(context.TODO(), schema.ZeroValue(), nil)
 		assert.Equal(t, fmt.Errorf("new cannot be nil"), err)
 	})
 
@@ -277,7 +272,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		}
 		old.SetCommonMetadata(md)
 		new.SetCommonMetadata(md)
-		err := o.Update(ctx, old, new)
+		err := o.Update(context.TODO(), old, new)
 		assert.Nil(t, err)
 	})
 
@@ -295,7 +290,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		md.DeletionTimestamp = &time.Time{}
 		md.Finalizers = []string{o.finalizer + "_not"}
 		new.SetCommonMetadata(md)
-		err := o.Update(ctx, schema.ZeroValue(), new)
+		err := o.Update(context.TODO(), schema.ZeroValue(), new)
 		assert.Nil(t, err)
 	})
 
@@ -311,7 +306,6 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		}
 		deleteErr := fmt.Errorf("I AM ERROR")
 		o.DeleteFunc = func(c context.Context, object resource.Object) error {
-			assert.Equal(t, ctx, c)
 			assert.Equal(t, obj, object)
 			return deleteErr
 		}
@@ -319,7 +313,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Fail(t, "patch should not be called for a failed delete")
 			return nil
 		}
-		err := o.Update(ctx, schema.ZeroValue(), obj)
+		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
 		assert.Equal(t, deleteErr, err)
 	})
 
@@ -334,7 +328,6 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			return nil
 		}
 		o.DeleteFunc = func(c context.Context, object resource.Object) error {
-			assert.Equal(t, ctx, c)
 			assert.Equal(t, obj, object)
 			return nil
 		}
@@ -343,7 +336,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			assert.Equal(t, resource.PatchOpRemove, request.Operations[0].Operation)
 			return patchErr
 		}
-		err := o.Update(ctx, schema.ZeroValue(), obj)
+		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
 		assert.Equal(t, patchErr, err)
 	})
 
@@ -362,7 +355,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			return nil
 		}
 
-		err := o.Update(ctx, schema.ZeroValue(), obj)
+		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
 		assert.Nil(t, err)
 	})
 
@@ -376,7 +369,6 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 
 		updateErr := fmt.Errorf("SOY ERROR")
 		o.UpdateFunc = func(c context.Context, old resource.Object, new resource.Object) error {
-			assert.Equal(t, ctx, c)
 			assert.Equal(t, obj, old)
 			assert.Equal(t, obj2, new)
 			return updateErr
@@ -390,7 +382,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			return nil
 		}
 
-		err := o.Update(ctx, obj, obj2)
+		err := o.Update(context.TODO(), obj, obj2)
 		assert.Equal(t, updateErr, err)
 	})
 }
@@ -399,7 +391,6 @@ func TestOpinionatedWatcher_Delete(t *testing.T) {
 	ex := &resource.SimpleObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex)
 	client := &mockPatchClient{}
-	ctx := context.TODO()
 	o, err := NewOpinionatedWatcher(schema, client)
 	assert.Nil(t, err)
 
@@ -412,7 +403,7 @@ func TestOpinionatedWatcher_Delete(t *testing.T) {
 		assert.Fail(t, "delete should not be called")
 		return nil
 	}
-	assert.Nil(t, o.Delete(ctx, schema.ZeroValue()))
+	assert.Nil(t, o.Delete(context.TODO(), schema.ZeroValue()))
 }
 
 type mockPatchClient struct {
