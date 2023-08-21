@@ -324,8 +324,8 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Dequeue retries according to the RetryDequeuePolicy
 			c.dequeueIfRequired(retryKey, obj, ResourceActionDelete)
 
-			// Do the watcher's Add, check for error
-			err := watcher.Add(ctx, obj)
+			// Do the watcher's Delete, check for error
+			err := watcher.Delete(ctx, obj)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
 			}
