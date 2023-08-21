@@ -1,30 +1,39 @@
 ﻿apiVersion: v1
-data:
-  config.yaml: "server:\r\n  http_listen_port: 3100\r\n\r\nsearch_enabled: true\r\n\r\ndistributor:\r\n
-    \ receivers:\r\n    jaeger:\r\n      protocols:\r\n        grpc:\r\n        thrift_compact:\r\n
-    \       thrift_http:\r\n    otlp:\r\n      protocols:\r\n        grpc:\r\n        http:\r\n\r\ningester:\r\n
-    \ trace_idle_period: 10s               # the length of time after a trace has
-    not received spans to consider it complete and flush it\r\n  max_block_bytes:
-    1_000_000           # cut the head block when it hits this size or ...\r\n  max_block_duration:
-    5m               #   this much time passes\r\n\r\ncompactor:\r\n  compaction:\r\n
-    \   compaction_window: 1h              # blocks in this time window will be compacted
-    together\r\n    max_block_bytes: 100_000_000        # maximum size of compacted
-    blocks\r\n    block_retention: 1h\r\n    compacted_block_retention: 10m\r\n\r\nstorage:\r\n
-    \ trace:\r\n    backend: local                     # backend configuration to
-    use\r\n    block:\r\n      bloom_filter_false_positive: .05 # bloom filter false
-    positive rate.  lower values create larger filters but fewer false positives\r\n
-    \     index_downsample_bytes: 1000     # number of bytes per index record\r\n
-    \     encoding: zstd                   # block encoding/compression.  options:
-    none, gzip, lz4-64k, lz4-256k, lz4-1M, lz4, snappy, zstd\r\n    wal:\r\n      path:
-    /tmp/tempo/wal             # where to store the the wal locally\r\n      encoding:
-    none                   # wal encoding/compression.  options: none, gzip, lz4-64k,
-    lz4-256k, lz4-1M, lz4, snappy, zstd\r\n    local:\r\n      path: /tmp/tempo/blocks\r\n
-    \   pool:\r\n      max_workers: 100                 # the worker pool mainly drives
-    querying, but is also used for polling the blocklist\r\n      queue_depth: 10000\r\n"
 kind: ConfigMap
 metadata:
   name: tempo-config
   namespace: default
+data:
+  overrides.yaml: |
+    overrides: 
+  tempo.yaml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+    compactor:
+      compaction:
+        compacted_block_retention: 24h
+    distributor:
+      receivers:
+        jaeger:
+          protocols:
+            thrift_compact:
+              endpoint: 0.0.0.0:6831
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+    ingester: {}
+    storage:
+      trace:
+        backend: local
+        search:
+        local:
+          path: /tmp/tempo/traces
+        wal:
+          path: /tmp/tempo/wal 
+          v2_encoding: none
+          search_encoding: none
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -47,8 +56,9 @@ spec:
     spec:
       containers:
       - args:
-        - -config.file=/etc/tempo/config.yaml
-        image: grafana/tempo:1.2.1
+        - -config.file=/conf/tempo.yaml
+        - -mem-ballast-size-mbs=1024
+        image: grafana/tempo:2.2.0
         imagePullPolicy: IfNotPresent
         name: tempo
         ports:
@@ -57,7 +67,7 @@ spec:
         - containerPort: 4317
           name: otlp-http
         volumeMounts:
-        - mountPath: /etc/tempo
+        - mountPath: /conf
           name: tempo-config
       volumes:
       - configMap:

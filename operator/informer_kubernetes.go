@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -50,8 +52,16 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			&cache.ListWatch{
 				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					ctx, span := GetTracer().Start(context.Background(), "informer-list")
+					defer span.End()
+					span.SetAttributes(
+						attribute.String("kind.name", sch.Kind()),
+						attribute.String("kind.group", sch.Group()),
+						attribute.String("kind.version", sch.Version()),
+						attribute.String("namespace", namespace),
+					)
 					resp := listObjectWrapper{}
-					err := client.ListInto(context.TODO(), namespace, resource.ListOptions{
+					err := client.ListInto(ctx, namespace, resource.ListOptions{
 						LabelFilters: labelFilters,
 						Continue:     options.Continue,
 						Limit:        int(options.Limit),
@@ -62,7 +72,14 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 					return &resp, nil
 				},
 				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					ctx := context.TODO()
+					ctx, span := GetTracer().Start(context.Background(), "informer-watch")
+					defer span.End()
+					span.SetAttributes(
+						attribute.String("kind.name", sch.Kind()),
+						attribute.String("kind.group", sch.Group()),
+						attribute.String("kind.version", sch.Version()),
+						attribute.String("namespace", namespace),
+					)
 					opts := resource.WatchOptions{
 						ResourceVersion:      options.ResourceVersion,
 						ResourceVersionMatch: string(options.ResourceVersionMatch),
@@ -108,40 +125,75 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// and let controller call it when appropriate.
 	_, err := k.SharedIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
+			ctx, span := GetTracer().Start(context.Background(), "informer-event-add")
+			defer span.End()
 			cast, err := k.toResourceObject(obj)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 				return
 			}
-			err = handler.Add(context.TODO(), cast)
+			span.SetAttributes(
+				attribute.String("kind.name", cast.StaticMetadata().Kind),
+				attribute.String("kind.group", cast.StaticMetadata().Group),
+				attribute.String("kind.version", cast.StaticMetadata().Version),
+				attribute.String("namespace", cast.StaticMetadata().Namespace),
+				attribute.String("name", cast.StaticMetadata().Name),
+			)
+			err = handler.Add(ctx, cast)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj interface{}) {
+			ctx, span := GetTracer().Start(context.Background(), "informer-event-update")
+			defer span.End()
 			cOld, err := k.toResourceObject(oldObj)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 				return
 			}
+			// None of these should change between old and new, so we can set them here with old's values
+			span.SetAttributes(
+				attribute.String("kind.name", cOld.StaticMetadata().Kind),
+				attribute.String("kind.group", cOld.StaticMetadata().Group),
+				attribute.String("kind.version", cOld.StaticMetadata().Version),
+				attribute.String("namespace", cOld.StaticMetadata().Namespace),
+				attribute.String("name", cOld.StaticMetadata().Name),
+			)
 			cNew, err := k.toResourceObject(newObj)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 				return
 			}
-			err = handler.Update(context.TODO(), cOld, cNew)
+			err = handler.Update(ctx, cOld, cNew)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
+			ctx, span := GetTracer().Start(context.Background(), "informer-event-delete")
+			defer span.End()
 			cast, err := k.toResourceObject(obj)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 				return
 			}
-			err = handler.Delete(context.TODO(), cast)
+			span.SetAttributes(
+				attribute.String("kind.name", cast.StaticMetadata().Kind),
+				attribute.String("kind.group", cast.StaticMetadata().Group),
+				attribute.String("kind.version", cast.StaticMetadata().Version),
+				attribute.String("namespace", cast.StaticMetadata().Namespace),
+				attribute.String("name", cast.StaticMetadata().Name),
+			)
+			err = handler.Delete(ctx, cast)
 			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
 				k.ErrorHandler(err)
 			}
 		},

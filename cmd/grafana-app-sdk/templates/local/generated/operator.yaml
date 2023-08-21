@@ -53,7 +53,7 @@ spec:
           name: {{.PluginID}}-operator
           env:
             - name: OTEL_HOST
-              value: grafana-agent.default.svc
+              value: tempo.default.svc
             - name: OTEL_PORT
               value: "4317"
             - name: OTEL_CONN_TYPE

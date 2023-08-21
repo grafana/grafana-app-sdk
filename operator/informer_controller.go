@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/resource"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type ResourceAction string
@@ -136,6 +137,8 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 
 	err := informer.AddEventHandler(&SimpleWatcher{
 		AddFunc: func(ctx context.Context, obj resource.Object) error {
+			ctx, span := GetTracer().Start(ctx, "controller-event-add")
+			defer span.End()
 			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
 				// Generate the unique key for this object
 				retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
@@ -153,6 +156,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 				// Do the watcher's Add, check for error
 				err := watcher.Add(ctx, obj)
 				if err != nil && c.ErrorHandler != nil {
+					span.SetStatus(codes.Error, err.Error())
 					c.ErrorHandler(err) // TODO: improve ErrorHandler
 				}
 				if err != nil && c.RetryPolicy != nil {
@@ -170,6 +174,8 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 			return nil
 		},
 		UpdateFunc: func(ctx context.Context, oldObj, newObj resource.Object) error {
+			ctx, span := GetTracer().Start(ctx, "controller-event-update")
+			defer span.End()
 			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
 				// Generate the unique key for this object
 				retryKey := c.keyForWatcherEvent(resourceKind, idx, newObj)
@@ -187,6 +193,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 				// Do the watcher's Update, check for error
 				err := watcher.Update(ctx, oldObj, newObj)
 				if err != nil && c.ErrorHandler != nil {
+					span.SetStatus(codes.Error, err.Error())
 					c.ErrorHandler(err)
 				}
 				if err != nil && c.RetryPolicy != nil {
@@ -204,6 +211,8 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 			return nil
 		},
 		DeleteFunc: func(ctx context.Context, obj resource.Object) error {
+			ctx, span := GetTracer().Start(ctx, "controller-event-delete")
+			defer span.End()
 			c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
 				// Generate the unique key for this object
 				retryKey := c.keyForWatcherEvent(resourceKind, idx, obj)
@@ -221,6 +230,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 				// Do the watcher's Delete, check for error
 				err := watcher.Delete(ctx, obj)
 				if err != nil && c.ErrorHandler != nil {
+					span.SetStatus(codes.Error, err.Error())
 					c.ErrorHandler(err)
 				}
 				if err != nil && c.RetryPolicy != nil {

@@ -5,6 +5,7 @@ kubePort: 8556
 # Pre-configured datasources to install on grafana. For custom-configuration datasources, use `datasourceConfigs`
 datasources:
   - cortex
+  - tempo
 # Plugin JSON data, as key/value pairs
 pluginJson:
   foo: bar
