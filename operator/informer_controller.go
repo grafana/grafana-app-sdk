@@ -7,8 +7,9 @@ import (
 	"math"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"go.opentelemetry.io/otel/codes"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type ResourceAction string

@@ -119,6 +119,7 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 // AddEventHandler adds a ResourceWatcher as an event handler for watch events from the informer.
 // Event handlers are not guaranteed to be executed in parallel or in any particular order by the underlying
 // kubernetes apimachinery code. If you want to coordinate ResourceWatchers, use am InformerController.
+// nolint:dupl
 func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error {
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
