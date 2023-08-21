@@ -25,6 +25,8 @@ var (
 	templateWatcher, _            = template.ParseFS(templates, "operator/watcher.tmpl")
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
+	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
+	templateOperatorTelemetry, _  = template.ParseFS(templates, "operator/telemetry.tmpl")
 )
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
@@ -181,4 +183,12 @@ type OperatorMainMetadata struct {
 
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
 	return templateOperatorMain.Execute(out, metadata)
+}
+
+func WriteOperatorConfig(out io.Writer) error {
+	return templateOperatorConfig.Execute(out, nil)
+}
+
+func WriteOperatorTelemetry(out io.Writer) error {
+	return templateOperatorTelemetry.Execute(out, nil)
 }

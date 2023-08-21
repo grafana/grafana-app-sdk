@@ -50,7 +50,16 @@ spec:
       containers:
         - image: {{.OperatorImage}}
           imagePullPolicy: IfNotPresent
-          name: {{.PluginID}}-operator{{ if .WebhookProperties.Enabled }}
+          name: {{.PluginID}}-operator
+          env:
+            - name: OTEL_HOST
+              value: grafana-agent.default.svc
+            - name: OTEL_PORT
+              value: "4317"
+            - name: OTEL_CONN_TYPE
+              value: grpc
+            - name: OTEL_SERVICE_NAME
+              value: "{{.PluginID}}-operator"{{ if .WebhookProperties.Enabled }}
           ports:
             - containerPort: {{ .WebhookProperties.Port }}
               name: webhook-api
