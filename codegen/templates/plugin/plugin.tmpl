@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"{{.Repo}}/pkg/plugin/secure"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
 	"github.com/grafana/grafana-app-sdk/plugin/router"
@@ -24,6 +25,13 @@ type Plugin struct {
 // Start has the plugin's router start listening over gRPC, and blocks until an unrecoverable error occurs
 func (p *Plugin) Start() error {
 	return p.router.ListenAndServe()
+}
+
+// CallResource allows Plugin to implement grafana-plugin-sdk-go/backend/instancemgmt.Instance for an App plugin, 
+// Which allows it to be used with grafana-plugin-sdk-go/backend/app.Manage. 
+// CallResource downstreams all CallResource requests to the router's handler
+func (p *Plugin) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
+	return p.router.CallResource(ctx, req, sender)
 }
 
 func New(namespace string, service Service) (*Plugin, error) {

@@ -18,11 +18,15 @@ func (m *backendPluginMainGenerator) Generate(decls ...kindsys.Custom) (*codejen
 	tmd := templates.BackendPluginRouterTemplateMetadata{
 		Repo:           m.projectRepo,
 		APICodegenPath: m.apiCodegenPath,
+		PluginID:       "REPLACEME",
 		Resources:      make([]kindsys.CustomProperties, 0),
 	}
 
 	for _, decl := range decls {
 		tmd.Resources = append(tmd.Resources, decl.Def().Properties)
+		if decl.Def().Properties.Group != "" {
+			tmd.PluginID = decl.Def().Properties.Group
+		}
 	}
 
 	b := bytes.Buffer{}

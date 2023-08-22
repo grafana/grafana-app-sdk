@@ -106,6 +106,7 @@ type BackendPluginRouterTemplateMetadata struct {
 	Repo           string
 	APICodegenPath string
 	Resources      []kindsys.CustomProperties
+	PluginID       string
 }
 
 // WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out

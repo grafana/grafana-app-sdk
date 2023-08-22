@@ -4,65 +4,97 @@ import (
     "context"
     "fmt"
 
-    "github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
-    "github.com/grafana/grafana-app-sdk/resource"
     "github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
+	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/app"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"k8s.io/client-go/rest"
 
     {{ range .Resources }}{{if .IsCRD }}"{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
     {{end}}"{{.Repo}}/pkg/plugin"
 )
 
+const (
+    pluginID = "{{.PluginID}}"
+)
+
 func main() {
-    svc := &PluginService{}
+    logger := log.DefaultLogger.With("pluginID", pluginID)
+	logger.Info("starting plugin", "pluginID", pluginID)
 
-    // GENERATED SIMPLE SERVICE INITIALIZER CODE
-    {{ range .Resources }}svc.{{ .MachineName }}ServiceInitializer = kubeconfig.CachingInitializer(
-        {{ if .IsCRD }}func(cfg kubeconfig.NamespacedConfig) (plugin.{{.Name}}Service, error) {
-            // This is example code which assumes the API and storage models are identical
-            // TODO: REPLACEME
-            return resource.NewTypedStore[*{{.MachineName}}.Object]({{.MachineName}}.Schema(), k8s.NewClientRegistry(cfg.RestConfig, k8s.ClientConfig{}))
-        }){{ else }}func(cfg kubeconfig.NamespacedConfig) (plugin.{{.Name}}Service, error) {
-            // FIXME: This must be implemented for the router to work
-            // FIXME: You will need to write an implementation of plugin.{{.Name}}Service to initialize here
-            return nil, nil
-        }){{ end }}
-    {{end}}
+    // app.Manage handles the app plugin lifecycle
+	if err := app.Manage(pluginID, newInstanceFactory(logger), app.ManageOpts{
+		TracingOpts: tracing.Opts{
+			CustomAttributes: []attribute.KeyValue{
+				attribute.String("plugin.id", pluginID),
+			},
+		},
+	}); err != nil {
+		logger.Error("failed to initialize instance", "err", err)
+		os.Exit(1)
+	}
 
-    p, err := plugin.New("default", svc) // TODO: fix namespace usage
-    if err != nil {
-        panic(err)
-    }
-
-    // Start listening
-    err = p.Start()
-    if err != nil {
-        panic(err)
-    }
+	logger.Info("plugin exited normally", "pluginID", pluginID)
+	os.Exit(0)
 }
 
 //
 // GENERATED EXAMPLE SERVICE CODE
-// You may want to write your own PluginService code. This example code uses lazy-loading initializers
-// (as kubeconfig comes from the secureJSONData, which is not known at start-time, only at request-time)
-// to return the appropriate service based on the unexported initializer function for each schema Service type.
+// You may want to write your own PluginService code. This example code simply returns unexported 
+// service variables for their associated GetX() methods, requiring the initializer to 
+// properly set up the services when creating an instance of PluginService. 
+// This code initializes each service to a resource.TypedStore for the appropriate schema. 
 //
 
 // PluginService implements plugin.Service
 type PluginService struct { {{ range .Resources }}
-    {{ .MachineName }}ServiceInitializer kubeconfig.Initializer[plugin.{{.Name}}Service]{{end}}
+    {{ .MachineName }}Service plugin.{{ .Name }}Service{{ end }}
 }
 {{ range .Resources }}
-// Get{{.Name}}Service returns a {{.Name}}Service, use the kube config from the context if initialization is required
-func (s *PluginService) Get{{.Name}}Service(ctx context.Context) (plugin.{{.Name}}Service, error) {
-    cfg, err := kubeconfig.FromContext(ctx)
-    if err != nil {
-        return nil, err
-    }
-
-    if s.{{ .MachineName }}ServiceInitializer == nil {
-        return nil, fmt.Errorf("no service initialization code")
-    }
-
-    return s.{{ .MachineName }}ServiceInitializer(cfg)
+// Get{{ .Name }}Service returns a {{ .Name }}Service
+func (s *PluginService) Get{{ .Name }}Service(ctx context.Context) (plugin.{{ .Name }}Service, error) {
+    return s.{{ .MachineName }}Service, nil
 }
-{{end}}
+{{ end }}
+
+// newInstanceFactory returns an app.InstanceFactoryFunc to be used with app.Manage
+func newInstanceFactory(logger log.Logger) app.InstanceFactoryFunc {
+	return func(settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
+        // Load the kubernetes config from the AppInstanceSettings
+		kcfg := kubeconfig.NamespacedConfig{}
+		err := kubeconfig.NewLoader().LoadFromSettings(settings, &kcfg)
+		if err != nil {
+            logger.Error("failed to load kubernetes config from settings", "err", err)
+			return nil, err
+		}
+
+		// Create our client generator, using kubernetes as a store
+		clientGenerator := k8s.NewClientRegistry(kcfg.RestConfig, k8s.ClientConfig{})
+
+        // Create our PluginService, then assign values to the individual Kind service(s)
+        svc := PluginService{}
+
+		// Create stores for each Kind{{ range .Resources }}
+        {{ .MachineName }}Store, err := resource.NewTypedStore[*{{ .MachineName }}.Object]({{ .MachineName }}.Schema(), clientGenerator)
+        if err != nil {
+            logger.Error("failed to create {{ .Name }} store", "err", err)
+            return nil, fmt.Errorf("failed to create {{ .Name }} store: %w", err)
+        }
+        svc.{{ .MachineName }}Service = {{ .MachineName }}Store{{ end }}
+
+        // Create the plugin, which allows for CallResource requests to it as an instancemgmt.Instance
+        p, err := plugin.New(kcfg.Namespace, &svc)
+        if err != nil {
+            logger.Error("failed to create plugin instance", "err", err)
+			return nil, fmt.Errorf("failed to create plugin instance: %w", err)
+        }
+
+		logger.Info("plugin instance provisioned successfully")
+		return p, nil
+	}
+}
