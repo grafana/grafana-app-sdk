@@ -126,7 +126,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		// The remove finalizer code is shared by both our add and update handlers, as this logic can be hit from either
 		err = o.removeFinalizer(ctx, object, finalizers)
 		if err != nil {
-			span.SetStatus(codes.Error, err.Error())
+			span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
 			return err
 		}
 		return nil
@@ -143,7 +143,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// Call the add handler, and if it returns successfully (no error), add the finalizer
 	err := o.addFunc(ctx, object)
 	if err != nil {
-		span.SetStatus(codes.Error, err.Error())
+		span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
 		return err
 	}
 
@@ -207,6 +207,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		// Call the delete handler, then remove the finalizer on success
 		err := o.deleteFunc(ctx, new)
 		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
 
@@ -218,7 +219,12 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		return nil
 	}
 
-	return o.updateFunc(ctx, old, new)
+	err := o.updateFunc(ctx, old, new)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
+		return err
+	}
+	return nil
 }
 
 // Delete exists to implement ResourceWatcher,

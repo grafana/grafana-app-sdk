@@ -7,8 +7,6 @@ import (
 	"math"
 	"time"
 
-	"go.opentelemetry.io/otel/codes"
-
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -235,14 +233,13 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 
 			// Do the watcher's Add, check for error
 			err := watcher.Add(ctx, obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-			}
 			if err != nil && c.ErrorHandler != nil {
 				c.ErrorHandler(err) // TODO: improve ErrorHandler
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					ctx, span := GetTracer().Start(ctx, "controller-retry")
+					defer span.End()
 					return nil, watcher.Add(ctx, obj)
 				}, ResourceActionCreate, obj)
 			}
@@ -281,14 +278,13 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 
 			// Do the watcher's Update, check for error
 			err := watcher.Update(ctx, oldObj, newObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-			}
 			if err != nil && c.ErrorHandler != nil {
 				c.ErrorHandler(err)
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					ctx, span := GetTracer().Start(ctx, "controller-retry")
+					defer span.End()
 					return nil, watcher.Update(ctx, oldObj, newObj)
 				}, ResourceActionUpdate, newObj)
 			}
@@ -327,14 +323,13 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 
 			// Do the watcher's Delete, check for error
 			err := watcher.Delete(ctx, obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-			}
 			if err != nil && c.ErrorHandler != nil {
 				c.ErrorHandler(err) // TODO: improve ErrorHandler
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					ctx, span := GetTracer().Start(ctx, "controller-retry")
+					defer span.End()
 					return nil, watcher.Delete(ctx, obj)
 				}, ResourceActionDelete, obj)
 			}
@@ -391,9 +386,10 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 			err:    err,
 		})
 	} else if err != nil {
-		span.SetStatus(codes.Error, err.Error())
 		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
 		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+			ctx, span := GetTracer().Start(ctx, "controller-retry")
+			defer span.End()
 			res, err := reconciler.Reconcile(ctx, req)
 			return res.RequeueAfter, err
 		}, ResourceActionFromReconcileAction(req.Action), req.Object)
