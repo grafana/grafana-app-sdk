@@ -79,11 +79,14 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 		attribute.String("url.full", request.URL().String()),
 	)
 	if err != nil {
-		return nil, parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 	md := k8sObject{}
 	err = json.Unmarshal(bytes, &md)
 	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("unable to unmarshal request body: %s", err.Error()))
 		return nil, err
 	}
 	return &md, nil
