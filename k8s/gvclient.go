@@ -116,8 +116,10 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 			return false, nil
 		}
 		if sc > 0 {
+			span.SetStatus(codes.Error, err.Error())
 			return false, NewServerResponseError(err, sc)
 		}
+		span.SetStatus(codes.Error, err.Error())
 		return false, err
 	}
 	return true, nil
@@ -131,6 +133,7 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 		versionLabel: g.version,
 	}, g.config)
 	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("error marshaling kubernetes JSON: %s", err.Error()))
 		return err
 	}
 
@@ -148,9 +151,16 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 		attribute.String("url.full", request.URL().String()),
 	)
 	if err != nil {
-		return parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	return rawToObject(bytes, into)
+	err = rawToObject(bytes, into)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
+		return err
+	}
+	return nil
 }
 
 func (g *groupVersionClient) update(ctx context.Context, plural string, obj resource.Object,
@@ -161,6 +171,7 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 		versionLabel: g.version,
 	}, g.config)
 	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("error marshaling kubernetes JSON: %s", err.Error()))
 		return err
 	}
 
@@ -179,9 +190,16 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 		attribute.String("url.full", req.URL().String()),
 	)
 	if err != nil {
-		return parseKubernetesError(raw, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	return rawToObject(raw, into)
+	err = rawToObject(raw, into)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
+		return err
+	}
+	return nil
 }
 
 func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subresource string, obj resource.Object,
@@ -192,6 +210,7 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 		versionLabel: g.version,
 	}, g.config)
 	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("error marshaling kubernetes JSON: %s", err.Error()))
 		return err
 	}
 
@@ -210,9 +229,16 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 		attribute.String("url.full", req.URL().String()),
 	)
 	if err != nil {
-		return parseKubernetesError(raw, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	return rawToObject(raw, into)
+	err = rawToObject(raw, into)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
+		return err
+	}
+	return nil
 }
 
 //nolint:revive,unused
@@ -239,9 +265,16 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 		attribute.String("url.full", req.URL().String()),
 	)
 	if err != nil {
-		return parseKubernetesError(raw, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
-	return rawToObject(raw, into)
+	err = rawToObject(raw, into)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
+		return err
+	}
+	return nil
 }
 
 func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Identifier, plural string) error {
@@ -293,7 +326,9 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 		attribute.String("url.full", req.URL().String()),
 	)
 	if err != nil {
-		return parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(bytes, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
 	}
 	return rawToListWithParser(bytes, into, itemParser)
 }

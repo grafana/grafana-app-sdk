@@ -2,9 +2,10 @@ package main
 
 import (
     "context"
-    "fmt"
+	"fmt"
+	"os"
 
-    "github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -13,7 +14,6 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 	"go.opentelemetry.io/otel/attribute"
-	"k8s.io/client-go/rest"
 
     {{ range .Resources }}{{if .IsCRD }}"{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
     {{end}}"{{.Repo}}/pkg/plugin"
