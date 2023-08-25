@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -96,7 +97,10 @@ func (o *OpinionatedWatcher) Wrap(watcher ResourceWatcher, syncToAdd bool) { // 
 // or if ObjectMetadata.DeletionTimestamp is non-nil, they will call DeleteFunc and remove the finalizer
 // (the finalizer prevents the resource from being hard deleted until it is removed).
 func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) error {
+	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-add")
+	defer span.End()
 	if object == nil {
+		span.SetStatus(codes.Error, "object cannot be nil")
 		return fmt.Errorf("object cannot be nil")
 	}
 
@@ -106,6 +110,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// An "add" event would trigger if the informer was restart or resyncing,
 	// so we may have missed the delete/update event.
 	if object.CommonMetadata().DeletionTimestamp != nil {
+		span.AddEvent("object is deleted and pending finalizer removal")
+
 		// Check if we're the finalizer it's waiting for. If we're not, we can drop this whole event.
 		if !slices.Contains(finalizers, o.finalizer) {
 			return nil
@@ -118,7 +124,12 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		}
 
 		// The remove finalizer code is shared by both our add and update handlers, as this logic can be hit from either
-		return o.removeFinalizer(ctx, object, finalizers)
+		err = o.removeFinalizer(ctx, object, finalizers)
+		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+			return err
+		}
+		return nil
 	}
 
 	// Next, we need to check if our finalizer is already in the finalizer list.
@@ -132,6 +143,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// Call the add handler, and if it returns successfully (no error), add the finalizer
 	err := o.addFunc(ctx, object)
 	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
 		return err
 	}
 
@@ -149,6 +161,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
 func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
+	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-update")
+	defer span.End()
 	// TODO: If old is nil, it _might_ be ok?
 	if old == nil {
 		return fmt.Errorf("old cannot be nil")
@@ -193,6 +207,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		// Call the delete handler, then remove the finalizer on success
 		err := o.deleteFunc(ctx, new)
 		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
 
@@ -204,7 +219,12 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		return nil
 	}
 
-	return o.updateFunc(ctx, old, new)
+	err := o.updateFunc(ctx, old, new)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
+		return err
+	}
+	return nil
 }
 
 // Delete exists to implement ResourceWatcher,

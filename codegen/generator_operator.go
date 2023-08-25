@@ -63,6 +63,48 @@ func (o *operatorKubeConfigJenny) Generate(_ ...kindsys.Custom) (*codejen.File, 
 	return codejen.NewFile("cmd/operator/kubeconfig.go", formatted, o), nil
 }
 
+type operatorConfigJenny struct {
+}
+
+func (*operatorConfigJenny) JennyName() string {
+	return "OperatorConfig"
+}
+
+func (o *operatorConfigJenny) Generate(_ ...kindsys.Custom) (*codejen.File, error) {
+	// TODO: combine this with kubeconfig?
+	b := bytes.Buffer{}
+	err := templates.WriteOperatorConfig(&b)
+	if err != nil {
+		return nil, err
+	}
+	formatted, err := format.Source(b.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return codejen.NewFile("cmd/operator/config.go", formatted, o), nil
+}
+
+type operatorTelemetryJenny struct {
+}
+
+func (*operatorTelemetryJenny) JennyName() string {
+	return "OperatorTelemetry"
+}
+
+func (o *operatorTelemetryJenny) Generate(_ ...kindsys.Custom) (*codejen.File, error) {
+	// TODO: combine this with config or keep separate?
+	b := bytes.Buffer{}
+	err := templates.WriteOperatorTelemetry(&b)
+	if err != nil {
+		return nil, err
+	}
+	formatted, err := format.Source(b.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return codejen.NewFile("cmd/operator/telemetry.go", formatted, o), nil
+}
+
 type operatorMainJenny struct {
 	projectRepo string
 	codegenPath string

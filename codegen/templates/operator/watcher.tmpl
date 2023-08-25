@@ -6,6 +6,7 @@ import (
 
     "github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"go.opentelemetry.io/otel"
 
 	"{{.Repo}}/{{.CodegenPath}}/resource/{{.MachineName}}"
 )
@@ -20,6 +21,8 @@ func New{{.Name}}Watcher() (*{{.Name}}Watcher, error) {
 
 // Add handles add events for {{.MachineName}}.Object resources.
 func (s *{{.Name}}Watcher) Add(ctx context.Context, rObj resource.Object) error {
+    ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-add")
+	defer span.End()
     object, ok := rObj.(*{{.MachineName}}.Object)
     if !ok {
         return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
@@ -27,12 +30,14 @@ func (s *{{.Name}}Watcher) Add(ctx context.Context, rObj resource.Object) error 
     }
 
     // TODO
-    fmt.Println("Added ", object.StaticMetadata().Identifier())
+    fmt.Println("Added ", object.StaticMetadata().Identifier().Name, span.SpanContext().TraceID())
 	return nil
 }
 
 // Update handles update events for {{.MachineName}}.Object resources.
 func (s *{{.Name}}Watcher) Update(ctx context.Context, rOld resource.Object, rNew resource.Object) error {
+    ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-update")
+	defer span.End()
     oldObject, ok := rOld.(*{{.MachineName}}.Object)
     if !ok {
         return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
@@ -46,12 +51,14 @@ func (s *{{.Name}}Watcher) Update(ctx context.Context, rOld resource.Object, rNe
     }
 
     // TODO
-    fmt.Println("Updated ", oldObject.StaticMetadata().Identifier(), newObject.StaticMetadata().Identifier())
+    fmt.Println("Updated ", oldObject.StaticMetadata().Identifier(), newObject.StaticMetadata().Identifier(), span.SpanContext().TraceID())
 	return nil
 }
 
 // Delete handles delete events for {{.MachineName}}.Object resources.
 func (s *{{.Name}}Watcher) Delete(ctx context.Context, rObj resource.Object) error {
+    ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-delete")
+	defer span.End()
     object, ok := rObj.(*{{.MachineName}}.Object)
     if !ok {
         return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
@@ -59,13 +66,15 @@ func (s *{{.Name}}Watcher) Delete(ctx context.Context, rObj resource.Object) err
     }
 
     // TODO
-    fmt.Println("Deleted ", object.StaticMetadata().Identifier())
+    fmt.Println("Deleted ", object.StaticMetadata().Identifier(), span.SpanContext().TraceID())
 	return nil
 }
 
 // Sync is not a standard resource.Watcher function, but is used when wrapping this watcher in an operator.OpinionatedWatcher.
 // It handles resources which MAY have been updated during an outage period where the watcher was not able to consume events.
 func (s *{{.Name}}Watcher) Sync(ctx context.Context, rObj resource.Object) error {
+    ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-sync")
+	defer span.End()
     object, ok := rObj.(*{{.MachineName}}.Object)
     if !ok {
         return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
@@ -73,6 +82,6 @@ func (s *{{.Name}}Watcher) Sync(ctx context.Context, rObj resource.Object) error
     }
 
     // TODO
-    fmt.Println("Possible update to ", object.StaticMetadata().Identifier())
+    fmt.Println("Possible update to ", object.StaticMetadata().Identifier(), span.SpanContext().TraceID())
 	return nil
 }

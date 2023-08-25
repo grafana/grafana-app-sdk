@@ -221,6 +221,8 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 // nolint:dupl
 func (c *InformerController) informerAddFunc(resourceKind string) func(context.Context, resource.Object) error {
 	return func(ctx context.Context, obj resource.Object) error {
+		ctx, span := GetTracer().Start(ctx, "controller-event-add")
+		defer span.End()
 		// Handle all watchers for the add for this resource kind
 		c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
 			// Generate the unique key for this object
@@ -236,6 +238,8 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					ctx, span := GetTracer().Start(ctx, "controller-retry")
+					defer span.End()
 					return nil, watcher.Add(ctx, obj)
 				}, ResourceActionCreate, obj)
 			}
@@ -262,6 +266,8 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 // nolint:dupl
 func (c *InformerController) informerUpdateFunc(resourceKind string) func(context.Context, resource.Object, resource.Object) error {
 	return func(ctx context.Context, oldObj resource.Object, newObj resource.Object) error {
+		ctx, span := GetTracer().Start(ctx, "controller-event-update")
+		defer span.End()
 		// Handle all watchers for the update for this resource kind
 		c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
 			// Generate the unique key for this object
@@ -277,6 +283,8 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					ctx, span := GetTracer().Start(ctx, "controller-retry")
+					defer span.End()
 					return nil, watcher.Update(ctx, oldObj, newObj)
 				}, ResourceActionUpdate, newObj)
 			}
@@ -303,6 +311,8 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 // nolint:dupl
 func (c *InformerController) informerDeleteFunc(resourceKind string) func(context.Context, resource.Object) error {
 	return func(ctx context.Context, obj resource.Object) error {
+		ctx, span := GetTracer().Start(ctx, "controller-event-delete")
+		defer span.End()
 		// Handle all watchers for the add for this resource kind
 		c.watchers.Range(resourceKind, func(idx int, watcher ResourceWatcher) {
 			// Generate the unique key for this object
@@ -311,13 +321,15 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Dequeue retries according to the RetryDequeuePolicy
 			c.dequeueIfRequired(retryKey, obj, ResourceActionDelete)
 
-			// Do the watcher's Add, check for error
-			err := watcher.Add(ctx, obj)
+			// Do the watcher's Delete, check for error
+			err := watcher.Delete(ctx, obj)
 			if err != nil && c.ErrorHandler != nil {
 				c.ErrorHandler(err) // TODO: improve ErrorHandler
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+					ctx, span := GetTracer().Start(ctx, "controller-retry")
+					defer span.End()
 					return nil, watcher.Delete(ctx, obj)
 				}, ResourceActionDelete, obj)
 			}
@@ -353,6 +365,8 @@ func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectSta
 }
 
 func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconciler, req ReconcileRequest, retryKey string) {
+	ctx, span := GetTracer().Start(ctx, "controller-event-reconcile")
+	defer span.End()
 	// Do the reconcile
 	res, err := reconciler.Reconcile(ctx, req)
 	// If the response contains a state, add it to the request for future retries
@@ -374,6 +388,8 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 	} else if err != nil {
 		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
 		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+			ctx, span := GetTracer().Start(ctx, "controller-retry")
+			defer span.End()
 			res, err := reconciler.Reconcile(ctx, req)
 			return res.RequeueAfter, err
 		}, ResourceActionFromReconcileAction(req.Action), req.Object)

@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tempo-config
+  namespace: default
+data:
+  overrides.yaml: |
+    overrides: 
+  tempo.yaml: |
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+    compactor:
+      compaction:
+        compacted_block_retention: 24h
+    distributor:
+      receivers:
+        jaeger:
+          protocols:
+            thrift_compact:
+              endpoint: 0.0.0.0:6831
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+    ingester: {}
+    storage:
+      trace:
+        backend: local
+        search:
+        local:
+          path: /tmp/tempo/traces
+        wal:
+          path: /tmp/tempo/wal 
+          v2_encoding: none
+          search_encoding: none
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: tempo
+  template:
+    metadata:
+      annotations:
+        tempo-config-hash: 1a64b8ef2f49f5c9e8057582936f2f7b
+      labels:
+        name: tempo
+    spec:
+      containers:
+      - args:
+        - -config.file=/conf/tempo.yaml
+        - -mem-ballast-size-mbs=1024
+        image: grafana/tempo:2.2.0
+        imagePullPolicy: IfNotPresent
+        name: tempo
+        ports:
+        - containerPort: 3100
+          name: http
+        - containerPort: 4317
+          name: otlp-http
+        volumeMounts:
+        - mountPath: /conf
+          name: tempo-config
+      volumes:
+      - configMap:
+          name: tempo-config
+        name: tempo-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: tempo
+  name: tempo
+  namespace: default
+spec:
+  ports:
+  - name: tempo-http
+    port: 3100
+    targetPort: 3100
+  - name: tempo-otlp-http
+    port: 4317
+    targetPort: 4317
+  selector:
+    name: tempo

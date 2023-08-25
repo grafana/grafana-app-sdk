@@ -27,9 +27,29 @@ metadata:
   labels:
     name: grafana
 data:
-  grafana.ini: "[analytics]\nreporting_enabled = false\n[auth.anonymous]\nenabled = true\norg_role = Admin\n[log.frontend]\nenabled
-     = true\n[plugins]\nallow_loading_unsigned_plugins = {{.PluginID}}\n[server]\nhttp_port = 3000\nroot_url = \nrouter_logging
-     = true\n[unified_alerting]\nenabled = true\n[users]\ndefault_theme = dark\n"
+  grafana.ini: | 
+    [analytics]
+    reporting_enabled = false
+    [tracing.opentelemetry.otlp]
+    address = tempo.default.svc:4317
+    [auth.anonymous]
+    enabled = true
+    org_role = Admin
+    [log.frontend]
+    enabled = true
+    [plugins]
+    allow_loading_unsigned_plugins = {{.PluginID}}
+    [plugin.{{.PluginID}}]
+    tracing = true
+    [server]
+    http_port = 3000
+    root_url = 
+    router_logging = true
+    [unified_alerting]
+    enabled = true
+    [users]
+    default_theme = dark
+
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -91,7 +111,7 @@ spec:
             - name: GF_INSTALL_PLUGINS
             - name: GF_PATHS_CONFIG
               value: /etc/grafana-config/grafana.ini
-          image: grafana/grafana-enterprise:8.4.5
+          image: grafana/grafana-enterprise:9.5.8
           imagePullPolicy: IfNotPresent
           name: grafana
           ports:

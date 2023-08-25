@@ -14,6 +14,19 @@ import (
 )
 
 func main() {
+    //Load the config from the environment
+    cfg, err := LoadConfigFromEnv()
+	if err != nil {
+		panic(err)
+	}
+
+    // Set up telemetry
+    // Tracing
+    err = SetTraceProvider(cfg.OTelConfig)
+	if err != nil {
+		panic(err)
+	}
+
     // Load the kube config
     kubeConfig, err := LoadInClusterConfig()
     if err != nil {

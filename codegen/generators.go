@@ -96,6 +96,6 @@ func OperatorGenerator(projectRepo, codegenPath string) Generator {
 	}, &operatorKubeConfigJenny{}, &operatorMainJenny{
 		projectRepo: projectRepo,
 		codegenPath: codegenPath,
-	})
+	}, &operatorConfigJenny{}, &operatorTelemetryJenny{})
 	return g
 }
