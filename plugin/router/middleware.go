@@ -2,7 +2,9 @@ package router
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
@@ -51,6 +53,21 @@ func NewCapturingMiddleware(f func(ctx context.Context, r *backend.CallResourceR
 			// Note the response here is mutable,
 			// so the changes performed by the actual middleware func will be propagated upstream
 			_ = res.Send(cs.Response)
+		}
+	}
+}
+
+// NewLoggingMiddleware returns a MiddleWareFunc which logs an INFO level message for each request,
+// and injects the provided Logger into the context used downstream.
+func NewLoggingMiddleware(logger logging.Logger) MiddlewareFunc {
+	return func(handler HandlerFunc) HandlerFunc {
+		return func(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) {
+			logger.InfoContext(ctx, fmt.Sprintf("Handling %s request to path %s", req.Method, req.Path),
+				"request.http.method", req.Method,
+				"request.http.path", req.Path,
+				"request.user", req.PluginContext.User.Name)
+
+			handler(logging.Context(ctx, logger), req, sender)
 		}
 	}
 }

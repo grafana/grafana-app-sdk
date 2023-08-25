@@ -46,13 +46,14 @@ type localEnvConfig struct {
 }
 
 type dataSourceConfig struct {
-	Access    string `json:"access" yaml:"access"`
-	Editable  bool   `json:"editable" yaml:"editable"`
-	IsDefault bool   `json:"isDefault" yaml:"isDefault"`
-	Name      string `json:"name" yaml:"name"`
-	Type      string `json:"type" yaml:"type"`
-	UID       string `json:"uid" yaml:"uid"`
-	URL       string `json:"url" yaml:"url"`
+	Access       string   `json:"access" yaml:"access"`
+	Editable     bool     `json:"editable" yaml:"editable"`
+	IsDefault    bool     `json:"isDefault" yaml:"isDefault"`
+	Name         string   `json:"name" yaml:"name"`
+	Type         string   `json:"type" yaml:"type"`
+	UID          string   `json:"uid" yaml:"uid"`
+	URL          string   `json:"url" yaml:"url"`
+	Dependencies []string `json:"dependencies" yaml:"dependencies"`
 }
 
 type localEnvWebhookConfig struct {
@@ -393,8 +394,9 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 	}
 
 	// Datasources
+	addedDeps := make(map[string]struct{})
 	for i, ds := range config.Datasources {
-		err := localGenerateDatasourceYAML(ds, i == 0, &props, &output)
+		err := localGenerateDatasourceYAML(ds, i == 0, &props, addedDeps, &output)
 		if err != nil {
 			return nil, err
 		}
@@ -423,13 +425,22 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 }
 
 //nolint:revive
-func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlGenProperties, out io.Writer) error {
+func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlGenProperties, depsMap map[string]struct{}, out io.Writer) error {
 	datasource = strings.ToLower(datasource)
 	cfg, ok := localDatasourceConfigs[datasource]
 	if !ok {
 		return fmt.Errorf("unsupported datasource '%s'", datasource)
 	}
-	files, ok := localDatasourceFiles[datasource]
+	files := make([]string, 0)
+	for _, dep := range cfg.Dependencies {
+		if _, ok := depsMap[dep]; ok {
+			continue
+		}
+		files = append(files, localDatasourceDependencyManifests[dep]...)
+		depsMap[dep] = struct{}{}
+	}
+	dsFiles, ok := localDatasourceFiles[datasource]
+	files = append(files, dsFiles...)
 	if ok {
 		for i, f := range files {
 			if i > 0 {

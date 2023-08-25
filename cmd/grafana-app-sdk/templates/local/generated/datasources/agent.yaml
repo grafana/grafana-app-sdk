@@ -1,0 +1,228 @@
+﻿apiVersion: v1
+data:
+  agent.yml: |
+    logs:
+      configs:
+        - name: k8sevents
+          clients:
+          - url: http://loki.default.svc.cluster.local:3100/loki/api/v1/push
+            external_labels:
+              cluster: my-cluster
+              job: integrations/kubernetes/eventhandler
+          positions:
+            filename: /tmp/k8seventspositions.yaml
+        - name: agent
+          clients:
+            - url: http://loki.default.svc.cluster.local:3100/loki/api/v1/push
+              external_labels:
+                cluster: my-cluster
+          positions:
+            filename: /tmp/positions.yaml
+          target_config:
+            sync_period: 10s
+          scrape_configs:
+          - job_name: integrations/kubernetes/pod-logs
+            kubernetes_sd_configs:
+              - role: pod
+            pipeline_stages:
+              - cri: {}
+            relabel_configs:
+              - source_labels:
+                  - __meta_kubernetes_pod_label_name
+                  - __meta_kubernetes_pod_label_app_kubernetes_io_name # also
+                target_label: __service__
+                separator: ""
+              - source_labels:
+                  - __meta_kubernetes_pod_node_name
+                target_label: __host__
+              - action: drop
+                regex: ""
+                source_labels:
+                  - __service__
+              - action: labelmap
+                regex: __meta_kubernetes_pod_label_(.+)
+              - action: replace
+                replacement: $1
+                separator: /
+                source_labels:
+                  - __meta_kubernetes_namespace
+                  - __service__
+                target_label: job
+              - action: replace
+                source_labels:
+                  - __meta_kubernetes_namespace
+                target_label: namespace
+              - action: replace
+                source_labels:
+                  - __meta_kubernetes_pod_name
+                target_label: pod
+              - action: replace
+                source_labels:
+                  - __meta_kubernetes_pod_container_name
+                target_label: container
+              - replacement: /var/log/pods/*$1/*.log
+                separator: /
+                source_labels:
+                  - __meta_kubernetes_pod_uid
+                  - __meta_kubernetes_pod_container_name
+                target_label: __path__
+              - action: replace # `cluster` label is required for the mimir integration, so set a default value
+                regex: ""
+                replacement: k8s-cluster
+                separator: ""
+                source_labels:
+                  - cluster
+                target_label: cluster
+              - action: replace
+                source_labels:
+                  - __meta_kubernetes_pod_container_name
+                target_label: name
+    metrics:
+    server:
+        log_level: info
+    traces:
+        configs:
+            - batch:
+                send_batch_size: 1000
+                timeout: 5s
+              name: traces_default
+              receivers:
+                otlp:
+                  protocols:
+                    grpc:
+                jaeger:
+                    protocols:
+                        thrift_compact: null
+                        thrift_http: null
+              remote_write:
+                - endpoint: tempo.default.svc.cluster.local:4317
+                  insecure: true
+                  retry_on_failure:
+                    enabled: true
+                    initial_interval: 500ms
+                    max_elapsed_time: 1s
+kind: ConfigMap
+metadata:
+  name: grafana-agent-config
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: grafana-agent
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: grafana-agent
+subjects:
+- kind: ServiceAccount
+  name: grafana-agent
+  namespace: default
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-agent
+  namespace: default
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana-agent
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: grafana-agent
+  template:
+    metadata:
+      annotations:
+        grafana-agent-config-hash: ea051677fc887c7c7d9894f7d450fdb1
+      labels:
+        name: grafana-agent
+    spec:
+      containers:
+      - args:
+        - -config.file=/etc/agent/agent.yml
+        - -server.http.address=0.0.0.0:80
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        image: grafana/agent:v0.35.2
+        imagePullPolicy: IfNotPresent
+        name: agent
+        ports:
+        - containerPort: 6831
+          name: thrift-compact
+          protocol: UDP
+        - containerPort: 14268
+          name: thrift-http
+          protocol: TCP
+        - containerPort: 4317
+          name: otlp-grpc
+          protocol: TCP
+        volumeMounts:
+        - mountPath: /etc/agent
+          name: grafana-agent-config
+        - mountPath: /var/log
+          name: varlogs
+          readOnly: true
+      serviceAccount: grafana-agent
+      volumes:
+      - configMap:
+          name: grafana-agent-config
+        name: grafana-agent-config
+      - hostPath:
+          path: /var/log
+        name: varlogs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: grafana-agent
+  name: grafana-agent
+  namespace: default
+spec:
+  ports:
+  - name: agent-thrift-compact
+    port: 6831
+    protocol: UDP
+    targetPort: 6831
+  - name: agent-thrift-http
+    port: 14268
+    protocol: TCP
+    targetPort: 14268
+  - name: agent-otel-grpc
+    port: 4317
+    protocol: TCP
+    targetPort: 4317
+  selector:
+    name: grafana-agent

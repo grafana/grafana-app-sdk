@@ -1,0 +1,121 @@
+﻿apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+  namespace: default
+data:
+  config.yaml: | 
+    auth_enabled: false
+    server:
+      http_listen_port: 3100
+    common:
+      path_prefix: /tmp/loki
+      storage:
+        filesystem:
+          chunks_directory: /tmp/loki/chunks
+          rules_directory: /tmp/loki/rules
+      replication_factor: 1
+      ring:
+        instance_addr: 127.0.0.1
+        kvstore:
+          store: inmemory
+    schema_config:
+      configs:
+        - from: 2020-10-24
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+    ruler:
+      alertmanager_url: http://localhost:9093
+      storage:
+        type: s3
+        s3:
+          s3: http://minio:minio123@minio.default.svc.cluster.local:9000
+          bucketnames: loki
+          s3forcepathstyle: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  namespace: default
+spec:
+  minReadySeconds: 10
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      name: loki
+  template:
+    metadata:
+      annotations:
+        loki-config-hash: 3ea717a076077bf16353d56e9f79510d
+      labels:
+        name: loki
+    spec:
+      containers:
+      - args:
+        - -config.file=/etc/loki/config.yaml
+        env:
+        - name: JAEGER_AGENT_HOST
+          value: tempo
+        - name: JAEGER_ENDPOINT
+          value: http://agent.default.svc.cluster.local:14268/api/traces
+        - name: JAEGER_SAMPLER_TYPE
+          value: const
+        - name: JAEGER_SAMPLER_PARAM
+          value: "1"
+        image: grafana/loki:2.8.4
+        imagePullPolicy: IfNotPresent
+        name: loki
+        ports:
+        - containerPort: 3100
+          name: http
+        - containerPort: 9095
+          name: grpc
+        volumeMounts:
+        - mountPath: /etc/loki
+          name: loki-config
+      volumes:
+      - configMap:
+          name: loki-config
+        name: loki-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    name: loki
+  name: loki
+  namespace: default
+spec:
+  ports:
+  - name: loki-http
+    port: 3100
+    targetPort: 3100
+  - name: loki-grpc
+    port: 9095
+    targetPort: 9095
+  selector:
+    name: loki
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: loki-ingress
+  namespace: default
+spec:
+  rules:
+  - host: loki.k3d.localhost
+    http:
+      paths:
+      - backend:
+          service:
+            name: loki
+            port:
+              number: 3100
+        path: /
+        pathType: Prefix
