@@ -34,3 +34,6 @@ datasourceConfigs:
 #    type: prometheus
 #    uid: "my-cortex-datasource"
 #    url: "http://cortex.default.svc.cluster.local:9009/api/prom"
+#
+# Toggle the generating of the grafana deployments, if you want to control these elsewhere
+generateGrafanaDeployment: true
