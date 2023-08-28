@@ -35,14 +35,15 @@ var localEnvFiles embed.FS
 
 // localEnvConfig is the configuration object used for the generation of local dev env resources
 type localEnvConfig struct {
-	Port              int                   `json:"port" yaml:"port"`
-	KubePort          int                   `json:"kubePort" yaml:"kubePort"`
-	Datasources       []string              `json:"datasources" yaml:"datasources"`
-	DatasourceConfigs []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
-	PluginJSON        map[string]any        `json:"pluginJson" yaml:"pluginJson"`
-	PluginSecureJSON  map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
-	OperatorImage     string                `json:"operatorImage" yaml:"operatorImage"`
-	Webhooks          localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
+	Port                      int                   `json:"port" yaml:"port"`
+	KubePort                  int                   `json:"kubePort" yaml:"kubePort"`
+	Datasources               []string              `json:"datasources" yaml:"datasources"`
+	DatasourceConfigs         []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
+	PluginJSON                map[string]any        `json:"pluginJson" yaml:"pluginJson"`
+	PluginSecureJSON          map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
+	OperatorImage             string                `json:"operatorImage" yaml:"operatorImage"`
+	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
+	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
 }
 
 type dataSourceConfig struct {
@@ -197,7 +198,9 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 
 func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 	// Read config (try YAML first, then JSON)
-	config := localEnvConfig{}
+	config := localEnvConfig{
+		GenerateGrafanaDeployment: true,
+	}
 	if _, err := os.Stat(filepath.Join(localPath, "config.yaml")); err == nil {
 		cfgBytes, err := os.ReadFile(filepath.Join(localPath, "config.yaml"))
 		if err != nil {
@@ -254,15 +257,16 @@ func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error
 }
 
 type yamlGenProperties struct {
-	PluginID          string
-	PluginIDKube      string
-	CRDs              []yamlGenPropsCRD
-	Services          []yamlGenPropsService
-	JSONData          map[string]string
-	SecureJSONData    map[string]string
-	Datasources       []dataSourceConfig
-	OperatorImage     string
-	WebhookProperties yamlGenPropsWebhooks
+	PluginID                  string
+	PluginIDKube              string
+	CRDs                      []yamlGenPropsCRD
+	Services                  []yamlGenPropsService
+	JSONData                  map[string]string
+	SecureJSONData            map[string]string
+	Datasources               []dataSourceConfig
+	OperatorImage             string
+	WebhookProperties         yamlGenPropsWebhooks
+	GenerateGrafanaDeployment bool
 }
 
 type yamlGenPropsCRD struct {
@@ -317,6 +321,7 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		WebhookProperties: yamlGenPropsWebhooks{
 			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating,
 		},
+		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
