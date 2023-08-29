@@ -30,12 +30,6 @@ func (def SomeDef) BindKindLineage(rt *thema.Runtime, opts ...thema.BindOption) 
 	return thema.BindLineage(def.V.LookupPath(cue.MakePath(cue.Str("lineage"))), rt, opts...)
 }
 
-// IsCore indicates whether the represented kind is a core kind.
-func (def SomeDef) IsCore() bool {
-	_, is := def.Properties.(CoreProperties)
-	return is
-}
-
 // IsCustom indicates whether the represented kind is a custom kind.
 func (def SomeDef) IsCustom() bool {
 	_, is := def.Properties.(CustomProperties)

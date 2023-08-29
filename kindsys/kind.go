@@ -70,13 +70,6 @@ type Kind interface {
 	Maturity() Maturity // TODO unclear if we want maturity for raw kinds
 }
 
-type Core interface {
-	Kind
-
-	// TODO docs
-	Def() Def[CoreProperties]
-}
-
 type Custom interface {
 	Kind
 

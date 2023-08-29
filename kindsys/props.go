@@ -13,28 +13,6 @@ type CommonProperties struct {
 	Description       string   `json:"description,omitempty"`
 }
 
-// CoreProperties represents the static properties in the definition of a
-// Core kind that are representable with basic Go types. This
-// excludes Thema schemas.
-//
-// When .cue file(s) containing a Core definition is loaded through the standard
-// [LoadCoreKindDef], func, it is fully validated and populated according to all
-// rules specified in CUE for Core kinds.
-type CoreProperties struct {
-	CommonProperties
-	CurrentVersion thema.SyntacticVersion `json:"currentVersion"`
-	CRD            struct {
-		Group       string `json:"group"`
-		Scope       string `json:"scope"`
-		DummySchema bool   `json:"dummySchema"`
-	} `json:"crd"`
-}
-
-func (m CoreProperties) _private() {}
-func (m CoreProperties) Common() CommonProperties {
-	return m.CommonProperties
-}
-
 // CustomProperties represents the static properties in the definition of a
 // Custom kind that are representable with basic Go types. This
 // excludes Thema schemas.
@@ -54,7 +32,6 @@ type CustomProperties struct {
 	} `json:"codegen"`
 }
 
-func (m CustomProperties) _private() {}
 func (m CustomProperties) Common() CommonProperties {
 	return m.CommonProperties
 }
@@ -65,12 +42,11 @@ func (m CustomProperties) Common() CommonProperties {
 // It is the traditional interface counterpart to the generic type constraint
 // KindProperties.
 type SomeKindProperties interface {
-	_private()
 	Common() CommonProperties
 }
 
 // KindProperties is a type parameter that comprises the base possible set of
 // kind metadata configurations.
 type KindProperties interface {
-	CoreProperties | CustomProperties
+	CustomProperties
 }

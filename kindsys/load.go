@@ -24,7 +24,7 @@ func cueContext() *cue.Context {
 	return ctx
 }
 
-func init() {
+func init() { //nolint:gochecknoinits
 	loadpFrameworkOnce()
 }
 
@@ -164,8 +164,6 @@ func ToKindProps[T KindProperties](v cue.Value) (T, error) {
 
 	anyprops := any(*props).(SomeKindProperties)
 	switch anyprops.(type) {
-	case CoreProperties:
-		kdef = fw.LookupPath(cue.MakePath(cue.Str("Core")))
 	case CustomProperties:
 		kdef = fw.LookupPath(cue.MakePath(cue.Str("Custom")))
 	default:
@@ -202,8 +200,6 @@ func ToDef[T KindProperties](v cue.Value) (Def[T], error) {
 
 	anyprops := any(*props).(SomeKindProperties)
 	switch anyprops.(type) {
-	case CoreProperties:
-		kdef = fw.LookupPath(cue.MakePath(cue.Str("Core")))
 	case CustomProperties:
 		kdef = fw.LookupPath(cue.MakePath(cue.Str("Custom")))
 	default:

@@ -21,7 +21,9 @@ import (
 // Grafana's kinds are similar to Kubernetes CustomResourceDefinitions.
 // Grafana provides a standard mechanism for representing its kinds as CRDs.
 //
-Kind: Core | Custom
+// Previously, this included Core+Composable, but everythign in app-sdk are "custom" kinds
+//
+Kind: Custom
 
 // properties shared between all kind categories.
 _sharedKind: {
