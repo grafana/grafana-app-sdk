@@ -6,9 +6,8 @@ import (
 	"go/format"
 
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/kindsys"
-
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
