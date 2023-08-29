@@ -5,8 +5,9 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/grafana/cuetsy"
-	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/thema/encoding/typescript"
+
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 // TSTypesJenny is a [OneToOne] that produces TypeScript types and

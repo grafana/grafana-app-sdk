@@ -10,10 +10,11 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/encoding/gocode"
 	"github.com/grafana/thema/encoding/openapi"
+
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 // customKindSchemaSubresources is a list of the valid top-level fields in a Custom Kind's schema
