@@ -10,7 +10,7 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/grafana/codejen"
-	"github.com/grafana/kindsys"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/encoding/gocode"
 	"github.com/grafana/thema/encoding/openapi"

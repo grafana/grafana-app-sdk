@@ -5,7 +5,7 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/grafana/cuetsy"
-	"github.com/grafana/kindsys"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/thema/encoding/typescript"
 )
 

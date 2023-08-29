@@ -2,7 +2,7 @@ package codegen
 
 import (
 	"github.com/grafana/codejen"
-	"github.com/grafana/kindsys"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )

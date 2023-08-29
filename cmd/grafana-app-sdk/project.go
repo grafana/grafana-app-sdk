@@ -14,7 +14,7 @@ import (
 	"text/template"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/grafana/kindsys"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 

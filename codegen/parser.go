@@ -8,7 +8,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
-	"github.com/grafana/kindsys"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/load"
 	"github.com/hashicorp/go-multierror"
