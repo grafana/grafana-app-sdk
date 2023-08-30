@@ -48,7 +48,7 @@ issue: {
 
 Alright, let's break down what we just wrote.
 
-Like with Go code, any cue file needs to start with a package declaration. In this case, our package is `kinds`. After the package declaration, we can optionally import other CUE packages (for example, `time` if you wanted to use `time.Time` types) using the same syntax as one might with Go. After that, you declare fields. With the grafana-app-sdk, we assume that every top-level field is a kind, and adheres to the [kindsys.Custom](https://github.com/grafana/kindsys/blob/df4488cce33697eccba0536970114fff02b81020/kindcat_custom.cue#L106) kind. That's what our `issue` field is--a Custom kind declaration.
+Like with Go code, any cue file needs to start with a package declaration. In this case, our package is `kinds`. After the package declaration, we can optionally import other CUE packages (for example, `time` if you wanted to use `time.Time` types) using the same syntax as one might with Go. After that, you declare fields. With the grafana-app-sdk, we assume that every top-level field is a kind, and adheres to the [kindsys.Custom](https://github.com/grafana/grafana-app-sdk/kindsys/blob/df4488cce33697eccba0536970114fff02b81020/kindcat_custom.cue#L106) kind. That's what our `issue` field is--a Custom kind declaration.
 
 Now, we get to the actual definition of our `issue` model:
 ```cue

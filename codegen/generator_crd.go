@@ -7,12 +7,12 @@ import (
 	cueopenapi "cuelang.org/go/encoding/openapi"
 	cueyaml "cuelang.org/go/pkg/encoding/yaml"
 	"github.com/grafana/codejen"
-	"github.com/grafana/kindsys"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/encoding/openapi"
 	goyaml "gopkg.in/yaml.v3"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 // CRDOutputEncoder is a function which marshals an object into a desired output format
