@@ -7,7 +7,7 @@ require (
 	github.com/dave/dst v0.27.2
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.11
-	github.com/grafana/grafana-plugin-sdk-go v0.173.0
+	github.com/grafana/grafana-plugin-sdk-go v0.174.0
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.0
@@ -25,7 +25,6 @@ require (
 )
 
 require (
-	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211112161151-bc219186db40 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
