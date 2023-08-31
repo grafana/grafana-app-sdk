@@ -50,24 +50,35 @@ type Logger interface {
 	InfoContext(ctx context.Context, msg string, args ...any)
 	WarnContext(ctx context.Context, msg string, args ...any)
 	ErrorContext(ctx context.Context, msg string, args ...any)
+	// TODO: should there be a
+	// With(args...) Logger
+	// method here? It complicates using other loggers (such as slog) as a drop-in, as they'll need wrappers
+	With(args ...any) Logger
 }
 
 // BasicLoggerWrapper wraps Logger with ContextLogger methods that drop the context and call the corresponding Logger methods instead
 type BasicLoggerWrapper struct {
 	BasicLogger
+	attrs []any
 }
 
 func (l *BasicLoggerWrapper) DebugContext(ctx context.Context, msg string, args ...any) {
-	l.Debug(msg, args)
+	l.Debug(msg, append(l.attrs, args...)...)
 }
 func (l *BasicLoggerWrapper) InfoContext(ctx context.Context, msg string, args ...any) {
-	l.Info(msg, args)
+	l.Info(msg, append(l.attrs, args...)...)
 }
 func (l *BasicLoggerWrapper) WarnContext(ctx context.Context, msg string, args ...any) {
-	l.Warn(msg, args)
+	l.Warn(msg, append(l.attrs, args...)...)
 }
 func (l *BasicLoggerWrapper) ErrorContext(ctx context.Context, msg string, args ...any) {
-	l.Error(msg, args)
+	l.Error(msg, append(l.attrs, args...)...)
+}
+func (l *BasicLoggerWrapper) With(args ...any) Logger {
+	return &BasicLoggerWrapper{
+		BasicLogger: l.BasicLogger,
+		attrs:       args,
+	}
 }
 
 // NoOpLogger is an implementation of Logger which does nothing when its methods are called
@@ -81,3 +92,11 @@ func (n *NoOpLogger) DebugContext(ctx context.Context, msg string, args ...any) 
 func (n *NoOpLogger) InfoContext(ctx context.Context, msg string, args ...any)  {}
 func (n *NoOpLogger) WarnContext(ctx context.Context, msg string, args ...any)  {}
 func (n *NoOpLogger) ErrorContext(ctx context.Context, msg string, args ...any) {}
+func (n *NoOpLogger) With(...any) Logger {
+	return n
+}
+
+var (
+	_ Logger = &NoOpLogger{}
+	_ Logger = &BasicLoggerWrapper{}
+)

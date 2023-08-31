@@ -42,5 +42,12 @@ func (p *PluginLogger) ErrorContext(ctx context.Context, msg string, args ...any
 	p.Logger.With("traceID", trace.SpanContextFromContext(ctx).TraceID()).Error(msg, args...)
 }
 
+// With returns a new Logger with the provided key/value pairs already set
+func (p *PluginLogger) With(args ...any) logging.Logger {
+	return &PluginLogger{
+		Logger: p.Logger.With(args...),
+	}
+}
+
 // Compile-time interface compliance check
 var _ logging.Logger = &PluginLogger{}
