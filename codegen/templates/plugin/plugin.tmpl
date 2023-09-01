@@ -4,6 +4,8 @@ import (
     "context"
 	"net/http"
 
+	"go.opentelemetry.io/otel"
+
 	"{{.Repo}}/pkg/plugin/secure"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
@@ -42,6 +44,7 @@ func New(namespace string, service Service) (*Plugin, error) {
 	}
 
 	p.router.Use(
+		router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware")),
 		kubeconfig.LoadingMiddleware(),
 		router.MiddlewareFunc(secure.Middleware))
 
