@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
 
+    "github.com/grafana/grafana-app-sdk/logging"
     "github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"go.opentelemetry.io/otel"
@@ -30,7 +31,7 @@ func (s *{{.Name}}Watcher) Add(ctx context.Context, rObj resource.Object) error 
     }
 
     // TODO
-    fmt.Println("Added ", object.StaticMetadata().Identifier().Name, span.SpanContext().TraceID())
+    logging.FromContext(ctx).DebugContext(ctx, "Added resource", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -44,14 +45,14 @@ func (s *{{.Name}}Watcher) Update(ctx context.Context, rOld resource.Object, rNe
             rOld.StaticMetadata().Name, rOld.StaticMetadata().Namespace, rOld.StaticMetadata().Kind)
     }
 
-    newObject, ok := rNew.(*{{.MachineName}}.Object)
+    _, ok := rNew.(*{{.MachineName}}.Object)
     if !ok {
         return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
             rNew.StaticMetadata().Name, rNew.StaticMetadata().Namespace, rNew.StaticMetadata().Kind)
     }
 
     // TODO
-    fmt.Println("Updated ", oldObject.StaticMetadata().Identifier(), newObject.StaticMetadata().Identifier(), span.SpanContext().TraceID())
+    logging.FromContext(ctx).DebugContext(ctx, "Updated resource", "name", oldObject.StaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -66,7 +67,7 @@ func (s *{{.Name}}Watcher) Delete(ctx context.Context, rObj resource.Object) err
     }
 
     // TODO
-    fmt.Println("Deleted ", object.StaticMetadata().Identifier(), span.SpanContext().TraceID())
+    logging.FromContext(ctx).DebugContext(ctx, "Deleted resource", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -82,6 +83,6 @@ func (s *{{.Name}}Watcher) Sync(ctx context.Context, rObj resource.Object) error
     }
 
     // TODO
-    fmt.Println("Possible update to ", object.StaticMetadata().Identifier(), span.SpanContext().TraceID())
+    logging.FromContext(ctx).DebugContext(ctx, "Possible resource update", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }

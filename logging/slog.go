@@ -8,6 +8,10 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// TraceIDKey is the key used by loggers for the trace ID field in key/value pairs.
+// It is set as a variable rather than a constant so that it can be changed by users at startup.
+var TraceIDKey string = "traceID"
+
 // NewSLogLogger creates a new SLogLogger which wraps an *slog.Logger that has a handler to always add a trace ID
 // to the log messages if the context is provided in the log call (e.g. InfoContext())
 func NewSLogLogger(handler slog.Handler) *SLogLogger {
@@ -42,7 +46,7 @@ func (t *traceIDHandler) Enabled(ctx context.Context, lvl slog.Level) bool {
 
 func (t *traceIDHandler) Handle(ctx context.Context, rec slog.Record) error {
 	if traceID := trace.SpanContextFromContext(ctx).TraceID(); traceID.IsValid() {
-		rec.AddAttrs(slog.String("traceID", traceID.String()))
+		rec.AddAttrs(slog.String(TraceIDKey, traceID.String()))
 	}
 	return t.next.Handle(ctx, rec)
 }

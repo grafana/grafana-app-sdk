@@ -6,6 +6,8 @@ import (
 	"os"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
+	sdkPlugin "github.com/grafana/grafana-app-sdk/plugin"
 	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -24,7 +26,11 @@ const (
 )
 
 func main() {
-    logger := log.DefaultLogger.With("pluginID", pluginID)
+	// Set the app-sdk logger to use the plugin-sdk logger
+    logger := sdkPlugin.NewLogger(log.DefaultLogger.With("pluginID", pluginID))
+	logger.Info("starting plugin", "pluginID", pluginID)
+	logging.DefaultLogger = logger
+
 	logger.Info("starting plugin", "pluginID", pluginID)
 
     // app.Manage handles the app plugin lifecycle
@@ -63,7 +69,7 @@ func (s *PluginService) Get{{ .Name }}Service(ctx context.Context) (plugin.{{ .N
 {{ end }}
 
 // newInstanceFactory returns an app.InstanceFactoryFunc to be used with app.Manage
-func newInstanceFactory(logger log.Logger) app.InstanceFactoryFunc {
+func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
 	return func(settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
         // Load the kubernetes config from the AppInstanceSettings
 		kcfg := kubeconfig.NamespacedConfig{}
