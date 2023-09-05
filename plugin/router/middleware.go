@@ -2,6 +2,7 @@ package router
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -69,11 +70,14 @@ func NewTracingMiddleware(tracer trace.Tracer) MiddlewareFunc {
 		routeInfo := MatchedRouteFromContext(ctx)
 
 		resp := next(ctx)
-
 		query := ""
-		if s := strings.SplitN(req.URL, "?", 1); len(s) > 1 {
+		if u, err := url.Parse(req.URL); err == nil {
+			query = u.RawQuery
+		} else if s := strings.SplitN(req.URL, "?", 1); len(s) > 1 {
+			// Fallback if URL can't be parsed
 			query = s[1]
 		}
+
 		span.SetAttributes(
 			attribute.Int("http.response.status_code", resp.Status),
 			attribute.Int("http.request.body.size", len(req.Body)),
