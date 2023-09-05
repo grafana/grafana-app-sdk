@@ -13,7 +13,7 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	github.com/yalue/merged_fs v1.2.2
+	github.com/yalue/merged_fs v1.2.3
 	go.opentelemetry.io/otel v1.17.0
 	go.opentelemetry.io/otel/trace v1.17.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
