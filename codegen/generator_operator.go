@@ -6,9 +6,9 @@ import (
 	"go/format"
 
 	"github.com/grafana/codejen"
-	"github.com/grafana/kindsys"
 
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 type watcherJenny struct {

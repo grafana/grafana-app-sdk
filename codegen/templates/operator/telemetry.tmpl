@@ -42,12 +42,11 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 	}
 
 	// Ensure default SDK resources and the required service name are set.
-	r, err := otelResource.Merge(
-		otelResource.Default(),
-		otelResource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(cfg.ServiceName),
-		),
+	r, err := otelResource.New(
+		context.Background(),
+		otelResource.WithAttributes(semconv.ServiceName(cfg.ServiceName)),
+		otelResource.WithProcessRuntimeDescription(),
+		otelResource.WithTelemetrySDK(),
 	)
 
 	if err != nil {

@@ -5,7 +5,7 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/grafana/kindsys"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 //go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl

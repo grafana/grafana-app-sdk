@@ -3,7 +3,7 @@
 Custom kinds are the base of code generation in the SDK, and are considered the canonical data model for all resource types handled by the SDK. 
 Custom kinds are defined in CUE.
 
-The CUE definition of a custom kind lives in [kindsys](https://github.com/grafana/kindsys/blob/ebfbbc0e58bf49a00a658341f3286ba5fecc056d/kindcat_custom.cue#L106). When writing a custom kind, you do not need to import kindsys (or thema), as they are implicitly imported as part of the code generation process. 
+The CUE definition of a custom kind lives in [kindsys](https://github.com/grafana/grafana-app-sdk/kindsys/blob/ebfbbc0e58bf49a00a658341f3286ba5fecc056d/kindcat_custom.cue#L106). When writing a custom kind, you do not need to import kindsys (or thema), as they are implicitly imported as part of the code generation process. 
 Instead, you only need to define values which have no deafults (and you are free to define values where you want to diverge from the defaults).
 
 If you have an existing project, you can create a template for a new kind using the CLI with

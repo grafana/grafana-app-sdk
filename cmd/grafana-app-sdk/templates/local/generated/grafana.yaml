@@ -22,6 +22,27 @@ subjects:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: {{.PluginIDKube}}-provisioning
+  namespace: default
+  labels:
+    name: grafana
+data:
+  gas-local-env-app-app.yaml: |
+    apiVersion: 1
+    apps:
+      - type: {{.PluginID}}
+        org_id: 1
+        org_name: Main Org.
+        disabled: false
+        jsonData:{{ range $key, $value := .JSONData }}
+          {{ $key }}: {{ $value }}{{end}}
+        secureJsonData:{{ range $key, $value := .SecureJSONData }}
+          {{ $key }}: {{ $value }}{{end}}
+{{ if .GenerateGrafanaDeployment }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: grafana-config
   namespace: default
   labels:
@@ -49,27 +70,6 @@ data:
     enabled = true
     [users]
     default_theme = dark
-
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{.PluginIDKube}}-provisioning
-  namespace: default
-  labels:
-    name: grafana
-data:
-  gas-local-env-app-app.yaml: |
-    apiVersion: 1
-    apps:
-      - type: {{.PluginID}}
-        org_id: 1
-        org_name: Main Org.
-        disabled: false
-        jsonData:{{ range $key, $value := .JSONData }}
-          {{ $key }}: {{ $value }}{{end}}
-        secureJsonData:{{ range $key, $value := .SecureJSONData }}
-          {{ $key }}: {{ $value }}{{end}}
 ---
 apiVersion: v1
 kind: Service
@@ -183,3 +183,4 @@ data:
           uid: {{.UID}}
           url: {{.URL}}
           version: 1{{end}}
+{{end}}

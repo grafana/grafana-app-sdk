@@ -14,11 +14,11 @@ import (
 	"text/template"
 
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/grafana/kindsys"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 //go:embed templates/*.tmpl

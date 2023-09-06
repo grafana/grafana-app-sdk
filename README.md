@@ -98,9 +98,9 @@ See [Writing Back-End Plugins](docs/plugin-backend.md) for more details on using
 
 ## Dependencies
 
-The grafana-app-sdk code generation uses [kindsys](https://github.com/grafana/kindsys) for it's CUE kind definitions, and [thema](https://github.com/grafana/thema) for the generated code's unmarshaling.
+The grafana-app-sdk code generation uses [kindsys](https://github.com/grafana/grafana-app-sdk/kindsys) for it's CUE kind definitions, and [thema](https://github.com/grafana/thema) for the generated code's unmarshaling.
 
-If you use the generated code, you must take a project dependency on [thema](https://github.com/grafana/thema), as it is used as a depndency in the generated code (kindsys is only used in the generation process, and is not needed in your project).
+If you use the generated code, you must take a project dependency on [thema](https://github.com/grafana/thema), as it is used as a dependency in the generated code (kindsys is only used in the generation process, and is not needed in your project).
 
 ## Further Reading
 

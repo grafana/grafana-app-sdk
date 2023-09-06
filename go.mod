@@ -7,20 +7,20 @@ require (
 	github.com/dave/dst v0.27.2
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.11
-	github.com/grafana/grafana-plugin-sdk-go v0.173.0
-	github.com/grafana/kindsys v0.0.0-20230508162304-452481b63482
+	github.com/grafana/grafana-plugin-sdk-go v0.174.0
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.0
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	go.opentelemetry.io/otel v1.16.0
-	go.opentelemetry.io/otel/trace v1.16.0
+	github.com/yalue/merged_fs v1.2.3
+	go.opentelemetry.io/otel v1.17.0
+	go.opentelemetry.io/otel/trace v1.17.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.28.0
-	k8s.io/apimachinery v0.28.0
-	k8s.io/client-go v0.28.0
+	k8s.io/api v0.28.1
+	k8s.io/apimachinery v0.28.1
+	k8s.io/client-go v0.28.1
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2
 )
 
@@ -96,14 +96,13 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
-	github.com/yalue/merged_fs v1.2.2 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.42.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.42.0 // indirect
 	go.opentelemetry.io/contrib/propagators/jaeger v1.17.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.16.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.16.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.16.0 // indirect
-	go.opentelemetry.io/otel/metric v1.16.0 // indirect
+	go.opentelemetry.io/otel/metric v1.17.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.16.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	golang.org/x/crypto v0.11.0 // indirect

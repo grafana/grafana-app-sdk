@@ -62,7 +62,7 @@ package {{ .Package }}
 			// common across all kinds, and becomes present in the unified lineage used for code generation and other tooling.
 			// `metadata` is optional, and should contain kind- or schema-specific metadata. The kind system adds
 			// an explicit set of common metadata which can be found at in the kindsys public repository at:
-			// https://github.com/grafana/kindsys/blob/452481b6348225a1bdb02c9abaef25d29ffe680d/kindcat_custom.cue#L25
+			// https://github.com/grafana/grafana-app-sdk/kindsys/blob/452481b6348225a1bdb02c9abaef25d29ffe680d/kindcat_custom.cue#L25
 			// additional metadata fields cannot conflict with the kindsys common metadata
 			{{end}}schema: {
 				{{ if eq .Target "model" }}// Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
