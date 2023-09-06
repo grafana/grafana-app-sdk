@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
-
 	"github.com/grafana/grafana-app-sdk/plugin"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -48,7 +46,7 @@ func NewResourceGroupRouterWithStore(
 	store Store,
 ) (*ResourceGroupRouter, error) {
 	router := &ResourceGroupRouter{
-		JSONRouter:    NewJSONRouter(backend.Logger),
+		JSONRouter:    NewJSONRouter(),
 		resourceGroup: resourceGroup,
 		store:         store,
 		namespace:     namespace,

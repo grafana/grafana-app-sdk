@@ -45,7 +45,7 @@ func (s *{{.Name}}Watcher) Update(ctx context.Context, rOld resource.Object, rNe
             rOld.StaticMetadata().Name, rOld.StaticMetadata().Namespace, rOld.StaticMetadata().Kind)
     }
 
-    _, ok := rNew.(*{{.MachineName}}.Object)
+    _, ok = rNew.(*{{.MachineName}}.Object)
     if !ok {
         return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
             rNew.StaticMetadata().Name, rNew.StaticMetadata().Namespace, rNew.StaticMetadata().Kind)
