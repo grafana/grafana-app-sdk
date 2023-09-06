@@ -6,10 +6,11 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 // MiddlewareFunc is a function that receives a HandlerFunc and returns another HandlerFunc.

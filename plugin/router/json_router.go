@@ -199,7 +199,7 @@ func (j *JSONRouter) sendErr(ctx context.Context, s backend.CallResourceResponse
 	j.sendRes(ctx, s, code, res)
 }
 
-func (j *JSONRouter) sendRes(ctx context.Context, s backend.CallResourceResponseSender, code int, res JSONResponse) {
+func (*JSONRouter) sendRes(ctx context.Context, s backend.CallResourceResponseSender, code int, res JSONResponse) {
 	var r backend.CallResourceResponse
 
 	if res != nil { // nolint: gocritic

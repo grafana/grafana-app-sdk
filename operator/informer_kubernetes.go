@@ -88,7 +88,7 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 					// TODO: can't defer the cancel call for the context, because it should only be canceled if the
 					// _caller_ of WatchFunc finishes with the WatchResponse before the timeout elapses...
 					// Seems to be a limitation of the kubernetes implementation here
-					/*if options.TimeoutSeconds != nil {
+					/* if options.TimeoutSeconds != nil {
 						timeout := time.Duration(*options.TimeoutSeconds) * time.Second
 						ctx, cancel = context.WithTimeout(ctx, timeout)
 					}*/
@@ -125,7 +125,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
 	_, err := k.SharedIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
+		AddFunc: func(obj any) {
 			ctx, span := GetTracer().Start(context.Background(), "informer-event-add")
 			defer span.End()
 			cast, err := k.toResourceObject(obj)
@@ -147,7 +147,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 				k.ErrorHandler(err)
 			}
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
+		UpdateFunc: func(oldObj, newObj any) {
 			ctx, span := GetTracer().Start(context.Background(), "informer-event-update")
 			defer span.End()
 			cOld, err := k.toResourceObject(oldObj)
@@ -176,7 +176,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 				k.ErrorHandler(err)
 			}
 		},
-		DeleteFunc: func(obj interface{}) {
+		DeleteFunc: func(obj any) {
 			ctx, span := GetTracer().Start(context.Background(), "informer-event-delete")
 			defer span.End()
 			cast, err := k.toResourceObject(obj)
@@ -214,7 +214,7 @@ func (k *KubernetesBasedInformer) Schema() resource.Schema {
 	return k.schema
 }
 
-func (k *KubernetesBasedInformer) toResourceObject(obj interface{}) (resource.Object, error) {
+func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
 	// First, check if it's already a resource.Object
 	if cast, ok := obj.(resource.Object); ok {
 		return cast, nil

@@ -11,13 +11,13 @@ jobs:
     steps:
     - uses: actions/setup-go@v4
       with:
-        go-version: '1.20'
+        go-version: '1.21'
         cache: false
     - uses: actions/checkout@v3
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v3
       with:
-        version: v1.51.2
+        version: v1.54.2
         args: --timeout 3m 
         only-new-issues: true
   
@@ -29,7 +29,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v3
       with:
-        go-version: "1.20"
+        go-version: "1.21"
 
     - name: Build
       run: go build -v cmd/grafana-app-sdk/*.go

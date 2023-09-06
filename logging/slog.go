@@ -10,7 +10,7 @@ import (
 
 // TraceIDKey is the key used by loggers for the trace ID field in key/value pairs.
 // It is set as a variable rather than a constant so that it can be changed by users at startup.
-var TraceIDKey string = "traceID"
+var TraceIDKey = "traceID"
 
 // NewSLogLogger creates a new SLogLogger which wraps an *slog.Logger that has a handler to always add a trace ID
 // to the log messages if the context is provided in the log call (e.g. InfoContext())

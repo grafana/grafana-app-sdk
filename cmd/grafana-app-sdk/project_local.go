@@ -502,7 +502,7 @@ func localGenerateGrafanaYAML(config localEnvConfig, props *yamlGenProperties, o
 
 func parsePluginJSONValue(v any) (string, error) {
 	switch cast := v.(type) {
-	case map[string]interface{}, []interface{}:
+	case map[string]any, []any:
 		val, err := json.Marshal(v)
 		if err != nil {
 			return "", err

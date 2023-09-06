@@ -85,18 +85,27 @@ type BasicLoggerWrapper struct {
 	attrs []any
 }
 
-func (l *BasicLoggerWrapper) DebugContext(ctx context.Context, msg string, args ...any) {
+// DebugContext drops the provided context and calls the underlying BasicLogger's Debug method with msg and args
+func (l *BasicLoggerWrapper) DebugContext(_ context.Context, msg string, args ...any) {
 	l.Debug(msg, append(l.attrs, args...)...)
 }
-func (l *BasicLoggerWrapper) InfoContext(ctx context.Context, msg string, args ...any) {
+
+// InfoContext drops the provided context and calls the underlying BasicLogger's Info method with msg and args
+func (l *BasicLoggerWrapper) InfoContext(_ context.Context, msg string, args ...any) {
 	l.Info(msg, append(l.attrs, args...)...)
 }
-func (l *BasicLoggerWrapper) WarnContext(ctx context.Context, msg string, args ...any) {
+
+// WarnContext drops the provided context and calls the underlying BasicLogger's Warn method with msg and args
+func (l *BasicLoggerWrapper) WarnContext(_ context.Context, msg string, args ...any) {
 	l.Warn(msg, append(l.attrs, args...)...)
 }
-func (l *BasicLoggerWrapper) ErrorContext(ctx context.Context, msg string, args ...any) {
+
+// ErrorContext drops the provided context and calls the underlying BasicLogger's Error method with msg and args
+func (l *BasicLoggerWrapper) ErrorContext(_ context.Context, msg string, args ...any) {
 	l.Error(msg, append(l.attrs, args...)...)
 }
+
+// With returns a new BasicLoggerWrapper with the supplied key/value args already set
 func (l *BasicLoggerWrapper) With(args ...any) Logger {
 	return &BasicLoggerWrapper{
 		BasicLogger: l.BasicLogger,
@@ -107,14 +116,14 @@ func (l *BasicLoggerWrapper) With(args ...any) Logger {
 // NoOpLogger is an implementation of Logger which does nothing when its methods are called
 type NoOpLogger struct{}
 
-func (n *NoOpLogger) Debug(msg string, args ...any)                             {}
-func (n *NoOpLogger) Info(msg string, args ...any)                              {}
-func (n *NoOpLogger) Warn(msg string, args ...any)                              {}
-func (n *NoOpLogger) Error(msg string, args ...any)                             {}
-func (n *NoOpLogger) DebugContext(ctx context.Context, msg string, args ...any) {}
-func (n *NoOpLogger) InfoContext(ctx context.Context, msg string, args ...any)  {}
-func (n *NoOpLogger) WarnContext(ctx context.Context, msg string, args ...any)  {}
-func (n *NoOpLogger) ErrorContext(ctx context.Context, msg string, args ...any) {}
+func (*NoOpLogger) Debug(string, ...any)                         {}
+func (*NoOpLogger) Info(string, ...any)                          {}
+func (*NoOpLogger) Warn(string, ...any)                          {}
+func (*NoOpLogger) Error(string, ...any)                         {}
+func (*NoOpLogger) DebugContext(context.Context, string, ...any) {}
+func (*NoOpLogger) InfoContext(context.Context, string, ...any)  {}
+func (*NoOpLogger) WarnContext(context.Context, string, ...any)  {}
+func (*NoOpLogger) ErrorContext(context.Context, string, ...any) {}
 func (n *NoOpLogger) With(...any) Logger {
 	return n
 }

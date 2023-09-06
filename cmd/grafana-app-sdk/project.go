@@ -461,9 +461,9 @@ func addComponentOperator(projectRootPath string, generator *codegen.CustomKindP
 	return nil
 }
 
-/**
-Backend plugin
-*/
+//
+// Backend plugin
+//
 
 // Linter doesn't like "Potential file inclusion via variable", which is actually desired here
 //
@@ -535,9 +535,9 @@ func projectAddPluginAPI(generator *codegen.CustomKindParser, repo, generatedAPI
 	return nil
 }
 
-/**
-Frontend plugin
-*/
+//
+// Frontend plugin
+//
 
 func addComponentFrontend(projectRootPath string, pluginID string, promptForOverwrite bool) error {
 	// Check plugin ID
