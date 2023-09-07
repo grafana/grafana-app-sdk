@@ -67,12 +67,17 @@ func NewCapturingMiddleware(f func(ctx context.Context, r *backend.CallResourceR
 func NewLoggingMiddleware(logger logging.Logger) MiddlewareFunc {
 	return func(handler HandlerFunc) HandlerFunc {
 		return func(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) {
-			logger.InfoContext(ctx, fmt.Sprintf("Handling %s request to path %s", req.Method, req.Path),
+			start := time.Now()
+			handler(logging.Context(ctx, logger), req, sender)
+			lat := time.Since(start)
+			// Logging latency in ms because it's easier to perceive as a human.
+			// But we also attach a separate field where latency is in seconds, for e.g. Loki queries.
+			logger.InfoContext(ctx, fmt.Sprintf("%s %s %dms", req.Method, req.Path, lat.Milliseconds()),
 				"request.http.method", req.Method,
 				"request.http.path", req.Path,
-				"request.user", req.PluginContext.User.Name)
-
-			handler(logging.Context(ctx, logger), req, sender)
+				"request.user", req.PluginContext.User.Name,
+				"request.latency", lat.Seconds(),
+			)
 		}
 	}
 }
