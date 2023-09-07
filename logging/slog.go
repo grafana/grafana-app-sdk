@@ -16,20 +16,52 @@ var TraceIDKey = "traceID"
 // to the log messages if the context is provided in the log call (e.g. InfoContext())
 func NewSLogLogger(handler slog.Handler) *SLogLogger {
 	return &SLogLogger{
-		Logger: *slog.New(&traceIDHandler{next: handler}),
+		Logger: slog.New(&traceIDHandler{next: handler}),
 	}
 }
 
-// SLogLogger wraps slog.Logger to override the With() method to return a Logger (*SLogLogger), rather than *slog.Logger,
-// implementing the Logger interface.
+// SLogLogger wraps slog.Logger both to override the With() method to return an *SLogLogger,
+// and to have an embedded context.Context, which is passed to the slog.Logger's _Level_Context method
+// when the _Level_ method is called.
 type SLogLogger struct {
-	slog.Logger
+	Logger *slog.Logger
+	ctx    context.Context
+}
+
+// Debug calls the slog.Logger's DebugContext method with the context provided by WithContext
+func (s *SLogLogger) Debug(msg string, args ...any) {
+	s.Logger.DebugContext(s.ctx, msg, args...)
+}
+
+// Info calls the slog.Logger's InfoContext method with the context provided by WithContext
+func (s *SLogLogger) Info(msg string, args ...any) {
+	s.Logger.InfoContext(s.ctx, msg, args...)
+}
+
+// Warn calls the slog.Logger's WarnContext method with the context provided by WithContext
+func (s *SLogLogger) Warn(msg string, args ...any) {
+	s.Logger.WarnContext(s.ctx, msg, args...)
+}
+
+// Error calls the slog.Logger's ErrorContext method with the context provided by WithContext
+func (s *SLogLogger) Error(msg string, args ...any) {
+	s.Logger.ErrorContext(s.ctx, msg, args...)
 }
 
 // With returns a new *SLogLogger with the provided key/value pairs attached
 func (s *SLogLogger) With(args ...any) Logger {
 	return &SLogLogger{
-		Logger: *s.Logger.With(args...),
+		Logger: s.Logger.With(args...),
+		ctx:    s.ctx,
+	}
+}
+
+// WithContext returns an *SLogLogger which still points to the same underlying *slog.Logger,
+// but has the provided context attached for Debug, Info, Warn, and Error calls.
+func (s *SLogLogger) WithContext(ctx context.Context) Logger {
+	return &SLogLogger{
+		Logger: s.Logger,
+		ctx:    ctx,
 	}
 }
 

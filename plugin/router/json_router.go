@@ -173,8 +173,7 @@ func (j *JSONRouter) WrapHandlerFunc(handler JSONHandlerFunc, okCode int) Handle
 }
 
 func (j *JSONRouter) sendErr(ctx context.Context, s backend.CallResourceResponseSender, err error) {
-	logging.FromContext(ctx).ErrorContext(
-		ctx,
+	logging.FromContext(ctx).Error(
 		"error processing backend plugin request",
 		"error", err.Error(),
 	)
@@ -225,6 +224,6 @@ func (*JSONRouter) sendRes(ctx context.Context, s backend.CallResourceResponseSe
 	}
 
 	if err := s.Send(&r); err != nil {
-		logging.FromContext(ctx).ErrorContext(ctx, "error sending backend response", "error", err)
+		logging.FromContext(ctx).Error("error sending backend response", "error", err)
 	}
 }

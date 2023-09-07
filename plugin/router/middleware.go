@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"go.opentelemetry.io/otel/attribute"
@@ -72,7 +73,7 @@ func NewLoggingMiddleware(logger logging.Logger) MiddlewareFunc {
 			lat := time.Since(start)
 			// Logging latency in ms because it's easier to perceive as a human.
 			// But we also attach a separate field where latency is in seconds, for e.g. Loki queries.
-			logger.InfoContext(ctx, fmt.Sprintf("%s %s %dms", req.Method, req.Path, lat.Milliseconds()),
+			logger.WithContext(ctx).Info(fmt.Sprintf("%s %s %dms", req.Method, req.Path, lat.Milliseconds()),
 				"request.http.method", req.Method,
 				"request.http.path", req.Path,
 				"request.user", req.PluginContext.User.Name,

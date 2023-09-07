@@ -31,7 +31,7 @@ func (s *{{.Name}}Watcher) Add(ctx context.Context, rObj resource.Object) error 
     }
 
     // TODO
-    logging.FromContext(ctx).DebugContext(ctx, "Added resource", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug(ctx, "Added resource", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -52,7 +52,7 @@ func (s *{{.Name}}Watcher) Update(ctx context.Context, rOld resource.Object, rNe
     }
 
     // TODO
-    logging.FromContext(ctx).DebugContext(ctx, "Updated resource", "name", oldObject.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug(ctx, "Updated resource", "name", oldObject.StaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -67,7 +67,7 @@ func (s *{{.Name}}Watcher) Delete(ctx context.Context, rObj resource.Object) err
     }
 
     // TODO
-    logging.FromContext(ctx).DebugContext(ctx, "Deleted resource", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug(ctx, "Deleted resource", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -83,6 +83,6 @@ func (s *{{.Name}}Watcher) Sync(ctx context.Context, rObj resource.Object) error
     }
 
     // TODO
-    logging.FromContext(ctx).DebugContext(ctx, "Possible resource update", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug(ctx, "Possible resource update", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }

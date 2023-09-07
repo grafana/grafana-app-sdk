@@ -15,15 +15,17 @@ type loggerContextKey struct{}
 
 // FromContext returns the Logger set in the context with Context(), or the DefaultLogger if no Logger is set in the context.
 // If DefaultLogger is nil, it returns a *NoOpLogger so that the return is always valid to call methods on without nil-checking.
+// So long as the Logger to return is not the NoOpLogger, it will call WithContext(ctx) on the logger in the context and return
+// the resulting Logger.
 func FromContext(ctx context.Context) Logger {
 	l := ctx.Value(contextKey)
 	if l != nil {
 		if logger, ok := l.(Logger); ok {
-			return logger
+			return logger.WithContext(ctx)
 		}
 	}
 	if DefaultLogger != nil {
-		return DefaultLogger
+		return DefaultLogger.WithContext(ctx)
 	}
 	return &NoOpLogger{}
 }
@@ -34,9 +36,8 @@ func Context(ctx context.Context, logger Logger) context.Context {
 	return context.WithValue(ctx, contextKey, logger)
 }
 
-// BasicLogger defines a basic interface for logging, with methods to log at various levels with a message and key/val args.
-// In order to be used as a Logger, a BasicLogger either needs to also implement Logger, or it can be wrapped with BasicLoggerWrapper.
-type BasicLogger interface {
+// Logger extends the BasicLogger interface with methods that accept a context as well as the message and key/val args.
+type Logger interface {
 	// Debug logs a message at the DEBUG level, with optional arguments as a sequence of key/value pairs
 	// (e.g. Debug("message", "key1", "val1", "key2", "val2"))
 	Debug(msg string, args ...any)
@@ -49,86 +50,28 @@ type BasicLogger interface {
 	// Error logs a message at the ERROR level, with optional arguments as a sequence of key/value pairs
 	// (e.g. Error("message", "key1", "val1", "key2", "val2"))
 	Error(msg string, args ...any)
-}
-
-// Logger extends the BasicLogger interface with methods that accept a context as well as the message and key/val args.
-type Logger interface {
-	BasicLogger
-	// DebugContext logs a message at the DEBUG level, and provides the context for processing as part of log handling.
-	// Generally, when a context is present, prefer DebugContext to Debug.
-	// Optional arguments can be passed along with the message and context as a sequence of key/value pairs
-	// (e.g. DebugContext(ctx, "message", "key1", "val1", "key2", "val2"))
-	DebugContext(ctx context.Context, msg string, args ...any)
-	// InfoContext logs a message at the INFO level, and provides the context for processing as part of log handling.
-	// Generally, when a context is present, prefer InfoContext to Info.
-	// Optional arguments can be passed along with the message and context as a sequence of key/value pairs
-	// (e.g. InfoContext(ctx, "message", "key1", "val1", "key2", "val2"))
-	InfoContext(ctx context.Context, msg string, args ...any)
-	// WarnContext logs a message at the WARN level, and provides the context for processing as part of log handling.
-	// Generally, when a context is present, prefer WarnContext to Warn.
-	// Optional arguments can be passed along with the message and context as a sequence of key/value pairs
-	// (e.g. WarnContext(ctx, "message", "key1", "val1", "key2", "val2"))
-	WarnContext(ctx context.Context, msg string, args ...any)
-	// ErrorContext logs a message at the ERROR level, and provides the context for processing as part of log handling.
-	// Generally, when a context is present, prefer ErrorContext to Debug.
-	// Optional arguments can be passed along with the message and context as a sequence of key/value pairs
-	// (e.g. ErrorContext(ctx, "message", "key1", "val1", "key2", "val2"))
-	ErrorContext(ctx context.Context, msg string, args ...any)
 	// With returns a Logger with the supplied key/value pair arguments attached to any messages it logs.
 	// This is syntactically equivalent to adding args to every call to a log method on the logger.
 	With(args ...any) Logger
-}
-
-// BasicLoggerWrapper wraps BasicLogger with Logger methods that drop the context and call the corresponding Logger methods instead
-type BasicLoggerWrapper struct {
-	BasicLogger
-	attrs []any
-}
-
-// DebugContext drops the provided context and calls the underlying BasicLogger's Debug method with msg and args
-func (l *BasicLoggerWrapper) DebugContext(_ context.Context, msg string, args ...any) {
-	l.Debug(msg, append(l.attrs, args...)...)
-}
-
-// InfoContext drops the provided context and calls the underlying BasicLogger's Info method with msg and args
-func (l *BasicLoggerWrapper) InfoContext(_ context.Context, msg string, args ...any) {
-	l.Info(msg, append(l.attrs, args...)...)
-}
-
-// WarnContext drops the provided context and calls the underlying BasicLogger's Warn method with msg and args
-func (l *BasicLoggerWrapper) WarnContext(_ context.Context, msg string, args ...any) {
-	l.Warn(msg, append(l.attrs, args...)...)
-}
-
-// ErrorContext drops the provided context and calls the underlying BasicLogger's Error method with msg and args
-func (l *BasicLoggerWrapper) ErrorContext(_ context.Context, msg string, args ...any) {
-	l.Error(msg, append(l.attrs, args...)...)
-}
-
-// With returns a new BasicLoggerWrapper with the supplied key/value args already set
-func (l *BasicLoggerWrapper) With(args ...any) Logger {
-	return &BasicLoggerWrapper{
-		BasicLogger: l.BasicLogger,
-		attrs:       args,
-	}
+	// WithContext returns a Logger with the provided context added, such that any subsequent
+	// calls to log methods should pass the context to the underlying handler.
+	WithContext(context.Context) Logger
 }
 
 // NoOpLogger is an implementation of Logger which does nothing when its methods are called
 type NoOpLogger struct{}
 
-func (*NoOpLogger) Debug(string, ...any)                         {}
-func (*NoOpLogger) Info(string, ...any)                          {}
-func (*NoOpLogger) Warn(string, ...any)                          {}
-func (*NoOpLogger) Error(string, ...any)                         {}
-func (*NoOpLogger) DebugContext(context.Context, string, ...any) {}
-func (*NoOpLogger) InfoContext(context.Context, string, ...any)  {}
-func (*NoOpLogger) WarnContext(context.Context, string, ...any)  {}
-func (*NoOpLogger) ErrorContext(context.Context, string, ...any) {}
+func (*NoOpLogger) Debug(string, ...any) {}
+func (*NoOpLogger) Info(string, ...any)  {}
+func (*NoOpLogger) Warn(string, ...any)  {}
+func (*NoOpLogger) Error(string, ...any) {}
 func (n *NoOpLogger) With(...any) Logger {
+	return n
+}
+func (n *NoOpLogger) WithContext(context.Context) Logger {
 	return n
 }
 
 var (
 	_ Logger = &NoOpLogger{}
-	_ Logger = &BasicLoggerWrapper{}
 )

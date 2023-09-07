@@ -22,6 +22,7 @@ func NewLogger(l log.Logger) *PluginLogger {
 // nolint:revive
 type PluginLogger struct {
 	log.Logger
+	ctx context.Context
 }
 
 // DebugContext adds the traceID field to the underlying log.Logger, then calls Debug with the provided msg and args
@@ -48,6 +49,14 @@ func (p *PluginLogger) ErrorContext(ctx context.Context, msg string, args ...any
 func (p *PluginLogger) With(args ...any) logging.Logger {
 	return &PluginLogger{
 		Logger: p.Logger.With(args...),
+	}
+}
+
+// WithContext returns a new Logger with the provided context embedded
+func (p *PluginLogger) WithContext(ctx context.Context) logging.Logger {
+	return &PluginLogger{
+		Logger: p.Logger,
+		ctx:    ctx,
 	}
 }
 
