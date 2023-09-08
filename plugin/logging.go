@@ -25,24 +25,24 @@ type PluginLogger struct {
 	ctx context.Context
 }
 
-// DebugContext adds the traceID field to the underlying log.Logger, then calls Debug with the provided msg and args
-func (p *PluginLogger) DebugContext(ctx context.Context, msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(ctx).TraceID()).Debug(msg, args...)
+// Debug adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Debug with the provided msg and args
+func (p *PluginLogger) Debug(msg string, args ...any) {
+	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Debug(msg, args...)
 }
 
-// InfoContext adds the traceID field to the underlying log.Logger, then calls Info with the provided msg and args
-func (p *PluginLogger) InfoContext(ctx context.Context, msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(ctx).TraceID()).Info(msg, args...)
+// Info adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Info with the provided msg and args
+func (p *PluginLogger) Info(msg string, args ...any) {
+	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Info(msg, args...)
 }
 
-// WarnContext adds the traceID field to the underlying log.Logger, then calls Warn with the provided msg and args
-func (p *PluginLogger) WarnContext(ctx context.Context, msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(ctx).TraceID()).Warn(msg, args...)
+// Warn adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Warn with the provided msg and args
+func (p *PluginLogger) Warn(msg string, args ...any) {
+	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Warn(msg, args...)
 }
 
-// ErrorContext adds the traceID field to the underlying log.Logger, then calls Error with the provided msg and args
-func (p *PluginLogger) ErrorContext(ctx context.Context, msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(ctx).TraceID()).Error(msg, args...)
+// Error adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Error with the provided msg and args
+func (p *PluginLogger) Error(msg string, args ...any) {
+	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Error(msg, args...)
 }
 
 // With returns a new Logger with the provided key/value pairs already set
