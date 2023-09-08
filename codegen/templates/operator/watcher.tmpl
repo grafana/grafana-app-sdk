@@ -31,7 +31,7 @@ func (s *{{.Name}}Watcher) Add(ctx context.Context, rObj resource.Object) error 
     }
 
     // TODO
-    logging.FromContext(ctx).Debug(ctx, "Added resource", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug("Added resource", "name", object.StaticMetadata().Identifier().Name)
 	return nil
 }
 
