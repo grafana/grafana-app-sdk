@@ -22,27 +22,6 @@ func NewLogger(l log.Logger) *PluginLogger {
 // nolint:revive
 type PluginLogger struct {
 	log.Logger
-	ctx context.Context
-}
-
-// Debug adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Debug with the provided msg and args
-func (p *PluginLogger) Debug(msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Debug(msg, args...)
-}
-
-// Info adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Info with the provided msg and args
-func (p *PluginLogger) Info(msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Info(msg, args...)
-}
-
-// Warn adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Warn with the provided msg and args
-func (p *PluginLogger) Warn(msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Warn(msg, args...)
-}
-
-// Error adds the traceID field to the underlying log.Logger from the context embedded with WithContect, then calls Error with the provided msg and args
-func (p *PluginLogger) Error(msg string, args ...any) {
-	p.Logger.With(logging.TraceIDKey, trace.SpanContextFromContext(p.ctx).TraceID()).Error(msg, args...)
 }
 
 // With returns a new Logger with the provided key/value pairs already set
@@ -52,12 +31,16 @@ func (p *PluginLogger) With(args ...any) logging.Logger {
 	}
 }
 
-// WithContext returns a new Logger with the provided context embedded
+// WithContext returns a new Logger with the trace ID in the provided context as an automatic field.
+// If the context does not contain a trace ID, the same logger is returned.
 func (p *PluginLogger) WithContext(ctx context.Context) logging.Logger {
-	return &PluginLogger{
-		Logger: p.Logger,
-		ctx:    ctx,
+	if traceID := trace.SpanFromContext(ctx).SpanContext().TraceID(); traceID.IsValid() {
+		return &PluginLogger{
+			Logger: p.Logger.With(logging.TraceIDKey, traceID),
+		}
 	}
+
+	return p
 }
 
 // Compile-time interface compliance check
