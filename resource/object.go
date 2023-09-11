@@ -154,6 +154,9 @@ type CommonMetadata struct {
 	// This can be used to block updates if a change has been made to the object between when the object was
 	// retrieved, and when the update was applied.
 	ResourceVersion string `json:"resourceVersion"`
+	// Generation is a number which is incremented every time the spec of the object changes.
+	// It is distinct from ResourceVersion, as it tracks only updates to the spec, and not subresources or metadata.
+	Generation int64 `json:"generation"`
 	// Labels are string key/value pairs attached to the object. They can be used for filtering,
 	// or as additional metadata
 	Labels map[string]string `json:"labels"`

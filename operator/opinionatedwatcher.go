@@ -3,7 +3,6 @@ package operator
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
@@ -307,22 +306,5 @@ func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {
 }
 
 func getGeneration(object resource.Object) int64 {
-	g, ok := object.CommonMetadata().ExtraFields["generation"]
-	if !ok {
-		return 0
-	}
-	switch t := g.(type) {
-	case int64:
-		return t
-	case int:
-		return int64(t)
-	case string:
-		conv, err := strconv.Atoi(t)
-		if err != nil {
-			return 0
-		}
-		return int64(conv)
-	default:
-		return 0
-	}
+	return object.CommonMetadata().Generation
 }

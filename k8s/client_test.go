@@ -629,13 +629,12 @@ func getTestObject() *resource.SimpleObject[testSpec] {
 			},
 			CommonMeta: resource.CommonMetadata{
 				ResourceVersion: "rev1",
+				Generation:      0,
 				Labels: map[string]string{
 					"foo":  "bar",
 					"test": "value",
 				},
-				ExtraFields: map[string]any{
-					"generation": int64(0),
-				},
+				ExtraFields: map[string]any{},
 			},
 		},
 		Spec: testSpec{
