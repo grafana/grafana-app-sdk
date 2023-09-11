@@ -267,9 +267,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		old := schema.ZeroValue()
 		new := schema.ZeroValue()
 		md := old.CommonMetadata()
-		md.ExtraFields = map[string]any{
-			"generation": 1,
-		}
+		md.Generation = 1
 		old.SetCommonMetadata(md)
 		new.SetCommonMetadata(md)
 		err := o.Update(context.TODO(), old, new)

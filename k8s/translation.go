@@ -70,6 +70,7 @@ func rawToObject(raw []byte, into resource.Object) error {
 		meta["updatedBy"] = ""
 	}
 	meta["resourceVersion"] = kubeObject.ObjectMetadata.ResourceVersion
+	meta["generation"] = kubeObject.ObjectMetadata.Generation
 	meta["uid"] = kubeObject.ObjectMetadata.UID
 	meta["creationTimestamp"] = kubeObject.ObjectMetadata.CreationTimestamp
 
@@ -101,13 +102,13 @@ func rawToObject(raw []byte, into resource.Object) error {
 	// Set the object metadata
 	cmd := into.CommonMetadata()
 	cmd.ResourceVersion = kubeObject.ObjectMetadata.ResourceVersion
+	cmd.Generation = kubeObject.ObjectMetadata.Generation
 	cmd.Labels = kubeObject.ObjectMetadata.Labels
 	cmd.UID = string(kubeObject.ObjectMetadata.UID)
 	if cmd.ExtraFields == nil {
 		cmd.ExtraFields = make(map[string]any)
 	}
 	cmd.Finalizers = kubeObject.ObjectMetadata.Finalizers
-	cmd.ExtraFields["generation"] = kubeObject.ObjectMetadata.Generation
 	if len(kubeObject.ObjectMetadata.OwnerReferences) > 0 {
 		cmd.ExtraFields["ownerReferences"] = kubeObject.ObjectMetadata.OwnerReferences
 	}
@@ -265,6 +266,7 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 		Namespace:         obj.StaticMetadata().Namespace,
 		UID:               types.UID(cMeta.UID),
 		ResourceVersion:   cMeta.ResourceVersion,
+		Generation:        cMeta.Generation,
 		CreationTimestamp: metav1.NewTime(cMeta.CreationTimestamp),
 		Labels:            cMeta.Labels,
 		Finalizers:        cMeta.Finalizers,
@@ -273,13 +275,6 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 	// Rest of the metadata in ExtraFields
 	for k, v := range cMeta.ExtraFields {
 		switch strings.ToLower(k) {
-		case "generation": // TODO: should generation be non-implementation-specific metadata?
-			if i, ok := v.(int64); ok {
-				meta.Generation = i
-			}
-			if i, ok := v.(int); ok {
-				meta.Generation = int64(i)
-			}
 		case "ownerReferences":
 			if o, ok := v.([]metav1.OwnerReference); ok {
 				meta.OwnerReferences = o

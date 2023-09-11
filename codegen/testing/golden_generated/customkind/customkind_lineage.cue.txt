@@ -20,12 +20,13 @@ customkind: thema.#Lineage & {
 				}
 				finalizers: [...string]
 				resourceVersion: string
+				generation:      >=-9223372036854775808 & <=9223372036854775807 & int
 				labels: {
 					[string]: string
 				}
 			}
 			{
-				[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
+				[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|generation|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
 			}
 			updateTimestamp: time.Time & {
 				string

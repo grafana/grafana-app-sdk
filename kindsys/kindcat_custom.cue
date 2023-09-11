@@ -15,6 +15,7 @@ _kubeObjectMetadata: {
     deletionTimestamp?: string & time.Time
     finalizers: [...string]
     resourceVersion: string
+	generation: int64
     labels: {
         [string]: string
     }
@@ -61,7 +62,7 @@ _crdSchema: {
 		// Can't use this as it's not yet enforced CUE:
 		//...string
 		// Have to do this gnarly regex instead
-		[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
+		[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|generation|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
 	}
 	spec: _
 

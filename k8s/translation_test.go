@@ -31,6 +31,7 @@ var complexObject = TestResourceObject{
 		CommonMetadata: resource.CommonMetadata{
 			UID:               "abc",
 			ResourceVersion:   "12345",
+			Generation:        1,
 			Labels:            map[string]string{"foo": "bar"},
 			CreationTimestamp: createdTime,
 			Finalizers:        []string{"finalizer"},
@@ -38,7 +39,6 @@ var complexObject = TestResourceObject{
 			CreatedBy:         "me",
 			UpdatedBy:         "you",
 			ExtraFields: map[string]any{
-				"generation": int64(1),
 				"annotations": map[string]string{
 					fmt.Sprintf("%screatedBy", annotationPrefix):       "me",
 					fmt.Sprintf("%supdatedBy", annotationPrefix):       "you",
@@ -97,7 +97,7 @@ func TestRawToObject(t *testing.T) {
 			Labels:            complexObject.Metadata.Labels,
 			CreationTimestamp: metav1.Time{complexObject.Metadata.CreationTimestamp},
 			Finalizers:        complexObject.Metadata.Finalizers,
-			Generation:        complexObject.Metadata.ExtraFields["generation"].(int64),
+			Generation:        complexObject.Metadata.Generation,
 			Annotations: map[string]string{
 				fmt.Sprintf("%screatedBy", annotationPrefix):       complexObject.Metadata.CreatedBy,
 				fmt.Sprintf("%supdatedBy", annotationPrefix):       complexObject.Metadata.UpdatedBy,
@@ -272,7 +272,7 @@ func TestMarshalJSON(t *testing.T) {
 			Labels:            complexObject.Metadata.Labels,
 			//CreationTimestamp: metav1.Time{complexObject.Metadata.CreationTimestamp},
 			Finalizers: complexObject.Metadata.Finalizers,
-			Generation: complexObject.Metadata.ExtraFields["generation"].(int64),
+			Generation: complexObject.Metadata.Generation,
 			Annotations: map[string]string{
 				fmt.Sprintf("%screatedBy", annotationPrefix):       complexObject.Metadata.CreatedBy,
 				fmt.Sprintf("%supdatedBy", annotationPrefix):       complexObject.Metadata.UpdatedBy,
