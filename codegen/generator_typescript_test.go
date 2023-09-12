@@ -17,7 +17,7 @@ func TestTSTypesJenny_Generate(t *testing.T) {
 	files, err := parser.Generate(wrapJenny(&TSTypesJenny{}))
 	fmt.Println(err)
 	// Check number of files generated
-	assert.Len(t, files, 1)
+	assert.Len(t, files, 2)
 	// Check content against the golden files
 	compareToGolden(t, files, "")
 }

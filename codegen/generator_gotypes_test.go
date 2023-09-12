@@ -18,7 +18,7 @@ const testCueDir = "./testing/cue"
 func TestResourceGoTypesGenerator_Generate(t *testing.T) {
 	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(testCueDir))
 	require.Nil(t, err)
-	files, err := parser.Generate(wrapJenny(&resourceGoTypesGenerator{}))
+	files, err := parser.Generate(wrapJenny(&resourceGoTypesGenerator{}), "customKind")
 	// Check number of files generated (should be spec, status, and metadata)
 	assert.Len(t, files, 3)
 	// Check content against the golden files

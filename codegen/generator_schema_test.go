@@ -13,7 +13,7 @@ import (
 func TestSchemaGenerator_Generate(t *testing.T) {
 	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(testCueDir))
 	require.Nil(t, err)
-	files, err := parser.Generate(wrapJenny(&schemaGenerator{}))
+	files, err := parser.Generate(wrapJenny(&schemaGenerator{}), "customKind")
 	// Check number of files generated (lineage and cue.module)
 	assert.Len(t, files, 1)
 	// Check content against the golden files
