@@ -15,8 +15,8 @@ type loggerContextKey struct{}
 
 // FromContext returns the Logger set in the context with Context(), or the DefaultLogger if no Logger is set in the context.
 // If DefaultLogger is nil, it returns a *NoOpLogger so that the return is always valid to call methods on without nil-checking.
-// So long as the Logger to return is not the NoOpLogger, it will call WithContext(ctx) on the logger in the context and return
-// the resulting Logger.
+// So long as the Logger to return is not the NoOpLogger, it will carry the context provided in this call
+// (by calling WithContext on the logger in the context).
 func FromContext(ctx context.Context) Logger {
 	l := ctx.Value(contextKey)
 	if l != nil {
@@ -36,7 +36,8 @@ func Context(ctx context.Context, logger Logger) context.Context {
 	return context.WithValue(ctx, contextKey, logger)
 }
 
-// Logger extends the BasicLogger interface with methods that accept a context as well as the message and key/val args.
+// Logger is a simple logging interface that exposes methods got writing structured log messages at varying levels,
+// and methods to return an altered logger (With and WithContext).
 type Logger interface {
 	// Debug logs a message at the DEBUG level, with optional arguments as a sequence of key/value pairs
 	// (e.g. Debug("message", "key1", "val1", "key2", "val2"))
