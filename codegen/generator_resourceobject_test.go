@@ -13,7 +13,7 @@ import (
 func TestResourceObjectGenerator_Generate(t *testing.T) {
 	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(testCueDir))
 	require.Nil(t, err)
-	files, err := parser.Generate(wrapJenny(&resourceObjectGenerator{}))
+	files, err := parser.Generate(wrapJenny(&resourceObjectGenerator{}), "customKind")
 	// Check number of files generated
 	assert.Len(t, files, 1)
 	// Check content against the golden files

@@ -18,7 +18,7 @@ func TestCrdGenerator_Generate_JSON(t *testing.T) {
 	files, err := parser.Generate(wrapJenny(&crdGenerator{
 		outputExtension: "json",
 		outputEncoder:   json.Marshal,
-	}))
+	}), "customKind")
 	// Check number of files generated
 	assert.Len(t, files, 1)
 	// Check content against the golden files
@@ -31,7 +31,7 @@ func TestCrdGenerator_Generate_YAML(t *testing.T) {
 	files, err := parser.Generate(wrapJenny(&crdGenerator{
 		outputExtension: "yaml",
 		outputEncoder:   yaml.Marshal,
-	}))
+	}), "customKind")
 	// Check number of files generated
 	assert.Len(t, files, 1)
 	// Check content against the golden files
