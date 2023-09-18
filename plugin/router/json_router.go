@@ -9,8 +9,8 @@ import (
 	"net/url"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/plugin"
 )
 
@@ -78,20 +78,18 @@ type JSONErrorHandler func(err plugin.Error) (int, JSONResponse)
 type JSONRouter struct {
 	*Subrouter
 	errHandler JSONErrorHandler
-	logger     log.Logger
 }
 
 // NewJSONRouter returns a new JSONRouter with a logger.
-func NewJSONRouter(logger log.Logger) *JSONRouter {
-	return NewJSONRouterWithErrorHandler(logger, nil)
+func NewJSONRouter() *JSONRouter {
+	return NewJSONRouterWithErrorHandler(nil)
 }
 
 // NewJSONRouterWithErrorHandler returns a new JSONRouter with a logger and a custom error handler.
-func NewJSONRouterWithErrorHandler(logger log.Logger, errHandler JSONErrorHandler) *JSONRouter {
+func NewJSONRouterWithErrorHandler(errHandler JSONErrorHandler) *JSONRouter {
 	return &JSONRouter{
 		Subrouter:  NewRouter().Subrouter(""), // TODO: find a nicer solution to work with routers / subrouters.
 		errHandler: errHandler,
-		logger:     logger,
 	}
 }
 
@@ -100,7 +98,6 @@ func (j *JSONRouter) Subroute(path string) *JSONRouter {
 	return &JSONRouter{
 		Subrouter:  j.Router.Subrouter(path),
 		errHandler: j.errHandler,
-		logger:     j.logger,
 	}
 }
 
@@ -110,7 +107,6 @@ func (j *JSONRouter) SubrouteWithErrorHandler(path string, errHandler JSONErrorH
 	return &JSONRouter{
 		Subrouter:  j.Router.Subrouter(path),
 		errHandler: errHandler,
-		logger:     j.logger,
 	}
 }
 
@@ -153,7 +149,7 @@ func (j *JSONRouter) WrapHandlerFunc(handler JSONHandlerFunc, okCode int) Handle
 	return func(ctx context.Context, r *backend.CallResourceRequest, s backend.CallResourceResponseSender) {
 		u, err := url.Parse(r.URL)
 		if err != nil {
-			j.sendErr(s, err)
+			j.sendErr(ctx, s, err)
 			return
 		}
 
@@ -168,16 +164,16 @@ func (j *JSONRouter) WrapHandlerFunc(handler JSONHandlerFunc, okCode int) Handle
 
 		res, err := handler(ctx, req)
 		if err != nil {
-			j.sendErr(s, err)
+			j.sendErr(ctx, s, err)
 			return
 		}
 
-		j.sendRes(s, okCode, res)
+		j.sendRes(ctx, s, okCode, res)
 	}
 }
 
-func (j *JSONRouter) sendErr(s backend.CallResourceResponseSender, err error) {
-	j.logger.Error(
+func (j *JSONRouter) sendErr(ctx context.Context, s backend.CallResourceResponseSender, err error) {
+	logging.FromContext(ctx).Error(
 		"error processing backend plugin request",
 		"error", err.Error(),
 	)
@@ -199,10 +195,10 @@ func (j *JSONRouter) sendErr(s backend.CallResourceResponseSender, err error) {
 		}
 	}
 
-	j.sendRes(s, code, res)
+	j.sendRes(ctx, s, code, res)
 }
 
-func (j *JSONRouter) sendRes(s backend.CallResourceResponseSender, code int, res JSONResponse) {
+func (*JSONRouter) sendRes(ctx context.Context, s backend.CallResourceResponseSender, code int, res JSONResponse) {
 	var r backend.CallResourceResponse
 
 	if res != nil { // nolint: gocritic
@@ -228,6 +224,6 @@ func (j *JSONRouter) sendRes(s backend.CallResourceResponseSender, code int, res
 	}
 
 	if err := s.Send(&r); err != nil {
-		j.logger.Error("error sending backend response:", err)
+		logging.FromContext(ctx).Error("error sending backend response", "error", err)
 	}
 }

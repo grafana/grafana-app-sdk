@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -23,6 +24,11 @@ var ErrInformerAlreadyAdded = errors.New("informer for resource kind already add
 
 // DefaultRetryPolicy is an Exponential Backoff RetryPolicy with an initial 5-second delay and a max of 5 attempts
 var DefaultRetryPolicy = ExponentialBackoffRetryPolicy(5*time.Second, 5)
+
+// DefaultErrorHandler is an error handler function which simply logs the error with the logger in the context
+var DefaultErrorHandler = func(ctx context.Context, err error) {
+	logging.FromContext(ctx).Error(err.Error(), "component", "InformerController", "error", err)
+}
 
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
@@ -84,7 +90,7 @@ var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject res
 type InformerController struct {
 	// ErrorHandler is a user-specified error handling function. This is typically for logging/metrics use,
 	// as retry logic is covered by the RetryPolicy.
-	ErrorHandler func(error)
+	ErrorHandler func(context.Context, error)
 	// RetryPolicy is a user-specified retry logic function which will be used when ResourceWatcher function calls fail.
 	RetryPolicy RetryPolicy
 	// RetryDequeuePolicy is a user-specified retry dequeue logic function which will be used for new informer actions
@@ -110,6 +116,7 @@ type retryInfo struct {
 func NewInformerController() *InformerController {
 	return &InformerController{
 		RetryPolicy:         DefaultRetryPolicy,
+		ErrorHandler:        DefaultErrorHandler,
 		informers:           NewListMap[Informer](),
 		watchers:            NewListMap[ResourceWatcher](),
 		reconcilers:         NewListMap[Reconciler](),
@@ -234,7 +241,7 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 			// Do the watcher's Add, check for error
 			err := watcher.Add(ctx, obj)
 			if err != nil && c.ErrorHandler != nil {
-				c.ErrorHandler(err) // TODO: improve ErrorHandler
+				c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
@@ -279,7 +286,7 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			// Do the watcher's Update, check for error
 			err := watcher.Update(ctx, oldObj, newObj)
 			if err != nil && c.ErrorHandler != nil {
-				c.ErrorHandler(err)
+				c.ErrorHandler(ctx, err)
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
@@ -324,7 +331,7 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Do the watcher's Delete, check for error
 			err := watcher.Delete(ctx, obj)
 			if err != nil && c.ErrorHandler != nil {
-				c.ErrorHandler(err) // TODO: improve ErrorHandler
+				c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 			}
 			if err != nil && c.RetryPolicy != nil {
 				c.queueRetry(retryKey, err, func() (*time.Duration, error) {

@@ -6,6 +6,7 @@ kubePort: 8556
 datasources:
   - cortex
   - tempo
+  - loki
 # Plugin JSON data, as key/value pairs
 pluginJson:
   foo: bar

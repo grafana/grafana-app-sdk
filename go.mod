@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.20
+go 1.21
 
 require (
 	cuelang.org/go v0.5.0

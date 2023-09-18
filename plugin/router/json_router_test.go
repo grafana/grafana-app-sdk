@@ -65,7 +65,7 @@ func TestJSONRouter_JSONErrorHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := router.NewJSONRouterWithErrorHandler(backend.Logger, tt.errHandler)
+			r := router.NewJSONRouterWithErrorHandler(tt.errHandler)
 
 			h := r.WrapHandlerFunc(func(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
 				return nil, tt.err
@@ -141,7 +141,7 @@ func TestJSONRouter_SubrouteWithErrorHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := router.NewJSONRouterWithErrorHandler(backend.Logger, func(err plugin.Error) (int, router.JSONResponse) {
+			r := router.NewJSONRouterWithErrorHandler(func(err plugin.Error) (int, router.JSONResponse) {
 				t.Fatal("this should not be called")
 
 				return http.StatusInternalServerError, nil
@@ -173,7 +173,7 @@ func TestJSONRouter_SubrouteWithErrorHandler(t *testing.T) {
 }
 
 func TestJSONRouter_WrapHandlerFunc(t *testing.T) {
-	r := router.NewJSONRouter(backend.Logger)
+	r := router.NewJSONRouter()
 
 	method := http.MethodGet
 	rawURL := "http://some.url.com/some/path?param1=val1&param2=val2"
@@ -350,7 +350,7 @@ func TestJSONRouter_HandleWithCode(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			r := router.NewJSONRouter(backend.Logger)
+			r := router.NewJSONRouter()
 
 			if tt.method == "" {
 				r.HandleWithCode(tt.path, func(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
@@ -379,7 +379,7 @@ func TestJSONRouter_HandleWithCode(t *testing.T) {
 }
 
 func TestJSONRouter_HandleResource(t *testing.T) {
-	r := router.NewJSONRouter(backend.Logger)
+	r := router.NewJSONRouter()
 	r.NotFoundHandler = nil
 
 	s := fakeSender{

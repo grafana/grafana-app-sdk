@@ -164,58 +164,6 @@ spec:
             name: cortex-config
           name: cortex-config
 ---
-apiVersion: v1
-kind: Service
-metadata:
-  labels:
-    name: minio
-  name: minio
-  namespace: default
-spec:
-  ports:
-    - name: minio-minio
-      port: 9000
-      targetPort: 9000
-  selector:
-    name: minio
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: minio
-  namespace: default
-spec:
-  minReadySeconds: 10
-  replicas: 1
-  revisionHistoryLimit: 10
-  selector:
-    matchLabels:
-      name: minio
-  template:
-    metadata:
-      labels:
-        name: minio
-    spec:
-      containers:
-        - args:
-            - mkdir -p /data/cortex && mkdir -p /data/loki && /usr/bin/minio server /data
-          command:
-            - /bin/bash
-            - -c
-          env:
-            - name: MINIO_ACCESS_KEY
-              value: minio
-            - name: MINIO_SECRET_KEY
-              value: minio123
-            - name: MINIO_PROMETHEUS_AUTH_TYPE
-              value: public
-          image: minio/minio:RELEASE.2021-06-07T21-40-51Z
-          imagePullPolicy: IfNotPresent
-          name: minio
-          ports:
-            - containerPort: 9000
-              name: minio
----
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

@@ -346,7 +346,7 @@ type CustomResourceDefinitionSpecNames struct {
 }
 
 // DeepCopyObject is an implementation of the receiver method required for implementing runtime.Object.
-func DeepCopyObject(in interface{}) runtime.Object {
+func DeepCopyObject(in any) runtime.Object {
 	val := reflect.ValueOf(in).Elem()
 
 	cpy := reflect.New(val.Type())

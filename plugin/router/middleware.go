@@ -2,12 +2,16 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 // MiddlewareFunc is a function that receives a HandlerFunc and returns another HandlerFunc.
@@ -55,6 +59,26 @@ func NewCapturingMiddleware(f func(ctx context.Context, r *backend.CallResourceR
 			// Note the response here is mutable,
 			// so the changes performed by the actual middleware func will be propagated upstream
 			_ = res.Send(cs.Response)
+		}
+	}
+}
+
+// NewLoggingMiddleware returns a MiddleWareFunc which logs an INFO level message for each request,
+// and injects the provided Logger into the context used downstream.
+func NewLoggingMiddleware(logger logging.Logger) MiddlewareFunc {
+	return func(handler HandlerFunc) HandlerFunc {
+		return func(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) {
+			start := time.Now()
+			handler(logging.Context(ctx, logger), req, sender)
+			lat := time.Since(start)
+			// Logging latency in ms because it's easier to perceive as a human.
+			// But we also attach a separate field where latency is in seconds, for e.g. Loki queries.
+			logger.WithContext(ctx).Info(fmt.Sprintf("%s %s %dms", req.Method, req.Path, lat.Milliseconds()),
+				"request.http.method", req.Method,
+				"request.http.path", req.Path,
+				"request.user", req.PluginContext.User.Name,
+				"request.latency", lat.Seconds(),
+			)
 		}
 	}
 }
