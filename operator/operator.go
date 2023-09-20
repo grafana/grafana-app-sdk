@@ -1,8 +1,9 @@
 package operator
 
 import (
-	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
 // Controller is an interface that describes a controller which can be run as part of an operator

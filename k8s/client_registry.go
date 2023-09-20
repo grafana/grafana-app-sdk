@@ -4,12 +4,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // NewClientRegistry returns a new ClientRegistry which will make Client structs using the provided rest.Config

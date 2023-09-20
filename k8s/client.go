@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Client is a kubernetes-specific implementation of resource.Client, using custom resource definitions.
