@@ -1,5 +1,10 @@
 package operator
 
+import (
+	"github.com/grafana/grafana-app-sdk/metrics"
+	"github.com/prometheus/client_golang/prometheus"
+)
+
 // Controller is an interface that describes a controller which can be run as part of an operator
 type Controller interface {
 	Run(<-chan struct{}) error
@@ -26,6 +31,17 @@ func (o *Operator) AddController(c Controller) {
 		o.controllers = make([]Controller, 0)
 	}
 	o.controllers = append(o.controllers, c)
+}
+
+// PrometheusCollectors returns the prometheus metric collectors for all controllers which implement metrics.Provider
+func (o *Operator) PrometheusCollectors() []prometheus.Collector {
+	collectors := make([]prometheus.Collector, 0)
+	for _, c := range o.controllers {
+		if provider, ok := c.(metrics.Provider); ok {
+			collectors = append(collectors, provider.PrometheusCollectors()...)
+		}
+	}
+	return collectors
 }
 
 // Run runs the operator until an unrecoverable error occurs or the stopCh is closed/receives a message.

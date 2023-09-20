@@ -6,7 +6,9 @@ import (
 
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 // Client is a kubernetes-specific implementation of resource.Client, using custom resource definitions.
@@ -29,6 +31,8 @@ type ClientConfig struct {
 	// regardless of how this value is set, so make sure your resource.Object implementations can handle
 	// turning strings into non-string types when unmarshaling if you plan to have custom metadata keys which have non-string values.
 	CustomMetadataIsAnyType bool
+
+	MetricsConfig metrics.Config
 }
 
 // DefaultClientConfig returns a ClientConfig using defaults that assume you have used the SDK codegen tooling
@@ -209,6 +213,11 @@ func (c *Client) Watch(ctx context.Context, namespace string, options resource.W
 			resource.ClusterScope, namespace, resource.NamespaceAll)
 	}
 	return c.client.watch(ctx, namespace, c.schema.Plural(), c.schema.ZeroValue(), options)
+}
+
+// Metrics returns the prometheus collectors used by this Client for registration with a prometheus exporter
+func (c *Client) PrometheusCollectors() []prometheus.Collector {
+	return c.client.metrics()
 }
 
 // RESTClient returns the underlying rest.Interface used to communicate with kubernetes

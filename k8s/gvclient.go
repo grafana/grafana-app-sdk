@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -15,6 +16,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -27,9 +29,11 @@ const (
 // GroupVersion is the unit with which kubernetes rest.Interface clients exist, so at minimum,
 // we require one rest.Interface for each unique GroupVersion.
 type groupVersionClient struct {
-	client  rest.Interface
-	version string
-	config  ClientConfig
+	client           rest.Interface
+	version          string
+	config           ClientConfig
+	requestDurations *prometheus.HistogramVec
+	totalRequests    *prometheus.CounterVec
 }
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
@@ -41,7 +45,9 @@ func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identi
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
+	start := time.Now()
 	bytes, err := request.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodGet, request.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodGet),
@@ -49,6 +55,7 @@ func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identi
 		attribute.String("server.port", request.URL().Port()),
 		attribute.String("url.full", request.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodGet, request.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -70,7 +77,9 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
+	start := time.Now()
 	bytes, err := request.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodGet, request.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodGet),
@@ -78,6 +87,7 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 		attribute.String("server.port", request.URL().Port()),
 		attribute.String("url.full", request.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodGet, request.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -102,7 +112,9 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
+	start := time.Now()
 	err := request.Do(ctx).StatusCode(&sc).Error()
+	g.logRequestDuration(time.Since(start), sc, http.MethodGet, request.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodGet),
@@ -110,6 +122,7 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 		attribute.String("server.port", request.URL().Port()),
 		attribute.String("url.full", request.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodGet, request.URL().Path)
 	if err != nil {
 		// HTTP error?
 		if sc == http.StatusNotFound {
@@ -142,7 +155,9 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 	if strings.TrimSpace(obj.StaticMetadata().Namespace) != "" {
 		request = request.Namespace(obj.StaticMetadata().Namespace)
 	}
+	start := time.Now()
 	bytes, err = request.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodPost, request.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodPost),
@@ -150,6 +165,7 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 		attribute.String("server.port", request.URL().Port()),
 		attribute.String("url.full", request.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodPost, request.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -181,7 +197,9 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 		req = req.Namespace(obj.StaticMetadata().Namespace)
 	}
 	sc := 0
+	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodPut, req.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodPut),
@@ -189,6 +207,7 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 		attribute.String("server.port", req.URL().Port()),
 		attribute.String("url.full", req.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodPut, req.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -220,7 +239,9 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 		req = req.Namespace(obj.StaticMetadata().Namespace)
 	}
 	sc := 0
+	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodPut, req.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodPut),
@@ -228,6 +249,7 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 		attribute.String("server.port", req.URL().Port()),
 		attribute.String("url.full", req.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodPut, req.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -256,7 +278,9 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 		req = req.Namespace(identifier.Namespace)
 	}
 	sc := 0
+	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodPatch, req.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodPatch),
@@ -264,6 +288,7 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 		attribute.String("server.port", req.URL().Port()),
 		attribute.String("url.full", req.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodPatch, req.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -285,7 +310,9 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
+	start := time.Now()
 	err := request.Do(ctx).StatusCode(&sc).Error()
+	g.logRequestDuration(time.Since(start), sc, http.MethodDelete, request.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodDelete),
@@ -293,6 +320,7 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 		attribute.String("server.port", request.URL().Port()),
 		attribute.String("url.full", request.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodDelete, request.URL().Path)
 	if err != nil && sc >= 300 {
 		return NewServerResponseError(err, sc)
 	}
@@ -317,7 +345,9 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 		req = req.Param("continue", options.Continue)
 	}
 	sc := 0
+	start := time.Now()
 	bytes, err := req.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, http.MethodGet, req.URL().Path)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodGet),
@@ -325,6 +355,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 		attribute.String("server.port", req.URL().Port()),
 		attribute.String("url.full", req.URL().String()),
 	)
+	g.incRequestCounter(sc, http.MethodGet, req.URL().Path)
 	if err != nil {
 		err = parseKubernetesError(bytes, sc, err)
 		span.SetStatus(codes.Error, err.Error())
@@ -362,6 +393,7 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 		attribute.String("server.port", req.URL().Port()),
 		attribute.String("url.full", req.URL().String()),
 	)
+	g.incRequestCounter(http.StatusOK, http.MethodGet, req.URL().Path)
 	channelBufferSize := options.EventBufferSize
 	if channelBufferSize <= 0 {
 		channelBufferSize = 1
@@ -373,6 +405,28 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 		stopCh: make(chan struct{}),
 	}
 	return w, nil
+}
+
+func (g *groupVersionClient) incRequestCounter(statusCode int, method string, path string) {
+	if g.totalRequests == nil {
+		return
+	}
+
+	g.totalRequests.WithLabelValues(strconv.Itoa(statusCode), method, path).Inc()
+}
+
+func (g *groupVersionClient) logRequestDuration(dur time.Duration, statusCode int, method string, path string) {
+	if g.requestDurations == nil {
+		return
+	}
+
+	g.requestDurations.WithLabelValues(strconv.Itoa(statusCode), method, path).Observe(dur.Seconds())
+}
+
+func (g *groupVersionClient) metrics() []prometheus.Collector {
+	return []prometheus.Collector{
+		g.totalRequests, g.requestDurations,
+	}
 }
 
 // WatchResponse wraps a kubernetes watch.Interface in order to implement resource.WatchResponse.
