@@ -124,8 +124,16 @@ type retryInfo struct {
 	err        error
 }
 
+// InformerControllerConfig contains configuration options for an InformerController
 type InformerControllerConfig struct {
 	MetricsConfig metrics.Config
+}
+
+// DefaultInformerControllerConfig returns an InformerControllerConfig with default values
+func DefaultInformerControllerConfig() InformerControllerConfig {
+	return InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig(""),
+	}
 }
 
 // NewInformerController creates a new controller
@@ -140,29 +148,32 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 		retryTickerInterval: time.Second,
 		reconcileLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.MetricsConfig.Namespace,
+			Subsystem:                       "informer",
 			Name:                            "reconcile_duration_seconds",
 			Help:                            "Time (in seconds) spent performing all reconcile actions for an event.",
 			Buckets:                         metrics.LatencyBuckets,
-			NativeHistogramBucketFactor:     1, // TODO: configurable?
-			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: time.Hour,
 		}, []string{"event_type", "kind"}),
 		reconcilerLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.MetricsConfig.Namespace,
-			Name:                            "reconciler_process_duration_seconds",
+			Subsystem:                       "reconciler",
+			Name:                            "process_duration_seconds",
 			Help:                            "Time (in seconds) spent performing individual reconciler actions.",
 			Buckets:                         metrics.LatencyBuckets,
-			NativeHistogramBucketFactor:     1, // TODO: configurable?
-			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: time.Hour,
 		}, []string{"event_type", "kind"}),
 		watcherLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.MetricsConfig.Namespace,
-			Name:                            "watcher_process_duration_seconds",
+			Subsystem:                       "watcher",
+			Name:                            "process_duration_seconds",
 			Help:                            "Time (in seconds) spent perfoming individual watcher actions.",
 			Buckets:                         metrics.LatencyBuckets,
-			NativeHistogramBucketFactor:     1, // TODO: configurable?
-			NativeHistogramMaxBucketNumber:  100,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: time.Hour,
 		}, []string{"event_type", "kind"}),
 		totalEvents: prometheus.NewCounterVec(prometheus.CounterOpts{

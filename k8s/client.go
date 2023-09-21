@@ -39,6 +39,7 @@ type ClientConfig struct {
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
 		CustomMetadataIsAnyType: false,
+		MetricsConfig:           metrics.DefaultConfig(""),
 	}
 }
 

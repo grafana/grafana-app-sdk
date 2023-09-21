@@ -94,13 +94,13 @@ func main() {
     {{ end }}
 
     // Create our operator
-    op := operator.New()
-    op.AddController(controller)
+    runner := operator.New()
+    runner.AddController(controller)
 
-    // Register the operator metric collectors
-    exporter.RegisterCollectors(op.PrometheusCollectors()...)
-    // Add the metrics exporter to the operator (allowing the operator to run it instead of needing to run it separately)
-    op.AddController(exporter)
+    // Register the operator runner metric collectors
+    exporter.RegisterCollectors(runner.PrometheusCollectors()...)
+    // Add the metrics exporter to the operator runner (allowing the operator to run it instead of needing to run it separately)
+    runner.AddController(exporter)
 
     stopCh := make(chan struct{})
 
@@ -114,7 +114,7 @@ func main() {
 
     // Run
 	logging.DefaultLogger.Info("Starting operator")
-    err = op.Run(stopCh)
+    err = runner.Run(stopCh)
     if err != nil {
         logging.DefaultLogger.With("error", err).Error("Operator exited with error")
 		panic(err)
