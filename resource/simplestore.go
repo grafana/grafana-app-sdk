@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 // SimpleStoreResource is a type used by SimpleStore to return concrete data, rather than an Object.
@@ -153,6 +154,7 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 	if object.CommonMeta.ResourceVersion != "" {
 		updateOptions.ResourceVersion = object.CommonMeta.ResourceVersion
 	}
+	object.CommonMeta.UpdateTimestamp = time.Now().UTC()
 	ret, err := s.client.Update(ctx, identifier, &object, updateOptions)
 	if err != nil {
 		return nil, err

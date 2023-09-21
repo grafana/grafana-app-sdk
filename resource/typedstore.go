@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"time"
 )
 
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
@@ -78,6 +79,9 @@ func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 // The update will fail if no ResourceVersion is provided, or if the ResourceVersion does not match the current one.
 // It returns the updated Object from the storage system.
 func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T) (T, error) {
+	md := obj.CommonMetadata()
+	md.UpdateTimestamp = time.Now().UTC()
+	obj.SetCommonMetadata(md)
 	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{})
 	if err != nil {
 		var n T
@@ -107,6 +111,9 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 	var ret Object
 
 	if resp != nil {
+		md := obj.CommonMetadata()
+		md.UpdateTimestamp = time.Now().UTC()
+		obj.SetCommonMetadata(md)
 		ret, err = t.client.Update(ctx, identifier, obj, UpdateOptions{})
 	} else {
 		ret, err = t.client.Create(ctx, Identifier{
