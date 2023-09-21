@@ -294,7 +294,10 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 	// Common metadata which isn't a part of kubernetes metadata
 	meta.Annotations[annotationPrefix+"createdBy"] = cMeta.CreatedBy
 	meta.Annotations[annotationPrefix+"updatedBy"] = cMeta.UpdatedBy
-	meta.Annotations[annotationPrefix+"updateTimestamp"] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
+	// Only set the UpdateTimestamp metadata if it's non-zero
+	if !cMeta.UpdateTimestamp.IsZero() {
+		meta.Annotations[annotationPrefix+"updateTimestamp"] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
+	}
 
 	// The non-common metadata needs to be converted into annotations
 	for k, v := range obj.CustomMetadata().MapFields() {

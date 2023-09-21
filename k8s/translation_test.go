@@ -285,6 +285,19 @@ func TestMarshalJSON(t *testing.T) {
 		Status: complexObject.Status,
 	})
 
+	emptyObject := TestResourceObject{}
+	emptyBytes, _ := json.Marshal(testKubernetesObject{
+		Metadata: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				fmt.Sprintf("%screatedBy", annotationPrefix): "",
+				fmt.Sprintf("%supdatedBy", annotationPrefix): "",
+				// No updateTimestamp when it's a zero (empty) time
+				fmt.Sprintf("%scustomField1", annotationPrefix): "",
+				fmt.Sprintf("%scustomField2", annotationPrefix): "",
+			},
+		},
+	})
+
 	tests := []struct {
 		name          string
 		obj           resource.Object
@@ -307,6 +320,14 @@ func TestMarshalJSON(t *testing.T) {
 			extraLabels:   nil,
 			config:        ClientConfig{},
 			expectedJSON:  complexBytes,
+			expectedError: nil,
+		},
+		{
+			name:          "empty object",
+			obj:           &emptyObject,
+			extraLabels:   nil,
+			config:        ClientConfig{},
+			expectedJSON:  emptyBytes,
 			expectedError: nil,
 		},
 	}
