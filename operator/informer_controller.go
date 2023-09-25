@@ -177,7 +177,8 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 			NativeHistogramMinResetDuration: time.Hour,
 		}, []string{"event_type", "kind"}),
 		totalEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name:      "informer_events_total",
+			Name:      "events_total",
+			Subsystem: "informer",
 			Namespace: cfg.MetricsConfig.Namespace,
 			Help:      "Total number of informer events",
 		}, []string{"event_type", "kind"}),

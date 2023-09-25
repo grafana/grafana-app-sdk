@@ -45,20 +45,20 @@ func NewSchemalessClient(kubeConfig rest.Config, clientConfig ClientConfig) *Sch
 		clients:      make(map[string]*groupVersionClient),
 		requestDurations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       clientConfig.MetricsConfig.Namespace,
-			Subsystem:                       "kubernetes",
+			Subsystem:                       "kubernetes_client",
 			Name:                            "request_duration_seconds",
 			Help:                            "Time (in seconds) spent serving HTTP requests.",
 			Buckets:                         metrics.LatencyBuckets,
 			NativeHistogramBucketFactor:     clientConfig.MetricsConfig.NativeHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  clientConfig.MetricsConfig.NativeHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: time.Hour,
-		}, []string{"status_code", "method", "path"}),
+		}, []string{"status_code", "verb", "kind", "subresource"}),
 		totalRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
 			Name:      "requests_total",
-			Subsystem: "kubernetes",
+			Subsystem: "kubernetes_client",
 			Namespace: clientConfig.MetricsConfig.Namespace,
 			Help:      "Total number of kubernetes requests",
-		}, []string{"status_code", "method", "path"}),
+		}, []string{"status_code", "verb", "kind", "subresource"}),
 	}
 }
 
