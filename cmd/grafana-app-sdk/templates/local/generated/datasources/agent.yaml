@@ -78,6 +78,24 @@ data:
                   - __meta_kubernetes_pod_container_name
                 target_label: name
     metrics:
+      global:
+        scrape_interval: 15s
+        remote_write:
+        - url: "http://cortex.default.svc.cluster.local:9009/api/v1/push"
+      configs:
+        - name: default
+          scrape_configs:
+          - job_name: grafana
+            static_configs:
+              - targets: ['grafana.default.svc.cluster.local']
+          - job_name: plugin
+            metrics_path: '/api/plugins/{{.PluginID}}/metrics'
+            static_configs:
+              - targets: ['grafana.default.svc.cluster.local']
+          - job_name: operator
+            static_configs:
+              - targets: ['{{.PluginID}}-operator.default.svc.cluster.local:9090']
+      wal_directory: /var/lib/agent/data
     server:
         log_level: info
     traces:

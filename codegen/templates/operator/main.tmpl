@@ -7,6 +7,7 @@ import (
     "syscall"
 
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/k8s"
 
@@ -43,11 +44,16 @@ func main() {
 		panic(err)
     }
 
+    // Prometheus metrics exporter (will expose the /metrics endpoint for scraping)
+    exporter := metrics.NewExporter(metrics.ExporterConfig{})
+
     // Create our client generator, using kubernetes as a store
     clientGenerator := k8s.NewClientRegistry(kubeConfig.RestConfig, k8s.ClientConfig{})
+    // Register kubernetes client metrics with the exporter (remove this line if you don't want these metrics)
+    exporter.RegisterCollectors(clientGenerator.PrometheusCollectors()...)
 
     // Create the controller which we'll attach our informer(s) and watcher(s) to
-    controller := operator.NewInformerController()
+    controller := operator.NewInformerController(operator.InformerControllerConfig{})
 
     // Wrap our resource watchers in OpinionatedWatchers, then add them to the controller
     {{ $p := .WatcherPackage }}{{ range .Resources }}{{.MachineName}}Client, err := clientGenerator.ClientFor({{.MachineName}}.Schema())
@@ -88,8 +94,13 @@ func main() {
     {{ end }}
 
     // Create our operator
-    op := operator.New()
-    op.AddController(controller)
+    runner := operator.New()
+    runner.AddController(controller)
+
+    // Register the operator runner metric collectors
+    exporter.RegisterCollectors(runner.PrometheusCollectors()...)
+    // Add the metrics exporter to the operator runner (allowing the operator to run it instead of needing to run it separately)
+    runner.AddController(exporter)
 
     stopCh := make(chan struct{})
 
@@ -103,7 +114,7 @@ func main() {
 
     // Run
 	logging.DefaultLogger.Info("Starting operator")
-    err = op.Run(stopCh)
+    err = runner.Run(stopCh)
     if err != nil {
         logging.DefaultLogger.With("error", err).Error("Operator exited with error")
 		panic(err)

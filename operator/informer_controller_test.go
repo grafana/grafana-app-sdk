@@ -13,19 +13,19 @@ import (
 
 func TestInformerController_AddWatcher(t *testing.T) {
 	t.Run("nil watcher", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		err := c.AddWatcher(nil, "")
 		assert.Equal(t, errors.New("watcher cannot be nil"), err)
 	})
 
 	t.Run("empty resourceKind", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		err := c.AddWatcher(&SimpleWatcher{}, "")
 		assert.Equal(t, errors.New("resourceKind cannot be empty"), err)
 	})
 
 	t.Run("first watcher", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		w := &SimpleWatcher{}
 		k := "foo"
 		err := c.AddWatcher(w, k)
@@ -36,7 +36,7 @@ func TestInformerController_AddWatcher(t *testing.T) {
 	})
 
 	t.Run("existing watchers", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		w1 := &SimpleWatcher{}
 		w2 := &SimpleWatcher{}
 		k := "foo"
@@ -57,19 +57,19 @@ func TestInformerController_AddWatcher(t *testing.T) {
 
 func TestInformerController_RemoveWatcher(t *testing.T) {
 	t.Run("nil watcher", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveWatcher(nil, "")
 	})
 
 	t.Run("empty resourceKind", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveWatcher(&SimpleWatcher{}, "")
 	})
 
 	t.Run("not in list", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		w1 := &SimpleWatcher{}
 		w2 := &SimpleWatcher{}
 		k := "foo"
@@ -79,7 +79,7 @@ func TestInformerController_RemoveWatcher(t *testing.T) {
 	})
 
 	t.Run("only watcher in list", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		w := &SimpleWatcher{}
 		k := "foo"
 		c.AddWatcher(w, k)
@@ -93,7 +93,7 @@ func TestInformerController_RemoveWatcher(t *testing.T) {
 		w3 := &SimpleWatcher{}
 		w4 := &SimpleWatcher{}
 		resourceKind := "foo"
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.AddWatcher(w1, resourceKind)
 		c.AddWatcher(w2, resourceKind)
 		c.AddWatcher(w3, resourceKind)
@@ -125,13 +125,13 @@ func TestInformerController_RemoveWatcher(t *testing.T) {
 
 func TestInformerController_RemoveAllWatchersForResource(t *testing.T) {
 	t.Run("empty key", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveAllWatchersForResource("")
 	})
 
 	t.Run("no watchers", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveAllWatchersForResource("foo")
 	})
@@ -142,7 +142,7 @@ func TestInformerController_RemoveAllWatchersForResource(t *testing.T) {
 		w3 := &SimpleWatcher{}
 		k1 := "foo"
 		k2 := "bar"
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.AddWatcher(w1, k1)
 		c.AddWatcher(w2, k1)
 		c.AddWatcher(w3, k2)
@@ -155,19 +155,19 @@ func TestInformerController_RemoveAllWatchersForResource(t *testing.T) {
 
 func TestInformerController_AddReconciler(t *testing.T) {
 	t.Run("nil reconciler", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		err := c.AddReconciler(nil, "")
 		assert.Equal(t, errors.New("reconciler cannot be nil"), err)
 	})
 
 	t.Run("empty resourceKind", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		err := c.AddReconciler(&SimpleReconciler{}, "")
 		assert.Equal(t, errors.New("resourceKind cannot be empty"), err)
 	})
 
 	t.Run("first reconciler", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		r := &SimpleReconciler{}
 		k := "foo"
 		err := c.AddReconciler(r, k)
@@ -178,7 +178,7 @@ func TestInformerController_AddReconciler(t *testing.T) {
 	})
 
 	t.Run("existing reconcilers", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		r1 := &SimpleReconciler{}
 		r2 := &SimpleReconciler{}
 		k := "foo"
@@ -199,19 +199,19 @@ func TestInformerController_AddReconciler(t *testing.T) {
 
 func TestInformerController_RemoveReconciler(t *testing.T) {
 	t.Run("nil reconciler", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveReconciler(nil, "")
 	})
 
 	t.Run("empty resourceKind", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveReconciler(&SimpleReconciler{}, "")
 	})
 
 	t.Run("not in list", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		r1 := &SimpleReconciler{}
 		r2 := &SimpleReconciler{}
 		k := "foo"
@@ -221,7 +221,7 @@ func TestInformerController_RemoveReconciler(t *testing.T) {
 	})
 
 	t.Run("only reconciler in list", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		r := &SimpleReconciler{}
 		k := "foo"
 		c.AddReconciler(r, k)
@@ -235,7 +235,7 @@ func TestInformerController_RemoveReconciler(t *testing.T) {
 		r3 := &SimpleReconciler{}
 		r4 := &SimpleReconciler{}
 		resourceKind := "foo"
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.AddReconciler(r1, resourceKind)
 		c.AddReconciler(r2, resourceKind)
 		c.AddReconciler(r3, resourceKind)
@@ -267,13 +267,13 @@ func TestInformerController_RemoveReconciler(t *testing.T) {
 
 func TestInformerController_RemoveAllReconcilersForResource(t *testing.T) {
 	t.Run("empty key", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveAllReconcilersForResource("")
 	})
 
 	t.Run("no watchers", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Ensure no panics
 		c.RemoveAllReconcilersForResource("foo")
 	})
@@ -284,7 +284,7 @@ func TestInformerController_RemoveAllReconcilersForResource(t *testing.T) {
 		r3 := &SimpleReconciler{}
 		k1 := "foo"
 		k2 := "bar"
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.AddReconciler(r1, k1)
 		c.AddReconciler(r2, k1)
 		c.AddReconciler(r3, k2)
@@ -297,19 +297,19 @@ func TestInformerController_RemoveAllReconcilersForResource(t *testing.T) {
 
 func TestInformerController_AddInformer(t *testing.T) {
 	t.Run("nil informer", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		err := c.AddInformer(nil, "")
 		assert.Equal(t, errors.New("informer cannot be nil"), err)
 	})
 
 	t.Run("empty resourceKind", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		err := c.AddInformer(&mockInformer{}, "")
 		assert.Equal(t, errors.New("resourceKind cannot be empty"), err)
 	})
 
 	t.Run("first informer", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		i := &mockInformer{}
 		k := "foo"
 		err := c.AddInformer(i, k)
@@ -320,7 +320,7 @@ func TestInformerController_AddInformer(t *testing.T) {
 	})
 
 	t.Run("existing informers", func(t *testing.T) {
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		i1 := &mockInformer{}
 		i2 := &mockInformer{}
 		k := "foo"
@@ -342,7 +342,7 @@ func TestInformerController_AddInformer(t *testing.T) {
 func TestInformerController_Run(t *testing.T) {
 	t.Run("normal operation", func(t *testing.T) {
 		wg := sync.WaitGroup{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		inf1 := &mockInformer{
 			RunFunc: func(stopCh <-chan struct{}) error {
 				<-stopCh
@@ -376,7 +376,7 @@ func TestInformerController_Run(t *testing.T) {
 
 	t.Run("normal operation", func(t *testing.T) {
 		wg := sync.WaitGroup{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		inf1 := &mockInformer{
 			RunFunc: func(stopCh <-chan struct{}) error {
 				<-stopCh
@@ -415,7 +415,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		addCalls := 0
 		reconcileCalls := 0
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addCalls++
@@ -433,7 +433,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		// Run
 		stopCh := make(chan struct{})
 		go c.Run(stopCh)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		close(stopCh)
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 1, reconcileCalls)
@@ -444,7 +444,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		addCalls := 0
 		reconcileCalls := 0
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
 			if attempt >= 1 {
 				return false, 0
@@ -472,7 +472,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		// Run
 		stopCh := make(chan struct{})
 		go c.Run(stopCh)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
 		close(stopCh)
 		assert.Equal(t, 2, addCalls)
@@ -484,7 +484,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		addCalls := 0
 		reconcileCalls := 0
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
 			if attempt >= 1 {
 				return false, 0
@@ -521,7 +521,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		// Run
 		stopCh := make(chan struct{})
 		go c.Run(stopCh)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
 		close(stopCh)
 		assert.Equal(t, 1, addCalls)
@@ -533,7 +533,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		addCalls := 0
 		reconcileCalls := 0
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
 			if attempt >= 1 {
 				return false, 0
@@ -571,7 +571,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		// Run
 		stopCh := make(chan struct{})
 		go c.Run(stopCh)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
 		close(stopCh)
 		assert.Equal(t, 2, addCalls)
@@ -583,7 +583,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		addCalls := 0
 		reconcileCalls := 0
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
 			if attempt > 1 {
 				return false, 0
@@ -611,7 +611,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		// Run
 		stopCh := make(chan struct{})
 		go c.Run(stopCh)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
 		close(stopCh)
 		assert.Equal(t, 1, addCalls)
@@ -623,7 +623,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		addCalls := 0
 		reconcileCalls := 0
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
 			if attempt > 1 {
 				return false, 0
@@ -652,7 +652,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		// Run
 		stopCh := make(chan struct{})
 		go c.Run(stopCh)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
 		close(stopCh)
 		assert.Equal(t, 2, addCalls)
@@ -674,7 +674,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 			wg.Done()
 		},
 	}
-	c := NewInformerController()
+	c := NewInformerController(InformerControllerConfig{})
 	// One-second multiplier on exponential backoff.
 	// Backoff will be 1s, 2s, 4s, 8s, 16s
 	c.RetryPolicy = ExponentialBackoffRetryPolicy(time.Second, 5)
@@ -697,11 +697,11 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 		assert.Nil(t, err)
 		wg.Done()
 	}()
-	inf.FireAdd(context.Background(), nil)
+	inf.FireAdd(context.Background(), emptyObject)
 	// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
 	time.Sleep(time.Second * 10)
 	// Fire an update, which should halt the add retries
-	inf.FireUpdate(context.Background(), nil, nil)
+	inf.FireUpdate(context.Background(), nil, emptyObject)
 	go func() {
 		// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
 		time.Sleep(time.Second * 10)
@@ -726,7 +726,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 				wg.Done()
 			},
 		}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Make the retry ticker interval a half-second so we can run this test faster
 		c.retryTickerInterval = time.Millisecond * 500
 		// 500-ms linear retry policy
@@ -752,11 +752,11 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			assert.Nil(t, err)
 			wg.Done()
 		}()
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		// Wait for what should be four retries
 		time.Sleep(time.Millisecond * 2300)
 		// Fire an update, which should halt the add retries
-		inf.FireUpdate(context.Background(), nil, nil)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 		go func() {
 			// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
 			time.Sleep(time.Second)
@@ -782,7 +782,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 				wg.Done()
 			},
 		}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Make the retry ticker interval a 50 ms so we can run this test faster
 		c.retryTickerInterval = time.Millisecond * 50
 		// 500-ms linear retry policy
@@ -814,10 +814,10 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			assert.Nil(t, err)
 			wg.Done()
 		}()
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 		time.Sleep(time.Millisecond * 500)
-		inf.FireUpdate(context.Background(), nil, nil)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 		go func() {
 			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 			time.Sleep(time.Millisecond * 500)
@@ -839,7 +839,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 				wg.Done()
 			},
 		}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		// Make the retry ticker interval a 50 ms so we can run this test faster
 		c.retryTickerInterval = time.Millisecond * 50
 		// 500-ms linear retry policy
@@ -864,7 +864,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			assert.Nil(t, err)
 			wg.Done()
 		}()
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 		go func() {
 			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 			time.Sleep(time.Millisecond * 500)
@@ -880,7 +880,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 	t.Run("linear retry, don't dequeue", func(t *testing.T) {
 		addError := errors.New("I AM ERROR")
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		retryQuery := make(chan error, 1)
 		retryResponse := make(chan bool, 10) // Larger buffer to avoid deadlocks
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
@@ -916,10 +916,10 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		// Fire off an add. This will fail in the watcher and ask the RetryPolicy if it should be retried.
 		// The RetryPolicy always says yes without waiting for the first ask (0 attempts),
 		// So this call will not block waiting for a response (testInformer.FireX calls block until the handlers are finished)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 
 		// Now that the retry is queued, we can fire off an update. This SHOULD NOT dequeue the pending add
-		inf.FireUpdate(context.Background(), nil, nil)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
 		timeout := make(chan struct{})
@@ -940,7 +940,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		addError := errors.New("I AM ERROR")
 		updateError := errors.New("JE SUIS ERROR")
 		inf := &testInformer{}
-		c := NewInformerController()
+		c := NewInformerController(InformerControllerConfig{})
 		retryQuery := make(chan error, 1)
 		retryResponse := make(chan bool, 10) // Larger buffer to avoid deadlocks
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
@@ -976,12 +976,12 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		// Fire off an add. This will fail in the watcher and ask the RetryPolicy if it should be retried.
 		// The RetryPolicy always says yes without waiting for the first ask (0 attempts),
 		// So this call will not block waiting for a response (testInformer.FireX calls block until the handlers are finished)
-		inf.FireAdd(context.Background(), nil)
+		inf.FireAdd(context.Background(), emptyObject)
 
 		// Now that the retry is queued, we can fire off an update. This SHOULD NOT dequeue the pending add.
 		// The update call should ALSO fail, which will query the retry policy, which will, on attempt 0, tell it to retry after 1 second
 		// without notifying the channel
-		inf.FireUpdate(context.Background(), nil, nil)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
 		timeout := make(chan struct{})
@@ -1153,3 +1153,5 @@ func (ti *testInformer) FireDelete(ctx context.Context, object resource.Object) 
 		w.Delete(ctx, object)
 	}
 }
+
+var emptyObject = &resource.SimpleObject[string]{}
