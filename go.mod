@@ -7,7 +7,7 @@ require (
 	github.com/dave/dst v0.27.2
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
-	github.com/grafana/grafana-plugin-sdk-go v0.175.0
+	github.com/grafana/grafana-plugin-sdk-go v0.178.0
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.0
