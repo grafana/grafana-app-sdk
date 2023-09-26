@@ -7,7 +7,10 @@ import (
 	"math"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -18,6 +21,9 @@ const (
 	ResourceActionUpdate = ResourceAction("UPDATE")
 	ResourceActionDelete = ResourceAction("DELETE")
 )
+
+// ErrNilObject indicates that a provided resource.Object is nil, and cannot be processed
+var ErrNilObject = errors.New("object cannot be nil")
 
 // ErrInformerAlreadyAdded indicates that there is already an informer for the resource kind mapped
 var ErrInformerAlreadyAdded = errors.New("informer for resource kind already added")
@@ -101,6 +107,12 @@ type InformerController struct {
 	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
 	retryTickerInterval time.Duration
+	totalEvents         *prometheus.CounterVec
+	reconcileLatency    *prometheus.HistogramVec
+	reconcilerLatency   *prometheus.HistogramVec
+	watcherLatency      *prometheus.HistogramVec
+	inflightActions     *prometheus.GaugeVec
+	inflightEvents      *prometheus.GaugeVec
 }
 
 type retryInfo struct {
@@ -112,8 +124,20 @@ type retryInfo struct {
 	err        error
 }
 
+// InformerControllerConfig contains configuration options for an InformerController
+type InformerControllerConfig struct {
+	MetricsConfig metrics.Config
+}
+
+// DefaultInformerControllerConfig returns an InformerControllerConfig with default values
+func DefaultInformerControllerConfig() InformerControllerConfig {
+	return InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig(""),
+	}
+}
+
 // NewInformerController creates a new controller
-func NewInformerController() *InformerController {
+func NewInformerController(cfg InformerControllerConfig) *InformerController {
 	return &InformerController{
 		RetryPolicy:         DefaultRetryPolicy,
 		ErrorHandler:        DefaultErrorHandler,
@@ -122,6 +146,52 @@ func NewInformerController() *InformerController {
 		reconcilers:         NewListMap[Reconciler](),
 		toRetry:             NewListMap[retryInfo](),
 		retryTickerInterval: time.Second,
+		reconcileLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace:                       cfg.MetricsConfig.Namespace,
+			Subsystem:                       "informer",
+			Name:                            "reconcile_duration_seconds",
+			Help:                            "Time (in seconds) spent performing all reconcile actions for an event.",
+			Buckets:                         metrics.LatencyBuckets,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: time.Hour,
+		}, []string{"event_type", "kind"}),
+		reconcilerLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace:                       cfg.MetricsConfig.Namespace,
+			Subsystem:                       "reconciler",
+			Name:                            "process_duration_seconds",
+			Help:                            "Time (in seconds) spent performing individual reconciler actions.",
+			Buckets:                         metrics.LatencyBuckets,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: time.Hour,
+		}, []string{"event_type", "kind"}),
+		watcherLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace:                       cfg.MetricsConfig.Namespace,
+			Subsystem:                       "watcher",
+			Name:                            "process_duration_seconds",
+			Help:                            "Time (in seconds) spent perfoming individual watcher actions.",
+			Buckets:                         metrics.LatencyBuckets,
+			NativeHistogramBucketFactor:     cfg.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.MetricsConfig.NativeHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: time.Hour,
+		}, []string{"event_type", "kind"}),
+		totalEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "events_total",
+			Subsystem: "informer",
+			Namespace: cfg.MetricsConfig.Namespace,
+			Help:      "Total number of informer events",
+		}, []string{"event_type", "kind"}),
+		inflightActions: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name:      "ongoing_reconcile_processes",
+			Namespace: cfg.MetricsConfig.Namespace,
+			Help:      "Current number of ongoing reconciliation (reconciler or watcher) processes",
+		}, []string{"event_type", "kind"}),
+		inflightEvents: prometheus.NewGaugeVec(prometheus.GaugeOpts{
+			Name:      "ongoing_reconcile_events",
+			Namespace: cfg.MetricsConfig.Namespace,
+			Help:      "Current number of events which have active reconcile processes",
+		}, []string{"event_type", "kind"}),
 	}
 }
 
@@ -225,9 +295,24 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
+// PrometheusCollectors returns the prometheus metric collectors used by this informer to allow for registration
+func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		c.totalEvents, c.reconcileLatency, c.inflightEvents, c.inflightActions, c.reconcilerLatency, c.watcherLatency,
+	}
+}
+
 // nolint:dupl
 func (c *InformerController) informerAddFunc(resourceKind string) func(context.Context, resource.Object) error {
 	return func(ctx context.Context, obj resource.Object) error {
+		if obj == nil {
+			return ErrNilObject
+		}
+
+		// Metrics for the whole reconcile process
+		eventStart := c.startEvent(string(ResourceActionCreate), obj.StaticMetadata().Kind)
+		defer c.completeEvent(string(ResourceActionCreate), obj.StaticMetadata().Kind, eventStart)
+
 		ctx, span := GetTracer().Start(ctx, "controller-event-add")
 		defer span.End()
 		// Handle all watchers for the add for this resource kind
@@ -239,17 +324,19 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 			c.dequeueIfRequired(retryKey, obj, ResourceActionCreate)
 
 			// Do the watcher's Add, check for error
-			err := watcher.Add(ctx, obj)
-			if err != nil && c.ErrorHandler != nil {
-				c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
-			}
-			if err != nil && c.RetryPolicy != nil {
-				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-					ctx, span := GetTracer().Start(ctx, "controller-retry")
-					defer span.End()
-					return nil, watcher.Add(ctx, obj)
-				}, ResourceActionCreate, obj)
-			}
+			c.wrapWatcherCall(string(ResourceActionCreate), obj.StaticMetadata().Kind, func() {
+				err := watcher.Add(ctx, obj)
+				if err != nil && c.ErrorHandler != nil {
+					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
+				}
+				if err != nil && c.RetryPolicy != nil {
+					c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+						ctx, span := GetTracer().Start(ctx, "controller-retry")
+						defer span.End()
+						return nil, watcher.Add(ctx, obj)
+					}, ResourceActionCreate, obj)
+				}
+			})
 		})
 		// Handle all reconcilers for the add for this resource kind
 		c.reconcilers.Range(resourceKind, func(idx int, reconciler Reconciler) {
@@ -273,6 +360,14 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 // nolint:dupl
 func (c *InformerController) informerUpdateFunc(resourceKind string) func(context.Context, resource.Object, resource.Object) error {
 	return func(ctx context.Context, oldObj resource.Object, newObj resource.Object) error {
+		if newObj == nil {
+			return ErrNilObject
+		}
+
+		// Metrics for the whole reconcile process
+		eventStart := c.startEvent(string(ResourceActionUpdate), newObj.StaticMetadata().Kind)
+		defer c.completeEvent(string(ResourceActionUpdate), newObj.StaticMetadata().Kind, eventStart)
+
 		ctx, span := GetTracer().Start(ctx, "controller-event-update")
 		defer span.End()
 		// Handle all watchers for the update for this resource kind
@@ -284,17 +379,19 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
 
 			// Do the watcher's Update, check for error
-			err := watcher.Update(ctx, oldObj, newObj)
-			if err != nil && c.ErrorHandler != nil {
-				c.ErrorHandler(ctx, err)
-			}
-			if err != nil && c.RetryPolicy != nil {
-				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-					ctx, span := GetTracer().Start(ctx, "controller-retry")
-					defer span.End()
-					return nil, watcher.Update(ctx, oldObj, newObj)
-				}, ResourceActionUpdate, newObj)
-			}
+			c.wrapWatcherCall(string(ResourceActionUpdate), newObj.StaticMetadata().Kind, func() {
+				err := watcher.Update(ctx, oldObj, newObj)
+				if err != nil && c.ErrorHandler != nil {
+					c.ErrorHandler(ctx, err)
+				}
+				if err != nil && c.RetryPolicy != nil {
+					c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+						ctx, span := GetTracer().Start(ctx, "controller-retry")
+						defer span.End()
+						return nil, watcher.Update(ctx, oldObj, newObj)
+					}, ResourceActionUpdate, newObj)
+				}
+			})
 		})
 		// Handle all reconcilers for the update for this resource kind
 		c.reconcilers.Range(resourceKind, func(index int, reconciler Reconciler) {
@@ -318,6 +415,14 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 // nolint:dupl
 func (c *InformerController) informerDeleteFunc(resourceKind string) func(context.Context, resource.Object) error {
 	return func(ctx context.Context, obj resource.Object) error {
+		if obj == nil {
+			return ErrNilObject
+		}
+
+		// Metrics for the whole reconcile process
+		eventStart := c.startEvent(string(ResourceActionDelete), obj.StaticMetadata().Kind)
+		defer c.completeEvent(string(ResourceActionDelete), obj.StaticMetadata().Kind, eventStart)
+
 		ctx, span := GetTracer().Start(ctx, "controller-event-delete")
 		defer span.End()
 		// Handle all watchers for the add for this resource kind
@@ -328,18 +433,23 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Dequeue retries according to the RetryDequeuePolicy
 			c.dequeueIfRequired(retryKey, obj, ResourceActionDelete)
 
+			c.inflightActions.WithLabelValues(string(ResourceActionUpdate), obj.StaticMetadata().Kind).Inc()
+			defer c.inflightActions.WithLabelValues(string(ResourceActionUpdate), obj.StaticMetadata().Kind).Dec()
+
 			// Do the watcher's Delete, check for error
-			err := watcher.Delete(ctx, obj)
-			if err != nil && c.ErrorHandler != nil {
-				c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
-			}
-			if err != nil && c.RetryPolicy != nil {
-				c.queueRetry(retryKey, err, func() (*time.Duration, error) {
-					ctx, span := GetTracer().Start(ctx, "controller-retry")
-					defer span.End()
-					return nil, watcher.Delete(ctx, obj)
-				}, ResourceActionDelete, obj)
-			}
+			c.wrapWatcherCall(string(ResourceActionDelete), obj.StaticMetadata().Kind, func() {
+				err := watcher.Delete(ctx, obj)
+				if err != nil && c.ErrorHandler != nil {
+					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
+				}
+				if err != nil && c.RetryPolicy != nil {
+					c.queueRetry(retryKey, err, func() (*time.Duration, error) {
+						ctx, span := GetTracer().Start(ctx, "controller-retry")
+						defer span.End()
+						return nil, watcher.Delete(ctx, obj)
+					}, ResourceActionDelete, obj)
+				}
+			})
 		})
 		// Handle all reconcilers for the add for this resource kind
 		c.reconcilers.Range(resourceKind, func(idx int, reconciler Reconciler) {
@@ -354,6 +464,7 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 				Action: ReconcileActionDeleted,
 				Object: obj,
 			}
+
 			c.doReconcile(ctx, reconciler, req, retryKey)
 		})
 		return nil
@@ -372,6 +483,17 @@ func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectSta
 }
 
 func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconciler, req ReconcileRequest, retryKey string) {
+	// Metrics for the reconcile action
+	action := ResourceActionFromReconcileAction(req.Action)
+	if c.inflightActions != nil {
+		c.inflightActions.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Inc()
+		defer c.inflightActions.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Dec()
+	}
+	if c.reconcilerLatency != nil {
+		start := time.Now()
+		defer c.reconcilerLatency.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Observe(time.Since(start).Seconds())
+	}
+
 	ctx, span := GetTracer().Start(ctx, "controller-event-reconcile")
 	defer span.End()
 	// Do the reconcile
@@ -450,6 +572,37 @@ func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
 		case <-stopCh:
 			return
 		}
+	}
+}
+
+func (c *InformerController) startEvent(eventType string, resourceKind string) time.Time {
+	if c.totalEvents != nil {
+		c.totalEvents.WithLabelValues(eventType, resourceKind).Inc()
+	}
+	if c.inflightEvents != nil {
+		c.inflightEvents.WithLabelValues(eventType, resourceKind).Inc()
+	}
+	return time.Now()
+}
+
+func (c *InformerController) completeEvent(eventType string, resourceKind string, startTime time.Time) {
+	if c.inflightEvents != nil {
+		c.inflightEvents.WithLabelValues(eventType, resourceKind).Dec()
+	}
+	if c.reconcileLatency != nil {
+		c.reconcileLatency.WithLabelValues(eventType, resourceKind).Observe(time.Since(startTime).Seconds())
+	}
+}
+
+func (c *InformerController) wrapWatcherCall(eventType string, resourceKind string, f func()) {
+	if c.inflightActions != nil {
+		c.inflightActions.WithLabelValues(eventType, resourceKind).Inc()
+		defer c.inflightActions.WithLabelValues(eventType, resourceKind).Dec()
+	}
+	start := time.Now()
+	f()
+	if c.watcherLatency != nil {
+		c.watcherLatency.WithLabelValues(eventType, resourceKind).Observe(time.Since(start).Seconds())
 	}
 }
 

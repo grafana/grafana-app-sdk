@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -26,6 +29,10 @@ type SchemalessClient struct {
 	clients map[string]*groupVersionClient
 
 	mutex sync.Mutex
+
+	// prometheus collectors for the client
+	requestDurations *prometheus.HistogramVec
+	totalRequests    *prometheus.CounterVec
 }
 
 // NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
@@ -36,6 +43,22 @@ func NewSchemalessClient(kubeConfig rest.Config, clientConfig ClientConfig) *Sch
 		kubeConfig:   kubeConfig,
 		clientConfig: clientConfig,
 		clients:      make(map[string]*groupVersionClient),
+		requestDurations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace:                       clientConfig.MetricsConfig.Namespace,
+			Subsystem:                       "kubernetes_client",
+			Name:                            "request_duration_seconds",
+			Help:                            "Time (in seconds) spent serving HTTP requests.",
+			Buckets:                         metrics.LatencyBuckets,
+			NativeHistogramBucketFactor:     clientConfig.MetricsConfig.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  clientConfig.MetricsConfig.NativeHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: time.Hour,
+		}, []string{"status_code", "verb", "kind", "subresource"}),
+		totalRequests: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "requests_total",
+			Subsystem: "kubernetes_client",
+			Namespace: clientConfig.MetricsConfig.Namespace,
+			Help:      "Total number of kubernetes requests",
+		}, []string{"status_code", "verb", "kind", "subresource"}),
 	}
 }
 
@@ -188,6 +211,13 @@ func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullId
 	return client.watch(ctx, identifier.Namespace, s.getPlural(identifier), exampleObject, options)
 }
 
+// PrometheusCollectors returns the prometheus metric collectors used by this client to allow for registration
+func (s *SchemalessClient) PrometheusCollectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		s.totalRequests, s.requestDurations,
+	}
+}
+
 func (s *SchemalessClient) getClient(identifier resource.FullIdentifier) (*groupVersionClient, error) {
 	gv := schema.GroupVersion{
 		Group:   identifier.Group,
@@ -206,9 +236,11 @@ func (s *SchemalessClient) getClient(identifier resource.FullIdentifier) (*group
 		return nil, err
 	}
 	s.clients[gv.Identifier()] = &groupVersionClient{
-		client:  client,
-		version: identifier.Version,
-		config:  s.clientConfig,
+		client:           client,
+		version:          identifier.Version,
+		config:           s.clientConfig,
+		requestDurations: s.requestDurations,
+		totalRequests:    s.totalRequests,
 	}
 	return s.clients[gv.Identifier()], nil
 }

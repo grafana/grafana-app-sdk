@@ -80,7 +80,12 @@ func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
 		}
 
 		// Create our client generator, using kubernetes as a store
-		clientGenerator := k8s.NewClientRegistry(kcfg.RestConfig, k8s.ClientConfig{})
+		clientGenerator := k8s.NewClientRegistry(kcfg.RestConfig, k8s.ClientConfig{
+			MetricsConfig: metrics.Config{
+				Namespace: strings.ReplaceAll(pluginID, "-", "_"),
+			},
+		})
+		prometheus.MustRegister(clientGenerator.PrometheusCollectors()...)
 
         // Create our PluginService, then assign values to the individual Kind service(s)
         svc := PluginService{}

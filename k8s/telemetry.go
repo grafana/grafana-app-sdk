@@ -29,5 +29,3 @@ func GetTracer() trace.Tracer {
 	}
 	return tracer
 }
-
-// TODO: metrics, logging interface
