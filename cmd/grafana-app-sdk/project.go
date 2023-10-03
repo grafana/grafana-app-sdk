@@ -24,7 +24,7 @@ import (
 //go:embed templates/*.tmpl
 var templates embed.FS
 
-//go:embed templates/frontend-static/*
+//go:embed templates/frontend-static/* templates/frontend-static/.config/*
 var frontEndStaticFiles embed.FS
 
 var projectCmd = &cobra.Command{
