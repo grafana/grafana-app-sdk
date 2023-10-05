@@ -70,7 +70,7 @@ func (s *PluginService) Get{{ .Name }}Service(ctx context.Context) (plugin.{{ .N
 
 // newInstanceFactory returns an app.InstanceFactoryFunc to be used with app.Manage
 func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
-	return func(settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
+	return func(ctx context.Context, settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
         // Load the kubernetes config from the AppInstanceSettings
 		kcfg := kubeconfig.NamespacedConfig{}
 		err := kubeconfig.NewLoader().LoadFromSettings(settings, &kcfg)
