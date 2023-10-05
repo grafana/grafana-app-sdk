@@ -47,6 +47,7 @@ spec:
       labels:
         name: {{.PluginID}}-operator
     spec:
+      serviceAccount: operator
       containers:
         - image: {{.OperatorImage}}
           imagePullPolicy: IfNotPresent
@@ -60,9 +61,18 @@ spec:
               value: grpc
             - name: OTEL_SERVICE_NAME
               value: "{{.PluginID}}-operator"
+{{ if .WebhookProperties.Enabled }}
+            - name: WEBHOOK_PORT
+              value: "{{ .WebhookProperties.Port }}"
+            - name: WEBHOOK_CERT_PATH
+              value: /run/secrets/tls/tls.crt
+            - name: WEBHOOK_KEY_PATH
+              value: /run/secrets/tls/tls.key
+{{ end }}
           ports:
             - containerPort: 9090
-              name: metrics{{ if .WebhookProperties.Enabled }}
+              name: metrics
+{{ if .WebhookProperties.Enabled }}
             - containerPort: {{ .WebhookProperties.Port }}
               name: webhook-api
           volumeMounts:
@@ -72,8 +82,8 @@ spec:
       volumes:
         - name: webhook-certs
           secret:
-            secretName: webhook-tls-certs{{ end }}
-      serviceAccount: operator
+            secretName: webhook-tls-certs
+{{ end }}
 ---
 apiVersion: v1
 kind: Service
@@ -84,9 +94,12 @@ spec:
   selector:
     name: {{.PluginID}}-operator
   ports:
-    - port: 9090
-      targetPort: metrics{{ if .WebhookProperties.Enabled }}
-    - port: 443
+    - name: metrics
+      port: 9090
+      targetPort: metrics
+{{ if .WebhookProperties.Enabled }}
+    - name: webhook-api
+      port: 443
       targetPort: webhook-api
 {{ if ne .WebhookProperties.Mutating "" }}
 ---
@@ -111,7 +124,7 @@ webhooks:
           - {{.}}{{end}}
         resources: ["{{.PluralMachineName}}"]{{end}}
 {{ end }}
-  {{ if ne .WebhookProperties.Mutating "" }}
+{{ if ne .WebhookProperties.Validating "" }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
