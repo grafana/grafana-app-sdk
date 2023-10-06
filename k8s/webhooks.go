@@ -10,8 +10,11 @@ import (
 
 	"gomodules.xyz/jsonpatch/v2"
 	admission "k8s.io/api/admission/v1beta1"
+	conversion "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -25,6 +28,9 @@ type WebhookServerConfig struct {
 	ValidatingControllers map[resource.Schema]resource.ValidatingAdmissionController
 	// MutatingControllers is a map of schemas to their corresponding MutatingAdmissionController.
 	MutatingControllers map[resource.Schema]resource.MutatingAdmissionController
+	// KindConverters is a map of GroupKind to a Converter which can parse any valid version of the kind
+	// and return any valid version of the kind.
+	KindConverters map[metav1.GroupKind]Converter
 	// DefaultValidatingController is called for any /validate requests received which don't have an entry in ValidatingControllers.
 	// If left nil, an error will be returned to the caller instead.
 	DefaultValidatingController resource.ValidatingAdmissionController
@@ -52,6 +58,7 @@ type WebhookServer struct {
 	DefaultMutatingController resource.MutatingAdmissionController
 	validatingControllers     map[string]validatingAdmissionControllerTuple
 	mutatingControllers       map[string]mutatingAdmissionControllerTuple
+	converters                map[string]Converter
 	port                      int
 	tlsConfig                 TLSConfig
 }
@@ -75,6 +82,7 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 		DefaultMutatingController:   config.DefaultMutatingController,
 		validatingControllers:       make(map[string]validatingAdmissionControllerTuple),
 		mutatingControllers:         make(map[string]mutatingAdmissionControllerTuple),
+		converters:                  make(map[string]Converter),
 		port:                        config.Port,
 		tlsConfig:                   config.TLSConfig,
 	}
@@ -85,6 +93,10 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 
 	for sch, controller := range config.MutatingControllers {
 		ws.AddMutatingAdmissionController(controller, sch)
+	}
+
+	for gv, conv := range config.KindConverters {
+		ws.AddConverter(conv, gv)
 	}
 
 	return &ws, nil
@@ -116,6 +128,14 @@ func (w *WebhookServer) AddMutatingAdmissionController(controller resource.Mutat
 	}
 }
 
+// AddConverter adds a Converter to the WebhookServer, associated with the given group and kind.
+func (w *WebhookServer) AddConverter(converter Converter, groupKind metav1.GroupKind) {
+	if w.converters == nil {
+		w.converters = make(map[string]Converter)
+	}
+	w.converters[gk(groupKind.Group, groupKind.Kind)] = converter
+}
+
 // Run establishes an HTTPS server on the configured port and exposes `/validate` and `/mutate` paths for kubernetes
 // validating and mutating webhooks, respectively. It will block until either closeChan is closed (in which case it returns nil),
 // or the server encounters an unrecoverable error (in which case it returns the error).
@@ -123,6 +143,7 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/validate", w.HandleValidateHTTP)
 	mux.HandleFunc("/mutate", w.HandleMutateHTTP)
+	mux.HandleFunc("/convert", w.HandleConvertHTTP)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", w.port),
 		Handler:           mux,
@@ -146,11 +167,12 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 }
 
 // HandleValidateHTTP is the HTTP HandlerFunc for a kubernetes validating webhook call
-// nolint:errcheck,revive
+// nolint:errcheck,revive,funlen
 func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
 		writer.WriteHeader(http.StatusMethodNotAllowed)
+		logging.FromContext(req.Context()).Error("Bad method")
 		return
 	}
 
@@ -159,6 +181,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	defer req.Body.Close()
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
+		logging.FromContext(req.Context()).Error("Couldn't read body", "error", err)
 		return
 	}
 
@@ -166,6 +189,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
+		logging.FromContext(req.Context()).Error("Couldn't unmarshal", "error", err)
 		return
 	}
 
@@ -185,6 +209,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
 		writer.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, "validating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)))
+		logging.FromContext(req.Context()).Error("No controller", "error", err)
 		return
 	}
 
@@ -193,6 +218,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	if err != nil {
 		// TODO: different error?
 		writer.WriteHeader(http.StatusBadRequest)
+		logging.FromContext(req.Context()).Error("Couldn't translate request", "error", err)
 		return
 	}
 
@@ -297,6 +323,82 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	}
 	writer.WriteHeader(http.StatusOK)
 	writer.Write(bytes)
+}
+
+// HandleConvertHTTP is the HTTP HandlerFunc for a kubernetes CRD conversion webhook call
+// nolint:errcheck,revive,funlen
+func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.Request) {
+	// Only POST is allowed
+	if req.Method != http.MethodPost {
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Read the body
+	body, err := io.ReadAll(req.Body)
+	defer req.Body.Close()
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	// Unmarshal the ConversionReview
+	rev := conversion.ConversionReview{}
+	err = json.Unmarshal(body, &rev)
+	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	if rev.Response == nil {
+		rev.Response = &conversion.ConversionResponse{
+			ConvertedObjects: make([]runtime.RawExtension, 0),
+		}
+	}
+	rev.Response.UID = rev.Request.UID
+
+	// Go through each object in the request
+	for _, obj := range rev.Request.Objects {
+		// Partly unmarshal to find the kind and APIVersion
+		tm := metav1.TypeMeta{}
+		err = json.Unmarshal(obj.Raw, &tm)
+		if err != nil {
+			writer.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		// Get the associated converter for this kind
+		conv, ok := w.converters[gk(tm.GroupVersionKind().Group, tm.Kind)]
+		if !ok {
+			// No converter for this kind
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		// Do the conversion
+		// Partial unmarshal to get kind and APIVersion
+		res, err := conv.Convert(RawKind{
+			Kind:       tm.Kind,
+			APIVersion: tm.APIVersion,
+			Group:      tm.GroupVersionKind().Group,
+			Version:    tm.GroupVersionKind().Version,
+			Raw:        obj.Raw,
+		}, rev.Request.DesiredAPIVersion)
+		if err != nil {
+			// Conversion error
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		rev.Response.ConvertedObjects = append(rev.Response.ConvertedObjects, runtime.RawExtension{
+			Raw: res,
+		})
+	}
+	rev.Response.Result.Code = http.StatusOK
+	rev.Response.Result.Status = metav1.StatusSuccess
+	resp, err := json.Marshal(rev)
+	if err != nil {
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	writer.Write(resp)
 }
 
 func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredObject resource.Object) ([]byte, error) {

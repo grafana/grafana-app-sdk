@@ -54,8 +54,8 @@ func rawToObject(raw []byte, into resource.Object) error {
 	// Metadata from annotations
 	meta := make(map[string]any)
 	for k, v := range kubeObject.ObjectMetadata.Annotations {
-		if len(k) > len(annotationPrefix) && k[:len(annotationPrefix)] == annotationPrefix {
-			meta[k[len(annotationPrefix):]] = v
+		if len(k) > len(AnnotationPrefix) && k[:len(AnnotationPrefix)] == AnnotationPrefix {
+			meta[k[len(AnnotationPrefix):]] = v
 		}
 	}
 	// All the (required) CommonMetadata fields--thema parse gets mad otherwise
@@ -230,10 +230,10 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 			op.Path = "/metadata/" + strings.Join(parts[2:], "/")
 		} else {
 			// Otherwise, update the path to be in annotations, as that's where all the custom and non-kubernetes common metadata goes
-			// We just have to prefic the remaining part of the path with the annotationPrefix
+			// We just have to prefic the remaining part of the path with the AnnotationPrefix
 			// And replace '/' with '~1' for encoding into a patch path
 			endPart := strings.Join(parts[1:], "~1") // If there were slashes, we need to encode them
-			op.Path = fmt.Sprintf("/metadata/annotations/%s%s", strings.ReplaceAll(annotationPrefix, "/", "~1"), endPart)
+			op.Path = fmt.Sprintf("/metadata/annotations/%s%s", strings.ReplaceAll(AnnotationPrefix, "/", "~1"), endPart)
 			if op.Operation == resource.PatchOpReplace {
 				op.Operation = resource.PatchOpAdd // We change this for safety--they behave the same within a map, but if they key is absent, replace won't work
 			}
@@ -292,19 +292,19 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 		}
 	}
 	// Common metadata which isn't a part of kubernetes metadata
-	meta.Annotations[annotationPrefix+"createdBy"] = cMeta.CreatedBy
-	meta.Annotations[annotationPrefix+"updatedBy"] = cMeta.UpdatedBy
+	meta.Annotations[AnnotationPrefix+"createdBy"] = cMeta.CreatedBy
+	meta.Annotations[AnnotationPrefix+"updatedBy"] = cMeta.UpdatedBy
 	// Only set the UpdateTimestamp metadata if it's non-zero
 	if !cMeta.UpdateTimestamp.IsZero() {
-		meta.Annotations[annotationPrefix+"updateTimestamp"] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
+		meta.Annotations[AnnotationPrefix+"updateTimestamp"] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
 	}
 
 	// The non-common metadata needs to be converted into annotations
 	for k, v := range obj.CustomMetadata().MapFields() {
 		if cfg.CustomMetadataIsAnyType {
-			meta.Annotations[annotationPrefix+k] = toString(v)
+			meta.Annotations[AnnotationPrefix+k] = toString(v)
 		} else {
-			meta.Annotations[annotationPrefix+k] = v.(string)
+			meta.Annotations[AnnotationPrefix+k] = v.(string)
 		}
 	}
 

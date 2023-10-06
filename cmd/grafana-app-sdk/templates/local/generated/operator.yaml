@@ -85,9 +85,11 @@ spec:
     name: {{.PluginID}}-operator
   ports:
     - port: 9090
-      targetPort: metrics{{ if .WebhookProperties.Enabled }}
+      targetPort: metrics
+      name: metrics{{ if .WebhookProperties.Enabled }}
     - port: 443
       targetPort: webhook-api
+      name: webhook-api
 {{ if ne .WebhookProperties.Mutating "" }}
 ---
 apiVersion: admissionregistration.k8s.io/v1
