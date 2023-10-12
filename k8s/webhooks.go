@@ -394,8 +394,11 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 		}, rev.Request.DesiredAPIVersion)
 		if err != nil {
 			// Conversion error
-			writer.WriteHeader(http.StatusInternalServerError)
-			return
+			rev.Response.Result.Status = metav1.StatusFailure
+			rev.Response.Result.Code = http.StatusInternalServerError
+			rev.Response.Result.Message = "Error converting object"
+			logging.FromContext(req.Context()).Error("Error converting object", "error", err.Error())
+			break
 		}
 		rev.Response.ConvertedObjects = append(rev.Response.ConvertedObjects, runtime.RawExtension{
 			Raw: res,
