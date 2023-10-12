@@ -378,7 +378,7 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 		if !ok {
 			// No converter for this kind
 			rev.Response.Result.Status = metav1.StatusFailure
-			rev.Response.Result.Code = http.StatusInternalServerError
+			rev.Response.Result.Code = http.StatusUnprocessableEntity
 			rev.Response.Result.Message = fmt.Sprintf("No converter registered for kind %s", tm.Kind)
 			logging.FromContext(req.Context()).Error("No converter has been registered for this groupKind", "kind", tm.Kind, "group", tm.GetObjectKind().GroupVersionKind().Group)
 			break
