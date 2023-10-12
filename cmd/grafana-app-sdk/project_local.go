@@ -374,7 +374,9 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		// TODO: this is a hack workaround for now, this should eventually be in the CRD generator
 		if props.WebhookProperties.Converting != "" {
 			rawCRD := make(map[string]any)
-			yaml.Unmarshal(f.Data, &rawCRD)
+			if err := yaml.Unmarshal(f.Data, &rawCRD); err != nil {
+				return nil, err
+			}
 			spec, ok := rawCRD["spec"].(map[string]any)
 			if !ok {
 				return nil, fmt.Errorf("could not parse CRD")

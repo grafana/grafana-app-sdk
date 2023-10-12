@@ -6,7 +6,7 @@ type Converter interface {
 	// Convert converts a raw kubernetes kind into the target APIVersion.
 	// The RawKind argument will contain kind information and the raw kubernetes object,
 	// and the returned bytes are expected to be a raw kubernetes object of the same kind and targetAPIVersion
-	// APIVersion.
+	// APIVersion. The returned kubernetes object MUST have an apiVersion that matches targetAPIVersion.
 	Convert(obj RawKind, targetAPIVersion string) ([]byte, error)
 }
 

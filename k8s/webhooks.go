@@ -355,7 +355,11 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 			ConvertedObjects: make([]runtime.RawExtension, 0),
 		}
 	}
+	// Pre-fill the response
 	rev.Response.UID = rev.Request.UID
+	// We'll update this away from a success if there is an error along the way
+	rev.Response.Result.Code = http.StatusOK
+	rev.Response.Result.Status = metav1.StatusSuccess
 
 	// Go through each object in the request
 	for _, obj := range rev.Request.Objects {
@@ -363,15 +367,21 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 		tm := metav1.TypeMeta{}
 		err = json.Unmarshal(obj.Raw, &tm)
 		if err != nil {
-			writer.WriteHeader(http.StatusBadRequest)
-			return
+			rev.Response.Result.Status = metav1.StatusFailure
+			rev.Response.Result.Code = http.StatusInternalServerError
+			rev.Response.Result.Message = err.Error()
+			logging.FromContext(req.Context()).Error("Error unmarshaling basic type data from object for conversion", "error", err.Error())
+			break
 		}
 		// Get the associated converter for this kind
 		conv, ok := w.converters[gk(tm.GroupVersionKind().Group, tm.Kind)]
 		if !ok {
 			// No converter for this kind
-			writer.WriteHeader(http.StatusInternalServerError)
-			return
+			rev.Response.Result.Status = metav1.StatusFailure
+			rev.Response.Result.Code = http.StatusInternalServerError
+			rev.Response.Result.Message = fmt.Sprintf("No converter registered for kind %s", tm.Kind)
+			logging.FromContext(req.Context()).Error("No converter has been registered for this groupKind", "kind", tm.Kind, "group", tm.GetObjectKind().GroupVersionKind().Group)
+			break
 		}
 		// Do the conversion
 		// Partial unmarshal to get kind and APIVersion
@@ -391,8 +401,6 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 			Raw: res,
 		})
 	}
-	rev.Response.Result.Code = http.StatusOK
-	rev.Response.Result.Status = metav1.StatusSuccess
 	resp, err := json.Marshal(rev)
 	if err != nil {
 		writer.WriteHeader(http.StatusInternalServerError)
