@@ -368,7 +368,7 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 		err = json.Unmarshal(obj.Raw, &tm)
 		if err != nil {
 			rev.Response.Result.Status = metav1.StatusFailure
-			rev.Response.Result.Code = http.StatusInternalServerError
+			rev.Response.Result.Code = http.StatusBadRequest
 			rev.Response.Result.Message = err.Error()
 			logging.FromContext(req.Context()).Error("Error unmarshaling basic type data from object for conversion", "error", err.Error())
 			break
