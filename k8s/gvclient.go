@@ -22,7 +22,8 @@ import (
 const (
 	versionLabel = "grafana-app-sdk-resource-version"
 
-	annotationPrefix = "grafana.com/"
+	// AnnotationPrefix is the prefix used in annotations which contain grafana kind metadata
+	AnnotationPrefix = "grafana.com/"
 )
 
 // groupVersionClient is the underlying client both Client and SchemalessClient use.

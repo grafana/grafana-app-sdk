@@ -22,6 +22,8 @@ webhooks:
   validating: false
   # If true, expects a /mutating endpoint to be exposed by your operator on `port`
   mutating: false
+  # If true, expects a /convert endpoint to be exposed by your operator on `port` for CRD conversion
+  converting: false
   # The port the operator exposes an HTTPS server with the webhook endpoint(s) on
   port: 8443
 # Non-standard or additional datasources you want to automatically include in grafana's provisioned list
