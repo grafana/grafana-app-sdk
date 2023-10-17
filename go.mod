@@ -4,7 +4,7 @@ go 1.21
 
 require (
 	cuelang.org/go v0.5.0
-	github.com/dave/dst v0.27.2
+	github.com/dave/dst v0.27.3
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
 	github.com/grafana/grafana-plugin-sdk-go v0.184.0
