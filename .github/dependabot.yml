@@ -1,9 +1,13 @@
 version: 2
-
 updates:
 - package-ecosystem: gomod
   directory: "/"
   schedule:
     interval: daily
+  groups:
+    all:
+      patterns:
+        - "*"
   labels:
   - "type/dependabot"
+
