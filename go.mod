@@ -3,11 +3,11 @@ module github.com/grafana/grafana-app-sdk
 go 1.21
 
 require (
-	cuelang.org/go v0.5.0
+	cuelang.org/go v0.6.0
 	github.com/dave/dst v0.27.3
 	github.com/grafana/codejen v0.0.3
-	github.com/grafana/cuetsy v0.1.10
-	github.com/grafana/grafana-plugin-sdk-go v0.188.3
+	github.com/grafana/cuetsy v0.1.11
+	github.com/grafana/grafana-plugin-sdk-go v0.188.4
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.17.0
@@ -35,7 +35,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cheekybits/genny v1.0.0 // indirect
 	github.com/chromedp/cdproto v0.0.0-20220208224320-6efb837e6bc2 // indirect
-	github.com/cockroachdb/apd/v2 v2.0.2 // indirect
+	github.com/cockroachdb/apd/v3 v3.2.0 // indirect
 	github.com/cockroachdb/errors v1.9.1 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
@@ -52,7 +52,6 @@ require (
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/glog v1.1.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/flatbuffers v23.1.21+incompatible // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
@@ -99,7 +98,7 @@ require (
 	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
-	github.com/protocolbuffers/txtpbfmt v0.0.0-20220428173112-74888fd59c2b // indirect
+	github.com/protocolbuffers/txtpbfmt v0.0.0-20230328191034-3462fbc510c0 // indirect
 	github.com/rivo/uniseg v0.3.4 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
