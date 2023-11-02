@@ -1,101 +1,48 @@
 package codegen
 
 import (
+	"io/fs"
+
 	"github.com/grafana/codejen"
-
-	"github.com/grafana/grafana-app-sdk/codegen/templates"
-	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
-const (
-	CustomTargetResource = "resource"
-	CustomTargetModel    = "model"
-)
-
-// CRDGenerator returns a Generator which will create a CRD file
-func CRDGenerator(outputEncoder CRDOutputEncoder, outputExtension string) Generator {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(&crdGenerator{
-		outputExtension: outputExtension,
-		outputEncoder:   outputEncoder,
-	})
-	return g
+type JennyList[T any] interface {
+	Generate(...T) (codejen.Files, error)
 }
 
-// ResourceGenerator returns a Generator which will produce Go and Cue files for using a schema for storage
-func ResourceGenerator() Generator {
-	g := codejen.JennyListWithNamer[kindsys.Custom](namerFunc)
-	g.Append(&resourceGoTypesGenerator{},
-		&resourceObjectGenerator{},
-		&schemaGenerator{},
-		&lineageGenerator{},
-		&cueGenerator{})
-	return g
+type Parser[T any] interface {
+	Parse(fs.FS, ...string) ([]T, error)
 }
 
-// ModelsGenerator returns a Generator which will produce Go and CUE files for API contract models
-func ModelsGenerator() Generator {
-	g := codejen.JennyListWithNamer[kindsys.Custom](namerFunc)
-	g.Append(&modelGoTypesGenerator{},
-		&modelsFunctionsGenerator{},
-		&cueGenerator{})
-	return g
+func NewGenerator[T any](parser Parser[T], files fs.FS) (*Generator[T], error) {
+	return &Generator[T]{
+		p:     parser,
+		files: files,
+	}, nil
 }
 
-// BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string) Generator {
-	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
-
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(&routerHandlerCodeGenerator{
-		projectRepo:    projectRepo,
-		apiCodegenPath: generatedAPIPath,
-	},
-		&simpleFileReturnGenerator{
-			file: codejen.File{
-				RelativePath: "plugin/secure/data.go",
-				Data:         pluginSecurePkgFiles["data.go"],
-			},
-		},
-		&simpleFileReturnGenerator{
-			file: codejen.File{
-				RelativePath: "plugin/secure/middleware.go",
-				Data:         pluginSecurePkgFiles["middleware.go"],
-			},
-		},
-		&simpleFileReturnGenerator{
-			file: codejen.File{
-				RelativePath: "plugin/secure/retriever.go",
-				Data:         pluginSecurePkgFiles["retriever.go"],
-			},
-		},
-		&routerCodeGenerator{
-			projectRepo: projectRepo,
-		},
-		&backendPluginMainGenerator{
-			projectRepo:    projectRepo,
-			apiCodegenPath: generatedAPIPath,
-		})
-	return g
+type Generator[T any] struct {
+	files fs.FS
+	p     Parser[T]
 }
 
-// TypeScriptModelsGenerator returns a Generator which generates TypeScript model code
-func TypeScriptModelsGenerator() Generator {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(TSTypesJenny{})
-	return g
+func (g *Generator[T]) Generate(jennies JennyList[T], selectors ...string) (codejen.Files, error) {
+	return g.FilteredGenerate(jennies, func(t T) bool {
+		return true
+	}, selectors...)
 }
 
-// OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
-// and a main func to run an operator for the watchers.
-func OperatorGenerator(projectRepo, codegenPath string) Generator {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(&watcherJenny{
-		projectRepo: projectRepo,
-		codegenPath: codegenPath,
-	}, &operatorKubeConfigJenny{}, &operatorMainJenny{
-		projectRepo: projectRepo,
-		codegenPath: codegenPath,
-	}, &operatorConfigJenny{}, &operatorTelemetryJenny{})
-	return g
+func (g *Generator[T]) FilteredGenerate(jennies JennyList[T], filterFunc func(T) bool, selectors ...string) (codejen.Files, error) {
+	kinds, err := g.p.Parse(g.files, selectors...)
+	if err != nil {
+		return nil, err
+	}
+	filteredKinds := make([]T, 0)
+	for _, kind := range kinds {
+		if !filterFunc(kind) {
+			continue
+		}
+		filteredKinds = append(filteredKinds, kind)
+	}
+	return jennies.Generate(filteredKinds...)
 }

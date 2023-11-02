@@ -14,7 +14,7 @@ import (
 )
 
 type Service interface { {{ range .Resources }}
-    Get{{ .Name }}Service(context.Context) ({{.Name}}Service, error){{end}}
+    Get{{ .Kind }}Service(context.Context) ({{.Kind}}Service, error){{end}}
 }
 
 // Plugin is the backend plugin
@@ -52,13 +52,13 @@ func New(namespace string, service Service) (*Plugin, error) {
 	// V1 Routes
 	v1Subrouter := p.router.Subroute("v1/")
 	{{ range .Resources }}
-	// {{.Name}} subrouter
+	// {{.Kind}} subrouter
 	{{.MachineName}}Subrouter := v1Subrouter.Subroute("{{.PluralMachineName}}/")
-	v1Subrouter.Handle("{{.PluralMachineName}}", p.handle{{.Name}}List, http.MethodGet)
-	v1Subrouter.HandleWithCode("{{.PluralMachineName}}", p.handle{{.Name}}Create, http.StatusCreated, http.MethodPost)
-	{{.MachineName}}Subrouter.Handle("{name}", p.handle{{.Name}}Get, http.MethodGet)
-	{{.MachineName}}Subrouter.Handle("{name}", p.handle{{.Name}}Update, http.MethodPut)
-	{{.MachineName}}Subrouter.HandleWithCode("{name}", p.handle{{.Name}}Delete, http.StatusNoContent, http.MethodDelete)
+	v1Subrouter.Handle("{{.PluralMachineName}}", p.handle{{.Kind}}List, http.MethodGet)
+	v1Subrouter.HandleWithCode("{{.PluralMachineName}}", p.handle{{.Kind}}Create, http.StatusCreated, http.MethodPost)
+	{{.MachineName}}Subrouter.Handle("{name}", p.handle{{.Kind}}Get, http.MethodGet)
+	{{.MachineName}}Subrouter.Handle("{name}", p.handle{{.Kind}}Update, http.MethodPut)
+	{{.MachineName}}Subrouter.HandleWithCode("{name}", p.handle{{.Kind}}Delete, http.StatusNoContent, http.MethodDelete)
 	{{ end }}
 
 	return p, nil

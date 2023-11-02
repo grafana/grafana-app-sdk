@@ -5,7 +5,7 @@ import (
 	"io"
 	"text/template"
 
-	"github.com/grafana/grafana-app-sdk/kindsys"
+	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
 //go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl
@@ -75,6 +75,7 @@ type LineageMetadata struct {
 	CUESelector       string
 	SchemaPackagePath string
 	SchemaPackageName string
+	ObjectTypeName    string
 	Subresources      []SubresourceMetadata
 }
 
@@ -105,7 +106,7 @@ func WriteWrappedType(metadata WrappedTypeMetadata, out io.Writer) error {
 type BackendPluginRouterTemplateMetadata struct {
 	Repo           string
 	APICodegenPath string
-	Resources      []kindsys.CustomProperties
+	Resources      []codegen.KindProperties
 	PluginID       string
 }
 
@@ -116,7 +117,7 @@ func WriteBackendPluginRouter(metadata BackendPluginRouterTemplateMetadata, out 
 
 // BackendPluginHandlerTemplateMetadata is the metadata required by the Backend Plugin Handler template
 type BackendPluginHandlerTemplateMetadata struct {
-	kindsys.CustomProperties
+	codegen.KindProperties
 	Repo           string
 	APICodegenPath string
 	TypeName       string
@@ -160,7 +161,7 @@ func GetBackendPluginSecurePackageFiles() (map[string][]byte, error) {
 }
 
 type WatcherMetadata struct {
-	kindsys.CustomProperties
+	codegen.KindProperties
 	PackageName string
 	Repo        string
 	CodegenPath string
@@ -179,7 +180,7 @@ type OperatorMainMetadata struct {
 	Repo           string
 	CodegenPath    string
 	WatcherPackage string
-	Resources      []kindsys.CustomProperties
+	Resources      []codegen.KindProperties
 }
 
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {

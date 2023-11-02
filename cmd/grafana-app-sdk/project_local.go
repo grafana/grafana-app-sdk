@@ -27,7 +27,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/grafana-app-sdk/codegen"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
 //go:embed templates/local/* templates/local/scripts/* templates/local/generated/datasources/*
@@ -180,7 +180,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Generate the k8s YAML bundle
-	parser, err := codegen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
+	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
 	if err != nil {
 		return err
 	}
@@ -308,7 +308,7 @@ type crdYAML struct {
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
 //nolint:funlen,errcheck,revive
-func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, config localEnvConfig) ([]byte, error) {
+func generateKubernetesYAML(parser *themagen.CustomKindParser, pluginID string, config localEnvConfig) ([]byte, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
 		PluginID:       pluginID,

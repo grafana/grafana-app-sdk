@@ -15,8 +15,8 @@ import (
 // It is skipped if nil, and should be overridden in non-generated code for custom lacuna resolution.
 var LacunaResolver func(*LineageType, []thema.Lacuna) error = nil
 
-// Object is a resource.Object-implementing wrapper for customkind.
-// It contains static and object metadata, as well as the customkind struct itself.
+// Object is a resource.Object-implementing wrapper for CustomKind.
+// It contains static and object metadata, as well as the CustomKind struct itself.
 type Object struct {
 	// StaticMeta contains the static metadata (name, namespace, group, version, kind) that uniquely identifies this resource
 	// it is distinct from the Metadata field, which contains all other metadata for the object.
@@ -87,7 +87,7 @@ func (o *Object) CustomMetadata() resource.CustomMetadata {
 	}
 }
 
-// SpecObject returns the actual "schema" customkind object, which holds the main body of data.
+// SpecObject returns the actual "schema" CustomKind object, which holds the main body of data.
 func (o *Object) SpecObject() any {
 	return o.Spec
 }

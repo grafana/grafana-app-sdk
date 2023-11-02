@@ -8,7 +8,7 @@ import (
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
-	"github.com/grafana/grafana-app-sdk/codegen"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
 var validateCmd = &cobra.Command{
@@ -32,7 +32,7 @@ func validate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	generator, err := codegen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
+	generator, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
 	if err != nil {
 		return err
 	}

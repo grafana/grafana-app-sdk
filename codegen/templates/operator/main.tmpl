@@ -61,21 +61,21 @@ func main() {
         logging.DefaultLogger.With("error", err).Error("Unable to generate client for {{.MachineName}}")
         panic(err)
     }
-    {{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Name}}Watcher()
+    {{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
     if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Unable to create {{.Name}}Watcher")
+        logging.DefaultLogger.With("error", err).Error("Unable to create {{.Kind}}Watcher")
         panic(err)
     }
     {{.MachineName}}OpinionatedWatcher, err := operator.NewOpinionatedWatcher({{.MachineName}}.Schema(), {{.MachineName}}Client)
     if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Unable to create OpinionatedWatcher for {{.Name}}")
+        logging.DefaultLogger.With("error", err).Error("Unable to create OpinionatedWatcher for {{.Kind}}")
         panic(err)
     }
     {{.MachineName}}OpinionatedWatcher.Wrap({{.MachineName}}Watcher, false)
     {{.MachineName}}OpinionatedWatcher.SyncFunc = {{.MachineName}}Watcher.Sync
     err = controller.AddWatcher({{.MachineName}}OpinionatedWatcher, {{.MachineName}}.Schema().Kind())
     if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Error adding {{.Name}} watcher to controller")
+        logging.DefaultLogger.With("error", err).Error("Error adding {{.Kind}} watcher to controller")
         panic(err)
     }
     {{ end }}
@@ -83,12 +83,12 @@ func main() {
     // Add informers for each of our resource types
     {{ range .Resources }}{{.MachineName}}Informer, err := operator.NewKubernetesBasedInformer({{.MachineName}}.Schema(), {{.MachineName}}Client, kubeConfig.Namespace)
     if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Unable to create {{.Name}} informer")
+        logging.DefaultLogger.With("error", err).Error("Unable to create {{.Kind}} informer")
         panic(err)
     }
     err = controller.AddInformer({{.MachineName}}Informer, {{.MachineName}}.Schema().Kind())
     if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Error adding {{.Name}} informer to controller")
+        logging.DefaultLogger.With("error", err).Error("Error adding {{.Kind}} informer to controller")
         panic(err)
     }
     {{ end }}

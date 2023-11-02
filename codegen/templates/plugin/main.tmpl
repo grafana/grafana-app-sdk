@@ -4,9 +4,11 @@ import (
     "context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	sdkPlugin "github.com/grafana/grafana-app-sdk/plugin"
 	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -15,9 +17,10 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 
-    {{ range .Resources }}{{if .IsCRD }}"{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
+    {{ range .Resources }}{{if ne .APIResource nil }}"{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
     {{end}}"{{.Repo}}/pkg/plugin"
 )
 
@@ -59,18 +62,18 @@ func main() {
 
 // PluginService implements plugin.Service
 type PluginService struct { {{ range .Resources }}
-    {{ .MachineName }}Service plugin.{{ .Name }}Service{{ end }}
+    {{ .MachineName }}Service plugin.{{ .Kind }}Service{{ end }}
 }
 {{ range .Resources }}
-// Get{{ .Name }}Service returns a {{ .Name }}Service
-func (s *PluginService) Get{{ .Name }}Service(ctx context.Context) (plugin.{{ .Name }}Service, error) {
+// Get{{ .Kind }}Service returns a {{ .Kind }}Service
+func (s *PluginService) Get{{ .Kind }}Service(ctx context.Context) (plugin.{{ .Kind }}Service, error) {
     return s.{{ .MachineName }}Service, nil
 }
 {{ end }}
 
 // newInstanceFactory returns an app.InstanceFactoryFunc to be used with app.Manage
 func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
-	return func(settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
+	return func(ctx context.Context, settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
         // Load the kubernetes config from the AppInstanceSettings
 		kcfg := kubeconfig.NamespacedConfig{}
 		err := kubeconfig.NewLoader().LoadFromSettings(settings, &kcfg)
@@ -93,8 +96,8 @@ func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
 		// Create stores for each Kind{{ range .Resources }}
         {{ .MachineName }}Store, err := resource.NewTypedStore[*{{ .MachineName }}.Object]({{ .MachineName }}.Schema(), clientGenerator)
         if err != nil {
-            logger.Error("failed to create {{ .Name }} store", "err", err)
-            return nil, fmt.Errorf("failed to create {{ .Name }} store: %w", err)
+            logger.Error("failed to create {{ .Kind }} store", "err", err)
+            return nil, fmt.Errorf("failed to create {{ .Kind }} store: %w", err)
         }
         svc.{{ .MachineName }}Service = {{ .MachineName }}Store{{ end }}
 

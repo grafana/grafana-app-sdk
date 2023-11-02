@@ -15,7 +15,7 @@ import (
 	"{{.Repo}}/{{.APICodegenPath}}/models/{{.MachineName}}"
 )
 
-type {{.Name}}Service interface {
+type {{.Kind}}Service interface {
 	List(ctx context.Context, namespace string, filters ...string) ([]{{.MachineName}}.{{.TypeName}}, error)
 	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.{{.TypeName}}, error)
 	Add(ctx context.Context, namespace string, obj *{{.MachineName}}.{{.TypeName}}) (*{{.MachineName}}.{{.TypeName}}, error)
@@ -23,7 +23,7 @@ type {{.Name}}Service interface {
 	Delete(ctx context.Context, id resource.Identifier) error
 }
 
-func (p *Plugin) handle{{.Name}}List(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
+func (p *Plugin) handle{{.Kind}}List(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
 	ctx, span := tracing.DefaultTracer().Start(ctx, "{{.MachineName}}-list")
 	defer span.End()
 	filtersRaw := req.URL.Query().Get("filters")
@@ -31,20 +31,20 @@ func (p *Plugin) handle{{.Name}}List(ctx context.Context, req router.JSONRequest
 	if len(filtersRaw) > 0 {
 		filters = strings.Split(filtersRaw, ",")
 	}
-	svc, err := p.service.Get{{.Name}}Service(ctx)
+	svc, err := p.service.Get{{.Kind}}Service(ctx)
 	if err != nil {
-	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Name}}Service: " + err.Error(), "error", err)
+	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
 	    return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
 	}
 	return svc.List(ctx, p.namespace, filters...)
 }
 
-func (p *Plugin) handle{{.Name}}Get(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
+func (p *Plugin) handle{{.Kind}}Get(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
 	ctx, span := tracing.DefaultTracer().Start(ctx, "{{.MachineName}}-get")
 	defer span.End()
-    svc, err := p.service.Get{{.Name}}Service(ctx)
+    svc, err := p.service.Get{{.Kind}}Service(ctx)
     if err != nil {
-	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Name}}Service: " + err.Error(), "error", err)
+	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
         return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
     }
 	obj, err := svc.Get(ctx, resource.Identifier{
@@ -55,13 +55,13 @@ func (p *Plugin) handle{{.Name}}Get(ctx context.Context, req router.JSONRequest)
 		if e, ok := err.(errWithStatusCode); ok {
 			return nil, plugin.NewError(e.StatusCode(), e.Error())
 		} else {
-            log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Name}} '" + req.Vars.MustGet("name") + "': " + err.Error(), "error", err)
+            log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}} '" + req.Vars.MustGet("name") + "': " + err.Error(), "error", err)
         }
 	}
 	return obj, err
 }
 
-func (p *Plugin) handle{{.Name}}Create(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
+func (p *Plugin) handle{{.Kind}}Create(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
 	ctx, span := tracing.DefaultTracer().Start(ctx, "{{.MachineName}}-create")
 	defer span.End()
 	body, err := io.ReadAll(req.Body)
@@ -74,9 +74,9 @@ func (p *Plugin) handle{{.Name}}Create(ctx context.Context, req router.JSONReque
 		return nil, plugin.NewError(http.StatusBadRequest, err.Error())
 	}
 
-    svc, err := p.service.Get{{.Name}}Service(ctx)
+    svc, err := p.service.Get{{.Kind}}Service(ctx)
     if err != nil {
-	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Name}}Service: " + err.Error(), "error", err)
+	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
         return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
     }
 	obj, err := svc.Add(ctx, p.namespace, unmarshaled{{.TypeName}})
@@ -84,13 +84,13 @@ func (p *Plugin) handle{{.Name}}Create(ctx context.Context, req router.JSONReque
 		if e, ok := err.(errWithStatusCode); ok {
 			return nil, plugin.NewError(e.StatusCode(), e.Error())
 		} else {
-            log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error creating new {{.Name}}: " + err.Error(), "error", err)
+            log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error creating new {{.Kind}}: " + err.Error(), "error", err)
         }
 	}
 	return obj, err
 }
 
-func (p *Plugin) handle{{.Name}}Update(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
+func (p *Plugin) handle{{.Kind}}Update(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
 	ctx, span := tracing.DefaultTracer().Start(ctx, "{{.MachineName}}-update")
 	defer span.End()
 	body, err := io.ReadAll(req.Body)
@@ -103,9 +103,9 @@ func (p *Plugin) handle{{.Name}}Update(ctx context.Context, req router.JSONReque
 		return nil, plugin.NewError(http.StatusBadRequest, err.Error())
 	}
 
-    svc, err := p.service.Get{{.Name}}Service(ctx)
+    svc, err := p.service.Get{{.Kind}}Service(ctx)
     if err != nil {
-	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Name}}Service: " + err.Error(), "error", err)
+	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
         return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
     }
 	obj, err := svc.Update(ctx, resource.Identifier{
@@ -116,18 +116,18 @@ func (p *Plugin) handle{{.Name}}Update(ctx context.Context, req router.JSONReque
 		if e, ok := err.(errWithStatusCode); ok {
 			return nil, plugin.NewError(e.StatusCode(), e.Error())
 		} else {
-            log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error updating {{.Name}} '" + req.Vars.MustGet("name") + "': " + err.Error(), "error", err)
+            log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error updating {{.Kind}} '" + req.Vars.MustGet("name") + "': " + err.Error(), "error", err)
         }
 	}
 	return obj, err
 }
 
-func (p *Plugin) handle{{.Name}}Delete(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
+func (p *Plugin) handle{{.Kind}}Delete(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
 	ctx, span := tracing.DefaultTracer().Start(ctx, "{{.MachineName}}-delete")
 	defer span.End()
-    svc, err := p.service.Get{{.Name}}Service(ctx)
+    svc, err := p.service.Get{{.Kind}}Service(ctx)
     if err != nil {
-	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Name}}Service: " + err.Error(), "error", err)
+	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
         return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
     }
 	err = svc.Delete(ctx, resource.Identifier{
@@ -138,7 +138,7 @@ func (p *Plugin) handle{{.Name}}Delete(ctx context.Context, req router.JSONReque
 		if e, ok := err.(errWithStatusCode); ok {
 			return nil, plugin.NewError(e.StatusCode(), e.Error())
 		} else {
-	        log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error deleting {{.Name}} '" + req.Vars.MustGet("name") + "': " + err.Error(), "error", err)
+	        log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error deleting {{.Kind}} '" + req.Vars.MustGet("name") + "': " + err.Error(), "error", err)
 	    }
 	}
 	return nil, err
