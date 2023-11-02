@@ -2,7 +2,6 @@ package thema
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -56,15 +55,10 @@ func TestResourceGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	files, err := parser.Generate(ResourceGenerator(), "customKind")
-	fmt.Println(err)
 	require.Nil(t, err)
-	for _, f := range files {
-		err := os.WriteFile(f.RelativePath, f.Data, fs.ModePerm)
-		fmt.Println(err)
-		require.Nil(t, err)
-	}
 	// Check number of files generated
-	//assert.Len(t, files, 1)
+	// 8 -> object, spec, metadata, status, lineage (CUE), lineage (go), schema, cue.mod/module.cue
+	assert.Len(t, files, 8)
 	// Check content against the golden files
 	compareToGolden(t, files, "")
 }

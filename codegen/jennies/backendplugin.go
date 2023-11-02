@@ -9,6 +9,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
+// BackendPluginMainGenerator returns a many-to-one jenny which generates the `main.go` file needed to run the backend plugin.
 func BackendPluginMainGenerator(projectRepo, apiCodegenPath string) codejen.ManyToOne[codegen.Kind] {
 	return &backendPluginMainGenerator{
 		projectRepo:    projectRepo,
