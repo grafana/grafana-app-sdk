@@ -60,6 +60,7 @@ type dataSourceConfig struct {
 type localEnvWebhookConfig struct {
 	Mutating   bool `json:"mutating" yaml:"mutating"`
 	Validating bool `json:"validating" yaml:"validating"`
+	Converting bool `json:"converting" yaml:"converting"`
 	Port       int  `json:"port" yaml:"port"`
 }
 
@@ -286,6 +287,7 @@ type yamlGenPropsWebhooks struct {
 	Port       int
 	Mutating   string
 	Validating string
+	Converting string
 	Base64Cert string
 	Base64Key  string
 	Base64CA   string
@@ -320,7 +322,7 @@ func generateKubernetesYAML(parser *themagen.CustomKindParser, pluginID string, 
 		SecureJSONData: make(map[string]string),
 		OperatorImage:  config.OperatorImage,
 		WebhookProperties: yamlGenPropsWebhooks{
-			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating,
+			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 	}
@@ -349,6 +351,9 @@ func generateKubernetesYAML(parser *themagen.CustomKindParser, pluginID string, 
 		if config.Webhooks.Validating {
 			props.WebhookProperties.Validating = "/validate"
 		}
+		if config.Webhooks.Converting {
+			props.WebhookProperties.Converting = "/convert"
+		}
 		// Generate cert bundle
 		bundle, err := generateCerts(fmt.Sprintf("%s-operator.default.svc", props.PluginID))
 		if err != nil {
@@ -365,6 +370,33 @@ func generateKubernetesYAML(parser *themagen.CustomKindParser, pluginID string, 
 		return nil, err
 	}
 	for _, f := range crdFiles {
+		// If converting webhooks are enabled, upate the yaml
+		// TODO: this is a hack workaround for now, this should eventually be in the CRD generator
+		if props.WebhookProperties.Converting != "" {
+			rawCRD := make(map[string]any)
+			if err := yaml.Unmarshal(f.Data, &rawCRD); err != nil {
+				return nil, err
+			}
+			spec, ok := rawCRD["spec"].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("could not parse CRD")
+			}
+			spec["conversion"] = map[string]any{
+				"strategy": "Webhook",
+				"webhook": map[string]any{
+					"conversionReviewVersions": []string{"v1"},
+					"clientConfig": map[string]any{
+						"service": map[string]any{
+							"name":      "convtest-app-operator",
+							"namespace": "default",
+							"path":      "/convert",
+						},
+						"caBundle": props.WebhookProperties.Base64CA,
+					},
+				},
+			}
+		}
+
 		output.Write(append(f.Data, []byte("\n---\n")...))
 		yml := crdYAML{}
 		err = yaml.Unmarshal(f.Data, &yml)
