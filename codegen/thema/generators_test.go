@@ -2,7 +2,6 @@ package thema
 
 import (
 	"encoding/json"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -42,7 +41,6 @@ func TestCRDGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		os.WriteFile("crd.yaml", files[0].Data, fs.ModePerm)
 		compareToGolden(t, files, "")
 	})
 }
@@ -61,6 +59,31 @@ func TestResourceGenerator(t *testing.T) {
 	assert.Len(t, files, 8)
 	// Check content against the golden files
 	compareToGolden(t, files, "")
+}
+
+func TestTypeScriptModelsGenerator(t *testing.T) {
+	// Ideally, we test only that this outputs the right jennies,
+	// but right now we just test the whole pipeline from thema -> written files
+
+	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(TestCUEDirectory))
+	require.Nil(t, err)
+
+	t.Run("resource", func(t *testing.T) {
+		files, err := parser.Generate(TypeScriptModelsGenerator(), "customKind")
+		require.Nil(t, err)
+		// Check number of files generated
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "")
+	})
+	t.Run("model", func(t *testing.T) {
+		files, err := parser.Generate(TypeScriptModelsGenerator(), "customKind2")
+		require.Nil(t, err)
+		// Check number of files generated
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "")
+	})
 }
 
 func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {

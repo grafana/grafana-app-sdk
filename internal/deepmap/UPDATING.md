@@ -12,6 +12,6 @@ A full diff of changes can be found at [diff.txt].
 When updating this fork, please add whatever changes you make (if different from the main oapi-codegen branch) to the above list and update [diff.txt] accordingly. 
 This can be done with:
 ```shell
-$ diff <path_to_deepmap>/oapi-codegen/pkg/codegen <path_to_grafana>/thema/internal/deepmap/oapi-codegen/pkg/codegen > <path_to_grafana>/thema/internal/deepmap/diff.txt
+$ diff <path_to_deepmap>/oapi-codegen/pkg/codegen <path_to_grafana>/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/codegen > <path_to_grafana>/grafana-app-sdk/internal/deepmap/diff.txt
 ```
 If you make changes to other packages, please also include them in the diff.

@@ -8,7 +8,7 @@ require (
 	github.com/getkin/kin-openapi v0.120.0
 	github.com/golangci/lint-1 v0.0.0-20181222135242-d2cdd8c08219
 	github.com/grafana/codejen v0.0.3
-	github.com/grafana/cuetsy v0.1.10
+	github.com/grafana/cuetsy v0.1.11
 	github.com/grafana/grafana-plugin-sdk-go v0.188.3
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
@@ -57,7 +57,6 @@ require (
 	github.com/go-openapi/swag v0.22.4 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang/glog v1.1.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/flatbuffers v23.1.21+incompatible // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
@@ -81,6 +80,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
+	github.com/lib/pq v1.10.7 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
@@ -103,7 +103,7 @@ require (
 	github.com/prometheus/client_model v0.4.1-0.20230718164431-9a2bf3000d16 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.11.1 // indirect
-	github.com/protocolbuffers/txtpbfmt v0.0.0-20220428173112-74888fd59c2b // indirect
+	github.com/protocolbuffers/txtpbfmt v0.0.0-20230328191034-3462fbc510c0 // indirect
 	github.com/rivo/uniseg v0.3.4 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect

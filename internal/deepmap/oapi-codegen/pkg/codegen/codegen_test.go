@@ -7,7 +7,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/golangci/lint-1"
-	"github.com/grafana/thema/internal/deepmap/oapi-codegen/pkg/util"
+	"github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

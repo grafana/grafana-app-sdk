@@ -1,14 +1,11 @@
 package cuekind
 
 import (
-	"bytes"
 	"embed"
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"path/filepath"
-	"regexp"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
@@ -19,13 +16,17 @@ import (
 //go:embed def.cue
 var overlayFS embed.FS
 
+func NewParser() (*Parser, error) {
+	return &Parser{}, nil
+}
+
 type Parser struct {
 	kindDef *cue.Value
 }
 
-var cueModRegex = regexp.MustCompile(`^module:[\s]+"([^"]+)"$`)
-
-func (p *Parser) ParseFS(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
+// Parse parses all CUE files in `files`, and reads all top-level selectors (or only `selectors` if provided)
+// as kinds as defined by [def.cue]. It then returns a list of kinds parsed.
+func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -48,7 +49,6 @@ func (p *Parser) ParseFS(files fs.FS, selectors ...string) ([]codegen.Kind, erro
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println(filepath.FromSlash(filepath.Join("/", modPath)))
 	inst := load.Instances(nil, &load.Config{
 		Overlay:    overlay,
 		ModuleRoot: filepath.FromSlash(filepath.Join("/", modPath)),
@@ -74,19 +74,18 @@ func (p *Parser) ParseFS(files fs.FS, selectors ...string) ([]codegen.Kind, erro
 			return nil, err
 		}
 		for i.Next() {
-			st := cueFmtState{}
-			i.Value().Format(&st, 'v')
-			os.WriteFile("./foo/fs-"+i.Label()+"-pre.cue", st.Bytes(), fs.ModePerm)
 			vals = append(vals, i.Value())
 		}
 	}
 
-	// Load the kind definition (do this only once)
+	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
 	kindDef, err := p.getKindDefinition()
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
 
+	// Unify the kinds we loaded from CUE with the kind definition,
+	// then put together the kind struct from that
 	kinds := make([]codegen.Kind, 0)
 	for _, val := range vals {
 		val = val.Unify(kindDef)
@@ -112,7 +111,7 @@ func (p *Parser) ParseFS(files fs.FS, selectors ...string) ([]codegen.Kind, erro
 	return kinds, nil
 }
 
-func (p *Parser) Parse(directory string, selectors ...string) ([]codegen.Kind, error) {
+func (p *Parser) ParseOld(directory string, selectors ...string) ([]codegen.Kind, error) {
 	kindDef, _ := p.getKindDefinition()
 	inst := load.Instances(nil, &load.Config{
 		Dir: directory,
@@ -142,13 +141,7 @@ func (p *Parser) Parse(directory string, selectors ...string) ([]codegen.Kind, e
 
 	kinds := make([]codegen.Kind, 0)
 	for _, val := range vals {
-		st := cueFmtState{}
-		val.Format(&st, 'v')
-		os.WriteFile("./foo/val.cue", st.Bytes(), fs.ModePerm)
 		val = val.Unify(kindDef)
-		st = cueFmtState{}
-		val.Format(&st, 'v')
-		os.WriteFile("./foo/val-unified.cue", st.Bytes(), fs.ModePerm)
 		if val.Err() != nil {
 			return nil, val.Err()
 		}
@@ -189,56 +182,6 @@ func (p *Parser) getKindDefinition() (cue.Value, error) {
 	return *p.kindDef, nil
 }
 
-func (p *Parser) Parse2() error {
-	overlay := make(map[string]load.Source)
-	ToOverlay(filepath.Join("/github.com/grafana/grafana-app-sdk/codegen/cuekind"), overlayFS, overlay)
-	fmt.Println(overlay)
-	instWithDef := load.Instances(nil, &load.Config{
-		Overlay: overlay,
-	})[0]
-	kindDef := cuecontext.New().BuildInstance(instWithDef).LookupPath(cue.MakePath(cue.Str("Kind")))
-	//fmt.Println(kindDef)
-
-	inst := load.Instances(nil, &load.Config{
-		Dir: "./testing/cue",
-	})
-	if len(inst) < 0 {
-		return fmt.Errorf("no data")
-	}
-	//fmt.Println(len(inst))
-	root := cuecontext.New().BuildInstance(inst[0])
-	//fmt.Println(root)
-	val := root.LookupPath(cue.MakePath(cue.Str("myKind")))
-	val = val.Unify(kindDef)
-	if val.Err() != nil {
-		fmt.Println(val.Err())
-		panic(val.Err())
-	}
-	fmt.Println(val)
-	props := codegen.KindProperties{}
-	val.Decode(&props)
-	someKind := codegen.AnyKind{
-		Props:       props,
-		AllVersions: make([]codegen.KindVersion, 0),
-	}
-	goVers := make(map[string]codegen.KindVersion)
-	vers := val.LookupPath(cue.MakePath(cue.Str("versions")))
-	fmt.Println(vers)
-	vers.Decode(&goVers)
-	fmt.Println(goVers)
-	for k, v := range goVers {
-		v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
-		someKind.AllVersions = append(someKind.AllVersions, v)
-	}
-	//someKind.Schema = val.LookupPath(cue.MakePath(cue.Str("schema")))
-	fmt.Println(someKind)
-	fmt.Println(someKind.AllVersions[0].Schema)
-	/*def := cuecontext.New().CompileString(FullDef)
-	val = val.Unify(def)
-	fmt.Println(val.Err())*/
-	return nil
-}
-
 func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
 	// TODO why not just stick the prefix on automatically...?
 	if !filepath.IsAbs(prefix) {
@@ -273,25 +216,4 @@ func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
 	}
 
 	return nil
-}
-
-// cueFmtState wraps a bytes.Buffer with the extra methods required to implement fmt.State.
-// it will return false when queried about any flags.
-type cueFmtState struct {
-	bytes.Buffer
-}
-
-// Width returns the value of the width option and whether it has been set. It will always return 0, false.
-func (*cueFmtState) Width() (wid int, ok bool) {
-	return 0, false
-}
-
-// Precision returns the value of the precision option and whether it has been set. It will always return 0, false.
-func (*cueFmtState) Precision() (prec int, ok bool) {
-	return 0, false
-}
-
-// Flag returns whether the specified flag has been set. It will always return false.
-func (*cueFmtState) Flag(flag int) bool {
-	return flag == '#' || flag == '+'
 }

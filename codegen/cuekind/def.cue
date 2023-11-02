@@ -3,14 +3,49 @@ package cuekind
 import (
 	"strings"
 	"struct"
+	"time"
 )
 
-#Schema: {
-	// metadata contains all kind-specific, non-kubernetes metadata
-	metadata: _
-	// labels allows for the user ot specify a list of typed labels which will get methods attached to the generated code
-	labels: _
-	// spec is the body of the object
+// _kubeObjectMetadata is metadata found in a kubernetes object's metadata field.
+// It is not exhaustive and only includes fields which may be relevant to a kind's implementation,
+// As it is also intended to be generic enough to function with any API Server.
+_kubeObjectMetadata: {
+    uid: string
+    creationTimestamp: string & time.Time
+    deletionTimestamp?: string & time.Time
+    finalizers: [...string]
+    resourceVersion: string
+	generation: int64
+    labels: {
+        [string]: string
+    }
+}
+
+Schema: {
+	// metadata contains embedded CommonMetadata and can be extended with custom string fields
+	// TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
+	// without external reference as using the CommonMetadata reference breaks thema codegen.
+	metadata: {
+		_kubeObjectMetadata
+
+		updateTimestamp: string & time.Time
+		createdBy: string
+		updatedBy: string
+
+		// TODO: additional metadata fields?
+		// Additional metadata can be added at any future point, as it is allowed to be constant across lineage versions
+
+		// extraFields is reserved for any fields that are pulled from the API server metadata but do not have concrete fields in the CUE metadata
+		extraFields: {
+			[string]: _
+		}
+	} & {
+		// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
+		// Can't use this as it's not yet enforced CUE:
+		//...string
+		// Have to do this gnarly regex instead
+		[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|generation|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
+	}
 	spec: _
 	status: {
 		#OperatorState: {
@@ -35,7 +70,6 @@ import (
 		additionalFields?: {
 			[string]: _
 		}
-		foo: string
 	} & {
 		[string]: _
 	}
@@ -56,7 +90,7 @@ Kind: S={
 			version: string
 			schema: _
 			if S.isAPIResource {
-				schema: #Schema
+				schema: Schema
 				_specIsNonEmpty: schema.spec & struct.MinFields(0)
 			}
 			// served indicates whether this version is served by the API server

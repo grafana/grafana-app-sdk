@@ -15,18 +15,23 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 	return g
 }
 
-func ResourceGenerator() *codejen.JennyList[codegen.Kind] {
+// ResourceGenerator returns a collection of jennies which generate backend resource code from kinds.
+// The `versioned` parameter governs whether to generate all versions where codegen.backend == true,
+// or just generate code for the current version.
+// If `versioned` is true, the paths to the generated files will include the version, and
+// the package name will be the version, rather than the kind.
+func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
-			GenerateOnlyCurrent: true,
+			GenerateOnlyCurrent: !versioned,
 			Depth:               1,
 		},
-		/*&jennies.ResourceObjectGenerator{
-			OnlyUseCurrentVersion: true,
-		},*/
+		&jennies.ResourceObjectGenerator{
+			OnlyUseCurrentVersion: !versioned,
+		},
 		&jennies.SchemaGenerator{
-			OnlyUseCurrentVersion: true,
+			OnlyUseCurrentVersion: !versioned,
 		},
 	)
 	return g
@@ -69,10 +74,15 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 	return g
 }
 
-// TypeScriptModelsGenerator returns a Generator which generates TypeScript model code
-func TypeScriptModelsGenerator() *codejen.JennyList[codegen.Kind] {
+// TypeScriptModelsGenerator returns a Generator which generates TypeScript model code.
+// The `versioned` parameter governs whether to generate all versions where codegen.frontend == true,
+// or just generate code for the current version.
+// If `versioned` is true, the paths to the generated files will include the version.
+func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(&jennies.TSTypesJenny{})
+	g.Append(&jennies.TypeScriptTypes{
+		GenerateOnlyCurrent: !versioned,
+	})
 	return g
 }
 

@@ -117,7 +117,9 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 // TypeScriptModelsGenerator returns a Generator which generates TypeScript model code
 func TypeScriptModelsGenerator() *codejen.JennyList[kindsys.Custom] {
 	g := codejen.JennyListWithNamer(kindsysNamerFunc)
-	g.Append(codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.TSTypesJenny{}, kindsysCustomToKind))
+	g.Append(codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.TypeScriptTypes{
+		GenerateOnlyCurrent: true,
+	}, kindsysCustomToKind))
 	return g
 }
 

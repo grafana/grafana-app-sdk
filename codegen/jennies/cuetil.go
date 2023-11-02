@@ -1,6 +1,7 @@
 package jennies
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -152,4 +153,25 @@ func TrimPathPrefix(path, prefix cue.Path) cue.Path {
 // they are either exactly equal, or if they are equal ignoring path optionality.
 func SelEq(s1, s2 cue.Selector) bool {
 	return s1 == s2 || s1.Optional() == s2.Optional()
+}
+
+// cueFmtState wraps a bytes.Buffer with the extra methods required to implement fmt.State.
+// it will return false when queried about any flags.
+type cueFmtState struct {
+	bytes.Buffer
+}
+
+// Width returns the value of the width option and whether it has been set. It will always return 0, false.
+func (*cueFmtState) Width() (wid int, ok bool) {
+	return 0, false
+}
+
+// Precision returns the value of the precision option and whether it has been set. It will always return 0, false.
+func (*cueFmtState) Precision() (prec int, ok bool) {
+	return 0, false
+}
+
+// Flag returns whether the specified flag has been set. It will always return false.
+func (*cueFmtState) Flag(flag int) bool {
+	return flag == '#' || flag == '+'
 }

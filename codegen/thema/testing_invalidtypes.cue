@@ -1,4 +1,4 @@
-package codegen
+package thema
 
 import (
 	"github.com/grafana/thema"
