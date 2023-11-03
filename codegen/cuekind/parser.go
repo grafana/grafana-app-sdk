@@ -13,7 +13,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
-//go:embed def.cue
+//go:embed def.cue cue.mod/module.cue
 var overlayFS embed.FS
 
 func NewParser() (*Parser, error) {
@@ -107,7 +107,6 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 		}
 		kinds = append(kinds, someKind)
 	}
-
 	return kinds, nil
 }
 
@@ -170,12 +169,15 @@ func (p *Parser) getKindDefinition() (cue.Value, error) {
 	}
 
 	kindOverlay := make(map[string]load.Source)
-	err := ToOverlay(filepath.Join("/github.com/grafana/grafana-app-sdk/codegen/cuekind"), overlayFS, kindOverlay)
+	err := ToOverlay("/github.com/grafana/grafana-app-sdk/codegen/cuekind", overlayFS, kindOverlay)
 	if err != nil {
 		return cue.Value{}, err
 	}
 	kindInstWithDef := load.Instances(nil, &load.Config{
-		Overlay: kindOverlay,
+		Overlay:    kindOverlay,
+		ModuleRoot: filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
+		Module:     "github.com/grafana/grafana-app-sdk/codegen/cuekind",
+		Dir:        filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
 	})[0]
 	kindDef := cuecontext.New().BuildInstance(kindInstWithDef).LookupPath(cue.MakePath(cue.Str("Kind")))
 	p.kindDef = &kindDef

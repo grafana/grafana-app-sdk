@@ -15,7 +15,7 @@ var rootCmd = &cobra.Command{
 func main() {
 	rootCmd.PersistentFlags().StringP("cuepath", "c", "kinds", "Path to directory with cue.mod")
 	rootCmd.PersistentFlags().StringSliceP("selectors", "s", []string{}, "selectors")
-	rootCmd.PersistentFlags().StringP("kindformat", "f", "cue", "Format in which kinds are written for this project (allowed values are 'cue' and 'thema')")
+	rootCmd.PersistentFlags().StringP("format", "f", "cue", "Format in which kinds are written for this project (allowed values are 'cue' and 'thema')")
 
 	setupVersionCmd()
 	setupGenerateCmd()

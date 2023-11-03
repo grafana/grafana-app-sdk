@@ -3,6 +3,7 @@ package templates
 import (
 	"embed"
 	"io"
+	"regexp"
 	"text/template"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -104,10 +105,15 @@ func WriteWrappedType(metadata WrappedTypeMetadata, out io.Writer) error {
 
 // BackendPluginRouterTemplateMetadata is the metadata required by the Backend Plugin Router template
 type BackendPluginRouterTemplateMetadata struct {
-	Repo           string
-	APICodegenPath string
-	Resources      []codegen.KindProperties
-	PluginID       string
+	Repo                  string
+	APICodegenPath        string
+	Resources             []codegen.KindProperties
+	PluginID              string
+	ResourcesAreVersioned bool
+}
+
+func (BackendPluginRouterTemplateMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
 }
 
 // WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out
@@ -122,6 +128,11 @@ type BackendPluginHandlerTemplateMetadata struct {
 	APICodegenPath string
 	TypeName       string
 	IsResource     bool
+	Version        string
+}
+
+func (BackendPluginHandlerTemplateMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
 }
 
 // WriteBackendPluginHandler executes the Backend Plugin Handler template, and writes out the generated go code to out
@@ -165,6 +176,11 @@ type WatcherMetadata struct {
 	PackageName string
 	Repo        string
 	CodegenPath string
+	Version     string
+}
+
+func (WatcherMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
 }
 
 func WriteWatcher(metadata WatcherMetadata, out io.Writer) error {
@@ -176,11 +192,16 @@ func WriteOperatorKubeConfig(out io.Writer) error {
 }
 
 type OperatorMainMetadata struct {
-	PackageName    string
-	Repo           string
-	CodegenPath    string
-	WatcherPackage string
-	Resources      []codegen.KindProperties
+	PackageName           string
+	Repo                  string
+	CodegenPath           string
+	WatcherPackage        string
+	ResourcesAreVersioned bool
+	Resources             []codegen.KindProperties
+}
+
+func (OperatorMainMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
 }
 
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
@@ -193,4 +214,10 @@ func WriteOperatorConfig(out io.Writer) error {
 
 func WriteOperatorTelemetry(out io.Writer) error {
 	return templateOperatorTelemetry.Execute(out, nil)
+}
+
+// ToPackageName sanitizes an input into a deterministic allowed go package name.
+// It is used to turn kind names or versions into package names when performing go code generation.
+func ToPackageName(input string) string {
+	return regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
 }

@@ -20,7 +20,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 
-    {{ range .Resources }}{{if ne .APIResource nil }}"{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
+    {{ $root := . }}
+    {{ range .Resources }}{{if ne .APIResource nil }}
+    {{ if $root.ResourcesAreVersioned }}{{.MachineName}} "{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}/{{ $root.ToPackageName .Current}}"{{ else }}"{{$.Repo}}/{{$.APICodegenPath}}/resource/{{.MachineName}}"{{ end }}{{end}}
     {{end}}"{{.Repo}}/pkg/plugin"
 )
 

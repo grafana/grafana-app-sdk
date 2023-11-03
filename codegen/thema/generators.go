@@ -95,7 +95,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 
 	g := codejen.JennyListWithNamer(kindsysNamerFunc)
 	g.Append(
-		codejen.AdaptOneToOne(jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath), kindsysCustomToKind),
+		codejen.AdaptOneToOne(jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, false), kindsysCustomToKind),
 		jennies.StaticManyToOneGenerator[kindsys.Custom](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
@@ -109,7 +109,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
 		codejen.AdaptManyToOne(jennies.RouterCodeGenerator(projectRepo), kindsysCustomToKind),
-		codejen.AdaptManyToOne(jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath), kindsysCustomToKind),
+		codejen.AdaptManyToOne(jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, false), kindsysCustomToKind),
 	)
 	return g
 }
@@ -128,9 +128,9 @@ func TypeScriptModelsGenerator() *codejen.JennyList[kindsys.Custom] {
 func OperatorGenerator(projectRepo, codegenPath string) *codejen.JennyList[kindsys.Custom] {
 	g := codejen.JennyListWithNamer[kindsys.Custom](kindsysNamerFunc)
 	g.Append(
-		codejen.AdaptOneToOne(jennies.WatcherJenny(projectRepo, codegenPath), kindsysCustomToKind),
+		codejen.AdaptOneToOne(jennies.WatcherJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorKubeConfigJenny{}, kindsysCustomToKind),
-		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath), kindsysCustomToKind),
+		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorConfigJenny{}, kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorTelemetryJenny{}, kindsysCustomToKind),
 	)

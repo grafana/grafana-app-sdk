@@ -23,6 +23,9 @@ import (
 	"time"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/grafana/codejen"
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -151,6 +154,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return err
+	}
 	localPath := filepath.Join(path, "local")
 	localGenPath := filepath.Join(localPath, "generated")
 	absPath, err := filepath.Abs(path)
@@ -181,12 +188,30 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Generate the k8s YAML bundle
-	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
-	if err != nil {
-		return err
+	parseFunc := func() (codejen.Files, error) {
+		switch format {
+		case "cue":
+			parser, err := cuekind.NewParser()
+			if err != nil {
+				return nil, err
+			}
+			generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+			if err != nil {
+				return nil, err
+			}
+			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"))
+		case "thema":
+			parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
+			if err != nil {
+				return nil, err
+			}
+			return generateCRDsThema(parser, "", "yaml", []string{})
+		default:
+			return nil, fmt.Errorf("unknown kind format '%s'", format)
+		}
 	}
 
-	k8sYAML, err := generateKubernetesYAML(parser, pluginID, *config)
+	k8sYAML, err := generateKubernetesYAML(parseFunc, pluginID, *config)
 	if err != nil {
 		return err
 	}
@@ -310,7 +335,7 @@ type crdYAML struct {
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
 //nolint:funlen,errcheck,revive
-func generateKubernetesYAML(parser *themagen.CustomKindParser, pluginID string, config localEnvConfig) ([]byte, error) {
+func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
 		PluginID:       pluginID,
@@ -365,7 +390,7 @@ func generateKubernetesYAML(parser *themagen.CustomKindParser, pluginID string, 
 	}
 
 	// Generate CRD YAML files, add the CRD metadata to the props
-	crdFiles, err := generateCRDs(parser, "", "yaml", []string{})
+	crdFiles, err := crdGenFunc()
 	if err != nil {
 		return nil, err
 	}

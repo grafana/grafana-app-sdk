@@ -54,7 +54,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 				return nil, err
 			}
 			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.go", kind.Properties().MachineName, ver.Version, kind.Properties().MachineName),
+				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.go", kind.Properties().MachineName, ToPackageName(ver.Version), kind.Properties().MachineName),
 				Data:         b,
 				From:         []codejen.NamedJenny{r},
 			})

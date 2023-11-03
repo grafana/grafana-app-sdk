@@ -14,6 +14,9 @@ import (
 	"text/template"
 
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/grafana/codejen"
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
@@ -118,7 +121,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Schemas
-	err = os.MkdirAll(filepath.Join(path, "schemas/cue.mod"), mkDirPerms)
+	err = os.MkdirAll(filepath.Join(path, "kinds/cue.mod"), mkDirPerms)
 	if err != nil {
 		return err
 	}
@@ -275,6 +278,12 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Kind format
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return err
+	}
+
 	// Target
 	target, err := cmd.Flags().GetString("type")
 	if err != nil {
@@ -317,7 +326,17 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 			pkg = filepath.Base(cuePath)
 		}
 
-		kindTmpl, err := template.ParseFS(templates, "templates/kind.cue.tmpl")
+		templatePath := "templates/kind.cue.tmpl"
+		switch format {
+		case "thema":
+			templatePath = "templates/kind.thema.cue.tmpl"
+		case "cue":
+			templatePath = "templates/kind.cue.tmpl"
+		default:
+			return fmt.Errorf("unknown kind format '%s'", format)
+		}
+
+		kindTmpl, err := template.ParseFS(templates, templatePath)
 		if err != nil {
 			return err
 		}
@@ -383,6 +402,12 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Kind format
+	format, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return err
+	}
+
 	// Plugin ID (optional depending on component)
 	pluginID, err := cmd.Flags().GetString("plugin-id")
 	if err != nil {
@@ -395,17 +420,32 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create the generator (used for generating non-static code)
-	generator, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
-	if err != nil {
-		fmt.Printf("%s\n", err.Error())
-		os.Exit(1)
+	var generator any
+	switch format {
+	case "cue":
+		parser, err := cuekind.NewParser()
+		if err != nil {
+			return err
+		}
+		generator, err = codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+	case "thema":
+		parser, err := themagen.NewParser(thema.NewRuntime(cuecontext.New()))
+		if err != nil {
+			return err
+		}
+		generator, err = codegen.NewGenerator[kindsys.Custom](parser, os.DirFS(cuePath))
 	}
 
 	// Allow for multiple components to be added at once
 	for _, component := range args {
 		switch component {
 		case "backend":
-			err = addComponentBackend(path, generator, selectors, pluginID)
+			switch format {
+			case "cue":
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), selectors, pluginID)
+			case "thema":
+				err = addComponentBackend(path, generator.(*codegen.Generator[kindsys.Custom]), selectors, pluginID)
+			}
 			if err != nil {
 				fmt.Printf("%s\n", err.Error())
 				os.Exit(1)
@@ -417,7 +457,16 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 				os.Exit(1)
 			}
 		case "operator":
-			err = addComponentOperator(path, generator, selectors)
+			switch format {
+			case "cue":
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors...)
+			case "thema":
+				err = addComponentOperator(path, generator.(*codegen.Generator[kindsys.Custom]), selectors...)
+			}
+			if err != nil {
+				fmt.Printf("%s\n", err.Error())
+				os.Exit(1)
+			}
 		default:
 			return fmt.Errorf("unknown component %s", component)
 		}
@@ -429,18 +478,31 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func addComponentOperator(projectRootPath string, generator *themagen.CustomKindParser, selectors []string) error {
+type anyGenerator interface {
+	*codegen.Generator[codegen.Kind] | *codegen.Generator[kindsys.Custom]
+}
+
+func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors ...string) error {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
 	if err != nil {
 		return err
 	}
 
-	files, err := generator.Generate(themagen.OperatorGenerator(repo, "pkg/generated"), selectors...)
-	if err != nil {
-		return err
+	var files codejen.Files
+	switch cast := any(generator).(type) {
+	case *codegen.Generator[codegen.Kind]:
+		files, err = cast.Generate(cuekind.OperatorGenerator(repo, "pkg/generated", true), selectors...)
+		if err != nil {
+			return err
+		}
+	case *codegen.Generator[kindsys.Custom]:
+		files, err = cast.Generate(themagen.OperatorGenerator(repo, "pkg/generated"), selectors...)
+		if err != nil {
+			return err
+		}
 	}
-	if err := checkAndMakePath("pkg"); err != nil {
+	if err = checkAndMakePath("pkg"); err != nil {
 		return err
 	}
 	for _, f := range files {
@@ -468,8 +530,7 @@ func addComponentOperator(projectRootPath string, generator *themagen.CustomKind
 // Linter doesn't like "Potential file inclusion via variable", which is actually desired here
 //
 //nolint:gosec
-func addComponentBackend(projectRootPath string, generator *themagen.CustomKindParser,
-	selectors []string, pluginID string) error {
+func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, pluginID string) error {
 	// Check plugin ID
 	if pluginID == "" {
 		return fmt.Errorf("plugin-id is required")
@@ -516,17 +577,28 @@ func addComponentBackend(projectRootPath string, generator *themagen.CustomKindP
 }
 
 //nolint:revive
-func projectAddPluginAPI(generator *themagen.CustomKindParser, repo, generatedAPIModelsPath string, selectors []string) error {
-	goFiles, err := generator.FilteredGenerate(themagen.Filter(themagen.BackendPluginGenerator(repo, generatedAPIModelsPath), func(c kindsys.Custom) bool {
-		return c.Def().Properties.Codegen.Frontend
-	}), selectors...)
+func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPath string, selectors []string) error {
+	var files codejen.Files
+	var err error
+	switch cast := any(generator).(type) {
+	case *codegen.Generator[codegen.Kind]:
+		files, err = cast.Generate(cuekind.BackendPluginGenerator(repo, generatedAPIModelsPath, true), selectors...)
+		if err != nil {
+			return err
+		}
+	case *codegen.Generator[kindsys.Custom]:
+		files, err = cast.Generate(themagen.BackendPluginGenerator(repo, generatedAPIModelsPath), selectors...)
+		if err != nil {
+			return err
+		}
+	}
 	if err != nil {
 		return err
 	}
-	if err := checkAndMakePath("pkg"); err != nil {
+	if err = checkAndMakePath("pkg"); err != nil {
 		return err
 	}
-	for _, f := range goFiles {
+	for _, f := range files {
 		err = writeFile(filepath.Join("pkg", f.RelativePath), f.Data)
 		if err != nil {
 			return err

@@ -56,7 +56,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		for _, ver := range kind.Versions() {
 			b := bytes.Buffer{}
 			err := templates.WriteSchema(templates.SchemaMetadata{
-				Package: meta.MachineName,
+				Package: ToPackageName(ver.Version),
 				Group:   meta.APIResource.Group,
 				Version: ver.Version,
 				Kind:    meta.Kind,
@@ -72,7 +72,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			}
 			files = append(files, codejen.File{
 				Data:         formatted,
-				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.MachineName, ver.Version, meta.MachineName),
+				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.MachineName, ToPackageName(ver.Version), meta.MachineName),
 				From:         []codejen.NamedJenny{s},
 			})
 		}

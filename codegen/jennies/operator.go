@@ -11,16 +11,18 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
-func WatcherJenny(projectRepo, codegenPath string) codejen.OneToOne[codegen.Kind] {
+func WatcherJenny(projectRepo, codegenPath string, generatedKindsAreVersioned bool) codejen.OneToOne[codegen.Kind] {
 	return &watcherJenny{
-		projectRepo: projectRepo,
-		codegenPath: codegenPath,
+		projectRepo:                projectRepo,
+		codegenPath:                codegenPath,
+		generatedKindsAreVersioned: generatedKindsAreVersioned,
 	}
 }
 
 type watcherJenny struct {
-	projectRepo string
-	codegenPath string
+	projectRepo                string
+	codegenPath                string
+	generatedKindsAreVersioned bool
 }
 
 func (*watcherJenny) JennyName() string {
@@ -32,6 +34,10 @@ func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
 		return nil, nil
 	}
 
+	ver := kind.Properties().Current
+	if !w.generatedKindsAreVersioned {
+		ver = ""
+	}
 	props := kind.Properties()
 	b := bytes.Buffer{}
 	err := templates.WriteWatcher(templates.WatcherMetadata{
@@ -39,6 +45,7 @@ func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
 		PackageName:    "watchers",
 		Repo:           w.projectRepo,
 		CodegenPath:    w.codegenPath,
+		Version:        ver,
 	}, &b)
 	if err != nil {
 		return nil, err
@@ -112,16 +119,18 @@ func (o *OperatorTelemetryJenny) Generate(_ ...codegen.Kind) (*codejen.File, err
 	return codejen.NewFile("cmd/operator/telemetry.go", formatted, o), nil
 }
 
-func OperatorMainJenny(projectRepo, codegenPath string) codejen.ManyToOne[codegen.Kind] {
+func OperatorMainJenny(projectRepo, codegenPath string, generatedKindsAreVersioned bool) codejen.ManyToOne[codegen.Kind] {
 	return &operatorMainJenny{
-		projectRepo: projectRepo,
-		codegenPath: codegenPath,
+		projectRepo:                projectRepo,
+		codegenPath:                codegenPath,
+		generatedKindsAreVersioned: generatedKindsAreVersioned,
 	}
 }
 
 type operatorMainJenny struct {
-	projectRepo string
-	codegenPath string
+	projectRepo                string
+	codegenPath                string
+	generatedKindsAreVersioned bool
 }
 
 func (*operatorMainJenny) JennyName() string {
@@ -130,11 +139,12 @@ func (*operatorMainJenny) JennyName() string {
 
 func (o *operatorMainJenny) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.OperatorMainMetadata{
-		Repo:           o.projectRepo,
-		CodegenPath:    o.codegenPath,
-		PackageName:    "main",
-		WatcherPackage: "watchers",
-		Resources:      make([]codegen.KindProperties, 0),
+		Repo:                  o.projectRepo,
+		CodegenPath:           o.codegenPath,
+		PackageName:           "main",
+		WatcherPackage:        "watchers",
+		Resources:             make([]codegen.KindProperties, 0),
+		ResourcesAreVersioned: o.generatedKindsAreVersioned,
 	}
 
 	for _, kind := range kinds {

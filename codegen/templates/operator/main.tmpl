@@ -11,8 +11,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/k8s"
 
-    {{$repo := .Repo}}{{$codegenPath := .CodegenPath}}{{ range .Resources }}
-	"{{$repo}}/{{$codegenPath}}/resource/{{.MachineName}}"{{ end}}{{ if ne .WatcherPackage "" }}
+    {{$repo := .Repo}}{{$codegenPath := .CodegenPath}}{{$versioned := .ResourcesAreVersioned}}{{ $root := . }}{{ range .Resources }}
+    {{ if $versioned }}{{.MachineName}} "{{$repo}}/{{$codegenPath}}/resource/{{.MachineName}}/{{ $root.ToPackageName .Current }}"{{ else }}"{{$repo}}/{{$codegenPath}}/resource/{{.MachineName}}"{{ end }}{{ end}}{{ if ne .WatcherPackage "" }}
 	"{{$repo}}/pkg/{{.WatcherPackage}}"{{end}}
 )
 

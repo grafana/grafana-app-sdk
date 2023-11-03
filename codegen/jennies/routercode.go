@@ -46,21 +46,27 @@ func (*routerCodeGenerator) JennyName() string {
 	return "routerCodeGenerator"
 }
 
-func RouterHandlerCodeGenerator(projectRepo, apiCodegenPath string) codejen.OneToOne[codegen.Kind] {
+func RouterHandlerCodeGenerator(projectRepo, apiCodegenPath string, generatedKindsAreVersioned bool) codejen.OneToOne[codegen.Kind] {
 	return &routerHandlerCodeGenerator{
-		projectRepo:    projectRepo,
-		apiCodegenPath: apiCodegenPath,
+		projectRepo:                projectRepo,
+		apiCodegenPath:             apiCodegenPath,
+		generatedKindsAreVersioned: generatedKindsAreVersioned,
 	}
 }
 
 type routerHandlerCodeGenerator struct {
-	projectRepo    string
-	apiCodegenPath string
+	projectRepo                string
+	apiCodegenPath             string
+	generatedKindsAreVersioned bool
 }
 
 func (h *routerHandlerCodeGenerator) Generate(decl codegen.Kind) (*codejen.File, error) {
 	meta := decl.Properties()
 
+	ver := ToPackageName(decl.Properties().Current)
+	if !h.generatedKindsAreVersioned {
+		ver = ""
+	}
 	b := bytes.Buffer{}
 	err := templates.WriteBackendPluginHandler(templates.BackendPluginHandlerTemplateMetadata{
 		KindProperties: meta,
@@ -68,6 +74,7 @@ func (h *routerHandlerCodeGenerator) Generate(decl codegen.Kind) (*codejen.File,
 		APICodegenPath: h.apiCodegenPath,
 		TypeName:       exportField(decl.Properties().Kind),
 		IsResource:     meta.APIResource != nil,
+		Version:        ver,
 	}, &b)
 	if err != nil {
 		return nil, err
