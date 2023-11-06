@@ -287,7 +287,9 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	if cfg.CRDEncoding == "yaml" {
 		encFunc = yaml.Marshal
 	}
-	crdFiles, err := generator.Generate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), selectors...)
+	crdFiles, err := generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	}, selectors...)
 	if err != nil {
 		return nil, err
 	}
