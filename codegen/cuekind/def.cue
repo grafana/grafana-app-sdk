@@ -83,30 +83,6 @@ Kind: S={
 	kind: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
 	group: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
 	current: string
-	// isCRD is true if the `crd` trait is present in the kind.
-	isAPIResource: S.apiResource != _|_
-	versions: {
-		[string]: {
-			version: string
-			schema: _
-			if S.isAPIResource {
-				schema: Schema
-				_specIsNonEmpty: schema.spec & struct.MinFields(0)
-			}
-			// served indicates whether this version is served by the API server
-			served: bool | *true
-			// codegen contains properties specific to generating code using tooling
-			codegen: {
-				// frontend indicates whether front-end TypeScript code should be generated for this kind's schema
-				frontend: bool | *S.codegen.frontend
-				// backend indicates whether back-end Go code should be generated for this kind's schema
-				backend: bool | *S.codegen.backend
-			}
-		}
-	}
-	machineName: strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
-	pluralName: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
-	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
 	// apiResource contains properties specific to converting this kind to a Kubernetes API Server Resource.
 	// apiResource is an optional trait that imposes some restrictions on `schema`, `group`, and `version`.
 	// If not present, the kind cannot be assumed to be convertable to a kubernetes API server resource.
@@ -123,7 +99,7 @@ Kind: S={
 		_computedGroups: [
 			if S.apiResource.groupOverride != _|_ {
 				strings.ToLower(S.apiResource.groupOverride),
-			}
+			},
 			strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.com"
 		]
 
@@ -140,6 +116,26 @@ Kind: S={
 		// within Kubernetes namespaces.
 		scope: "Cluster" | *"Namespaced"
 	}
+	// isCRD is true if the `crd` trait is present in the kind.
+	isAPIResource: apiResource != _|_
+	versions: {
+		[string]: {
+			version: string
+			schema: _
+			// served indicates whether this version is served by the API server
+			served: bool | *true
+			// codegen contains properties specific to generating code using tooling
+			codegen: {
+				// frontend indicates whether front-end TypeScript code should be generated for this kind's schema
+				frontend: bool | *S.codegen.frontend
+				// backend indicates whether back-end Go code should be generated for this kind's schema
+				backend: bool | *S.codegen.backend
+			}
+		}
+	}
+	machineName: strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
+	pluralName: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
+	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
 	// codegen contains properties specific to generating code using tooling. At the root level of the kind, it sets
 	// the defaults for the `codegen` field in all entries in `versions`. 
 	// Valus set in `versions[x]: codegen` will overwrite the value set here.

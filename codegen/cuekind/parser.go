@@ -21,7 +21,8 @@ func NewParser() (*Parser, error) {
 }
 
 type Parser struct {
-	kindDef *cue.Value
+	kindDef   *cue.Value
+	schemaDef *cue.Value
 }
 
 // Parse parses all CUE files in `files`, and reads all top-level selectors (or only `selectors` if provided)
@@ -83,6 +84,10 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
+	schemaDef, err := p.getAPIResourceSchemaDefinition()
+	if err != nil {
+		return nil, fmt.Errorf("could not load internal schema definition: %w", err)
+	}
 
 	// Unify the kinds we loaded from CUE with the kind definition,
 	// then put together the kind struct from that
@@ -103,6 +108,9 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 		vers.Decode(&goVers)
 		for k, v := range goVers {
 			v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
+			if props.APIResource != nil {
+				v.Schema = v.Schema.Unify(schemaDef)
+			}
 			someKind.AllVersions = append(someKind.AllVersions, v)
 		}
 		kinds = append(kinds, someKind)
@@ -182,6 +190,27 @@ func (p *Parser) getKindDefinition() (cue.Value, error) {
 	kindDef := cuecontext.New().BuildInstance(kindInstWithDef).LookupPath(cue.MakePath(cue.Str("Kind")))
 	p.kindDef = &kindDef
 	return *p.kindDef, nil
+}
+
+func (p *Parser) getAPIResourceSchemaDefinition() (cue.Value, error) {
+	if p.schemaDef != nil {
+		return *p.schemaDef, nil
+	}
+
+	kindOverlay := make(map[string]load.Source)
+	err := ToOverlay("/github.com/grafana/grafana-app-sdk/codegen/cuekind", overlayFS, kindOverlay)
+	if err != nil {
+		return cue.Value{}, err
+	}
+	kindInstWithDef := load.Instances(nil, &load.Config{
+		Overlay:    kindOverlay,
+		ModuleRoot: filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
+		Module:     "github.com/grafana/grafana-app-sdk/codegen/cuekind",
+		Dir:        filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
+	})[0]
+	schemaDef := cuecontext.New().BuildInstance(kindInstWithDef).LookupPath(cue.MakePath(cue.Str("Schema")))
+	p.schemaDef = &schemaDef
+	return *p.schemaDef, nil
 }
 
 func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {

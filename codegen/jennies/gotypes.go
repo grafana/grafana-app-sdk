@@ -93,7 +93,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, machineName string
 	}
 	return codejen.Files{codejen.File{
 		Data:         bytes,
-		RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_type_gen_go"), machineName),
+		RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_gen.go"), strings.ToLower(machineName)),
 		From:         []codejen.NamedJenny{g},
 	}}, nil
 }
