@@ -15,11 +15,11 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 	"github.com/grafana/grafana-app-sdk/kindsys"
 )
@@ -326,11 +326,11 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 			pkg = filepath.Base(cuePath)
 		}
 
-		templatePath := "templates/kind.cue.tmpl"
+		var templatePath string
 		switch format {
-		case "thema":
+		case FormatThema:
 			templatePath = "templates/kind.thema.cue.tmpl"
-		case "cue":
+		case FormatCUE:
 			templatePath = "templates/kind.cue.tmpl"
 		default:
 			return fmt.Errorf("unknown kind format '%s'", format)
@@ -422,18 +422,24 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	// Create the generator (used for generating non-static code)
 	var generator any
 	switch format {
-	case "cue":
+	case FormatCUE:
 		parser, err := cuekind.NewParser()
 		if err != nil {
 			return err
 		}
 		generator, err = codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
-	case "thema":
+		if err != nil {
+			return err
+		}
+	case FormatThema:
 		parser, err := themagen.NewParser(thema.NewRuntime(cuecontext.New()))
 		if err != nil {
 			return err
 		}
 		generator, err = codegen.NewGenerator[kindsys.Custom](parser, os.DirFS(cuePath))
+		if err != nil {
+			return err
+		}
 	}
 
 	// Allow for multiple components to be added at once
@@ -441,9 +447,9 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		switch component {
 		case "backend":
 			switch format {
-			case "cue":
+			case FormatCUE:
 				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), selectors, pluginID)
-			case "thema":
+			case FormatThema:
 				err = addComponentBackend(path, generator.(*codegen.Generator[kindsys.Custom]), selectors, pluginID)
 			}
 			if err != nil {
@@ -458,9 +464,9 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 			}
 		case "operator":
 			switch format {
-			case "cue":
+			case FormatCUE:
 				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors...)
-			case "thema":
+			case FormatThema:
 				err = addComponentOperator(path, generator.(*codegen.Generator[kindsys.Custom]), selectors...)
 			}
 			if err != nil {

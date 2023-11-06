@@ -9,6 +9,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -48,7 +49,9 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 			From:         []codejen.NamedJenny{r},
 		})
 	} else {
-		for _, ver := range kind.Versions() {
+		allVersions := kind.Versions()
+		for i := 0; i < len(allVersions); i++ {
+			ver := allVersions[i]
 			b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
 			if err != nil {
 				return nil, err
@@ -63,7 +66,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
+func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
 	customMetadataFields := make([]templates.ObjectMetadataField, 0)
 	mdv := version.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
 	if mdv.Exists() {

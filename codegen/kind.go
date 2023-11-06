@@ -20,7 +20,7 @@ type KindProperties struct {
 	PluralName        string                 `json:"pluralName"`
 	Current           string                 `json:"current"`
 	APIResource       *APIResourceProperties `json:"apiResource"`
-	Codegen           CodegenProperties      `json:"codegen"`
+	Codegen           KindCodegenProperties  `json:"codegen"`
 }
 
 type APIResourceProperties struct {
@@ -28,7 +28,7 @@ type APIResourceProperties struct {
 	Scope string `json:"scope"`
 }
 
-type CodegenProperties struct {
+type KindCodegenProperties struct {
 	Frontend bool `json:"frontend"`
 	Backend  bool `json:"backend"`
 }
@@ -37,9 +37,9 @@ type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema  cue.Value         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen CodegenProperties `json:"codegen"`
-	Served  bool              `json:"served"`
+	Schema  cue.Value             `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen KindCodegenProperties `json:"codegen"`
+	Served  bool                  `json:"served"`
 }
 
 type AnyKind struct {

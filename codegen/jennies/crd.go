@@ -2,17 +2,12 @@ package jennies
 
 import (
 	"fmt"
-	"strings"
 
 	"cuelang.org/go/cue"
-	cueopenapi "cuelang.org/go/encoding/openapi"
-	cueyaml "cuelang.org/go/pkg/encoding/yaml"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/thema"
-	"github.com/grafana/thema/encoding/openapi"
 	goyaml "gopkg.in/yaml.v3"
 
+	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/k8s"
 )
 
@@ -36,11 +31,6 @@ func (*crdGenerator) JennyName() string {
 }
 
 func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
-	// We need to go through every schema, as they all have to be defined in the CRD
-	//sch, err := lin.Schema(thema.SV(0, 0))
-	//if err != nil {
-	//	return nil, err
-	//}
 	props := kind.Properties()
 
 	resource := customResourceDefinition{
@@ -154,66 +144,6 @@ func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) 
 		// There should only be one schema here...
 		// TODO: this may change with subresources--but subresources should have defined names
 		return nil, fmt.Errorf("version %s has multiple schemas", version)
-	}
-	var schemaProps map[string]any
-	for k, v := range back.Components.Schemas {
-		d, ok := v.(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("error generating openapi schema - generated schema has invalid type")
-		}
-		schemaProps, ok = d["properties"].(map[string]any)
-		if !ok {
-			return nil, fmt.Errorf("error generating openapi schema - %s has no properties", k)
-		}
-	}
-	// Remove the "metadata" property, as metadata can't be extended in a CRD (the k8s.Client will handle how to encode/decode the metadata)
-	delete(schemaProps, "metadata")
-
-	// CRDs have a problem with openness and the "additionalProperties: {}", we need to _instead_ use "x-kubernetes-preserve-unknown-fields": true
-	replaceAdditionalProperties(schemaProps)
-
-	return schemaProps, nil
-}
-
-func schemaToOpenAPIProperties(sch thema.Schema) (map[string]any, error) {
-	f, err := openapi.GenerateSchema(sch, &openapi.Config{
-		Config: &cueopenapi.Config{
-			ExpandReferences: true,
-			NameFunc: func(val cue.Value, path cue.Path) string {
-				fmt.Println("NAMEFUNC ", path)
-				i := 0
-				for ; i < len(path.Selectors()) && i < len(val.Path().Selectors()); i++ {
-					if !SelEq(path.Selectors()[i], val.Path().Selectors()[i]) {
-						break
-					}
-				}
-				if i > 0 {
-					path = cue.MakePath(path.Selectors()[i:]...)
-				}
-				return strings.Trim(path.String(), "?#")
-			},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	str, err := cueyaml.Marshal(sch.Lineage().Runtime().Context().BuildFile(f))
-	if err != nil {
-		return nil, err
-	}
-
-	// Decode the bytes back into an object where we can trim the openAPI clutter out
-	// and grab just the schema as a map[string]any (which is what k8s wants)
-	back := cueOpenAPIEncoded{}
-	err = goyaml.Unmarshal([]byte(str), &back)
-	if err != nil {
-		return nil, err
-	}
-	if len(back.Components.Schemas) != 1 {
-		// There should only be one schema here...
-		// TODO: this may change with subresources--but subresources should have defined names
-		return nil, fmt.Errorf("version %s has multiple schemas", "unknown")
 	}
 	var schemaProps map[string]any
 	for k, v := range back.Components.Schemas {

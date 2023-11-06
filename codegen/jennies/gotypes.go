@@ -16,9 +16,10 @@ import (
 	"github.com/dave/dst/dstutil"
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/grafana/codejen"
+	"golang.org/x/tools/imports"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 	deepmapcodegen "github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/codegen"
-	"golang.org/x/tools/imports"
 )
 
 const GoTypesMaxDepth = 5
@@ -63,7 +64,9 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	}
 
 	files := make(codejen.Files, 0)
-	for _, ver := range kind.Versions() {
+	versions := kind.Versions()
+	for i := 0; i < len(versions); i++ {
+		ver := versions[i]
 		if !ver.Codegen.Backend {
 			continue
 		}
@@ -83,7 +86,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, machineName string
 		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix)
 	}
 
-	bytes, err := GoTypesFromCUE(version.Schema, CUEGoConfig{
+	goBytes, err := GoTypesFromCUE(version.Schema, CUEGoConfig{
 		PackageName: packageName,
 		Name:        exportField(machineName),
 		Version:     version.Version,
@@ -92,7 +95,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, machineName string
 		return nil, err
 	}
 	return codejen.Files{codejen.File{
-		Data:         bytes,
+		Data:         goBytes,
 		RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_gen.go"), strings.ToLower(machineName)),
 		From:         []codejen.NamedJenny{g},
 	}}, nil
@@ -104,7 +107,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
-		bytes, err := GoTypesFromCUE(v, CUEGoConfig{
+		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
 			PackageName: packageName,
 			Name:        exportField(strings.Join(fieldName, "")),
 			Version:     kv.Version,
@@ -113,7 +116,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 			return nil, err
 		}
 		return codejen.Files{codejen.File{
-			Data:         bytes,
+			Data:         goBytes,
 			RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_%s_gen.go"), strings.ToLower(machineName), strings.Join(fieldName, "_")),
 			From:         []codejen.NamedJenny{g},
 		}}, nil
@@ -177,7 +180,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 	}
 
 	loader := openapi3.NewLoader()
-	oT, err := loader.LoadFromData([]byte(yml))
+	oT, err := loader.LoadFromData(yml)
 	if err != nil {
 		return nil, fmt.Errorf("loading generated openapi failed: %w", err)
 	}

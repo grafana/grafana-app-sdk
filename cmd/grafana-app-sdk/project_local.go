@@ -24,12 +24,12 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
@@ -144,6 +144,7 @@ func initializeLocalEnvFiles(basePath, clusterName, operatorImageName string) er
 	return nil
 }
 
+// nolint:funlen
 func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	// Path (optional)
 	path, err := cmd.Flags().GetString("path")
@@ -190,7 +191,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	// Generate the k8s YAML bundle
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
-		case "cue":
+		case FormatCUE:
 			parser, err := cuekind.NewParser()
 			if err != nil {
 				return nil, err
@@ -200,7 +201,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 				return nil, err
 			}
 			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"))
-		case "thema":
+		case FormatThema:
 			parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
 			if err != nil {
 				return nil, err

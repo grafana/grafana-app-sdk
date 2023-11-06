@@ -9,12 +9,12 @@ import (
 
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 	"github.com/grafana/grafana-app-sdk/kindsys"
 )
@@ -88,9 +88,9 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	files := make(codejen.Files, 0)
+	var files codejen.Files
 	switch format {
-	case "thema":
+	case FormatThema:
 		files, err = generateKindsThema(os.DirFS(cuePath), kindGenConfig{
 			GoGenBasePath: goGenPath,
 			TSGenBasePath: tsGenPath,
@@ -101,7 +101,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-	case "cue":
+	case FormatCUE:
 		files, err = generateKindsCue(os.DirFS(cuePath), kindGenConfig{
 			GoGenBasePath: goGenPath,
 			TSGenBasePath: tsGenPath,
@@ -255,7 +255,6 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 	// Resource
 	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true), func(kind codegen.Kind) bool {
-		fmt.Println("Check " + kind.Name() + " for resource")
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {

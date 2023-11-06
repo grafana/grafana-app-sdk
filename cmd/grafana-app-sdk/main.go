@@ -6,6 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	FormatCUE   = "cue"
+	FormatThema = "thema"
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "grafana-app-sdk <command>",
 	Short: "A tool for working with grafana apps, used for generating code from CUE kinds, creating project boilerplate, and running local deployments",

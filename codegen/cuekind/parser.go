@@ -10,6 +10,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
@@ -27,6 +28,8 @@ type Parser struct {
 
 // Parse parses all CUE files in `files`, and reads all top-level selectors (or only `selectors` if provided)
 // as kinds as defined by [def.cue]. It then returns a list of kinds parsed.
+//
+//nolint:funlen
 func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
@@ -56,7 +59,7 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 		Module:     modPath,
 		Dir:        filepath.FromSlash(filepath.Join("/", modPath)),
 	})
-	if len(inst) < 0 {
+	if len(inst) == 0 {
 		return nil, fmt.Errorf("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
@@ -80,106 +83,76 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
-	kindDef, err := p.getKindDefinition()
+	kindDef, schemaDef, err := p.getKindDefinition()
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
-	}
-	schemaDef, err := p.getAPIResourceSchemaDefinition()
-	if err != nil {
-		return nil, fmt.Errorf("could not load internal schema definition: %w", err)
 	}
 
 	// Unify the kinds we loaded from CUE with the kind definition,
 	// then put together the kind struct from that
 	kinds := make([]codegen.Kind, 0)
 	for _, val := range vals {
+		// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
+		// This gives us default values for all fields that weren't filled out,
+		// and will create errors for required fields that may be missing.
 		val = val.Unify(kindDef)
 		if val.Err() != nil {
 			return nil, val.Err()
 		}
-		props := codegen.KindProperties{}
-		val.Decode(&props)
-		someKind := &codegen.AnyKind{
-			Props:       props,
-			AllVersions: make([]codegen.KindVersion, 0),
-		}
-		goVers := make(map[string]codegen.KindVersion)
-		vers := val.LookupPath(cue.MakePath(cue.Str("versions")))
-		vers.Decode(&goVers)
-		for k, v := range goVers {
-			v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
-			if props.APIResource != nil {
-				v.Schema = v.Schema.Unify(schemaDef)
-			}
-			someKind.AllVersions = append(someKind.AllVersions, v)
-		}
-		kinds = append(kinds, someKind)
-	}
-	return kinds, nil
-}
 
-func (p *Parser) ParseOld(directory string, selectors ...string) ([]codegen.Kind, error) {
-	kindDef, _ := p.getKindDefinition()
-	inst := load.Instances(nil, &load.Config{
-		Dir: directory,
-	})
-	if len(inst) < 0 {
-		return nil, fmt.Errorf("no data")
-	}
-	root := cuecontext.New().BuildInstance(inst[0])
-	vals := make([]cue.Value, 0)
-	if len(selectors) > 0 {
-		for _, s := range selectors {
-			v := root.LookupPath(cue.MakePath(cue.Str(s)))
-			if v.Err() != nil {
-				return nil, v.Err()
-			}
-			vals = append(vals, v)
-		}
-	} else {
-		i, err := root.Fields()
+		// Decode the unified value into our collection of properties.
+		props := codegen.KindProperties{}
+		err = val.Decode(&props)
 		if err != nil {
 			return nil, err
 		}
-		for i.Next() {
-			vals = append(vals, i.Value())
-		}
-	}
 
-	kinds := make([]codegen.Kind, 0)
-	for _, val := range vals {
-		val = val.Unify(kindDef)
-		if val.Err() != nil {
-			return nil, val.Err()
-		}
-		props := codegen.KindProperties{}
-		val.Decode(&props)
+		// We can't simply decode the version map, because we need to extract some values as types,
+		// but leave the schema value as a cue.Value. So we tell cue to decode it into a map,
+		// then still need to iterate through the map and adjust values
 		someKind := &codegen.AnyKind{
 			Props:       props,
 			AllVersions: make([]codegen.KindVersion, 0),
 		}
 		goVers := make(map[string]codegen.KindVersion)
 		vers := val.LookupPath(cue.MakePath(cue.Str("versions")))
-		vers.Decode(&goVers)
+		if vers.Err() != nil {
+			return nil, vers.Err()
+		}
+		err = vers.Decode(&goVers)
+		if err != nil {
+			return nil, err
+		}
 		for k, v := range goVers {
 			v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
+			if v.Schema.Err() != nil {
+				return nil, v.Schema.Err()
+			}
+			if props.APIResource != nil {
+				// Normally, we would use a conditional unify in the def.cue file of kindDef,
+				// but there is a bug where the conditional evaluation creates a nil vertex somewhere
+				// when loading with the CLI, so this is a faster fix (TODO: long-term fix)
+				v.Schema = v.Schema.Unify(schemaDef)
+				if v.Schema.Err() != nil {
+					return nil, v.Schema.Err()
+				}
+			}
 			someKind.AllVersions = append(someKind.AllVersions, v)
 		}
 		kinds = append(kinds, someKind)
 	}
-
 	return kinds, nil
 }
 
-func (p *Parser) getKindDefinition() (cue.Value, error) {
+func (p *Parser) getKindDefinition() (cue.Value, cue.Value, error) {
 	if p.kindDef != nil {
-		return *p.kindDef, nil
+		return *p.kindDef, *p.schemaDef, nil
 	}
 
 	kindOverlay := make(map[string]load.Source)
 	err := ToOverlay("/github.com/grafana/grafana-app-sdk/codegen/cuekind", overlayFS, kindOverlay)
 	if err != nil {
-		return cue.Value{}, err
+		return cue.Value{}, cue.Value{}, err
 	}
 	kindInstWithDef := load.Instances(nil, &load.Config{
 		Overlay:    kindOverlay,
@@ -187,30 +160,21 @@ func (p *Parser) getKindDefinition() (cue.Value, error) {
 		Module:     "github.com/grafana/grafana-app-sdk/codegen/cuekind",
 		Dir:        filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
 	})[0]
-	kindDef := cuecontext.New().BuildInstance(kindInstWithDef).LookupPath(cue.MakePath(cue.Str("Kind")))
+	inst := cuecontext.New().BuildInstance(kindInstWithDef)
+	if inst.Err() != nil {
+		return cue.Value{}, cue.Value{}, inst.Err()
+	}
+	kindDef := inst.LookupPath(cue.MakePath(cue.Str("Kind")))
+	if kindDef.Err() != nil {
+		return cue.Value{}, cue.Value{}, kindDef.Err()
+	}
+	schemaDef := inst.LookupPath(cue.MakePath(cue.Str("Schema")))
+	if schemaDef.Err() != nil {
+		return cue.Value{}, cue.Value{}, schemaDef.Err()
+	}
 	p.kindDef = &kindDef
-	return *p.kindDef, nil
-}
-
-func (p *Parser) getAPIResourceSchemaDefinition() (cue.Value, error) {
-	if p.schemaDef != nil {
-		return *p.schemaDef, nil
-	}
-
-	kindOverlay := make(map[string]load.Source)
-	err := ToOverlay("/github.com/grafana/grafana-app-sdk/codegen/cuekind", overlayFS, kindOverlay)
-	if err != nil {
-		return cue.Value{}, err
-	}
-	kindInstWithDef := load.Instances(nil, &load.Config{
-		Overlay:    kindOverlay,
-		ModuleRoot: filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
-		Module:     "github.com/grafana/grafana-app-sdk/codegen/cuekind",
-		Dir:        filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
-	})[0]
-	schemaDef := cuecontext.New().BuildInstance(kindInstWithDef).LookupPath(cue.MakePath(cue.Str("Schema")))
 	p.schemaDef = &schemaDef
-	return *p.schemaDef, nil
+	return *p.kindDef, *p.schemaDef, nil
 }
 
 func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {

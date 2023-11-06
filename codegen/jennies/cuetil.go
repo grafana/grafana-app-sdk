@@ -32,6 +32,9 @@ func CUEValueToOAPIYAML(val cue.Value, cfg CUEOpenAPIConfig) ([]byte, error) {
 	return []byte(str), nil
 }
 
+// CUEValueToOpenAPI converts a cue.Value into an OpenAPI ast.File
+//
+//nolint:gocritic,revive
 func CUEValueToOpenAPI(val cue.Value, cfg CUEOpenAPIConfig) (*ast.File, error) {
 	defpath := cue.MakePath(cue.Def(cfg.Name))
 	v := val.Context().CompileString(fmt.Sprintf("#%s: _", cfg.Name))
@@ -153,6 +156,14 @@ func TrimPathPrefix(path, prefix cue.Path) cue.Path {
 // they are either exactly equal, or if they are equal ignoring path optionality.
 func SelEq(s1, s2 cue.Selector) bool {
 	return s1 == s2 || s1.Optional() == s2.Optional()
+}
+
+// CUEValueToString returns a formatted string output of a cue.Value.
+// This is a more detailed string than using fmt.Println(v), as it will include optional fields and definitions.
+func CUEValueToString(v cue.Value) string {
+	st := cueFmtState{}
+	v.Format(&st, 'v')
+	return st.String()
 }
 
 // cueFmtState wraps a bytes.Buffer with the extra methods required to implement fmt.State.

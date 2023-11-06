@@ -119,8 +119,9 @@ Kind: S={
 	// isCRD is true if the `crd` trait is present in the kind.
 	isAPIResource: apiResource != _|_
 	versions: {
-		[string]: {
-			version: string
+		[V=string]: {
+			// Version must be the key in the map, but is pulled into the value of the map for ease-of-access when dealing with the resulting value
+			version: V
 			schema: _
 			// served indicates whether this version is served by the API server
 			served: bool | *true

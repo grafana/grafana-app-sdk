@@ -6,10 +6,8 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/grafana/cuetsy"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/thema/encoding/typescript"
 
-	"github.com/grafana/grafana-app-sdk/kindsys"
+	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
 // TypeScriptTypes is a one-to-many jenny that generates one or more TypeScript types for a kind.
@@ -57,7 +55,9 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 
 	files := make(codejen.Files, 0)
 	// For each version, check if we need to codegen
-	for _, v := range kind.Versions() {
+	allVersions := kind.Versions()
+	for i := 0; i < len(allVersions); i++ {
+		v := allVersions[i]
 		if !v.Codegen.Frontend {
 			continue
 		}
@@ -92,23 +92,4 @@ func generateTypescriptBytes(v *codegen.KindVersion, name string, cfg cuetsy.Con
 	// post-process fix on the generated TS
 	fixed := strings.ReplaceAll(tf.String(), "Array<string>", "string[]")
 	return []byte(fixed), nil
-}
-
-func (j TypeScriptTypes) Generate1(decl kindsys.Custom) (*codejen.File, error) {
-	// TODO allow using name instead of machine name in thema generator
-	f, err := typescript.GenerateTypes(decl.Lineage().Latest(), &typescript.TypeConfig{
-		RootName: decl.Name(),
-		Group:    false,
-		CuetsyConfig: &cuetsy.Config{
-			ImportMapper: cuetsy.IgnoreImportMapper,
-			Export:       true,
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	// post-process fix on the generated TS
-	fixed := strings.ReplaceAll(f.String(), "Array<string>", "string[]")
-
-	return codejen.NewFile(decl.Lineage().Name()+"_types.gen.ts", []byte(fixed), j), nil
 }

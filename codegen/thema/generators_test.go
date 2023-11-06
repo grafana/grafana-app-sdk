@@ -61,6 +61,22 @@ func TestResourceGenerator(t *testing.T) {
 	compareToGolden(t, files, "")
 }
 
+func TestModelsGenerator(t *testing.T) {
+	// Ideally, we test only that this outputs the right jennies,
+	// but right now we just test the whole pipeline from thema -> written files
+
+	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(TestCUEDirectory))
+	require.Nil(t, err)
+
+	files, err := parser.Generate(ModelsGenerator(), "customKind2")
+	require.Nil(t, err)
+	// Check number of files generated
+	// 4 -> go type, lineage, functions wrapper for type/lineage, cue module
+	assert.Len(t, files, 4)
+	// Check content against the golden files
+	compareToGolden(t, files, "")
+}
+
 func TestTypeScriptModelsGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files

@@ -8,7 +8,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/load"
 	"github.com/hashicorp/go-multierror"
@@ -113,13 +112,6 @@ type genericFilteredGenerator struct {
 
 func (g *genericFilteredGenerator) Allowed(c kindsys.Custom) bool {
 	return g.filterFunc(c)
-}
-
-func namerFunc(k codegen.Kind) string {
-	if k == nil {
-		return "nil"
-	}
-	return k.Properties().Kind
 }
 
 func kindsysNamerFunc(d kindsys.Custom) string {

@@ -16,6 +16,8 @@ import (
 
 // depointerizer returns an AST manipulator that removes redundant
 // pointer indirection from the defined types.
+//
+//nolint:gocritic,revive
 func depointerizer() dstutil.ApplyFunc {
 	return func(c *dstutil.Cursor) bool {
 		switch x := c.Node().(type) {
@@ -47,6 +49,8 @@ func setStar(e dst.Expr) string {
 
 // It fixes the "generic" fields. It happens when a value in cue could be different structs.
 // For Go it generates a struct with a json.RawMessage field inside and multiple functions to map it between the different possibilities.
+//
+//nolint:gocognit
 func fixRawData() dstutil.ApplyFunc {
 	return func(c *dstutil.Cursor) bool {
 		f, is := c.Node().(*dst.File)

@@ -3,6 +3,7 @@ package thema
 import (
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -25,7 +26,7 @@ func kindsysCustomToKind(decl kindsys.Custom) codegen.Kind {
 			PluralMachineName: props.PluralMachineName,
 			Group:             props.Group,
 			Current:           versionString(props.CurrentVersion),
-			Codegen: codegen.CodegenProperties{
+			Codegen: codegen.KindCodegenProperties{
 				Frontend: props.Codegen.Frontend,
 				Backend:  props.Codegen.Backend,
 			},
@@ -42,7 +43,7 @@ func kindsysCustomToKind(decl kindsys.Custom) codegen.Kind {
 	for sch != nil {
 		k.AllVersions = append(k.AllVersions, codegen.KindVersion{
 			Version: versionString(sch.Version()),
-			Schema:  sch.Underlying().LookupPath(cue.MakePath(cue.Hid("_#schema", "github.com/grafana/thema"))).Eval(), //sch.Underlying().LookupPath(cue.MakePath(cue.Str("schema"))),
+			Schema:  sch.Underlying().LookupPath(cue.MakePath(cue.Hid("_#schema", "github.com/grafana/thema"))).Eval(),
 			Codegen: k.Props.Codegen,
 		})
 		sch = sch.Successor()
