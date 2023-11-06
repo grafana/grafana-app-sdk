@@ -5,7 +5,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-	jennies2 "github.com/grafana/grafana-app-sdk/codegen/thema/jennies"
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
@@ -48,7 +47,7 @@ func ModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 		&jennies.GoTypes{
 			GenerateOnlyCurrent: !versioned,
 		},
-		&jennies2.ModelsFunctionsGenerator{}, // TODO
+		// &jennies2.ModelsFunctionsGenerator{}, // TODO
 	)
 	return g
 }

@@ -89,10 +89,10 @@ Kind: S={
 		[string]: {
 			version: string
 			schema: _
-			if S.isAPIResource {
-				schema: Schema
-				_specIsNonEmpty: schema.spec & struct.MinFields(0)
-			}
+			// if S.isAPIResource {
+			// 	schema: Schema
+			// 	_specIsNonEmpty: schema.spec & struct.MinFields(0)
+			// }
 			// served indicates whether this version is served by the API server
 			served: bool | *true
 			// codegen contains properties specific to generating code using tooling
