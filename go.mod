@@ -5,11 +5,15 @@ go 1.21
 require (
 	cuelang.org/go v0.5.0
 	github.com/dave/dst v0.27.3
+	github.com/getkin/kin-openapi v0.120.0
+	github.com/golangci/lint-1 v0.0.0-20181222135242-d2cdd8c08219
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
 	github.com/grafana/grafana-plugin-sdk-go v0.188.3
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/labstack/echo/v4 v4.10.0
+	github.com/matryer/moq v0.2.7
 	github.com/prometheus/client_golang v1.17.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.7.0
@@ -17,6 +21,8 @@ require (
 	github.com/yalue/merged_fs v1.2.3
 	go.opentelemetry.io/otel v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
+	golang.org/x/text v0.13.0
+	golang.org/x/tools v0.8.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.28.3
@@ -44,7 +50,6 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20230731152917-f99041a5c027 // indirect
 	github.com/emicklei/proto v1.10.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
-	github.com/getkin/kin-openapi v0.120.0 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -75,7 +80,6 @@ require (
 	github.com/klauspost/cpuid/v2 v2.2.3 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/labstack/echo/v4 v4.10.0 // indirect
 	github.com/labstack/gommon v0.4.0 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -127,9 +131,7 @@ require (
 	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/sys v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.8.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230731193218-e0aa005b6bdf // indirect
