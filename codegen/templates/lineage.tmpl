@@ -6,9 +6,11 @@ package {{.Package}}
 
 import (
 	"embed"
+	"encoding/json"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/load"
 	"github.com/grafana/thema/vmux"
@@ -18,6 +20,10 @@ var rt = thema.NewRuntime(cuecontext.New())
 var lineage thema.Lineage
 var typedLatest thema.TypedSchema[*LineageType]
 var muxer vmux.TypedMux[*LineageType]
+
+// LacunaResolver is used by Object.Unmarshal to resolve any lacunas that emerge in the unmarshal process.
+// It is skipped if nil, and should be overridden in non-generated code for custom lacuna resolution.
+var LacunaResolver func(*LineageType, []thema.Lacuna) error = nil
 
 // LineageType must be used instead of Object for thema.BindType, as the bound struct must exactly match the Schema,
 // and Object has extra fields for metadata (which necessarily cannot be rendered in the Lineage/Schema,
@@ -35,6 +41,8 @@ func init() {
 		panic(err)
 	}
 	muxer = vmux.NewTypedMux[*LineageType](typedLatest, vmux.NewJSONCodec("input"))
+
+	{{.ObjectTypeName}}UnmarshalFunc = ThemaUnmarshalFunc
 }
 
 //go:embed {{.CUEFile}} cue.mod/*
@@ -61,3 +69,39 @@ func Lineage(rt *thema.Runtime, opts ...thema.BindOption) (thema.Lineage, error)
 }
 
 var _ thema.LineageFactory = Lineage // Ensure our factory fulfills the type
+
+func ThemaUnmarshalFunc(into *{{.ObjectTypeName}}, objBytes resource.ObjectBytes, config resource.UnmarshalConfig) error {
+    // Unify the spec and subresources into one JSON object for the muxer
+    unified := make(map[string]json.RawMessage)
+    unified["spec"] = objBytes.Spec
+    {{ range .Subresources }}if sr, ok := objBytes.Subresources["{{.JSONName}}"]; ok {
+        unified["{{.JSONName}}"] = sr
+    }
+    {{ end }}
+    unified["metadata"] = objBytes.Metadata
+    bytes, err := json.Marshal(unified)
+    if err != nil {
+        return err
+    }
+
+    // Parse with the muxer
+	instance, lacunas, err := muxer(bytes)
+	if err != nil {
+		return err
+	}
+	parsedObj, err := instance.Value()
+	if err != nil {
+		return err
+	}
+	if lacunas != nil && len(lacunas.AsList()) > 0 && LacunaResolver != nil {
+        err = LacunaResolver(parsedObj, lacunas.AsList())
+        if err != nil {
+            return err
+        }
+	}
+
+	into.Spec = parsedObj.Spec
+	into.Metadata = parsedObj.Metadata{{ range .Subresources }}
+    into.{{.TypeName}} = parsedObj.{{.TypeName}}{{ end }}
+	return nil
+}

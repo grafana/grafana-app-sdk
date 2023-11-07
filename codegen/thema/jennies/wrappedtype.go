@@ -1,4 +1,4 @@
-package codegen
+package jennies
 
 import (
 	"bytes"
@@ -7,20 +7,20 @@ import (
 
 	"github.com/grafana/codejen"
 
+	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
-type modelsFunctionsGenerator struct {
+type ModelsFunctionsGenerator struct {
 }
 
-func (*modelsFunctionsGenerator) JennyName() string {
+func (*ModelsFunctionsGenerator) JennyName() string {
 	return "ModelsFunctionsGenerator"
 }
 
-func (s *modelsFunctionsGenerator) Generate(decl kindsys.Custom) (*codejen.File, error) {
-	meta := decl.Def().Properties
-	typeName := typeNameFromKey(decl.Lineage().Name())
+func (s *ModelsFunctionsGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
+	meta := kind.Properties()
+	typeName := exportField(meta.Kind)
 	md := templates.WrappedTypeMetadata{
 		Package:     meta.MachineName,
 		TypeName:    typeName,

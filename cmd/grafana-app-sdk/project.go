@@ -17,7 +17,7 @@ import (
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
-	"github.com/grafana/grafana-app-sdk/codegen"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
@@ -395,7 +395,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create the generator (used for generating non-static code)
-	generator, err := codegen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
+	generator, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
 	if err != nil {
 		fmt.Printf("%s\n", err.Error())
 		os.Exit(1)
@@ -429,14 +429,14 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func addComponentOperator(projectRootPath string, generator *codegen.CustomKindParser, selectors []string) error {
+func addComponentOperator(projectRootPath string, generator *themagen.CustomKindParser, selectors []string) error {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
 	if err != nil {
 		return err
 	}
 
-	files, err := generator.Generate(codegen.OperatorGenerator(repo, "pkg/generated"), selectors...)
+	files, err := generator.Generate(themagen.OperatorGenerator(repo, "pkg/generated"), selectors...)
 	if err != nil {
 		return err
 	}
@@ -468,7 +468,7 @@ func addComponentOperator(projectRootPath string, generator *codegen.CustomKindP
 // Linter doesn't like "Potential file inclusion via variable", which is actually desired here
 //
 //nolint:gosec
-func addComponentBackend(projectRootPath string, generator *codegen.CustomKindParser,
+func addComponentBackend(projectRootPath string, generator *themagen.CustomKindParser,
 	selectors []string, pluginID string) error {
 	// Check plugin ID
 	if pluginID == "" {
@@ -516,8 +516,8 @@ func addComponentBackend(projectRootPath string, generator *codegen.CustomKindPa
 }
 
 //nolint:revive
-func projectAddPluginAPI(generator *codegen.CustomKindParser, repo, generatedAPIModelsPath string, selectors []string) error {
-	goFiles, err := generator.FilteredGenerate(codegen.Filter(codegen.BackendPluginGenerator(repo, generatedAPIModelsPath), func(c kindsys.Custom) bool {
+func projectAddPluginAPI(generator *themagen.CustomKindParser, repo, generatedAPIModelsPath string, selectors []string) error {
+	goFiles, err := generator.FilteredGenerate(themagen.Filter(themagen.BackendPluginGenerator(repo, generatedAPIModelsPath), func(c kindsys.Custom) bool {
 		return c.Def().Properties.Codegen.Frontend
 	}), selectors...)
 	if err != nil {
