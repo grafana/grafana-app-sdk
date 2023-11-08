@@ -5,9 +5,18 @@ updates:
   schedule:
     interval: daily
   groups:
-    all:
+    cue:
       patterns:
-        - "*"
+      - "*cue*"
+      - "*thema*"
+      - "*codejen*"
+    all:
+      exclude-patterns:
+      - "*cue*"
+      - "*thema*"
+      - "*codejen*"
+      patterns:
+      - "*"
   labels:
   - "type/dependabot"
 
