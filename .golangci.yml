@@ -2,6 +2,7 @@ run:
   tests: false
   skip-dirs:
     - test/
+    - internal/deepmap/
 
 linters-settings:
   funlen:
@@ -70,7 +71,6 @@ linters:
   disable-all: true
   enable:
     - bodyclose
-    - depguard
     - dogsled
     - dupl
     - errcheck

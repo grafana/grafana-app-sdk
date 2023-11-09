@@ -1,9 +1,22 @@
 version: 2
-
 updates:
 - package-ecosystem: gomod
   directory: "/"
   schedule:
     interval: daily
+  groups:
+    cue:
+      patterns:
+      - "*cue*"
+      - "*thema*"
+      - "*codejen*"
+    all:
+      exclude-patterns:
+      - "*cue*"
+      - "*thema*"
+      - "*codejen*"
+      patterns:
+      - "*"
   labels:
   - "type/dependabot"
+

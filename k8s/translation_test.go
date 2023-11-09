@@ -31,6 +31,7 @@ var complexObject = TestResourceObject{
 		CommonMetadata: resource.CommonMetadata{
 			UID:               "abc",
 			ResourceVersion:   "12345",
+			Generation:        1,
 			Labels:            map[string]string{"foo": "bar"},
 			CreationTimestamp: createdTime,
 			Finalizers:        []string{"finalizer"},
@@ -38,13 +39,12 @@ var complexObject = TestResourceObject{
 			CreatedBy:         "me",
 			UpdatedBy:         "you",
 			ExtraFields: map[string]any{
-				"generation": int64(1),
 				"annotations": map[string]string{
-					fmt.Sprintf("%screatedBy", annotationPrefix):       "me",
-					fmt.Sprintf("%supdatedBy", annotationPrefix):       "you",
-					fmt.Sprintf("%supdateTimestamp", annotationPrefix): updatedTime.Format(time.RFC3339Nano),
-					fmt.Sprintf("%scustomField1", annotationPrefix):    "foo",
-					fmt.Sprintf("%scustomField2", annotationPrefix):    "bar",
+					fmt.Sprintf("%screatedBy", AnnotationPrefix):       "me",
+					fmt.Sprintf("%supdatedBy", AnnotationPrefix):       "you",
+					fmt.Sprintf("%supdateTimestamp", AnnotationPrefix): updatedTime.Format(time.RFC3339Nano),
+					fmt.Sprintf("%scustomField1", AnnotationPrefix):    "foo",
+					fmt.Sprintf("%scustomField2", AnnotationPrefix):    "bar",
 				},
 			},
 		},
@@ -97,13 +97,13 @@ func TestRawToObject(t *testing.T) {
 			Labels:            complexObject.Metadata.Labels,
 			CreationTimestamp: metav1.Time{complexObject.Metadata.CreationTimestamp},
 			Finalizers:        complexObject.Metadata.Finalizers,
-			Generation:        complexObject.Metadata.ExtraFields["generation"].(int64),
+			Generation:        complexObject.Metadata.Generation,
 			Annotations: map[string]string{
-				fmt.Sprintf("%screatedBy", annotationPrefix):       complexObject.Metadata.CreatedBy,
-				fmt.Sprintf("%supdatedBy", annotationPrefix):       complexObject.Metadata.UpdatedBy,
-				fmt.Sprintf("%supdateTimestamp", annotationPrefix): complexObject.Metadata.UpdateTimestamp.Format(time.RFC3339Nano),
-				fmt.Sprintf("%scustomField1", annotationPrefix):    complexObject.Metadata.CustomField1,
-				fmt.Sprintf("%scustomField2", annotationPrefix):    complexObject.Metadata.CustomField2,
+				fmt.Sprintf("%screatedBy", AnnotationPrefix):       complexObject.Metadata.CreatedBy,
+				fmt.Sprintf("%supdatedBy", AnnotationPrefix):       complexObject.Metadata.UpdatedBy,
+				fmt.Sprintf("%supdateTimestamp", AnnotationPrefix): complexObject.Metadata.UpdateTimestamp.Format(time.RFC3339Nano),
+				fmt.Sprintf("%scustomField1", AnnotationPrefix):    complexObject.Metadata.CustomField1,
+				fmt.Sprintf("%scustomField2", AnnotationPrefix):    complexObject.Metadata.CustomField2,
 			},
 		},
 		Spec:   complexObject.Spec,
@@ -272,17 +272,30 @@ func TestMarshalJSON(t *testing.T) {
 			Labels:            complexObject.Metadata.Labels,
 			//CreationTimestamp: metav1.Time{complexObject.Metadata.CreationTimestamp},
 			Finalizers: complexObject.Metadata.Finalizers,
-			Generation: complexObject.Metadata.ExtraFields["generation"].(int64),
+			Generation: complexObject.Metadata.Generation,
 			Annotations: map[string]string{
-				fmt.Sprintf("%screatedBy", annotationPrefix):       complexObject.Metadata.CreatedBy,
-				fmt.Sprintf("%supdatedBy", annotationPrefix):       complexObject.Metadata.UpdatedBy,
-				fmt.Sprintf("%supdateTimestamp", annotationPrefix): complexObject.Metadata.UpdateTimestamp.Format(time.RFC3339Nano),
-				fmt.Sprintf("%scustomField1", annotationPrefix):    complexObject.Metadata.CustomField1,
-				fmt.Sprintf("%scustomField2", annotationPrefix):    complexObject.Metadata.CustomField2,
+				fmt.Sprintf("%screatedBy", AnnotationPrefix):       complexObject.Metadata.CreatedBy,
+				fmt.Sprintf("%supdatedBy", AnnotationPrefix):       complexObject.Metadata.UpdatedBy,
+				fmt.Sprintf("%supdateTimestamp", AnnotationPrefix): complexObject.Metadata.UpdateTimestamp.Format(time.RFC3339Nano),
+				fmt.Sprintf("%scustomField1", AnnotationPrefix):    complexObject.Metadata.CustomField1,
+				fmt.Sprintf("%scustomField2", AnnotationPrefix):    complexObject.Metadata.CustomField2,
 			},
 		},
 		Spec:   complexObject.Spec,
 		Status: complexObject.Status,
+	})
+
+	emptyObject := TestResourceObject{}
+	emptyBytes, _ := json.Marshal(testKubernetesObject{
+		Metadata: metav1.ObjectMeta{
+			Annotations: map[string]string{
+				fmt.Sprintf("%screatedBy", AnnotationPrefix): "",
+				fmt.Sprintf("%supdatedBy", AnnotationPrefix): "",
+				// No updateTimestamp when it's a zero (empty) time
+				fmt.Sprintf("%scustomField1", AnnotationPrefix): "",
+				fmt.Sprintf("%scustomField2", AnnotationPrefix): "",
+			},
+		},
 	})
 
 	tests := []struct {
@@ -307,6 +320,14 @@ func TestMarshalJSON(t *testing.T) {
 			extraLabels:   nil,
 			config:        ClientConfig{},
 			expectedJSON:  complexBytes,
+			expectedError: nil,
+		},
+		{
+			name:          "empty object",
+			obj:           &emptyObject,
+			extraLabels:   nil,
+			config:        ClientConfig{},
+			expectedJSON:  emptyBytes,
 			expectedError: nil,
 		},
 	}

@@ -47,18 +47,20 @@ type localEnvConfig struct {
 }
 
 type dataSourceConfig struct {
-	Access    string `json:"access" yaml:"access"`
-	Editable  bool   `json:"editable" yaml:"editable"`
-	IsDefault bool   `json:"isDefault" yaml:"isDefault"`
-	Name      string `json:"name" yaml:"name"`
-	Type      string `json:"type" yaml:"type"`
-	UID       string `json:"uid" yaml:"uid"`
-	URL       string `json:"url" yaml:"url"`
+	Access       string   `json:"access" yaml:"access"`
+	Editable     bool     `json:"editable" yaml:"editable"`
+	IsDefault    bool     `json:"isDefault" yaml:"isDefault"`
+	Name         string   `json:"name" yaml:"name"`
+	Type         string   `json:"type" yaml:"type"`
+	UID          string   `json:"uid" yaml:"uid"`
+	URL          string   `json:"url" yaml:"url"`
+	Dependencies []string `json:"dependencies" yaml:"dependencies"`
 }
 
 type localEnvWebhookConfig struct {
 	Mutating   bool `json:"mutating" yaml:"mutating"`
 	Validating bool `json:"validating" yaml:"validating"`
+	Converting bool `json:"converting" yaml:"converting"`
 	Port       int  `json:"port" yaml:"port"`
 }
 
@@ -285,6 +287,7 @@ type yamlGenPropsWebhooks struct {
 	Port       int
 	Mutating   string
 	Validating string
+	Converting string
 	Base64Cert string
 	Base64Key  string
 	Base64CA   string
@@ -319,7 +322,7 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		SecureJSONData: make(map[string]string),
 		OperatorImage:  config.OperatorImage,
 		WebhookProperties: yamlGenPropsWebhooks{
-			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating,
+			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 	}
@@ -348,6 +351,9 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		if config.Webhooks.Validating {
 			props.WebhookProperties.Validating = "/validate"
 		}
+		if config.Webhooks.Converting {
+			props.WebhookProperties.Converting = "/convert"
+		}
 		// Generate cert bundle
 		bundle, err := generateCerts(fmt.Sprintf("%s-operator.default.svc", props.PluginID))
 		if err != nil {
@@ -364,6 +370,33 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 		return nil, err
 	}
 	for _, f := range crdFiles {
+		// If converting webhooks are enabled, upate the yaml
+		// TODO: this is a hack workaround for now, this should eventually be in the CRD generator
+		if props.WebhookProperties.Converting != "" {
+			rawCRD := make(map[string]any)
+			if err := yaml.Unmarshal(f.Data, &rawCRD); err != nil {
+				return nil, err
+			}
+			spec, ok := rawCRD["spec"].(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("could not parse CRD")
+			}
+			spec["conversion"] = map[string]any{
+				"strategy": "Webhook",
+				"webhook": map[string]any{
+					"conversionReviewVersions": []string{"v1"},
+					"clientConfig": map[string]any{
+						"service": map[string]any{
+							"name":      "convtest-app-operator",
+							"namespace": "default",
+							"path":      "/convert",
+						},
+						"caBundle": props.WebhookProperties.Base64CA,
+					},
+				},
+			}
+		}
+
 		output.Write(append(f.Data, []byte("\n---\n")...))
 		yml := crdYAML{}
 		err = yaml.Unmarshal(f.Data, &yml)
@@ -398,8 +431,9 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 	}
 
 	// Datasources
+	addedDeps := make(map[string]struct{})
 	for i, ds := range config.Datasources {
-		err := localGenerateDatasourceYAML(ds, i == 0, &props, &output)
+		err := localGenerateDatasourceYAML(ds, i == 0, &props, addedDeps, &output)
 		if err != nil {
 			return nil, err
 		}
@@ -428,13 +462,22 @@ func generateKubernetesYAML(parser *codegen.CustomKindParser, pluginID string, c
 }
 
 //nolint:revive
-func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlGenProperties, out io.Writer) error {
+func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlGenProperties, depsMap map[string]struct{}, out io.Writer) error {
 	datasource = strings.ToLower(datasource)
 	cfg, ok := localDatasourceConfigs[datasource]
 	if !ok {
 		return fmt.Errorf("unsupported datasource '%s'", datasource)
 	}
-	files, ok := localDatasourceFiles[datasource]
+	files := make([]string, 0)
+	for _, dep := range cfg.Dependencies {
+		if _, ok := depsMap[dep]; ok {
+			continue
+		}
+		files = append(files, localDatasourceDependencyManifests[dep]...)
+		depsMap[dep] = struct{}{}
+	}
+	dsFiles, ok := localDatasourceFiles[datasource]
+	files = append(files, dsFiles...)
 	if ok {
 		for i, f := range files {
 			if i > 0 {
@@ -491,7 +534,7 @@ func localGenerateGrafanaYAML(config localEnvConfig, props *yamlGenProperties, o
 
 func parsePluginJSONValue(v any) (string, error) {
 	switch cast := v.(type) {
-	case map[string]interface{}, []interface{}:
+	case map[string]any, []any:
 		val, err := json.Marshal(v)
 		if err != nil {
 			return "", err

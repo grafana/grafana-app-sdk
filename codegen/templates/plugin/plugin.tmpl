@@ -8,7 +8,7 @@ import (
 
 	"{{.Repo}}/pkg/plugin/secure"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
 	"github.com/grafana/grafana-app-sdk/plugin/router"
 )
@@ -38,13 +38,14 @@ func (p *Plugin) CallResource(ctx context.Context, req *backend.CallResourceRequ
 
 func New(namespace string, service Service) (*Plugin, error) {
 	p := &Plugin{
-	    router: router.NewJSONRouter(log.DefaultLogger),
+	    router: router.NewJSONRouter(),
 			namespace: namespace,
 	    service: service,
 	}
 
 	p.router.Use(
 		router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware")),
+		router.NewLoggingMiddleware(logging.DefaultLogger),
 		kubeconfig.LoadingMiddleware(),
 		router.MiddlewareFunc(secure.Middleware))
 

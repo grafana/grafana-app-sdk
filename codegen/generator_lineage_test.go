@@ -13,7 +13,7 @@ import (
 func TestLineageGenerator_Generate(t *testing.T) {
 	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(testCueDir))
 	require.Nil(t, err)
-	files, err := parser.Generate(wrapJenny(&lineageGenerator{}))
+	files, err := parser.Generate(wrapJenny(&lineageGenerator{}), "customKind")
 	// Check number of files generated
 	assert.Len(t, files, 1)
 	// Check content against the golden files
@@ -28,7 +28,7 @@ func TestLineageGenerator_JennyName(t *testing.T) {
 func TestCueGenerator_Generate(t *testing.T) {
 	parser, err := NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(testCueDir))
 	require.Nil(t, err)
-	files, err := parser.Generate(wrapJenny(&cueGenerator{}))
+	files, err := parser.Generate(wrapJenny(&cueGenerator{}), "customKind")
 	// Check number of files generated (lineage and cue.module)
 	assert.Len(t, files, 2)
 	// Check content against the golden files

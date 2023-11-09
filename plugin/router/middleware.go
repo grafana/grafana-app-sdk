@@ -2,12 +2,19 @@ package router
 
 import (
 	"context"
+	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
 // MiddlewareFunc is a function that receives a HandlerFunc and returns another HandlerFunc.
@@ -59,6 +66,26 @@ func NewCapturingMiddleware(f func(ctx context.Context, r *backend.CallResourceR
 	}
 }
 
+// NewLoggingMiddleware returns a MiddleWareFunc which logs an INFO level message for each request,
+// and injects the provided Logger into the context used downstream.
+func NewLoggingMiddleware(logger logging.Logger) MiddlewareFunc {
+	return func(handler HandlerFunc) HandlerFunc {
+		return func(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) {
+			start := time.Now()
+			handler(logging.Context(ctx, logger), req, sender)
+			lat := time.Since(start)
+			// Logging latency in ms because it's easier to perceive as a human.
+			// But we also attach a separate field where latency is in seconds, for e.g. Loki queries.
+			logger.WithContext(ctx).Info(fmt.Sprintf("%s %s %dms", req.Method, req.Path, lat.Milliseconds()),
+				"request.http.method", req.Method,
+				"request.http.path", req.Path,
+				"request.user", req.PluginContext.User.Name,
+				"request.latency", lat.Seconds(),
+			)
+		}
+	}
+}
+
 // NewTracingMiddleware returns a MiddlewareFunc which adds a tracing span for every request which lasts
 // the duration of the request's handle time and includes all attributes which are a part of
 // OpenTelemetry's Semantic Conventions for HTTP spans:
@@ -86,5 +113,58 @@ func NewTracingMiddleware(tracer trace.Tracer) MiddlewareFunc {
 			attribute.String("url.path", req.Path),
 			attribute.String("url.query", query),
 			attribute.String("http.route", routeInfo.Path))
+	})
+}
+
+const mb = 1024 * 1024
+
+var BodySizeBuckets = []float64{1 * mb, 2.5 * mb, 5 * mb, 10 * mb, 25 * mb, 50 * mb, 100 * mb, 250 * mb}
+
+func NewMetricsMiddleware(cfg metrics.Config, registerer prometheus.Registerer) MiddlewareFunc {
+	// Declare and register metrics
+	requestDurations := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace:                       cfg.Namespace,
+		Name:                            "request_duration_seconds",
+		Help:                            "Time (in seconds) spent serving HTTP requests.",
+		Buckets:                         metrics.LatencyBuckets,
+		NativeHistogramBucketFactor:     1, // TODO: configurable?
+		NativeHistogramMaxBucketNumber:  100,
+		NativeHistogramMinResetDuration: time.Hour,
+	}, []string{"status_code", "method", "route"})
+	totalRequests := prometheus.NewCounterVec(prometheus.CounterOpts{
+		Name:      "requests_total",
+		Namespace: cfg.Namespace,
+		Help:      "Total number of kubernetes requests",
+	}, []string{"status_code", "method", "route"})
+	requestBytes := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: cfg.Namespace,
+		Name:      "request_message_bytes",
+		Help:      "Size (in bytes) of messages received in the request.",
+		Buckets:   BodySizeBuckets,
+	}, []string{"method", "route"})
+	responseBytes := prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Namespace: cfg.Namespace,
+		Name:      "response_message_bytes",
+		Help:      "Size (in bytes) of messages sent in response.",
+		Buckets:   BodySizeBuckets,
+	}, []string{"method", "route"})
+	inflight := prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: cfg.Namespace,
+		Name:      "inflight_requests",
+		Help:      "Current number of inflight requests.",
+	}, []string{"method", "route"})
+	registerer.MustRegister(requestDurations, totalRequests, requestBytes, responseBytes, inflight)
+
+	return NewCapturingMiddleware(func(ctx context.Context, req *backend.CallResourceRequest, next NextFunc) {
+		routeInfo := MatchedRouteFromContext(ctx)
+		inflight.WithLabelValues(req.Method, routeInfo.Path).Inc()
+		requestBytes.WithLabelValues(req.Method, routeInfo.Path).Observe(float64(len(req.Body)))
+		start := time.Now()
+		resp := next(ctx)
+		lat := time.Since(start)
+		inflight.WithLabelValues(req.Method, routeInfo.Path).Dec()
+		requestDurations.WithLabelValues(strconv.Itoa(resp.Status), req.Method, routeInfo.Path).Observe(lat.Seconds())
+		totalRequests.WithLabelValues(strconv.Itoa(resp.Status), req.Method, routeInfo.Path).Inc()
+		responseBytes.WithLabelValues(req.Method, routeInfo.Path).Observe(float64(len(resp.Body)))
 	})
 }

@@ -38,6 +38,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) CommonMetadata() resource.Commo
     return resource.CommonMetadata{
         UID: {{.ObjectShortName}}.Metadata.Uid,
         ResourceVersion: {{.ObjectShortName}}.Metadata.ResourceVersion,
+        Generation: {{.ObjectShortName}}.Metadata.Generation,
         Labels: {{.ObjectShortName}}.Metadata.Labels,
         CreationTimestamp: {{.ObjectShortName}}.Metadata.CreationTimestamp,
         UpdateTimestamp: {{.ObjectShortName}}.Metadata.UpdateTimestamp,
@@ -55,6 +56,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) CommonMetadata() resource.Commo
 func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata resource.CommonMetadata) {
     {{.ObjectShortName}}.Metadata.Uid = metadata.UID
     {{.ObjectShortName}}.Metadata.ResourceVersion = metadata.ResourceVersion
+    {{.ObjectShortName}}.Metadata.Generation = metadata.Generation
     {{.ObjectShortName}}.Metadata.Labels = metadata.Labels
     {{.ObjectShortName}}.Metadata.CreationTimestamp = metadata.CreationTimestamp
     {{.ObjectShortName}}.Metadata.UpdateTimestamp = metadata.UpdateTimestamp

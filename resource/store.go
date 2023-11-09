@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 )
 
 // TODO: rewrite the godocs, this is all copied from crd/store.go
@@ -122,6 +123,10 @@ func (s *Store) Update(ctx context.Context, obj Object) (Object, error) {
 		return nil, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
 	}
 
+	md := obj.CommonMetadata()
+	md.UpdateTimestamp = time.Now().UTC()
+	obj.SetCommonMetadata(md)
+
 	client, err := s.getClient(obj.StaticMetadata().Kind)
 	if err != nil {
 		return nil, err
@@ -194,6 +199,9 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	}
 
 	if resp != nil {
+		md := obj.CommonMetadata()
+		md.UpdateTimestamp = time.Now().UTC()
+		obj.SetCommonMetadata(md)
 		return client.Update(ctx, Identifier{
 			Namespace: obj.StaticMetadata().Namespace,
 			Name:      obj.StaticMetadata().Name,

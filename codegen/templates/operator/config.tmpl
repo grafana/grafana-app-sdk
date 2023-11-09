@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -13,7 +14,8 @@ const (
 )
 
 type Config struct {
-	OTelConfig OpenTelemetryConfig
+	OTelConfig    OpenTelemetryConfig
+	WebhookServer WebhookServerConfig
 }
 
 type OpenTelemetryConfig struct {
@@ -21,6 +23,12 @@ type OpenTelemetryConfig struct {
 	Port        int
 	ConnType    string
 	ServiceName string
+}
+
+type WebhookServerConfig struct {
+	Port        int
+	TLSCertPath string
+	TLSKeyPath  string
 }
 
 func LoadConfigFromEnv() (*Config, error) {
@@ -54,5 +62,20 @@ func LoadConfigFromEnv() (*Config, error) {
 			return nil, fmt.Errorf("invalid OTEL_PORT '%s': %w", portStr, err)
 		}
 	}
+
+	whPortStr := os.Getenv("WEBHOOK_PORT")
+	if whPortStr == "" {
+		cfg.WebhookServer.Port = 8443
+	} else {
+		var err error
+		cfg.WebhookServer.Port, err = strconv.Atoi(whPortStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid WEBHOOK_PORT '%s': %w", whPortStr, err)
+		}
+	}
+
+	cfg.WebhookServer.TLSCertPath = os.Getenv("WEBHOOK_CERT_PATH")
+	cfg.WebhookServer.TLSKeyPath = os.Getenv("WEBHOOK_KEY_PATH")
+
 	return &cfg, nil
 }
