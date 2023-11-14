@@ -1,5 +1,5 @@
 //nolint:lll
-package codegen
+package thema
 
 import (
 	"fmt"
@@ -14,6 +14,74 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/kindsys"
 )
+
+func NewParser(rt *thema.Runtime) (*Parser, error) {
+	return &Parser{
+		rt: rt,
+	}, nil
+}
+
+type Parser struct {
+	rt *thema.Runtime
+}
+
+func (p *Parser) Parse(modFS fs.FS, selectors ...string) ([]kindsys.Custom, error) {
+	// Load in the cue from the modFS using thema
+	inst, err := load.InstanceWithThema(modFS, ".")
+	if err != nil {
+		return nil, err
+	}
+
+	root := p.rt.Context().BuildInstance(inst)
+	if root.Err() != nil {
+		return nil, root.Err()
+	}
+	if !root.Exists() {
+		return nil, fmt.Errorf("unable to load Instance")
+	}
+
+	// Get the relevant selectors
+	allDefs := make([]kindsys.Custom, 0)
+	if len(selectors) == 0 {
+		i, err := root.Fields()
+		if err != nil {
+			return nil, err
+		}
+		for i.Next() {
+			def, err := kindsys.ToDef[kindsys.CustomProperties](i.Value())
+			if err != nil {
+				return nil, err
+			}
+			custom, err := kindsys.BindCustom(p.rt, def)
+			if err != nil {
+				return nil, err
+			}
+			allDefs = append(allDefs, custom)
+		}
+	} else {
+		for _, s := range selectors {
+			v := root.LookupPath(cue.ParsePath(s))
+			if !v.Exists() {
+				return nil, fmt.Errorf("%s: selector does not exist", s)
+			}
+			if v.Err() != nil {
+				return nil, fmt.Errorf("%s: %w", s, v.Err())
+			}
+
+			def, err := kindsys.ToDef[kindsys.CustomProperties](v)
+			if err != nil {
+				return nil, err
+			}
+			custom, err := kindsys.BindCustom(p.rt, def)
+			if err != nil {
+				return nil, err
+			}
+			allDefs = append(allDefs, custom)
+		}
+	}
+
+	return allDefs, nil
+}
 
 // Generator is an interface which describes any code generator that can be passed to a Parser, such as CustomKindParser.
 type Generator interface {
@@ -46,7 +114,7 @@ func (g *genericFilteredGenerator) Allowed(c kindsys.Custom) bool {
 	return g.filterFunc(c)
 }
 
-func namerFunc(d kindsys.Custom) string {
+func kindsysNamerFunc(d kindsys.Custom) string {
 	if d == nil {
 		return "nil"
 	}

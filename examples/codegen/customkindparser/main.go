@@ -9,7 +9,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/thema"
 
-	"github.com/grafana/grafana-app-sdk/codegen"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
 //go:embed example.cue cue.mod/module.cue
@@ -23,13 +23,13 @@ var modFS embed.FS
 //go:generate ../../../target/grafana-app-sdk generate all --crdencoding=yaml --cuepath .
 func main() {
 	// Create a new CustomKindParser using the default thema_cue library and our modFS that has the cue files embedded
-	g, err := codegen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), modFS)
+	g, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), modFS)
 	if err != nil {
 		log.Panicln(err)
 	}
 
 	// Just generate the JSON CustomResourceDefinition file for the myObject selector:
-	files, err := g.Generate(codegen.CRDGenerator(json.Marshal, "json"), "myObject")
+	files, err := g.Generate(themagen.CRDGenerator(json.Marshal, "json"), "myObject")
 	// Print the contents to the console, rather than writing out to disk
 	// You could also use this to write to a kubernetes API
 	for _, f := range files {
