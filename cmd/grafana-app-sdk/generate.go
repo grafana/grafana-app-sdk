@@ -12,7 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/grafana/grafana-app-sdk/codegen"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
@@ -70,7 +70,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	parser, err := codegen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
+	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
 	if err != nil {
 		return err
 	}
@@ -130,8 +130,8 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func generateBackendResources(parser *codegen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
-	files, err := parser.FilteredGenerate(codegen.Filter(codegen.ResourceGenerator(),
+func generateBackendResources(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
+	files, err := parser.FilteredGenerate(themagen.Filter(themagen.ResourceGenerator(),
 		func(c kindsys.Custom) bool {
 			// Only run this generator on definitions with target="resource" and backend=true
 			return c.Def().Properties.IsCRD && c.Def().Properties.Codegen.Backend
@@ -145,8 +145,8 @@ func generateBackendResources(parser *codegen.CustomKindParser, genPath string, 
 	return files, nil
 }
 
-func generateBackendModels(parser *codegen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
-	files, err := parser.FilteredGenerate(codegen.Filter(codegen.ModelsGenerator(),
+func generateBackendModels(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
+	files, err := parser.FilteredGenerate(themagen.Filter(themagen.ModelsGenerator(),
 		func(c kindsys.Custom) bool {
 			// Only run this generator on definitions with target="model" and backend=true
 			return !c.Def().Properties.IsCRD && c.Def().Properties.Codegen.Backend
@@ -160,8 +160,8 @@ func generateBackendModels(parser *codegen.CustomKindParser, genPath string, sel
 	return files, nil
 }
 
-func generateFrontendModels(parser *codegen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
-	files, err := parser.FilteredGenerate(codegen.Filter(codegen.TypeScriptModelsGenerator(),
+func generateFrontendModels(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
+	files, err := parser.FilteredGenerate(themagen.Filter(themagen.TypeScriptModelsGenerator(),
 		func(c kindsys.Custom) bool {
 			// Only run this generator on definitions with target="resource" and backend=true
 			return c.Def().Properties.Codegen.Frontend
@@ -175,15 +175,15 @@ func generateFrontendModels(parser *codegen.CustomKindParser, genPath string, se
 	return files, nil
 }
 
-func generateCRDs(parser *codegen.CustomKindParser, genPath string, encoding string, selectors []string) (codejen.Files, error) {
-	var ms codegen.Generator
+func generateCRDs(parser *themagen.CustomKindParser, genPath string, encoding string, selectors []string) (codejen.Files, error) {
+	var ms themagen.Generator
 	if encoding == "yaml" {
-		ms = codegen.CRDGenerator(yaml.Marshal, "yaml")
+		ms = themagen.CRDGenerator(yaml.Marshal, "yaml")
 	} else {
 		// Assume JSON
-		ms = codegen.CRDGenerator(json.Marshal, "json")
+		ms = themagen.CRDGenerator(json.Marshal, "json")
 	}
-	files, err := parser.FilteredGenerate(codegen.Filter(ms, func(c kindsys.Custom) bool {
+	files, err := parser.FilteredGenerate(themagen.Filter(ms, func(c kindsys.Custom) bool {
 		return c.Def().Properties.IsCRD
 	}), selectors...)
 	if err != nil {
