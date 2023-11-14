@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/prometheus/client_golang/prometheus"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/prometheus/client_golang/prometheus"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/rest"
 )
 
 // OperatorConfig is used to configure an Operator on creation
@@ -90,21 +91,32 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	var me *metrics.Exporter
 	if cfg.Metrics.Enabled {
 		me = metrics.NewExporter(cfg.Metrics.ExporterConfig)
-		me.RegisterCollectors(cg.PrometheusCollectors()...)
-		me.RegisterCollectors(controller.PrometheusCollectors()...)
+		err := me.RegisterCollectors(cg.PrometheusCollectors()...)
+		if err != nil {
+			return nil, err
+		}
+		err = me.RegisterCollectors(controller.PrometheusCollectors()...)
+		if err != nil {
+			return nil, err
+		}
 	}
 	if cfg.Tracing.Enabled {
-		SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
+		err := SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &Operator{
+	op := &Operator{
 		Name:            cfg.Name,
 		ErrorHandler:    cfg.ErrorHandler,
 		clientGen:       cg,
 		controller:      controller,
 		admission:       ws,
 		metricsExporter: me,
-	}, nil
+	}
+	op.controller.ErrorHandler = op.ErrorHandler
+	return op, nil
 }
 
 // Operator is a simple operator implementation. Instead of manually registering controllers like with operator.Operator,
@@ -195,6 +207,8 @@ func (o *Operator) WatchKind(schema resource.Schema, watcher SyncWatcher, option
 	return o.controller.AddWatcher(ow, kindStr)
 }
 
+// ReconcileKind will watch the specified kind (schema) with opinionated logic, passing the events on to the provided Reconciler.
+// You can configure the query used for watching the kind using ListWatchOptions.
 func (o *Operator) ReconcileKind(schema resource.Schema, reconciler operator.Reconciler, options ListWatchOptions) error {
 	client, err := o.clientGen.ClientFor(schema)
 	if err != nil {
@@ -221,6 +235,8 @@ func (o *Operator) ReconcileKind(schema resource.Schema, reconciler operator.Rec
 	return o.controller.AddReconciler(or, kindStr)
 }
 
+// ValidateKind provides a validation path for the provided kind (schema) in the validating webhook,
+// using the provided ValidatingAdmissionController for the validation logic.
 func (o *Operator) ValidateKind(schema resource.Schema, controller resource.ValidatingAdmissionController) error {
 	if o.admission == nil {
 		return fmt.Errorf("webhooks are not enabled")
@@ -229,6 +245,8 @@ func (o *Operator) ValidateKind(schema resource.Schema, controller resource.Vali
 	return nil
 }
 
+// MutateKind provides a mutation path for the provided kind (schema) in the mutating webhook,
+// using the provided MutatingAdmissionController for the mutation logic.
 func (o *Operator) MutateKind(schema resource.Schema, controller resource.MutatingAdmissionController) error {
 	if o.admission == nil {
 		return fmt.Errorf("webhooks are not enabled")
@@ -237,18 +255,17 @@ func (o *Operator) MutateKind(schema resource.Schema, controller resource.Mutati
 	return nil
 }
 
-func (o *Operator) ConvertKind(schema resource.Schema, converter k8s.Converter) error {
+// ConvertKind provides a conversion path for the provided GroupKind in the converting webhook,
+// using the provided k8s.Converter for the conversion logic.
+func (o *Operator) ConvertKind(gk metav1.GroupKind, converter k8s.Converter) error {
 	if o.admission == nil {
 		return fmt.Errorf("webhooks are not enabled")
 	}
-	o.admission.AddConverter(converter, metav1.GroupKind{
-		Group: schema.Group(),
-		Kind:  schema.Kind(),
-	})
+	o.admission.AddConverter(converter, gk)
 	return nil
 }
 
 func (*Operator) label(schema resource.Schema, options ListWatchOptions) string {
-	// TODO: hash
+	// TODO: hash?
 	return fmt.Sprintf("%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","))
 }

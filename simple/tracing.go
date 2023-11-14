@@ -32,7 +32,6 @@ type OpenTelemetryConfig struct {
 // SetTraceProvider creates a trace.TracerProvider and sets it as the global TracerProvider which is used by
 // default for all app-sdk packages unless overridden.
 func SetTraceProvider(cfg OpenTelemetryConfig) error {
-	var err error
 	var exp trace.SpanExporter
 	switch cfg.ConnType {
 	case OTelConnTypeGRPC:
@@ -49,12 +48,16 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 
 		// Set up a trace exporter
 		exp, err = otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+		if err != nil {
+			return err
+		}
 	case OTelConnTypeHTTP:
 		// TODO: better?
+		var err error
 		exp, err = otlptracehttp.New(context.Background())
-	}
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
 	}
 
 	// Ensure default SDK resources and the required service name are set.

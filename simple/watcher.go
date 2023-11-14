@@ -42,7 +42,7 @@ func (w *Watcher) Delete(ctx context.Context, object resource.Object) error {
 // Sync calls SyncFunc, if non-nil
 func (w *Watcher) Sync(ctx context.Context, object resource.Object) error {
 	if w.SyncFunc != nil {
-		w.SyncFunc(ctx, object)
+		return w.SyncFunc(ctx, object)
 	}
 	return nil
 }

@@ -7,10 +7,11 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/grafana/grafana-app-sdk/plugin/router"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
+
+	"github.com/grafana/grafana-app-sdk/plugin/router"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type PluginError struct {
@@ -108,12 +109,12 @@ type Converter[API any, Store resource.Object] interface {
 type NoOpConverter[SingleForm resource.Object] struct{}
 
 // ToStore returns the apiObject unchanged
-func (n *NoOpConverter[SingleForm]) ToStore(_ context.Context, apiObject SingleForm) (SingleForm, error) {
+func (*NoOpConverter[SingleForm]) ToStore(_ context.Context, apiObject SingleForm) (SingleForm, error) {
 	return apiObject, nil
 }
 
 // ToAPI returns the storeObject unchanged
-func (n *NoOpConverter[SingleForm]) ToAPI(_ context.Context, storeObject SingleForm) (SingleForm, error) {
+func (*NoOpConverter[SingleForm]) ToAPI(_ context.Context, storeObject SingleForm) (SingleForm, error) {
 	return storeObject, nil
 }
 
