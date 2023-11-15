@@ -299,6 +299,6 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
 	allFiles = append(allFiles, modelFiles...)
 	allFiles = append(allFiles, tsFiles...)
-	allFiles = append(allFiles, tsFiles...)
+	allFiles = append(allFiles, crdFiles...)
 	return allFiles, nil
 }
