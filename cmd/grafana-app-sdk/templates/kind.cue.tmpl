@@ -12,7 +12,7 @@ package {{ .Package }}
 	// (the `resource.Object` interface), and attributes of that expression.
 	// if crd is not present, the kind system and code generation do not impose API server format restricitons,
 	// and do not add common API server information.
-	{{ if eq .Target "model"}}// crd: {} // not present as this kind was generated as a "model" target
+	{{ if eq .Target "model"}}// apiResource: {} // not present as this kind was generated as a "model" target
 	{{ else }}apiResource: {
 		// [OPTIONAL]
 		// Scope determines the scope of the kind in the API server. It currently allows two values:
