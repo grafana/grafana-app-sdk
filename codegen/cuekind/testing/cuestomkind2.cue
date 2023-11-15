@@ -1,21 +1,19 @@
-package cue
+package testing
 
-import (
-    "time"
-)
+import "time"
 
 customKind2: {
-    name: "CustomKind2"
-    group: "custom"
-    codegen: {
+	group: "custom"
+	kind: "CustomKind2"
+	current: "v0-0"
+	codegen: {
         frontend: true
         backend: true
     }
-    lineage: {
-        name: "customkind2",
-        schemas: [{
-            version: [0,0]
-            schema: {
+	versions: {
+		"v0-0": {
+			version: "v0-0"
+			schema: {
                 #InnerObject1: {
                     innerField1: string
                     innerField2: [...string]
@@ -51,6 +49,6 @@ customKind2: {
                 boolField: bool | *false
                 floatField: float64
             }
-        }]
-    }
+		}
+	}
 }

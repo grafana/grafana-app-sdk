@@ -6,6 +6,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	FormatCUE   = "cue"
+	FormatThema = "thema"
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "grafana-app-sdk <command>",
 	Short: "A tool for working with grafana apps, used for generating code from CUE kinds, creating project boilerplate, and running local deployments",
@@ -15,6 +20,7 @@ var rootCmd = &cobra.Command{
 func main() {
 	rootCmd.PersistentFlags().StringP("cuepath", "c", "kinds", "Path to directory with cue.mod")
 	rootCmd.PersistentFlags().StringSliceP("selectors", "s", []string{}, "selectors")
+	rootCmd.PersistentFlags().StringP("format", "f", "cue", "Format in which kinds are written for this project (allowed values are 'cue' and 'thema')")
 
 	setupVersionCmd()
 	setupGenerateCmd()

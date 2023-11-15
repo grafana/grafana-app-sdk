@@ -1,19 +1,17 @@
-package cue
+package testing
 
-import (
-    "time"
-)
+import "time"
 
 customKind: {
-    name: "CustomKind"
-    crd: {}
-    group: "custom"
-    lineage: {
-        name: "customkind",
-        schemas: [{
-            version: [0,0]
-            schema: {
-                #InnerObject1: {
+	group: "custom"
+	kind: "CustomKind"
+	current: "v0-0"
+	apiResource: {}
+	versions: {
+		"v0-0": {
+			version: "v0-0"
+			schema: {
+				#InnerObject1: {
                     innerField1: string
                     innerField2: [...string]
                     innerField3: [...#InnerObject2]
@@ -56,7 +54,7 @@ customKind: {
                     customMetadataField: string
                     otherMetadataField: string
                 }
-            }
-        }]
-    }
+			}
+		}
+	}
 }

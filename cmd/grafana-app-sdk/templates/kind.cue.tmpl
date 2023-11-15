@@ -3,7 +3,7 @@ package {{ .Package }}
 // This is our {{.Name}} definition, which contains metadata about the kind, and the kind's schema
 {{.FieldName}}: {
 	// Name is the human-readable name which is used for generated type names.
-	name: "{{.Name}}"
+	kind: "{{.Name}}"
 	// Group affects the grouping of this kind, especially with respect to API server expression.
 	// This is typically the same as the plugin ID, though there are length restrictions when the crd trait is present,
 	// so it may vary if the plugin ID is too long.
@@ -12,8 +12,8 @@ package {{ .Package }}
 	// (the `resource.Object` interface), and attributes of that expression.
 	// if crd is not present, the kind system and code generation do not impose API server format restricitons,
 	// and do not add common API server information.
-	{{ if eq .Target "model"}}// crd: {} // not present as this kind was generated as a "model" target
-	{{ else }}crd: {
+	{{ if eq .Target "model"}}// apiResource: {} // not present as this kind was generated as a "model" target
+	{{ else }}apiResource: {
 		// [OPTIONAL]
 		// Scope determines the scope of the kind in the API server. It currently allows two values:
 		// * Namespaced - resources for this kind are created inside namespaces
@@ -24,6 +24,7 @@ package {{ .Package }}
 	// [OPTIONAL]
 	// Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
 	// If not present, default values within the codegen trait are used.
+	// This is the global trait, and can be overridden by specifying values in the versions themselves.
 	codegen: {
 		// [OPTIONAL]
 		// frontend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
@@ -38,54 +39,63 @@ package {{ .Package }}
 	// The human-readable plural form of the "name" field.
 	// Will default to <name>+"s" if not present.
 	pluralName: "{{.Name}}s"
-	// lineage is the thema Lineage (Schema) definition.
-	// A Lineage is a Thema construct that is used to present versions of a resource in a continuous sequence,
-	// with translations between versions. Read more at [https://github.com/grafana/thema].
-	lineage: {
-		// The lineage's schemas field is the sequence of all schema versions, starting with [0,0].
-		// Each entry in the list is a subsequent version, either a new major version ([+1,0]) or a new minor version ([+0,+1])
-		schemas: [{
-			// Version is the version of this specific schema within the lineage.
-			// The first entry must be [0,0], and subsequent ones must increment either the major or minor version.
-			// For breaking changes (such as adding a new non-optional field), the major version must be incremented.
-			version: [0,0]
-			// Schema is the actual schema for this version{{ if ne .Target "model" }}
-			// As an API server-expressable resource, the schema has a restricted format:
-			// {
-			//     spec: { ... }
-			//     status: { ... } // optional
-			//     metadata: { ... } // optional
-			// }
-			// `spec` must always be present, and is the schema for the object.
-			// `status` is optional, and should contain status or state information which is typically not user-editable
-			// (controlled by controllers/operators). The kind system adds some implicit status information which is
-			// common across all kinds, and becomes present in the unified lineage used for code generation and other tooling.
-			// `metadata` is optional, and should contain kind- or schema-specific metadata. The kind system adds
-			// an explicit set of common metadata which can be found at in the kindsys public repository at:
-			// https://github.com/grafana/grafana-app-sdk/kindsys/blob/452481b6348225a1bdb02c9abaef25d29ffe680d/kindcat_custom.cue#L25
-			// additional metadata fields cannot conflict with the kindsys common metadata
-			{{end}}schema: {
-				{{ if eq .Target "model" }}// Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
-				// firstField: string
-				// secondField: int64
-				{{ else }}// spec is the schema of our resource. The spec should include all the user-ediable information for the kind.
-				spec: {
-				    // Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
-					// firstField: string
-					// secondField: int64
-				}
-				// status is where state and status information which may be used or updated by the operator or back-end should be placed
-				// If you do not have any such information, you do not need to include this field,
-				// however, as mentioned above, certain fields will be added by the kind system regardless.
-				//status: {
-				//	currentState: string
-				//}
-				// metadata if where kind- and schema-specific metadata goes. This is typically unused,
-				// as the kind system's common metadata is always part of `metadata` and covers most metadata use-cases.
-				//metadata: {
-				//	kindSpecificField: string
-				//}{{ end }}
-			}
-		}]
+	// Current designates which version in `versions` is the current one. This impacts code generation.
+	current: "v1"
+	// Versions is a map of all versions names to the version's schema and other metadata (such as codegen data).
+	// Versions can be specified in a non-inlined manner at the root level by using:
+	// {{.FieldName}}: versions: <your_version_name>: { ...version contents... }
+	versions: {
+	    "v1": {
+	        version: "v1"
+	        // Schema is the actual schema for this version{{ if ne .Target "model" }}
+            // As an API server-expressable resource, the schema has a restricted format:
+            // {
+            //     spec: { ... }
+            //     status: { ... } // optional
+            //     metadata: { ... } // optional
+            // }
+            // `spec` must always be present, and is the schema for the object.
+            // `status` is optional, and should contain status or state information which is typically not user-editable
+            // (controlled by controllers/operators). The kind system adds some implicit status information which is
+            // common across all kinds, and becomes present in the unified lineage used for code generation and other tooling.
+            // `metadata` is optional, and should contain kind- or schema-specific metadata. The kind system adds
+            // an explicit set of common metadata which can be found in the definition file for a CUE kind at
+            // [https://github.com/grafana/grafana-app-sdk/blob/main/codegen/cuekind/def.cue]
+            // additional metadata fields cannot conflict with the common metadata field names
+	        {{end}}schema: {
+                {{ if eq .Target "model" }}// Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
+                // firstField: string
+                // secondField: int64
+                {{ else }}// spec is the schema of our resource. The spec should include all the user-ediable information for the kind.
+                spec: {
+                    // Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
+                    // firstField: string
+                    // secondField: int64
+                }
+                // status is where state and status information which may be used or updated by the operator or back-end should be placed
+                // If you do not have any such information, you do not need to include this field,
+                // however, as mentioned above, certain fields will be added by the kind system regardless.
+                //status: {
+                //	currentState: string
+                //}
+                // metadata if where kind- and schema-specific metadata goes. This is typically unused,
+                // as the kind system's common metadata is always part of `metadata` and covers most metadata use-cases.
+                //metadata: {
+                //	kindSpecificField: string
+                //}{{ end }}
+	        }
+	        // [OPTIONAL]
+	        // This setting will override `codegen` at the root level of the kind
+	        codegen: {
+                // [OPTIONAL]
+                // frontend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
+                // Will default to the kind's root-level codegen.frontend if not present.
+                frontend: true
+                // [OPTIONAL]
+                // backend tells the CLI to generate backend-end code (Go types) for the schema.
+                // Will default to kind's root-level codegen.backend if not present.
+                backend: true
+	        }
+	    }
 	}
 }

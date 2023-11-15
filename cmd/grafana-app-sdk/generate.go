@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 	"github.com/grafana/grafana-app-sdk/kindsys"
 )
@@ -70,57 +73,50 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
+	format, err := cmd.Flags().GetString("format")
 	if err != nil {
 		return err
 	}
 
-	// We want to run all the codegen before writing any files, to avoid partial generation in the event of errors
-	allFiles := make(codejen.Files, 0)
-
-	// Let's start by generating all back-end code
-	// resource-target back-end code
-	files, err := generateBackendResources(parser, filepath.Join(goGenPath, targetResource), selectors)
+	encType, err := cmd.Flags().GetString("crdencoding")
 	if err != nil {
 		return err
 	}
-	allFiles = append(allFiles, files...)
 
-	// models-target back-end code
-	files, err = generateBackendModels(parser, filepath.Join(goGenPath, targetModel+"s"), selectors)
+	crdPath, err := cmd.Flags().GetString("crdpath")
 	if err != nil {
 		return err
 	}
-	allFiles = append(allFiles, files...)
 
-	// Front-end codegen
-	files, err = generateFrontendModels(parser, tsGenPath, selectors)
-	if err != nil {
-		return err
-	}
-	allFiles = append(allFiles, files...)
-
-	// Schema definition generation (CRD-only currently)
-	switch storageType {
-	case "kubernetes":
-		encType, err := cmd.Flags().GetString("crdencoding")
+	var files codejen.Files
+	switch format {
+	case FormatThema:
+		files, err = generateKindsThema(os.DirFS(cuePath), kindGenConfig{
+			GoGenBasePath: goGenPath,
+			TSGenBasePath: tsGenPath,
+			StorageType:   storageType,
+			CRDEncoding:   encType,
+			CRDPath:       crdPath,
+		}, selectors...)
 		if err != nil {
 			return err
 		}
-		crdPath, err := cmd.Flags().GetString("crdpath")
+	case FormatCUE:
+		files, err = generateKindsCue(os.DirFS(cuePath), kindGenConfig{
+			GoGenBasePath: goGenPath,
+			TSGenBasePath: tsGenPath,
+			StorageType:   storageType,
+			CRDEncoding:   encType,
+			CRDPath:       crdPath,
+		}, selectors...)
 		if err != nil {
 			return err
 		}
-		files, err = generateCRDs(parser, crdPath, encType, selectors)
-		if err != nil {
-			return err
-		}
-		allFiles = append(allFiles, files...)
 	default:
-		return fmt.Errorf("unknown storage type '%s'", storageType)
+		return fmt.Errorf("unknown kind format '%s'", format)
 	}
 
-	for _, f := range allFiles {
+	for _, f := range files {
 		err = writeFile(f.RelativePath, f.Data)
 		if err != nil {
 			return err
@@ -130,7 +126,60 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-func generateBackendResources(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
+type kindGenConfig struct {
+	GoGenBasePath string
+	TSGenBasePath string
+	StorageType   string
+	CRDEncoding   string
+	CRDPath       string
+}
+
+func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
+	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), modFS)
+	if err != nil {
+		return nil, err
+	}
+
+	// We want to run all the codegen before writing any files, to avoid partial generation in the event of errors
+	allFiles := make(codejen.Files, 0)
+
+	// Let's start by generating all back-end code
+	// resource-target back-end code
+	files, err := generateBackendResourcesThema(parser, filepath.Join(cfg.GoGenBasePath, targetResource), selectors)
+	if err != nil {
+		return nil, err
+	}
+	allFiles = append(allFiles, files...)
+
+	// models-target back-end code
+	files, err = generateBackendModelsThema(parser, filepath.Join(cfg.GoGenBasePath, targetModel+"s"), selectors)
+	if err != nil {
+		return nil, err
+	}
+	allFiles = append(allFiles, files...)
+
+	// Front-end codegen
+	files, err = generateFrontendModelsThema(parser, cfg.TSGenBasePath, selectors)
+	if err != nil {
+		return nil, err
+	}
+	allFiles = append(allFiles, files...)
+
+	// Schema definition generation (CRD-only currently)
+	switch cfg.StorageType {
+	case "kubernetes":
+		files, err = generateCRDsThema(parser, cfg.CRDPath, cfg.CRDEncoding, selectors)
+		if err != nil {
+			return nil, err
+		}
+		allFiles = append(allFiles, files...)
+	default:
+		return nil, fmt.Errorf("unknown storage type '%s'", cfg.StorageType)
+	}
+	return allFiles, nil
+}
+
+func generateBackendResourcesThema(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
 	files, err := parser.FilteredGenerate(themagen.Filter(themagen.ResourceGenerator(),
 		func(c kindsys.Custom) bool {
 			// Only run this generator on definitions with target="resource" and backend=true
@@ -145,7 +194,7 @@ func generateBackendResources(parser *themagen.CustomKindParser, genPath string,
 	return files, nil
 }
 
-func generateBackendModels(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
+func generateBackendModelsThema(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
 	files, err := parser.FilteredGenerate(themagen.Filter(themagen.ModelsGenerator(),
 		func(c kindsys.Custom) bool {
 			// Only run this generator on definitions with target="model" and backend=true
@@ -160,7 +209,7 @@ func generateBackendModels(parser *themagen.CustomKindParser, genPath string, se
 	return files, nil
 }
 
-func generateFrontendModels(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
+func generateFrontendModelsThema(parser *themagen.CustomKindParser, genPath string, selectors []string) (codejen.Files, error) {
 	files, err := parser.FilteredGenerate(themagen.Filter(themagen.TypeScriptModelsGenerator(),
 		func(c kindsys.Custom) bool {
 			// Only run this generator on definitions with target="resource" and backend=true
@@ -175,7 +224,7 @@ func generateFrontendModels(parser *themagen.CustomKindParser, genPath string, s
 	return files, nil
 }
 
-func generateCRDs(parser *themagen.CustomKindParser, genPath string, encoding string, selectors []string) (codejen.Files, error) {
+func generateCRDsThema(parser *themagen.CustomKindParser, genPath string, encoding string, selectors []string) (codejen.Files, error) {
 	var ms themagen.Generator
 	if encoding == "yaml" {
 		ms = themagen.CRDGenerator(yaml.Marshal, "yaml")
@@ -193,4 +242,63 @@ func generateCRDs(parser *themagen.CustomKindParser, genPath string, encoding st
 		files[i].RelativePath = filepath.Join(genPath, f.RelativePath)
 	}
 	return files, nil
+}
+
+func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
+	parser, err := cuekind.NewParser()
+	if err != nil {
+		return nil, err
+	}
+	generator, err := codegen.NewGenerator[codegen.Kind](parser, modFS)
+	if err != nil {
+		return nil, err
+	}
+	// Resource
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	}, selectors...)
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range resourceFiles {
+		resourceFiles[i].RelativePath = filepath.Join(filepath.Join(cfg.GoGenBasePath, targetResource), f.RelativePath)
+	}
+	// Model
+	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource == nil
+	}, selectors...)
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range modelFiles {
+		modelFiles[i].RelativePath = filepath.Join(filepath.Join(cfg.GoGenBasePath, targetModel+"s"), f.RelativePath)
+	}
+	// TypeScript
+	tsFiles, err := generator.Generate(cuekind.TypeScriptModelsGenerator(true), selectors...)
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range tsFiles {
+		tsFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
+	}
+	// CRD
+	encFunc := json.Marshal
+	if cfg.CRDEncoding == "yaml" {
+		encFunc = yaml.Marshal
+	}
+	crdFiles, err := generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	}, selectors...)
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range crdFiles {
+		crdFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+	}
+
+	allFiles := append(make(codejen.Files, 0), resourceFiles...)
+	allFiles = append(allFiles, modelFiles...)
+	allFiles = append(allFiles, tsFiles...)
+	allFiles = append(allFiles, crdFiles...)
+	return allFiles, nil
 }
