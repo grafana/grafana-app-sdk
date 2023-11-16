@@ -21,18 +21,16 @@ curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sd
 package kinds
 
 issue: {
-	name: "Issue"
+	kind: "Issue"
         group: "issue-tracker-project"
-	crd: {}
+	apiResource: {}
 	codegen: {
 		frontend: true
 		backend: true
 	}
-	currentVersion: [0,0]
-	lineage: {
-		name: "issue"
-		schemas: [{
-			version: [0,0]
+	current: "v1"
+	versions: {
+		"v1": {
 			schema: {
 				spec: {
 					title: string
@@ -40,7 +38,7 @@ issue: {
 					status: string
 				}
 			}
-		}]
+		}
 	}
 }
 ```
@@ -48,68 +46,36 @@ issue: {
 
 Alright, let's break down what we just wrote.
 
-Like with Go code, any cue file needs to start with a package declaration. In this case, our package is `kinds`. After the package declaration, we can optionally import other CUE packages (for example, `time` if you wanted to use `time.Time` types) using the same syntax as one might with Go. After that, you declare fields. With the grafana-app-sdk, we assume that every top-level field is a kind, and adheres to the [kindsys.Custom](https://github.com/grafana/grafana-app-sdk/kindsys/blob/df4488cce33697eccba0536970114fff02b81020/kindcat_custom.cue#L106) kind. That's what our `issue` field is--a Custom kind declaration.
+Like with Go code, any cue file needs to start with a package declaration. In this case, our package is `kinds`. After the package declaration, we can optionally import other CUE packages (for example, `time` if you wanted to use `time.Time` types) using the same syntax as one might with Go. After that, you declare fields. With the grafana-app-sdk, we assume that every top-level field is a kind, and adheres to the [CUE Kind definition](https://github.com/grafana/grafana-app-sdk/blob/main/codegen/cuekind/def.cue#L82). That's what our `issue` field is--a Kind declaration.
 
 Now, we get to the actual definition of our `issue` model:
 ```cue
 issue: {
-	name: "Issue"
-	crd: {}
+	kind: "Issue"
+	apiResource: {}
 	codegen: {
 		frontend: true
 		backend: true
 	}
-	currentVersion: [0,0]
-	lineage: {} // trimmed here
+	current: "v1"
+	versions: {} // trimmed here
 }
 ```
-Here we have a collection of metadata relating to our model, and then a `lineage` definition, which we'll get to in a moment. Let's break down the other fields first:
+Here we have a collection of metadata relating to our model, and then a `versions` definition, which we'll get to in a moment. Let's break down the other fields first:
 
 | Snippit                               | Meaning                                                                                                                                                                                                                                                                                                                               |
 |---------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| <nobr>`name: "Issue"`</nobr>          | This is just the human-readable name, which will be used for naming some things in-code.                                                                                                                                                                                                                                              |
-| <nobr>`crd: {}`</nobr>                | This field is an indicator that the kind is expressible as an API Server resource (typically, a Custom Resource Definition). From a codegen perspective, that means that generated go code will be compatible with `resource`-package interfaces. There are fields that can be set within `crd`, but we're ok with its default values |
+| <nobr>`kind: "Issue"`</nobr>           | This is just the human-readable name, which will be used for naming some things in-code.                                                                                                                                                                                                                                              |
+| <nobr>`apiResource: {}`</nobr>         | This field is an indicator that the kind is expressible as an API Server resource (typically, a Custom Resource Definition). From a codegen perspective, that means that generated go code will be compatible with `resource`-package interfaces. There are fields that can be set within `apiResource`, but we're ok with its default values |
  | <nobr>`codegen.frontend: true`</nobr> | This instructs the CLI to generate front-end (TypeScript interfaces) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                                                                                                                                          |
 | <nobr>`codegen.backend: true`</nobr>  | This instructs the CLI to generate back-end (go) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                                                                                                                                                              |
 | <nobr>`currentVersion: [0,0]`</nobr>  | This is the current version of the Schema to use for codegen (will default to the latest if not present)                                                                                                                                                                                                                              |
 
-ok, now back to that `lineage`. Within the kind system we are extending, `lineage` will be joined with the definition `thema.#Lineage`. A `#Lineage` is a somewhat complicated definition, but almost everything is handled for us by the kind system and thema except for the need to actually define what our **schemas** look like. Within the lineage, schemas are sequential versions that each have a form which is continuous from the last schema (either "minor version" continuous, where forward translation can be done implicitly, or "major version" continous, where there are breaking changes and forward translation has to be explicitly defined using *lenses*, which we won't get into at this point). To read more about how a Thema Lineage works, consult [the Thema docs](https://github.com/grafana/thema/blob/main/docs/overview.md).
+ok, now back to `versions`. In the CUE kind, `versions` is a map of a version name to an object containing meta-information about the version, and its `schema`. 
+The map is unordered, so there is no implicit or explicit sequential relationship between versions in your Kind definition, but consider naming conventions that portray the evolution of the kind (for example, `v1`, `v1beta`, `v2`, etc. like kubernetes' kind versions). The `current` top-level Kind attribute declares which version in this map is the current, 
+or preferred version. Note that this does not need to be the latest version. This is also the version that will be indicated to be "stored" when generating a CRD from the Kind.
 
-Next in the file, we have this bit:
-```cue
-lineage: {
-    name: "issue"
-    schemas: [{
-        version: [0,0]
-        schema: {
-            spec: {
-                title: string
-                description: string
-                status: string
-            }
-        }
-    }]
-}
-```
-The first field, which is the lineage name, _must_ be an all-lowercase version of the kind's name. 
-Future versions of kindsys or the codegen may allow you to omit this field.
-```cue
-schemas: [{
-    version: [0,0]
-    schema: {
-        spec: {
-            title: string
-            description: string
-            status: string
-        }
-    }
-}]
-```
-Each element in `schemas` is a new schema. Schemas are ordered by version, with each schema requiring a `version` field set as
-```[major,minor]```. The first schema must always have a version of `[0,0]`, and subsequent schemas must bump that version 
-with either the next major or minor version.
-
-After that, we have the actual `schema` field.
+Inside our `"v1"` version, we have the actual `schema` field:
 ```cue
 spec: {
 	title: string
@@ -117,7 +83,7 @@ spec: {
 	status: string
 }
 ```
-But wait, why do we have a `spec` key here? This is an important restriction that's imposed by grafana's kind system, not by Thema itself. 
+But wait, why do we have a `spec` key here? That wasn't a requirement in `def.cue`! This is an important restriction imposed by the SDK codegen when defining an API-server compatible resource (`apiResource` in the kind). The definition for this restriction actually also lives in `def.cue`, [it's called Schema there](https://github.com/grafana/grafana-app-sdk/blob/main/codegen/cuekind/def.cue#L24).
 Each top-level field in the resource is considered to be a unique component of the resource when expressed in an API Server. 
 The `spec` component is the actual definition of our object's body, but there are two other components that are included implicitly even if not declared: 
 `metadata` and `status`. `metadata` includes all the common metadata associated by the kind system and the app-sdk to _all_ kinds. 

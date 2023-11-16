@@ -49,7 +49,26 @@ grafana-app-sdk project component add frontend backend operator --plugin-id="iss
 Just like with any other command that writes files, the output is a list of all written files:
 ```shell
 $ grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
+ * Writing file plugin/.config/.eslintrc
+ * Writing file plugin/.config/.prettierrc.js
+ * Writing file plugin/.config/Dockerfile
+ * Writing file plugin/.config/README.md
+ * Writing file plugin/.config/jest/mocks/react-inlinesvg.tsx
+ * Writing file plugin/.config/jest/utils.js
+ * Writing file plugin/.config/jest-setup.js
+ * Writing file plugin/.config/jest.config.js
+ * Writing file plugin/.config/tsconfig.json
+ * Writing file plugin/.config/types/custom.d.ts
+ * Writing file plugin/.config/webpack/constants.ts
+ * Writing file plugin/.config/webpack/utils.ts
+ * Writing file plugin/.config/webpack/webpack.config.ts
+ * Writing file plugin/.eslintrc
+ * Writing file plugin/.nvmrc
+ * Writing file plugin/.prettierrc.js
+ * Writing file plugin/CHANGELOG.md
+ * Writing file plugin/LICENSE
  * Writing file plugin/README.md
+ * Writing file plugin/jest-setup.js
  * Writing file plugin/jest.config.js
  * Writing file plugin/src/App.tsx
  * Writing file plugin/src/components/Routes/Routes.tsx
@@ -72,8 +91,10 @@ $ grafana-app-sdk project component add frontend backend operator --plugin-id="i
  * Writing file pkg/plugin/secure/retriever.go
  * Writing file plugin/Magefile.go
  * Writing file plugin/src/plugin.json
+ * Writing file cmd/operator/config.go
  * Writing file cmd/operator/kubeconfig.go
  * Writing file cmd/operator/main.go
+ * Writing file cmd/operator/telemetry.go
  * Writing file pkg/watchers/watcher_issue.go
  * Writing file cmd/operator/Dockerfile
 ```
@@ -85,8 +106,10 @@ $ tree -I "generated|definitions|kinds|local" .
 ├── cmd
 │   └── operator
 │       ├── Dockerfile
+│       ├── config.go
 │       ├── kubeconfig.go
-│       └── main.go
+│       ├── main.go
+│       └── telemetry.go
 ├── go.mod
 ├── go.sum
 ├── pkg
@@ -100,8 +123,11 @@ $ tree -I "generated|definitions|kinds|local" .
 │   └── watchers
 │       └── watcher_issue.go
 └── plugin
+    ├── CHANGELOG.md
+    ├── LICENSE
     ├── Magefile.go
     ├── README.md
+    ├── jest-setup.js
     ├── jest.config.js
     ├── package.json
     ├── pkg
@@ -124,7 +150,7 @@ $ tree -I "generated|definitions|kinds|local" .
     │       └── utils.routing.ts
     └── tsconfig.json
 
-14 directories, 29 files
+14 directories, 34 files
 ```
 
 Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
@@ -284,21 +310,26 @@ A _lot_ of files were generated in `plugin`:
 ```bash
 $ tree plugin
 plugin
-├── jest.config.js
+├── CHANGELOG.md
+├── LICENSE
 ├── Magefile.go
+├── README.md
+├── jest-setup.js
+├── jest.config.js
 ├── package.json
 ├── pkg
 │   └── main.go
-├── README.md
 ├── src
 │   ├── App.tsx
 │   ├── components
 │   │   └── Routes
-│   │       ├── index.tsx
-│   │       └── Routes.tsx
+│   │       ├── Routes.tsx
+│   │       └── index.tsx
 │   ├── constants.ts
 │   ├── generated
-│   │   └── Issue_types.gen.ts
+│   │   └── issue
+│   │       └── v1
+│   │           └── types.gen.ts
 │   ├── module.ts
 │   ├── pages
 │   │   ├── index.tsx
@@ -310,7 +341,7 @@ plugin
 │       └── utils.routing.ts
 └── tsconfig.json
 
-7 directories, 18 files
+10 directories, 21 files
 ```
 We can also safely _ignore_ a lot of this generation. If you create a grafana plugin, there's a certain amount of metadata that needs to be created, and, likewise, when you create a react app (which front-end plugins are), there's some other data that needs to exist. So basically everything in the root `plugin` directory is something we can ignore for the moment, as it's just things telling either grafana how to handle this app, or react how to compile it. But, as a quick breakdown, here's what each file does that we're going to ignore:
 
