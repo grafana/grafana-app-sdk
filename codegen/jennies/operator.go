@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"strings"
 
 	"github.com/grafana/codejen"
 
@@ -98,30 +99,14 @@ func (o *OperatorConfigJenny) Generate(_ ...codegen.Kind) (*codejen.File, error)
 	return codejen.NewFile("cmd/operator/config.go", formatted, o), nil
 }
 
-type OperatorTelemetryJenny struct {
-}
-
-func (*OperatorTelemetryJenny) JennyName() string {
-	return "OperatorTelemetry"
-}
-
-func (o *OperatorTelemetryJenny) Generate(_ ...codegen.Kind) (*codejen.File, error) {
-	// TODO: combine this with config or keep separate?
-	b := bytes.Buffer{}
-	err := templates.WriteOperatorTelemetry(&b)
-	if err != nil {
-		return nil, err
-	}
-	formatted, err := format.Source(b.Bytes())
-	if err != nil {
-		return nil, err
-	}
-	return codejen.NewFile("cmd/operator/telemetry.go", formatted, o), nil
-}
-
 func OperatorMainJenny(projectRepo, codegenPath string, generatedKindsAreVersioned bool) codejen.ManyToOne[codegen.Kind] {
+	parts := strings.Split(projectRepo, "/")
+	if len(parts) == 0 {
+		parts = []string{""}
+	}
 	return &operatorMainJenny{
 		projectRepo:                projectRepo,
+		projectName:                parts[len(parts)-1],
 		codegenPath:                codegenPath,
 		generatedKindsAreVersioned: generatedKindsAreVersioned,
 	}
@@ -129,6 +114,7 @@ func OperatorMainJenny(projectRepo, codegenPath string, generatedKindsAreVersion
 
 type operatorMainJenny struct {
 	projectRepo                string
+	projectName                string
 	codegenPath                string
 	generatedKindsAreVersioned bool
 }
@@ -140,6 +126,7 @@ func (*operatorMainJenny) JennyName() string {
 func (o *operatorMainJenny) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.OperatorMainMetadata{
 		Repo:                  o.projectRepo,
+		ProjectName:           o.projectName,
 		CodegenPath:           o.codegenPath,
 		PackageName:           "main",
 		WatcherPackage:        "watchers",

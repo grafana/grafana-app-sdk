@@ -5,6 +5,8 @@ import (
 	"os"
 	"strconv"
 	"strings"
+
+	"github.com/grafana/grafana-app-sdk/simple"
 )
 
 const (
@@ -13,15 +15,8 @@ const (
 )
 
 type Config struct {
-	OTelConfig    OpenTelemetryConfig
+	OTelConfig    simple.OpenTelemetryConfig
 	WebhookServer WebhookServerConfig
-}
-
-type OpenTelemetryConfig struct {
-	Host        string
-	Port        int
-	ConnType    string
-	ServiceName string
 }
 
 type WebhookServerConfig struct {
