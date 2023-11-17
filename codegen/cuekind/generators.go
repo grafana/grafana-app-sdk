@@ -98,7 +98,6 @@ func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen
 		&jennies.OperatorKubeConfigJenny{},
 		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned),
 		&jennies.OperatorConfigJenny{},
-		&jennies.OperatorTelemetryJenny{},
 	)
 	return g
 }

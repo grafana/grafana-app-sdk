@@ -193,6 +193,7 @@ func WriteOperatorKubeConfig(out io.Writer) error {
 
 type OperatorMainMetadata struct {
 	PackageName           string
+	ProjectName           string
 	Repo                  string
 	CodegenPath           string
 	WatcherPackage        string
@@ -210,10 +211,6 @@ func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
 
 func WriteOperatorConfig(out io.Writer) error {
 	return templateOperatorConfig.Execute(out, nil)
-}
-
-func WriteOperatorTelemetry(out io.Writer) error {
-	return templateOperatorTelemetry.Execute(out, nil)
 }
 
 // ToPackageName sanitizes an input into a deterministic allowed go package name.

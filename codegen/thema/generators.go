@@ -133,7 +133,6 @@ func OperatorGenerator(projectRepo, codegenPath string) *codejen.JennyList[kinds
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorKubeConfigJenny{}, kindsysCustomToKind),
 		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorConfigJenny{}, kindsysCustomToKind),
-		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorTelemetryJenny{}, kindsysCustomToKind),
 	)
 	return g
 }
