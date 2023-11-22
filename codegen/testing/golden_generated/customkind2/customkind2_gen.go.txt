@@ -4,19 +4,19 @@ import (
 	"time"
 )
 
-// Defines values for Customkind2Enum.
+// Defines values for CustomKind2Enum.
 const (
-	Customkind2EnumDefault Customkind2Enum = "default"
-	Customkind2EnumVal1    Customkind2Enum = "val1"
-	Customkind2EnumVal2    Customkind2Enum = "val2"
-	Customkind2EnumVal3    Customkind2Enum = "val3"
-	Customkind2EnumVal4    Customkind2Enum = "val4"
+	CustomKind2EnumDefault CustomKind2Enum = "default"
+	CustomKind2EnumVal1    CustomKind2Enum = "val1"
+	CustomKind2EnumVal2    CustomKind2Enum = "val2"
+	CustomKind2EnumVal3    CustomKind2Enum = "val3"
+	CustomKind2EnumVal4    CustomKind2Enum = "val4"
 )
 
-// Customkind2 defines model for Customkind2.
-type Customkind2 struct {
+// CustomKind2 defines model for CustomKind2.
+type CustomKind2 struct {
 	BoolField  bool             `json:"boolField"`
-	Enum       Customkind2Enum  `json:"enum"`
+	Enum       CustomKind2Enum  `json:"enum"`
 	Field1     string           `json:"field1"`
 	FloatField float64          `json:"floatField"`
 	I32        int              `json:"i32"`
@@ -27,8 +27,8 @@ type Customkind2 struct {
 	Union      interface{}      `json:"union"`
 }
 
-// Customkind2Enum defines model for Customkind2.Enum.
-type Customkind2Enum string
+// CustomKind2Enum defines model for CustomKind2.Enum.
+type CustomKind2Enum string
 
 // InnerObject1 defines model for InnerObject1.
 type InnerObject1 struct {

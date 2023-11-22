@@ -60,7 +60,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		return g.generateFiles(ver, kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
+		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
 	}
 
 	files := make(codejen.Files, 0)
@@ -71,7 +71,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			continue
 		}
 
-		generated, err := g.generateFiles(&ver, kind.Properties().MachineName, ToPackageName(ver.Version), filepath.Join(kind.Properties().MachineName, ToPackageName(ver.Version)))
+		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), filepath.Join(kind.Properties().MachineName, ToPackageName(ver.Version)))
 		if err != nil {
 			return nil, err
 		}
@@ -81,14 +81,14 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	return files, nil
 }
 
-func (g *GoTypes) generateFiles(version *codegen.KindVersion, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
+func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
 	if g.Depth > 0 {
 		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix)
 	}
 
 	goBytes, err := GoTypesFromCUE(version.Schema, CUEGoConfig{
 		PackageName: packageName,
-		Name:        exportField(machineName),
+		Name:        exportField(sanitizeLabelString(name)),
 		Version:     version.Version,
 	}, 0)
 	if err != nil {
