@@ -9,7 +9,7 @@ We're still going to keep our front-end pretty simple, so all we're going to do 
 In the future, the `project add frontend` will auto-generate this boilerplate client, but for now, we have to write it ourselves. 
 For this tutorial, we have one pre-written, that we'll discuss a few parts of. Either create a new file called `plugin/src/api/issue_client.ts` and [copy the contents of this file into it](frontend-files/issue-client.ts), or run the following to do it automatically:
 ```bash
-curl -o plugin/src/api/issue_client.ts https://github.com/grafana/grafana-app-sdk/blob/main/docs/tutorials/issue-tracker/frontend-files/issue-client.ts
+curl -o plugin/src/api/issue_client.ts https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/issue-client.ts
 ```
 
 A few things to note in our client:
@@ -37,7 +37,7 @@ The rest of the client uses grafana libraries to make fetch requests to perform 
 We already have a very empty generated main page located at `plugin/src/pages/main.tsx`. We're going to overwrite all of this with new contents. 
 Either copy [the contents of this file](frontend-files/main.tsx) into `plugin/src/pages/main.tsx` (overwriting the current contents), or do it with curl:
 ```bash
-curl -o plugins/src/pages/main.tsx https://github.com/grafana/grafana-app-sdk/blob/main/docs/tutorials/issue-tracker/frontend-files/main.tsx
+curl -o plugin/src/pages/main.tsx https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/main.tsx
 ```
 
 TODO: breakdown of the file contents?

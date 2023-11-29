@@ -106,6 +106,7 @@ export const MainPage = () => {
                     key="delete-issue"
                     name="trash-alt"
                     size={'md'}
+                    aria-label="delete-issue"
                     onClick={() => {
                         deleteIssue(issue.staticMetadata.name);
                     }}

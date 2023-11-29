@@ -1,4 +1,4 @@
-import { Issue as generatedIssue } from '../generated/issue_types.gen';
+import { Issue as generatedIssue } from '../generated/issue/v1/types.gen';
 import { BackendSrvRequest, getBackendSrv, FetchResponse } from '@grafana/runtime';
 import { lastValueFrom } from 'rxjs';
 import { PLUGIN_API_URL } from '../constants';

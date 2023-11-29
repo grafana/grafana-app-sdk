@@ -111,7 +111,7 @@ spec:
             - name: GF_INSTALL_PLUGINS
             - name: GF_PATHS_CONFIG
               value: /etc/grafana-config/grafana.ini
-          image: grafana/grafana-enterprise:9.5.8
+          image: grafana/grafana-enterprise:10.0.3
           imagePullPolicy: IfNotPresent
           name: grafana
           ports:
