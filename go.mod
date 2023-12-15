@@ -2,6 +2,9 @@ module github.com/grafana/grafana-app-sdk
 
 go 1.21
 
+// Required for compatibility with grafana/grafana-plugin-sdk-go & grafana/thema
+replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
+
 require (
 	cuelang.org/go v0.5.0
 	github.com/dave/dst v0.27.3
