@@ -162,7 +162,7 @@ func ToKindProps[T KindProperties](v cue.Value) (T, error) {
 	fw := CUEFramework(v.Context())
 	var kdef cue.Value
 
-	anyprops := any(*props).(SomeKindProperties)
+	anyprops := any(*props).(SomeKindProperties) // nolint: revive
 	switch anyprops.(type) {
 	case CustomProperties:
 		kdef = fw.LookupPath(cue.MakePath(cue.Str("Custom")))
@@ -198,7 +198,7 @@ func ToDef[T KindProperties](v cue.Value) (Def[T], error) {
 	fw := CUEFramework(v.Context())
 	var kdef cue.Value
 
-	anyprops := any(*props).(SomeKindProperties)
+	anyprops := any(*props).(SomeKindProperties) // nolint: revive
 	switch anyprops.(type) {
 	case CustomProperties:
 		kdef = fw.LookupPath(cue.MakePath(cue.Str("Custom")))

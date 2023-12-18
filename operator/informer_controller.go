@@ -491,7 +491,9 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 	}
 	if c.reconcilerLatency != nil {
 		start := time.Now()
-		defer c.reconcilerLatency.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Observe(time.Since(start).Seconds())
+		defer func() {
+			c.reconcilerLatency.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Observe(time.Since(start).Seconds())
+		}()
 	}
 
 	ctx, span := GetTracer().Start(ctx, "controller-event-reconcile")

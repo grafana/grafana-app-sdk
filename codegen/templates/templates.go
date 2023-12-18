@@ -27,7 +27,6 @@ var (
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
-	templateOperatorTelemetry, _  = template.ParseFS(templates, "operator/telemetry.tmpl")
 )
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
