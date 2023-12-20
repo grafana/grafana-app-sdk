@@ -60,14 +60,14 @@ func rawToObject(raw []byte, into resource.Object) error {
 	}
 	// All the (required) CommonMetadata fields--thema parse gets mad otherwise
 	// TODO: overhaul this whole thing so we can just set everything in the metadata without a two-step process
-	if _, ok := meta["updateTimestamp"]; !ok {
-		meta["updateTimestamp"] = kubeObject.ObjectMetadata.CreationTimestamp.Format(time.RFC3339Nano)
+	if _, ok := meta[annotationUpdateTimestamp]; !ok {
+		meta[annotationUpdateTimestamp] = kubeObject.ObjectMetadata.CreationTimestamp.Format(time.RFC3339Nano)
 	}
-	if _, ok := meta["createdBy"]; !ok {
-		meta["createdBy"] = ""
+	if _, ok := meta[annotationCreatedBy]; !ok {
+		meta[annotationCreatedBy] = ""
 	}
-	if _, ok := meta["updatedBy"]; !ok {
-		meta["updatedBy"] = ""
+	if _, ok := meta[annotationUpdatedBy]; !ok {
+		meta[annotationUpdatedBy] = ""
 	}
 	meta["resourceVersion"] = kubeObject.ObjectMetadata.ResourceVersion
 	meta["generation"] = kubeObject.ObjectMetadata.Generation
@@ -292,11 +292,11 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 		}
 	}
 	// Common metadata which isn't a part of kubernetes metadata
-	meta.Annotations[AnnotationPrefix+"createdBy"] = cMeta.CreatedBy
-	meta.Annotations[AnnotationPrefix+"updatedBy"] = cMeta.UpdatedBy
+	meta.Annotations[AnnotationPrefix+annotationCreatedBy] = cMeta.CreatedBy
+	meta.Annotations[AnnotationPrefix+annotationUpdatedBy] = cMeta.UpdatedBy
 	// Only set the UpdateTimestamp metadata if it's non-zero
 	if !cMeta.UpdateTimestamp.IsZero() {
-		meta.Annotations[AnnotationPrefix+"updateTimestamp"] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
+		meta.Annotations[AnnotationPrefix+annotationUpdateTimestamp] = cMeta.UpdateTimestamp.Format(time.RFC3339Nano)
 	}
 
 	// The non-common metadata needs to be converted into annotations
@@ -304,7 +304,7 @@ func getV1ObjectMeta(obj resource.Object, cfg ClientConfig) metav1.ObjectMeta {
 		if cfg.CustomMetadataIsAnyType {
 			meta.Annotations[AnnotationPrefix+k] = toString(v)
 		} else {
-			meta.Annotations[AnnotationPrefix+k] = v.(string)
+			meta.Annotations[AnnotationPrefix+k] = v.(string) // nolint: revive
 		}
 	}
 

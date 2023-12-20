@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
-	otelResource "go.opentelemetry.io/otel/sdk/resource"
+	otelresource "go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 	"google.golang.org/grpc"
@@ -61,11 +61,11 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 	}
 
 	// Ensure default SDK resources and the required service name are set.
-	r, err := otelResource.New(
+	r, err := otelresource.New(
 		context.Background(),
-		otelResource.WithAttributes(semconv.ServiceName(cfg.ServiceName)),
-		otelResource.WithProcessRuntimeDescription(),
-		otelResource.WithTelemetrySDK(),
+		otelresource.WithAttributes(semconv.ServiceName(cfg.ServiceName)),
+		otelresource.WithProcessRuntimeDescription(),
+		otelresource.WithTelemetrySDK(),
 	)
 
 	if err != nil {

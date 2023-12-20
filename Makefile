@@ -15,8 +15,8 @@ deps: $(GOSUM)
 $(GOSUM): $(SOURCES) $(GOMOD)
 	go mod tidy
 
-LINTER_VERSION := 1.54.2
-LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION) $@
+LINTER_VERSION := 1.55.2
+LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint
 lint: $(LINTER_BINARY)

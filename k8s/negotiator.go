@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	serializerJSON "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 )
 
 // GenericNegotiatedSerializer implements runtime.NegotiatedSerializer and allows for JSON serialization and
@@ -23,7 +23,7 @@ func (*GenericNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerIn
 		MediaType: "application/json",
 		StreamSerializer: &runtime.StreamSerializerInfo{
 			Serializer: &GenericJSONDecoder{},
-			Framer:     serializerJSON.Framer,
+			Framer:     jsonserializer.Framer,
 		},
 	}}
 }

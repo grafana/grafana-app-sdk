@@ -103,7 +103,7 @@ func getASTFieldByLabel(n ast.Node, label string) (*ast.Field, error) {
 
 	for _, el := range d {
 		if isFieldWithLabel(el, label) {
-			return el.(*ast.Field), nil
+			return el.(*ast.Field), nil // nolint: revive
 		}
 	}
 

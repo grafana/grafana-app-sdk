@@ -164,7 +164,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					},
 				},
 			},
-			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"createdBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed),
+			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+annotationCreatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed),
 		},
 		{
 			name:         "no underlying, add action, invalid updatedBy",
@@ -185,7 +185,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					},
 				},
 			},
-			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updatedBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed),
+			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+annotationUpdatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed),
 		},
 		{
 			name:         "no underlying, add action, specified updateTimestamp",
@@ -205,7 +205,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					},
 				},
 			},
-			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updateTimestamp"), http.StatusBadRequest, ErrReasonFieldNotAllowed),
+			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+annotationUpdateTimestamp), http.StatusBadRequest, ErrReasonFieldNotAllowed),
 		},
 		{
 			name: "add action, underlying failure",
@@ -275,7 +275,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					},
 				},
 			},
-			expected: NewAdmissionError(fmt.Errorf("cannot change /metadata/annotations/"+AnnotationPrefix+"createdBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed),
+			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+annotationCreatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed),
 		},
 		{
 			name:         "no underlying, update action, invalid updatedBy",
@@ -304,7 +304,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					},
 				},
 			},
-			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updatedBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed),
+			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+annotationUpdatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed),
 		},
 		{
 			name:         "no underlying, add action, specified updateTimestamp",
@@ -334,7 +334,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					},
 				},
 			},
-			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updateTimestamp"), http.StatusBadRequest, ErrReasonFieldNotAllowed),
+			expected: NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+annotationUpdateTimestamp), http.StatusBadRequest, ErrReasonFieldNotAllowed),
 		},
 		{
 			name: "update action, underlying failure",

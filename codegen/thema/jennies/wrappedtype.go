@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/grafana/codejen"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )

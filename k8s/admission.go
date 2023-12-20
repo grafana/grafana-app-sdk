@@ -120,30 +120,30 @@ func (o *OpinionatedValidatingAdmissionController) Validate(ctx context.Context,
 		// Not allowed to set createdBy, updatedBy, or updateTimestamp
 		// createdBy can be set, but only to the username of the request
 		if request.Object.CommonMetadata().CreatedBy != "" && request.Object.CommonMetadata().CreatedBy != request.UserInfo.Username {
-			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"createdBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+			return NewAdmissionError(makeAnnotationError(annotationCreatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		// updatedBy can be set, but only to the username of the request
 		if request.Object.CommonMetadata().UpdatedBy != "" && request.Object.CommonMetadata().UpdatedBy != request.UserInfo.Username {
-			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updatedBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+			return NewAdmissionError(makeAnnotationError(annotationUpdatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		emptyTime := time.Time{}
 		// updateTimestamp cannot be set
 		if request.Object.CommonMetadata().UpdateTimestamp != emptyTime {
-			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updateTimestamp"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+			return NewAdmissionError(makeAnnotationError(annotationUpdateTimestamp), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 	case resource.AdmissionActionUpdate:
 		// Not allowed to set createdBy, updatedBy, or updateTimestamp
 		// createdBy can be set, but only to the username of the request
 		if request.Object.CommonMetadata().CreatedBy != request.OldObject.CommonMetadata().CreatedBy {
-			return NewAdmissionError(fmt.Errorf("cannot change /metadata/annotations/"+AnnotationPrefix+"createdBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+			return NewAdmissionError(makeAnnotationError(annotationCreatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		// updatedBy can be set, but only to the username of the request
 		if request.Object.CommonMetadata().UpdatedBy != request.OldObject.CommonMetadata().UpdatedBy && request.Object.CommonMetadata().UpdatedBy != request.UserInfo.Username {
-			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updatedBy"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+			return NewAdmissionError(makeAnnotationError(annotationUpdatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		// updateTimestamp cannot be set
 		if request.Object.CommonMetadata().UpdateTimestamp != request.OldObject.CommonMetadata().UpdateTimestamp {
-			return NewAdmissionError(fmt.Errorf("cannot set /metadata/annotations/"+AnnotationPrefix+"updateTimestamp"), http.StatusBadRequest, ErrReasonFieldNotAllowed)
+			return NewAdmissionError(makeAnnotationError(annotationUpdateTimestamp), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 	default:
 		// Do nothing
@@ -153,6 +153,10 @@ func (o *OpinionatedValidatingAdmissionController) Validate(ctx context.Context,
 		return o.Underlying.Validate(ctx, request)
 	}
 	return nil
+}
+
+func makeAnnotationError(annotation string) error {
+	return fmt.Errorf("cannot set /metadata/annotations/%s%s", AnnotationPrefix, annotation)
 }
 
 // NewOpinionatedValidatingAdmissionController returns a new OpinionatedValidatingAdmissionController which wraps the provided

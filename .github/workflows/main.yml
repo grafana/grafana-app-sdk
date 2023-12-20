@@ -1,4 +1,4 @@
-name: Main Branch Tests
+name: Build Main
 
 on:
   push:
@@ -6,19 +6,35 @@ on:
     - main
 
 jobs:
-  
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-
+    # git checkout
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    # Go env
     - name: Set up Go
-      uses: actions/setup-go@v3
+      uses: actions/setup-go@v4
       with:
         go-version: "1.21"
-
-    - name: Build
-      run: go build -v cmd/grafana-app-sdk/*.go
-
+    # make test
     - name: Test
       run: go test -v ./...
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    # git checkout
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    # Go env
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: "1.21"
+    # make build
+    - name: Build
+      run: go build -v cmd/grafana-app-sdk/*.go
