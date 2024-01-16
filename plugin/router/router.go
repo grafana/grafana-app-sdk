@@ -69,6 +69,10 @@ type Subrouter struct {
 	path         string
 }
 
+func (r *Subrouter) Path() string {
+	return r.path
+}
+
 // Subrouter creates and returns a Subrouter for the given path prefix.
 // All handlers registered with the Subrouter will have the prefix added implicitly.
 func (r *Router) Subrouter(path string) *Subrouter {
