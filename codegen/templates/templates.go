@@ -2,6 +2,7 @@ package templates
 
 import (
 	"embed"
+	"fmt"
 	"io"
 	"regexp"
 	"text/template"
@@ -13,10 +14,11 @@ import (
 var templates embed.FS
 
 var (
-	templateResourceObject, _ = template.ParseFS(templates, "resourceobject.tmpl")
-	templateSchema, _         = template.ParseFS(templates, "schema.tmpl")
-	templateLineage, _        = template.ParseFS(templates, "lineage.tmpl")
-	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
+	templateResourceObject, _     = template.ParseFS(templates, "resourceobject.tmpl")
+	templateResourceObject2, terr = template.ParseFS(templates, "resourceobject2.tmpl")
+	templateSchema, _             = template.ParseFS(templates, "kind.tmpl")
+	templateLineage, _            = template.ParseFS(templates, "lineage.tmpl")
+	templateWrappedType, _        = template.ParseFS(templates, "wrappedtype.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -50,6 +52,12 @@ type SubresourceMetadata struct {
 // WriteResourceObject executes the Resource Object template, and writes out the generated go code to out
 func WriteResourceObject(metadata ResourceObjectTemplateMetadata, out io.Writer) error {
 	return templateResourceObject.Execute(out, metadata)
+}
+
+func WriteResourceObject2(metadata ResourceObjectTemplateMetadata, out io.Writer) error {
+	fmt.Println(templateResourceObject2 == nil)
+	fmt.Println(terr)
+	return templateResourceObject2.Execute(out, metadata)
 }
 
 // SchemaMetadata is the metadata required by the Resource Schema template
@@ -87,6 +95,7 @@ func WriteLineageGo(metadata LineageMetadata, out io.Writer) error {
 type ObjectMetadataField struct {
 	JSONName  string
 	FieldName string
+	GoType    string
 }
 
 // WrappedTypeMetadata is the metadata required by the wrappedtype go code template

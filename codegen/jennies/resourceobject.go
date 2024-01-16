@@ -91,6 +91,7 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 			customMetadataFields = append(customMetadataFields, templates.ObjectMetadataField{
 				JSONName:  lbl,
 				FieldName: fieldName,
+				GoType:    "string", // TODO: not hardcode
 			})
 		}
 	}
@@ -119,7 +120,7 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 		})
 	}
 	b := bytes.Buffer{}
-	err = templates.WriteResourceObject(md, &b)
+	err = templates.WriteResourceObject2(md, &b)
 	if err != nil {
 		return nil, err
 	}
