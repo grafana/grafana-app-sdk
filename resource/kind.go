@@ -25,8 +25,22 @@ type Object2 interface {
 	SetStaticMetadata(metadata StaticMetadata)
 }
 
+// MultiVersionKind is a collection of Kinds which have the same Group and Kind, but different versions.
+// This may allow us to include conversion as a component of the interface.
+// TODO: not sure if necessary
 type MultiVersionKind interface {
+	Group() string
+	Kind() string
 	Versions() []Kind
+}
+
+// Group is a collection of Kinds which share a Group and Version, allowing them to be put under the same
+// routing in an API server.
+// TODO: not sure if necessary
+type Group interface {
+	Group() string
+	Version() string
+	Kinds() []Kind
 }
 
 // Kind is an interface representing a kubernetes-compatible Kind, which contains information about the Kind's
