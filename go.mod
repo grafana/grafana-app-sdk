@@ -22,20 +22,20 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.8.4
 	github.com/yalue/merged_fs v1.2.3
-	go.opentelemetry.io/otel v1.21.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0
-	go.opentelemetry.io/otel/sdk v1.21.0
-	go.opentelemetry.io/otel/trace v1.21.0
+	go.opentelemetry.io/otel v1.22.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.22.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.22.0
+	go.opentelemetry.io/otel/sdk v1.22.0
+	go.opentelemetry.io/otel/trace v1.22.0
 	golang.org/x/text v0.14.0
 	golang.org/x/tools v0.17.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	google.golang.org/grpc v1.60.1
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.29.0
-	k8s.io/apiextensions-apiserver v0.29.0
-	k8s.io/apimachinery v0.29.0
-	k8s.io/client-go v0.29.0
+	k8s.io/api v0.29.1
+	k8s.io/apiextensions-apiserver v0.29.1
+	k8s.io/apimachinery v0.29.1
+	k8s.io/client-go v0.29.1
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 )
 
@@ -57,7 +57,7 @@ require (
 	github.com/emicklei/proto v1.10.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/getsentry/sentry-go v0.12.0 // indirect
-	github.com/go-logr/logr v1.3.0 // indirect
+	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.6 // indirect
 	github.com/go-openapi/swag v0.22.4 // indirect
@@ -126,8 +126,8 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.46.1 // indirect
 	go.opentelemetry.io/contrib/propagators/jaeger v1.21.1 // indirect
 	go.opentelemetry.io/contrib/samplers/jaegerremote v0.15.1 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.21.0 // indirect
-	go.opentelemetry.io/otel/metric v1.21.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.22.0 // indirect
+	go.opentelemetry.io/otel/metric v1.22.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	golang.org/x/crypto v0.18.0 // indirect
 	golang.org/x/mod v0.14.0 // indirect
