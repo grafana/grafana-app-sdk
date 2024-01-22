@@ -22,6 +22,7 @@ const (
 	SubresourceScale  = SubresourceName("scale")
 )
 
+// APIServerResponseError is a Kubernetes API error with status code.
 type APIServerResponseError interface {
 	error
 	StatusCode() int
@@ -77,11 +78,25 @@ func (s *Store) Add(ctx context.Context, obj Object) (Object, error) {
 	if obj.StaticMetadata().Kind == "" {
 		return nil, fmt.Errorf("obj.StaticMetadata().Kind must not be empty")
 	}
-	if obj.StaticMetadata().Namespace == "" {
-		return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
-	}
 	if obj.StaticMetadata().Name == "" {
 		return nil, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
+	}
+
+	id := Identifier{
+		Name: obj.StaticMetadata().Name,
+	}
+
+	schema, err := s.getSchema(obj.StaticMetadata().Kind)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.Scope() == NamespacedScope {
+		if obj.StaticMetadata().Namespace == "" {
+			return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
+		}
+
+		id.Namespace = obj.StaticMetadata().Namespace
 	}
 
 	client, err := s.getClient(obj.StaticMetadata().Kind)
@@ -89,10 +104,7 @@ func (s *Store) Add(ctx context.Context, obj Object) (Object, error) {
 		return nil, err
 	}
 
-	return client.Create(ctx, Identifier{
-		Namespace: obj.StaticMetadata().Namespace,
-		Name:      obj.StaticMetadata().Name,
-	}, obj, CreateOptions{})
+	return client.Create(ctx, id, obj, CreateOptions{})
 }
 
 // SimpleAdd is a variation of Add that has the caller explicitly supply Identifier and kind as arguments,
@@ -116,11 +128,25 @@ func (s *Store) Update(ctx context.Context, obj Object) (Object, error) {
 	if obj.StaticMetadata().Kind == "" {
 		return nil, fmt.Errorf("obj.StaticMetadata().Kind must not be empty")
 	}
-	if obj.StaticMetadata().Namespace == "" {
-		return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
-	}
 	if obj.StaticMetadata().Name == "" {
 		return nil, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
+	}
+
+	id := Identifier{
+		Name: obj.StaticMetadata().Name,
+	}
+
+	schema, err := s.getSchema(obj.StaticMetadata().Kind)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.Scope() == NamespacedScope {
+		if obj.StaticMetadata().Namespace == "" {
+			return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
+		}
+
+		id.Namespace = obj.StaticMetadata().Namespace
 	}
 
 	md := obj.CommonMetadata()
@@ -132,10 +158,7 @@ func (s *Store) Update(ctx context.Context, obj Object) (Object, error) {
 		return nil, err
 	}
 
-	return client.Update(ctx, Identifier{
-		Namespace: obj.StaticMetadata().Namespace,
-		Name:      obj.StaticMetadata().Name,
-	}, obj, UpdateOptions{
+	return client.Update(ctx, id, obj, UpdateOptions{
 		ResourceVersion: obj.CommonMetadata().ResourceVersion,
 	})
 }
@@ -175,11 +198,25 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	if obj.StaticMetadata().Kind == "" {
 		return nil, fmt.Errorf("obj.StaticMetadata().Kind must not be empty")
 	}
-	if obj.StaticMetadata().Namespace == "" {
-		return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
-	}
 	if obj.StaticMetadata().Name == "" {
 		return nil, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
+	}
+
+	id := Identifier{
+		Name: obj.StaticMetadata().Name,
+	}
+
+	schema, err := s.getSchema(obj.StaticMetadata().Kind)
+	if err != nil {
+		return nil, err
+	}
+
+	if schema.Scope() == NamespacedScope {
+		if obj.StaticMetadata().Namespace == "" {
+			return nil, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
+		}
+
+		id.Namespace = obj.StaticMetadata().Namespace
 	}
 
 	client, err := s.getClient(obj.StaticMetadata().Kind)
@@ -187,7 +224,7 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 		return nil, err
 	}
 
-	resp, err := client.Get(ctx, obj.StaticMetadata().Identifier())
+	resp, err := client.Get(ctx, id)
 
 	if err != nil {
 		cast, ok := err.(APIServerResponseError)
@@ -202,17 +239,11 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 		md := obj.CommonMetadata()
 		md.UpdateTimestamp = time.Now().UTC()
 		obj.SetCommonMetadata(md)
-		return client.Update(ctx, Identifier{
-			Namespace: obj.StaticMetadata().Namespace,
-			Name:      obj.StaticMetadata().Name,
-		}, obj, UpdateOptions{
+		return client.Update(ctx, id, obj, UpdateOptions{
 			ResourceVersion: obj.CommonMetadata().ResourceVersion,
 		})
 	}
-	return client.Create(ctx, Identifier{
-		Namespace: obj.StaticMetadata().Namespace,
-		Name:      obj.StaticMetadata().Name,
-	}, obj, CreateOptions{})
+	return client.Create(ctx, id, obj, CreateOptions{})
 }
 
 // Delete deletes a resource with the given Identifier and kind.
@@ -262,13 +293,19 @@ func (s *Store) Client(kind string) (Client, error) {
 }
 
 func (s *Store) getClient(kind string) (Client, error) {
+	schema, err := s.getSchema(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.clients.ClientFor(schema)
+}
+
+func (s *Store) getSchema(kind string) (Schema, error) {
 	schema, ok := s.types[kind]
 	if !ok {
 		return nil, fmt.Errorf("resource kind '%s' is not registered in store", kind)
 	}
-	client, err := s.clients.ClientFor(schema)
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+
+	return schema, nil
 }
