@@ -197,7 +197,8 @@ func TestStore_Add(t *testing.T) {
 		ret, err := store.Add(ctx, &SimpleObject[any]{
 			BasicMetadataObject: BasicMetadataObject{
 				StaticMeta: StaticMetadata{
-					Kind: schema.Kind() + "no",
+					Kind: schema.Kind(),
+					Name: "test",
 				},
 			},
 		})
@@ -365,7 +366,8 @@ func TestStore_Update(t *testing.T) {
 		ret, err := store.Update(ctx, &SimpleObject[any]{
 			BasicMetadataObject: BasicMetadataObject{
 				StaticMeta: StaticMetadata{
-					Kind: schema.Kind() + "no",
+					Kind: schema.Kind(),
+					Name: "test",
 				},
 			},
 		})
@@ -536,7 +538,8 @@ func TestStore_Upsert(t *testing.T) {
 		ret, err := store.Update(ctx, &SimpleObject[any]{
 			BasicMetadataObject: BasicMetadataObject{
 				StaticMeta: StaticMetadata{
-					Kind: schema.Kind() + "no",
+					Kind: schema.Kind(),
+					Name: "test",
 				},
 			},
 		})
