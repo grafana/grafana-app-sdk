@@ -13,6 +13,7 @@ import (
 // Client for a Schema and doing type conversions in-code.
 type TypedStore[ObjectType Object] struct {
 	client Client
+	scope  SchemaScope
 }
 
 // NewTypedStore creates a new TypedStore. The ObjectType and Schema.ZeroValue()'s underlying type should match.
@@ -37,6 +38,7 @@ func NewTypedStore[ObjectType Object](schema Schema, generator ClientGenerator) 
 	}
 	return &TypedStore[ObjectType]{
 		client: client,
+		scope:  schema.Scope(),
 	}, nil
 }
 
@@ -53,18 +55,23 @@ func (t *TypedStore[T]) Get(ctx context.Context, identifier Identifier) (T, erro
 // Add creates a new resource. obj.StaticMetadata() is expected to have Namespace and Name set.
 // If they are not, no request is made to the underlying client, and an error is returned.
 func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
-	if obj.StaticMetadata().Namespace == "" {
-		var n T
-		return n, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
-	}
 	if obj.StaticMetadata().Name == "" {
 		var n T
 		return n, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
 	}
-	ret, err := t.client.Create(ctx, Identifier{
-		Namespace: obj.StaticMetadata().Namespace,
-		Name:      obj.StaticMetadata().Name,
-	}, obj, CreateOptions{})
+	id := Identifier{
+		Name: obj.StaticMetadata().Name,
+	}
+
+	if t.scope == NamespacedScope {
+		if obj.StaticMetadata().Namespace == "" {
+			var n T
+			return n, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
+		}
+		id.Namespace = obj.StaticMetadata().Namespace
+	}
+
+	ret, err := t.client.Create(ctx, id, obj, CreateOptions{})
 	if err != nil {
 		var n T
 		return n, err
@@ -116,10 +123,7 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 		obj.SetCommonMetadata(md)
 		ret, err = t.client.Update(ctx, identifier, obj, UpdateOptions{})
 	} else {
-		ret, err = t.client.Create(ctx, Identifier{
-			Namespace: obj.StaticMetadata().Namespace,
-			Name:      obj.StaticMetadata().Name,
-		}, obj, CreateOptions{})
+		ret, err = t.client.Create(ctx, identifier, obj, CreateOptions{})
 	}
 	if err != nil {
 		var n T
