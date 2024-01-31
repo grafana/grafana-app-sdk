@@ -8,7 +8,7 @@ import (
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
-	themagen "github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk/codegen/thema"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
 var validateCmd = &cobra.Command{

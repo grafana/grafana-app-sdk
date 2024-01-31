@@ -18,10 +18,10 @@ import (
 	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 
-	"github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk/codegen/cuekind"
-	themagen "github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk/codegen/thema"
-	"github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk/kindsys"
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
+	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
+	"github.com/grafana/grafana-app-sdk/kindsys"
 )
 
 //go:embed templates/*.tmpl
