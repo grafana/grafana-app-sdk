@@ -24,13 +24,7 @@ jobs:
         go-version: "1.21"
     # make test
     - name: Test
-      run: go test -v ./...
-    # make test
-    - name: Test CLI module
-      run: go test -v ./cmd/grafana-app-sdk/...
-    # make test
-    - name: Test plugin module
-      run: go test -v ./plugin/...
+      run: make test
   release:
     needs: test
     runs-on: ubuntu-latest
