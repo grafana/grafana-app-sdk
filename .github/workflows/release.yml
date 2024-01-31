@@ -24,7 +24,7 @@ jobs:
         go-version: "1.21"
     # make test
     - name: Test
-      run: go test -v ./...
+      run: make test
   release:
     needs: test
     runs-on: ubuntu-latest
