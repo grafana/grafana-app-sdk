@@ -12,7 +12,7 @@ require (
 	github.com/golangci/lint-1 v0.0.0-20181222135242-d2cdd8c08219
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
-	github.com/grafana/grafana-plugin-sdk-go v0.202.0
+	github.com/grafana/grafana-plugin-sdk-go v0.204.0
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/labstack/echo/v4 v4.11.4
@@ -121,10 +121,10 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.46.1 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.47.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.46.1 // indirect
-	go.opentelemetry.io/contrib/propagators/jaeger v1.21.1 // indirect
-	go.opentelemetry.io/contrib/samplers/jaegerremote v0.15.1 // indirect
+	go.opentelemetry.io/contrib/propagators/jaeger v1.22.0 // indirect
+	go.opentelemetry.io/contrib/samplers/jaegerremote v0.16.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.22.0 // indirect
 	go.opentelemetry.io/otel/metric v1.22.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
