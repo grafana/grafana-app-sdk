@@ -5,33 +5,23 @@ import (
 	"fmt"
 	"reflect"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// SimpleStoreResource is a type used by SimpleStore to return concrete data, rather than an Object.
-// All data from an underlying Object returned by a client is preserved in this struct,
-// But with a concrete type for the SpecObject() (presented here as Spec).
-// TODO: concrete ObjectMetadata type in addition to SpecType? Would make using this a mite more complicated with MetadataOption
-type SimpleStoreResource[SpecType any] struct {
-	Spec           SpecType       `json:"spec"`
-	StaticMetadata StaticMetadata `json:"staticMetadata"`
-	CommonMetadata CommonMetadata `json:"objectMetadata"`
-	CustomMetadata CustomMetadata `json:"customMetadata"`
-	Subresources   map[string]any `json:"subresources"`
-}
-
 // ObjectMetadataOption is a function which updates an ObjectMetadata
-type ObjectMetadataOption func(o *CommonMetadata)
+type ObjectMetadataOption func(o *metav1.ObjectMeta)
 
 // WithLabels sets the labels of an ObjectMetadata
 func WithLabels(labels map[string]string) ObjectMetadataOption {
-	return func(o *CommonMetadata) {
+	return func(o *metav1.ObjectMeta) {
 		o.Labels = labels
 	}
 }
 
 // WithLabel sets a specific key in the labels of an ObjectMetadata
 func WithLabel(key, value string) ObjectMetadataOption {
-	return func(o *CommonMetadata) {
+	return func(o *metav1.ObjectMeta) {
 		if o.Labels == nil {
 			o.Labels = make(map[string]string)
 		}
@@ -42,7 +32,7 @@ func WithLabel(key, value string) ObjectMetadataOption {
 // WithResourceVersion sets the ResourceVersion to the supplied resourceVersion.
 // This allows you to ensure that an update will fail if the version in the store doesn't match the one you supplied.
 func WithResourceVersion(resourceVersion string) ObjectMetadataOption {
-	return func(o *CommonMetadata) {
+	return func(o *metav1.ObjectMeta) {
 		o.ResourceVersion = resourceVersion
 	}
 }
@@ -59,12 +49,12 @@ type SimpleStore[SpecType any] struct {
 // It will error if the type of the Schema.ZeroValue().SpecObject() does not match the provided SpecType.
 // It will also error if a client cannot be created from the generator, as unlike Store, the client is generated once
 // and reused for all subsequent calls.
-func NewSimpleStore[SpecType any](schema Schema, generator ClientGenerator) (*SimpleStore[SpecType], error) {
-	if reflect.TypeOf(schema.ZeroValue().SpecObject()) != reflect.TypeOf(new(SpecType)).Elem() {
+func NewSimpleStore[SpecType any](schema Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
+	if reflect.TypeOf(schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {
 		return nil, fmt.Errorf(
 			"SpecType '%s' does not match underlying schema.ZeroValue().SpecObject() type '%s'",
 			reflect.TypeOf(new(SpecType)).Elem(),
-			reflect.TypeOf(schema.ZeroValue().SpecObject()))
+			reflect.TypeOf(schema.ZeroValue().GetSpec()))
 	}
 
 	client, err := generator.ClientFor(schema)
@@ -80,15 +70,15 @@ func NewSimpleStore[SpecType any](schema Schema, generator ClientGenerator) (*Si
 // List returns a list of all resources of the Schema type in the provided namespace,
 // optionally matching the provided filters.
 func (s *SimpleStore[T]) List(ctx context.Context, namespace string, filters ...string) (
-	[]SimpleStoreResource[T], error) {
+	[]TypedSpecObject[T], error) {
 	listObj, err := s.client.List(ctx, namespace, ListOptions{
 		LabelFilters: filters,
 	})
 	if err != nil {
 		return nil, err
 	}
-	items := listObj.ListItems()
-	list := make([]SimpleStoreResource[T], len(items))
+	items := listObj.GetItems()
+	list := make([]TypedSpecObject[T], len(items))
 	for idx, item := range items {
 		converted, err := s.cast(item)
 		if err != nil {
@@ -100,7 +90,7 @@ func (s *SimpleStore[T]) List(ctx context.Context, namespace string, filters ...
 }
 
 // Get gets an object with the provided identifier
-func (s *SimpleStore[T]) Get(ctx context.Context, identifier Identifier) (*SimpleStoreResource[T], error) {
+func (s *SimpleStore[T]) Get(ctx context.Context, identifier Identifier) (*TypedSpecObject[T], error) {
 	obj, err := s.client.Get(ctx, identifier)
 	if err != nil {
 		return nil, err
@@ -110,12 +100,12 @@ func (s *SimpleStore[T]) Get(ctx context.Context, identifier Identifier) (*Simpl
 
 // Add creates a new object
 func (s *SimpleStore[T]) Add(ctx context.Context, identifier Identifier, obj T, opts ...ObjectMetadataOption) (
-	*SimpleStoreResource[T], error) {
-	object := SimpleObject[T]{
+	*TypedSpecObject[T], error) {
+	object := TypedSpecObject[T]{
 		Spec: obj,
 	}
 	for _, opt := range opts {
-		opt(&object.CommonMeta)
+		opt(&object.ObjectMeta)
 	}
 	ret, err := s.client.Create(ctx, identifier, &object, CreateOptions{})
 	if err != nil {
@@ -128,8 +118,8 @@ func (s *SimpleStore[T]) Add(ctx context.Context, identifier Identifier, obj T, 
 // If the WithResourceVersion option is used, the update will fail if the object's ResourceVersion in the store
 // doesn't match the one provided in WithResourceVersion.
 func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj T, opts ...ObjectMetadataOption) (
-	*SimpleStoreResource[T], error) {
-	object := SimpleObject[T]{
+	*TypedSpecObject[T], error) {
+	object := TypedSpecObject[T]{
 		Spec: obj,
 	}
 	// Before we can run the opts on the metadata, we need the current metadata
@@ -139,22 +129,18 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 	if err != nil {
 		return nil, err
 	}
-	object.CommonMeta = current.CommonMetadata
-	customFields := current.CustomMetadata.MapFields()
-	if len(customFields) > 0 {
-		object.CustomMeta = make(SimpleCustomMetadata)
-		for f, v := range customFields {
-			object.CustomMeta[f] = v
-		}
-	}
+	object.TypeMeta = current.TypeMeta
+	object.ObjectMeta = current.ObjectMeta
 	for _, opt := range opts {
-		opt(&object.CommonMeta)
+		opt(&object.ObjectMeta)
 	}
 	updateOptions := UpdateOptions{}
-	if object.CommonMeta.ResourceVersion != "" {
-		updateOptions.ResourceVersion = object.CommonMeta.ResourceVersion
+	if object.GetResourceVersion() != "" {
+		updateOptions.ResourceVersion = object.GetResourceVersion()
 	}
-	object.CommonMeta.UpdateTimestamp = time.Now().UTC()
+	cmd := object.GetCommonMetadata()
+	cmd.UpdateTimestamp = time.Now().UTC()
+	object.SetCommonMetadata(cmd)
 	ret, err := s.client.Update(ctx, identifier, &object, updateOptions)
 	if err != nil {
 		return nil, err
@@ -166,18 +152,19 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 // If the WithResourceVersion option is used, the update will fail if the object's ResourceVersion in the store
 // doesn't match the one provided in WithResourceVersion.
 func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier, subresource SubresourceName,
-	obj any) (*SimpleStoreResource[T], error) {
+	obj any) (*TypedSpecObject[T], error) {
 	if subresource == "" {
 		return nil, fmt.Errorf("subresource may not be empty")
 	}
-	object := SimpleObject[T]{
-		SubresourceMap: map[string]any{
+	object := TypedSpecObject[T]{
+		Subresources: map[string]any{
 			string(subresource): obj,
 		},
 	}
 	ret, err := s.client.Update(ctx, identifier, &object, UpdateOptions{
 		Subresource: string(subresource),
 	})
+	fmt.Println("ret: ", ret)
 	if err != nil {
 		return nil, err
 	}
@@ -190,16 +177,38 @@ func (s *SimpleStore[T]) Delete(ctx context.Context, identifier Identifier) erro
 }
 
 //nolint:revive
-func (s *SimpleStore[T]) cast(obj Object) (*SimpleStoreResource[T], error) {
-	spec, ok := obj.SpecObject().(T)
+func (s *SimpleStore[T]) cast(obj Object) (*TypedSpecObject[T], error) {
+	if cast, ok := obj.(*TypedSpecObject[T]); ok {
+		return cast, nil
+	}
+	spec, ok := obj.GetSpec().(T)
 	if !ok {
 		return nil, fmt.Errorf("returned object could not be cast to store's type")
 	}
-	return &SimpleStoreResource[T]{
-		Spec:           spec,
-		StaticMetadata: obj.StaticMetadata(),
-		CommonMetadata: obj.CommonMetadata(),
-		CustomMetadata: obj.CustomMetadata(),
-		Subresources:   obj.Subresources(),
+	apiVersion, kind := obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+	return &TypedSpecObject[T]{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       kind,
+			APIVersion: apiVersion,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:                       obj.GetName(),
+			GenerateName:               obj.GetGenerateName(),
+			Namespace:                  obj.GetNamespace(),
+			SelfLink:                   obj.GetSelfLink(),
+			UID:                        obj.GetUID(),
+			ResourceVersion:            obj.GetResourceVersion(),
+			Generation:                 obj.GetGeneration(),
+			CreationTimestamp:          obj.GetCreationTimestamp(),
+			DeletionTimestamp:          obj.GetDeletionTimestamp(),
+			DeletionGracePeriodSeconds: obj.GetDeletionGracePeriodSeconds(),
+			Labels:                     obj.GetLabels(),
+			Annotations:                obj.GetAnnotations(),
+			OwnerReferences:            obj.GetOwnerReferences(),
+			Finalizers:                 obj.GetFinalizers(),
+			ManagedFields:              obj.GetManagedFields(),
+		},
+		Spec:         spec,
+		Subresources: obj.GetSubresources(),
 	}, nil
 }

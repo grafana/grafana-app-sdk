@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestNewSimpleStore(t *testing.T) {
-	schema := NewSimpleSchema("g", "v", &SimpleObject[int]{})
+	schema := NewTypedKind("g", "v", "k", &TypedSpecObject[int]{})
 	t.Run("type mismatch", func(t *testing.T) {
 		store, err := NewSimpleStore[string](schema, &mockClientGenerator{})
 		assert.Nil(t, store)
@@ -19,8 +20,8 @@ func TestNewSimpleStore(t *testing.T) {
 	t.Run("clientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("SOY ERROR")
 		generator := &mockClientGenerator{
-			ClientForFunc: func(s Schema) (Client, error) {
-				assert.Equal(t, schema, s)
+			ClientForFunc: func(k Kind) (Client, error) {
+				assert.Equal(t, schema, k)
 				return nil, cerr
 			},
 		}
@@ -32,8 +33,8 @@ func TestNewSimpleStore(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		client := &mockClient{}
 		generator := &mockClientGenerator{
-			ClientForFunc: func(s Schema) (Client, error) {
-				assert.Equal(t, schema, s)
+			ClientForFunc: func(k Kind) (Client, error) {
+				assert.Equal(t, schema, k)
 				return client, nil
 			},
 		}
@@ -65,14 +66,10 @@ func TestSimpleStore_Get(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		obj := &SimpleObject[string]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Name: "test",
-				},
-				CommonMeta: CommonMetadata{
-					ResourceVersion: "123",
-				},
+		obj := &TypedSpecObject[string]{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:            "test",
+				ResourceVersion: "123",
 			},
 			Spec: "foo",
 		}
@@ -83,23 +80,19 @@ func TestSimpleStore_Get(t *testing.T) {
 		}
 		ret, err := store.Get(ctx, id)
 		assert.Nil(t, err)
-		assert.Equal(t, obj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, obj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, obj.SpecObject(), ret.Spec)
+		assert.Equal(t, obj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, obj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, obj.Spec, ret.Spec)
 	})
 }
 
 func TestSimpleStore_Add(t *testing.T) {
 	store, client := getSimpleStoreTestSetup()
 	ctx := context.TODO()
-	retObj := &SimpleObject[string]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Name: "test",
-			},
-			CommonMeta: CommonMetadata{
-				ResourceVersion: "123",
-			},
+	retObj := &TypedSpecObject[string]{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test",
+			ResourceVersion: "123",
 		},
 		Spec: "foo",
 	}
@@ -122,14 +115,14 @@ func TestSimpleStore_Add(t *testing.T) {
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			assert.Equal(t, "test", obj.SpecObject())
+			assert.Equal(t, "test", obj.GetSpec())
 			return retObj, nil
 		}
 		ret, err := store.Add(ctx, id, "test")
 		assert.Nil(t, err)
-		assert.Equal(t, retObj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, retObj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, retObj.SpecObject(), ret.Spec)
+		assert.Equal(t, retObj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, retObj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, retObj.Spec, ret.Spec)
 	})
 
 	t.Run("success, with metadata options", func(t *testing.T) {
@@ -139,29 +132,25 @@ func TestSimpleStore_Add(t *testing.T) {
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			assert.Equal(t, "test", obj.SpecObject())
-			assert.Equal(t, lbls, obj.CommonMetadata().Labels)
+			assert.Equal(t, "test", obj.GetSpec())
+			assert.Equal(t, lbls, obj.GetCommonMetadata().Labels)
 			return retObj, nil
 		}
 		ret, err := store.Add(ctx, id, "test", WithLabels(lbls))
 		assert.Nil(t, err)
-		assert.Equal(t, retObj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, retObj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, retObj.SpecObject(), ret.Spec)
+		assert.Equal(t, retObj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, retObj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, retObj.Spec, ret.Spec)
 	})
 }
 
 func TestSimpleStore_Update(t *testing.T) {
 	store, client := getSimpleStoreTestSetup()
 	ctx := context.TODO()
-	retObj := &SimpleObject[string]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Name: "test",
-			},
-			CommonMeta: CommonMetadata{
-				ResourceVersion: "123",
-			},
+	retObj := &TypedSpecObject[string]{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test",
+			ResourceVersion: "123",
 		},
 		Spec: "foo",
 	}
@@ -200,14 +189,14 @@ func TestSimpleStore_Update(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			assert.Equal(t, "test", obj.SpecObject())
+			assert.Equal(t, "test", obj.GetSpec())
 			return retObj, nil
 		}
 		ret, err := store.Update(ctx, id, "test")
 		assert.Nil(t, err)
-		assert.Equal(t, retObj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, retObj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, retObj.SpecObject(), ret.Spec)
+		assert.Equal(t, retObj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, retObj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, retObj.Spec, ret.Spec)
 	})
 
 	t.Run("success, with metadata options", func(t *testing.T) {
@@ -220,15 +209,15 @@ func TestSimpleStore_Update(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			assert.Equal(t, "test", obj.SpecObject())
-			assert.Equal(t, lbls, obj.CommonMetadata().Labels)
+			assert.Equal(t, "test", obj.GetSpec())
+			assert.Equal(t, lbls, obj.GetCommonMetadata().Labels)
 			return retObj, nil
 		}
 		ret, err := store.Update(ctx, id, "test", WithLabels(lbls))
 		assert.Nil(t, err)
-		assert.Equal(t, retObj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, retObj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, retObj.SpecObject(), ret.Spec)
+		assert.Equal(t, retObj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, retObj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, retObj.Spec, ret.Spec)
 	})
 
 	t.Run("success, with resourceVersion option", func(t *testing.T) {
@@ -239,16 +228,16 @@ func TestSimpleStore_Update(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			assert.Equal(t, "test", obj.SpecObject())
-			assert.Equal(t, rv, obj.CommonMetadata().ResourceVersion)
+			assert.Equal(t, "test", obj.GetSpec())
+			assert.Equal(t, rv, obj.GetCommonMetadata().ResourceVersion)
 			assert.Equal(t, rv, options.ResourceVersion)
 			return retObj, nil
 		}
 		ret, err := store.Update(ctx, id, "test", WithResourceVersion(rv))
 		assert.Nil(t, err)
-		assert.Equal(t, retObj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, retObj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, retObj.SpecObject(), ret.Spec)
+		assert.Equal(t, retObj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, retObj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, retObj.Spec, ret.Spec)
 	})
 }
 
@@ -259,14 +248,10 @@ func TestSimpleStore_UpdateSubresource(t *testing.T) {
 		Namespace: "ns",
 		Name:      "test",
 	}
-	retObj := &SimpleObject[string]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Name: "test",
-			},
-			CommonMeta: CommonMetadata{
-				ResourceVersion: "123",
-			},
+	retObj := &TypedSpecObject[string]{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test",
+			ResourceVersion: "123",
 		},
 		Spec: "foo",
 	}
@@ -293,17 +278,19 @@ func TestSimpleStore_UpdateSubresource(t *testing.T) {
 
 	t.Run("success, no metadata options", func(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			fmt.Println("obj: ", obj)
+			fmt.Println("opts: ", options)
 			assert.Equal(t, string(SubresourceStatus), options.Subresource)
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			assert.Equal(t, 2, obj.Subresources()[string(SubresourceStatus)])
+			assert.Equal(t, 2, obj.GetSubresources()[string(SubresourceStatus)])
 			return retObj, nil
 		}
 		ret, err := store.UpdateSubresource(ctx, id, SubresourceStatus, 2)
 		assert.Nil(t, err)
-		assert.Equal(t, retObj.StaticMetadata(), ret.StaticMetadata)
-		assert.Equal(t, retObj.CommonMetadata(), ret.CommonMetadata)
-		assert.Equal(t, retObj.SpecObject(), ret.Spec)
+		assert.Equal(t, retObj.GetStaticMetadata(), ret.GetStaticMetadata())
+		assert.Equal(t, retObj.GetCommonMetadata(), ret.GetCommonMetadata())
+		assert.Equal(t, retObj.Spec, ret.Spec)
 	})
 }
 
@@ -341,8 +328,8 @@ func TestSimpleStore_List(t *testing.T) {
 	store, client := getSimpleStoreTestSetup()
 	ctx := context.TODO()
 	ns := "ns"
-	list := &SimpleList[*SimpleObject[string]]{
-		Items: []*SimpleObject[string]{
+	list := &TypedList[*TypedSpecObject[string]]{
+		Items: []*TypedSpecObject[string]{
 			{
 				Spec: "a",
 			},
@@ -373,9 +360,9 @@ func TestSimpleStore_List(t *testing.T) {
 		assert.Equal(t, len(list.Items), len(ret))
 		for i := 0; i < len(ret); i++ {
 			assert.Equal(t, list.Items[i].Spec, ret[i].Spec)
-			assert.Equal(t, list.Items[i].StaticMeta, ret[i].StaticMetadata)
-			assert.Equal(t, list.Items[i].CommonMeta, ret[i].CommonMetadata)
-			assert.Equal(t, list.Items[i].SubresourceMap, ret[i].Subresources)
+			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret[i].GetStaticMetadata())
+			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret[i].GetCommonMetadata())
+			assert.Equal(t, list.Items[i].Subresources, ret[i].Subresources)
 		}
 	})
 
@@ -392,9 +379,9 @@ func TestSimpleStore_List(t *testing.T) {
 		assert.Equal(t, len(list.Items), len(ret))
 		for i := 0; i < len(ret); i++ {
 			assert.Equal(t, list.Items[i].Spec, ret[i].Spec)
-			assert.Equal(t, list.Items[i].StaticMeta, ret[i].StaticMetadata)
-			assert.Equal(t, list.Items[i].CommonMeta, ret[i].CommonMetadata)
-			assert.Equal(t, list.Items[i].SubresourceMap, ret[i].Subresources)
+			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret[i].GetStaticMetadata())
+			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret[i].GetCommonMetadata())
+			assert.Equal(t, list.Items[i].Subresources, ret[i].Subresources)
 		}
 	})
 }
@@ -402,11 +389,11 @@ func TestSimpleStore_List(t *testing.T) {
 func getSimpleStoreTestSetup() (*SimpleStore[string], *mockClient) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{
-		ClientForFunc: func(schema Schema) (Client, error) {
+		ClientForFunc: func(kind Kind) (Client, error) {
 			return client, nil
 		},
 	}
-	schema := NewSimpleSchema("g", "v", &SimpleObject[string]{})
-	store, _ := NewSimpleStore[string](schema, generator)
+	kind := NewTypedKind("g", "v", "test", &TypedSpecObject[string]{})
+	store, _ := NewSimpleStore[string](kind, generator)
 	return store, client
 }

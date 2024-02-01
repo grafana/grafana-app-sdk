@@ -164,6 +164,7 @@ type Client interface {
 // All methods require an `into` field, as the Client has no schema knowledge so must do blind deserialization
 // without the benefit of a Schema.ZeroValue(). Passed identifiers are now FullIdentifier, which includes
 // group, version, and kind schema information.
+// Reading/Writing of objects to wire format is left to the discretion of the implementer.
 type SchemalessClient interface {
 	// Get retrieves a resource identified by identifier, and marshals it into `into`
 	Get(ctx context.Context, identifier FullIdentifier, into Object) error
@@ -196,5 +197,5 @@ type SchemalessClient interface {
 type ClientGenerator interface {
 	// ClientFor returns a Client for the provided Schema. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientFor calls.
-	ClientFor(Schema) (Client, error)
+	ClientFor(Kind) (Client, error)
 }

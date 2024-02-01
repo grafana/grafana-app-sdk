@@ -2,9 +2,12 @@ package resource
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // WireFormat enumerates values for possible message wire formats.
@@ -20,97 +23,50 @@ const (
 	WireFormatJSON
 )
 
-// UnmarshalConfig is the config used for unmarshaling Objects.
-// It consists of fields that are descriptive of the underlying content, based on knowledge the caller has.
-type UnmarshalConfig struct {
-	// WireFormat is the wire format of the provided payload
-	WireFormat WireFormat
-	// VersionHint is what the client thinks the version is (if non-empty)
-	VersionHint string
-}
-
-// ObjectBytes is the collection of different Object components as raw bytes.
-// It is used for unmarshaling an Object, and can be used for Marshaling as well.
-// Client-implementations are required to process their own storage representation into
-// a uniform representation in ObjectBytes.
-type ObjectBytes struct {
-	// Spec contains the marshaled SpecObject. It should be unmarshalable directly into the Object-implementation's
-	// Spec object using an unmarshaler of the appropriate WireFormat type
-	Spec []byte
-	// Metadata includes object-specific metadata, and may include CommonMetadata depending on implementation.
-	// Clients must call SetCommonMetadata on the object after an Unmarshal if CommonMetadata is not provided in the bytes.
-	Metadata []byte
-	// Subresources contains a map of all subresources that are both part of the underlying Object implementation,
-	// AND are supported by the Client implementation. Each entry should be unmarshalable directly into the
-	// Object-implementation's relevant subresource using an unmarshaler of the appropriate WireFormat type
-	Subresources map[string][]byte
-}
-
-// Object represents a concrete schema object. This is an abstract representation,
-// and most concrete implementations should come from generated code.
-// In abstract, an Object consists of a single `Spec` object, optional subresources as specified by a schema,
-// and metadata, divided into Static and Object Metadata.
-//
-// Relationship-wise, an Object can be viewed as an instance of a Schema, though an Object has no
-// concrete ties to a Schema aside from a Schema generating it with Schema.ZeroValue() and
-// StaticMetadata Group,Version,Kind commonalities. Thus, an Object does not _need_ a correlated Schema,
-// but functions best when related to one.
-//
-// TODO: comments on how to generate concrete Object implementations with the SDK's codegen
+// Object implements kubernetes' runtime.Object and meta/v1.Object, as well as some additional methods useful for the app-sdk
 type Object interface {
-	// CommonMetadata returns the Object's CommonMetadata
-	CommonMetadata() CommonMetadata
+	runtime.Object
+	schema.ObjectKind
+	metav1.Object
 
-	// SetCommonMetadata overwrites the CommonMetadata of the object.
-	// Implementations should always overwrite, rather than attempt merges of the metadata.
-	// Callers wishing to merge should get current metadata with CommonMetadata() and set specific values.
-	SetCommonMetadata(metadata CommonMetadata)
-
-	// StaticMetadata returns the Object's StaticMetadata
-	StaticMetadata() StaticMetadata
-
-	// SetStaticMetadata overwrites the Object's StaticMetadata with the provided StaticMetadata.
-	// Implementations should always overwrite, rather than attempt merges of the metadata.
-	// Callers wishing to merge should get current metadata with StaticMetadata() and set specific values.
-	// Note that StaticMetadata is only mutable in an object create context.
+	// GetSpec returns the Spec of the Object
+	GetSpec() any
+	// SetSpec sets the Spec of the Object. It will error if the underlying type is incompatible with the spec type
+	SetSpec(any) error
+	// GetSubresources returns all known and populated subresouces of the Object, in a map of subresource name -> subresource
+	// TODO: should this exist? Originally it was added for arbitrary typed kind unmarshal, which didn't work right anyway
+	GetSubresources() map[string]any
+	// GetSubresource returns a specific subresource object, or nil if one does not exist. The boolean value is true if the subresource is valid.
+	GetSubresource(string) (any, bool)
+	// SetSubresource sets a specific subresource by name. If will error if the subresource does not exist, or if the
+	// `val` type is incompatible with the subresource type.
+	// TODO: should this exist? Originally it was added for arbitrary typed kind unmarshal, which didn't work right anyway
+	SetSubresource(key string, val any) error
+	// GetStaticMetadata returns the StaticMetadata of the Object
+	GetStaticMetadata() StaticMetadata
+	// SetStaticMetadata sets the StaticMetadata of the Object. This is equivalent to calling all the SetX methods
+	// for each piece of metadata contained in StaticMetadata
 	SetStaticMetadata(metadata StaticMetadata)
+	// GetCommonMetadata returns the app-sdk CommonMetadata, which is a combination of kubernetes metadata
+	// and additional app-sdk-specific metadata
+	GetCommonMetadata() CommonMetadata
+	// SetCommonMetadata sets the Object metadata fields contained in the provided CommonMetadata
+	SetCommonMetadata(CommonMetadata)
 
-	// CustomMetadata returns metadata unique to this Object's kind, as opposed to Common and Static metadata,
-	// which are the same across all kinds. An object may have no kind-specific CustomMetadata.
-	// CustomMetadata can only be read from this interface, for use with resource.Client implementations,
-	// those who wish to set CustomMetadata should use the interface's underlying type.
-	CustomMetadata() CustomMetadata
-
-	// SpecObject returns the actual "schema" object, which holds the main body of data
-	SpecObject() any
-
-	// Subresources returns a map of subresource name(s) to the object value for that subresource.
-	// Spec is not considered a subresource, and should only be returned by SpecObject
-	Subresources() map[string]any
-
-	// Unmarshal unmarshals the spec object and all provided subresources according to the provided WireFormat.
-	// It returns an error if any part of the provided bytes cannot be unmarshaled.
-	Unmarshal(bytes ObjectBytes, config UnmarshalConfig) error
-
-	// Copy returns a full copy of the Object with all its data
+	// Copy returns a Deep Copy of the object. This is the equivalent of the runtime.Object DeepCopyObject() method,
+	// but one which returns Object instead of runtime.Object.
 	Copy() Object
 }
 
-// CustomMetadata is an interface describing a resource.Object's kind-specific metadata
-type CustomMetadata interface {
-	// MapFields converts the custom metadata's fields into a map of field key to value.
-	// This is used so Clients don't need to engage in reflection for marshaling metadata,
-	// as various implementations may not store kind-specific metadata the same way.
-	MapFields() map[string]any
-}
-
-// ListObject represents a List of Object-implementing objects with list metadata.
-// The simplest way to use it is to use the implementation returned by a Client's List call.
+// ListObject represents a list of Object-implementing objects with list metadata.
+// This interface extends the metav1.List
 type ListObject interface {
-	ListMetadata() ListMetadata
-	SetListMetadata(ListMetadata)
-	ListItems() []Object
+	runtime.Object
+	schema.ObjectKind
+	metav1.ListInterface
+	GetItems() []Object
 	SetItems([]Object)
+	Copy() ListObject
 }
 
 // StaticMetadata consists of all non-mutable metadata for an object.
@@ -182,33 +138,8 @@ type CommonMetadata struct {
 	// TODO: additional fields?
 
 	// ExtraFields stores implementation-specific metadata.
-	// Not all Client implementations are required to honor all ExtraFields keys.
-	// Generally, this field should be shied away from unless you know the specific
-	// Client implementation you're working with and wish to track or mutate extra information.
+	// Not all Object implementations will respect or use all possible ExtraFields.
 	ExtraFields map[string]any `json:"extraFields"`
-}
-
-// ListMetadata is metadata for a list of objects. This is typically only used in responses from the storage layer.
-type ListMetadata struct {
-	ResourceVersion string `json:"resourceVersion"`
-
-	Continue string `json:"continue"`
-
-	RemainingItemCount *int64 `json:"remainingItemCount"`
-
-	// ExtraFields stores implementation-specific metadata.
-	// Not all Client implementations are required to honor all ExtraFields keys.
-	// Generally, this field should be shied away from unless you know the specific
-	// Client implementation you're working with and wish to track or mutate extra information.
-	ExtraFields map[string]any `json:"extraFields"`
-}
-
-// SimpleCustomMetadata is an implementation of CustomMetadata
-type SimpleCustomMetadata map[string]any
-
-// MapFields returns a map of string->value for all CustomMetadata fields
-func (s SimpleCustomMetadata) MapFields() map[string]any {
-	return s
 }
 
 // CopyObject is an implementation of the receiver method `Copy()` required for implementing Object.
@@ -233,125 +164,10 @@ func CopyObject(in any) Object {
 	return nil
 }
 
-// BasicMetadataObject is a composable base struct to attach Metadata, and its associated functions, to another struct.
-// BasicMetadataObject provides a Metadata field composed of StaticMetadata and ObjectMetadata, as well as the
-// ObjectMetadata(),SetObjectMetadata(), StaticMetadata(), and SetStaticMetadata() receiver functions.
-type BasicMetadataObject struct {
-	StaticMeta StaticMetadata       `json:"staticMetadata"`
-	CommonMeta CommonMetadata       `json:"commonMetadata"`
-	CustomMeta SimpleCustomMetadata `json:"customMetadata"`
-}
-
-// CommonMetadata returns the object's CommonMetadata
-func (b *BasicMetadataObject) CommonMetadata() CommonMetadata {
-	return b.CommonMeta
-}
-
-// SetCommonMetadata overwrites the ObjectMetadata.Common() supplied by BasicMetadataObject.ObjectMetadata()
-func (b *BasicMetadataObject) SetCommonMetadata(m CommonMetadata) {
-	b.CommonMeta = m
-}
-
-// StaticMetadata returns the object's StaticMetadata
-func (b *BasicMetadataObject) StaticMetadata() StaticMetadata {
-	return b.StaticMeta
-}
-
-// SetStaticMetadata overwrites the StaticMetadata supplied by BasicMetadataObject.StaticMetadata()
-func (b *BasicMetadataObject) SetStaticMetadata(m StaticMetadata) {
-	b.StaticMeta = m
-}
-
-// CustomMetadata returns the object's CustomMetadata
-func (b *BasicMetadataObject) CustomMetadata() CustomMetadata {
-	return b.CustomMeta
-}
-
-// SimpleObject is a very simple implementation of the Object interface.
-// Its subresources are provided by the untyped map[string]any SubresourceMap.
-// If you use this as a composable piece of another object,
-// ensure that you shadow the Copy() method for correct behavior.
-type SimpleObject[SpecType any] struct {
-	BasicMetadataObject
-	Spec           SpecType       `json:"spec"`
-	SubresourceMap map[string]any `json:"subresources"`
-}
-
-// SpecObject returns the
-func (t *SimpleObject[T]) SpecObject() any {
-	return t.Spec
-}
-
-// Subresources returns the SubresourceMap field
-func (t *SimpleObject[T]) Subresources() map[string]any {
-	return t.SubresourceMap
-}
-
-// Copy provides a copy of this SimpleObject. If SimpleObject is used as a component in another type,
-// this method must be shadowed by the parent type for proper behavior.
-// TODO: not sure whether this should be implemented in SimpleObject at all, but I can see use-cases where you use
-// SimpleObject directly, rather than as a component
-func (t *SimpleObject[T]) Copy() Object {
-	return CopyObject(t)
-}
-
-// Unmarshal takes in bytes of the spec and subresources, unmarshals the spec into t.Spec,
-// and puts all subresource bytes into t.SubresourceMap without unmarshaling.
-func (t *SimpleObject[T]) Unmarshal(bytes ObjectBytes, c UnmarshalConfig) error {
-	if t.SubresourceMap == nil {
-		t.SubresourceMap = make(map[string]any)
+func copyAny[T any](src T, dest *T) error {
+	m, err := json.Marshal(src)
+	if err != nil {
+		return err
 	}
-	switch c.WireFormat {
-	case WireFormatJSON:
-		err := json.Unmarshal(bytes.Spec, &t.Spec)
-		if err != nil {
-			return err
-		}
-		for k, v := range bytes.Subresources {
-			t.SubresourceMap[k] = json.RawMessage(v)
-		}
-		err = json.Unmarshal(bytes.Metadata, &t.CommonMeta)
-		if err != nil {
-			return err
-		}
-		return nil
-	default:
-		return fmt.Errorf("cannot handle specified wire format")
-	}
-}
-
-// SimpleList is a simple implementation of ListObject.
-type SimpleList[ItemType Object] struct {
-	ListMeta ListMetadata `json:"metadata"`
-	Items    []ItemType   `json:"items"`
-}
-
-// ListItems returns the ListItems, re-cast as a slice of Object elements
-func (l *SimpleList[T]) ListItems() []Object {
-	items := make([]Object, len(l.Items))
-	for i := 0; i < len(l.Items); i++ {
-		items[i] = l.Items[i]
-	}
-	return items
-}
-
-// SetItems overwrites ListItems with the contents of items, provided that each element in items is of type T
-func (l *SimpleList[T]) SetItems(items []Object) {
-	newItems := make([]T, 0)
-	for _, i := range items {
-		if cast, ok := i.(T); ok {
-			newItems = append(newItems, cast)
-		}
-	}
-	l.Items = newItems
-}
-
-// ListMetadata returns ListMeta
-func (l *SimpleList[T]) ListMetadata() ListMetadata {
-	return l.ListMeta
-}
-
-// SetListMetadata overwrites the contents of ListMeta with metadata
-func (l *SimpleList[T]) SetListMetadata(metadata ListMetadata) {
-	l.ListMeta = metadata
+	return json.Unmarshal(m, dest)
 }

@@ -13,12 +13,12 @@ import (
 // Client for a Schema and doing type conversions in-code.
 type TypedStore[ObjectType Object] struct {
 	client Client
-	scope  SchemaScope
+	sch    Schema
 }
 
 // NewTypedStore creates a new TypedStore. The ObjectType and Schema.ZeroValue()'s underlying type should match.
 // If they do not, an error is returned.
-func NewTypedStore[ObjectType Object](schema Schema, generator ClientGenerator) (*TypedStore[ObjectType], error) {
+func NewTypedStore[ObjectType Object](schema Kind, generator ClientGenerator) (*TypedStore[ObjectType], error) {
 	schemaType := reflect.TypeOf(schema.ZeroValue())
 	providedType := reflect.TypeOf(new(ObjectType)).Elem()
 	// Get the actual underlying types
@@ -38,7 +38,7 @@ func NewTypedStore[ObjectType Object](schema Schema, generator ClientGenerator) 
 	}
 	return &TypedStore[ObjectType]{
 		client: client,
-		scope:  schema.Scope(),
+		sch:    schema,
 	}, nil
 }
 
@@ -55,23 +55,25 @@ func (t *TypedStore[T]) Get(ctx context.Context, identifier Identifier) (T, erro
 // Add creates a new resource. obj.StaticMetadata() is expected to have Namespace and Name set.
 // If they are not, no request is made to the underlying client, and an error is returned.
 func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
-	if obj.StaticMetadata().Name == "" {
-		var n T
-		return n, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
-	}
-	id := Identifier{
-		Name: obj.StaticMetadata().Name,
-	}
-
-	if t.scope == NamespacedScope {
-		if obj.StaticMetadata().Namespace == "" {
+	if t.sch.Scope() == ClusterScope {
+		if obj.GetNamespace() != "" {
+			var n T
+			return n, fmt.Errorf("obj.StaticMetadata().Namespace mustbe empty for cluster-scoped objects")
+		}
+	} else {
+		if obj.GetNamespace() == "" {
 			var n T
 			return n, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
 		}
-		id.Namespace = obj.StaticMetadata().Namespace
 	}
-
-	ret, err := t.client.Create(ctx, id, obj, CreateOptions{})
+	if obj.GetName() == "" {
+		var n T
+		return n, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
+	}
+	ret, err := t.client.Create(ctx, Identifier{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}, obj, CreateOptions{})
 	if err != nil {
 		var n T
 		return n, err
@@ -86,7 +88,7 @@ func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 // The update will fail if no ResourceVersion is provided, or if the ResourceVersion does not match the current one.
 // It returns the updated Object from the storage system.
 func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T) (T, error) {
-	md := obj.CommonMetadata()
+	md := obj.GetCommonMetadata()
 	md.UpdateTimestamp = time.Now().UTC()
 	obj.SetCommonMetadata(md)
 	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{})
@@ -118,12 +120,15 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 	var ret Object
 
 	if resp != nil {
-		md := obj.CommonMetadata()
+		md := obj.GetCommonMetadata()
 		md.UpdateTimestamp = time.Now().UTC()
 		obj.SetCommonMetadata(md)
 		ret, err = t.client.Update(ctx, identifier, obj, UpdateOptions{})
 	} else {
-		ret, err = t.client.Create(ctx, identifier, obj, CreateOptions{})
+		ret, err = t.client.Create(ctx, Identifier{
+			Namespace: obj.GetNamespace(),
+			Name:      obj.GetName(),
+		}, obj, CreateOptions{})
 	}
 	if err != nil {
 		var n T
@@ -164,33 +169,16 @@ func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) 
 	return err
 }
 
-// TypedStoreList is the ListObject-implementing struct returned from TypedStore.List calls
-type TypedStoreList[T Object] struct {
-	Metadata ListMetadata `json:"metadata"`
-	Items    []T          `json:"items"`
-}
-
 // List lists all resources in the provided namespace, optionally filtered by the provided filters
-func (t *TypedStore[T]) List(ctx context.Context, namespace string, filters ...string) (*TypedStoreList[T], error) {
-	listObj, err := t.client.List(ctx, namespace, ListOptions{
+func (t *TypedStore[T]) List(ctx context.Context, namespace string, filters ...string) (*TypedList[T], error) {
+	resp := &TypedList[T]{}
+	err := t.client.ListInto(ctx, namespace, ListOptions{
 		LabelFilters: filters,
-	})
+	}, resp)
 	if err != nil {
 		return nil, err
 	}
-	items := listObj.ListItems()
-	resp := TypedStoreList[T]{
-		Metadata: listObj.ListMetadata(),
-		Items:    make([]T, len(items)),
-	}
-	for idx, item := range items {
-		converted, err := t.cast(item)
-		if err != nil {
-			return nil, err
-		}
-		resp.Items[idx] = converted
-	}
-	return &resp, nil
+	return resp, nil
 }
 
 //nolint:revive
