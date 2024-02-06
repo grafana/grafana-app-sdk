@@ -41,7 +41,6 @@ type SchemaGroup interface {
 
 // SimpleSchema is a simple implementation of Schema. It can be used for constructing simple Schemas,
 // though the easiest way to define a schema is via codegen.
-// Deprecated: Kinds are now favored over Schemas for usage. Use TypedKind instead.
 // TODO: codegen info
 type SimpleSchema struct {
 	group   string
@@ -131,7 +130,6 @@ func WithScope(scope SchemaScope) func(schema *SimpleSchema) {
 }
 
 // NewSimpleSchema returns a new SimpleSchema
-// Deprecated: Kinds are now favored over Schemas for usage. Use NewTypedKind instead.
 func NewSimpleSchema(group, version string, zeroVal Object, opts ...SimpleSchemaOption) *SimpleSchema {
 	s := SimpleSchema{
 		group:   group,

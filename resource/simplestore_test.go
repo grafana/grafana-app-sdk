@@ -10,7 +10,7 @@ import (
 )
 
 func TestNewSimpleStore(t *testing.T) {
-	schema := NewTypedKind("g", "v", "k", &TypedSpecObject[int]{})
+	schema := Kind{NewSimpleSchema("g", "v", &TypedSpecObject[int]{}, WithKind("k")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	t.Run("type mismatch", func(t *testing.T) {
 		store, err := NewSimpleStore[string](schema, &mockClientGenerator{})
 		assert.Nil(t, store)
@@ -393,7 +393,7 @@ func getSimpleStoreTestSetup() (*SimpleStore[string], *mockClient) {
 			return client, nil
 		},
 	}
-	kind := NewTypedKind("g", "v", "test", &TypedSpecObject[string]{})
+	kind := Kind{NewSimpleSchema("g", "v", &TypedSpecObject[string]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store, _ := NewSimpleStore[string](kind, generator)
 	return store, client
 }

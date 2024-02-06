@@ -11,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func TestUntypedKind_Read(t *testing.T) {
+func TestJSONCodec_Read(t *testing.T) {
 	emptyJSONErr := json.NewDecoder(&bytes.Buffer{}).Decode(&struct{}{})
 	unexpectedEndErr := json.Unmarshal([]byte{}, &struct{}{})
 
@@ -73,16 +73,14 @@ func TestUntypedKind_Read(t *testing.T) {
 	}}
 
 	for _, test := range tests {
-		k := &UntypedKind{}
+		c := &JSONCodec{}
 
 		t.Run(test.name, func(t *testing.T) {
-			out, err := k.Read(bytes.NewReader(test.input), KindEncodingJSON)
+			out := &UntypedObject{}
+			err := c.Read(bytes.NewReader(test.input), out)
 			require.Equal(t, test.err, err)
 			if test.obj != nil {
-				require.NotNil(t, out)
-				obj, ok := out.(*UntypedObject)
-				require.True(t, ok, "output object is not of type *UntypedObject")
-				assert.Equal(t, *test.obj, *obj)
+				assert.Equal(t, *test.obj, *out)
 			}
 		})
 	}

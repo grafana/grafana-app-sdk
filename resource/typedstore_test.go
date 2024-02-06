@@ -11,7 +11,7 @@ import (
 )
 
 func TestNewTypedStore(t *testing.T) {
-	schema := NewTypedKind("g", "v", "k", &TypedSpecObject[int]{})
+	schema := Kind{NewSimpleSchema("g", "v", &TypedSpecObject[int]{}, WithKind("k")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	t.Run("type mismatch", func(t *testing.T) {
 		store, err := NewTypedStore[*TypedSpecStatusObject[string, string]](schema, &mockClientGenerator{})
 		assert.Nil(t, store)
@@ -460,7 +460,7 @@ func getTypedStoreTestSetup() (*TypedStore[*TypedSpecStatusObject[string, string
 			return client, nil
 		},
 	}
-	kind := NewTypedKind("g", "v", "test", &TypedSpecStatusObject[string, string]{})
+	kind := Kind{NewSimpleSchema("g", "v", &TypedSpecStatusObject[string, string]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store, _ := NewTypedStore[*TypedSpecStatusObject[string, string]](kind, generator)
 	return store, client
 }

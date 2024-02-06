@@ -18,8 +18,8 @@ type TypedStore[ObjectType Object] struct {
 
 // NewTypedStore creates a new TypedStore. The ObjectType and Schema.ZeroValue()'s underlying type should match.
 // If they do not, an error is returned.
-func NewTypedStore[ObjectType Object](schema Kind, generator ClientGenerator) (*TypedStore[ObjectType], error) {
-	schemaType := reflect.TypeOf(schema.ZeroValue())
+func NewTypedStore[ObjectType Object](kind Kind, generator ClientGenerator) (*TypedStore[ObjectType], error) {
+	schemaType := reflect.TypeOf(kind.ZeroValue())
 	providedType := reflect.TypeOf(new(ObjectType)).Elem()
 	// Get the actual underlying types
 	// Do both at once, because there needs to be casting ability between them
@@ -32,13 +32,13 @@ func NewTypedStore[ObjectType Object](schema Kind, generator ClientGenerator) (*
 			"underlying types of schema.ZeroValue() and provided ObjectType are not the same (%s != %s)",
 			schemaType.Name(), providedType.Name())
 	}
-	client, err := generator.ClientFor(schema)
+	client, err := generator.ClientFor(kind)
 	if err != nil {
 		return nil, fmt.Errorf("error getting client from generator: %w", err)
 	}
 	return &TypedStore[ObjectType]{
 		client: client,
-		sch:    schema,
+		sch:    &kind,
 	}, nil
 }
 

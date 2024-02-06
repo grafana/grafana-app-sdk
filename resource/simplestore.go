@@ -53,15 +53,15 @@ type SimpleStore[SpecType any] struct {
 // It will also error if a client cannot be created from the generator, as unlike Store, the client is generated once
 // and reused for all subsequent calls.
 // Deprecated: prefer using TypedStore instead
-func NewSimpleStore[SpecType any](schema Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
-	if reflect.TypeOf(schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {
+func NewSimpleStore[SpecType any](kind Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
+	if reflect.TypeOf(kind.Schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {
 		return nil, fmt.Errorf(
 			"SpecType '%s' does not match underlying schema.ZeroValue().SpecObject() type '%s'",
 			reflect.TypeOf(new(SpecType)).Elem(),
-			reflect.TypeOf(schema.ZeroValue().GetSpec()))
+			reflect.TypeOf(kind.ZeroValue().GetSpec()))
 	}
 
-	client, err := generator.ClientFor(schema)
+	client, err := generator.ClientFor(kind)
 	if err != nil {
 		return nil, fmt.Errorf("error getting client from generator: %w", err)
 	}

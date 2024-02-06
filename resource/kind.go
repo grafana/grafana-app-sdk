@@ -2,14 +2,10 @@ package resource
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
-	"strings"
 
-	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type KindEncoding string
@@ -22,334 +18,162 @@ const (
 )
 
 var (
-	_ Kind = &UntypedKind{}
-	_ Kind = &TypedKind[*UntypedObject]{}
+	_ Schema = &Kind{}
 )
 
-// KindReader describes any type capable of reading one or more Kind object bytes (in wire format) into a specific or generic Object.
-// KindReaders may be specific to a particular group/version/kind, or generic across any or all of group, version, and kind.
-// See TypedKind and UntypedKind as examples of KindReader implementations.
-type KindReader interface {
-	// Read consumes the wire-format bytes contained in the io.Reader, and unmarshals them into an instance of the
-	// Kind as an Object.
-	// It MAY return an error if the provided bytes are not of an expected group, version, and/or kind,
-	// and MUST return an error if the provided bytes are not of the proper shape to be unmarshaled as a kind, or cannot be unmarshaled for any other reason.
-	Read(in io.Reader, encoding KindEncoding) (Object, error)
-	// ReadInto consumes the wire-format bytes contained in the io.Reader, and unmarshals them into the provided Object.
-	// It MAY return an error if the provided bytes are not of an expected group, version, and/or kind, or if the provided `into` Object
-	// is not of a compatible underlying type, and MUST return an error if the provided bytes are not of the proper shape to be unmarshaled
-	// as a kind, or cannot be unmarshaled for any other reason.
-	ReadInto(in io.Reader, into Object, encoding KindEncoding) error
-}
-
-// KindWriter describes any type capable of writing out an Object into wire-format bytes.
-// KindWriters may be specific to a particular Group/Version/Kind, or generic across any or all of Group, Version, and Kind.
-// See TypedKind and UntypedKind as examples of KindWriter implementations.
-type KindWriter interface {
-	// Write consumes an Object-implementation of an instance of the Kind, and writes marshaled wire-format bytes
-	// to the provided io.Writer. It MAY return an error if the provided Object is not of the expected underlying type(s),
-	// and MUST return an error if the object cannot be marshaled into bytes.
-	Write(obj Object, out io.Writer, encoding KindEncoding) error
-}
-
-// KindReadWriter is an interface that combines KindReader and KindWriter
-type KindReadWriter interface {
-	KindReader
-	KindWriter
-}
-
-// Kind is an interface representing a kubernetes-compatible Kind, which contains information about the Kind's
-// Group, Version, Kind, Plural, and Scope, as well as allowing for creation of a zero-value version of the Kind as an
-// Object (which may contain default values for fields as decided by the implementation).
-// Additionally, Kind contains the logic for reading wire bytes into an Object instance of the Kind,
-// or serializing an Object instance of the Kind into wire bytes.
-// In this sense, Kind combines schema information and a serializer into one interface used to interact with the kind.
-type Kind interface {
-	KindReadWriter
+// SchemaWithCodecs is an interface which *Kind implements, and may be used in place of Kind.
+// TODO: On the fence about whether stores/clients should accept Kind or SchemaWithCodecs
+type SchemaWithCodecs interface {
 	Schema
+	Codec(KindEncoding) Codec
 }
 
-// NewKindGroup returns a new KindGroup with the provided group and version
-func NewKindGroup(group, version string) *KindGroup {
-	return &KindGroup{
-		group:   group,
-		version: version,
-		kinds:   make([]Kind, 0),
-	}
+// Codec is an interface which describes any object which can read and write Object implementations to/from bytes.
+// A codec is often specific to an encoding of the bytes in the reader/writer, and may also be specific to
+// Object implementations.
+type Codec interface {
+	Read(in io.Reader, into Object) error
+	Write(out io.Writer, obj Object) error
 }
 
-// KindGroup is a set of Kind objects which share the same Group and Version.
-type KindGroup struct {
-	group   string
-	version string
-	kinds   []Kind
+// Kind is a struct which encapsulates Schema information and Codecs for reading/writing Objects which are instances
+// of the contained Schema. It implements Schema using the Schema field.
+type Kind struct {
+	Schema Schema
+	Codecs map[KindEncoding]Codec
 }
 
-// Group returns the group value shared by all kinds in the KindGroup
-func (k *KindGroup) Group() string {
-	return k.group
+// Group returns Schema.Group() if Schema is non-nil, otherwise it returns an empty string
+func (k *Kind) Group() string {
+	if k.Schema == nil {
+		return ""
+	}
+	return k.Schema.Group()
 }
 
-// Version returns the version value shared by all kinds in the KindGroup
-func (k *KindGroup) Version() string {
-	return k.version
+// Version returns Schema.Version() if Schema is non-nil, otherwise it returns an empty string
+func (k *Kind) Version() string {
+	if k.Schema == nil {
+		return ""
+	}
+	return k.Schema.Version()
 }
 
-// Kinds returns the list of kinds registered with the group
-func (k *KindGroup) Kinds() []Kind {
-	return k.kinds
+// Kind returns Schema.Kind() if Schema is non-nil, otherwise it returns an empty string
+func (k *Kind) Kind() string {
+	if k.Schema == nil {
+		return ""
+	}
+	return k.Schema.Kind()
 }
 
-// AddKind adds a Kind to the group, if its Group() and Version() values match the KindGroup's.
-// Otherwise, it returns an error.
-func (k *KindGroup) AddKind(kind Kind) error {
-	if kind == nil {
-		return fmt.Errorf("kind cannot be nil")
+// Plural returns Schema.Plural() if Schema is non-nil, otherwise it returns an empty string
+func (k *Kind) Plural() string {
+	if k.Schema == nil {
+		return ""
 	}
-	if k.kinds == nil {
-		k.kinds = make([]Kind, 0)
-		if k.group == "" {
-			k.group = kind.Group()
-		}
-		if k.version == "" {
-			k.version = kind.Version()
-		}
-	}
-	if k.group != kind.Group() || k.version != kind.Version() {
-		return fmt.Errorf("kind group is restricted to group/version %s/%s, provided kind is %s/%s", k.group, k.version, kind.Group(), kind.Version())
-	}
-	k.kinds = append(k.kinds, kind)
-	return nil
+	return k.Schema.Plural()
 }
 
-// UntypedKind is a generic implementation of Kind, which will work for any kubernetes kind,
-// with Write consuming any Object and producing kubernetes bytes, and Read consuming any valid kubernetes kind bytes
-// and producing an *UntypedKind. The values for all getter methods are set via the corresponding struct fields.
-type UntypedKind struct {
-	// GVK is the group, version, and kind of the UntypedKind, returned by Group(), Version(), and Kind() respectively
-	GVK schema.GroupVersionKind
-	// PluralKind is the plural name of the Kind, returned via Plural()
-	PluralKind string
-	// KindScope is the scope of the Kind, returned by Scope()
-	KindScope SchemaScope
-	// ZeroObject is the *UntypedObject returned by ZeroValue(). This only needs to be non-nil if you do not want to use
-	// an empty *UntypedObject as the ZeroValue() return.
-	ZeroObject UntypedObject
+// Scope returns Schema.Scope() if Schema is non-nil, otherwise it returns an empty string
+func (k *Kind) Scope() SchemaScope {
+	if k.Schema == nil {
+		return ""
+	}
+	return k.Schema.Scope()
 }
 
-func (u *UntypedKind) Group() string {
-	return u.GVK.Group
-}
-func (u *UntypedKind) Version() string {
-	return u.GVK.Version
-}
-func (u *UntypedKind) Kind() string {
-	return u.GVK.Kind
-}
-func (u *UntypedKind) Plural() string {
-	if u.PluralKind == "" {
-		return strings.ToLower(u.GVK.Kind) + "s"
-	}
-	return u.PluralKind
-}
-func (u *UntypedKind) ZeroValue() Object {
-	return u.ZeroObject.Copy()
-}
-func (u *UntypedKind) Scope() SchemaScope {
-	if u.KindScope == SchemaScope("") {
-		return NamespacedScope
-	}
-	return u.KindScope
-}
-
-// Read reads in kubernetes JSON bytes for any kind and returns an *UntypedKind for those bytes
-func (u *UntypedKind) Read(in io.Reader, encoding KindEncoding) (Object, error) {
-	obj := &UntypedObject{}
-	if err := u.ReadInto(in, obj, encoding); err != nil {
-		return nil, err
-	}
-	return obj, nil
-}
-
-// ReadInto reads in kubernetes JSON bytes for any kind and attempts to unmarshal them into the provided `into` Object
-func (u *UntypedKind) ReadInto(in io.Reader, into Object, encoding KindEncoding) error {
-	if in == nil {
-		return fmt.Errorf("in io.Reader cannot be nil")
-	}
-	if into == nil {
-		return fmt.Errorf("into Object cannot be nil")
-	}
-	switch encoding {
-	case KindEncodingJSON:
-		return json.NewDecoder(in).Decode(&into)
-	case KindEncodingYAML:
-		return yaml.NewDecoder(in).Decode(&into)
-	}
-	return fmt.Errorf("cannot unmarshal unknown content encoding '%s'", encoding)
-}
-
-// Write takes in any Object and outputs a kubernetes object JSON
-func (u *UntypedKind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
-	m := make(map[string]any)
-	m["apiVersion"], m["kind"] = obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
-	m["metadata"] = metav1.ObjectMeta{
-		Name:                       obj.GetName(),
-		GenerateName:               obj.GetGenerateName(),
-		Namespace:                  obj.GetNamespace(),
-		SelfLink:                   obj.GetSelfLink(),
-		UID:                        obj.GetUID(),
-		ResourceVersion:            obj.GetResourceVersion(),
-		Generation:                 obj.GetGeneration(),
-		CreationTimestamp:          obj.GetCreationTimestamp(),
-		DeletionTimestamp:          obj.GetDeletionTimestamp(),
-		DeletionGracePeriodSeconds: obj.GetDeletionGracePeriodSeconds(),
-		Labels:                     obj.GetLabels(),
-		Annotations:                obj.GetAnnotations(),
-		OwnerReferences:            obj.GetOwnerReferences(),
-		Finalizers:                 obj.GetFinalizers(),
-		ManagedFields:              obj.GetManagedFields(),
-	}
-	m["spec"] = obj.GetSpec()
-	for k, v := range obj.GetSubresources() {
-		m[k] = v
-	}
-	switch encoding {
-	case KindEncodingJSON:
-		return json.NewEncoder(out).Encode(m)
-	case KindEncodingYAML:
-		return yaml.NewEncoder(out).Encode(m)
-	default:
-		return fmt.Errorf("cannot marshal unknown content encoding '%s'", encoding)
-	}
-}
-
-// NewTypedKind is a convenience function for creating a new instance of TypedKind.
-// It defaults all fields not required as arguments.
-func NewTypedKind[T Object](group, version, kind string, zeroObject T) *TypedKind[T] {
-	return &TypedKind[T]{
-		GVK: schema.GroupVersionKind{
-			Group:   group,
-			Version: version,
-			Kind:    kind,
-		},
-		PluralKind: fmt.Sprintf("%ss", strings.ToLower(kind)),
-		KindScope:  NamespacedScope,
-		ZeroObject: zeroObject,
-	}
-}
-
-// TypedKind is an implementation of Kind which uses a provided type param for the Object type to read into/read from.
-// TypedKind will allow for reading bytes of any kind and apiVersion, but will attempt to parse them into an Object of
-// type T.
-type TypedKind[T Object] struct {
-	GVK        schema.GroupVersionKind
-	PluralKind string
-	KindScope  SchemaScope
-	ZeroObject T
-}
-
-func (t *TypedKind[T]) Group() string {
-	return t.GVK.Group
-}
-func (t *TypedKind[T]) Version() string {
-	return t.GVK.Version
-}
-func (t *TypedKind[T]) Kind() string {
-	return t.GVK.Kind
-}
-func (t *TypedKind[T]) Plural() string {
-	if t.PluralKind == "" {
-		return strings.ToLower(t.GVK.Kind) + "s"
-	}
-	return t.PluralKind
-}
-func (t *TypedKind[T]) ZeroValue() Object {
-	var o Object = t.ZeroObject
-	if o == nil {
+// ZeroValue returns the ZeroValue() function of the Schema, or an *UntypedObject if the Schema is nil.
+func (k *Kind) ZeroValue() Object {
+	if k.Schema == nil {
 		return &UntypedObject{}
 	}
-	fmt.Println(o)
-	return o.Copy()
-}
-func (t *TypedKind[T]) Scope() SchemaScope {
-	if t.KindScope == "" {
-		return NamespacedScope
-	}
-	return t.KindScope
+	return k.Schema.ZeroValue()
 }
 
-func (t *TypedKind[T]) Read(in io.Reader, encoding KindEncoding) (Object, error) {
-	into := new(T) // TODO: use ZeroValue instead?
-	// TODO: better way of unmarshaling into the object...
-	bytes, err := io.ReadAll(in)
+// Codec is a nil-safe way of accessing the Codecs map in the Kind.
+// It will return nil if the map key does not exist, or the key is explicitly set to nil.
+func (k *Kind) Codec(encoding KindEncoding) Codec {
+	if k.Codecs == nil {
+		return nil
+	}
+	return k.Codecs[encoding]
+}
+
+func NewJSONCodec() *JSONCodec {
+	return &JSONCodec{}
+}
+
+// JSONCodec is a Codec-implementing struct that reads and writes kubernetes-formatted JSON bytes.
+type JSONCodec struct{}
+
+// Read is a simple wrapper for the json package unmarshal into the object.
+// TODO: expect kubernetes-formatted bytes on input?
+func (j *JSONCodec) Read(in io.Reader, out Object) error {
+	// TODO: keep it this basic compared to Write?
+	return json.NewDecoder(in).Decode(&out)
+	/*m := make(map[string]json.RawMessage)
+	err := json.NewDecoder(in).Decode(m)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	switch encoding {
-	case KindEncodingJSON:
-		err = json.Unmarshal(bytes, into)
+
+	// GVK
+	kind, apiVersion := "", ""
+	if encKind, ok := m["kind"]; ok {
+		err = json.Unmarshal(encKind, &kind)
 		if err != nil {
-			return nil, err
+			return fmt.Errorf("error unmarshaling kind: %w", err)
 		}
-	case KindEncodingYAML:
-		err = yaml.Unmarshal(bytes, into)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("cannot unmarshal unknown content encoding '%s'", encoding)
+	} else {
+		return fmt.Errorf("provided JSON bytes do not contain root-level field 'kind'")
 	}
-	return *into, nil
+	if encAPIVersion, ok := m["apiVersion"]; ok {
+		err = json.Unmarshal(encAPIVersion, &apiVersion)
+		if err != nil {
+			return fmt.Errorf("error unmarshaling apiVersion: %w", err)
+		}
+	} else {
+		return fmt.Errorf("provided JSON bytes do not contain root-level field 'kind'")
+	}
+	out.SetGroupVersionKind(schema.FromAPIVersionAndKind(apiVersion, kind))
+
+	// Metadata
+
+	// Spec
+	// Reflection?
+
+	// Subresources
+	// Reflection?
+	*/
 }
 
-func (t *TypedKind[T]) ReadInto(in io.Reader, into Object, encoding KindEncoding) error {
-	cast, ok := into.(T)
-	if !ok {
-		return fmt.Errorf("into must be of type parameter T (provided type %#v)", into)
-	}
-	switch encoding {
-	case KindEncodingJSON:
-		return json.NewDecoder(in).Decode(cast)
-	case KindEncodingYAML:
-		return yaml.NewDecoder(in).Decode(cast)
-	}
-	return fmt.Errorf("cannot unmarshal unknown content encoding '%s'", encoding)
-}
-
-// Write takes in any Object and outputs a kubernetes object JSON.
-// This is an identical call to UntypedKind.Write, as they both do not examine the underlying typing of the obj
-func (t *TypedKind[T]) Write(obj Object, out io.Writer, encoding KindEncoding) error {
+// Write marshals the provided Object into kubernetes-formatted JSON bytes.
+func (j *JSONCodec) Write(out io.Writer, in Object) error {
 	m := make(map[string]any)
-	m["apiVersion"], m["kind"] = obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
+	m["apiVersion"], m["kind"] = in.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
 	m["metadata"] = metav1.ObjectMeta{
-		Name:                       obj.GetName(),
-		GenerateName:               obj.GetGenerateName(),
-		Namespace:                  obj.GetNamespace(),
-		SelfLink:                   obj.GetSelfLink(),
-		UID:                        obj.GetUID(),
-		ResourceVersion:            obj.GetResourceVersion(),
-		Generation:                 obj.GetGeneration(),
-		CreationTimestamp:          obj.GetCreationTimestamp(),
-		DeletionTimestamp:          obj.GetDeletionTimestamp(),
-		DeletionGracePeriodSeconds: obj.GetDeletionGracePeriodSeconds(),
-		Labels:                     obj.GetLabels(),
-		Annotations:                obj.GetAnnotations(),
-		OwnerReferences:            obj.GetOwnerReferences(),
-		Finalizers:                 obj.GetFinalizers(),
-		ManagedFields:              obj.GetManagedFields(),
+		Name:                       in.GetName(),
+		GenerateName:               in.GetGenerateName(),
+		Namespace:                  in.GetNamespace(),
+		SelfLink:                   in.GetSelfLink(),
+		UID:                        in.GetUID(),
+		ResourceVersion:            in.GetResourceVersion(),
+		Generation:                 in.GetGeneration(),
+		CreationTimestamp:          in.GetCreationTimestamp(),
+		DeletionTimestamp:          in.GetDeletionTimestamp(),
+		DeletionGracePeriodSeconds: in.GetDeletionGracePeriodSeconds(),
+		Labels:                     in.GetLabels(),
+		Annotations:                in.GetAnnotations(),
+		OwnerReferences:            in.GetOwnerReferences(),
+		Finalizers:                 in.GetFinalizers(),
+		ManagedFields:              in.GetManagedFields(),
 	}
-	m["spec"] = obj.GetSpec()
-	for k, v := range obj.GetSubresources() {
+	m["spec"] = in.GetSpec()
+	for k, v := range in.GetSubresources() {
 		m[k] = v
 	}
-	switch encoding {
-	case KindEncodingJSON:
-		return json.NewEncoder(out).Encode(m)
-	case KindEncodingYAML:
-		return yaml.NewEncoder(out).Encode(m)
-	default:
-		return fmt.Errorf("cannot marshal unknown content encoding '%s'", encoding)
-	}
+	return json.NewEncoder(out).Encode(m)
 }
 
 type TypedList[T Object] struct {
