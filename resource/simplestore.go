@@ -12,6 +12,8 @@ import (
 // ObjectMetadataOption is a function which updates an ObjectMetadata
 type ObjectMetadataOption func(o *metav1.ObjectMeta)
 
+type SimpleStoreObject[T any] TypedObject[T, map[string]any]
+
 // WithLabels sets the labels of an ObjectMetadata
 func WithLabels(labels map[string]string) ObjectMetadataOption {
 	return func(o *metav1.ObjectMeta) {
@@ -41,6 +43,7 @@ func WithResourceVersion(resourceVersion string) ObjectMetadataOption {
 // allowing the user to work with the actual type in the Schema Object's spec,
 // without casting in and out of the Object interface.
 // It should be instantiated with NewSimpleStore.
+// Deprecated: prefer using TypedStore instead
 type SimpleStore[SpecType any] struct {
 	client Client
 }
@@ -49,6 +52,7 @@ type SimpleStore[SpecType any] struct {
 // It will error if the type of the Schema.ZeroValue().SpecObject() does not match the provided SpecType.
 // It will also error if a client cannot be created from the generator, as unlike Store, the client is generated once
 // and reused for all subsequent calls.
+// Deprecated: prefer using TypedStore instead
 func NewSimpleStore[SpecType any](schema Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
 	if reflect.TypeOf(schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {
 		return nil, fmt.Errorf(
@@ -70,7 +74,7 @@ func NewSimpleStore[SpecType any](schema Kind, generator ClientGenerator) (*Simp
 // List returns a list of all resources of the Schema type in the provided namespace,
 // optionally matching the provided filters.
 func (s *SimpleStore[T]) List(ctx context.Context, namespace string, filters ...string) (
-	[]TypedSpecObject[T], error) {
+	[]TypedObject[T, MapSubresourceCatalog], error) {
 	listObj, err := s.client.List(ctx, namespace, ListOptions{
 		LabelFilters: filters,
 	})
@@ -78,7 +82,7 @@ func (s *SimpleStore[T]) List(ctx context.Context, namespace string, filters ...
 		return nil, err
 	}
 	items := listObj.GetItems()
-	list := make([]TypedSpecObject[T], len(items))
+	list := make([]TypedObject[T, MapSubresourceCatalog], len(items))
 	for idx, item := range items {
 		converted, err := s.cast(item)
 		if err != nil {
@@ -90,7 +94,7 @@ func (s *SimpleStore[T]) List(ctx context.Context, namespace string, filters ...
 }
 
 // Get gets an object with the provided identifier
-func (s *SimpleStore[T]) Get(ctx context.Context, identifier Identifier) (*TypedSpecObject[T], error) {
+func (s *SimpleStore[T]) Get(ctx context.Context, identifier Identifier) (*TypedObject[T, MapSubresourceCatalog], error) {
 	obj, err := s.client.Get(ctx, identifier)
 	if err != nil {
 		return nil, err
@@ -100,8 +104,8 @@ func (s *SimpleStore[T]) Get(ctx context.Context, identifier Identifier) (*Typed
 
 // Add creates a new object
 func (s *SimpleStore[T]) Add(ctx context.Context, identifier Identifier, obj T, opts ...ObjectMetadataOption) (
-	*TypedSpecObject[T], error) {
-	object := TypedSpecObject[T]{
+	*TypedObject[T, MapSubresourceCatalog], error) {
+	object := TypedObject[T, MapSubresourceCatalog]{
 		Spec: obj,
 	}
 	for _, opt := range opts {
@@ -118,8 +122,8 @@ func (s *SimpleStore[T]) Add(ctx context.Context, identifier Identifier, obj T, 
 // If the WithResourceVersion option is used, the update will fail if the object's ResourceVersion in the store
 // doesn't match the one provided in WithResourceVersion.
 func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj T, opts ...ObjectMetadataOption) (
-	*TypedSpecObject[T], error) {
-	object := TypedSpecObject[T]{
+	*TypedObject[T, MapSubresourceCatalog], error) {
+	object := TypedObject[T, MapSubresourceCatalog]{
 		Spec: obj,
 	}
 	// Before we can run the opts on the metadata, we need the current metadata
@@ -152,12 +156,12 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 // If the WithResourceVersion option is used, the update will fail if the object's ResourceVersion in the store
 // doesn't match the one provided in WithResourceVersion.
 func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier, subresource SubresourceName,
-	obj any) (*TypedSpecObject[T], error) {
+	obj any) (*TypedObject[T, MapSubresourceCatalog], error) {
 	if subresource == "" {
 		return nil, fmt.Errorf("subresource may not be empty")
 	}
-	object := TypedSpecObject[T]{
-		Subresources: map[string]any{
+	object := TypedObject[T, MapSubresourceCatalog]{
+		Subresources: MapSubresourceCatalog{
 			string(subresource): obj,
 		},
 	}
@@ -176,9 +180,11 @@ func (s *SimpleStore[T]) Delete(ctx context.Context, identifier Identifier) erro
 	return s.client.Delete(ctx, identifier)
 }
 
+type MapSubresourceCatalog map[string]any
+
 //nolint:revive
-func (s *SimpleStore[T]) cast(obj Object) (*TypedSpecObject[T], error) {
-	if cast, ok := obj.(*TypedSpecObject[T]); ok {
+func (s *SimpleStore[T]) cast(obj Object) (*TypedObject[T, MapSubresourceCatalog], error) {
+	if cast, ok := obj.(*TypedObject[T, MapSubresourceCatalog]); ok {
 		return cast, nil
 	}
 	spec, ok := obj.GetSpec().(T)
@@ -186,7 +192,7 @@ func (s *SimpleStore[T]) cast(obj Object) (*TypedSpecObject[T], error) {
 		return nil, fmt.Errorf("returned object could not be cast to store's type")
 	}
 	apiVersion, kind := obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
-	return &TypedSpecObject[T]{
+	return &TypedObject[T, MapSubresourceCatalog]{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       kind,
 			APIVersion: apiVersion,

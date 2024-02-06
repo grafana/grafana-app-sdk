@@ -76,7 +76,7 @@ func TestUntypedKind_Read(t *testing.T) {
 		k := &UntypedKind{}
 
 		t.Run(test.name, func(t *testing.T) {
-			out, err := k.Read(bytes.NewReader(test.input))
+			out, err := k.Read(bytes.NewReader(test.input), KindEncodingJSON)
 			require.Equal(t, test.err, err)
 			if test.obj != nil {
 				require.NotNil(t, out)

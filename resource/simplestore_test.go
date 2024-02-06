@@ -328,8 +328,8 @@ func TestSimpleStore_List(t *testing.T) {
 	store, client := getSimpleStoreTestSetup()
 	ctx := context.TODO()
 	ns := "ns"
-	list := &TypedList[*TypedSpecObject[string]]{
-		Items: []*TypedSpecObject[string]{
+	list := &TypedList[*TypedObject[string, MapSubresourceCatalog]]{
+		Items: []*TypedObject[string, MapSubresourceCatalog]{
 			{
 				Spec: "a",
 			},

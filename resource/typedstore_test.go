@@ -13,9 +13,9 @@ import (
 func TestNewTypedStore(t *testing.T) {
 	schema := NewTypedKind("g", "v", "k", &TypedSpecObject[int]{})
 	t.Run("type mismatch", func(t *testing.T) {
-		store, err := NewTypedStore[*TypedSpecObject[string]](schema, &mockClientGenerator{})
+		store, err := NewTypedStore[*TypedSpecStatusObject[string, string]](schema, &mockClientGenerator{})
 		assert.Nil(t, store)
-		assert.Equal(t, fmt.Errorf("underlying types of schema.ZeroValue() and provided ObjectType are not the same (TypedSpecObject[int] != TypedSpecObject[string])"), err)
+		assert.Equal(t, fmt.Errorf("underlying types of schema.ZeroValue() and provided ObjectType are not the same (TypedSpecObject[int] != TypedSpecStatusObject[string,string])"), err)
 	})
 
 	t.Run("clientGenerator error", func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestTypedStore_Get(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		obj := &TypedSpecObject[string]{
+		obj := &TypedSpecStatusObject[string, string]{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:            "test",
 				ResourceVersion: "123",
@@ -88,7 +88,7 @@ func TestTypedStore_Get(t *testing.T) {
 func TestTypedStore_Add(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()
-	addObj := &TypedSpecObject[string]{
+	addObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "ns",
 			Name:            "test",
@@ -96,7 +96,7 @@ func TestTypedStore_Add(t *testing.T) {
 		},
 		Spec: "bar",
 	}
-	retObj := &TypedSpecObject[string]{
+	retObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "test",
 			ResourceVersion: "123",
@@ -131,7 +131,7 @@ func TestTypedStore_Add(t *testing.T) {
 func TestTypedStore_Update(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()
-	updateObj := &TypedSpecObject[string]{
+	updateObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "ns",
 			Name:            "test",
@@ -139,7 +139,7 @@ func TestTypedStore_Update(t *testing.T) {
 		},
 		Spec: "bar",
 	}
-	retObj := &TypedSpecObject[string]{
+	retObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "test",
 			ResourceVersion: "123",
@@ -180,7 +180,7 @@ func TestTypedStore_Update(t *testing.T) {
 func TestTypedStore_Upsert(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()
-	updateObj := &TypedSpecObject[string]{
+	updateObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "ns",
 			Name:            "test",
@@ -189,7 +189,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 		Spec: "bar",
 	}
 
-	retObj := &TypedSpecObject[string]{
+	retObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "test",
 			ResourceVersion: "123",
@@ -275,17 +275,15 @@ func TestTypedStore_Upsert(t *testing.T) {
 func TestTypedStore_UpdateSubresource(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()
-	updateObj := &TypedSpecObject[string]{
+	updateObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "ns",
 			Name:            "test",
 			ResourceVersion: "abc",
 		},
-		Subresources: map[string]any{
-			string(SubresourceStatus): "foo",
-		},
+		Status: "foo",
 	}
-	retObj := &TypedSpecObject[string]{
+	retObj := &TypedSpecStatusObject[string, string]{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:            "test",
 			ResourceVersion: "123",
@@ -395,8 +393,8 @@ func TestTypedStore_List(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()
 	ns := "ns"
-	list := &TypedList[*TypedSpecObject[string]]{
-		Items: []*TypedSpecObject[string]{
+	list := &TypedList[*TypedSpecStatusObject[string, string]]{
+		Items: []*TypedSpecStatusObject[string, string]{
 			{
 				Spec: "a",
 			},
@@ -430,7 +428,7 @@ func TestTypedStore_List(t *testing.T) {
 			assert.Equal(t, list.Items[i].Spec, ret.Items[i].Spec)
 			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret.Items[i].GetStaticMetadata())
 			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret.Items[i].GetCommonMetadata())
-			assert.Equal(t, list.Items[i].Subresources, ret.Items[i].Subresources)
+			assert.Equal(t, list.Items[i].Status, ret.Items[i].Status)
 		}
 	})
 
@@ -450,19 +448,19 @@ func TestTypedStore_List(t *testing.T) {
 			assert.Equal(t, list.Items[i].Spec, ret.Items[i].Spec)
 			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret.Items[i].GetStaticMetadata())
 			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret.Items[i].GetCommonMetadata())
-			assert.Equal(t, list.Items[i].Subresources, ret.Items[i].Subresources)
+			assert.Equal(t, list.Items[i].Status, ret.Items[i].Status)
 		}
 	})
 }
 
-func getTypedStoreTestSetup() (*TypedStore[*TypedSpecObject[string]], *mockClient) {
+func getTypedStoreTestSetup() (*TypedStore[*TypedSpecStatusObject[string, string]], *mockClient) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{
 		ClientForFunc: func(kind Kind) (Client, error) {
 			return client, nil
 		},
 	}
-	kind := NewTypedKind("g", "v", "test", &TypedSpecObject[string]{})
-	store, _ := NewTypedStore[*TypedSpecObject[string]](kind, generator)
+	kind := NewTypedKind("g", "v", "test", &TypedSpecStatusObject[string, string]{})
+	store, _ := NewTypedStore[*TypedSpecStatusObject[string, string]](kind, generator)
 	return store, client
 }

@@ -26,12 +26,6 @@ type TypedSpecObject[T any] struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Spec              T `json:"spec"`
-	// TODO: should this be map[string]any, or map[string]json.RawMessage?
-	// json.RawMessage is clearer about what it is, but it locks it to being JSON bytes
-	// any doesn't tell you anything, so the user needs to have a priori knowledge or do type checks/reflection
-	// It started as json.RawMessage, but for usefulness in SimpleStore I changed it to any--but SimpleStore
-	// may also be deprecated soon...
-	Subresources map[string]any `json:"-"`
 }
 
 func (t *TypedSpecObject[T]) GetStaticMetadata() StaticMetadata {
@@ -131,38 +125,15 @@ func (t *TypedSpecObject[T]) SetSpec(spec any) error {
 }
 
 func (t *TypedSpecObject[T]) GetSubresources() map[string]any {
-	sr := make(map[string]any)
-	for k, v := range t.Subresources {
-		sr[k] = v
-	}
-	return sr
+	return map[string]any{}
 }
 
 func (t *TypedSpecObject[T]) GetSubresource(key string) (any, bool) {
-	if sr, ok := t.Subresources[key]; ok {
-		return sr, true
-	}
 	return nil, false
 }
 
 func (t *TypedSpecObject[T]) SetSubresource(key string, val any) error {
-	cast, ok := val.(json.RawMessage)
-	if !ok {
-		if check, ok := val.([]byte); ok {
-			cast = check
-		} else {
-			var err error
-			cast, err = json.Marshal(val)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	if t.Subresources == nil {
-		t.Subresources = make(map[string]any)
-	}
-	t.Subresources[key] = cast
-	return nil
+	return fmt.Errorf("TypedSpecObject does not allow subresources")
 }
 
 func (t *TypedSpecObject[T]) DeepCopyObject() runtime.Object {
@@ -182,60 +153,7 @@ func (t *TypedSpecObject[T]) Copy() Object {
 	} else if err := json.Unmarshal(specBytes, &cpy.Spec); err != nil {
 		// Again, we shouldn't be hitting here with normal data, but we don't want to panic
 	}
-	srBytes, err := json.Marshal(t.Subresources)
-	if err != nil {
-		// We really shouldn't end up here, but we don't want to panic. So we actually do nothing
-	} else if err := json.Unmarshal(srBytes, &cpy.Subresources); err != nil {
-		// Again, we shouldn't be hitting here with normal data, but we don't want to panic
-	}
 	return cpy
-}
-
-func (t *TypedSpecObject[T]) MarshalJSON() ([]byte, error) {
-	m := make(map[string]any)
-	m["kind"] = t.Kind
-	m["apiVersion"] = t.APIVersion
-	m["metadata"] = t.ObjectMeta
-	m["spec"] = t.Spec
-	for k, v := range t.Subresources {
-		m[k] = v
-	}
-	return json.Marshal(m)
-}
-
-func (t *TypedSpecObject[T]) UnmarshalJSON(data []byte) error {
-	m := make(map[string]json.RawMessage)
-	err := json.Unmarshal(data, &m)
-	if err != nil {
-		return err
-	}
-	if err = json.Unmarshal(m["apiVersion"], &t.TypeMeta.APIVersion); err != nil {
-		return fmt.Errorf("error reading apiVersion: %w", err)
-	}
-	if err = json.Unmarshal(m["kind"], &t.TypeMeta.Kind); err != nil {
-		return fmt.Errorf("error reading kind: %w", err)
-	}
-	if err = json.Unmarshal(m["metadata"], &t.ObjectMeta); err != nil {
-		return fmt.Errorf("error reading metadata: %w", err)
-	}
-	for k, v := range m {
-		if k == "apiVersion" || k == "kind" || k == "metadata" {
-			continue
-		}
-		if k == "spec" {
-			spec := new(T)
-			t.Spec = *spec
-			if err = json.Unmarshal(v, &t.Spec); err != nil {
-				return err
-			}
-			continue
-		}
-		if t.Subresources == nil {
-			t.Subresources = make(map[string]any)
-		}
-		t.Subresources[k] = v
-	}
-	return nil
 }
 
 // TypedSpecStatusObject is an implementation of Object which has a typed Spec and Status subresource.
@@ -394,6 +312,9 @@ func (t *TypedSpecStatusObject[T, S]) Copy() Object {
 
 // TypedObject is an implementation of Object which has a typed Spec, and an arbitrary set of typed subresources
 // governed by top-level exported fields of the SubresourceCatalog type.
+// It is generally more efficient to use a bespoke Object implementation, or TypedSpecObject or TypedSpecStatusObject,
+// as this type requires the use of more complex generic logic for JSON marshal/unmarshal and the Subresource methods
+// used in Object.
 type TypedObject[Spec, SubresourceCatalog any] struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -498,18 +419,88 @@ func (t *TypedObject[Spec, Sub]) SetSpec(spec any) error {
 }
 
 func (t *TypedObject[Spec, Sub]) GetSubresources() map[string]any {
-	// TODO
-	return nil
+	sr := make(map[string]any)
+	// TODO: better way than reflection?
+	val := reflect.ValueOf(t.Subresources)
+
+	switch val.Kind() {
+	case reflect.Struct:
+		typ := reflect.TypeOf(t.Subresources)
+		for i := 0; i < val.NumField(); i++ {
+			sr[getFieldName(typ.Field(i))] = val.Field(i).Interface()
+		}
+	case reflect.Map:
+		for _, key := range val.MapKeys() {
+			sr[key.String()] = val.MapIndex(key).Interface()
+		}
+	default:
+		return nil
+	}
+	return sr
 }
 
 func (t *TypedObject[Spec, Sub]) GetSubresource(key string) (any, bool) {
-	// TODO
+	val := reflect.ValueOf(t.Subresources)
+
+	switch val.Kind() {
+	case reflect.Struct:
+		typ := reflect.TypeOf(t.Subresources)
+		for i := 0; i < val.NumField(); i++ {
+			if getFieldName(typ.Field(i)) == key {
+				return val.Field(i).Interface(), true
+			}
+		}
+	case reflect.Map:
+		for _, k := range val.MapKeys() {
+			if k.String() == key {
+				return val.MapIndex(k).Interface(), true
+			}
+		}
+	default:
+		return nil, false
+	}
 	return nil, false
 }
 
-func (t *TypedObject[Spec, Sub]) SetSubresource(key string, val any) error {
-	// TODO
-	return nil
+func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
+	typ := reflect.TypeOf(t.Subresources)
+	val := reflect.ValueOf(t.Subresources)
+
+	switch val.Kind() {
+	case reflect.Struct:
+		for i := 0; i < val.NumField(); i++ {
+			if getFieldName(typ.Field(i)) == key {
+				if typ.Field(i).Type != reflect.TypeOf(value) {
+					return fmt.Errorf("cannot assign value of type %s to subresource '%s' of type %s", reflect.TypeOf(value).String(), key, typ.Field(i).Type.String())
+				}
+				field := reflect.ValueOf(&t.Subresources).Elem().Field(i)
+				if !field.CanSet() {
+					return fmt.Errorf("cannot set value")
+				}
+				field.Set(reflect.ValueOf(value))
+				return nil
+			}
+		}
+	case reflect.Map:
+		if val.IsNil() {
+			ok := false
+			t.Subresources, ok = reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())).Interface().(Sub)
+			if !ok {
+				return fmt.Errorf("subresource catalog is a nil map which could not be instantiated")
+			}
+		}
+		if !reflect.TypeOf(key).AssignableTo(typ.Key()) {
+			return fmt.Errorf("subresource map has an unassignable key type of '%s'", typ.Key().String())
+		}
+		if !reflect.TypeOf(value).AssignableTo(typ.Elem()) {
+			return fmt.Errorf("subresource map requires a value of type '%s', provided value '%s' is not assignable", typ.Elem().String(), reflect.TypeOf(value))
+		}
+		val.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
+		return nil
+	default:
+	}
+
+	return fmt.Errorf("subresource '%s' does not exist", key)
 }
 
 func (t *TypedObject[Spec, Sub]) DeepCopyObject() runtime.Object {
@@ -587,4 +578,13 @@ func (t *TypedObject[Spec, Sub]) UnmarshalJSON(data []byte) error {
 		return fmt.Errorf("error reading spec: %w", err)
 	}
 	return json.Unmarshal(data, &t.Subresources)
+}
+
+func getFieldName(field reflect.StructField) string {
+	name := field.Name
+	if tag, ok := field.Tag.Lookup("json"); ok {
+		split := strings.Split(tag, ",")
+		name = split[0]
+	}
+	return name
 }
