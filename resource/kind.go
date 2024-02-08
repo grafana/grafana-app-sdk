@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -39,56 +40,8 @@ type Codec interface {
 // Kind is a struct which encapsulates Schema information and Codecs for reading/writing Objects which are instances
 // of the contained Schema. It implements Schema using the Schema field.
 type Kind struct {
-	Schema Schema
+	Schema
 	Codecs map[KindEncoding]Codec
-}
-
-// Group returns Schema.Group() if Schema is non-nil, otherwise it returns an empty string
-func (k *Kind) Group() string {
-	if k.Schema == nil {
-		return ""
-	}
-	return k.Schema.Group()
-}
-
-// Version returns Schema.Version() if Schema is non-nil, otherwise it returns an empty string
-func (k *Kind) Version() string {
-	if k.Schema == nil {
-		return ""
-	}
-	return k.Schema.Version()
-}
-
-// Kind returns Schema.Kind() if Schema is non-nil, otherwise it returns an empty string
-func (k *Kind) Kind() string {
-	if k.Schema == nil {
-		return ""
-	}
-	return k.Schema.Kind()
-}
-
-// Plural returns Schema.Plural() if Schema is non-nil, otherwise it returns an empty string
-func (k *Kind) Plural() string {
-	if k.Schema == nil {
-		return ""
-	}
-	return k.Schema.Plural()
-}
-
-// Scope returns Schema.Scope() if Schema is non-nil, otherwise it returns an empty string
-func (k *Kind) Scope() SchemaScope {
-	if k.Schema == nil {
-		return ""
-	}
-	return k.Schema.Scope()
-}
-
-// ZeroValue returns the ZeroValue() function of the Schema, or an *UntypedObject if the Schema is nil.
-func (k *Kind) ZeroValue() Object {
-	if k.Schema == nil {
-		return &UntypedObject{}
-	}
-	return k.Schema.ZeroValue()
 }
 
 // Codec is a nil-safe way of accessing the Codecs map in the Kind.
@@ -98,6 +51,29 @@ func (k *Kind) Codec(encoding KindEncoding) Codec {
 		return nil
 	}
 	return k.Codecs[encoding]
+}
+
+// Read is a convenience wrapper for getting the Codec for a particular KindEncoding and reading into Schema.ZeroObject()
+func (k *Kind) Read(in io.Reader, encoding KindEncoding) (Object, error) {
+	codec := k.Codec(encoding)
+	if codec == nil {
+		return nil, fmt.Errorf("no codec for encoding '%s'", encoding)
+	}
+	into := k.ZeroValue()
+	err := codec.Read(in, into)
+	if err != nil {
+		return nil, err
+	}
+	return into, nil
+}
+
+// Write is a convenience wrapper for getting the Codec for a particular KindEncoding and calling Codec.Write
+func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
+	codec := k.Codec(encoding)
+	if codec == nil {
+		return fmt.Errorf("no codec for encoding '%s'", encoding)
+	}
+	return codec.Write(out, obj)
 }
 
 func NewJSONCodec() *JSONCodec {

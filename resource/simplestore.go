@@ -9,33 +9,41 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// SimpleStoreMetadata is a representation of the Metadata used in the TypedObject returned by SimpleStore,
+// and is used for the ObjectMetadataOption argument.
+type SimpleStoreMetadata interface {
+	metav1.Object
+}
+
 // ObjectMetadataOption is a function which updates an ObjectMetadata
-type ObjectMetadataOption func(o *metav1.ObjectMeta)
+type ObjectMetadataOption func(o SimpleStoreMetadata)
 
 type SimpleStoreObject[T any] TypedObject[T, map[string]any]
 
 // WithLabels sets the labels of an ObjectMetadata
 func WithLabels(labels map[string]string) ObjectMetadataOption {
-	return func(o *metav1.ObjectMeta) {
-		o.Labels = labels
+	return func(o SimpleStoreMetadata) {
+		o.SetLabels(labels)
 	}
 }
 
 // WithLabel sets a specific key in the labels of an ObjectMetadata
 func WithLabel(key, value string) ObjectMetadataOption {
-	return func(o *metav1.ObjectMeta) {
-		if o.Labels == nil {
-			o.Labels = make(map[string]string)
+	return func(o SimpleStoreMetadata) {
+		labels := o.GetLabels()
+		if labels == nil {
+			labels = make(map[string]string)
 		}
-		o.Labels[key] = value
+		labels[key] = value
+		o.SetLabels(labels)
 	}
 }
 
 // WithResourceVersion sets the ResourceVersion to the supplied resourceVersion.
 // This allows you to ensure that an update will fail if the version in the store doesn't match the one you supplied.
 func WithResourceVersion(resourceVersion string) ObjectMetadataOption {
-	return func(o *metav1.ObjectMeta) {
-		o.ResourceVersion = resourceVersion
+	return func(o SimpleStoreMetadata) {
+		o.SetResourceVersion(resourceVersion)
 	}
 }
 
