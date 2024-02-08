@@ -22,13 +22,6 @@ var (
 	_ Schema = &Kind{}
 )
 
-// SchemaWithCodecs is an interface which *Kind implements, and may be used in place of Kind.
-// TODO: On the fence about whether stores/clients should accept Kind or SchemaWithCodecs
-type SchemaWithCodecs interface {
-	Schema
-	Codec(KindEncoding) Codec
-}
-
 // Codec is an interface which describes any object which can read and write Object implementations to/from bytes.
 // A codec is often specific to an encoding of the bytes in the reader/writer, and may also be specific to
 // Object implementations.
