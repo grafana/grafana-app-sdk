@@ -10,6 +10,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestNewOpinionatedReconciler(t *testing.T) {
@@ -43,7 +44,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		patchCalled := false
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[int]{},
+			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -52,7 +53,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 				assert.Equal(t, ctx, c)
-				assert.Equal(t, req.Object.StaticMetadata().Identifier(), identifier)
+				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
 						Path:      "/metadata/finalizers",
@@ -88,7 +89,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 	t.Run("normal add with error", func(t *testing.T) {
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[int]{},
+			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -122,7 +123,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		patchCalled := false
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[int]{},
+			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -132,7 +133,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 				assert.Equal(t, ctx, c)
-				assert.Equal(t, req.Object.StaticMetadata().Identifier(), identifier)
+				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
 						Path:      "/metadata/finalizers",
@@ -170,7 +171,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		patchCalled := false
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[int]{},
+			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
 				opinionatedReconcilerPatchStateKey: errors.New("I AM ERROR"),
 			},
@@ -179,7 +180,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 				assert.Equal(t, ctx, c)
-				assert.Equal(t, req.Object.StaticMetadata().Identifier(), identifier)
+				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
 						Path:      "/metadata/finalizers",
@@ -207,11 +208,9 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 	t.Run("add to resync", func(t *testing.T) {
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[int]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						Finalizers: []string{finalizer},
-					},
+			Object: &resource.TypedSpecObject[int]{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers: []string{finalizer},
 				},
 			},
 			State: map[string]any{
@@ -248,11 +247,9 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 	t.Run("normal update", func(t *testing.T) {
 		req := ReconcileRequest{
 			Action: ReconcileActionUpdated,
-			Object: &resource.SimpleObject[int]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						Finalizers: []string{finalizer},
-					},
+			Object: &resource.TypedSpecObject[int]{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers: []string{finalizer},
 				},
 			},
 			State: map[string]any{
@@ -288,7 +285,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		patchCalled := false
 		req := ReconcileRequest{
 			Action: ReconcileActionUpdated,
-			Object: &resource.SimpleObject[int]{},
+			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -297,7 +294,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 				assert.Equal(t, ctx, c)
-				assert.Equal(t, req.Object.StaticMetadata().Identifier(), identifier)
+				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
 						Path:      "/metadata/finalizers",
@@ -324,15 +321,13 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 
 	t.Run("update with non-nil deletionTimestamp", func(t *testing.T) {
 		patchCalled := false
-		deleted := time.Now()
+		deleted := metav1.NewTime(time.Now())
 		req := ReconcileRequest{
 			Action: ReconcileActionUpdated,
-			Object: &resource.SimpleObject[int]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						DeletionTimestamp: &deleted,
-						Finalizers:        []string{finalizer},
-					},
+			Object: &resource.TypedSpecObject[int]{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers:        []string{finalizer},
+					DeletionTimestamp: &deleted,
 				},
 			},
 			State: map[string]any{
@@ -343,7 +338,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 				assert.Equal(t, ctx, c)
-				assert.Equal(t, req.Object.StaticMetadata().Identifier(), identifier)
+				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
 						Path:      "/metadata/finalizers/0",
@@ -371,7 +366,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 	t.Run("normal delete", func(t *testing.T) {
 		req := ReconcileRequest{
 			Action: ReconcileActionDeleted,
-			Object: &resource.SimpleObject[int]{},
+			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -410,7 +405,7 @@ func TestOpinionatedReconciler_Wrap(t *testing.T) {
 	}
 	rreq := ReconcileRequest{
 		Action: ReconcileActionResynced,
-		Object: &resource.SimpleObject[bool]{},
+		Object: &resource.TypedSpecObject[bool]{},
 	}
 	ctx := context.Background()
 	myRec := &SimpleReconciler{
@@ -430,10 +425,10 @@ func TestOpinionatedReconciler_Wrap(t *testing.T) {
 
 func TestTypedReconciler_Reconcile(t *testing.T) {
 	t.Run("nil ReconcileFunc", func(t *testing.T) {
-		r := TypedReconciler[*resource.SimpleObject[string]]{}
+		r := TypedReconciler[*resource.TypedSpecObject[string]]{}
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[string]{},
+			Object: &resource.TypedSpecObject[string]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -444,8 +439,8 @@ func TestTypedReconciler_Reconcile(t *testing.T) {
 	})
 
 	t.Run("non-nil ReconcileFunc", func(t *testing.T) {
-		r := TypedReconciler[*resource.SimpleObject[string]]{}
-		obj := &resource.SimpleObject[string]{}
+		r := TypedReconciler[*resource.TypedSpecObject[string]]{}
+		obj := &resource.TypedSpecObject[string]{}
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
 			Object: obj,
@@ -462,7 +457,7 @@ func TestTypedReconciler_Reconcile(t *testing.T) {
 			},
 		}
 		recErr := errors.New("I AM ERROR")
-		r.ReconcileFunc = func(c context.Context, request TypedReconcileRequest[*resource.SimpleObject[string]]) (ReconcileResult, error) {
+		r.ReconcileFunc = func(c context.Context, request TypedReconcileRequest[*resource.TypedSpecObject[string]]) (ReconcileResult, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, req.Action, request.Action)
 			assert.Equal(t, req.State, request.State)
@@ -475,15 +470,15 @@ func TestTypedReconciler_Reconcile(t *testing.T) {
 	})
 
 	t.Run("wrong type", func(t *testing.T) {
-		r := TypedReconciler[*resource.SimpleObject[string]]{}
-		obj := &resource.SimpleObject[int]{
-			BasicMetadataObject: resource.BasicMetadataObject{
-				StaticMeta: resource.StaticMetadata{
-					Name:      "foo",
-					Namespace: "bar",
-					Kind:      "obj",
-					Group:     "test",
-				},
+		r := TypedReconciler[*resource.TypedSpecObject[string]]{}
+		obj := &resource.TypedSpecObject[int]{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       "obj",
+				APIVersion: "test/v1",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "foo",
+				Namespace: "bar",
 			},
 		}
 		req := ReconcileRequest{
@@ -493,12 +488,12 @@ func TestTypedReconciler_Reconcile(t *testing.T) {
 				"foo": "bar",
 			},
 		}
-		r.ReconcileFunc = func(c context.Context, request TypedReconcileRequest[*resource.SimpleObject[string]]) (ReconcileResult, error) {
+		r.ReconcileFunc = func(c context.Context, request TypedReconcileRequest[*resource.TypedSpecObject[string]]) (ReconcileResult, error) {
 			assert.Fail(t, "ReconcileFunc should not be called")
 			return ReconcileResult{}, nil
 		}
 		res, err := r.Reconcile(context.Background(), req)
-		assert.Equal(t, err, NewCannotCastError(obj.StaticMeta))
+		assert.Equal(t, err, NewCannotCastError(obj.GetStaticMetadata()))
 		assert.Equal(t, ReconcileResult{}, res)
 	})
 }
@@ -508,7 +503,7 @@ func TestSimpleReconciler_Reconcile(t *testing.T) {
 		r := SimpleReconciler{}
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[string]{},
+			Object: &resource.TypedSpecObject[string]{},
 			State: map[string]any{
 				"foo": "bar",
 			},
@@ -522,7 +517,7 @@ func TestSimpleReconciler_Reconcile(t *testing.T) {
 		r := SimpleReconciler{}
 		req := ReconcileRequest{
 			Action: ReconcileActionCreated,
-			Object: &resource.SimpleObject[string]{},
+			Object: &resource.TypedSpecObject[string]{},
 			State: map[string]any{
 				"foo": "bar",
 			},

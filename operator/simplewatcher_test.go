@@ -13,7 +13,7 @@ import (
 func TestFakeWatcher_Add(t *testing.T) {
 	w := SimpleWatcher{}
 	c := context.TODO()
-	obj := &resource.SimpleObject[string]{
+	obj := &resource.TypedSpecObject[string]{
 		Spec: "foo",
 	}
 
@@ -47,10 +47,10 @@ func TestFakeWatcher_Add(t *testing.T) {
 func TestFakeWatcher_Update(t *testing.T) {
 	w := SimpleWatcher{}
 	c := context.TODO()
-	old := &resource.SimpleObject[string]{
+	old := &resource.TypedSpecObject[string]{
 		Spec: "foo",
 	}
-	new := &resource.SimpleObject[string]{
+	new := &resource.TypedSpecObject[string]{
 		Spec: "bar",
 	}
 
@@ -86,7 +86,7 @@ func TestFakeWatcher_Update(t *testing.T) {
 func TestFakeWatcher_Delete(t *testing.T) {
 	w := SimpleWatcher{}
 	c := context.TODO()
-	obj := &resource.SimpleObject[string]{
+	obj := &resource.TypedSpecObject[string]{
 		Spec: "foo",
 	}
 

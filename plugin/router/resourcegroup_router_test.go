@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"testing"
 
@@ -17,47 +16,31 @@ import (
 )
 
 var (
-	testResourceGroup = resource.NewSimpleSchemaGroup("test.resource", "v1")
-	testResource      = testResourceGroup.AddSchema(&Test{}, resource.WithKind("Test"))
+	testResource = resource.Kind{
+		Schema: resource.NewSimpleSchema("test.resource", "v1", &Test{}, resource.WithKind("Test")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	testResourceGroup = &rg{[]resource.Kind{testResource}}
 )
 
 type Test struct {
-	resource.BasicMetadataObject `json:",inline"`
-	Spec                         TestModel  `json:"spec,omitempty"`
-	Status                       TestStatus `json:"status,omitempty"`
+	resource.TypedSpecStatusObject[TestModel, TestStatus]
 }
 
-func (t *Test) SpecObject() any {
-	return t.Spec
-}
-
-func (t *Test) Unmarshal(b resource.ObjectBytes, _ resource.UnmarshalConfig) error {
-	err := json.Unmarshal(b.Spec, &t.Spec)
-	if err != nil {
-		return fmt.Errorf("obj2 spec unmarshall error: %s", err)
-	}
-
-	if len(b.Subresources["status"]) == 0 {
-		t.Status = TestStatus{}
-		return nil
-	}
-
-	if err := json.Unmarshal(b.Subresources["status"], &t.Status); err != nil {
-		fmt.Println("Status: ", string(b.Subresources["status"]))
-		return fmt.Errorf("obj2 status unmarshal error: %s", err)
-	}
-
-	return nil
-}
-
-func (t *Test) Subresources() map[string]any {
-	return map[string]any{
-		"status": t.Status,
-	}
-}
-
+// Copy: We have to overwrite this otherwise the returned underlying value is resource.TypedSpecStatusObject[TestModel, TestStatus] and not Test
 func (t *Test) Copy() resource.Object {
-	return resource.CopyObject(t)
+	inner := t.TypedSpecStatusObject.Copy().(*resource.TypedSpecStatusObject[TestModel, TestStatus])
+	return &Test{
+		TypedSpecStatusObject: *inner,
+	}
+}
+
+type rg struct {
+	kinds []resource.Kind
+}
+
+func (r *rg) Kinds() []resource.Kind {
+	return r.kinds
 }
 
 type TestModel struct {
@@ -239,7 +222,7 @@ func TestResourceGroupRouter_List(t *testing.T) {
 			listFunc: func(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error) {
 				require.Equal(t, "Test", kind)
 
-				list := resource.SimpleList[*Test]{}
+				list := resource.TypedList[*Test]{}
 				list.Items = []*Test{firstResource, secondResource}
 
 				return &list, nil
@@ -257,7 +240,7 @@ func TestResourceGroupRouter_List(t *testing.T) {
 				sendFunc: func(response *backend.CallResourceResponse) error {
 					assert.Equal(t, http.StatusOK, response.Status)
 
-					var resources resource.SimpleList[*Test]
+					var resources resource.TypedList[*Test]
 					require.NoError(t, json.Unmarshal(response.Body, &resources))
 
 					assert.Len(t, resources.Items, 2)
@@ -309,7 +292,7 @@ func TestResourceGroupRouter_Get(t *testing.T) {
 
 				test := testResource.ZeroValue().(*Test)
 				test.Spec.SomeInfo = "some_info"
-				test.StaticMeta.Name = identifier.Name
+				test.ObjectMeta.Name = identifier.Name
 
 				return test, nil
 			},
@@ -329,7 +312,7 @@ func TestResourceGroupRouter_Get(t *testing.T) {
 					var resource Test
 					require.NoError(t, json.Unmarshal(response.Body, &resource))
 
-					assert.Equal(t, "some_test", resource.StaticMeta.Name)
+					assert.Equal(t, "some_test", resource.GetName())
 					assert.Contains(t, "some_info", resource.Spec.SomeInfo)
 
 					return nil
