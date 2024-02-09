@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// KindEncoding is the wire encoding of the Kind objects.
 type KindEncoding string
 
 // KindEncoding constants which reflect the string used for a Content-Type header.
