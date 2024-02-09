@@ -80,42 +80,8 @@ type JSONCodec struct{}
 // Read is a simple wrapper for the json package unmarshal into the object.
 // TODO: expect kubernetes-formatted bytes on input?
 func (j *JSONCodec) Read(in io.Reader, out Object) error {
-	// TODO: keep it this basic compared to Write?
+	// TODO: make this work similar to Write, where the shape of the golang object shouldn't have to match the kubernetes JSON
 	return json.NewDecoder(in).Decode(&out)
-	/*m := make(map[string]json.RawMessage)
-	err := json.NewDecoder(in).Decode(m)
-	if err != nil {
-		return err
-	}
-
-	// GVK
-	kind, apiVersion := "", ""
-	if encKind, ok := m["kind"]; ok {
-		err = json.Unmarshal(encKind, &kind)
-		if err != nil {
-			return fmt.Errorf("error unmarshaling kind: %w", err)
-		}
-	} else {
-		return fmt.Errorf("provided JSON bytes do not contain root-level field 'kind'")
-	}
-	if encAPIVersion, ok := m["apiVersion"]; ok {
-		err = json.Unmarshal(encAPIVersion, &apiVersion)
-		if err != nil {
-			return fmt.Errorf("error unmarshaling apiVersion: %w", err)
-		}
-	} else {
-		return fmt.Errorf("provided JSON bytes do not contain root-level field 'kind'")
-	}
-	out.SetGroupVersionKind(schema.FromAPIVersionAndKind(apiVersion, kind))
-
-	// Metadata
-
-	// Spec
-	// Reflection?
-
-	// Subresources
-	// Reflection?
-	*/
 }
 
 // Write marshals the provided Object into kubernetes-formatted JSON bytes.
