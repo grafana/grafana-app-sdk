@@ -13,7 +13,10 @@ const (
 	ClusterScope    = SchemaScope("Cluster")
 )
 
-// Schema represents a schema object
+// Schema is an interface which represents an object schema for a particular group, version, and kind.
+// It allows a user to create an empty/default instance of the associated go Object for that schema,
+// and encapsulates methods for accessing information about the schema.
+// When combined with read/write methods, it becomes a Kind.
 type Schema interface {
 	// Group returns the Schema group
 	Group() string
@@ -31,6 +34,7 @@ type Schema interface {
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
 // but an implementation may require a relationship.
+// Deprecated: Kinds are now favored over Schemas for usage.
 type SchemaGroup interface {
 	Schemas() []Schema
 }
@@ -79,6 +83,7 @@ func (s *SimpleSchema) ZeroValue() Object {
 }
 
 // SimpleSchemaGroup collects schemas with the same group and version
+// Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 type SimpleSchemaGroup struct {
 	group   string
 	version string
@@ -151,6 +156,7 @@ func NewSimpleSchema(group, version string, zeroVal Object, opts ...SimpleSchema
 }
 
 // NewSimpleSchemaGroup returns a new SimpleSchemaGroup
+// Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 func NewSimpleSchemaGroup(group, version string) *SimpleSchemaGroup {
 	return &SimpleSchemaGroup{
 		group:   group,

@@ -2,17 +2,27 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type TestGroup struct {
+	kinds []Kind
+}
+
+func (t *TestGroup) Kinds() []Kind {
+	return t.kinds
+}
 
 func TestNewStore(t *testing.T) {
 	generator := &mockClientGenerator{
-		ClientForFunc: func(schema Schema) (Client, error) {
+		ClientForFunc: func(kind Kind) (Client, error) {
 			assert.Fail(t, "ClientFor should not be called on New")
 			return nil, nil
 		},
@@ -23,12 +33,12 @@ func TestNewStore(t *testing.T) {
 		assert.Equal(t, generator, store.clients)
 	})
 	t.Run("register groups", func(t *testing.T) {
-		g1 := NewSimpleSchemaGroup("g1", "1")
-		g1s1 := g1.AddSchema(&SimpleObject[any]{}, WithKind("g1s1"))
-		g1s2 := g1.AddSchema(&SimpleObject[any]{}, WithKind("g1s2"))
-		g2 := NewSimpleSchemaGroup("g2", "1")
-		g2s1 := g2.AddSchema(&SimpleObject[any]{}, WithKind("g2s1"))
-		g2s2 := g2.AddSchema(&SimpleObject[any]{}, WithKind("g2s2"))
+		g1s1 := Kind{NewSimpleSchema("g1", "1", &TypedSpecObject[any]{}, WithKind("g1s1")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g1s2 := Kind{NewSimpleSchema("g1", "2", &TypedSpecObject[any]{}, WithKind("g1s2")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g2s1 := Kind{NewSimpleSchema("g2", "1", &TypedSpecObject[any]{}, WithKind("g2s1")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g2s2 := Kind{NewSimpleSchema("g2", "2", &TypedSpecObject[any]{}, WithKind("g2s2")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g1 := &TestGroup{[]Kind{g1s1, g1s2}}
+		g2 := &TestGroup{[]Kind{g2s1, g2s2}}
 
 		store := NewStore(generator, g1, g2)
 		require.NotNil(t, store)
@@ -44,22 +54,22 @@ func TestStore_List(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		list, err := store.List(context.TODO(), schema.Kind()+"no", "")
+		list, err := store.List(context.TODO(), kind.Kind()+"no", "")
 		require.Nil(t, list)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		list, err := store.List(ctx, schema.Kind(), "")
+		list, err := store.List(ctx, kind.Kind(), "")
 		require.Nil(t, list)
 		assert.Equal(t, cerr, err)
 	})
@@ -67,21 +77,21 @@ func TestStore_List(t *testing.T) {
 	t.Run("client list error", func(t *testing.T) {
 		ns := "foo"
 		cerr := fmt.Errorf("JE SUIS ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		client.ListFunc = func(ctx context.Context, namespace string, options ListOptions) (ListObject, error) {
 			return nil, cerr
 		}
-		list, err := store.List(ctx, schema.Kind(), ns)
+		list, err := store.List(ctx, kind.Kind(), ns)
 		require.Nil(t, list)
 		assert.Equal(t, cerr, err)
 	})
 
 	t.Run("list, no filters", func(t *testing.T) {
 		ns := "foo"
-		ret := &mockListObject{}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		ret := &UntypedList{}
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		client.ListFunc = func(c context.Context, namespace string, options ListOptions) (ListObject, error) {
@@ -89,7 +99,7 @@ func TestStore_List(t *testing.T) {
 			assert.Equal(t, ns, namespace)
 			return ret, nil
 		}
-		list, err := store.List(ctx, schema.Kind(), ns)
+		list, err := store.List(ctx, kind.Kind(), ns)
 		assert.Nil(t, err)
 		assert.Equal(t, ret, list)
 	})
@@ -97,8 +107,8 @@ func TestStore_List(t *testing.T) {
 	t.Run("list, with filters", func(t *testing.T) {
 		ns := "foo"
 		filters := []string{"a", "b", "c"}
-		ret := &mockListObject{}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		ret := &UntypedList{}
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		client.ListFunc = func(c context.Context, namespace string, options ListOptions) (ListObject, error) {
@@ -107,7 +117,7 @@ func TestStore_List(t *testing.T) {
 			assert.Equal(t, filters, options.LabelFilters)
 			return ret, nil
 		}
-		list, err := store.List(ctx, schema.Kind(), ns, filters...)
+		list, err := store.List(ctx, kind.Kind(), ns, filters...)
 		assert.Nil(t, err)
 		assert.Equal(t, ret, list)
 	})
@@ -117,22 +127,22 @@ func TestStore_Get(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		ret, err := store.Get(ctx, schema.Kind()+"no", Identifier{})
+		ret, err := store.Get(ctx, kind.Kind()+"no", Identifier{})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		ret, err := store.Get(ctx, schema.Kind(), Identifier{})
+		ret, err := store.Get(ctx, kind.Kind(), Identifier{})
 		require.Nil(t, ret)
 		assert.Equal(t, cerr, err)
 	})
@@ -142,10 +152,10 @@ func TestStore_Get(t *testing.T) {
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		obj, err := store.Get(ctx, schema.Kind(), Identifier{})
+		obj, err := store.Get(ctx, kind.Kind(), Identifier{})
 		assert.Nil(t, obj)
 		assert.Equal(t, cerr, err)
 	})
@@ -155,16 +165,16 @@ func TestStore_Get(t *testing.T) {
 			Namespace: "foo",
 			Name:      "bar",
 		}
-		ret := &SimpleObject[any]{}
+		ret := &TypedSpecObject[any]{}
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return ret, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		obj, err := store.Get(ctx, schema.Kind(), id)
+		obj, err := store.Get(ctx, kind.Kind(), id)
 		assert.Nil(t, err)
 		assert.Equal(t, ret, obj)
 	})
@@ -174,68 +184,65 @@ func TestStore_Add(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
-	obj := &SimpleObject[any]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Kind:      schema.Kind(),
-				Namespace: "ns",
-				Name:      "test",
-			},
+	obj := &TypedSpecObject[any]{
+		TypeMeta: metav1.TypeMeta{
+			Kind: kind.Kind(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns",
+			Name:      "test",
 		},
 	}
 
 	t.Run("empty kind", func(t *testing.T) {
-		ret, err := store.Add(ctx, &SimpleObject[any]{})
+		ret, err := store.Add(ctx, &TypedSpecObject[any]{})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Kind must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty"), err)
 	})
 
 	t.Run("empty namespace", func(t *testing.T) {
-		ret, err := store.Add(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind: schema.Kind(),
-					Name: "test",
-				},
+		ret, err := store.Add(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetNamespace() must not be empty"), err)
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		ret, err := store.Add(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind:      schema.Kind() + "no",
-					Namespace: "ns",
-				},
+		ret, err := store.Add(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Name must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetName() must not be empty"), err)
 	})
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		ret, err := store.Add(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind:      schema.Kind() + "no",
-					Namespace: "ns",
-					Name:      "test",
-				},
+		ret, err := store.Add(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
+				Name:      "test",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
 		ret, err := store.Add(ctx, obj.Copy())
@@ -248,7 +255,7 @@ func TestStore_Add(t *testing.T) {
 		client.CreateFunc = func(ctx context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Add(ctx, obj.Copy())
@@ -257,14 +264,14 @@ func TestStore_Add(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		resp := &SimpleObject[int]{}
+		resp := &TypedSpecObject[int]{}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
-			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
-			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, obj.GetStaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.GetStaticMetadata().Name, identifier.Name)
 			return resp, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Add(ctx, obj.Copy())
@@ -277,31 +284,31 @@ func TestStore_SimpleAdd(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
-	obj := &SimpleObject[any]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Kind:      schema.Kind(),
-				Namespace: "ns",
-				Name:      "test",
-			},
+	obj := &TypedSpecObject[any]{
+		TypeMeta: metav1.TypeMeta{
+			Kind: kind.Kind(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns",
+			Name:      "test",
 		},
 	}
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		ret, err := store.SimpleAdd(ctx, schema.Kind()+"no", Identifier{}, obj.Copy())
+		ret, err := store.SimpleAdd(ctx, kind.Kind()+"no", Identifier{}, obj.Copy())
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		ret, err := store.SimpleAdd(ctx, schema.Kind(), Identifier{}, obj.Copy())
+		ret, err := store.SimpleAdd(ctx, kind.Kind(), Identifier{}, obj.Copy())
 		require.Nil(t, ret)
 		assert.Equal(t, cerr, err)
 	})
@@ -311,10 +318,10 @@ func TestStore_SimpleAdd(t *testing.T) {
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		ret, err := store.SimpleAdd(ctx, schema.Kind(), Identifier{}, obj.Copy())
+		ret, err := store.SimpleAdd(ctx, kind.Kind(), Identifier{}, obj.Copy())
 		assert.Nil(t, ret)
 		assert.Equal(t, cerr, err)
 	})
@@ -324,16 +331,16 @@ func TestStore_SimpleAdd(t *testing.T) {
 			Namespace: "foo",
 			Name:      "bar",
 		}
-		resp := &SimpleObject[any]{}
+		resp := &TypedSpecObject[any]{}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return resp, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		ret, err := store.SimpleAdd(ctx, schema.Kind(), id, obj.Copy())
+		ret, err := store.SimpleAdd(ctx, kind.Kind(), id, obj.Copy())
 		assert.Nil(t, err)
 		assert.Equal(t, resp, ret)
 	})
@@ -343,68 +350,65 @@ func TestStore_Update(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
-	obj := &SimpleObject[any]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Kind:      schema.Kind(),
-				Namespace: "ns",
-				Name:      "test",
-			},
+	obj := &TypedSpecObject[any]{
+		TypeMeta: metav1.TypeMeta{
+			Kind: kind.Kind(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns",
+			Name:      "test",
 		},
 	}
 
 	t.Run("empty kind", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{})
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Kind must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty"), err)
 	})
 
 	t.Run("empty namespace", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind: schema.Kind(),
-					Name: "test",
-				},
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetNamespace() must not be empty"), err)
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind:      schema.Kind() + "no",
-					Namespace: "ns",
-				},
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Name must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetName() must not be empty"), err)
 	})
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind:      schema.Kind() + "no",
-					Namespace: "ns",
-					Name:      "test",
-				},
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
+				Name:      "test",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
 		ret, err := store.Update(ctx, obj.Copy())
@@ -417,7 +421,7 @@ func TestStore_Update(t *testing.T) {
 		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Update(ctx, obj.Copy())
@@ -426,16 +430,16 @@ func TestStore_Update(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		resp := &SimpleObject[int]{}
+		resp := &TypedSpecObject[int]{}
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
-			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
-			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, obj.GetStaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.GetStaticMetadata().Name, identifier.Name)
 			assert.Equal(t, "", options.ResourceVersion)
 			assert.Equal(t, "", options.Subresource)
 			return resp, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Update(ctx, obj.Copy())
@@ -448,8 +452,8 @@ func TestStore_UpdateSubresource(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
 
 	t.Run("empty kind", func(t *testing.T) {
@@ -459,17 +463,17 @@ func TestStore_UpdateSubresource(t *testing.T) {
 	})
 
 	t.Run("empty subresourceName", func(t *testing.T) {
-		obj, err := store.UpdateSubresource(ctx, schema.Kind(), Identifier{}, "", nil)
+		obj, err := store.UpdateSubresource(ctx, kind.Kind(), Identifier{}, "", nil)
 		require.Nil(t, obj)
 		assert.Equal(t, fmt.Errorf("subresourceName cannot be empty"), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		obj, err := store.UpdateSubresource(ctx, schema.Kind(), Identifier{}, "status", nil)
+		obj, err := store.UpdateSubresource(ctx, kind.Kind(), Identifier{}, "status", nil)
 		require.Nil(t, obj)
 		assert.Equal(t, cerr, err)
 	})
@@ -479,16 +483,16 @@ func TestStore_UpdateSubresource(t *testing.T) {
 		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		obj, err := store.UpdateSubresource(ctx, schema.Kind(), Identifier{}, "status", nil)
+		obj, err := store.UpdateSubresource(ctx, kind.Kind(), Identifier{}, "status", nil)
 		assert.Nil(t, obj)
 		assert.Equal(t, cerr, err)
 	})
 
 	t.Run("success", func(t *testing.T) {
-		resp := &SimpleObject[int]{}
+		resp := &TypedSpecObject[int]{}
 		id := Identifier{
 			Namespace: "ns",
 			Name:      "test",
@@ -499,13 +503,16 @@ func TestStore_UpdateSubresource(t *testing.T) {
 			assert.Equal(t, id.Name, identifier.Name)
 			assert.Equal(t, "", options.ResourceVersion)
 			assert.Equal(t, "status", options.Subresource)
-			assert.Equal(t, 1, obj.Subresources()["status"])
+			var expectedStatus json.RawMessage
+			expectedStatus, _ = json.Marshal(1)
+			actualStatus := obj.GetSubresources()["status"]
+			assert.Equal(t, expectedStatus, actualStatus)
 			return resp, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		ret, err := store.UpdateSubresource(ctx, schema.Kind(), id, "status", 1)
+		ret, err := store.UpdateSubresource(ctx, kind.Kind(), id, "status", 1)
 		assert.Nil(t, err)
 		assert.Equal(t, resp, ret)
 	})
@@ -515,68 +522,65 @@ func TestStore_Upsert(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
-	obj := &SimpleObject[any]{
-		BasicMetadataObject: BasicMetadataObject{
-			StaticMeta: StaticMetadata{
-				Kind:      schema.Kind(),
-				Namespace: "ns",
-				Name:      "test",
-			},
+	obj := &TypedSpecObject[any]{
+		TypeMeta: metav1.TypeMeta{
+			Kind: kind.Kind(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: "ns",
+			Name:      "test",
 		},
 	}
 
 	t.Run("empty kind", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{})
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Kind must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty"), err)
 	})
 
 	t.Run("empty namespace", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind: schema.Kind(),
-					Name: "test",
-				},
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetNamespace() must not be empty"), err)
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind:      schema.Kind() + "no",
-					Namespace: "ns",
-				},
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("obj.StaticMetadata().Name must not be empty"), err)
+		assert.Equal(t, fmt.Errorf("obj.GetName() must not be empty"), err)
 	})
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		ret, err := store.Update(ctx, &SimpleObject[any]{
-			BasicMetadataObject: BasicMetadataObject{
-				StaticMeta: StaticMetadata{
-					Kind:      schema.Kind() + "no",
-					Namespace: "ns",
-					Name:      "test",
-				},
+		ret, err := store.Update(ctx, &TypedSpecObject[any]{
+			TypeMeta: metav1.TypeMeta{
+				Kind: kind.Kind() + "no",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "ns",
+				Name:      "test",
 			},
 		})
 		require.Nil(t, ret)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
 		ret, err := store.Upsert(ctx, obj.Copy())
@@ -589,7 +593,7 @@ func TestStore_Upsert(t *testing.T) {
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Upsert(ctx, obj.Copy())
@@ -603,7 +607,7 @@ func TestStore_Upsert(t *testing.T) {
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Upsert(ctx, obj.Copy())
@@ -615,14 +619,14 @@ func TestStore_Upsert(t *testing.T) {
 		cerr := fmt.Errorf("JE SUIS ERROR")
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
 			assert.Equal(t, ctx, c)
-			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
-			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, obj.GetStaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.GetStaticMetadata().Name, identifier.Name)
 			return obj, nil
 		}
 		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			return nil, cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Upsert(ctx, obj.Copy())
@@ -631,17 +635,17 @@ func TestStore_Upsert(t *testing.T) {
 	})
 
 	t.Run("success, get 404", func(t *testing.T) {
-		resp := &SimpleObject[int]{}
+		resp := &TypedSpecObject[int]{}
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
 			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
 		}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
-			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
-			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, obj.GetStaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.GetStaticMetadata().Name, identifier.Name)
 			return resp, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Upsert(ctx, obj.Copy())
@@ -649,22 +653,22 @@ func TestStore_Upsert(t *testing.T) {
 		assert.Equal(t, resp, ret)
 	})
 	t.Run("success", func(t *testing.T) {
-		resp := &SimpleObject[int]{}
+		resp := &TypedSpecObject[int]{}
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
 			assert.Equal(t, ctx, c)
-			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
-			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, obj.GetStaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.GetStaticMetadata().Name, identifier.Name)
 			return resp, nil
 		}
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
-			assert.Equal(t, obj.StaticMetadata().Namespace, identifier.Namespace)
-			assert.Equal(t, obj.StaticMetadata().Name, identifier.Name)
+			assert.Equal(t, obj.GetStaticMetadata().Namespace, identifier.Namespace)
+			assert.Equal(t, obj.GetStaticMetadata().Name, identifier.Name)
 			assert.Equal(t, "", options.ResourceVersion)
 			assert.Equal(t, "", options.Subresource)
 			return resp, nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
 		ret, err := store.Upsert(ctx, obj.Copy())
@@ -677,21 +681,21 @@ func TestStore_Delete(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("kind")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		err := store.Delete(ctx, schema.Kind()+"no", Identifier{})
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		err := store.Delete(ctx, kind.Kind()+"no", Identifier{})
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		err := store.Delete(ctx, schema.Kind(), Identifier{})
+		err := store.Delete(ctx, kind.Kind(), Identifier{})
 		assert.Equal(t, cerr, err)
 	})
 
@@ -700,10 +704,10 @@ func TestStore_Delete(t *testing.T) {
 		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
 			return cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		err := store.Delete(ctx, schema.Kind(), Identifier{})
+		err := store.Delete(ctx, kind.Kind(), Identifier{})
 		assert.Equal(t, cerr, err)
 	})
 
@@ -717,10 +721,10 @@ func TestStore_Delete(t *testing.T) {
 			assert.Equal(t, id, identifier)
 			return nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		err := store.Delete(ctx, schema.Kind(), id)
+		err := store.Delete(ctx, kind.Kind(), id)
 		assert.Nil(t, err)
 	})
 }
@@ -729,21 +733,21 @@ func TestStore_ForceDelete(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 	ctx := context.TODO()
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		err := store.Delete(ctx, schema.Kind()+"no", Identifier{})
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		err := store.Delete(ctx, kind.Kind()+"no", Identifier{})
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("ClientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		err := store.ForceDelete(ctx, schema.Kind(), Identifier{})
+		err := store.ForceDelete(ctx, kind.Kind(), Identifier{})
 		assert.Equal(t, cerr, err)
 	})
 
@@ -752,10 +756,10 @@ func TestStore_ForceDelete(t *testing.T) {
 		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
 			return cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		err := store.ForceDelete(ctx, schema.Kind(), Identifier{})
+		err := store.ForceDelete(ctx, kind.Kind(), Identifier{})
 		assert.Equal(t, cerr, err)
 	})
 
@@ -764,10 +768,10 @@ func TestStore_ForceDelete(t *testing.T) {
 		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
 			return cerr
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		err := store.ForceDelete(ctx, schema.Kind(), Identifier{})
+		err := store.ForceDelete(ctx, kind.Kind(), Identifier{})
 		assert.Equal(t, nil, err)
 	})
 
@@ -781,10 +785,10 @@ func TestStore_ForceDelete(t *testing.T) {
 			assert.Equal(t, id, identifier)
 			return nil
 		}
-		generator.ClientForFunc = func(schema Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return client, nil
 		}
-		err := store.ForceDelete(ctx, schema.Kind(), id)
+		err := store.ForceDelete(ctx, kind.Kind(), id)
 		assert.Nil(t, err)
 	})
 }
@@ -797,31 +801,31 @@ func TestStore_Client(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
 
 	t.Run("unregistered kind", func(t *testing.T) {
-		c, err := store.Client(schema.Kind() + "no")
+		c, err := store.Client(kind.Kind() + "no")
 		assert.Nil(t, c)
-		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", schema.Kind()), err)
+		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
 
 	t.Run("clientGenerator error", func(t *testing.T) {
 		cerr := fmt.Errorf("ICH BIN ERROR")
-		generator.ClientForFunc = func(sch Schema) (Client, error) {
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		c, err := store.Client(schema.Kind())
+		c, err := store.Client(kind.Kind())
 		assert.Nil(t, c)
 		assert.Equal(t, cerr, err)
 	})
 
 	t.Run("success", func(t *testing.T) {
-		generator.ClientForFunc = func(sch Schema) (Client, error) {
-			assert.Equal(t, schema, sch)
+		generator.ClientForFunc = func(knd Kind) (Client, error) {
+			assert.Equal(t, kind, knd)
 			return client, nil
 		}
-		c, err := store.Client(schema.Kind())
+		c, err := store.Client(kind.Kind())
 		assert.Nil(t, err)
 		assert.Equal(t, client, c)
 	})
@@ -832,7 +836,7 @@ func TestStore_Register(t *testing.T) {
 	store := NewStore(generator)
 
 	// No schema
-	generator.ClientForFunc = func(schema Schema) (Client, error) {
+	generator.ClientForFunc = func(kind Kind) (Client, error) {
 		assert.Fail(t, "no calls should be made to ClientFor")
 		return nil, nil
 	}
@@ -840,10 +844,10 @@ func TestStore_Register(t *testing.T) {
 	assert.Nil(t, c)
 	assert.Equal(t, fmt.Errorf("resource kind 'test' is not registered in store"), err)
 
-	schema := NewSimpleSchema("g1", "v1", &SimpleObject[any]{}, WithKind("test"))
-	store.Register(schema)
-	generator.ClientForFunc = func(sch Schema) (Client, error) {
-		assert.Equal(t, schema, sch)
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	store.Register(kind)
+	generator.ClientForFunc = func(knd Kind) (Client, error) {
+		assert.Equal(t, kind, knd)
 		return &mockClient{}, nil
 	}
 	c, err = store.Client("test")
@@ -856,7 +860,7 @@ func TestStore_RegisterGroup(t *testing.T) {
 	store := NewStore(generator)
 
 	// No schema
-	generator.ClientForFunc = func(schema Schema) (Client, error) {
+	generator.ClientForFunc = func(kind Kind) (Client, error) {
 		assert.Fail(t, "no calls should be made to ClientFor")
 		return nil, nil
 	}
@@ -864,11 +868,11 @@ func TestStore_RegisterGroup(t *testing.T) {
 	assert.Nil(t, c)
 	assert.Equal(t, fmt.Errorf("resource kind 'test' is not registered in store"), err)
 
-	group := NewSimpleSchemaGroup("g1", "v1")
-	schema := group.AddSchema(&SimpleObject[any]{}, WithKind("test"))
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	group := &TestGroup{[]Kind{kind}}
 	store.RegisterGroup(group)
-	generator.ClientForFunc = func(sch Schema) (Client, error) {
-		assert.Equal(t, schema, sch)
+	generator.ClientForFunc = func(knd Kind) (Client, error) {
+		assert.Equal(t, kind, knd)
 		return &mockClient{}, nil
 	}
 	c, err = store.Client("test")
@@ -876,32 +880,11 @@ func TestStore_RegisterGroup(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-type mockListObject struct {
-	ListMeta ListMetadata
-	List     []Object
-}
-
-func (l *mockListObject) ListItems() []Object {
-	return l.List
-}
-
-func (l *mockListObject) SetItems(o []Object) {
-
-}
-
-func (l *mockListObject) ListMetadata() ListMetadata {
-	return l.ListMeta
-}
-
-func (l *mockListObject) SetListMetadata(m ListMetadata) {
-
-}
-
 type mockClientGenerator struct {
-	ClientForFunc func(Schema) (Client, error)
+	ClientForFunc func(Kind) (Client, error)
 }
 
-func (g *mockClientGenerator) ClientFor(s Schema) (Client, error) {
+func (g *mockClientGenerator) ClientFor(s Kind) (Client, error) {
 	if g.ClientForFunc != nil {
 		return g.ClientForFunc(s)
 	}
