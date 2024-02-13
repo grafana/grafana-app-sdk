@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"encoding/json"
 	"reflect"
 
@@ -65,8 +66,8 @@ func (o *UntypedObjectWrapper) DeepCopyObject() runtime.Object {
 
 // Into unmarshals the wrapped object bytes into the provided resource.Object, using the same unmarshal logic
 // that Client and SchemalessClient use
-func (o *UntypedObjectWrapper) Into(into resource.Object) error {
-	return rawToObject(o.object, into)
+func (o *UntypedObjectWrapper) Into(into resource.Object, codec resource.Codec) error {
+	return codec.Read(bytes.NewReader(o.object), into)
 }
 
 // UntypedWatchObject implements runtime.Object, and keeps the Object part of a kubernetes watch event as bytes
@@ -79,8 +80,8 @@ type UntypedWatchObject struct {
 
 // Into unmarshals the wrapped object bytes into the provided resource.Object, using the same unmarshal logic
 // that Client and SchemalessClient use
-func (w *UntypedWatchObject) Into(into resource.Object) error {
-	return rawToObject(w.Object, into)
+func (w *UntypedWatchObject) Into(into resource.Object, codec resource.Codec) error {
+	return codec.Read(bytes.NewReader(w.Object), into)
 }
 
 // DeepCopyObject copies the object
@@ -100,7 +101,7 @@ func (w *UntypedWatchObject) DeepCopyObject() runtime.Object {
 }
 
 type intoObject interface {
-	Into(object resource.Object) error
+	Into(object resource.Object, codec resource.Codec) error
 }
 
 type wrappedObject interface {

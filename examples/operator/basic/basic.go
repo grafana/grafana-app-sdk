@@ -33,7 +33,11 @@ func main() {
 	kubeConfig.APIPath = "/apis" // Don't know why this isn't set correctly by default, but it isn't
 
 	// Create a schema to use
-	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.SimpleObject[BasicModel]{}, resource.WithKind("BasicCustomResource"))
+	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, resource.WithKind("BasicCustomResource"))
+	kind := resource.Kind{
+		Schema: schema,
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
 
 	// Register the schema (if it doesn't already exist)
 	manager, err := k8s.NewManager(*kubeConfig)
@@ -52,7 +56,7 @@ func main() {
 
 	// Get a client for our schema
 	clientGenerator := k8s.NewClientRegistry(*kubeConfig, k8s.ClientConfig{})
-	client, err := clientGenerator.ClientFor(schema)
+	client, err := clientGenerator.ClientFor(kind)
 	if err != nil {
 		panic(fmt.Errorf("error creating client for schema: %w", err))
 	}
