@@ -17,18 +17,36 @@ import (
 
 // Schemas are defined here for clarity
 var (
-	group1     = resource.NewSimpleSchemaGroup("org.example.obj", "v1")
-	obj1Schema = group1.AddSchema(&Obj1{})
-	obj2Schema = group1.AddSchema(&Obj2{})
-	group2     = resource.NewSimpleSchemaGroup("org.example.def", "v1")
-	def1Schema = group2.AddSchema(&Def1{})
+	obj1Kind = resource.Kind{
+		Schema: resource.NewSimpleSchema("org.example.obj", "v1", &Obj1{}),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	obj2Kind = resource.Kind{
+		Schema: resource.NewSimpleSchema("org.example.obj", "v1", &Obj2{}),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	def1Kind = resource.Kind{
+		Schema: resource.NewSimpleSchema("org.example.def", "v1", &Def1{}),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+
+	group1 = &group{[]resource.Kind{obj1Kind, obj2Kind}}
+	group2 = &group{[]resource.Kind{def1Kind}}
 
 	allSchemas = []resource.Schema{
-		obj1Schema,
-		obj2Schema,
-		def1Schema,
+		obj1Kind,
+		obj2Kind,
+		def1Kind,
 	}
 )
+
+type group struct {
+	kinds []resource.Kind
+}
+
+func (g *group) Kinds() []resource.Kind {
+	return g.kinds
+}
 
 func main() {
 	// We're going to use kubernetes for our storage system, so we need to get a kubernetes config
@@ -86,24 +104,23 @@ func useStore(generator resource.ClientGenerator) {
 
 	// Create an example of each of our CRD types
 	obj1 := Obj1{}
-	obj1.StaticMeta.Namespace = "default"
-	obj1.StaticMeta.Name = "example-1"
-	obj1.StaticMeta.Kind = obj1Schema.Kind()
+	obj1.SetNamespace("default")
+	obj1.SetName("example-1")
+	obj1.Kind = obj1Kind.Kind()
 	obj1Added, err := store.Add(context.TODO(), &obj1)
 	if err != nil {
 		panic(fmt.Errorf("error adding obj1: %s", err))
 	}
 	logObj("Added Obj1 using Store", obj1Added)
 
-	obj2 := Obj2{
-		Spec: Obj2Spec{
-			Simple1: "foo",
-			Simple2: "bar",
-		},
+	obj2 := Obj2{}
+	obj2.Spec = Obj2Spec{
+		Simple1: "foo",
+		Simple2: "bar",
 	}
-	obj2.StaticMeta.Namespace = "default"
-	obj2.StaticMeta.Name = "example-1" // We can use the same name, because it's a different resource kind
-	obj2.StaticMeta.Kind = obj2Schema.Kind()
+	obj2.ObjectMeta.Namespace = "default"
+	obj2.ObjectMeta.Name = "example-1" // We can use the same name, because it's a different resource kind
+	obj2.Kind = obj1Kind.Kind()
 	obj2Added, err := store.Add(context.TODO(), &obj2)
 	if err != nil {
 		panic(err)
@@ -113,7 +130,7 @@ func useStore(generator resource.ClientGenerator) {
 	fmt.Println("Hi")
 	statusUpdate := Obj2{}
 	statusUpdate.Status.State = "Updated"
-	obj2Updated, err := store.UpdateSubresource(context.TODO(), obj2Schema.Kind(), resource.Identifier{
+	obj2Updated, err := store.UpdateSubresource(context.TODO(), obj2Kind.Kind(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-1",
 	}, resource.SubresourceStatus, &statusUpdate)
@@ -121,7 +138,7 @@ func useStore(generator resource.ClientGenerator) {
 
 	def1 := Def1{}
 	def1.Spec.Param1 = "param"
-	def1Added, err := store.SimpleAdd(context.TODO(), def1Schema.Kind(), resource.Identifier{
+	def1Added, err := store.SimpleAdd(context.TODO(), def1Kind.Kind(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-1",
 	}, &def1)
@@ -131,21 +148,21 @@ func useStore(generator resource.ClientGenerator) {
 	logObj("Added Def1 using Store", def1Added)
 
 	// Delete everything we made so far
-	err = store.Delete(context.TODO(), obj1Schema.Kind(), resource.Identifier{
+	err = store.Delete(context.TODO(), obj1Kind.Kind(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-1",
 	})
 	if err != nil {
 		panic(err)
 	}
-	err = store.Delete(context.TODO(), obj2Schema.Kind(), resource.Identifier{
+	err = store.Delete(context.TODO(), obj2Kind.Kind(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-1",
 	})
 	if err != nil {
 		panic(err)
 	}
-	err = store.Delete(context.TODO(), def1Schema.Kind(), resource.Identifier{
+	err = store.Delete(context.TODO(), def1Kind.Kind(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-1",
 	})
@@ -161,7 +178,7 @@ func useStore(generator resource.ClientGenerator) {
 // The trade-off is that the SimpleStore can only be tied to one specific Schema.
 func useSimpleStore(generator resource.ClientGenerator) {
 	// SimpleStore can only manipulate one Custom Resource type, but allows for direct manipulation of the Spec object
-	simpleStore, err := resource.NewSimpleStore[Obj2Spec](obj2Schema, generator)
+	simpleStore, err := resource.NewSimpleStore[Obj2Spec](obj2Kind, generator)
 	added, err := simpleStore.Add(context.TODO(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-2",
@@ -207,7 +224,7 @@ func logObj(msg string, obj any) {
  */
 
 type Obj1 struct {
-	resource.SimpleObject[Obj1Spec]
+	resource.TypedSpecObject[Obj1Spec]
 }
 
 func (o1 *Obj1) Copy() resource.Object {
@@ -220,38 +237,7 @@ type Obj1Spec struct {
 }
 
 type Obj2 struct {
-	resource.BasicMetadataObject
-	Spec   Obj2Spec
-	Status Obj2Status
-}
-
-func (o2 *Obj2) SpecObject() any {
-	return o2.Spec
-}
-
-func (o2 *Obj2) Unmarshal(b resource.ObjectBytes, _ resource.UnmarshalConfig) error {
-	err := json.Unmarshal(b.Spec, &o2.Spec)
-	if err != nil {
-		return fmt.Errorf("obj2 spec unmarshall error: %s", err)
-	}
-
-	if len(b.Subresources["status"]) == 0 {
-		o2.Status = Obj2Status{}
-		return nil
-	}
-
-	if err := json.Unmarshal(b.Subresources["status"], &o2.Status); err != nil {
-		fmt.Println("Status: ", string(b.Subresources["status"]))
-		return fmt.Errorf("obj2 status unmarshal error: %s", err)
-	}
-
-	return nil
-}
-
-func (o2 *Obj2) Subresources() map[string]any {
-	return map[string]any{
-		"status": o2.Status,
-	}
+	resource.TypedSpecStatusObject[Obj2Spec, Obj2Status]
 }
 
 func (o2 *Obj2) Copy() resource.Object {
@@ -268,7 +254,7 @@ type Obj2Status struct {
 }
 
 type Def1 struct {
-	resource.SimpleObject[Def1Spec]
+	resource.TypedSpecObject[Def1Spec]
 }
 
 func (d *Def1) Copy() resource.Object {

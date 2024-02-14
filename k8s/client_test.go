@@ -23,7 +23,11 @@ import (
 )
 
 var (
-	testSchema        = resource.NewSimpleSchema("group", "version", &resource.SimpleObject[testSpec]{}, resource.WithKind("test"))
+	testSchema = resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[testSpec]{}, resource.WithKind("test"))
+	testKind   = resource.Kind{
+		Schema: testSchema,
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
 	responseObj       = getTestObject()
 	k8sResponseObject = struct {
 		metav1.TypeMeta   `json:",inline"`
@@ -31,17 +35,17 @@ var (
 		Spec              testSpec `json:"spec"`
 	}{
 		TypeMeta: metav1.TypeMeta{
-			Kind: responseObj.StaticMetadata().Kind,
+			Kind: responseObj.GetStaticMetadata().Kind,
 			APIVersion: schema.GroupVersion{
-				Group:   responseObj.StaticMetadata().Group,
-				Version: responseObj.StaticMetadata().Version,
+				Group:   responseObj.GetStaticMetadata().Group,
+				Version: responseObj.GetStaticMetadata().Version,
 			}.Identifier(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:            responseObj.StaticMetadata().Name,
-			Namespace:       responseObj.StaticMetadata().Namespace,
-			ResourceVersion: responseObj.CommonMetadata().ResourceVersion,
-			Labels:          responseObj.CommonMetadata().Labels,
+			Name:            responseObj.GetStaticMetadata().Name,
+			Namespace:       responseObj.GetStaticMetadata().Namespace,
+			ResourceVersion: responseObj.GetCommonMetadata().ResourceVersion,
+			Labels:          responseObj.GetCommonMetadata().Labels,
 		},
 		Spec: responseObj.Spec,
 	}
@@ -49,7 +53,7 @@ var (
 )
 
 func TestClient_Get(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -79,15 +83,15 @@ func TestClient_Get(t *testing.T) {
 
 		resp, err := client.Get(ctx, id)
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), resp.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), resp.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), resp.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), resp.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), resp.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), resp.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), resp.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), resp.GetSubresources())
 	})
 }
 
 func TestClient_GetInto(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -109,9 +113,9 @@ func TestClient_GetInto(t *testing.T) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
 
-		into := resource.SimpleObject[any]{}
+		into := resource.TypedSpecObject[any]{}
 		err := client.GetInto(ctx, id, &into)
-		assert.Equal(t, resource.SimpleObject[any]{}, into)
+		assert.Equal(t, resource.TypedSpecObject[any]{}, into)
 		require.NotNil(t, err)
 		cast, ok := err.(*ServerResponseError)
 		require.True(t, ok)
@@ -125,18 +129,18 @@ func TestClient_GetInto(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
 		}
 
-		into := resource.SimpleObject[testSpec]{}
+		into := resource.TypedSpecObject[testSpec]{}
 		err := client.GetInto(ctx, id, &into)
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), into.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), into.CommonMetadata())
+		assert.Equal(t, responseObj.GetStaticMetadata(), into.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), into.GetCommonMetadata())
 		assert.Equal(t, responseObj.Spec, into.Spec)
-		assert.Equal(t, responseObj.Subresources(), into.Subresources())
+		assert.Equal(t, responseObj.GetSubresources(), into.GetSubresources())
 	})
 }
 
 func TestClient_Create(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -184,15 +188,15 @@ func TestClient_Create(t *testing.T) {
 
 		resp, err := client.Create(ctx, id, getTestObject(), resource.CreateOptions{})
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), resp.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), resp.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), resp.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), resp.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), resp.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), resp.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), resp.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), resp.GetSubresources())
 	})
 }
 
 func TestClient_CreateInto(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -223,7 +227,7 @@ func TestClient_CreateInto(t *testing.T) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
 
-		err := client.CreateInto(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.SimpleObject[any]{})
+		err := client.CreateInto(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.TypedSpecObject[any]{})
 		require.NotNil(t, err)
 		cast, ok := err.(*ServerResponseError)
 		require.True(t, ok)
@@ -245,18 +249,18 @@ func TestClient_CreateInto(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s", id.Namespace, testSchema.Plural()), r.URL.Path)
 		}
 
-		into := resource.SimpleObject[testSpec]{}
+		into := resource.TypedSpecObject[testSpec]{}
 		err := client.CreateInto(ctx, id, getTestObject(), resource.CreateOptions{}, &into)
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), into.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), into.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), into.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), into.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), into.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), into.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), into.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), into.GetSubresources())
 	})
 }
 
 func TestClient_Update(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -303,13 +307,13 @@ func TestClient_Update(t *testing.T) {
 		}
 
 		resp, err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{
-			ResourceVersion: responseObj.CommonMeta.ResourceVersion,
+			ResourceVersion: responseObj.GetCommonMetadata().ResourceVersion,
 		})
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), resp.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), resp.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), resp.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), resp.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), resp.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), resp.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), resp.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), resp.GetSubresources())
 	})
 
 	t.Run("success, no RV", func(t *testing.T) {
@@ -335,10 +339,10 @@ func TestClient_Update(t *testing.T) {
 
 		resp, err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{})
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), resp.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), resp.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), resp.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), resp.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), resp.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), resp.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), resp.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), resp.GetSubresources())
 	})
 
 	t.Run("success, subresource", func(t *testing.T) {
@@ -358,19 +362,19 @@ func TestClient_Update(t *testing.T) {
 		}
 
 		resp, err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{
-			ResourceVersion: responseObj.CommonMeta.ResourceVersion,
+			ResourceVersion: responseObj.GetCommonMetadata().ResourceVersion,
 			Subresource:     "status",
 		})
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), resp.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), resp.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), resp.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), resp.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), resp.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), resp.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), resp.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), resp.GetSubresources())
 	})
 }
 
 func TestClient_UpdateInto(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -423,15 +427,15 @@ func TestClient_UpdateInto(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
 		}
 
-		into := resource.SimpleObject[testSpec]{}
+		into := resource.TypedSpecObject[testSpec]{}
 		err := client.UpdateInto(ctx, id, getTestObject(), resource.UpdateOptions{
-			ResourceVersion: responseObj.CommonMeta.ResourceVersion,
+			ResourceVersion: responseObj.GetCommonMetadata().ResourceVersion,
 		}, &into)
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), into.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), into.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), into.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), into.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), into.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), into.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), into.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), into.GetSubresources())
 	})
 
 	t.Run("success, no RV", func(t *testing.T) {
@@ -455,13 +459,13 @@ func TestClient_UpdateInto(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
 		}
 
-		into := resource.SimpleObject[testSpec]{}
+		into := resource.TypedSpecObject[testSpec]{}
 		err := client.UpdateInto(ctx, id, getTestObject(), resource.UpdateOptions{}, &into)
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), into.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), into.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), into.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), into.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), into.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), into.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), into.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), into.GetSubresources())
 	})
 
 	t.Run("success, subresource", func(t *testing.T) {
@@ -480,21 +484,21 @@ func TestClient_UpdateInto(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s/status", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
 		}
 
-		into := resource.SimpleObject[testSpec]{}
+		into := resource.TypedSpecObject[testSpec]{}
 		err := client.UpdateInto(ctx, id, getTestObject(), resource.UpdateOptions{
-			ResourceVersion: responseObj.CommonMeta.ResourceVersion,
+			ResourceVersion: responseObj.GetCommonMetadata().ResourceVersion,
 			Subresource:     "status",
 		}, &into)
 		assert.Nil(t, err)
-		assert.Equal(t, responseObj.StaticMetadata(), into.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), into.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), into.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), into.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), into.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), into.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), into.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), into.GetSubresources())
 	})
 }
 
 func TestClient_Delete(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	id := resource.Identifier{
 		Namespace: "ns",
@@ -528,13 +532,13 @@ func TestClient_Delete(t *testing.T) {
 }
 
 func TestClient_List(t *testing.T) {
-	client, server := getClientTestSetup(testSchema)
+	client, server := getClientTestSetup(testKind)
 	defer server.Close()
 	ctx := context.TODO()
 	ns := "ns"
 	listResp := testList{
 		TypeMeta: metav1.TypeMeta{
-			Kind: responseObj.StaticMeta.Kind,
+			Kind: responseObj.GetStaticMetadata().Kind,
 		},
 		Metadata: metav1.ListMeta{},
 		Items: []submittedObj{{
@@ -570,13 +574,13 @@ func TestClient_List(t *testing.T) {
 		list, err := client.List(ctx, ns, resource.ListOptions{})
 		assert.Nil(t, err)
 		assert.NotNil(t, list)
-		assert.Len(t, list.ListItems(), 1)
-		item, ok := list.ListItems()[0].(*resource.SimpleObject[testSpec])
+		assert.Len(t, list.GetItems(), 1)
+		item, ok := list.GetItems()[0].(*resource.TypedSpecObject[testSpec])
 		assert.True(t, ok)
-		assert.Equal(t, responseObj.StaticMetadata(), item.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), item.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), item.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), item.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), item.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), item.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), item.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), item.GetSubresources())
 	})
 
 	t.Run("success, with filters", func(t *testing.T) {
@@ -596,13 +600,13 @@ func TestClient_List(t *testing.T) {
 		})
 		assert.Nil(t, err)
 		assert.NotNil(t, list)
-		assert.Len(t, list.ListItems(), 1)
-		item, ok := list.ListItems()[0].(*resource.SimpleObject[testSpec])
+		assert.Len(t, list.GetItems(), 1)
+		item, ok := list.GetItems()[0].(*resource.TypedSpecObject[testSpec])
 		assert.True(t, ok)
-		assert.Equal(t, responseObj.StaticMetadata(), item.StaticMetadata())
-		assert.Equal(t, responseObj.CommonMetadata(), item.CommonMetadata())
-		assert.Equal(t, responseObj.SpecObject(), item.SpecObject())
-		assert.Equal(t, responseObj.Subresources(), item.Subresources())
+		assert.Equal(t, responseObj.GetStaticMetadata(), item.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), item.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), item.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), item.GetSubresources())
 	})
 }
 
@@ -617,31 +621,26 @@ func TestClient_Client(t *testing.T) {
 	assert.Equal(t, restClient, client.RESTClient())
 }
 
-func getTestObject() *resource.SimpleObject[testSpec] {
-	return &resource.SimpleObject[testSpec]{
-		BasicMetadataObject: resource.BasicMetadataObject{
-			StaticMeta: resource.StaticMetadata{
-				Namespace: "namespace",
-				Name:      "name",
-				Kind:      "test",
-				Group:     "group",
-				Version:   "version",
-			},
-			CommonMeta: resource.CommonMetadata{
-				ResourceVersion: "rev1",
-				Generation:      0,
-				Labels: map[string]string{
-					"foo":  "bar",
-					"test": "value",
-				},
-				ExtraFields: map[string]any{},
+func getTestObject() *resource.TypedSpecObject[testSpec] {
+	return &resource.TypedSpecObject[testSpec]{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       testSchema.Kind(),
+			APIVersion: fmt.Sprintf("%s/%s", testSchema.Group(), testSchema.Version()),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "namespace",
+			Name:            "name",
+			ResourceVersion: "rev1",
+			Generation:      0,
+			Labels: map[string]string{
+				"foo":  "bar",
+				"test": "value",
 			},
 		},
 		Spec: testSpec{
 			Test1: "111",
 			Test2: "test",
 		},
-		SubresourceMap: make(map[string]any),
 	}
 }
 
@@ -667,7 +666,7 @@ type testServer struct {
 	responseFunc func(http.ResponseWriter, *http.Request)
 }
 
-func getClientTestSetup(schema resource.Schema) (*Client, *testServer) {
+func getClientTestSetup(schema resource.Kind) (*Client, *testServer) {
 	s := testServer{}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if s.responseFunc != nil {
@@ -681,6 +680,7 @@ func getClientTestSetup(schema resource.Schema) (*Client, *testServer) {
 			client: client,
 		},
 		schema: schema,
+		codec:  schema.Codec(resource.KindEncodingJSON),
 	}, &s
 }
 

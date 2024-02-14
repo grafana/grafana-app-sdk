@@ -22,7 +22,7 @@ type Store interface {
 // ResourceGroupRouter is a Router which exposes generic CRUD routes for every resource contained in a given group.
 type ResourceGroupRouter struct {
 	*JSONRouter
-	resourceGroup resource.SchemaGroup
+	resourceGroup resource.KindCollection
 	namespace     string
 	store         Store
 }
@@ -30,7 +30,7 @@ type ResourceGroupRouter struct {
 // NewResourceGroupRouter returns a new ResourceGroupRouter,
 // exposing CRUD routes to manipulate resources in given group.
 func NewResourceGroupRouter(
-	resourceGroup resource.SchemaGroup,
+	resourceGroup resource.KindCollection,
 	namespace string,
 	clientGenerator resource.ClientGenerator,
 ) (*ResourceGroupRouter, error) {
@@ -41,7 +41,7 @@ func NewResourceGroupRouter(
 
 // NewResourceGroupRouterWithStore returns a new ResourceGroupRouter with pre-configured Store.
 func NewResourceGroupRouterWithStore(
-	resourceGroup resource.SchemaGroup,
+	resourceGroup resource.KindCollection,
 	namespace string,
 	store Store,
 ) (*ResourceGroupRouter, error) {
@@ -52,7 +52,7 @@ func NewResourceGroupRouterWithStore(
 		namespace:     namespace,
 	}
 
-	for _, schema := range router.resourceGroup.Schemas() {
+	for _, schema := range router.resourceGroup.Kinds() {
 		// TODO: all possible versions for each kind should be handled, address this with SchemaGroup in codegen?
 		baseRoute := fmt.Sprintf(
 			"%s/%s/%s",
@@ -90,7 +90,7 @@ func (router *ResourceGroupRouter) createResource(cr resource.Schema) JSONHandle
 		}
 		// The only bit of static metadata the user can specify here is the name
 		toBeInserted.SetStaticMetadata(resource.StaticMetadata{
-			Name:      toBeInserted.StaticMetadata().Name,
+			Name:      toBeInserted.GetName(),
 			Namespace: router.namespace,
 			Group:     cr.Group(),
 			Version:   cr.Version(),
@@ -148,7 +148,7 @@ func (router *ResourceGroupRouter) updateResource(cr resource.Schema) JSONHandle
 		}
 		// The only bit of static metadata the user can specify here is the name
 		updatedResource.SetStaticMetadata(resource.StaticMetadata{
-			Name:      updatedResource.StaticMetadata().Name,
+			Name:      updatedResource.GetName(),
 			Namespace: router.namespace,
 			Group:     cr.Group(),
 			Version:   cr.Version(),

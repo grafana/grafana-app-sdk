@@ -147,7 +147,7 @@ const opinionatedReconcilerPatchStateKey = "grafana-app-sdk-opinionated-reconcil
 //   - If the action is an Update, and the OpinionatedReconciler's finalizer is missing (and DeletionTimestamp is nil), add the finalizer, and do not delegate (the subsequent update action will delegate)
 func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
-	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
+	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		request.Action = ReconcileActionResynced
 		return o.wrappedReconcile(ctx, request)
 	}
@@ -163,7 +163,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 		}
 
 		// Attach the finalizer on success
-		patchErr := o.client.PatchInto(ctx, request.Object.StaticMetadata().Identifier(), resource.PatchRequest{
+		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 			Operations: []resource.PatchOperation{{
 				Operation: resource.PatchOpAdd,
 				Path:      "/metadata/finalizers",
@@ -178,18 +178,18 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 		}
 		return resp, patchErr
 	}
-	if request.Action == ReconcileActionUpdated && request.Object.CommonMetadata().DeletionTimestamp != nil && slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
-		patchErr := o.client.PatchInto(ctx, request.Object.StaticMetadata().Identifier(), resource.PatchRequest{
+	if request.Action == ReconcileActionUpdated && request.Object.GetDeletionTimestamp() != nil && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
+		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 			Operations: []resource.PatchOperation{{
 				Operation: resource.PatchOpRemove,
-				Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(request.Object.CommonMetadata().Finalizers, o.finalizer)),
+				Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(request.Object.GetFinalizers(), o.finalizer)),
 			}},
 		}, resource.PatchOptions{}, request.Object)
 		return ReconcileResult{}, patchErr
 	}
-	if request.Action == ReconcileActionUpdated && !slices.Contains(request.Object.CommonMetadata().Finalizers, o.finalizer) {
+	if request.Action == ReconcileActionUpdated && !slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		// Add the finalizer, don't delegate, let the reconcile action for adding the finalizer propagate down to avoid confusing extra reconciliations
-		patchErr := o.client.PatchInto(ctx, request.Object.StaticMetadata().Identifier(), resource.PatchRequest{
+		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 			Operations: []resource.PatchOperation{{
 				Operation: resource.PatchOpAdd,
 				Path:      "/metadata/finalizers",
@@ -266,7 +266,7 @@ func (t *TypedReconciler[T]) Reconcile(ctx context.Context, request ReconcileReq
 	}
 	cast, ok := request.Object.(T)
 	if !ok {
-		return ReconcileResult{}, NewCannotCastError(request.Object.StaticMetadata())
+		return ReconcileResult{}, NewCannotCastError(request.Object.GetStaticMetadata())
 	}
 	return t.ReconcileFunc(ctx, TypedReconcileRequest[T]{
 		Action: request.Action,

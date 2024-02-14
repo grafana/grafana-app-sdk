@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strings"
@@ -25,6 +26,9 @@ type SchemalessClient struct {
 
 	clientConfig ClientConfig
 
+	// codec is used for encoding/decoding JSON bytes into objects
+	codec resource.Codec
+
 	// clients is the actual k8s clients, groupversion -> client
 	clients map[string]*groupVersionClient
 
@@ -37,11 +41,16 @@ type SchemalessClient struct {
 
 // NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
 func NewSchemalessClient(kubeConfig rest.Config, clientConfig ClientConfig) *SchemalessClient {
+	return NewSchemalessClientWithCodec(kubeConfig, clientConfig, resource.NewJSONCodec())
+}
+
+func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientConfig, jsonCodec resource.Codec) *SchemalessClient {
 	kubeConfig.NegotiatedSerializer = &GenericNegotiatedSerializer{}
 	kubeConfig.UserAgent = rest.DefaultKubernetesUserAgent()
 	return &SchemalessClient{
 		kubeConfig:   kubeConfig,
 		clientConfig: clientConfig,
+		codec:        jsonCodec,
 		clients:      make(map[string]*groupVersionClient),
 		requestDurations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       clientConfig.MetricsConfig.Namespace,
@@ -77,7 +86,7 @@ func (s *SchemalessClient) Get(ctx context.Context, identifier resource.FullIden
 	return client.get(ctx, resource.Identifier{
 		Namespace: identifier.Namespace,
 		Name:      identifier.Name,
-	}, s.getPlural(identifier), into)
+	}, s.getPlural(identifier), into, s.codec)
 }
 
 // Create creates a new resource, and marshals the storage response (the created object) into the `into` field.
@@ -102,7 +111,7 @@ func (s *SchemalessClient) Create(ctx context.Context, identifier resource.FullI
 		Kind:      identifier.Kind,
 	})
 
-	return client.create(ctx, s.getPlural(identifier), obj, into)
+	return client.create(ctx, s.getPlural(identifier), obj, into, s.codec)
 }
 
 // Update updates an existing resource, and marshals the updated version into the `into` field
@@ -135,19 +144,15 @@ func (s *SchemalessClient) Update(ctx context.Context, identifier resource.FullI
 			return err
 		}
 
-		md := obj.CommonMetadata()
-		md.ResourceVersion = existingMd.ObjectMetadata.ResourceVersion
-		obj.SetCommonMetadata(md)
+		obj.SetResourceVersion(existingMd.GetResourceVersion())
 	} else {
-		md := obj.CommonMetadata()
-		md.ResourceVersion = options.ResourceVersion
-		obj.SetCommonMetadata(md)
+		obj.SetResourceVersion(options.ResourceVersion)
 	}
 
 	if options.Subresource != "" {
-		return client.updateSubresource(ctx, s.getPlural(identifier), options.Subresource, obj, into, options)
+		return client.updateSubresource(ctx, s.getPlural(identifier), options.Subresource, obj, into, options, s.codec)
 	}
-	return client.update(ctx, s.getPlural(identifier), obj, into, options)
+	return client.update(ctx, s.getPlural(identifier), obj, into, options, s.codec)
 }
 
 // Patch performs a JSON Patch on the provided resource, and marshals the updated version into the `into` field
@@ -161,7 +166,7 @@ func (s *SchemalessClient) Patch(ctx context.Context, identifier resource.FullId
 	return client.patch(ctx, resource.Identifier{
 		Namespace: identifier.Namespace,
 		Name:      identifier.Name,
-	}, s.getPlural(identifier), patch, into, options)
+	}, s.getPlural(identifier), patch, into, options, s.codec)
 }
 
 // Delete deletes a resource identified by identifier
@@ -189,9 +194,9 @@ func (s *SchemalessClient) List(ctx context.Context, identifier resource.FullIde
 	}
 
 	return client.list(ctx, identifier.Namespace, s.getPlural(identifier), into, options,
-		func(bytes []byte) (resource.Object, error) {
+		func(raw []byte) (resource.Object, error) {
 			into := exampleListItem.Copy()
-			err := rawToObject(bytes, into)
+			err := s.codec.Read(bytes.NewReader(raw), into)
 			return into, err
 		})
 }
@@ -208,7 +213,7 @@ func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullId
 	if err != nil {
 		return nil, err
 	}
-	return client.watch(ctx, identifier.Namespace, s.getPlural(identifier), exampleObject, options)
+	return client.watch(ctx, identifier.Namespace, s.getPlural(identifier), exampleObject, options, s.codec)
 }
 
 // PrometheusCollectors returns the prometheus metric collectors used by this client to allow for registration

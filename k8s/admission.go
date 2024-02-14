@@ -71,7 +71,7 @@ func (o *OpinionatedMutatingAdmissionController) Mutate(ctx context.Context, req
 	}
 
 	// Get the CommonMetadata, so we can update it
-	cmd := resp.UpdatedObject.CommonMetadata()
+	cmd := resp.UpdatedObject.GetCommonMetadata()
 
 	if cmd.Labels == nil {
 		cmd.Labels = make(map[string]string)
@@ -119,30 +119,30 @@ func (o *OpinionatedValidatingAdmissionController) Validate(ctx context.Context,
 	case resource.AdmissionActionCreate:
 		// Not allowed to set createdBy, updatedBy, or updateTimestamp
 		// createdBy can be set, but only to the username of the request
-		if request.Object.CommonMetadata().CreatedBy != "" && request.Object.CommonMetadata().CreatedBy != request.UserInfo.Username {
+		if request.Object.GetCommonMetadata().CreatedBy != "" && request.Object.GetCommonMetadata().CreatedBy != request.UserInfo.Username {
 			return NewAdmissionError(makeAnnotationError(annotationCreatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		// updatedBy can be set, but only to the username of the request
-		if request.Object.CommonMetadata().UpdatedBy != "" && request.Object.CommonMetadata().UpdatedBy != request.UserInfo.Username {
+		if request.Object.GetCommonMetadata().UpdatedBy != "" && request.Object.GetCommonMetadata().UpdatedBy != request.UserInfo.Username {
 			return NewAdmissionError(makeAnnotationError(annotationUpdatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		emptyTime := time.Time{}
 		// updateTimestamp cannot be set
-		if request.Object.CommonMetadata().UpdateTimestamp != emptyTime {
+		if request.Object.GetCommonMetadata().UpdateTimestamp != emptyTime {
 			return NewAdmissionError(makeAnnotationError(annotationUpdateTimestamp), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 	case resource.AdmissionActionUpdate:
 		// Not allowed to set createdBy, updatedBy, or updateTimestamp
 		// createdBy can be set, but only to the username of the request
-		if request.Object.CommonMetadata().CreatedBy != request.OldObject.CommonMetadata().CreatedBy {
+		if request.Object.GetCommonMetadata().CreatedBy != request.OldObject.GetCommonMetadata().CreatedBy {
 			return NewAdmissionError(makeAnnotationError(annotationCreatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		// updatedBy can be set, but only to the username of the request
-		if request.Object.CommonMetadata().UpdatedBy != request.OldObject.CommonMetadata().UpdatedBy && request.Object.CommonMetadata().UpdatedBy != request.UserInfo.Username {
+		if request.Object.GetCommonMetadata().UpdatedBy != request.OldObject.GetCommonMetadata().UpdatedBy && request.Object.GetCommonMetadata().UpdatedBy != request.UserInfo.Username {
 			return NewAdmissionError(makeAnnotationError(annotationUpdatedBy), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 		// updateTimestamp cannot be set
-		if request.Object.CommonMetadata().UpdateTimestamp != request.OldObject.CommonMetadata().UpdateTimestamp {
+		if request.Object.GetCommonMetadata().UpdateTimestamp != request.OldObject.GetCommonMetadata().UpdateTimestamp {
 			return NewAdmissionError(makeAnnotationError(annotationUpdateTimestamp), http.StatusBadRequest, ErrReasonFieldNotAllowed)
 		}
 	default:

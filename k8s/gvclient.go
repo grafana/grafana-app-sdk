@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -38,7 +40,7 @@ type groupVersionClient struct {
 }
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
-	into resource.Object) error {
+	into resource.Object, codec resource.Codec) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-get")
 	defer span.End()
 	sc := 0
@@ -47,7 +49,7 @@ func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identi
 		request = request.Namespace(identifier.Namespace)
 	}
 	start := time.Now()
-	bytes, err := request.Do(ctx).StatusCode(&sc).Raw()
+	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "GET", plural, "spec")
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
@@ -58,19 +60,24 @@ func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identi
 	)
 	g.incRequestCounter(sc, "GET", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	err = rawToObject(bytes, into)
+	err = codec.Read(bytes.NewReader(raw), into)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())
 	}
 	return err
 }
 
+type metadataObject struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+}
+
 func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resource.Identifier, plural string) (
-	*k8sObject, error) {
+	*metadataObject, error) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-getmetadata")
 	defer span.End()
 	sc := 0
@@ -94,7 +101,7 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	md := k8sObject{}
+	md := metadataObject{}
 	err = json.Unmarshal(bytes, &md)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to unmarshal request body: %s", err.Error()))
@@ -140,24 +147,26 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 }
 
 func (g *groupVersionClient) create(ctx context.Context, plural string, obj resource.Object,
-	into resource.Object) error {
+	into resource.Object, codec resource.Codec) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-create")
 	defer span.End()
-	bytes, err := marshalJSON(obj, map[string]string{
+	addLabels(obj, map[string]string{
 		versionLabel: g.version,
-	}, g.config)
+	})
+	buf := &bytes.Buffer{}
+	err := codec.Write(buf, obj)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("error marshaling kubernetes JSON: %s", err.Error()))
 		return err
 	}
 
 	sc := 0
-	request := g.client.Post().Resource(plural).Body(bytes)
-	if strings.TrimSpace(obj.StaticMetadata().Namespace) != "" {
-		request = request.Namespace(obj.StaticMetadata().Namespace)
+	request := g.client.Post().Resource(plural).Body(buf.Bytes())
+	if strings.TrimSpace(obj.GetNamespace()) != "" {
+		request = request.Namespace(obj.GetNamespace())
 	}
 	start := time.Now()
-	bytes, err = request.Do(ctx).StatusCode(&sc).Raw()
+	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "CREATE", plural, "spec")
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
@@ -168,11 +177,11 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 	)
 	g.incRequestCounter(sc, "CREATE", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	err = rawToObject(bytes, into)
+	err = codec.Read(bytes.NewReader(raw), into)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
 		return err
@@ -181,21 +190,23 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 }
 
 func (g *groupVersionClient) update(ctx context.Context, plural string, obj resource.Object,
-	into resource.Object, _ resource.UpdateOptions) error {
+	into resource.Object, _ resource.UpdateOptions, codec resource.Codec) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-update")
 	defer span.End()
-	bytes, err := marshalJSON(obj, map[string]string{
+	addLabels(obj, map[string]string{
 		versionLabel: g.version,
-	}, g.config)
+	})
+	buf := &bytes.Buffer{}
+	err := codec.Write(buf, obj)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("error marshaling kubernetes JSON: %s", err.Error()))
 		return err
 	}
 
 	req := g.client.Put().Resource(plural).
-		Name(obj.StaticMetadata().Name).Body(bytes)
-	if strings.TrimSpace(obj.StaticMetadata().Namespace) != "" {
-		req = req.Namespace(obj.StaticMetadata().Namespace)
+		Name(obj.GetName()).Body(buf.Bytes())
+	if strings.TrimSpace(obj.GetNamespace()) != "" {
+		req = req.Namespace(obj.GetNamespace())
 	}
 	sc := 0
 	start := time.Now()
@@ -210,11 +221,11 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 	)
 	g.incRequestCounter(sc, "UPDATE", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	err = rawToObject(raw, into)
+	err = codec.Read(bytes.NewReader(raw), into)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
 		return err
@@ -223,21 +234,23 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 }
 
 func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subresource string, obj resource.Object,
-	into resource.Object, _ resource.UpdateOptions) error {
+	into resource.Object, _ resource.UpdateOptions, codec resource.Codec) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-update-subresource")
 	defer span.End()
-	bytes, err := marshalJSON(obj, map[string]string{
+	addLabels(obj, map[string]string{
 		versionLabel: g.version,
-	}, g.config)
+	})
+	buf := &bytes.Buffer{}
+	err := codec.Write(buf, obj)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("error marshaling kubernetes JSON: %s", err.Error()))
 		return err
 	}
 
 	req := g.client.Put().Resource(plural).SubResource(subresource).
-		Name(obj.StaticMetadata().Name).Body(bytes)
-	if strings.TrimSpace(obj.StaticMetadata().Namespace) != "" {
-		req = req.Namespace(obj.StaticMetadata().Namespace)
+		Name(obj.GetName()).Body(buf.Bytes())
+	if strings.TrimSpace(obj.GetNamespace()) != "" {
+		req = req.Namespace(obj.GetNamespace())
 	}
 	sc := 0
 	start := time.Now()
@@ -252,11 +265,11 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 	)
 	g.incRequestCounter(sc, "UPDATE", plural, subresource)
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	err = rawToObject(raw, into)
+	err = codec.Read(bytes.NewReader(raw), into)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
 		return err
@@ -266,15 +279,15 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 
 //nolint:revive,unused
 func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Identifier, plural string,
-	patch resource.PatchRequest, into resource.Object, _ resource.PatchOptions) error {
+	patch resource.PatchRequest, into resource.Object, _ resource.PatchOptions, codec resource.Codec) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-patch")
 	defer span.End()
-	bytes, err := marshalJSONPatch(patch)
+	patchBytes, err := marshalJSONPatch(patch)
 	if err != nil {
 		return err
 	}
 	req := g.client.Patch(types.JSONPatchType).Resource(plural).
-		Name(identifier.Name).Body(bytes)
+		Name(identifier.Name).Body(patchBytes)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		req = req.Namespace(identifier.Namespace)
 	}
@@ -291,11 +304,11 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 	)
 	g.incRequestCounter(sc, "PATCH", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	err = rawToObject(raw, into)
+	err = codec.Read(bytes.NewReader(raw), into)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
 		return err
@@ -367,7 +380,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 
 //nolint:revive
 func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string,
-	exampleObject resource.Object, options resource.WatchOptions) (*WatchResponse, error) {
+	exampleObject resource.Object, options resource.WatchOptions, codec resource.Codec) (*WatchResponse, error) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-watch")
 	defer span.End()
 	g.client.Get()
@@ -401,6 +414,7 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	}
 	w := &WatchResponse{
 		ex:     exampleObject,
+		codec:  codec,
 		watch:  resp,
 		ch:     make(chan resource.WatchEvent, channelBufferSize),
 		stopCh: make(chan struct{}),
@@ -437,6 +451,7 @@ type WatchResponse struct {
 	ch      chan resource.WatchEvent
 	stopCh  chan struct{}
 	ex      resource.Object
+	codec   resource.Codec
 	started bool
 }
 
@@ -448,7 +463,7 @@ func (w *WatchResponse) start() {
 			var obj resource.Object
 			if cast, ok := evt.Object.(intoObject); ok {
 				obj = w.ex.Copy()
-				err := cast.Into(obj)
+				err := cast.Into(obj, w.codec)
 				if err != nil {
 					// TODO: hmm
 					break
@@ -524,4 +539,15 @@ func parseKubernetesError(responseBytes []byte, statusCode int, err error) error
 		return NewServerResponseError(err, statusCode)
 	}
 	return err
+}
+
+func addLabels(obj resource.Object, labels map[string]string) {
+	l := obj.GetLabels()
+	if l == nil {
+		l = make(map[string]string)
+	}
+	for k, v := range labels {
+		l[k] = v
+	}
+	obj.SetLabels(l)
 }

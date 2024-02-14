@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
+
+var _ resource.ClientGenerator = &ClientRegistry{}
 
 // NewClientRegistry returns a new ClientRegistry which will make Client structs using the provided rest.Config
 func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *ClientRegistry {
@@ -53,7 +56,11 @@ type ClientRegistry struct {
 
 // ClientFor returns a Client with the underlying rest.Interface being a cached one for the Schema's GroupVersion.
 // If no such client is cached, it creates a new one with the stored config.
-func (c *ClientRegistry) ClientFor(sch resource.Schema) (resource.Client, error) {
+func (c *ClientRegistry) ClientFor(sch resource.Kind) (resource.Client, error) {
+	codec := sch.Codec(resource.KindEncodingJSON)
+	if codec == nil {
+		return nil, fmt.Errorf("no codec for KindEncodingJSON")
+	}
 	client, err := c.getClient(sch)
 	if err != nil {
 		return nil, err
@@ -67,6 +74,7 @@ func (c *ClientRegistry) ClientFor(sch resource.Schema) (resource.Client, error)
 			totalRequests:    c.totalRequests,
 		},
 		schema: sch,
+		codec:  codec,
 		config: c.clientConfig,
 	}, nil
 }

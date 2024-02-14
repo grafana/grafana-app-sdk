@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestInformerController_AddWatcher(t *testing.T) {
@@ -1043,23 +1044,15 @@ func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
 		{
 			name:      "same generations, shouldn't dequeue",
 			newAction: ResourceActionUpdate,
-			newObject: &resource.SimpleObject[string]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						ExtraFields: map[string]any{
-							"generation": int64(1),
-						},
-					},
+			newObject: &resource.TypedSpecObject[string]{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
 				},
 			},
 			retryAction: ResourceActionCreate,
-			retryObject: &resource.SimpleObject[string]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						ExtraFields: map[string]any{
-							"generation": int64(1),
-						},
-					},
+			retryObject: &resource.TypedSpecObject[string]{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
 				},
 			},
 			retryError: nil,
@@ -1068,23 +1061,15 @@ func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
 		{
 			name:      "different generations, should dequeue",
 			newAction: ResourceActionUpdate,
-			newObject: &resource.SimpleObject[string]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						ExtraFields: map[string]any{
-							"generation": int64(1),
-						},
-					},
+			newObject: &resource.TypedSpecObject[string]{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 1,
 				},
 			},
 			retryAction: ResourceActionCreate,
-			retryObject: &resource.SimpleObject[string]{
-				BasicMetadataObject: resource.BasicMetadataObject{
-					CommonMeta: resource.CommonMetadata{
-						ExtraFields: map[string]any{
-							"generation": int64(2),
-						},
-					},
+			retryObject: &resource.TypedSpecObject[string]{
+				ObjectMeta: metav1.ObjectMeta{
+					Generation: 2,
 				},
 			},
 			retryError: nil,
@@ -1154,4 +1139,4 @@ func (ti *testInformer) FireDelete(ctx context.Context, object resource.Object) 
 	}
 }
 
-var emptyObject = &resource.SimpleObject[string]{}
+var emptyObject = &resource.TypedSpecObject[string]{}

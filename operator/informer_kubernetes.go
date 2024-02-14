@@ -60,7 +60,7 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 						attribute.String("kind.version", sch.Version()),
 						attribute.String("namespace", namespace),
 					)
-					resp := listObjectWrapper{}
+					resp := resource.UntypedList{}
 					err := client.ListInto(ctx, namespace, resource.ListOptions{
 						LabelFilters: labelFilters,
 						Continue:     options.Continue,
@@ -134,12 +134,13 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 				k.ErrorHandler(err)
 				return
 			}
+			gvk := cast.GroupVersionKind()
 			span.SetAttributes(
-				attribute.String("kind.name", cast.StaticMetadata().Kind),
-				attribute.String("kind.group", cast.StaticMetadata().Group),
-				attribute.String("kind.version", cast.StaticMetadata().Version),
-				attribute.String("namespace", cast.StaticMetadata().Namespace),
-				attribute.String("name", cast.StaticMetadata().Name),
+				attribute.String("kind.name", gvk.Kind),
+				attribute.String("kind.group", gvk.Group),
+				attribute.String("kind.version", gvk.Version),
+				attribute.String("namespace", cast.GetNamespace()),
+				attribute.String("name", cast.GetName()),
 			)
 			err = handler.Add(ctx, cast)
 			if err != nil {
@@ -157,12 +158,13 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 				return
 			}
 			// None of these should change between old and new, so we can set them here with old's values
+			gvk := cOld.GroupVersionKind()
 			span.SetAttributes(
-				attribute.String("kind.name", cOld.StaticMetadata().Kind),
-				attribute.String("kind.group", cOld.StaticMetadata().Group),
-				attribute.String("kind.version", cOld.StaticMetadata().Version),
-				attribute.String("namespace", cOld.StaticMetadata().Namespace),
-				attribute.String("name", cOld.StaticMetadata().Name),
+				attribute.String("kind.name", gvk.Kind),
+				attribute.String("kind.group", gvk.Group),
+				attribute.String("kind.version", gvk.Version),
+				attribute.String("namespace", cOld.GetNamespace()),
+				attribute.String("name", cOld.GetName()),
 			)
 			cNew, err := k.toResourceObject(newObj)
 			if err != nil {
@@ -185,12 +187,13 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 				k.ErrorHandler(err)
 				return
 			}
+			gvk := cast.GroupVersionKind()
 			span.SetAttributes(
-				attribute.String("kind.name", cast.StaticMetadata().Kind),
-				attribute.String("kind.group", cast.StaticMetadata().Group),
-				attribute.String("kind.version", cast.StaticMetadata().Version),
-				attribute.String("namespace", cast.StaticMetadata().Namespace),
-				attribute.String("name", cast.StaticMetadata().Name),
+				attribute.String("kind.name", gvk.Kind),
+				attribute.String("kind.group", gvk.Group),
+				attribute.String("kind.version", gvk.Version),
+				attribute.String("namespace", cast.GetNamespace()),
+				attribute.String("name", cast.GetName()),
 			)
 			err = handler.Delete(ctx, cast)
 			if err != nil {
@@ -260,87 +263,6 @@ type ListWatchClient interface {
 	Watch(ctx context.Context, namespace string, options resource.WatchOptions) (resource.WatchResponse, error)
 }
 
-type listObjectWrapper struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-	Items           []runtime.Object
-}
-
-func (l *listObjectWrapper) DeepCopyObject() runtime.Object {
-	val := reflect.ValueOf(l).Elem()
-
-	cpy := reflect.New(val.Type())
-	cpy.Elem().Set(val)
-
-	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
-		return obj
-	}
-
-	// TODO: better return than nil?
-	return nil
-}
-
-func (*listObjectWrapper) ListMetadata() resource.ListMetadata {
-	return resource.ListMetadata{}
-}
-
-func (l *listObjectWrapper) SetListMetadata(md resource.ListMetadata) {
-	l.ListMeta = metav1.ListMeta{
-		ResourceVersion: md.ResourceVersion,
-		Continue:        md.Continue,
-	}
-}
-
-func (*listObjectWrapper) ListItems() []resource.Object {
-	return nil
-}
-
-func (l *listObjectWrapper) SetItems(items []resource.Object) {
-	list := make([]runtime.Object, 0)
-	for _, i := range items {
-		// If the Object already implements runtime.Object, we don't have to wrap it
-		if ro, ok := i.(runtime.Object); ok {
-			list = append(list, ro)
-		} else {
-			list = append(list, &objectWrapper{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:       i.StaticMetadata().Namespace,
-					Name:            i.StaticMetadata().Name,
-					ResourceVersion: i.CommonMetadata().ResourceVersion,
-				},
-				Object: i,
-			})
-		}
-	}
-	l.Items = list
-}
-
-type objectWrapper struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
-	Object            resource.Object
-}
-
-func (o *objectWrapper) DeepCopyObject() runtime.Object {
-	val := reflect.ValueOf(o).Elem()
-
-	cpy := reflect.New(val.Type())
-	cpy.Elem().Set(val)
-
-	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
-		return obj
-	}
-
-	// TODO: better return than nil?
-	return nil
-}
-
-func (o *objectWrapper) ResourceObject() resource.Object {
-	return o.Object
-}
-
 type watchWrapper struct {
 	watch resource.WatchResponse
 	ch    chan watch.Event
@@ -349,15 +271,8 @@ type watchWrapper struct {
 func (w *watchWrapper) start() {
 	for e := range w.watch.WatchEvents() {
 		w.ch <- watch.Event{
-			Type: watch.EventType(e.EventType),
-			Object: &objectWrapper{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:       e.Object.StaticMetadata().Namespace,
-					Name:            e.Object.StaticMetadata().Name,
-					ResourceVersion: e.Object.CommonMetadata().ResourceVersion,
-				},
-				Object: e.Object,
-			},
+			Type:   watch.EventType(e.EventType),
+			Object: e.Object,
 		}
 	}
 }
