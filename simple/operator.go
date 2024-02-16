@@ -188,6 +188,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options Li
 	if err != nil {
 		return err
 	}
+	inf.ErrorHandler = o.ErrorHandler
 	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
@@ -218,6 +219,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
+	inf.ErrorHandler = o.ErrorHandler
 	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {

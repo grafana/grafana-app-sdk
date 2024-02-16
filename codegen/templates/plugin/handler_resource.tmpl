@@ -17,7 +17,7 @@ import (
 )
 
 type {{.Kind}}Service interface {
-	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedStoreList[*{{.MachineName}}.Object], error)
+	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedList[*{{.MachineName}}.Object], error)
 	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.Object, error)
 	Add(ctx context.Context, obj *{{.MachineName}}.Object) (*{{.MachineName}}.Object, error)
 	Update(ctx context.Context, id resource.Identifier, obj *{{.MachineName}}.Object) (*{{.MachineName}}.Object, error)
@@ -82,7 +82,7 @@ func (p *Plugin) handle{{.Kind}}Create(ctx context.Context, req router.JSONReque
 	    log.DefaultLogger.Error("Error getting {{.Kind}}Service: " + err.Error())
         return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
     }
-	t.StaticMeta.Namespace = p.namespace
+	t.SetNamespace(p.namespace)
 	obj, err := svc.Add(ctx, &t)
 	if err != nil {
 		if e, ok := err.(errWithStatusCode); ok {

@@ -67,7 +67,7 @@ func main() {
         logging.DefaultLogger.With("error", err).Error("Unable to create {{.Kind}}Watcher")
         panic(err)
     }
-    err = runner.WatchKind({{.MachineName}}.Schema(), {{.MachineName}}Watcher, simple.ListWatchOptions{
+    err = runner.WatchKind({{.MachineName}}.Kind(), {{.MachineName}}Watcher, simple.ListWatchOptions{
         Namespace: resource.NamespaceAll,
     })
     if err != nil {

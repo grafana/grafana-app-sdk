@@ -19,34 +19,31 @@ import (
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
 // and works most optimally with a client that has a Watch response that implements KubernetesCompatibleWatch.
 type KubernetesBasedInformer struct {
-	ErrorHandler        func(error)
+	ErrorHandler        func(context.Context, error)
 	SharedIndexInformer cache.SharedIndexInformer
-	schema              resource.Schema
+	schema              resource.Kind
 }
 
 var EmptyLabelFilters []string
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests.
-func NewKubernetesBasedInformer(sch resource.Schema, client ListWatchClient, namespace string) (
+func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
 	*KubernetesBasedInformer, error) {
 	return NewKubernetesBasedInformerWithFilters(sch, client, namespace, EmptyLabelFilters)
 }
 
 // NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatchClient, namespace string, labelFilters []string) (
+func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, namespace string, labelFilters []string) (
 	*KubernetesBasedInformer, error) {
-	if sch == nil {
-		return nil, fmt.Errorf("resource cannot be nil")
-	}
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
 	}
 
 	return &KubernetesBasedInformer{
 		schema: sch,
-		ErrorHandler: func(err error) {
+		ErrorHandler: func(ctx context.Context, err error) {
 			// Do nothing
 		},
 		SharedIndexInformer: cache.NewSharedIndexInformer(
@@ -131,7 +128,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 			cast, err := k.toResourceObject(obj)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 				return
 			}
 			gvk := cast.GroupVersionKind()
@@ -145,7 +142,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 			err = handler.Add(ctx, cast)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 			}
 		},
 		UpdateFunc: func(oldObj, newObj any) {
@@ -154,7 +151,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 			cOld, err := k.toResourceObject(oldObj)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 				return
 			}
 			// None of these should change between old and new, so we can set them here with old's values
@@ -169,13 +166,13 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 			cNew, err := k.toResourceObject(newObj)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 				return
 			}
 			err = handler.Update(ctx, cOld, cNew)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 			}
 		},
 		DeleteFunc: func(obj any) {
@@ -184,7 +181,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 			cast, err := k.toResourceObject(obj)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 				return
 			}
 			gvk := cast.GroupVersionKind()
@@ -198,7 +195,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 			err = handler.Delete(ctx, cast)
 			if err != nil {
 				span.SetStatus(codes.Error, err.Error())
-				k.ErrorHandler(err)
+				k.errorHandler(ctx, err)
 			}
 		},
 	})
@@ -231,7 +228,8 @@ func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, er
 	// Next, see if it has an `Into` method for casting to a resource.Object
 	if cast, ok := obj.(ConvertableIntoResourceObject); ok {
 		newObj := k.schema.ZeroValue()
-		err := cast.Into(newObj)
+		// TODO: better
+		err := cast.Into(newObj, k.schema.Codec(resource.KindEncodingJSON))
 		return newObj, err
 	}
 	// TODO: other methods...?
@@ -239,11 +237,17 @@ func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, er
 	return nil, fmt.Errorf("unable to cast %v into resource.Object", reflect.TypeOf(obj))
 }
 
+func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
+	if k.ErrorHandler != nil {
+		k.ErrorHandler(ctx, err)
+	}
+}
+
 // ConvertableIntoResourceObject describes any object which can be marshaled into a resource.Object.
 // This is specifically useful for objects which may wrap underlying data which can be marshaled into a resource.Object,
 // but need the exact implementation provided to them (by `into`).
 type ConvertableIntoResourceObject interface {
-	Into(object resource.Object) error
+	Into(object resource.Object, codec resource.Codec) error
 }
 
 // ResourceObjectWrapper describes anything which wraps a resource.Object, such that it can be extracted.

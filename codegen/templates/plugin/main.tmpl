@@ -96,7 +96,7 @@ func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
         svc := PluginService{}
 
 		// Create stores for each Kind{{ range .Resources }}
-        {{ .MachineName }}Store, err := resource.NewTypedStore[*{{ .MachineName }}.Object]({{ .MachineName }}.Schema(), clientGenerator)
+        {{ .MachineName }}Store, err := resource.NewTypedStore[*{{ .MachineName }}.Object]({{ .MachineName }}.Kind(), clientGenerator)
         if err != nil {
             logger.Error("failed to create {{ .Kind }} store", "err", err)
             return nil, fmt.Errorf("failed to create {{ .Kind }} store: %w", err)

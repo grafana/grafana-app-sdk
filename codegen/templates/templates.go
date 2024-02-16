@@ -2,6 +2,7 @@ package templates
 
 import (
 	"embed"
+	"fmt"
 	"io"
 	"regexp"
 	"text/template"
@@ -15,7 +16,9 @@ var templates embed.FS
 var (
 	templateResourceObject, _ = template.ParseFS(templates, "resourceobject.tmpl")
 	templateSchema, _         = template.ParseFS(templates, "schema.tmpl")
+	templateCodec, _          = template.ParseFS(templates, "codec.tmpl")
 	templateLineage, _        = template.ParseFS(templates, "lineage.tmpl")
+	templateThemaCodec, terr  = template.ParseFS(templates, "themacodec.tmpl")
 	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
@@ -27,6 +30,38 @@ var (
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
+)
+
+var (
+	GoTypeString = CustomMetadataFieldGoType{
+		GoType: "string",
+		SetFuncTemplate: func(inputVarName string, setToVarName string) string {
+			return fmt.Sprintf("%s = %s", setToVarName, inputVarName)
+		},
+		GetFuncTemplate: func(varName string) string {
+			return fmt.Sprintf("return %s", varName)
+		},
+	}
+	GoTypeInt = CustomMetadataFieldGoType{
+		GoType: "int",
+		SetFuncTemplate: func(inputVarName string, setToVarName string) string {
+			return fmt.Sprintf("%s = strconv.Itoa(%s)", setToVarName, inputVarName)
+		},
+		GetFuncTemplate: func(varName string) string {
+			return fmt.Sprintf("i, _ := strconv.Atoi(%s)\nreturn i", varName)
+		},
+		AdditionalImports: []string{"strconv"},
+	}
+	GoTypeTime = CustomMetadataFieldGoType{
+		GoType: "time.Time",
+		SetFuncTemplate: func(inputVarName string, setToVarName string) string {
+			return fmt.Sprintf("%s = %s.Format(time.RFC3339)", setToVarName, inputVarName)
+		},
+		GetFuncTemplate: func(varName string) string {
+			return fmt.Sprintf("parsed, _ := time.Parse(%s, time.RFC3339)\nreturn parsed", varName)
+		},
+		AdditionalImports: []string{"time"},
+	}
 )
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
@@ -67,6 +102,17 @@ func WriteSchema(metadata SchemaMetadata, out io.Writer) error {
 	return templateSchema.Execute(out, metadata)
 }
 
+// WriteCodec executes the Generic Resource Codec template, and writes out the generated go code to out
+func WriteCodec(metadata SchemaMetadata, out io.Writer) error {
+	return templateCodec.Execute(out, metadata)
+}
+
+// WriteThemaCodec executes the Thema-specific Codec template, and writes out the generated go code to out
+func WriteThemaCodec(metadata ResourceObjectTemplateMetadata, out io.Writer) error {
+	fmt.Println(terr)
+	return templateThemaCodec.Execute(out, metadata)
+}
+
 // LineageMetadata is the metadata required by the lineage go code template
 type LineageMetadata struct {
 	Package           string
@@ -87,6 +133,14 @@ func WriteLineageGo(metadata LineageMetadata, out io.Writer) error {
 type ObjectMetadataField struct {
 	JSONName  string
 	FieldName string
+	GoType    CustomMetadataFieldGoType
+}
+
+type CustomMetadataFieldGoType struct {
+	GoType            string
+	SetFuncTemplate   func(inputVarName string, setToVarName string) string
+	GetFuncTemplate   func(fromStringVarName string) string
+	AdditionalImports []string
 }
 
 // WrappedTypeMetadata is the metadata required by the wrappedtype go code template

@@ -33,6 +33,9 @@ func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 		&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: !versioned,
 		},
+		&jennies.CodecGenerator{
+			OnlyUseCurrentVersion: !versioned,
+		},
 	)
 	return g
 }

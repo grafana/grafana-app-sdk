@@ -1,9 +1,12 @@
 package k8s
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 
+	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -66,6 +69,7 @@ func (*GenericJSONDecoder) Decode(data []byte, defaults *schema.GroupVersionKind
 	chk := check{}
 	err := json.Unmarshal(data, &chk)
 	if chk.Type != "" {
+		return nil, nil, fmt.Errorf("bad type")
 		// Watch response
 		w := &UntypedWatchObject{}
 		err = json.Unmarshal(data, w)
@@ -98,7 +102,6 @@ func (*GenericJSONDecoder) Identifier() runtime.Identifier {
 	return "generic-json-decoder"
 }
 
-/*
 type KindNegotiatedSerializer struct {
 	Kind resource.Kind
 }
@@ -108,7 +111,8 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 	supported := make([]runtime.SerializerInfo, 0)
 	for encoding, codec := range k.Kind.Codecs {
 		serializer := &CodecDecoder{
-			Codec: codec,
+			SampleObject: k.Kind.ZeroValue(),
+			Codec:        codec,
 		}
 		info := runtime.SerializerInfo{
 			MediaType:  string(encoding),
@@ -118,6 +122,8 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 		// Framer is used for the stream serializer
 		switch encoding {
 		case resource.KindEncodingJSON:
+			serializer.Decoder = json.Unmarshal
+			info.Serializer = serializer
 			info.StreamSerializer = &runtime.StreamSerializerInfo{
 				Serializer: serializer,
 				Framer:     jsonserializer.Framer,
@@ -139,14 +145,15 @@ func (*KindNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder,
 }
 
 // DecoderToVersion returns a GenericJSONDecoder
-func (*KindNegotiatedSerializer) DecoderToVersion(_ runtime.Decoder, _ runtime.GroupVersioner) runtime.Decoder {
-	return &GenericJSONDecoder{}
+func (*KindNegotiatedSerializer) DecoderToVersion(d runtime.Decoder, _ runtime.GroupVersioner) runtime.Decoder {
+	return d
 }
 
-// GenericJSONDecoder implements runtime.Serializer and works with Untyped* objects to implement runtime.Object
+// CodecDecoder implements runtime.Serializer and works with Untyped* objects to implement runtime.Object
 type CodecDecoder struct {
 	SampleObject resource.Object
 	Codec        resource.Codec
+	Decoder      func([]byte, any) error
 }
 
 // Decode decodes the provided data into UntypedWatchObject or UntypedObjectWrapper
@@ -154,61 +161,39 @@ type CodecDecoder struct {
 //nolint:gocritic,revive
 func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (
 	runtime.Object, *schema.GroupVersionKind, error) {
-	type check struct {
-		metav1.TypeMeta `json:",inline"`
-		Type            string          `json:"type"`
-		Kind            string          `json:"kind"`
-		Items           []interface{}   `json:"items,omitempty"`
-		Object          json.RawMessage `json:"object"`
-	}
 	if into != nil {
+		if cast, ok := into.(resource.Object); ok {
+			err := c.Codec.Read(bytes.NewReader(data), cast)
+			return cast, defaults, err
+		}
+		if cast, ok := into.(*metav1.WatchEvent); ok {
+			err := c.Decoder(data, cast)
+			return cast, defaults, err
+		}
+		if cast, ok := into.(*metav1.List); ok {
+			err := c.Decoder(data, cast)
+			return cast, defaults, err
+		}
 		// We shouldn't encounter this
-		// TODO: make better
-		err := json.Unmarshal(data, into)
+		// TODO: make better or return error?
+		err := c.Decoder(data, into)
 		return into, defaults, err
 	}
 
-	// Determine what kind of object we have the raw bytes for
-	// We do this by unmarshalling into a superset of a few possible types, then narrowing down
-	// TODO: this seems very naive, check how apimachinery does it typically
-	chk := check{}
-	err := json.Unmarshal(data, &chk)
-	if chk.Type != "" {
-		// Watch response
-		w := &UntypedWatchObject{}
-		err = json.Unmarshal(data, w)
-		obj := c.SampleObject.Copy()
-		c.Codec.Read(bytes.NewReader(check.Object), obj)
-		into = &watch.Event{
-			Type:   watch.EventType(chk.Type),
-			Object: obj,
-		}
-		into = w
-	} else if chk.Items != nil {
-		// List
-		// TODO
-	} else if chk.Kind != "" {
-		o := &UntypedObjectWrapper{}
-		err = json.Unmarshal(data, o)
-		o.object = data
-		into = o
-	}
-	return into, defaults, err
+	obj := c.SampleObject.Copy()
+	err := c.Codec.Read(bytes.NewReader(data), obj)
+	return obj, defaults, err
 }
 
 // Encode json-encodes the provided object
-func (*CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
-	// TODO: check compliance with resource.Object and use marshalJSON in that case
-	b, e := json.Marshal(obj)
-	if e != nil {
-		return e
+func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
+	if cast, ok := obj.(resource.Object); ok {
+		return c.Codec.Write(w, cast)
 	}
-	_, e = w.Write(b)
-	return e
+	return fmt.Errorf("provided object is not a resource.Object")
 }
 
 // Identifier returns "generic-json-decoder"
 func (*CodecDecoder) Identifier() runtime.Identifier {
-	return "generic-json-decoder"
+	return "codec-decoder"
 }
-*/
