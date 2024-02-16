@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/format"
+	"slices"
 	"strings"
 	"time"
 
@@ -117,6 +118,10 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 			})
 		}
 	}
+	// Sort extra fields so that codegen is deterministic for ordering
+	slices.SortFunc(customMetadataFields, func(a, b templates.ObjectMetadataField) int {
+		return strings.Compare(a.FieldName, b.FieldName)
+	})
 
 	meta := kind.Properties()
 	md := templates.ResourceObjectTemplateMetadata{

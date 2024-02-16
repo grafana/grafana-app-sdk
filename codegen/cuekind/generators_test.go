@@ -59,8 +59,8 @@ func TestResourceGenerator(t *testing.T) {
 	files, err := ResourceGenerator(false).Generate(kinds...)
 	require.Nil(t, err)
 	// Check number of files generated
-	// 5 -> object, spec, metadata, status, schema
-	assert.Len(t, files, 5)
+	// 5 -> object, spec, metadata, status, schema, codec
+	assert.Len(t, files, 6)
 	// Check content against the golden files
 	compareToGolden(t, files, "")
 }

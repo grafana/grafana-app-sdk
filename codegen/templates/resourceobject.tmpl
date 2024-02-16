@@ -133,12 +133,18 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata reso
 }
 
 {{range .CustomMetadataFields}}func ({{$root.ObjectShortName}} *{{$root.ObjectTypeName}}) Get{{.FieldName}}() {{.GoType.GoType}} {
+    if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
+        {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
+    }
     {{ $var := (printf "%v.ObjectMeta.Annotations[\"%v\"]" $root.ObjectShortName .JSONName) }}
     {{ $ret := (call .GoType.GetFuncTemplate $var) }}
     {{ $ret }}
 }
 
 func ({{$root.ObjectShortName}} *{{$root.ObjectTypeName}}) Set{{.FieldName}}({{.JSONName}} {{.GoType.GoType}}) {
+    if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
+        {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
+    }
     {{ $var := (printf "%v.ObjectMeta.Annotations[\"%v\"]" $root.ObjectShortName .JSONName) }}
     {{ $ret := (call .GoType.SetFuncTemplate .JSONName $var) }}
     {{ $ret }}

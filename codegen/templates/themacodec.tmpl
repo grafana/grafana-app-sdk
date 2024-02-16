@@ -88,12 +88,6 @@ func (*JSONCodec) Write(writer io.Writer, from resource.Object) error {
     {{ $ret := (call .GoType.GetFuncTemplate $var) }}
     {{ $ret }}
 }
-
-func set{{.FieldName}}(annotations map[string]string, {{.JSONName}} {{.GoType.GoType}}) {
-    {{ $var := (printf "annotations[\"%v\"]" .JSONName) }}
-    {{ $ret := (call .GoType.SetFuncTemplate .JSONName $var) }}
-    {{ $ret }}
-}
 {{ end }}
 // Interface compliance checks
 var _ resource.Codec = &JSONCodec{}

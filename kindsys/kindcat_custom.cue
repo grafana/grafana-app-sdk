@@ -29,13 +29,6 @@ CommonMetadata: {
     updateTimestamp: string & time.Time
     createdBy: string
     updatedBy: string
-
-	// TODO: additional metadata fields?
-
-	// extraFields is reserved for any fields that are pulled from the API server metadata but do not have concrete fields in the CUE metadata
-	extraFields: {
-		[string]: _
-	}
 }
 
 // _crdSchema is the schema format for a CRD.
@@ -49,14 +42,6 @@ _crdSchema: {
 		updateTimestamp: string & time.Time
 		createdBy: string
 		updatedBy: string
-
-		// TODO: additional metadata fields?
-		// Additional metadata can be added at any future point, as it is allowed to be constant across lineage versions
-
-		// extraFields is reserved for any fields that are pulled from the API server metadata but do not have concrete fields in the CUE metadata
-		extraFields: {
-			[string]: _
-		}
 	} & {
 		// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
 		// Can't use this as it's not yet enforced CUE:

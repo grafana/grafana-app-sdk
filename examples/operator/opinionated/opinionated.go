@@ -100,7 +100,7 @@ func main() {
 	}
 
 	// Create an informer for the schema to watch all namespaces.
-	informer, err := operator.NewKubernetesBasedInformer(schema, client, "")
+	informer, err := operator.NewKubernetesBasedInformer(kind, client, "")
 	if err != nil {
 		panic(fmt.Errorf("unable to create controller: %w", err))
 	}
@@ -111,7 +111,7 @@ func main() {
 
 	// Add a basic error handler to log errors. The function is called if a watcher function returns an error.
 	// If no ErrorHandler is defined, the error is swallowed.
-	informer.ErrorHandler = func(err error) {
+	informer.ErrorHandler = func(ctx context.Context, err error) {
 		log.Printf("\u001B[0;31mERROR: %s\u001B[0m", err.Error())
 	}
 

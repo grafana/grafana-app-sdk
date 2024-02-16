@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"cuelang.org/go/cue/cuecontext"
@@ -55,8 +56,14 @@ func TestResourceGenerator(t *testing.T) {
 	files, err := parser.Generate(ResourceGenerator(), "customKind")
 	require.Nil(t, err)
 	// Check number of files generated
-	// 8 -> object, spec, metadata, status, lineage (CUE), lineage (go), schema, cue.mod/module.cue
-	assert.Len(t, files, 8)
+	// 8 -> object, spec, metadata, status, lineage (CUE), lineage (go), schema, codec, cue.mod/module.cue
+	assert.Len(t, files, 9)
+	// Since the codec file differs for thema, we need to use the re-named version we have in testing/golden_generated
+	for i := 0; i < len(files); i++ {
+		if strings.Contains(files[i].RelativePath, "codec_gen") {
+			files[i].RelativePath = strings.Replace(files[i].RelativePath, "codec_gen", "thema_codec_gen", 1)
+		}
+	}
 	// Check content against the golden files
 	compareToGolden(t, files, "")
 }

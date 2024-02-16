@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"go/format"
+	"slices"
 	"strings"
 	"time"
 
@@ -117,6 +119,10 @@ func (*CodecGenerator) generateObjectFile(kind codegen.Kind, version *codegen.Ki
 			})
 		}
 	}
+	// Sort extra fields so that codegen is deterministic for ordering
+	slices.SortFunc(customMetadataFields, func(a, b templates.ObjectMetadataField) int {
+		return strings.Compare(a.FieldName, b.FieldName)
+	})
 
 	meta := kind.Properties()
 	md := templates.ResourceObjectTemplateMetadata{
@@ -146,11 +152,11 @@ func (*CodecGenerator) generateObjectFile(kind codegen.Kind, version *codegen.Ki
 	if err != nil {
 		return nil, err
 	}
-	/*formatted, err := format.Source(b.Bytes())
+	formatted, err := format.Source(b.Bytes())
 	if err != nil {
 		return nil, err
-	}*/
-	return b.Bytes(), nil
+	}
+	return formatted, nil
 }
 
 func goTypeFromCUEValue(value cue.Value) templates.CustomMetadataFieldGoType {
