@@ -92,6 +92,21 @@ func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] 
 	return g
 }
 
+// TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
+// The `versioned` parameter governs whether to generate all versions where codegen.frontend == true,
+// or just generate code for the current version.
+// If `versioned` is true, the paths to the generated files will include the version.
+func TypeScriptResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer(namerFunc)
+	g.Append(&jennies.TypeScriptTypes{
+		GenerateOnlyCurrent: !versioned,
+		Depth:               1,
+	}, &jennies.TypeScriptResourceTypes{
+		GenerateOnlyCurrent: !versioned,
+	})
+	return g
+}
+
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
 func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
