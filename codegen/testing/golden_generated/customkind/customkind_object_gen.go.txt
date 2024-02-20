@@ -89,6 +89,17 @@ func (o *Object) GetCommonMetadata() resource.CommonMetadata {
 	if dt != nil {
 		deletionTimestamp = &dt.Time
 	}
+	// Legacy ExtraFields support
+	extraFields := make(map[string]any)
+	if o.Annotations != nil {
+		extraFields["annotations"] = o.Annotations
+	}
+	if o.ManagedFields != nil {
+		extraFields["managedFields"] = o.ManagedFields
+	}
+	if o.OwnerReferences != nil {
+		extraFields["ownerReferences"] = o.OwnerReferences
+	}
 	return resource.CommonMetadata{
 		UID:               string(o.UID),
 		ResourceVersion:   o.ResourceVersion,
@@ -100,7 +111,7 @@ func (o *Object) GetCommonMetadata() resource.CommonMetadata {
 		UpdateTimestamp:   o.GetUpdateTimestamp(),
 		CreatedBy:         o.GetCreatedBy(),
 		UpdatedBy:         o.GetUpdatedBy(),
-		// TODO: populate ExtraFields...?
+		ExtraFields:       extraFields,
 	}
 }
 
@@ -128,6 +139,24 @@ func (o *Object) SetCommonMetadata(metadata resource.CommonMetadata) {
 	}
 	if metadata.UpdatedBy != "" {
 		o.SetUpdatedBy(metadata.UpdatedBy)
+	}
+	// Legacy support for setting Annotations, ManagedFields, and OwnerReferences via ExtraFields
+	if metadata.ExtraFields != nil {
+		if annotations, ok := metadata.ExtraFields["annotations"]; ok {
+			if cast, ok := annotations.(map[string]string); ok {
+				o.Annotations = cast
+			}
+		}
+		if managedFields, ok := metadata.ExtraFields["managedFields"]; ok {
+			if cast, ok := managedFields.([]metav1.ManagedFieldsEntry); ok {
+				o.ManagedFields = cast
+			}
+		}
+		if ownerReferences, ok := metadata.ExtraFields["ownerReferences"]; ok {
+			if cast, ok := ownerReferences.([]metav1.OwnerReference); ok {
+				o.OwnerReferences = cast
+			}
+		}
 	}
 }
 

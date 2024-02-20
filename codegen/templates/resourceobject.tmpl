@@ -90,6 +90,17 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetCommonMetadata() resource.Co
 	if dt != nil {
 		deletionTimestamp = &dt.Time
 	}
+	// Legacy ExtraFields support
+	extraFields := make(map[string]any)
+	if {{.ObjectShortName}}.Annotations != nil {
+	    extraFields["annotations"] = {{.ObjectShortName}}.Annotations
+	}
+	if {{.ObjectShortName}}.ManagedFields != nil {
+	    extraFields["managedFields"] = {{.ObjectShortName}}.ManagedFields
+	}
+	if {{.ObjectShortName}}.OwnerReferences != nil {
+	    extraFields["ownerReferences"] = {{.ObjectShortName}}.OwnerReferences
+	}
 	return resource.CommonMetadata{
 		UID:               string({{.ObjectShortName}}.UID),
 		ResourceVersion:   {{.ObjectShortName}}.ResourceVersion,
@@ -101,7 +112,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetCommonMetadata() resource.Co
 		UpdateTimestamp:   {{.ObjectShortName}}.GetUpdateTimestamp(),
 		CreatedBy:         {{.ObjectShortName}}.GetCreatedBy(),
 		UpdatedBy:         {{.ObjectShortName}}.GetUpdatedBy(),
-		// TODO: populate ExtraFields...?
+		ExtraFields:       extraFields,
 	}
 }
 
@@ -129,6 +140,24 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata reso
     }
     if metadata.UpdatedBy != "" {
         {{.ObjectShortName}}.SetUpdatedBy(metadata.UpdatedBy)
+    }
+    // Legacy support for setting Annotations, ManagedFields, and OwnerReferences via ExtraFields
+    if metadata.ExtraFields != nil {
+        if annotations, ok := metadata.ExtraFields["annotations"]; ok {
+            if cast, ok := annotations.(map[string]string); ok {
+                 {{.ObjectShortName}}.Annotations = cast
+            }
+        }
+        if managedFields, ok := metadata.ExtraFields["managedFields"]; ok {
+            if cast, ok := managedFields.([]metav1.ManagedFieldsEntry); ok {
+                 {{.ObjectShortName}}.ManagedFields = cast
+            }
+        }
+        if ownerReferences, ok := metadata.ExtraFields["ownerReferences"]; ok {
+            if cast, ok := ownerReferences.([]metav1.OwnerReference); ok {
+                 {{.ObjectShortName}}.OwnerReferences = cast
+            }
+        }
     }
 }
 
