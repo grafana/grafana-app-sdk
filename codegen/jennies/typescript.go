@@ -128,15 +128,6 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			return nil, nil
 		}
 
-		/*bytes, err := generateTypescriptBytes(ver.Schema, kind.Name(), cfg)
-		if err != nil {
-			return nil, fmt.Errorf("error generating TypeScript for kind '%s', version '%s': %w", kind.Name(), ver.Version, err)
-		}
-		return codejen.Files{codejen.File{
-			RelativePath: fmt.Sprintf("%s_types.gen.ts", kind.Properties().MachineName),
-			Data:         bytes,
-			From:         []codejen.NamedJenny{j},
-		}}, nil*/
 		return j.generateFiles(ver, kind.Name(), "", strings.ToLower(kind.Properties().MachineName)+"_", cfg)
 	}
 
@@ -149,15 +140,6 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			continue
 		}
 
-		/*bytes, err := generateTypescriptBytes(v.Schema, kind.Name(), cfg)
-		if err != nil {
-			return nil, fmt.Errorf("error generating TypeScript for kind '%s', version '%s': %w", kind.Name(), v.Version, err)
-		}
-		files = append(files, codejen.File{
-			RelativePath: fmt.Sprintf("%s/%s/types.gen.ts", kind.Properties().MachineName, v.Version),
-			Data:         bytes,
-			From:         []codejen.NamedJenny{j},
-		})*/
 		generated, err := j.generateFiles(&v, kind.Name(), fmt.Sprintf("%s/%s", kind.Properties().MachineName, v.Version), "", cfg)
 		if err != nil {
 			return nil, err
