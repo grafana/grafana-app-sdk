@@ -112,28 +112,6 @@ Successfully tagged localhost/issue-tracker-project:latest
 ```
 (some parts of this trimmed for readability)
 
-You will get an error at the end of the output:
-```shell
-No longer supported. Use grafana create-plugin https://github.com/grafana/plugin-tools/tree/main/packages/create-plugin
-
-make: *** [build/plugin-frontend] Error 1
-```
-To fix this error, go ahead and execute:
-```shell
-shell $ cd plugin/
-shell $ npx @grafana/create-plugin@latest migrate
-```
-Default to answering "yes" to all the prompts. 
-
-After that, run:
-```shell
-make build/plugin-frontend
-```
-It should end with a message similar to this:
-```shell
-webpack 5.88.1 compiled successfully in 1421 ms
-```
-
 So what's with all the output? Well, `make build` is doing three separate things, just chained together.
 1. Build the backend plugin binary (using `Magefile`)
 2. Build the frontend plugin (using `yarn`)
@@ -246,98 +224,83 @@ Since our plugin is automatically installed, we can go to [grafana.k3d.localhost
 Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
 ```shell
 $ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
+```
 {
-  "Metadata": {
-    "ResourceVersion": "1190",
-    "Continue": "",
-    "RemainingItemCount": null,
-    "ExtraFields": null
-  },
-  "Items": []
+    "kind": "IssueList",
+    "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
+    "metadata": {
+        "resourceVersion": "1079"
+    },
+    "items": []
 }
 ```
 
 Just to demonstrate our API surface, we can try creating a new issue from the API:
 ```shell
-$ curl -X POST -H "contant-type:application/json" -d '{"staticMetadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues
-{"objectMetadata":{"ResourceVersion":"2320","Labels":{"grafana-app-sdk-resource-version":"v0-0"},"CreationTimestamp":"2023-03-29T19:33:57Z","DeletionTimestamp":null,"Finalizers":null,"ExtraFields":{"generation":1}},"staticMetadata":{"Group":"unknown-plugin.plugins.grafana.com","Version":"v0-0","Kind":"Issue","Namespace":"default","Name":"test-issue"},"spec":{"description":"A test issue","status":"open","title":"Test"}}
+$ curl -X POST -H "contant-type:application/json" -d '{"metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues
+{"kind":"Issue","apiVersion":"issue-tracker-project.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default","uid":"027d84d6-4b0d-4154-8343-83a9280089d1","resourceVersion":"1104","generation":1,"creationTimestamp":"2024-02-21T17:05:32Z","labels":{"grafana-app-sdk-resource-version":"v1"},"managedFields":[{"manager":"gpx_issue-tracker-project-app_linux_arm64","operation":"Update","apiVersion":"issue-tracker-project.ext.grafana.com/v1","time":"2024-02-21T17:05:32Z","fieldsType":"FieldsV1","fieldsV1":{"f:metadata":{"f:labels":{".":{},"f:grafana-app-sdk-resource-version":{}}},"f:spec":{".":{},"f:description":{},"f:status":{},"f:title":{}}}}]},"spec":{"description":"A test issue","status":"open","title":"Test"},"status":{}}
 $ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
 {
+  "kind": "IssueList",
+  "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
   "metadata": {
-    "resourceVersion": "840",
-    "continue": "",
-    "remainingItemCount": null,
-    "extraFields": null
+    "resourceVersion": "1109"
   },
   "items": [
     {
-      "staticMetadata": {
-        "group": "issue-tracker-project.ext.grafana.com",
-        "version": "v0-0",
-        "kind": "Issue",
-        "namespace": "default",
-        "name": "test-issue"
-      },
+      "kind": "Issue",
+      "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
       "metadata": {
-        "createdBy": "",
-        "creationTimestamp": "2023-05-15T13:12:29Z",
-        "extraFields": {
-          "generation": 1,
-          "managedFields": [
-            {
-              "manager": "gpx_issue-tracker-project-app_linux_arm64",
-              "operation": "Update",
-              "apiVersion": "issue-tracker-project.ext.grafana.com/v0-0",
-              "time": "2023-05-15T13:12:29Z",
-              "fieldsType": "FieldsV1",
-              "fieldsV1": {
-                "f:metadata": {
-                  "f:annotations": {
-                    ".": {},
-                    "f:createdBy": {},
-                    "f:updatedBy": {},
-                    "f:updatedTimestamp": {}
-                  },
-                  "f:labels": {
-                    ".": {},
-                    "f:grafana-app-sdk-resource-version": {}
-                  }
-                },
-                "f:spec": {
+        "name": "test-issue",
+        "namespace": "default",
+        "uid": "027d84d6-4b0d-4154-8343-83a9280089d1",
+        "resourceVersion": "1105",
+        "generation": 1,
+        "creationTimestamp": "2024-02-21T17:05:32Z",
+        "labels": {
+          "grafana-app-sdk-resource-version": "v1"
+        },
+        "finalizers": [
+          "issue-tracker-project-operator-issues-finalizer"
+        ],
+        "managedFields": [
+          {
+            "manager": "gpx_issue-tracker-project-app_linux_arm64",
+            "operation": "Update",
+            "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
+            "time": "2024-02-21T17:05:32Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:labels": {
                   ".": {},
-                  "f:description": {},
-                  "f:status": {},
-                  "f:title": {}
+                  "f:grafana-app-sdk-resource-version": {}
                 }
+              },
+              "f:spec": {
+                ".": {},
+                "f:description": {},
+                "f:status": {},
+                "f:title": {}
               }
-            },
-            {
-              "manager": "operator",
-              "operation": "Update",
-              "apiVersion": "issue-tracker-project.ext.grafana.com/v0-0",
-              "time": "2023-05-15T13:12:29Z",
-              "fieldsType": "FieldsV1",
-              "fieldsV1": {
-                "f:metadata": {
-                  "f:finalizers": {
-                    ".": {},
-                    "v:\"operator.v0-0.Issue.issue-tracker-project.ext.grafana.com\"": {}
-                  }
+            }
+          },
+          {
+            "manager": "operator",
+            "operation": "Update",
+            "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
+            "time": "2024-02-21T17:05:32Z",
+            "fieldsType": "FieldsV1",
+            "fieldsV1": {
+              "f:metadata": {
+                "f:finalizers": {
+                  ".": {},
+                  "v:\"issue-tracker-project-operator-issues-finalizer\"": {}
                 }
               }
             }
-          ]
-        },
-        "finalizers": [
-          "operator.v0-0.Issue.issue-tracker-project.ext.grafana.com"
-        ],
-        "labels": {
-          "grafana-app-sdk-resource-version": "v0-0"
-        },
-        "resourceVersion": "830",
-        "uid": "",
-        "updateTimestamp": "2023-05-15T13:12:29Z",
-        "updatedBy": ""
+          }
+        ]
       },
       "spec": {
         "description": "A test issue",
@@ -350,28 +313,23 @@ $ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/r
 }
 ```
 
-You can see that this includes metadata which we didn't define in our CUE, but was implicitly added (common metadata). Some of this is kubernetes (and everything in `extraFields` is kubernetes metadata), and some of it (like `updateTimestamp`) is non-kubernetes metadata that has to be handled by the implementer.
+You can see that this includes metadata which we didn't define in our CUE, but was implicitly added (kubernetes metadata). 
 
 For fun, we can also interact with our resources through kubectl:
 ```shell
 $ kubectl get issue test-issue -o yaml
-apiVersion: issue-tracker-project.ext.grafana.com/v0-0
 kind: Issue
 metadata:
-  annotations:
-    createdBy: ""
-    updatedBy: ""
-    updatedTimestamp: "0001-01-01T00:00:00Z"
-  creationTimestamp: "2023-05-15T13:12:29Z"
+  creationTimestamp: "2024-02-21T17:05:32Z"
   finalizers:
-  - operator.v0-0.Issue.issue-tracker-project.ext.grafana.com
+  - issue-tracker-project-operator-issues-finalizer
   generation: 1
   labels:
-    grafana-app-sdk-resource-version: v0-0
+    grafana-app-sdk-resource-version: v1
   name: test-issue
   namespace: default
-  resourceVersion: "830"
-  uid: 9eb07fa3-4762-4946-a560-6da59a4f7a2b
+  resourceVersion: "1105"
+  uid: 027d84d6-4b0d-4154-8343-83a9280089d1
 spec:
   description: A test issue
   status: open
