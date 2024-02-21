@@ -35,35 +35,35 @@ type UntypedObject struct {
 	Subresources map[string]json.RawMessage
 }
 
-func (a *UntypedObject) GetSpec() any {
-	return a.Spec
+func (u *UntypedObject) GetSpec() any {
+	return u.Spec
 }
 
-func (a *UntypedObject) SetSpec(spec any) error {
+func (u *UntypedObject) SetSpec(spec any) error {
 	cast, ok := spec.(map[string]any)
 	if !ok {
 		return fmt.Errorf("spec must be of type map[string]any")
 	}
-	a.Spec = cast
+	u.Spec = cast
 	return nil
 }
 
-func (a *UntypedObject) GetSubresources() map[string]any {
+func (u *UntypedObject) GetSubresources() map[string]any {
 	sr := make(map[string]any)
-	for k, v := range a.Subresources {
+	for k, v := range u.Subresources {
 		sr[k] = v
 	}
 	return sr
 }
 
-func (a *UntypedObject) GetSubresource(key string) (any, bool) {
-	if sr, ok := a.Subresources[key]; ok {
+func (u *UntypedObject) GetSubresource(key string) (any, bool) {
+	if sr, ok := u.Subresources[key]; ok {
 		return sr, true
 	}
 	return nil, false
 }
 
-func (a *UntypedObject) SetSubresource(key string, val any) error {
+func (u *UntypedObject) SetSubresource(key string, val any) error {
 	cast, ok := val.(json.RawMessage)
 	if !ok {
 		if check, ok := val.([]byte); ok {
@@ -76,10 +76,10 @@ func (a *UntypedObject) SetSubresource(key string, val any) error {
 			}
 		}
 	}
-	if a.Subresources == nil {
-		a.Subresources = make(map[string]json.RawMessage)
+	if u.Subresources == nil {
+		u.Subresources = make(map[string]json.RawMessage)
 	}
-	a.Subresources[key] = cast
+	u.Subresources[key] = cast
 	return nil
 }
 
@@ -153,6 +153,8 @@ func (u *UntypedObject) SetStaticMetadata(metadata StaticMetadata) {
 	})
 }
 
+// GetCommonMetadata returns CommonMetadata for the object
+// nolint:revive,staticcheck
 func (u *UntypedObject) GetCommonMetadata() CommonMetadata {
 	var err error
 	dt := u.DeletionTimestamp
@@ -189,6 +191,8 @@ func (u *UntypedObject) GetCommonMetadata() CommonMetadata {
 	}
 }
 
+// SetCommonMetadata sets metadata in the UntypedObject based on the contents of the provided CommonMetadata
+// nolint:dupl
 func (u *UntypedObject) SetCommonMetadata(metadata CommonMetadata) {
 	u.UID = types.UID(metadata.UID)
 	u.ResourceVersion = metadata.ResourceVersion
@@ -216,6 +220,9 @@ func (u *UntypedObject) SetCommonMetadata(metadata CommonMetadata) {
 	}
 }
 
+// Copy creates a copy of the object, using JSON marshaling to copy the spec,
+// and slice copy for the subresource bytes
+// nolint:revive,staticcheck
 func (u *UntypedObject) Copy() Object {
 	cpy := &UntypedObject{}
 	cpy.APIVersion = u.APIVersion

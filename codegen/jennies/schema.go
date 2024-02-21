@@ -1,3 +1,4 @@
+//nolint:dupl
 package jennies
 
 import (
@@ -21,6 +22,8 @@ func (*SchemaGenerator) JennyName() string {
 	return "SchemaGenerator"
 }
 
+// Generate creates one or more schema go files for the provided Kind
+// nolint:dupl
 func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	meta := kind.Properties()
 

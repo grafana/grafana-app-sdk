@@ -158,6 +158,7 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 	return formatted, nil
 }
 
+// nolint:gocritic
 func goTypeFromCUEValue(value cue.Value) templates.CustomMetadataFieldGoType {
 	// Super janky for now--there's _got_ to be a better way of determining the type for a definition field
 	// Maybe we take it from openapi instead?

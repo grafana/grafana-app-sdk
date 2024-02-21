@@ -86,7 +86,7 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 		request = request.Namespace(identifier.Namespace)
 	}
 	start := time.Now()
-	bytes, err := request.Do(ctx).StatusCode(&sc).Raw()
+	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "GET", plural, "spec")
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
@@ -97,12 +97,12 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 	)
 	g.incRequestCounter(sc, "GET", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	md := metadataObject{}
-	err = json.Unmarshal(bytes, &md)
+	err = json.Unmarshal(raw, &md)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to unmarshal request body: %s", err.Error()))
 		return nil, err
@@ -360,7 +360,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	}
 	sc := 0
 	start := time.Now()
-	bytes, err := req.Do(ctx).StatusCode(&sc).Raw()
+	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "LIST", plural, "spec")
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
@@ -371,11 +371,11 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	)
 	g.incRequestCounter(sc, "LIST", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(bytes, sc, err)
+		err = parseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	return rawToListWithParser(bytes, into, itemParser)
+	return rawToListWithParser(raw, into, itemParser)
 }
 
 //nolint:revive

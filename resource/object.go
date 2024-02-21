@@ -1,7 +1,6 @@
 package resource
 
 import (
-	"encoding/json"
 	"reflect"
 	"time"
 
@@ -162,12 +161,4 @@ func CopyObject(in any) Object {
 
 	// TODO: better return than nil?
 	return nil
-}
-
-func copyAny[T any](src T, dest *T) error {
-	m, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(m, dest)
 }

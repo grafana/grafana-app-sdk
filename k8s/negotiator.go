@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // GenericNegotiatedSerializer implements runtime.NegotiatedSerializer and allows for JSON serialization and
@@ -69,7 +70,6 @@ func (*GenericJSONDecoder) Decode(data []byte, defaults *schema.GroupVersionKind
 	chk := check{}
 	err := json.Unmarshal(data, &chk)
 	if chk.Type != "" {
-		return nil, nil, fmt.Errorf("bad type")
 		// Watch response
 		w := &UntypedWatchObject{}
 		err = json.Unmarshal(data, w)
@@ -128,9 +128,9 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 				Serializer: serializer,
 				Framer:     jsonserializer.Framer,
 			}
-			//case resource.KindEncodingYAML:
+		case resource.KindEncodingYAML:
 			// TODO: YAML framer
-			//	framer = yamlserializer.Framer
+			//	framer = yamlserializer.Framer <- doesn't exist
 		}
 		supported = append(supported, info)
 	}

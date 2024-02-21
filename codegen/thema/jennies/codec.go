@@ -11,11 +11,11 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
@@ -159,6 +159,7 @@ func (*CodecGenerator) generateObjectFile(kind codegen.Kind, version *codegen.Ki
 	return formatted, nil
 }
 
+// nolint:gocritic
 func goTypeFromCUEValue(value cue.Value) templates.CustomMetadataFieldGoType {
 	// Super janky for now--there's _got_ to be a better way of determining the type for a definition field
 	// Maybe we take it from openapi instead?

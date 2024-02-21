@@ -176,7 +176,6 @@ func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Ident
 	ret, err := s.client.Update(ctx, identifier, &object, UpdateOptions{
 		Subresource: string(subresource),
 	})
-	fmt.Println("ret: ", ret)
 	if err != nil {
 		return nil, err
 	}
