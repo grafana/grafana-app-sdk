@@ -274,12 +274,23 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		modelFiles[i].RelativePath = filepath.Join(filepath.Join(cfg.GoGenBasePath, targetModel+"s"), f.RelativePath)
 	}
 	// TypeScript
-	tsFiles, err := generator.Generate(cuekind.TypeScriptModelsGenerator(true), selectors...)
+	tsModelFiles, err := generator.FilteredGenerate(cuekind.TypeScriptModelsGenerator(true), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource == nil
+	}, selectors...)
 	if err != nil {
 		return nil, err
 	}
-	for i, f := range tsFiles {
-		tsFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
+	for i, f := range tsModelFiles {
+		tsModelFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
+	}
+	tsResourceFiles, err := generator.FilteredGenerate(cuekind.TypeScriptResourceGenerator(true), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	}, selectors...)
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range tsResourceFiles {
+		tsResourceFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
 	}
 	// CRD
 	encFunc := json.Marshal
@@ -298,7 +309,8 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
 	allFiles = append(allFiles, modelFiles...)
-	allFiles = append(allFiles, tsFiles...)
+	allFiles = append(allFiles, tsModelFiles...)
+	allFiles = append(allFiles, tsResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
 	return allFiles, nil
 }

@@ -10,10 +10,11 @@ import (
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/thema"
 	"github.com/grafana/thema/load"
 	"github.com/grafana/thema/vmux"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var rt = thema.NewRuntime(cuecontext.New())
@@ -43,8 +44,6 @@ func init() {
 		panic(err)
 	}
 	muxer = vmux.NewTypedMux[*LineageType](typedLatest, vmux.NewJSONCodec("input"))
-
-	ObjectUnmarshalFunc = ThemaUnmarshalFunc
 }
 
 //go:embed customkind_lineage.cue cue.mod/*
@@ -72,7 +71,13 @@ func Lineage(rt *thema.Runtime, opts ...thema.BindOption) (thema.Lineage, error)
 
 var _ thema.LineageFactory = Lineage // Ensure our factory fulfills the type
 
-func ThemaUnmarshalFunc(into *Object, objBytes resource.ObjectBytes, config resource.UnmarshalConfig) error {
+type ThemaObjectBytes struct {
+	Metadata     []byte
+	Spec         []byte
+	Subresources map[string][]byte
+}
+
+func ThemaUnmarshalFunc(into *Object, objBytes ThemaObjectBytes) error {
 	// Unify the spec and subresources into one JSON object for the muxer
 	unified := make(map[string]json.RawMessage)
 	unified["spec"] = objBytes.Spec
@@ -109,9 +114,19 @@ func ThemaUnmarshalFunc(into *Object, objBytes resource.ObjectBytes, config reso
 	}
 
 	into.Spec = parsedObj.Spec
-	into.Metadata = parsedObj.Metadata
 	into.Spec = parsedObj.Spec
 	into.Status = parsedObj.Status
-	into.Metadata = parsedObj.Metadata
+	into.Spec = parsedObj.Spec
+	into.Status = parsedObj.Status
+	into.SetCreationTimestamp(metav1.NewTime(parsedObj.Metadata.CreationTimestamp))
+	if parsedObj.Metadata.DeletionTimestamp != nil {
+		dt := metav1.NewTime(*parsedObj.Metadata.DeletionTimestamp)
+		into.SetDeletionTimestamp(&dt)
+	}
+	into.SetFinalizers(parsedObj.Metadata.Finalizers)
+	into.SetGeneration(parsedObj.Metadata.Generation)
+	into.SetLabels(parsedObj.Metadata.Labels)
+	into.SetResourceVersion(parsedObj.Metadata.ResourceVersion)
+	into.SetUID(types.UID(parsedObj.Metadata.Uid))
 	return nil
 }

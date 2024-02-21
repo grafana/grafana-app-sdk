@@ -65,7 +65,7 @@ func main() {
 	watcher := &BasicWatcher{}
 
 	// Create the Informer
-	informer, err := operator.NewKubernetesBasedInformer(schema, client, "default")
+	informer, err := operator.NewKubernetesBasedInformer(kind, client, "default")
 	if err != nil {
 		panic(fmt.Errorf("unable to create informer: %w", err))
 	}
@@ -76,7 +76,7 @@ func main() {
 
 	// Add a basic error handler to log errors. The function is called if a watcher function returns an error.
 	// If no ErrorHandler is defined, the error is swallowed.
-	informer.ErrorHandler = func(err error) {
+	informer.ErrorHandler = func(ctx context.Context, err error) {
 		log.Printf("\u001B[0;31mERROR: %s\u001B[0m", err.Error())
 	}
 
