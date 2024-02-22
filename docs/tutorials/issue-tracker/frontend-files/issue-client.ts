@@ -1,17 +1,10 @@
-import { Issue as generatedIssue } from '../generated/issue/v1/types.gen';
+import { Issue } from '../generated/issue/v1/issue_object_gen';
 import { BackendSrvRequest, getBackendSrv, FetchResponse } from '@grafana/runtime';
 import { lastValueFrom } from 'rxjs';
 import { PLUGIN_API_URL } from '../constants';
 
 export interface ListResponse<T> {
     items: T[];
-}
-
-export interface Issue extends generatedIssue {
-    staticMetadata: {
-        name: string
-        namespace: string
-    }
 }
 
 export class IssueClient {
@@ -28,7 +21,7 @@ export class IssueClient {
                 description: description,
                 status: 'open',
             },
-            staticMetadata: {
+            metadata: {
                 name: 'issue-' + makeid(10),
                 namespace: 'default',
             }

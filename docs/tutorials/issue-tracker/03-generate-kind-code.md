@@ -7,12 +7,16 @@ make generate
 This command should ouput a list of all the files it writes:
 ```shell
 $ make generate
+ * Writing file pkg/generated/resource/issue/v1/issue_codec_gen.go
  * Writing file pkg/generated/resource/issue/v1/issue_metadata_gen.go
  * Writing file pkg/generated/resource/issue/v1/issue_object_gen.go
  * Writing file pkg/generated/resource/issue/v1/issue_schema_gen.go
  * Writing file pkg/generated/resource/issue/v1/issue_spec_gen.go
  * Writing file pkg/generated/resource/issue/v1/issue_status_gen.go
- * Writing file plugin/src/generated/issue/v1/types.gen.ts
+ * Writing file plugin/src/generated/issue/v1/issue_object_gen.ts
+ * Writing file plugin/src/generated/issue/v1/types.metadata.gen.ts
+ * Writing file plugin/src/generated/issue/v1/types.spec.gen.ts
+ * Writing file plugin/src/generated/issue/v1/types.status.gen.ts
  * Writing file definitions/issue.issue-tracker-project.ext.grafana.com.json
 ```
 That's a bunch of files written! Let's tree the directory to understand the structure a bit better.
@@ -44,6 +48,7 @@ $ tree .
 │       └── resource
 │           └── issue
 │               └── v1
+│                   ├── issue_codec_gen.go
 │                   ├── issue_metadata_gen.go
 │                   ├── issue_object_gen.go
 │                   ├── issue_schema_gen.go
@@ -54,9 +59,12 @@ $ tree .
         └── generated
             └── issue
                 └── v1
-                    └── types.gen.ts
+                    ├── issue_object_gen.ts
+                    ├── types.metadata.gen.ts
+                    ├── types.spec.gen.ts
+                    └── types.status.gen.ts
 
-21 directories, 16 files
+21 directories, 20 files
 ```
 
 So we can now see that all our generated go code lives in the `pkg/generated` package. Since our `target` was `"resource"`, the generated code for `issue` is in the `pkg/generated/resource` package. 
@@ -80,18 +88,25 @@ pkg/generated
 └── resource
     └── issue
         └── v1
+            ├── issue_codec_gen.go
             ├── issue_metadata_gen.go
             ├── issue_object_gen.go
             ├── issue_schema_gen.go
             ├── issue_spec_gen.go
             └── issue_status_gen.go
 
-4 directories, 5 files
+4 directories, 6 files
 ```
 
-The exported go types from our kind's `v1` schema definition are `issue_metadata_gen.go`, `issue_spec_gen.go`, and `issue_status_gen.go`. You'll note that `issue_metadata_gen.go` and `issue_status_gen.go` contain types and fields which we didn't define in our schema--that's because of the joined "default" metadata and status information. If we had defined a `status` or `metadata` in our schema, those fields would _also_ be present in the generated types.
+The exported go types from our kind's `v1` schema definition are `issue_spec_gen.go` and `issue_status_gen.go`. 
+`issue_metadata_gen.go` exists for legacy reasons we won't touch on here. You'll note that `issue_status_gen.go` contain types and fields which we didn't define in our schema--that's because of the joined "default" status information. 
+If we had defined a `status` or `metadata` in our schema, those fields would _also_ be present in the generated types.
 
-In addition to the types generated from our kind's schema, we have `issue_object_gen.go` and `issue_schema_gen.go`. `issue_object_gen.go` defines the complete object (with `spec`, `status`, and `schema` in it) in a way that satisfies the `resource.Object` interface, so that it can be used with the SDK. Likewise, `issue_schema_gen.go` defines a `resource.Schema` for this specific version of the kind which can be used in your project.
+In addition to the types generated from our kind's schema, we have `issue_object_gen.go`, `issue_schema_gen.go`, and `issue_codec_gen.go`. 
+`issue_object_gen.go` defines the complete object (with `spec`, `status`, and metadata) in a way that satisfies the `resource.Object` interface, so that it can be used with the SDK. 
+Likewise, `issue_schema_gen.go` defines a `resource.Schema` for this specific version of the kind which can be used in your project, 
+in addition to a `resource.Kind` for the kind. Finally, `issue_codec_gen.go` contains code for a kubernetes-JSON-bytes<->Issue `Object` codec, 
+which is used by the `Kind` for marshaling and unmarshaling our Object when interacting with the API server.
 
 ## Generated TypeScript Code
 
@@ -100,12 +115,19 @@ $ tree plugin
 plugin
 └── src
     └── generated
-        └── issue_types.gen.ts
+        └── issue
+            └── v1
+                ├── issue_object_gen.ts
+                ├── types.metadata.gen.ts
+                ├── types.spec.gen.ts
+                └── types.status.gen.ts
 
-3 directories, 1 file
+5 directories, 4 files
 ```
 
-The generated TypeScript contains an interface built from our schema. TypeScript code is only generated for kinds where `frontend: true`.
+The generated TypeScript contains an interface built from our schema. 
+Similarly to our go code, there are types for `Spec` and `Status` (and a legacy `Metadata` type), 
+and an `Object` type which pulls them all together. TypeScript code is only generated for kinds where `frontend: true`.
 
 ### Generated Custom Resource Definitions
 

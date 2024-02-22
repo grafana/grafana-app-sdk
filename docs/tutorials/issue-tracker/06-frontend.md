@@ -12,25 +12,7 @@ For this tutorial, we have one pre-written, that we'll discuss a few parts of. E
 curl -o plugin/src/api/issue_client.ts https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/issue-client.ts
 ```
 
-A few things to note in our client:
-```TypeScript
-import { Issue as generatedIssue } from '../generated/issue_types.gen';
-
-// ommitted code
-
-export interface Issue extends generatedIssue {
-    staticMetadata: {
-      name: string
-      namespace: string
-    }
-}
-```
-We import the generated `Issue` interface, but we extend it with `staticMetadata`. Why do we do this? 
-Well, the generated interface contains only what we defined in our schema, which doesn't include the metadata contents. 
-Since right now we are returning our `resource` Object, and accepting the same type in our POST/PUT requests, we need to include the necessary metadata. 
-Later on, we'll separate out our `resource` Object and our API models, but for now, this is necessary to include the `name` and `namespace` identifiers required by the API.
-
-The rest of the client uses grafana libraries to make fetch requests to perform relevent actions. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
+The client uses grafana libraries to make fetch requests to perform relevent actions. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
 
 ## Main Page
 
