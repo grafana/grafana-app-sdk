@@ -52,23 +52,23 @@ func (t *TypedStore[T]) Get(ctx context.Context, identifier Identifier) (T, erro
 	return t.cast(obj)
 }
 
-// Add creates a new resource. obj.StaticMetadata() is expected to have Namespace and Name set.
+// Add creates a new resource. obj.GetName() must not be empty, and obj.GetNamespace() cannot be empty for namespace-scoped kinds.
 // If they are not, no request is made to the underlying client, and an error is returned.
 func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 	if t.sch.Scope() == ClusterScope {
 		if obj.GetNamespace() != "" {
 			var n T
-			return n, fmt.Errorf("obj.StaticMetadata().Namespace mustbe empty for cluster-scoped objects")
+			return n, fmt.Errorf("obj.GetNamespace() mustbe empty for cluster-scoped objects")
 		}
 	} else {
 		if obj.GetNamespace() == "" {
 			var n T
-			return n, fmt.Errorf("obj.StaticMetadata().Namespace must not be empty")
+			return n, fmt.Errorf("obj.GetNamespace() must not be empty")
 		}
 	}
 	if obj.GetName() == "" {
 		var n T
-		return n, fmt.Errorf("obj.StaticMetadata().Name must not be empty")
+		return n, fmt.Errorf("obj.GetName() must not be empty")
 	}
 	ret, err := t.client.Create(ctx, Identifier{
 		Namespace: obj.GetNamespace(),

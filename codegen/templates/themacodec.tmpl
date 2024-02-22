@@ -43,7 +43,6 @@ func (*JSONCodec) Read(reader io.Reader, into resource.Object) error {
         UpdateTimestamp: extractUpdateTimestamp(annotations),
         CreatedBy: extractCreatedBy(annotations),
         UpdatedBy: extractUpdatedBy(annotations),
-        ExtraFields: map[string]any{},
     }
     // Thema hates null fields for these ones
     if md.Finalizers == nil {
