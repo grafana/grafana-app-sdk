@@ -73,6 +73,8 @@ func (*JSONCodec) Read(reader io.Reader, into resource.Object) error {
 	}
 	// Overwrite the metadata in the unmarshaled object with the one from temp (to get accurate kube metadata)
 	cast.ObjectMeta = temp.ObjectMeta
+	cast.APIVersion = temp.APIVersion
+	cast.Kind = temp.Kind
 	return nil
 }
 
