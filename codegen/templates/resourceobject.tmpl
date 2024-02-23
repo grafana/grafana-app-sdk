@@ -165,7 +165,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata reso
     if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
         {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
     }
-    {{ $var := (printf "%v.ObjectMeta.Annotations[\"%v\"]" $root.ObjectShortName .JSONName) }}
+    {{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
     {{ $ret := (call .GoType.GetFuncTemplate $var) }}
     {{ $ret }}
 }
@@ -174,7 +174,7 @@ func ({{$root.ObjectShortName}} *{{$root.ObjectTypeName}}) Set{{.FieldName}}({{.
     if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
         {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
     }
-    {{ $var := (printf "%v.ObjectMeta.Annotations[\"%v\"]" $root.ObjectShortName .JSONName) }}
+    {{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
     {{ $ret := (call .GoType.SetFuncTemplate .JSONName $var) }}
     {{ $ret }}
 }

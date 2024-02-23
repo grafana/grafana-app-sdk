@@ -9,9 +9,9 @@ import (
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/grafana/cuetsy"
-	"github.com/grafana/grafana-app-sdk/codegen/templates"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 type TypeScriptResourceTypes struct {
@@ -54,7 +54,7 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func (t *TypeScriptResourceTypes) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, tsTypePrefix string) ([]byte, error) {
+func (*TypeScriptResourceTypes) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, tsTypePrefix string) ([]byte, error) {
 	metadata := templates.ResourceTSTemplateMetadata{
 		TypeName:     exportField(kind.Name()),
 		Subresources: make([]templates.SubresourceMetadata, 0),

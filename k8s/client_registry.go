@@ -101,9 +101,9 @@ func (c *ClientRegistry) getClient(sch resource.Kind) (rest.Interface, error) {
 	ccfg := c.cfg
 	ccfg.GroupVersion = &gv
 	// TODO: needs a bit more testing before we can use this
-	/*ccfg.NegotiatedSerializer = &KindNegotiatedSerializer{
-		Kind: sch,
-	}*/
+	// ccfg.NegotiatedSerializer = &KindNegotiatedSerializer{
+	// 	Kind: sch,
+	// }
 	client, err := rest.RESTClientFor(&ccfg)
 	if err != nil {
 		return nil, err

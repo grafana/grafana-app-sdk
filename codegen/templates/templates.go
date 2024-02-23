@@ -18,7 +18,7 @@ var (
 	templateSchema, _         = template.ParseFS(templates, "schema.tmpl")
 	templateCodec, _          = template.ParseFS(templates, "codec.tmpl")
 	templateLineage, _        = template.ParseFS(templates, "lineage.tmpl")
-	templateThemaCodec, terr  = template.ParseFS(templates, "themacodec.tmpl")
+	templateThemaCodec, _     = template.ParseFS(templates, "themacodec.tmpl")
 	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
 	templateTSType, _         = template.ParseFS(templates, "tstype.tmpl")
 
@@ -123,7 +123,6 @@ func WriteCodec(metadata SchemaMetadata, out io.Writer) error {
 
 // WriteThemaCodec executes the Thema-specific Codec template, and writes out the generated go code to out
 func WriteThemaCodec(metadata ResourceObjectTemplateMetadata, out io.Writer) error {
-	fmt.Println(terr)
 	return templateThemaCodec.Execute(out, metadata)
 }
 

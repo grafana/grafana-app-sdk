@@ -79,13 +79,13 @@ type JSONCodec struct{}
 
 // Read is a simple wrapper for the json package unmarshal into the object.
 // TODO: expect kubernetes-formatted bytes on input?
-func (j *JSONCodec) Read(in io.Reader, out Object) error {
+func (*JSONCodec) Read(in io.Reader, out Object) error {
 	// TODO: make this work similar to Write, where the shape of the golang object shouldn't have to match the kubernetes JSON
 	return json.NewDecoder(in).Decode(&out)
 }
 
 // Write marshals the provided Object into kubernetes-formatted JSON bytes.
-func (j *JSONCodec) Write(out io.Writer, in Object) error {
+func (*JSONCodec) Write(out io.Writer, in Object) error {
 	m := make(map[string]any)
 	m["apiVersion"], m["kind"] = in.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
 	m["metadata"] = metav1.ObjectMeta{
@@ -122,6 +122,8 @@ func (t *TypedList[T]) DeepCopyObject() runtime.Object {
 	return t.Copy()
 }
 
+// Copy creates a copy of the list
+// nolint:revive
 func (t *TypedList[T]) Copy() ListObject {
 	cpy := &TypedList[T]{
 		TypeMeta: t.TypeMeta,
@@ -129,7 +131,7 @@ func (t *TypedList[T]) Copy() ListObject {
 	}
 	t.ListMeta.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len(t.Items); i++ {
-		cpy.Items[i] = t.Items[i].Copy().(T)
+		cpy.Items[i], _ = t.Items[i].Copy().(T)
 	}
 	return cpy
 }
@@ -146,10 +148,11 @@ func (t *TypedList[T]) GetItems() []Object {
 func (t *TypedList[T]) SetItems(items []Object) {
 	t.Items = make([]T, len(items))
 	for i := 0; i < len(t.Items); i++ {
-		_, ok := items[i].(T)
+		cast, ok := items[i].(T)
 		if !ok {
-			// HMMMMM
+			// Not compatible, skip the item
+			continue
 		}
-		t.Items[i] = items[i].(T)
+		t.Items[i] = cast
 	}
 }

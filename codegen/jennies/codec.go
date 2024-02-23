@@ -1,3 +1,4 @@
+//nolint:dupl
 package jennies
 
 import (
@@ -21,6 +22,8 @@ func (*CodecGenerator) JennyName() string {
 	return "CodecGenerator"
 }
 
+// Generate creates one or more codec go files for the provided Kind
+// nolint:dupl
 func (c *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	meta := kind.Properties()
 

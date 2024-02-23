@@ -165,7 +165,7 @@ func (o *Object) GetCreatedBy() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["createdBy"]
+	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
 }
 
 func (o *Object) SetCreatedBy(createdBy string) {
@@ -173,7 +173,7 @@ func (o *Object) SetCreatedBy(createdBy string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["createdBy"] = createdBy
+	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
 }
 
 func (o *Object) GetCustomMetadataField() string {
@@ -181,7 +181,7 @@ func (o *Object) GetCustomMetadataField() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["customMetadataField"]
+	return o.ObjectMeta.Annotations["grafana.com/customMetadataField"]
 }
 
 func (o *Object) SetCustomMetadataField(customMetadataField string) {
@@ -189,7 +189,7 @@ func (o *Object) SetCustomMetadataField(customMetadataField string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["customMetadataField"] = customMetadataField
+	o.ObjectMeta.Annotations["grafana.com/customMetadataField"] = customMetadataField
 }
 
 func (o *Object) GetOtherMetadataField() string {
@@ -197,7 +197,7 @@ func (o *Object) GetOtherMetadataField() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["otherMetadataField"]
+	return o.ObjectMeta.Annotations["grafana.com/otherMetadataField"]
 }
 
 func (o *Object) SetOtherMetadataField(otherMetadataField string) {
@@ -205,7 +205,7 @@ func (o *Object) SetOtherMetadataField(otherMetadataField string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["otherMetadataField"] = otherMetadataField
+	o.ObjectMeta.Annotations["grafana.com/otherMetadataField"] = otherMetadataField
 }
 
 func (o *Object) GetUpdateTimestamp() time.Time {
@@ -213,7 +213,7 @@ func (o *Object) GetUpdateTimestamp() time.Time {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	parsed, _ := time.Parse(o.ObjectMeta.Annotations["updateTimestamp"], time.RFC3339)
+	parsed, _ := time.Parse(o.ObjectMeta.Annotations["grafana.com/updateTimestamp"], time.RFC3339)
 	return parsed
 }
 
@@ -222,7 +222,7 @@ func (o *Object) SetUpdateTimestamp(updateTimestamp time.Time) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
+	o.ObjectMeta.Annotations["grafana.com/updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
 }
 
 func (o *Object) GetUpdatedBy() string {
@@ -230,7 +230,7 @@ func (o *Object) GetUpdatedBy() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["updatedBy"]
+	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
 }
 
 func (o *Object) SetUpdatedBy(updatedBy string) {
@@ -238,7 +238,7 @@ func (o *Object) SetUpdatedBy(updatedBy string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["updatedBy"] = updatedBy
+	o.ObjectMeta.Annotations["grafana.com/updatedBy"] = updatedBy
 }
 
 func (o *Object) Copy() resource.Object {

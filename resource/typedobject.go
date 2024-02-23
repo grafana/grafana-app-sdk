@@ -1,3 +1,4 @@
+//nolint:dupl
 package resource
 
 import (
@@ -48,6 +49,8 @@ func (t *TypedSpecObject[T]) SetStaticMetadata(metadata StaticMetadata) {
 	})
 }
 
+// GetCommonMetadata returns CommonMetadata for the object
+// nolint:revive,staticcheck
 func (t *TypedSpecObject[T]) GetCommonMetadata() CommonMetadata {
 	var err error
 	dt := t.DeletionTimestamp
@@ -84,6 +87,8 @@ func (t *TypedSpecObject[T]) GetCommonMetadata() CommonMetadata {
 	}
 }
 
+// SetCommonMetadata sets metadata in the TypedSpecObject based on the contents of the provided CommonMetadata
+// nolint:dupl
 func (t *TypedSpecObject[T]) SetCommonMetadata(metadata CommonMetadata) {
 	t.UID = types.UID(metadata.UID)
 	t.ResourceVersion = metadata.ResourceVersion
@@ -124,15 +129,15 @@ func (t *TypedSpecObject[T]) SetSpec(spec any) error {
 	return nil
 }
 
-func (t *TypedSpecObject[T]) GetSubresources() map[string]any {
+func (*TypedSpecObject[T]) GetSubresources() map[string]any {
 	return map[string]any{}
 }
 
-func (t *TypedSpecObject[T]) GetSubresource(key string) (any, bool) {
+func (*TypedSpecObject[T]) GetSubresource(_ string) (any, bool) {
 	return nil, false
 }
 
-func (t *TypedSpecObject[T]) SetSubresource(key string, val any) error {
+func (*TypedSpecObject[T]) SetSubresource(_ string, _ any) error {
 	return fmt.Errorf("TypedSpecObject does not allow subresources")
 }
 
@@ -140,6 +145,8 @@ func (t *TypedSpecObject[T]) DeepCopyObject() runtime.Object {
 	return t.Copy()
 }
 
+// Copy creates a copy of the object. It uses JSON marshaling for copying the spec data.
+// nolint:revive,staticcheck
 func (t *TypedSpecObject[T]) Copy() Object {
 	cpy := &TypedSpecObject[T]{}
 	cpy.APIVersion = t.APIVersion
@@ -185,6 +192,8 @@ func (t *TypedSpecStatusObject[T, S]) SetStaticMetadata(metadata StaticMetadata)
 	})
 }
 
+// GetCommonMetadata returns CommonMetadata for the object
+// nolint:revive,staticcheck
 func (t *TypedSpecStatusObject[T, S]) GetCommonMetadata() CommonMetadata {
 	var err error
 	dt := t.DeletionTimestamp
@@ -221,6 +230,8 @@ func (t *TypedSpecStatusObject[T, S]) GetCommonMetadata() CommonMetadata {
 	}
 }
 
+// SetCommonMetadata sets metadata in the TypedSpecStatusObject based on the contents of the provided CommonMetadata
+// nolint:dupl
 func (t *TypedSpecStatusObject[T, S]) SetCommonMetadata(metadata CommonMetadata) {
 	t.UID = types.UID(metadata.UID)
 	t.ResourceVersion = metadata.ResourceVersion
@@ -288,6 +299,8 @@ func (t *TypedSpecStatusObject[T, S]) DeepCopyObject() runtime.Object {
 	return t.Copy()
 }
 
+// Copy creates a copy of the object, using JSON marshaling to copy the spec and status objects.
+// nolint:revive,staticcheck
 func (t *TypedSpecStatusObject[T, S]) Copy() Object {
 	cpy := &TypedSpecStatusObject[T, S]{}
 	cpy.APIVersion = t.APIVersion
@@ -342,6 +355,8 @@ func (t *TypedObject[Spec, Sub]) SetStaticMetadata(metadata StaticMetadata) {
 	})
 }
 
+// GetCommonMetadata returns CommonMetadata for the object
+// nolint:revive,staticcheck
 func (t *TypedObject[Spec, Sub]) GetCommonMetadata() CommonMetadata {
 	var err error
 	dt := t.DeletionTimestamp
@@ -378,6 +393,8 @@ func (t *TypedObject[Spec, Sub]) GetCommonMetadata() CommonMetadata {
 	}
 }
 
+// SetCommonMetadata sets metadata in the TypedObject based on the contents of the provided CommonMetadata
+// nolint:dupl
 func (t *TypedObject[Spec, Sub]) SetCommonMetadata(metadata CommonMetadata) {
 	t.UID = types.UID(metadata.UID)
 	t.ResourceVersion = metadata.ResourceVersion
@@ -507,6 +524,8 @@ func (t *TypedObject[Spec, Sub]) DeepCopyObject() runtime.Object {
 	return t.Copy()
 }
 
+// Copy creates a copy of the object, using JSON marshaling to copy the spec and status objects.
+// nolint:revive,staticcheck
 func (t *TypedObject[Spec, Sub]) Copy() Object {
 	cpy := &TypedObject[Spec, Sub]{}
 	cpy.APIVersion = t.APIVersion
@@ -550,8 +569,8 @@ func (t *TypedObject[Spec, Sub]) MarshalJSON() ([]byte, error) {
 				continue
 			}
 		}
-		marshalled, err := json.Marshal(v.Field(i).Interface())
-		m[fn] = json.RawMessage(marshalled)
+		marshaled, err := json.Marshal(v.Field(i).Interface())
+		m[fn] = json.RawMessage(marshaled)
 		if err != nil {
 			return nil, err
 		}

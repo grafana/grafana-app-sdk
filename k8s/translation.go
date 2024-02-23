@@ -7,9 +7,10 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	admission "k8s.io/api/admission/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type k8sListWithItems struct {
@@ -18,6 +19,7 @@ type k8sListWithItems struct {
 	Items           []json.RawMessage `json:"items"`
 }
 
+//nolint:staticcheck
 func rawToListWithParser(raw []byte, into resource.ListObject, itemParser func([]byte) (resource.Object, error)) error {
 	um := k8sListWithItems{}
 	err := json.Unmarshal(raw, &um)
@@ -41,14 +43,6 @@ func rawToListWithParser(raw []byte, into resource.ListObject, itemParser func([
 	into.SetRemainingItemCount(um.Metadata.GetRemainingItemCount())
 	into.SetItems(items)
 	return nil
-}
-
-type convertedObject struct {
-	metav1.TypeMeta `json:",inline"`
-	Metadata        metav1.ObjectMeta `json:"metadata"`
-	Spec            any               `json:"spec"`
-	Status          any               `json:"status,omitempty"`
-	Scale           any               `json:"scale,omitempty"`
 }
 
 var metaV1Fields = getV1ObjectMetaFields()
@@ -114,13 +108,13 @@ func getV1ObjectMetaFields() map[string]struct{} {
 	return fields
 }
 
-func unmarshalKubernetesAdmissionReview(bytes []byte, format resource.WireFormat) (*admission.AdmissionReview, error) {
+func unmarshalKubernetesAdmissionReview(raw []byte, format resource.WireFormat) (*admission.AdmissionReview, error) {
 	if format != resource.WireFormatJSON {
 		return nil, fmt.Errorf("unsupported WireFormat '%s'", fmt.Sprint(format))
 	}
 
 	rev := admission.AdmissionReview{}
-	err := json.Unmarshal(bytes, &rev)
+	err := json.Unmarshal(raw, &rev)
 	if err != nil {
 		return nil, err
 	}
