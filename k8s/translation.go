@@ -129,28 +129,35 @@ func rawToObject(raw []byte, into resource.Object) error {
 	return nil
 }
 
-func rawToListWithParser(raw []byte, into resource.ListObject, itemParser func([]byte) (resource.Object, error)) error {
-	um := k8sListWithItems{}
-	err := json.Unmarshal(raw, &um)
-	if err != nil {
+// ObjectParserFn is a function that parses raw bytes into a resource.Object.
+type ObjectParserFn func([]byte) (resource.Object, error)
+
+func rawToListWithParser(raw []byte, into resource.ListObject, respSize int, itemParser ObjectParserFn) error {
+	var um k8sListWithItems
+	if respSize > 0 {
+		um.Items = make([]json.RawMessage, 0, respSize)
+	}
+
+	if err := json.Unmarshal(raw, &um); err != nil {
 		return err
 	}
-	// Attempt to parse all items in the list before setting the parsed metadata,
-	// as the parser could return an error, and we don't want to _partially_ unmarshal the list (just metadata) into `into`
-	items := make([]resource.Object, 0)
-	for _, item := range um.Items {
-		parsed, err := itemParser(item)
-		if err != nil {
-			return err
-		}
-		items = append(items, parsed)
-	}
+
 	into.SetListMetadata(resource.ListMetadata{
 		ResourceVersion:    um.Metadata.ResourceVersion,
 		Continue:           um.Metadata.Continue,
 		RemainingItemCount: um.Metadata.RemainingItemCount,
 	})
-	into.SetItems(items)
+
+	for _, item := range um.Items {
+		obj, err := itemParser(item)
+		if err != nil {
+			into.Clear()
+			return err
+		}
+
+		into.AppendItem(obj)
+	}
+
 	return nil
 }
 

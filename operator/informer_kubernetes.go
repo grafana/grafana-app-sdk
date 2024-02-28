@@ -60,7 +60,9 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 						attribute.String("kind.version", sch.Version()),
 						attribute.String("namespace", namespace),
 					)
-					resp := listObjectWrapper{}
+					resp := listObjectWrapper{
+						Items: make([]runtime.Object, 0, options.Limit),
+					}
 					err := client.ListInto(ctx, namespace, resource.ListOptions{
 						LabelFilters: labelFilters,
 						Continue:     options.Continue,
@@ -281,39 +283,61 @@ func (l *listObjectWrapper) DeepCopyObject() runtime.Object {
 	return nil
 }
 
-func (*listObjectWrapper) ListMetadata() resource.ListMetadata {
-	return resource.ListMetadata{}
+func (l *listObjectWrapper) ListMetadata() resource.ListMetadata {
+	return resource.ListMetadata{
+		ResourceVersion:    l.ResourceVersion,
+		Continue:           l.Continue,
+		RemainingItemCount: l.RemainingItemCount,
+	}
 }
 
 func (l *listObjectWrapper) SetListMetadata(md resource.ListMetadata) {
 	l.ListMeta = metav1.ListMeta{
-		ResourceVersion: md.ResourceVersion,
-		Continue:        md.Continue,
+		ResourceVersion:    md.ResourceVersion,
+		Continue:           md.Continue,
+		RemainingItemCount: md.RemainingItemCount,
 	}
 }
 
 func (*listObjectWrapper) ListItems() []resource.Object {
+	// TODO(@radiohead): not sure if leaving this empty is OK?
 	return nil
 }
 
-func (l *listObjectWrapper) SetItems(items []resource.Object) {
-	list := make([]runtime.Object, 0)
-	for _, i := range items {
-		// If the Object already implements runtime.Object, we don't have to wrap it
-		if ro, ok := i.(runtime.Object); ok {
-			list = append(list, ro)
-		} else {
-			list = append(list, &objectWrapper{
-				ObjectMeta: metav1.ObjectMeta{
-					Namespace:       i.StaticMetadata().Namespace,
-					Name:            i.StaticMetadata().Name,
-					ResourceVersion: i.CommonMetadata().ResourceVersion,
-				},
-				Object: i,
-			})
+func (l *listObjectWrapper) AppendItem(item resource.Object) {
+	if l.Items == nil {
+		l.Items = make([]runtime.Object, 0, 2)
+	}
+
+	// If the Object already implements runtime.Object, we don't have to wrap it
+	var obj runtime.Object
+	if ro, ok := item.(runtime.Object); ok {
+		obj = ro
+	} else {
+		obj = &objectWrapper{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:       item.StaticMetadata().Namespace,
+				Name:            item.StaticMetadata().Name,
+				ResourceVersion: item.CommonMetadata().ResourceVersion,
+			},
+			Object: item,
 		}
 	}
-	l.Items = list
+
+	l.Items = append(l.Items, obj)
+}
+
+func (l *listObjectWrapper) SetItems(items []resource.Object) {
+	l.Items = make([]runtime.Object, 0, len(items))
+	for _, i := range items {
+		l.AppendItem(i)
+	}
+}
+
+func (l *listObjectWrapper) Clear() {
+	l.ListMeta = metav1.ListMeta{}
+	clear(l.Items)
+	l.Items = l.Items[:0]
 }
 
 type objectWrapper struct {

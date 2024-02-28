@@ -328,8 +328,13 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 	return err
 }
 
-func (g *groupVersionClient) list(ctx context.Context, namespace, plural string, into resource.ListObject,
-	options resource.ListOptions, itemParser func([]byte) (resource.Object, error)) error {
+func (g *groupVersionClient) list(
+	ctx context.Context,
+	namespace, plural string,
+	into resource.ListObject,
+	options resource.ListOptions,
+	itemParser ObjectParserFn,
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-list")
 	defer span.End()
 	req := g.client.Get().Resource(plural)
@@ -362,7 +367,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	return rawToListWithParser(bytes, into, itemParser)
+	return rawToListWithParser(bytes, into, options.Limit, itemParser)
 }
 
 //nolint:revive
