@@ -36,7 +36,7 @@ func writeFile(path string, contents []byte) error {
 		}
 	}
 	fmt.Printf(" * Writing file %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0655)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
@@ -65,7 +65,7 @@ func writeExecutableFile(path string, contents []byte) error {
 		}
 	}
 	fmt.Printf(" * Writing file %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		return err
 	}
