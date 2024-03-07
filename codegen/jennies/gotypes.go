@@ -48,6 +48,8 @@ type GoTypes struct {
 	// Typically, a value of 0 is "safest" for NamingDepth, as it prevents overlapping names for types.
 	// However, if you know that your fields have unique names up to a certain depth, you may configure this to be higher.
 	NamingDepth int
+
+	AddKubernetesCodegen bool
 }
 
 func (*GoTypes) JennyName() string {
@@ -86,10 +88,15 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix)
 	}
 
+	applyFuncs := make([]dstutil.ApplyFunc, 0)
+	if g.AddKubernetesCodegen {
+		applyFuncs = append(applyFuncs, addGenComments())
+	}
 	goBytes, err := GoTypesFromCUE(version.Schema, CUEGoConfig{
 		PackageName: packageName,
 		Name:        exportField(sanitizeLabelString(name)),
 		Version:     version.Version,
+		ApplyFuncs:  applyFuncs,
 	}, 0)
 	if err != nil {
 		return nil, err
@@ -107,10 +114,15 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
+		applyFuncs := make([]dstutil.ApplyFunc, 0)
+		if g.AddKubernetesCodegen && fieldName[len(fieldName)-1] != "metadata" { // metadata hack because of thema
+			applyFuncs = append(applyFuncs, addGenComments())
+		}
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
 			PackageName: packageName,
 			Name:        exportField(strings.Join(fieldName, "")),
 			Version:     kv.Version,
+			ApplyFuncs:  applyFuncs,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
 		if err != nil {
 			return nil, err
