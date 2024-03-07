@@ -24,8 +24,9 @@ func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
-			GenerateOnlyCurrent: !versioned,
-			Depth:               1,
+			GenerateOnlyCurrent:  !versioned,
+			Depth:                1,
+			AddKubernetesCodegen: true,
 		},
 		&jennies.ResourceObjectGenerator{
 			OnlyUseCurrentVersion: !versioned,
@@ -117,6 +118,16 @@ func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen
 		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned),
 		&jennies.OperatorConfigJenny{},
 	)
+	return g
+}
+
+func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(&jennies.OpenAPI{
+		GenerateOnlyCurrent: !versioned,
+		GoModName:           projectRepo,
+		GoGenPath:           goGenPath,
+	})
 	return g
 }
 
