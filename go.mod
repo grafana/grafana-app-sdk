@@ -1,6 +1,8 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.21
+go 1.21.0
+
+toolchain go1.21.7
 
 // Required for compatibility with grafana/grafana-plugin-sdk-go & grafana/thema
 replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
@@ -13,12 +15,13 @@ require (
 	github.com/golangci/lint-1 v0.0.0-20181222135242-d2cdd8c08219
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
-	github.com/grafana/grafana-plugin-sdk-go v0.212.0
+	github.com/grafana/grafana-plugin-sdk-go v0.215.0
+	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240313174547-3696eca280bb
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/matryer/moq v0.3.4
-	github.com/prometheus/client_golang v1.19.0
+	github.com/prometheus/client_golang v1.18.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
@@ -31,15 +34,14 @@ require (
 	golang.org/x/text v0.14.0
 	golang.org/x/tools v0.19.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
-	google.golang.org/grpc v1.62.0
+	google.golang.org/grpc v1.62.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.29.2
 	k8s.io/apiextensions-apiserver v0.29.2
 	k8s.io/apimachinery v0.29.2
 	k8s.io/apiserver v0.29.2
 	k8s.io/client-go v0.29.2
-	k8s.io/gengo/v2 v2.0.0-20240228010128-51d4e06bde70
-	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
+	k8s.io/kube-openapi v0.0.0-20240220201932-37d671a357a5
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 )
 
@@ -62,7 +64,7 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.3 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/elazarl/goproxy v0.0.0-20230731152917-f99041a5c027 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.3 // indirect
 	github.com/emicklei/proto v1.10.0 // indirect
@@ -125,7 +127,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
-	github.com/prometheus/common v0.48.0 // indirect
+	github.com/prometheus/common v0.46.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect
 	github.com/protocolbuffers/txtpbfmt v0.0.0-20230328191034-3462fbc510c0 // indirect
 	github.com/rivo/uniseg v0.3.4 // indirect
@@ -144,11 +146,11 @@ require (
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/v3 v3.5.10 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.47.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.46.1 // indirect
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.46.1 // indirect
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.49.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace v0.49.0 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
 	go.opentelemetry.io/contrib/propagators/jaeger v1.22.0 // indirect
-	go.opentelemetry.io/contrib/samplers/jaegerremote v0.16.0 // indirect
+	go.opentelemetry.io/contrib/samplers/jaegerremote v0.18.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 // indirect
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.1.0 // indirect

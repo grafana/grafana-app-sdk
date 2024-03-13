@@ -3,11 +3,13 @@ package apiserver
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/apis/example"
 	"k8s.io/apiserver/pkg/registry/generic"
@@ -25,18 +27,17 @@ type RESTStorage struct {
 
 // NewRESTStorage returns a RESTStorage object that will work against API services.
 func NewRESTStorage(scheme *runtime.Scheme, kind resource.Kind, optsGetter generic.RESTOptionsGetter) (*RESTStorage, error) {
-	strategy := NewGenericStrategy(scheme)
+	strategy := NewGenericStrategy(scheme, kind)
 
 	store := &genericregistry.Store{
 		NewFunc:                   func() runtime.Object { return kind.ZeroValue() },
 		NewListFunc:               func() runtime.Object { return &resource.UntypedList{} },
 		PredicateFunc:             MatchObject,
-		DefaultQualifiedResource:  example.Resource("examples"),
-		SingularQualifiedResource: example.Resource("example"),
-
-		CreateStrategy: strategy,
-		UpdateStrategy: strategy,
-		DeleteStrategy: strategy,
+		DefaultQualifiedResource:  schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Plural())},
+		SingularQualifiedResource: schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Kind())},
+		CreateStrategy:            strategy,
+		UpdateStrategy:            strategy,
+		DeleteStrategy:            strategy,
 
 		// TODO: define table converter that exposes more than name/creation timestamp
 		TableConvertor: rest.NewDefaultTableConvertor(example.Resource("examples")),
@@ -49,8 +50,8 @@ func NewRESTStorage(scheme *runtime.Scheme, kind resource.Kind, optsGetter gener
 }
 
 // NewGenericStrategy creates and returns a genericStrategy instance
-func NewGenericStrategy(typer runtime.ObjectTyper) genericStrategy {
-	return genericStrategy{typer, names.SimpleNameGenerator}
+func NewGenericStrategy(typer runtime.ObjectTyper, kind resource.Kind) *genericStrategy {
+	return &genericStrategy{typer, names.SimpleNameGenerator, kind}
 }
 
 // GetAttrs returns labels.Set, fields.Set, and error in case the given runtime.Object is not a resource.Object
@@ -60,8 +61,8 @@ func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
 		return nil, nil, fmt.Errorf("given object is not a resource.Object")
 	}
 	return labels.Set(object.GetLabels()), fields.Set{
-		"metadata.name":      object.GetName(),
-		"metadata.namespace": object.GetNamespace(),
+		"metadata.name": object.GetName(),
+		//"metadata.namespace": object.GetNamespace(),
 	}, nil
 }
 
@@ -78,41 +79,42 @@ func MatchObject(label labels.Selector, field fields.Selector) storage.Selection
 type genericStrategy struct {
 	runtime.ObjectTyper
 	names.NameGenerator
+	resource.Kind
 }
 
-func (genericStrategy) NamespaceScoped() bool {
-	return true
+func (g *genericStrategy) NamespaceScoped() bool {
+	return g.Kind.Scope() == resource.NamespacedScope
 }
 
-func (genericStrategy) PrepareForCreate(_ context.Context, _ runtime.Object) {
+func (g *genericStrategy) PrepareForCreate(_ context.Context, _ runtime.Object) {
 }
 
-func (genericStrategy) PrepareForUpdate(_ context.Context, _, _ runtime.Object) {
+func (g *genericStrategy) PrepareForUpdate(_ context.Context, _, _ runtime.Object) {
 }
 
-func (genericStrategy) Validate(_ context.Context, _ runtime.Object) field.ErrorList {
+func (g *genericStrategy) Validate(_ context.Context, _ runtime.Object) field.ErrorList {
 	return []*field.Error{}
 }
 
 // WarningsOnCreate returns warnings for the creation of the given object.
-func (genericStrategy) WarningsOnCreate(_ context.Context, _ runtime.Object) []string { return nil }
+func (g *genericStrategy) WarningsOnCreate(_ context.Context, _ runtime.Object) []string { return nil }
 
-func (genericStrategy) AllowCreateOnUpdate() bool {
+func (g *genericStrategy) AllowCreateOnUpdate() bool {
 	return false
 }
 
-func (genericStrategy) AllowUnconditionalUpdate() bool {
+func (g *genericStrategy) AllowUnconditionalUpdate() bool {
 	return false
 }
 
-func (genericStrategy) Canonicalize(_ runtime.Object) {
+func (g *genericStrategy) Canonicalize(_ runtime.Object) {
 }
 
-func (genericStrategy) ValidateUpdate(_ context.Context, _, _ runtime.Object) field.ErrorList {
+func (g *genericStrategy) ValidateUpdate(_ context.Context, _, _ runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 
 // WarningsOnUpdate returns warnings for the given update.
-func (genericStrategy) WarningsOnUpdate(_ context.Context, _, _ runtime.Object) []string {
+func (g *genericStrategy) WarningsOnUpdate(_ context.Context, _, _ runtime.Object) []string {
 	return nil
 }

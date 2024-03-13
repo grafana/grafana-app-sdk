@@ -123,11 +123,6 @@ func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen
 
 func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
-	g.Append(&jennies.OpenAPI{
-		GenerateOnlyCurrent: !versioned,
-		GoModName:           projectRepo,
-		GoGenPath:           goGenPath,
-	})
 	return g
 }
 
