@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// Metadata defines model for Metadata.
-type Metadata struct {
+// ExternalNameMetadata defines model for ExternalNameMetadata.
+type ExternalNameMetadata struct {
 	CreatedBy         string            `json:"createdBy"`
 	CreationTimestamp time.Time         `json:"creationTimestamp"`
 	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty"`
@@ -21,7 +21,7 @@ type Metadata struct {
 // _kubeObjectMetadata is metadata found in a kubernetes object's metadata field.
 // It is not exhaustive and only includes fields which may be relevant to a kind's implementation,
 // As it is also intended to be generic enough to function with any API Server.
-type KubeObjectMetadata struct {
+type ExternalNameKubeObjectMetadata struct {
 	CreationTimestamp time.Time         `json:"creationTimestamp"`
 	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty"`
 	Finalizers        []string          `json:"finalizers"`

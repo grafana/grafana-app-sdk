@@ -1,22 +1,22 @@
 package v1
 
-// Defines values for OperatorStateState.
+// Defines values for ExternalNameOperatorStateState.
 const (
-	OperatorStateStateFailed     OperatorStateState = "failed"
-	OperatorStateStateInProgress OperatorStateState = "in_progress"
-	OperatorStateStateSuccess    OperatorStateState = "success"
+	ExternalNameOperatorStateStateFailed     ExternalNameOperatorStateState = "failed"
+	ExternalNameOperatorStateStateInProgress ExternalNameOperatorStateState = "in_progress"
+	ExternalNameOperatorStateStateSuccess    ExternalNameOperatorStateState = "success"
 )
 
-// Defines values for StatusOperatorStateState.
+// Defines values for ExternalNamestatusOperatorStateState.
 const (
-	StatusOperatorStateStateFailed     StatusOperatorStateState = "failed"
-	StatusOperatorStateStateInProgress StatusOperatorStateState = "in_progress"
-	StatusOperatorStateStateSuccess    StatusOperatorStateState = "success"
+	ExternalNamestatusOperatorStateStateFailed     ExternalNamestatusOperatorStateState = "failed"
+	ExternalNamestatusOperatorStateStateInProgress ExternalNamestatusOperatorStateState = "in_progress"
+	ExternalNamestatusOperatorStateStateSuccess    ExternalNamestatusOperatorStateState = "success"
 )
 
-// OperatorState defines model for OperatorState.
+// ExternalNameOperatorState defines model for ExternalNameOperatorState.
 // +k8s:openapi-gen=true
-type OperatorState struct {
+type ExternalNameOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
 
@@ -28,28 +28,28 @@ type OperatorState struct {
 
 	// state describes the state of the lastEvaluation.
 	// It is limited to three possible states for machine evaluation.
-	State OperatorStateState `json:"state"`
+	State ExternalNameOperatorStateState `json:"state"`
 }
 
-// OperatorStateState state describes the state of the lastEvaluation.
+// ExternalNameOperatorStateState state describes the state of the lastEvaluation.
 // It is limited to three possible states for machine evaluation.
 // +k8s:openapi-gen=true
-type OperatorStateState string
+type ExternalNameOperatorStateState string
 
-// Status defines model for Status.
+// ExternalNameStatus defines model for ExternalNameStatus.
 // +k8s:openapi-gen=true
-type Status struct {
+type ExternalNameStatus struct {
 	// additionalFields is reserved for future use
 	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
 
 	// operatorStates is a map of operator ID to operator state evaluations.
 	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
-	OperatorStates map[string]StatusOperatorState `json:"operatorStates,omitempty"`
+	OperatorStates map[string]ExternalNamestatusOperatorState `json:"operatorStates,omitempty"`
 }
 
-// StatusOperatorState defines model for status.#OperatorState.
+// ExternalNamestatusOperatorState defines model for ExternalNamestatus.#OperatorState.
 // +k8s:openapi-gen=true
-type StatusOperatorState struct {
+type ExternalNamestatusOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
 
@@ -61,10 +61,10 @@ type StatusOperatorState struct {
 
 	// state describes the state of the lastEvaluation.
 	// It is limited to three possible states for machine evaluation.
-	State StatusOperatorStateState `json:"state"`
+	State ExternalNamestatusOperatorStateState `json:"state"`
 }
 
-// StatusOperatorStateState state describes the state of the lastEvaluation.
+// ExternalNamestatusOperatorStateState state describes the state of the lastEvaluation.
 // It is limited to three possible states for machine evaluation.
 // +k8s:openapi-gen=true
-type StatusOperatorStateState string
+type ExternalNamestatusOperatorStateState string

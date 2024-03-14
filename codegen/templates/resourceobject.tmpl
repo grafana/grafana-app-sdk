@@ -28,7 +28,7 @@ func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) SetSpec(spec any) error {
-    cast, ok := spec.(Spec)
+    cast, ok := spec.({{.SpecTypeName}})
     if !ok {
         return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
     }

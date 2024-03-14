@@ -50,6 +50,11 @@ type GoTypes struct {
 	NamingDepth int
 
 	AddKubernetesCodegen bool
+
+	// PrefixWithKindName will prefix any types with a Depth > 0 with the exported name of the Kind.
+	// So a Kind named Foo with a `spec` field and Depth of 1 will generate a spec type of `FooSpec` instead of
+	// Spec if PrefixWithKindName is set to true.
+	PrefixWithKindName bool
 }
 
 func (*GoTypes) JennyName() string {
@@ -85,7 +90,11 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 
 func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
 	if g.Depth > 0 {
-		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix)
+		namePrefix := ""
+		if g.PrefixWithKindName {
+			namePrefix = exportField(name)
+		}
+		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix)
 	}
 
 	applyFuncs := make([]dstutil.ApplyFunc, 0)
@@ -108,7 +117,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 	}}, nil
 }
 
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
@@ -121,6 +130,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
 			PackageName: packageName,
 			Name:        exportField(strings.Join(fieldName, "")),
+			NamePrefix:  namePrefix,
 			Version:     kv.Version,
 			ApplyFuncs:  applyFuncs,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
@@ -141,7 +151,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix)
+		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix)
 		if err != nil {
 			return nil, err
 		}
@@ -163,11 +173,13 @@ type CUEGoConfig struct {
 
 	// UseGoDeclInComments sets the name of the fields and structs at the beginning of each comment.
 	UseGoDeclInComments bool
+
+	NamePrefix string
 }
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
 	openAPIConfig := CUEOpenAPIConfig{
-		Name:    cfg.Name,
+		Name:    cfg.NamePrefix + cfg.Name,
 		Version: cfg.Version,
 		NameFunc: func(value cue.Value, path cue.Path) string {
 			i := 0
@@ -182,7 +194,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 			if i > 0 {
 				path = cue.MakePath(path.Selectors()[i:]...)
 			}
-			return strings.Trim(path.String(), "?#")
+			return cfg.NamePrefix + strings.Trim(path.String(), "?#")
 		},
 	}
 

@@ -49,6 +49,11 @@ var (
 type ResourceObjectGenerator struct {
 	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
 	OnlyUseCurrentVersion bool
+
+	// SubresourceTypesArePrefixed should be set to true if the subresource go types (such as spec or status)
+	// are prefixed with the exported Kind name. Generally, if you generated go types with Depth: 1 and PrefixWithKindName: true,
+	// then you should set this value to true as well.
+	SubresourceTypesArePrefixed bool
 }
 
 func (*ResourceObjectGenerator) JennyName() string {
@@ -89,7 +94,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
+func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
 	customMetadataFields := make([]templates.ObjectMetadataField, 0)
 	mdv := version.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
 	if mdv.Exists() {
@@ -123,11 +128,15 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 		return strings.Compare(a.FieldName, b.FieldName)
 	})
 
+	typePrefix := ""
+	if r.SubresourceTypesArePrefixed {
+		typePrefix = exportField(kind.Name())
+	}
 	meta := kind.Properties()
 	md := templates.ResourceObjectTemplateMetadata{
 		Package:              pkg,
 		TypeName:             meta.Kind,
-		SpecTypeName:         "Spec",
+		SpecTypeName:         typePrefix + "Spec",
 		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object
 		ObjectShortName:      "o",
 		Subresources:         make([]templates.SubresourceMetadata, 0),
@@ -142,7 +151,7 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 			continue
 		}
 		md.Subresources = append(md.Subresources, templates.SubresourceMetadata{
-			TypeName: exportField(it.Label()),
+			TypeName: typePrefix + exportField(it.Label()),
 			JSONName: it.Label(),
 		})
 	}
