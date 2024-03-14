@@ -10,10 +10,10 @@ import (
 
 // schema is unexported to prevent accidental overwrites
 var (
-	kindSchema = resource.NewSimpleSchema("core.grafana.internal", "v1", &ExternalName{}, &ExternalNameList{}, resource.WithKind("ExternalName"),
+	schemaExternalName = resource.NewSimpleSchema("core.grafana.internal", "v1", &ExternalName{}, &ExternalNameList{}, resource.WithKind("ExternalName"),
 		resource.WithPlural("externalnames"), resource.WithScope(resource.ClusterScope))
-	kind = resource.Kind{
-		Schema: kindSchema,
+	kindExternalName = resource.Kind{
+		Schema: schemaExternalName,
 		Codecs: map[resource.KindEncoding]resource.Codec{
 			resource.KindEncodingJSON: &JSONCodec{},
 		},
@@ -21,14 +21,14 @@ var (
 )
 
 // Kind returns a resource.Kind for this Schema with a JSON codec
-func Kind() resource.Kind {
-	return kind
+func ExternalNameKind() resource.Kind {
+	return kindExternalName
 }
 
 // Schema returns a resource.SimpleSchema representation of ExternalName
-func Schema() *resource.SimpleSchema {
-	return kindSchema
+func ExternalNameSchema() *resource.SimpleSchema {
+	return schemaExternalName
 }
 
 // Interface compliance checks
-var _ resource.Schema = kindSchema
+var _ resource.Schema = kindExternalName

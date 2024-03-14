@@ -21,6 +21,7 @@ import (
 	"io"
 	"net"
 
+	"github.com/grafana/grafana-app-sdk/apiserver"
 	"github.com/grafana/grafana-app-sdk/simple"
 	filestorage "github.com/grafana/grafana/pkg/apiserver/storage/file"
 	"github.com/spf13/cobra"
@@ -42,12 +43,12 @@ type APIServerOptions struct {
 	config *simple.APIServerConfig
 }
 
-func NewAPIServerOptions(groups []simple.APIServerGroup, out, errOut io.Writer) *APIServerOptions {
+func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer) *APIServerOptions {
 	serverConfig := simple.NewAPIServerConfig(groups)
 
 	gvs := []schema.GroupVersion{}
 	for _, g := range groups {
-		for _, r := range g.Resource {
+		for _, r := range g.Resources {
 			gv := schema.GroupVersion{
 				Group:   r.Kind.Group(),
 				Version: r.Kind.Version(),

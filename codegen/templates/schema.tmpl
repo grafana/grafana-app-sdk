@@ -10,10 +10,10 @@ import (
 
 // schema is unexported to prevent accidental overwrites
 var (
-    kindSchema = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
+    schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
         resource.WithPlural("{{.Plural}}"), resource.WithScope(resource.{{.Scope}}Scope))
-    kind = resource.Kind{
-        Schema: kindSchema,
+    kind{{.Kind}} = resource.Kind{
+        Schema: schema{{.Kind}},
         Codecs: map[resource.KindEncoding]resource.Codec{
             resource.KindEncodingJSON: &JSONCodec{},
         },
@@ -21,14 +21,14 @@ var (
 )
 
 // Kind returns a resource.Kind for this Schema with a JSON codec
-func Kind() resource.Kind {
-    return kind
+func {{.FuncPrefix}}Kind() resource.Kind {
+    return kind{{.Kind}}
 }
 
 // Schema returns a resource.SimpleSchema representation of {{.Kind}}
-func Schema() *resource.SimpleSchema {
-    return kindSchema
+func {{.FuncPrefix}}Schema() *resource.SimpleSchema {
+    return schema{{.Kind}}
 }
 
 // Interface compliance checks
-var _ resource.Schema = kindSchema
+var _ resource.Schema = kind{{.Kind}}

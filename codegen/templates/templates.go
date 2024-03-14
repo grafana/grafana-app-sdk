@@ -103,12 +103,13 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
-	Package string
-	Group   string
-	Version string
-	Kind    string
-	Plural  string
-	Scope   string
+	Package    string
+	Group      string
+	Version    string
+	Kind       string
+	Plural     string
+	Scope      string
+	FuncPrefix string
 }
 
 // WriteSchema executes the Resource Schema template, and writes out the generated go code to out

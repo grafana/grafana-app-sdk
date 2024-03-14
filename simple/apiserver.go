@@ -1,12 +1,12 @@
 package simple
 
 import (
+	"fmt"
 	"maps"
 	"net/http"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s"
-	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana/pkg/apimachinery/apis/common/v0alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,29 +20,9 @@ import (
 	"k8s.io/kube-openapi/pkg/common"
 )
 
-type APIServerResource struct {
-	Kind                  resource.Kind
-	GetOpenAPIDefinitions common.GetOpenAPIDefinitions
-	Subresources          []SubresourceRoute
-	Validator             resource.ValidatingAdmissionController
-	// Mutators is an optional map of schema => MutatingAdmissionController to use for the schema on admission.
-	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
-	Mutator    resource.MutatingAdmissionController
-	Reconciler operator.Reconciler
-}
-
-func (r *APIServerResource) AddToScheme(scheme *runtime.Scheme) {
-	gv := schema.GroupVersion{
-		Group:   r.Kind.Group(),
-		Version: r.Kind.Version(),
-	}
-	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
-	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
-}
-
 type APIServerGroup struct {
 	Name     string
-	Resource []APIServerResource
+	Resource []apiserver.Resource
 	// Converters is an optional map of GroupKind => Converter to use for CRD version conversion requests.
 	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
 	Converters map[metav1.GroupKind]k8s.Converter
@@ -83,7 +63,7 @@ type AdditionalRouteHandler func(w http.ResponseWriter, r *http.Request, identif
 
 // ExtraConfig holds custom apiserver config
 type ExtraConfig struct {
-	ResourceGroups []APIServerGroup
+	ResourceGroups []apiserver.ResourceGroup
 	Scheme         *runtime.Scheme
 	Codecs         serializer.CodecFactory
 }
@@ -94,7 +74,7 @@ type APIServerConfig struct {
 	ExtraConfig   ExtraConfig
 }
 
-func NewAPIServerConfig(groups []APIServerGroup) *APIServerConfig {
+func NewAPIServerConfig(groups []apiserver.ResourceGroup) *APIServerConfig {
 	scheme := runtime.NewScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -110,7 +90,7 @@ func NewAPIServerConfig(groups []APIServerGroup) *APIServerConfig {
 	)
 
 	for _, g := range groups {
-		for _, r := range g.Resource {
+		for _, r := range g.Resources {
 			gv := schema.GroupVersion{
 				Group:   r.Kind.Group(),
 				Version: r.Kind.Version(),
@@ -166,7 +146,7 @@ func (c completedConfig) New() (*Server, error) {
 	openapiGetters := []common.GetOpenAPIDefinitions{}
 
 	for _, g := range c.ExtraConfig.ResourceGroups {
-		for _, r := range g.Resource {
+		for _, r := range g.Resources {
 			openapiGetters = append(openapiGetters, r.GetOpenAPIDefinitions)
 		}
 	}
@@ -191,13 +171,20 @@ func (c completedConfig) New() (*Server, error) {
 	parameterCodec := runtime.NewParameterCodec(scheme)
 	for _, g := range c.ExtraConfig.ResourceGroups {
 		apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
-		for _, r := range g.Resource {
+		for _, r := range g.Resources {
 			s, err := apiserver.NewRESTStorage(scheme, r.Kind, c.GenericConfig.RESTOptionsGetter)
 			if err != nil {
 				return nil, err
 			}
 			store := map[string]rest.Storage{}
 			store[r.Kind.Plural()] = s
+			// Custom subresource routes
+			resourceCaller := &apiserver.SubresourceConnector{
+				Routes: r.Subresources,
+			}
+			for _, subRoute := range r.Subresources {
+				store[fmt.Sprintf("%s/%s", r.Kind.Plural(), subRoute.Path)] = resourceCaller
+			}
 			apiGroupInfo.VersionedResourcesStorageMap[r.Kind.Version()] = store
 		}
 		if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {

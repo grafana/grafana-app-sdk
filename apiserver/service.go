@@ -3,7 +3,6 @@ package apiserver
 import (
 	"bytes"
 	"fmt"
-	"net/http"
 
 	"github.com/go-openapi/spec"
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -16,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/server"
-	"k8s.io/kube-openapi/pkg/spec3"
 )
 
 type APIServerResource struct {
@@ -46,16 +44,6 @@ type APIServerGroup struct {
 	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
 	Converters map[metav1.GroupKind]k8s.Converter
 }
-
-type SubresourceRoute struct {
-	// Path is the path _past_ the resource identifier
-	// {schema.group}/{schema.version}/{schema.plural}[/ns/{ns}]/{path}
-	Path        string
-	OpenAPISpec *spec3.PathProps // Exposed in the open api service discovery
-	Handler     AdditionalRouteHandler
-}
-
-type AdditionalRouteHandler func(w http.ResponseWriter, r *http.Request, identifier resource.Identifier)
 
 // An APIService is a set of one or more GroupVersions with the same Group, which can be run as a part of
 // an APIServer.
