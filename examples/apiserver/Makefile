@@ -8,7 +8,7 @@ generate:
 
 .PHONY=run
 run: generate
-	@go run main.go
+	@go run main.go --secure-port=6443
 
 .PHONY=clean
 clean:

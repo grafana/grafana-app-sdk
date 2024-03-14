@@ -1,6 +1,5 @@
 package core
 
-// This is our ExternalName definition, which contains metadata about the kind, and the kind's schema
 externalName: {
 	kind: "ExternalName"
 	group: "core"

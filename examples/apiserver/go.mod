@@ -4,9 +4,8 @@ go 1.21.7
 
 require (
 	github.com/grafana/grafana-app-sdk v0.14.12
-	github.com/grafana/grafana/pkg/apiserver v0.0.0-20240313235430-b6a020148b11
 	k8s.io/apimachinery v0.29.2
-	k8s.io/apiserver v0.29.2
+	k8s.io/component-base v0.29.2
 	k8s.io/kube-openapi v0.0.0-20240228011516-70dd3763d340
 )
 
@@ -41,6 +40,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240313174547-3696eca280bb // indirect
+	github.com/grafana/grafana/pkg/apiserver v0.0.0-20240314120634-38a8bf10f34a // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.1-0.20191002090509-6af20e3a5340 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
@@ -99,8 +99,8 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.29.2 // indirect
 	k8s.io/apiextensions-apiserver v0.29.2 // indirect
+	k8s.io/apiserver v0.29.2 // indirect
 	k8s.io/client-go v0.29.2 // indirect
-	k8s.io/component-base v0.29.2 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/kms v0.29.2 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
