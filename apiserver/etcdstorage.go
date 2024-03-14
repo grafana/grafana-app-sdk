@@ -11,7 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
-	"k8s.io/apiserver/pkg/apis/example"
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -32,7 +31,7 @@ func NewRESTStorage(scheme *runtime.Scheme, kind resource.Kind, optsGetter gener
 	store := &genericregistry.Store{
 		NewFunc:                   func() runtime.Object { return kind.ZeroValue() },
 		NewListFunc:               func() runtime.Object { return kind.ZeroListValue() },
-		PredicateFunc:             MatchObject,
+		PredicateFunc:             MatchObjectFunc(kind),
 		DefaultQualifiedResource:  schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Plural())},
 		SingularQualifiedResource: schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Kind())},
 		CreateStrategy:            strategy,
@@ -40,9 +39,9 @@ func NewRESTStorage(scheme *runtime.Scheme, kind resource.Kind, optsGetter gener
 		DeleteStrategy:            strategy,
 
 		// TODO: define table converter that exposes more than name/creation timestamp
-		TableConvertor: rest.NewDefaultTableConvertor(example.Resource("examples")),
+		TableConvertor: rest.NewDefaultTableConvertor(schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Plural())}),
 	}
-	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: GetAttrs}
+	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: GetAttrsFunc(kind)}
 	if err := store.CompleteWithOptions(options); err != nil {
 		return nil, err
 	}
@@ -54,25 +53,28 @@ func NewGenericStrategy(typer runtime.ObjectTyper, kind resource.Kind) *genericS
 	return &genericStrategy{typer, names.SimpleNameGenerator, kind}
 }
 
-// GetAttrs returns labels.Set, fields.Set, and error in case the given runtime.Object is not a resource.Object
-func GetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
-	object, ok := obj.(resource.Object)
-	if !ok {
-		return nil, nil, fmt.Errorf("given object is not a resource.Object")
+func GetAttrsFunc(kind resource.Kind) func(obj runtime.Object) (labels.Set, fields.Set, error) {
+	return func(obj runtime.Object) (labels.Set, fields.Set, error) {
+		object, ok := obj.(resource.Object)
+		if !ok {
+			return nil, nil, fmt.Errorf("given object is not a resource.Object")
+		}
+		fields := make(fields.Set)
+		fields["metadata.name"] = object.GetName()
+		if kind.Scope() != resource.ClusterScope {
+			fields["metadata.namespace"] = object.GetNamespace()
+		}
+		return labels.Set(object.GetLabels()), fields, nil
 	}
-	return labels.Set(object.GetLabels()), fields.Set{
-		"metadata.name": object.GetName(),
-		//"metadata.namespace": object.GetNamespace(),
-	}, nil
 }
 
-// MatchObject is the filter used by the generic etcd backend to watch events
-// from etcd to clients of the apiserver only interested in specific labels/fields.
-func MatchObject(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
-	return storage.SelectionPredicate{
-		Label:    label,
-		Field:    field,
-		GetAttrs: GetAttrs,
+func MatchObjectFunc(kind resource.Kind) func(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
+	return func(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
+		return storage.SelectionPredicate{
+			Label:    label,
+			Field:    field,
+			GetAttrs: GetAttrsFunc(kind),
+		}
 	}
 }
 
