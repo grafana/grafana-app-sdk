@@ -14,7 +14,8 @@ import (
 
 func TestNewOpinionatedWatcher(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
-	schema := resource.NewSimpleSchema("group", "version", ex, resource.WithKind("my-crd"))
+	exList := &resource.TypedList[*resource.TypedSpecObject[string]]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, exList, resource.WithKind("my-crd"))
 	client := &mockPatchClient{}
 
 	t.Run("nil args", func(t *testing.T) {
@@ -61,7 +62,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 	}
 
 	t.Run("nil watcher", func(t *testing.T) {
-		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}), &mockPatchClient{})
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{})
 		assert.Nil(t, err)
 		w.Wrap(nil, false)
 		assert.Nil(t, w.AddFunc)
@@ -71,7 +72,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 	})
 
 	t.Run("syncToAdd=false", func(t *testing.T) {
-		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}), &mockPatchClient{})
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{})
 		assert.Nil(t, err)
 		w.Wrap(simple, false)
 		assert.NotNil(t, w.AddFunc)
@@ -81,7 +82,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 	})
 
 	t.Run("syncToAdd=true", func(t *testing.T) {
-		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}), &mockPatchClient{})
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{})
 		assert.Nil(t, err)
 		w.Wrap(simple, true)
 		assert.NotNil(t, w.AddFunc)
@@ -93,7 +94,8 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 
 func TestOpinionatedWatcher_Add(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
-	schema := resource.NewSimpleSchema("group", "version", ex)
+	exList := &resource.TypedList[*resource.TypedSpecObject[string]]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, exList)
 	client := &mockPatchClient{}
 	o, err := NewOpinionatedWatcher(schema, client)
 	assert.Nil(t, err)
@@ -235,7 +237,8 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 
 func TestOpinionatedWatcher_Update(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
-	schema := resource.NewSimpleSchema("group", "version", ex)
+	exList := &resource.TypedList[*resource.TypedSpecObject[string]]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, exList)
 	client := &mockPatchClient{}
 	o, err := NewOpinionatedWatcher(schema, client)
 	assert.Nil(t, err)
@@ -373,7 +376,8 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 
 func TestOpinionatedWatcher_Delete(t *testing.T) {
 	ex := &resource.TypedSpecObject[string]{}
-	schema := resource.NewSimpleSchema("group", "version", ex)
+	exList := &resource.TypedList[*resource.TypedSpecObject[string]]{}
+	schema := resource.NewSimpleSchema("group", "version", ex, exList)
 	client := &mockPatchClient{}
 	o, err := NewOpinionatedWatcher(schema, client)
 	assert.Nil(t, err)

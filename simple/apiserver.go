@@ -38,7 +38,7 @@ func (r *APIServerResource) AddToScheme(scheme *runtime.Scheme) {
 		Version: r.Kind.Version(),
 	}
 	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
-	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), &resource.UntypedList{})
+	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
 }
 
 type APIServerGroup struct {
@@ -148,7 +148,6 @@ func GetOpenAPIDefinitions(getters []common.GetOpenAPIDefinitions) common.GetOpe
 
 // New returns a new instance of ExampleServer from the given config.
 func (c completedConfig) New() (*ExampleServer, error) {
-
 	scheme := runtime.NewScheme()
 	// Codecs provides methods for retrieving codecs and serializers for specific
 	// versions and content types.
@@ -176,7 +175,7 @@ func (c completedConfig) New() (*ExampleServer, error) {
 				Version: r.Kind.Version(),
 			}
 			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
-			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), &resource.UntypedList{})
+			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
 			metav1.AddToGroupVersion(scheme, gv)
 			openapiGetters = append(openapiGetters, r.GetOpenAPIDefinitions)
 		}

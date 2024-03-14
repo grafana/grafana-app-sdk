@@ -36,7 +36,7 @@ func (r *APIServerResource) AddToScheme(scheme *runtime.Scheme) {
 		Version: r.Kind.Version(),
 	}
 	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
-	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), &resource.UntypedList{})
+	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
 }
 
 type APIServerGroup struct {

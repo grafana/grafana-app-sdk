@@ -248,6 +248,7 @@ func (u *UntypedObject) Copy() Object {
 	return cpy
 }
 
+// k8s:openapi-gen=true
 type UntypedList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
@@ -276,11 +277,4 @@ func (u *UntypedList) GetItems() []Object {
 
 func (u *UntypedList) SetItems(items []Object) {
 	u.Items = items
-}
-
-func GetOpenAPIDefinitions() map[string]runtime.Object {
-	return map[string]runtime.Object{
-		"UntypedObject": &UntypedObject{},
-		"UntypedList":   &UntypedList{},
-	}
 }

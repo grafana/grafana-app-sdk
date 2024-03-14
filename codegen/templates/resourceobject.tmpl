@@ -15,7 +15,7 @@ import ({{ range .CustomMetadataFields }}{{ range $imp := .GoType.AdditionalImpo
 )
 
 // +k8s:openapi-gen=true
-type {{.ObjectTypeName}} struct {
+type {{.TypeName}} struct {
     metav1.TypeMeta `json:",inline"`
     metav1.ObjectMeta `json:"metadata"`
     Spec       {{.SpecTypeName}} `json:"spec"`{{ range .Subresources }}{{ if ne .Comment "" }}
@@ -23,11 +23,11 @@ type {{.ObjectTypeName}} struct {
         {{ .TypeName }} {{.TypeName}} `json:"{{.JSONName}}"`{{ end }}
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetSpec() any {
+func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
     return {{.ObjectShortName}}.Spec
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetSpec(spec any) error {
+func ({{.ObjectShortName}} *{{.TypeName}}) SetSpec(spec any) error {
     cast, ok := spec.(Spec)
     if !ok {
         return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
@@ -36,13 +36,13 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetSpec(spec any) error {
     return nil
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetSubresources() map[string]any {
+func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresources() map[string]any {
     return map[string]any{ {{ range .Subresources }}
         "{{.JSONName}}": {{$root.ObjectShortName}}.{{.TypeName}},
     {{ end }} }
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetSubresource(name string) (any,bool) {
+func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresource(name string) (any,bool) {
     switch name { {{ range .Subresources }}
     case"{{ .JSONName }}":
         return {{$root.ObjectShortName}}.{{.TypeName}}, true
@@ -51,7 +51,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetSubresource(name string) (an
     }
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetSubresource(name string, value any) error {
+func ({{.ObjectShortName}} *{{.TypeName}}) SetSubresource(name string, value any) error {
     switch name { {{ range .Subresources }}
     case"{{ .JSONName }}":
         cast, ok := value.({{.TypeName}})
@@ -65,7 +65,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetSubresource(name string, val
     }
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetStaticMetadata() resource.StaticMetadata {
+func ({{.ObjectShortName}} *{{.TypeName}}) GetStaticMetadata() resource.StaticMetadata {
     return resource.StaticMetadata{
         Name:      {{.ObjectShortName}}.ObjectMeta.Name,
     	Namespace: {{.ObjectShortName}}.ObjectMeta.Namespace,
@@ -75,7 +75,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetStaticMetadata() resource.St
     }
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetStaticMetadata(metadata resource.StaticMetadata) {
+func ({{.ObjectShortName}} *{{.TypeName}}) SetStaticMetadata(metadata resource.StaticMetadata) {
     {{.ObjectShortName}}.Name = metadata.Name
     {{.ObjectShortName}}.Namespace = metadata.Namespace
     {{.ObjectShortName}}.SetGroupVersionKind(schema.GroupVersionKind{
@@ -85,7 +85,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetStaticMetadata(metadata reso
     })
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetCommonMetadata() resource.CommonMetadata {
+func ({{.ObjectShortName}} *{{.TypeName}}) GetCommonMetadata() resource.CommonMetadata {
     dt := {{.ObjectShortName}}.DeletionTimestamp
 	var deletionTimestamp *time.Time
 	if dt != nil {
@@ -117,7 +117,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) GetCommonMetadata() resource.Co
 	}
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata resource.CommonMetadata) {
+func ({{.ObjectShortName}} *{{.TypeName}}) SetCommonMetadata(metadata resource.CommonMetadata) {
     {{.ObjectShortName}}.UID = types.UID(metadata.UID)
     {{.ObjectShortName}}.ResourceVersion = metadata.ResourceVersion
     {{.ObjectShortName}}.Generation = metadata.Generation
@@ -162,7 +162,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata reso
     }
 }
 
-{{range .CustomMetadataFields}}func ({{$root.ObjectShortName}} *{{$root.ObjectTypeName}}) Get{{.FieldName}}() {{.GoType.GoType}} {
+{{range .CustomMetadataFields}}func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Get{{.FieldName}}() {{.GoType.GoType}} {
     if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
         {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
     }
@@ -171,7 +171,7 @@ func ({{.ObjectShortName}} *{{.ObjectTypeName}}) SetCommonMetadata(metadata reso
     {{ $ret }}
 }
 
-func ({{$root.ObjectShortName}} *{{$root.ObjectTypeName}}) Set{{.FieldName}}({{.JSONName}} {{.GoType.GoType}}) {
+func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Set{{.FieldName}}({{.JSONName}} {{.GoType.GoType}}) {
     if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
         {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
     }
@@ -182,13 +182,53 @@ func ({{$root.ObjectShortName}} *{{$root.ObjectTypeName}}) Set{{.FieldName}}({{.
 
 {{end}}
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) Copy() resource.Object {
+func ({{.ObjectShortName}} *{{.TypeName}}) Copy() resource.Object {
     return resource.CopyObject({{.ObjectShortName}})
 }
 
-func ({{.ObjectShortName}} *{{.ObjectTypeName}}) DeepCopyObject() runtime.Object {
+func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyObject() runtime.Object {
     return {{.ObjectShortName}}.Copy()
 }
 
 // Interface compliance compile-time check
-var _ resource.Object = &Object{}
+var _ resource.Object = &{{.TypeName}}{}
+
+// +k8s:openapi-gen=true
+type {{.TypeName}}List struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+	Items           []{{.TypeName}} `json:"items"`
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyObject() runtime.Object {
+	return {{.ObjectShortName}}.Copy()
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}List) Copy() resource.ListObject {
+	cpy := &{{.TypeName}}List{
+		TypeMeta: {{.ObjectShortName}}.TypeMeta,
+		Items:    make([]{{.TypeName}}, len({{.ObjectShortName}}.Items)),
+	}
+	{{.ObjectShortName}}.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	for i := 0; i < len({{.ObjectShortName}}.Items); i++ {
+        if item, ok := o.Items[i].Copy().(*{{.TypeName}}); ok {
+			cpy.Items[i] = *item
+		}
+	}
+	return cpy
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}List) GetItems() []resource.Object {
+	items := make([]resource.Object, len(o.Items))
+	for i := 0; i < len(o.Items); i++ {
+		items[i] = &o.Items[i]
+	}
+	return items
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}List) SetItems(items []resource.Object) {
+    o.Items = make([]{{.TypeName}}, len(items))
+	for i := 0; i < len(items); i++ {
+		o.Items[i] = *items[i].(*{{.TypeName}})
+	}
+}

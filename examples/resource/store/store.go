@@ -18,15 +18,15 @@ import (
 // Schemas are defined here for clarity
 var (
 	obj1Kind = resource.Kind{
-		Schema: resource.NewSimpleSchema("org.example.obj", "v1", &Obj1{}),
+		Schema: resource.NewSimpleSchema("org.example.obj", "v1", &Obj1{}, &resource.TypedList[*Obj1]{}),
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
 	}
 	obj2Kind = resource.Kind{
-		Schema: resource.NewSimpleSchema("org.example.obj", "v1", &Obj2{}),
+		Schema: resource.NewSimpleSchema("org.example.obj", "v1", &Obj2{}, &resource.TypedList[*Obj2]{}),
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
 	}
 	def1Kind = resource.Kind{
-		Schema: resource.NewSimpleSchema("org.example.def", "v1", &Def1{}),
+		Schema: resource.NewSimpleSchema("org.example.def", "v1", &Def1{}, &resource.TypedList[*Def1]{}),
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
 	}
 

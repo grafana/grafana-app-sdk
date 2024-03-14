@@ -31,7 +31,7 @@ func NewRESTStorage(scheme *runtime.Scheme, kind resource.Kind, optsGetter gener
 
 	store := &genericregistry.Store{
 		NewFunc:                   func() runtime.Object { return kind.ZeroValue() },
-		NewListFunc:               func() runtime.Object { return &resource.UntypedList{} },
+		NewListFunc:               func() runtime.Object { return kind.ZeroListValue() },
 		PredicateFunc:             MatchObject,
 		DefaultQualifiedResource:  schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Plural())},
 		SingularQualifiedResource: schema.GroupResource{Group: kind.Group(), Resource: strings.ToLower(kind.Kind())},

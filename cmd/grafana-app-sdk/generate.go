@@ -282,7 +282,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	for i, f := range resourceFiles {
-		resourceFiles[i].RelativePath = filepath.Join(filepath.Join(cfg.GoGenBasePath, targetResource), f.RelativePath)
+		resourceFiles[i].RelativePath = filepath.Join(cfg.GoGenBasePath, f.RelativePath)
 	}
 	// Model
 	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true), func(kind codegen.Kind) bool {

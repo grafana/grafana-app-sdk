@@ -52,7 +52,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: fmt.Sprintf("%s/%s_schema_gen.go", meta.MachineName, meta.MachineName),
+			RelativePath: fmt.Sprintf("%s/%s_schema_gen.go", meta.Group, meta.MachineName),
 			From:         []codejen.NamedJenny{s},
 		})
 	} else {
@@ -75,7 +75,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			}
 			files = append(files, codejen.File{
 				Data:         formatted,
-				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.MachineName, ToPackageName(ver.Version), meta.MachineName),
+				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.Group, ToPackageName(ver.Version), meta.MachineName),
 				From:         []codejen.NamedJenny{s},
 			})
 		}

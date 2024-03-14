@@ -50,9 +50,9 @@ func (o *OpenAPI) Generate(kind codegen.Kind) (codejen.Files, error) {
 
 		err := gengo.Execute(generators.NameSystems(),
 			generators.DefaultNameSystem(),
-			o.getTargetsFunc(&ver, ToPackageName(ver.Version), filepath.Join(o.GoGenPath, "resource", ToPackageName(strings.ToLower(kind.Name())), ToPackageName(ver.Version)), fs),
+			o.getTargetsFunc(&ver, ToPackageName(ver.Version), filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(kind.Properties().Group)), ToPackageName(ver.Version)), fs),
 			gengo.StdBuildTag,
-			[]string{fmt.Sprintf("%s/%s/resource/%s/%s", o.GoModName, o.GoGenPath, ToPackageName(strings.ToLower(kind.Name())), ToPackageName(ver.Version))},
+			[]string{fmt.Sprintf("%s/%s/%s/%s", o.GoModName, o.GoGenPath, ToPackageName(strings.ToLower(kind.Properties().Group)), ToPackageName(ver.Version))},
 		)
 		if err != nil {
 			return nil, err
