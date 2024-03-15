@@ -12,6 +12,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 type ResourceCallOptions struct {
@@ -105,9 +107,8 @@ func (h *handlerWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	h.handler(w, req, h.id)
 }
 
-func CovertURLToResourceCallOptions(in *url.Values, out *ResourceCallOptions, s conversion.Scope) error {
-	// WARNING: Field TypeMeta does not have json tag, skipping.
-
+// CovertURLValuesToResourceCallOptions reads from the input *url.Values and assigns fields in the out *ResourceCallOptions
+func CovertURLValuesToResourceCallOptions(in *url.Values, out *ResourceCallOptions, s conversion.Scope) error {
 	if values, ok := map[string][]string(*in)["path"]; ok && len(values) > 0 {
 		if err := runtime.Convert_Slice_string_To_string(&values, &out.Path, s); err != nil {
 			return err
@@ -116,4 +117,37 @@ func CovertURLToResourceCallOptions(in *url.Values, out *ResourceCallOptions, s 
 		out.Path = ""
 	}
 	return nil
+}
+
+func GetResourceCallOptionsOpenAPIDefinition() map[string]common.OpenAPIDefinition {
+	return map[string]common.OpenAPIDefinition{
+		"github.com/grafana/grafana-app-sdk/apiserver.ResourceCallOptions": common.OpenAPIDefinition{
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "ExternalNameFoo defines model for ExternalNameFoo.",
+					Type:        []string{"object"},
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"path": {
+							SchemaProps: spec.SchemaProps{
+								Default: "",
+								Type:    []string{"string"},
+								Format:  "",
+							},
+						},
+					},
+					Required: []string{"foo"},
+				},
+			},
+		},
+	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 
@@ -18,10 +19,12 @@ func main() {
 	r := apiserver.Resource{
 		Kind:                  corev1.ExternalNameKind(),
 		GetOpenAPIDefinitions: corev1.GetOpenAPIDefinitions,
+		// Example "foo" subresource that just prints out some JSON payload
 		Subresources: []apiserver.SubresourceRoute{{
 			Path:        "foo",
 			OpenAPISpec: fooSubresourceOpenAPI,
 			Handler: func(w http.ResponseWriter, r *http.Request, identifier resource.Identifier) {
+				fmt.Println("Called foo subresource for externalName: ", identifier)
 				w.Write([]byte(`{"notright":2}`))
 			},
 		}},

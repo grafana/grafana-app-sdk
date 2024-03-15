@@ -2,17 +2,13 @@ package simple
 
 import (
 	"fmt"
-	"maps"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/grafana/grafana/pkg/apimachinery/apis/common/v0alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -21,7 +17,6 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/kube-openapi/pkg/common"
-	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 type APIServerGroup struct {
@@ -93,20 +88,9 @@ func NewAPIServerConfig(groups []apiserver.ResourceGroup) *APIServerConfig {
 		&metav1.APIResourceList{},
 	)
 
+	// Add each ResourceGroup to the scheme
 	for _, g := range groups {
-		for _, r := range g.Resources {
-			gv := schema.GroupVersion{
-				Group:   r.Kind.Group(),
-				Version: r.Kind.Version(),
-			}
-			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
-			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
-			scheme.AddKnownTypes(gv, &apiserver.ResourceCallOptions{})
-			scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*apiserver.ResourceCallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
-				return apiserver.CovertURLToResourceCallOptions(a.(*url.Values), b.(*apiserver.ResourceCallOptions), scope)
-			})
-			metav1.AddToGroupVersion(scheme, gv)
-		}
+		g.AddToScheme(scheme)
 	}
 
 	return &APIServerConfig{
@@ -159,11 +143,11 @@ func (c completedConfig) New() (*Server, error) {
 		}
 	}
 
-	c.GenericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(GetOpenAPIDefinitions(openapiGetters), openapi.NewDefinitionNamer(c.ExtraConfig.Scheme))
+	c.GenericConfig.OpenAPIConfig = genericapiserver.DefaultOpenAPIConfig(apiserver.GetOpenAPIDefinitions(openapiGetters), openapi.NewDefinitionNamer(c.ExtraConfig.Scheme))
 	c.GenericConfig.OpenAPIConfig.Info.Title = "Core"
 	c.GenericConfig.OpenAPIConfig.Info.Version = "1.0"
 
-	c.GenericConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(GetOpenAPIDefinitions(openapiGetters), openapi.NewDefinitionNamer(c.ExtraConfig.Scheme))
+	c.GenericConfig.OpenAPIV3Config = genericapiserver.DefaultOpenAPIV3Config(apiserver.GetOpenAPIDefinitions(openapiGetters), openapi.NewDefinitionNamer(c.ExtraConfig.Scheme))
 	c.GenericConfig.OpenAPIV3Config.Info.Title = "Core"
 	c.GenericConfig.OpenAPIV3Config.Info.Version = "1.0"
 
@@ -202,43 +186,4 @@ func (c completedConfig) New() (*Server, error) {
 	}
 
 	return s, nil
-}
-
-func GetOpenAPIDefinitions(getters []common.GetOpenAPIDefinitions) common.GetOpenAPIDefinitions {
-	return func(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-		defs := v0alpha1.GetOpenAPIDefinitions(ref) // common grafana apis
-		defs["github.com/grafana/grafana-app-sdk/apiserver.ResourceCallOptions"] = common.OpenAPIDefinition{
-			Schema: spec.Schema{
-				SchemaProps: spec.SchemaProps{
-					Description: "ExternalNameFoo defines model for ExternalNameFoo.",
-					Type:        []string{"object"},
-					Properties: map[string]spec.Schema{
-						"kind": {
-							SchemaProps: spec.SchemaProps{
-								Type: []string{"string"},
-							},
-						},
-						"apiVersion": {
-							SchemaProps: spec.SchemaProps{
-								Type: []string{"string"},
-							},
-						},
-						"path": {
-							SchemaProps: spec.SchemaProps{
-								Default: "",
-								Type:    []string{"string"},
-								Format:  "",
-							},
-						},
-					},
-					Required: []string{"foo"},
-				},
-			},
-		}
-		for _, fn := range getters {
-			out := fn(ref)
-			maps.Copy(defs, out)
-		}
-		return defs
-	}
 }

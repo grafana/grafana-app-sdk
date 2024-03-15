@@ -3,11 +3,14 @@ package apiserver
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"net/http"
+	"net/url"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana/pkg/apimachinery/apis/common/v0alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,6 +34,13 @@ func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
 	}
 	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
 	scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
+	// If there are subresource routes, we need to add the ResourceCallOptions to the scheme for the Connector to work
+	if len(r.Subresources) > 0 {
+		scheme.AddKnownTypes(gv, &ResourceCallOptions{})
+		scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*ResourceCallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
+			return CovertURLValuesToResourceCallOptions(a.(*url.Values), b.(*ResourceCallOptions), scope)
+		})
+	}
 }
 
 type SubresourceRoute struct {
@@ -70,7 +80,6 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 		&metav1.APIGroupList{},
 		&metav1.APIGroup{},
 		&metav1.APIResourceList{},
-		&ResourceCallOptions{},
 	)
 	for _, r := range g.Resources {
 		r.AddToScheme(scheme)
@@ -128,5 +137,20 @@ func schemeConversionFunc(r1, r2 resource.Kind, converter k8s.Converter) func(an
 			return err
 		}
 		return r2.Codec(resource.KindEncodingJSON).Read(bytes.NewReader(converted), toObj)
+	}
+}
+
+// GetOpenAPIDefinitions combines the provided list of getters and standard grafana and kubernetes OpenAPIDefinitions
+// into a single GetOpenAPIDefinitions function which can be used with a kubernetes API Server.
+func GetOpenAPIDefinitions(getters []common.GetOpenAPIDefinitions) common.GetOpenAPIDefinitions {
+	return func(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+		// TODO: extract v0alpha1 openAPI into app-sdk, or leave in grafana?
+		defs := v0alpha1.GetOpenAPIDefinitions(ref) // common grafana apis
+		for _, fn := range getters {
+			out := fn(ref)
+			maps.Copy(defs, out)
+		}
+		maps.Copy(defs, GetResourceCallOptionsOpenAPIDefinition())
+		return defs
 	}
 }
