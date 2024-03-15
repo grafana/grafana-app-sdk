@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana/pkg/apimachinery/apis/common/v0alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -18,6 +21,7 @@ import (
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 type APIServerGroup struct {
@@ -97,6 +101,10 @@ func NewAPIServerConfig(groups []apiserver.ResourceGroup) *APIServerConfig {
 			}
 			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()), r.Kind.ZeroValue())
 			scheme.AddKnownTypeWithName(gv.WithKind(r.Kind.Kind()+"List"), r.Kind.ZeroListValue())
+			scheme.AddKnownTypes(gv, &apiserver.ResourceCallOptions{})
+			scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*apiserver.ResourceCallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
+				return apiserver.CovertURLToResourceCallOptions(a.(*url.Values), b.(*apiserver.ResourceCallOptions), scope)
+			})
 			metav1.AddToGroupVersion(scheme, gv)
 		}
 	}
@@ -172,18 +180,19 @@ func (c completedConfig) New() (*Server, error) {
 	for _, g := range c.ExtraConfig.ResourceGroups {
 		apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
 		for _, r := range g.Resources {
+			plural := strings.ToLower(r.Kind.Plural())
 			s, err := apiserver.NewRESTStorage(scheme, r.Kind, c.GenericConfig.RESTOptionsGetter)
 			if err != nil {
 				return nil, err
 			}
 			store := map[string]rest.Storage{}
-			store[r.Kind.Plural()] = s
+			store[plural] = s
 			// Custom subresource routes
 			resourceCaller := &apiserver.SubresourceConnector{
 				Routes: r.Subresources,
 			}
 			for _, subRoute := range r.Subresources {
-				store[fmt.Sprintf("%s/%s", r.Kind.Plural(), subRoute.Path)] = resourceCaller
+				store[fmt.Sprintf("%s/%s", plural, subRoute.Path)] = resourceCaller
 			}
 			apiGroupInfo.VersionedResourcesStorageMap[r.Kind.Version()] = store
 		}
@@ -198,6 +207,34 @@ func (c completedConfig) New() (*Server, error) {
 func GetOpenAPIDefinitions(getters []common.GetOpenAPIDefinitions) common.GetOpenAPIDefinitions {
 	return func(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 		defs := v0alpha1.GetOpenAPIDefinitions(ref) // common grafana apis
+		defs["github.com/grafana/grafana-app-sdk/apiserver.ResourceCallOptions"] = common.OpenAPIDefinition{
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "ExternalNameFoo defines model for ExternalNameFoo.",
+					Type:        []string{"object"},
+					Properties: map[string]spec.Schema{
+						"kind": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"apiVersion": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"path": {
+							SchemaProps: spec.SchemaProps{
+								Default: "",
+								Type:    []string{"string"},
+								Format:  "",
+							},
+						},
+					},
+					Required: []string{"foo"},
+				},
+			},
+		}
 		for _, fn := range getters {
 			out := fn(ref)
 			maps.Copy(defs, out)

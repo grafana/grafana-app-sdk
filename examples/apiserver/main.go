@@ -1,11 +1,13 @@
 package main
 
 import (
+	"net/http"
 	"os"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
 	cmd "github.com/grafana/grafana-app-sdk/cmd/apiserver"
 	corev1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/component-base/cli"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -16,13 +18,13 @@ func main() {
 	r := apiserver.Resource{
 		Kind:                  corev1.ExternalNameKind(),
 		GetOpenAPIDefinitions: corev1.GetOpenAPIDefinitions,
-		/*Subresources: []apiserver.SubresourceRoute{{
+		Subresources: []apiserver.SubresourceRoute{{
 			Path:        "foo",
 			OpenAPISpec: fooSubresourceOpenAPI,
 			Handler: func(w http.ResponseWriter, r *http.Request, identifier resource.Identifier) {
 				w.Write([]byte(`{"foo":"bar"}`))
 			},
-		}},*/
+		}},
 	}
 	g := apiserver.ResourceGroup{
 		Name:      r.Kind.Group(),

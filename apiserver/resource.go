@@ -70,6 +70,7 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 		&metav1.APIGroupList{},
 		&metav1.APIGroup{},
 		&metav1.APIResourceList{},
+		&ResourceCallOptions{},
 	)
 	for _, r := range g.Resources {
 		r.AddToScheme(scheme)

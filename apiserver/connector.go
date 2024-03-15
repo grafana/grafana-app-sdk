@@ -4,10 +4,13 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/registry/rest"
 )
 
@@ -73,11 +76,17 @@ func (r *SubresourceConnector) Connect(ctx context.Context, id string, opts runt
 		return nil, fmt.Errorf("invalid options object: %#v", opts)
 	}
 	fmt.Println("ResourceCallREST.Connect() called with id:", id, "and opts:", resourceCallOpts)
-	// TODO: extract Identifier from context
-	identifier := resource.Identifier{}
 	// TODO: map instead?
+	info, ok := request.RequestInfoFrom(ctx)
+	if !ok {
+		return nil, fmt.Errorf("unable to retrieve request info from context")
+	}
+	identifier := resource.Identifier{
+		Name:      info.Name,
+		Namespace: info.Namespace,
+	}
 	for _, route := range r.Routes {
-		if route.Path == id {
+		if route.Path == info.Subresource {
 			return &handlerWrapper{
 				id:      identifier,
 				handler: route.Handler,
@@ -94,4 +103,17 @@ type handlerWrapper struct {
 
 func (h *handlerWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	h.handler(w, req, h.id)
+}
+
+func CovertURLToResourceCallOptions(in *url.Values, out *ResourceCallOptions, s conversion.Scope) error {
+	// WARNING: Field TypeMeta does not have json tag, skipping.
+
+	if values, ok := map[string][]string(*in)["path"]; ok && len(values) > 0 {
+		if err := runtime.Convert_Slice_string_To_string(&values, &out.Path, s); err != nil {
+			return err
+		}
+	} else {
+		out.Path = ""
+	}
+	return nil
 }
