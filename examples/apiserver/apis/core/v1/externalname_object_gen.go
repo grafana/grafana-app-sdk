@@ -177,6 +177,22 @@ func (o *ExternalName) SetCreatedBy(createdBy string) {
 	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
 }
 
+func (o *ExternalName) GetOtherField() string {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	return o.ObjectMeta.Annotations["grafana.com/otherField"]
+}
+
+func (o *ExternalName) SetOtherField(otherField string) {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	o.ObjectMeta.Annotations["grafana.com/otherField"] = otherField
+}
+
 func (o *ExternalName) GetUpdateTimestamp() time.Time {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)

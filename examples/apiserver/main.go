@@ -22,7 +22,7 @@ func main() {
 			Path:        "foo",
 			OpenAPISpec: fooSubresourceOpenAPI,
 			Handler: func(w http.ResponseWriter, r *http.Request, identifier resource.Identifier) {
-				w.Write([]byte(`{"foo":"bar"}`))
+				w.Write([]byte(`{"notright":2}`))
 			},
 		}},
 	}

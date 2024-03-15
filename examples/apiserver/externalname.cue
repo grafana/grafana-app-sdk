@@ -19,6 +19,9 @@ externalName: {
                 spec: {
 					host: string
                 }
+                metadata: {
+                	otherField: string
+                }
 	        }
 	    }
 	}

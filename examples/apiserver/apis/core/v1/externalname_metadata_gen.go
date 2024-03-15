@@ -12,6 +12,7 @@ type ExternalNameMetadata struct {
 	Finalizers        []string          `json:"finalizers"`
 	Generation        int64             `json:"generation"`
 	Labels            map[string]string `json:"labels"`
+	OtherField        string            `json:"otherField"`
 	ResourceVersion   string            `json:"resourceVersion"`
 	Uid               string            `json:"uid"`
 	UpdateTimestamp   time.Time         `json:"updateTimestamp"`
