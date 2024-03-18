@@ -6,6 +6,7 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
@@ -15,6 +16,11 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apiserver/pkg/registry/generic"
+	"k8s.io/apiserver/pkg/registry/rest"
+	"k8s.io/apiserver/pkg/server"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/kube-openapi/pkg/common"
 )
 
@@ -108,6 +114,37 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 			scheme.AddConversionFunc(r2.Kind.ZeroValue(), r1.Kind.ZeroValue(), schemeConversionFunc(r2.Kind, r1.Kind, converter))
 		}
 	}
+}
+
+type StorageProviderFunc func(resource.Kind, *runtime.Scheme, generic.RESTOptionsGetter) (rest.Storage, error)
+
+type StorageProvider2 interface {
+	StandardStorage(kind resource.Kind, scheme *runtime.Scheme) (rest.StandardStorage, error)
+}
+
+func (g *ResourceGroup) APIGroupInfo(storageProvider StorageProvider2) (*server.APIGroupInfo, error) {
+	scheme := g.Scheme()                                // TODO: have this be an argument?
+	parameterCodec := runtime.NewParameterCodec(scheme) // TODO: have this be an argument?
+	codecs := serializer.NewCodecFactory(scheme)        // TODO: codec based on kinds?
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
+	for _, r := range g.Resources {
+		plural := strings.ToLower(r.Kind.Plural())
+		s, err := storageProvider.StandardStorage(r.Kind, scheme)
+		if err != nil {
+			return nil, err
+		}
+		store := map[string]rest.Storage{}
+		store[plural] = s
+		// Custom subresource routes
+		resourceCaller := &SubresourceConnector{
+			Routes: r.Subresources,
+		}
+		for _, subRoute := range r.Subresources {
+			store[fmt.Sprintf("%s/%s", plural, subRoute.Path)] = resourceCaller
+		}
+		apiGroupInfo.VersionedResourcesStorageMap[r.Kind.Version()] = store
+	}
+	return &apiGroupInfo, nil
 }
 
 func schemeConversionFunc(r1, r2 resource.Kind, converter k8s.Converter) func(any, any, conversion.Scope) error {

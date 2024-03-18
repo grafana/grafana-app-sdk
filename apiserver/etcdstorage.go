@@ -20,6 +20,14 @@ import (
 
 var _ rest.StandardStorage = &RESTStorage{}
 
+type RESTStorageProvider struct {
+	optsGetter generic.RESTOptionsGetter
+}
+
+func (r *RESTStorageProvider) StandardStorage(kind resource.Kind, scheme *runtime.Scheme) (rest.StandardStorage, error) {
+	return NewRESTStorage(scheme, kind, r.optsGetter)
+}
+
 type RESTStorage struct {
 	*genericregistry.Store
 }
