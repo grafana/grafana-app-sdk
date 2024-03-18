@@ -27,6 +27,9 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 		if ver == nil {
 			return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
 		}
+		if !ver.Codegen.Frontend {
+			return nil, nil
+		}
 		b, err := t.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName)+"_")
 		if err != nil {
 			return nil, err
@@ -40,6 +43,9 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 		allVersions := kind.Versions()
 		for i := 0; i < len(allVersions); i++ {
 			ver := allVersions[i]
+			if !ver.Codegen.Frontend {
+				continue
+			}
 			b, err := t.generateObjectFile(kind, &ver, "")
 			if err != nil {
 				return nil, err
