@@ -358,6 +358,9 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	if options.Continue != "" {
 		req = req.Param("continue", options.Continue)
 	}
+	if options.ResourceVersion != "" {
+		req = req.Param("resourceVersion", options.ResourceVersion)
+	}
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
