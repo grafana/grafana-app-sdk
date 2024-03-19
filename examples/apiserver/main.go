@@ -17,7 +17,7 @@ import (
 func main() {
 	// Create an API Server Resource for the
 	r := apiserver.Resource{
-		Kind:                  corev1.ExternalNameKind(),
+		Kind:                  corev1.Kind(),
 		GetOpenAPIDefinitions: corev1.GetOpenAPIDefinitions,
 		// Example "foo" subresource that just prints out some JSON payload
 		Subresources: []apiserver.SubresourceRoute{{

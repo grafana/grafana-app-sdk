@@ -1,7 +1,7 @@
 package v1
 
-// ExternalNameSpec defines model for ExternalNameSpec.
+// Spec defines model for Spec.
 // +k8s:openapi-gen=true
-type ExternalNameSpec struct {
+type Spec struct {
 	Host string `json:"host"`
 }

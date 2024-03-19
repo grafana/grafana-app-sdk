@@ -118,8 +118,18 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 
 type StorageProviderFunc func(resource.Kind, *runtime.Scheme, generic.RESTOptionsGetter) (rest.Storage, error)
 
+type StandardStorage interface {
+	rest.StandardStorage
+	GetSubresources() map[string]SubresourceStorage
+}
+
+type SubresourceStorage interface {
+	rest.Storage
+	rest.Patcher
+}
+
 type StorageProvider2 interface {
-	StandardStorage(kind resource.Kind, scheme *runtime.Scheme) (rest.StandardStorage, error)
+	StandardStorage(kind resource.Kind, scheme *runtime.Scheme) (StandardStorage, error)
 }
 
 func (g *ResourceGroup) APIGroupInfo(storageProvider StorageProvider2) (*server.APIGroupInfo, error) {
@@ -134,7 +144,13 @@ func (g *ResourceGroup) APIGroupInfo(storageProvider StorageProvider2) (*server.
 			return nil, err
 		}
 		store := map[string]rest.Storage{}
+		// Resource storage
 		store[plural] = s
+		// Subresource storage
+		for k, subRoute := range s.GetSubresources() {
+			store[fmt.Sprintf("%s/%s", plural, k)] = subRoute
+		}
+
 		// Custom subresource routes
 		resourceCaller := &SubresourceConnector{
 			Routes: r.Subresources,

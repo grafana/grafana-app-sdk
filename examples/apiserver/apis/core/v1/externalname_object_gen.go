@@ -16,10 +16,10 @@ import (
 
 // +k8s:openapi-gen=true
 type ExternalName struct {
-	metav1.TypeMeta    `json:",inline"`
-	metav1.ObjectMeta  `json:"metadata"`
-	Spec               ExternalNameSpec   `json:"spec"`
-	ExternalNameStatus ExternalNameStatus `json:"status"`
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              Spec   `json:"spec"`
+	Status            Status `json:"status"`
 }
 
 func (o *ExternalName) GetSpec() any {
@@ -27,7 +27,7 @@ func (o *ExternalName) GetSpec() any {
 }
 
 func (o *ExternalName) SetSpec(spec any) error {
-	cast, ok := spec.(ExternalNameSpec)
+	cast, ok := spec.(Spec)
 	if !ok {
 		return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
 	}
@@ -37,14 +37,14 @@ func (o *ExternalName) SetSpec(spec any) error {
 
 func (o *ExternalName) GetSubresources() map[string]any {
 	return map[string]any{
-		"status": o.ExternalNameStatus,
+		"status": o.Status,
 	}
 }
 
 func (o *ExternalName) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
-		return o.ExternalNameStatus, true
+		return o.Status, true
 	default:
 		return nil, false
 	}
@@ -53,11 +53,11 @@ func (o *ExternalName) GetSubresource(name string) (any, bool) {
 func (o *ExternalName) SetSubresource(name string, value any) error {
 	switch name {
 	case "status":
-		cast, ok := value.(ExternalNameStatus)
+		cast, ok := value.(Status)
 		if !ok {
-			return fmt.Errorf("cannot set status type %#v, not of type ExternalNameStatus", value)
+			return fmt.Errorf("cannot set status type %#v, not of type Status", value)
 		}
-		o.ExternalNameStatus = cast
+		o.Status = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)
