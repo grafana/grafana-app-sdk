@@ -12,12 +12,12 @@ import (
 
 func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
-		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalName":        schema_apiserver_apis_core_v1_ExternalName(ref),
-		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameList":    schema_apiserver_apis_core_v1_ExternalNameList(ref),
-		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.OperatorState":       schema_apiserver_apis_core_v1_OperatorState(ref),
-		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.Spec":                schema_apiserver_apis_core_v1_Spec(ref),
-		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.Status":              schema_apiserver_apis_core_v1_Status(ref),
-		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.StatusOperatorState": schema_apiserver_apis_core_v1_StatusOperatorState(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalName":                    schema_apiserver_apis_core_v1_ExternalName(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameList":                schema_apiserver_apis_core_v1_ExternalNameList(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameOperatorState":       schema_apiserver_apis_core_v1_ExternalNameOperatorState(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameSpec":                schema_apiserver_apis_core_v1_ExternalNameSpec(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameStatus":              schema_apiserver_apis_core_v1_ExternalNameStatus(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNamestatusOperatorState": schema_apiserver_apis_core_v1_ExternalNamestatusOperatorState(ref),
 	}
 }
 
@@ -50,13 +50,13 @@ func schema_apiserver_apis_core_v1_ExternalName(ref common.ReferenceCallback) co
 					"spec": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.Spec"),
+							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameSpec"),
 						},
 					},
 					"status": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.Status"),
+							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameStatus"),
 						},
 					},
 				},
@@ -64,7 +64,7 @@ func schema_apiserver_apis_core_v1_ExternalName(ref common.ReferenceCallback) co
 			},
 		},
 		Dependencies: []string{
-			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.Spec", "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.Status", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameSpec", "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
 	}
 }
 
@@ -116,11 +116,11 @@ func schema_apiserver_apis_core_v1_ExternalNameList(ref common.ReferenceCallback
 	}
 }
 
-func schema_apiserver_apis_core_v1_OperatorState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apiserver_apis_core_v1_ExternalNameOperatorState(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "OperatorState defines model for OperatorState.",
+				Description: "ExternalNameOperatorState defines model for ExternalNameOperatorState.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"descriptiveState": {
@@ -168,11 +168,11 @@ func schema_apiserver_apis_core_v1_OperatorState(ref common.ReferenceCallback) c
 	}
 }
 
-func schema_apiserver_apis_core_v1_Spec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apiserver_apis_core_v1_ExternalNameSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Spec defines model for Spec.",
+				Description: "ExternalNameSpec defines model for ExternalNameSpec.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"host": {
@@ -189,11 +189,11 @@ func schema_apiserver_apis_core_v1_Spec(ref common.ReferenceCallback) common.Ope
 	}
 }
 
-func schema_apiserver_apis_core_v1_Status(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apiserver_apis_core_v1_ExternalNameStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "Status defines model for Status.",
+				Description: "ExternalNameStatus defines model for ExternalNameStatus.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"additionalFields": {
@@ -220,7 +220,7 @@ func schema_apiserver_apis_core_v1_Status(ref common.ReferenceCallback) common.O
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]interface{}{},
-										Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.StatusOperatorState"),
+										Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNamestatusOperatorState"),
 									},
 								},
 							},
@@ -230,15 +230,15 @@ func schema_apiserver_apis_core_v1_Status(ref common.ReferenceCallback) common.O
 			},
 		},
 		Dependencies: []string{
-			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.StatusOperatorState"},
+			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNamestatusOperatorState"},
 	}
 }
 
-func schema_apiserver_apis_core_v1_StatusOperatorState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+func schema_apiserver_apis_core_v1_ExternalNamestatusOperatorState(ref common.ReferenceCallback) common.OpenAPIDefinition {
 	return common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
-				Description: "StatusOperatorState defines model for status.#OperatorState.",
+				Description: "ExternalNamestatusOperatorState defines model for ExternalNamestatus.#OperatorState.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"descriptiveState": {
