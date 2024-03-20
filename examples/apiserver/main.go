@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
-	cmd "github.com/grafana/grafana-app-sdk/cmd/apiserver"
 	corev1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1"
 	corev2 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v2"
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -59,14 +58,14 @@ func main() {
 
 	// APIServerOptions is used to create the API server from one or more ResourceGroups.
 	// TODO: this will be expanded upon
-	o := cmd.NewAPIServerOptions([]apiserver.ResourceGroup{resourceGroup}, os.Stdout, os.Stderr)
+	o := simple.NewAPIServerOptions([]apiserver.ResourceGroup{resourceGroup}, os.Stdout, os.Stderr)
 	o.RecommendedOptions.Admission = nil
 	o.RecommendedOptions.Authorization = nil
 	o.RecommendedOptions.Authentication = nil
 	o.RecommendedOptions.CoreAPI = nil
 
 	ch := make(chan struct{})
-	cmd := cmd.NewCommandStartAPIServer(o, ch)
+	cmd := simple.NewCommandStartAPIServer(o, ch)
 
 	code := cli.Run(cmd)
 	os.Exit(code)
@@ -125,7 +124,7 @@ func (c *Converter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, e
 		target = &corev2.ExternalName{}
 		ver = "v2"
 	}
-	codec := corev1.JSONCodec{}
+	codec := corev1.ExternalNameJSONCodec{}
 	err := codec.Read(bytes.NewReader(obj.Raw), target)
 	if err != nil {
 		return nil, err
