@@ -59,12 +59,34 @@ type SubresourceRoute struct {
 
 type AdditionalRouteHandler func(w http.ResponseWriter, r *http.Request, identifier resource.Identifier)
 
+// TODO: should this be different from the k8s.Converter? Using the k8s.Converter means we need extra allocations when working with the runtime.Object apimachinery supplies
+type Converter interface {
+	k8s.Converter
+}
+
+type GenericConverter struct{}
+
+func (GenericConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
+	codec := resource.NewJSONCodec()
+	into := &resource.UntypedObject{}
+	err := codec.Read(bytes.NewReader(obj.Raw), into)
+	if err != nil {
+		return nil, err
+	}
+	into.SetGroupVersionKind(schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind))
+	buf := bytes.Buffer{}
+	err = codec.Write(&buf, into)
+	return buf.Bytes(), err
+}
+
 type ResourceGroup struct {
 	Name      string
 	Resources []Resource
 	// Converters is an optional map of GroupKind => Converter to use for CRD version conversion requests.
+	// This SHOULD be supplied if multiple versions of the same GroupKind exist in the ResourceGroup.
+	// If not supplied, a GenericConverter will be used for all conversions.
 	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
-	Converters map[metav1.GroupKind]k8s.Converter
+	Converters map[metav1.GroupKind]Converter
 }
 
 func (g *ResourceGroup) Scheme() *runtime.Scheme {
@@ -87,32 +109,62 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 		&metav1.APIGroup{},
 		&metav1.APIResourceList{},
 	)
+
+	// TODO: this assumes items in the Resources slice are ordered by version
+	versions := make(map[metav1.GroupKind][]Resource)
 	for _, r := range g.Resources {
-		r.AddToScheme(scheme)
-		metav1.AddToGroupVersion(scheme, schema.GroupVersion{
-			Group:   r.Kind.Group(),
-			Version: r.Kind.Version(),
-		})
+		gk := metav1.GroupKind{Group: r.Kind.Group(), Kind: r.Kind.Kind()}
+		list, ok := versions[gk]
+		if !ok {
+			list = make([]Resource, 0)
+		}
+		list = append(list, r)
+		versions[gk] = list
 	}
 
-	// Register conversion functions
-	// TODO: necessary?
-	for _, r1 := range g.Resources {
-		converter, ok := g.Converters[metav1.GroupKind{
-			Group: r1.Kind.Group(),
-			Kind:  r1.Kind.Kind(),
-		}]
-		if !ok {
-			continue
+	for gk, vers := range versions {
+		// Create an internal version which is set as the latest version in the list for each distinct GroupKind
+		latest := vers[len(vers)-1]
+		gv := schema.GroupVersion{
+			Group:   latest.Kind.Group(),
+			Version: runtime.APIVersionInternal,
 		}
-		for _, r2 := range g.Resources {
-			if r1.Kind.Kind() != r2.Kind.Kind() {
-				continue
-			}
+		scheme.AddKnownTypeWithName(gv.WithKind(gk.Kind), latest.Kind.ZeroValue())
+		scheme.AddKnownTypeWithName(gv.WithKind(gk.Kind+"List"), latest.Kind.ZeroListValue())
 
-			scheme.AddConversionFunc(r1.Kind.ZeroValue(), r2.Kind.ZeroValue(), schemeConversionFunc(r1.Kind, r2.Kind, converter))
-			scheme.AddConversionFunc(r2.Kind.ZeroValue(), r1.Kind.ZeroValue(), schemeConversionFunc(r2.Kind, r1.Kind, converter))
+		// Get the converter for this GroupKind, or use a Generic one if none was supplied
+		var converter Converter = GenericConverter{}
+		if g.Converters != nil {
+			ok := false
+			converter, ok = g.Converters[gk]
+			if !ok {
+				converter = GenericConverter{}
+			}
 		}
+
+		// Register each added version with the scheme
+		priorities := make([]schema.GroupVersion, len(vers))
+		for i, v := range vers {
+			groupVersion := schema.GroupVersion{
+				Group:   v.Kind.Group(),
+				Version: v.Kind.Version(),
+			}
+			v.AddToScheme(scheme)
+			metav1.AddToGroupVersion(scheme, groupVersion)
+			priorities[len(priorities)-1-i] = groupVersion
+
+			// Also register converters
+			for _, v2 := range vers {
+				if v.Kind.Version() == v2.Kind.Version() {
+					continue
+				}
+				scheme.AddConversionFunc(v.Kind.ZeroValue(), v2.Kind.ZeroValue(), schemeConversionFunc(v.Kind, v2.Kind, converter))
+				scheme.AddConversionFunc(v2.Kind.ZeroValue(), v.Kind.ZeroValue(), schemeConversionFunc(v2.Kind, v.Kind, converter))
+			}
+		}
+
+		// Set version priorities based on the reverse-order list we built
+		scheme.SetVersionPriority(priorities...)
 	}
 }
 
@@ -185,7 +237,7 @@ func schemeConversionFunc(r1, r2 resource.Kind, converter k8s.Converter) func(an
 			Group:      r1.Group(),
 			Version:    r1.Version(),
 			Raw:        fromBytes.Bytes(),
-		}, fmt.Sprintf("%s/%s", r1.Group(), r1.Version()))
+		}, fmt.Sprintf("%s/%s", r2.Group(), r2.Version()))
 		if err != nil {
 			return err
 		}

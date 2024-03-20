@@ -1,9 +1,7 @@
 package simple
 
 import (
-	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -14,7 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
-	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/kube-openapi/pkg/common"
 )
@@ -133,8 +130,8 @@ type Server struct {
 }
 
 func (c completedConfig) New() (*Server, error) {
-	scheme := c.ExtraConfig.Scheme
-	codecs := c.ExtraConfig.Codecs
+	//scheme := c.ExtraConfig.Scheme
+	//codecs := c.ExtraConfig.Codecs
 	openapiGetters := []common.GetOpenAPIDefinitions{}
 
 	for _, g := range c.ExtraConfig.ResourceGroups {
@@ -160,9 +157,10 @@ func (c completedConfig) New() (*Server, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	parameterCodec := runtime.NewParameterCodec(scheme)
+	//parameterCodec := runtime.NewParameterCodec(scheme)
+	provider := apiserver.NewRESTStorageProvider(c.GenericConfig.RESTOptionsGetter)
 	for _, g := range c.ExtraConfig.ResourceGroups {
-		apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
+		/*apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
 		for _, r := range g.Resources {
 			plural := strings.ToLower(r.Kind.Plural())
 			s, err := apiserver.NewRESTStorage(scheme, r.Kind, c.GenericConfig.RESTOptionsGetter)
@@ -179,8 +177,12 @@ func (c completedConfig) New() (*Server, error) {
 				store[fmt.Sprintf("%s/%s", plural, subRoute.Path)] = resourceCaller
 			}
 			apiGroupInfo.VersionedResourcesStorageMap[r.Kind.Version()] = store
+		}*/
+		apiGroupInfo, err := g.APIGroupInfo(provider)
+		if err != nil {
+			return nil, err
 		}
-		if err := s.GenericAPIServer.InstallAPIGroup(&apiGroupInfo); err != nil {
+		if err := s.GenericAPIServer.InstallAPIGroup(apiGroupInfo); err != nil {
 			return nil, err
 		}
 	}

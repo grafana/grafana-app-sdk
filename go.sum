@@ -1,6 +1,8 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cuelang.org/go v0.5.0 h1:D6N0UgTGJCOxFKU8RU+qYvavKNsVc/+ZobmifStVJzU=
 cuelang.org/go v0.5.0/go.mod h1:okjJBHFQFer+a41sAe2SaGm1glWS8oEb6CmJvn5Zdws=
+cuelang.org/go v0.6.0-0.dev h1:UF8SfXkJkE5BfuM7/9okJXUPqnfX+pEaBaPzyoNED9c=
+cuelang.org/go v0.6.0-0.dev/go.mod h1:okjJBHFQFer+a41sAe2SaGm1glWS8oEb6CmJvn5Zdws=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/toml v1.3.2 h1:o7IhLm0Msx3BaB+n3Ag7L8EVlByGnpq14C4YWiu/gL8=
@@ -215,14 +217,22 @@ github.com/grafana/codejen v0.0.3 h1:tAWxoTUuhgmEqxJPOLtJoxlPBbMULFwKFOcRsPRPXDw
 github.com/grafana/codejen v0.0.3/go.mod h1:zmwwM/DRyQB7pfuBjTWII3CWtxcXh8LTwAYGfDfpR6s=
 github.com/grafana/cuetsy v0.1.10 h1:+W9/7roI8LorL+D1RJhKGdhsTZ81adrK9dHS0r7qsXs=
 github.com/grafana/cuetsy v0.1.10/go.mod h1:Ix97+CPD8ws9oSSxR3/Lf4ahU1I4Np83kjJmDVnLZvc=
+github.com/grafana/cuetsy v0.1.11/go.mod h1:Ix97+CPD8ws9oSSxR3/Lf4ahU1I4Np83kjJmDVnLZvc=
+github.com/grafana/grafana v1.9.2-0.20240318213800-533a05677dd4 h1:oB9F7DHLvD3aqf9SuaDXmVCVFXd8tw+z3gEutcJFEiU=
+github.com/grafana/grafana v1.9.2-0.20240318213800-533a05677dd4/go.mod h1:IFmpfI/XlumHkpCOXAZpmsF4FOt8bc/T0icJqKPYeiY=
+github.com/grafana/grafana v1.9.2-0.20240319174817-693bfcf267a3 h1:lntgJFIaTb5DVl5QE/v49w8I2H+xtpalsgZpLdP57TE=
+github.com/grafana/grafana v1.9.2-0.20240319174817-693bfcf267a3/go.mod h1:IFmpfI/XlumHkpCOXAZpmsF4FOt8bc/T0icJqKPYeiY=
 github.com/grafana/grafana-plugin-sdk-go v0.215.0 h1:02gwVsqYi1I+U48/MQR61eOMxiXE7KNKC8QsiMJ//qA=
 github.com/grafana/grafana-plugin-sdk-go v0.215.0/go.mod h1:nBsh3jRItKQUXDF2BQkiQCPxqrsSQeb+7hiFyJTO1RE=
 github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240313174547-3696eca280bb h1:5i5TOA+alDEqlId+K71XGsv+bXlppGEhroalNaoVzfk=
 github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240313174547-3696eca280bb/go.mod h1:nV2wBeJVWosdfoEl7e36Rhm8wYsNt677Pu8s7gw7MdA=
 github.com/grafana/grafana/pkg/apiserver v0.0.0-20240314120634-38a8bf10f34a h1:/0uexnoKHItCjpfFuujEIfJx25c7Z/fqPHZ5oGWzZ2k=
 github.com/grafana/grafana/pkg/apiserver v0.0.0-20240314120634-38a8bf10f34a/go.mod h1:zs7IYOnodIQ36XA6M6RZRNCIrUfZuEkgpUOgVUWXPXk=
+github.com/grafana/grafana/pkg/apiserver v0.0.0-20240318213800-533a05677dd4 h1:mGazarz9hIW9b+CtwBHQ/RkOR2/JTP6IlFe7v7WTMcY=
+github.com/grafana/grafana/pkg/apiserver v0.0.0-20240318213800-533a05677dd4/go.mod h1:zs7IYOnodIQ36XA6M6RZRNCIrUfZuEkgpUOgVUWXPXk=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26 h1:HX927q4X1n451pnGb8U0wq74i8PCzuxVjzv7TyD10kc=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26/go.mod h1:Pn9nfzCk7nV0mvNgwusgCjCROZP6nm4GpwTnmEhLT24=
+github.com/grafana/thema v0.0.0-20230712153715-375c1b45f3ed/go.mod h1:3zLJnssFRPCnebCBRlq53t5LgYv9P1mbj0XMozZMTww=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-prometheus v1.2.1-0.20191002090509-6af20e3a5340 h1:uGoIog/wiQHI9GAxXO5TJbT0wWKH3O9HhOJW1F9c3fY=
@@ -306,6 +316,7 @@ github.com/labstack/gommon v0.4.2 h1:F8qTUNXgG1+6WQmqoUWnz8WiEU60mXVVw0P4ht1WRA0
 github.com/labstack/gommon v0.4.2/go.mod h1:QlUFxVM+SNXhDL/Z7YhocGIBYOiwB0mXm1+1bAPHPyU=
 github.com/lib/pq v1.10.7 h1:p7ZhMD+KsSRozJr34udlUrhboJwWAgCg34+/ZZNvZZw=
 github.com/lib/pq v1.10.7/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
+github.com/lib/pq v1.10.9/go.mod h1:AlVN5x4E4T544tWzH6hKfbfQvm3HdbOxrmggDNAPY9o=
 github.com/magefile/mage v1.15.0 h1:BvGheCMAsG3bWUDbZ8AyXXpCNwU9u5CB6sM+HNb9HYg=
 github.com/magefile/mage v1.15.0/go.mod h1:z5UZb/iS3GoOSn0JgWuiw7dxlurVYTu+/jHXqQg881A=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
@@ -503,6 +514,7 @@ github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2 h1:eY9dn8+vbi4tKz5
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xlab/treeprint v1.1.0 h1:G/1DjNkPpfZCFt9CSh6b5/nY4VimlbHF3Rh4obvtzDk=
 github.com/xlab/treeprint v1.1.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=
+github.com/xlab/treeprint v1.2.0/go.mod h1:gj5Gd3gPdKtR1ikdDK6fnFLdmIS0X30kTTuNd/WEJu0=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/yalp/jsonpath v0.0.0-20180802001716-5cc68e5049a0/go.mod h1:/LWChgwKmvncFJFHJ7Gvn9wZArjbV5/FppcK2fKk/tI=
 github.com/yalue/merged_fs v1.3.0 h1:qCeh9tMPNy/i8cwDsQTJ5bLr6IRxbs6meakNE5O+wyY=

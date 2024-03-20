@@ -8,17 +8,17 @@ toolchain go1.21.7
 replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
 
 require (
-	cuelang.org/go v0.5.0
+	cuelang.org/go v0.6.0-0.dev
 	github.com/dave/dst v0.27.3
 	github.com/getkin/kin-openapi v0.122.0
 	github.com/go-openapi/spec v0.20.14
 	github.com/golangci/lint-1 v0.0.0-20181222135242-d2cdd8c08219
 	github.com/grafana/codejen v0.0.3
-	github.com/grafana/cuetsy v0.1.10
+	github.com/grafana/cuetsy v0.1.11
 	github.com/grafana/grafana-plugin-sdk-go v0.215.0
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240313174547-3696eca280bb
-	github.com/grafana/grafana/pkg/apiserver v0.0.0-20240314120634-38a8bf10f34a
-	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
+	github.com/grafana/grafana/pkg/apiserver v0.0.0-20240318213800-533a05677dd4
+	github.com/grafana/thema v0.0.0-20230712153715-375c1b45f3ed
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/labstack/echo/v4 v4.11.4
 	github.com/matryer/moq v0.3.4
@@ -93,6 +93,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
+	github.com/grafana/grafana v1.9.2-0.20240318213800-533a05677dd4 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.1-0.20191002090509-6af20e3a5340 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
@@ -110,7 +111,7 @@ require (
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/labstack/gommon v0.4.2 // indirect
-	github.com/lib/pq v1.10.7 // indirect
+	github.com/lib/pq v1.10.9 // indirect
 	github.com/magefile/mage v1.15.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattetti/filebuffer v1.0.1 // indirect
@@ -145,7 +146,7 @@ require (
 	github.com/urfave/cli v1.22.14 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	github.com/xlab/treeprint v1.1.0 // indirect
+	github.com/xlab/treeprint v1.2.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.10 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.10 // indirect

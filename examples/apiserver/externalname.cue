@@ -24,5 +24,13 @@ externalName: {
                 }
 	        }
 	    }
+	    "v2": {
+	    	schema: {
+	    		spec: {
+	    			host: string
+	    			otherData: string
+	    		}
+	    	}
+	    }
 	}
 }

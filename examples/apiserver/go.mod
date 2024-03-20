@@ -40,7 +40,7 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/grafana/pkg/apimachinery v0.0.0-20240313174547-3696eca280bb // indirect
-	github.com/grafana/grafana/pkg/apiserver v0.0.0-20240314120634-38a8bf10f34a // indirect
+	github.com/grafana/grafana/pkg/apiserver v0.0.0-20240318213800-533a05677dd4 // indirect
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.1-0.20191002090509-6af20e3a5340 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.19.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

@@ -17,16 +17,22 @@ limitations under the License.
 package server
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
+	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 	filestorage "github.com/grafana/grafana/pkg/apiserver/storage/file"
 	"github.com/spf13/cobra"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
 	netutils "k8s.io/utils/net"
@@ -41,6 +47,8 @@ type APIServerOptions struct {
 	StdErr io.Writer
 
 	config *simple.APIServerConfig
+
+	groups []apiserver.ResourceGroup
 }
 
 func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer) *APIServerOptions {
@@ -67,6 +75,7 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 		StdErr: errOut,
 
 		config: serverConfig,
+		groups: groups,
 	}
 	return o
 }
@@ -108,6 +117,8 @@ func (o *APIServerOptions) Config() (*simple.APIServerConfig, error) {
 	if err := o.RecommendedOptions.SecureServing.ApplyTo(&serverConfig.GenericConfig.SecureServing, &serverConfig.GenericConfig.LoopbackClientConfig); err != nil {
 		return nil, err
 	}
+	o.RecommendedOptions.Etcd.EnableWatchCache = false
+	//o.RecommendedOptions.Etcd.StorageConfig.Transport.ServerList = []string{"127.0.0.1:2379"}
 
 	if err := o.RecommendedOptions.Etcd.ApplyTo(&serverConfig.GenericConfig.Config); err != nil {
 		return nil, err
@@ -132,6 +143,41 @@ func (o *APIServerOptions) Run(stopCh <-chan struct{}) error {
 	if err != nil {
 		return err
 	}
+
+	server.GenericAPIServer.AddPostStartHook("start-resource-informers", func(ctx genericapiserver.PostStartHookContext) error {
+		if ctx.LoopbackClientConfig == nil {
+			return fmt.Errorf("missing LoopbackClientConfig from PostStartHookContext")
+		}
+		ctx.LoopbackClientConfig.Host = strings.Replace(ctx.LoopbackClientConfig.Host, "[::1]", "127.0.0.1", 1) // This is [::1] by default?
+		ctx.LoopbackClientConfig.APIPath = "/apis"                                                              // empty by default?
+		clientRegistry := k8s.NewClientRegistry(*ctx.LoopbackClientConfig, k8s.DefaultClientConfig())
+		controller := operator.NewInformerController(operator.DefaultInformerControllerConfig())
+		for _, g := range o.groups {
+			for _, r := range g.Resources {
+				if r.Reconciler != nil {
+					kindStr := fmt.Sprintf("%s.%s/%s", r.Kind.Plural(), r.Kind.Group(), r.Kind.Version())
+					controller.AddReconciler(r.Reconciler, kindStr)
+					client, err := clientRegistry.ClientFor(r.Kind)
+					if err != nil {
+						return err
+					}
+					ret, err := client.List(context.Background(), resource.NamespaceAll, resource.ListOptions{})
+					fmt.Println(ret)
+					fmt.Println(err)
+					if c, ok := err.(resource.APIServerResponseError); ok {
+						fmt.Println(c.StatusCode())
+					}
+					informer, err := operator.NewKubernetesBasedInformer(r.Kind, client, resource.NamespaceAll)
+					if err != nil {
+						return err
+					}
+					controller.AddInformer(informer, kindStr)
+				}
+			}
+		}
+		go controller.Run(ctx.StopCh)
+		return nil
+	})
 
 	return server.GenericAPIServer.PrepareRun().Run(stopCh)
 }
