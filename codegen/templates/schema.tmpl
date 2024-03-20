@@ -15,7 +15,7 @@ var (
     kind{{.Kind}} = resource.Kind{
         Schema: schema{{.Kind}},
         Codecs: map[resource.KindEncoding]resource.Codec{
-            resource.KindEncodingJSON: &JSONCodec{},
+            resource.KindEncodingJSON: &{{.FuncPrefix}}JSONCodec{},
         },
     }
 )

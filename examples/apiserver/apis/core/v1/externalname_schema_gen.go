@@ -15,7 +15,7 @@ var (
 	kindExternalName = resource.Kind{
 		Schema: schemaExternalName,
 		Codecs: map[resource.KindEncoding]resource.Codec{
-			resource.KindEncodingJSON: &JSONCodec{},
+			resource.KindEncodingJSON: &ExternalNameJSONCodec{},
 		},
 	}
 )

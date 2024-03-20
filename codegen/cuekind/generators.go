@@ -27,7 +27,6 @@ func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 			GenerateOnlyCurrent:  !versioned,
 			Depth:                1,
 			AddKubernetesCodegen: true,
-			PrefixWithKindName:   true,
 		},
 		&jennies.ResourceObjectGenerator{
 			OnlyUseCurrentVersion:       !versioned,

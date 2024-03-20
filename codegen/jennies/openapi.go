@@ -25,6 +25,11 @@ type OpenAPI struct {
 
 	GoModName string
 	GoGenPath string
+
+	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
+	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
+	// When GroupByKind is false, only one generated OpenAPI file will exist for the entire GroupVersion.
+	GroupByKind bool
 }
 
 func (*OpenAPI) JennyName() string {
@@ -52,7 +57,7 @@ func (o *OpenAPI) Generate(kind codegen.Kind) (codejen.Files, error) {
 			generators.DefaultNameSystem(),
 			o.getTargetsFunc(&ver, ToPackageName(ver.Version), filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(kind.Properties().Group)), ToPackageName(ver.Version)), fs),
 			gengo.StdBuildTag,
-			[]string{fmt.Sprintf("%s/%s/%s/%s", o.GoModName, o.GoGenPath, ToPackageName(strings.ToLower(kind.Properties().Group)), ToPackageName(ver.Version))},
+			[]string{fmt.Sprintf("%s/%s/%s", o.GoModName, o.GoGenPath, GetGeneratedPath(o.GroupByKind, kind, ver.Version))},
 		)
 		if err != nil {
 			return nil, err

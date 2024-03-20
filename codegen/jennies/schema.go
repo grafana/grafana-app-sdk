@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"path/filepath"
 
 	"github.com/grafana/codejen"
 
@@ -16,6 +17,12 @@ import (
 type SchemaGenerator struct {
 	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
 	OnlyUseCurrentVersion bool
+
+	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
+	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
+	// When GroupByKind is false, the Kind() and Schema() functions are prefixed with the kind name,
+	// i.e. FooKind() and FooSchema() for kind.Name()="Foo"
+	GroupByKind bool
 }
 
 func (*SchemaGenerator) JennyName() string {
@@ -32,6 +39,11 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			meta.APIResource.Scope, resource.ClusterScope, resource.NamespacedScope)
 	}
 
+	prefix := ""
+	if !s.GroupByKind {
+		prefix = exportField(kind.Name())
+	}
+
 	files := make(codejen.Files, 0)
 	if s.OnlyUseCurrentVersion {
 		b := bytes.Buffer{}
@@ -42,7 +54,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			Kind:       meta.Kind,
 			Plural:     meta.PluralMachineName,
 			Scope:      meta.APIResource.Scope,
-			FuncPrefix: exportField(meta.Kind),
+			FuncPrefix: prefix,
 		}, &b)
 		if err != nil {
 			return nil, err
@@ -66,7 +78,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 				Kind:       meta.Kind,
 				Plural:     meta.PluralMachineName,
 				Scope:      meta.APIResource.Scope,
-				FuncPrefix: exportField(meta.Kind),
+				FuncPrefix: prefix,
 			}, &b)
 			if err != nil {
 				return nil, err
@@ -77,7 +89,7 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			}
 			files = append(files, codejen.File{
 				Data:         formatted,
-				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.Group, ToPackageName(ver.Version), meta.MachineName),
+				RelativePath: filepath.Join(GetGeneratedPath(s.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_schema_gen.go", meta.MachineName)),
 				From:         []codejen.NamedJenny{s},
 			})
 		}

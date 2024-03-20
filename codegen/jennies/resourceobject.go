@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/format"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -46,6 +47,13 @@ var (
 	_ = json.Unmarshal(commonMetadataBytes, &commonMetadataFieldMap)
 )
 
+func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) string {
+	if groupByKind {
+		return filepath.Join(ToPackageName(kind.Properties().MachineName), ToPackageName(version))
+	}
+	return filepath.Join(ToPackageName(kind.Properties().Group), ToPackageName(version))
+}
+
 type ResourceObjectGenerator struct {
 	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
 	OnlyUseCurrentVersion bool
@@ -54,6 +62,12 @@ type ResourceObjectGenerator struct {
 	// are prefixed with the exported Kind name. Generally, if you generated go types with Depth: 1 and PrefixWithKindName: true,
 	// then you should set this value to true as well.
 	SubresourceTypesArePrefixed bool
+
+	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
+	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
+	// When GroupByKind is false, subresource types (such as spec and status) are assumed to be prefixed with the
+	// kind name, which can be accomplished by setting GroupByKind=false on the GoTypesGenerator.
+	GroupByKind bool
 }
 
 func (*ResourceObjectGenerator) JennyName() string {
@@ -85,7 +99,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 				return nil, err
 			}
 			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.go", kind.Properties().Group, ToPackageName(ver.Version), kind.Properties().MachineName),
+				RelativePath: filepath.Join(GetGeneratedPath(r.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.Properties().MachineName))),
 				Data:         b,
 				From:         []codejen.NamedJenny{r},
 			})

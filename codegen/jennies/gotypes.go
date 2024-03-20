@@ -51,10 +51,11 @@ type GoTypes struct {
 
 	AddKubernetesCodegen bool
 
-	// PrefixWithKindName will prefix any types with a Depth > 0 with the exported name of the Kind.
-	// So a Kind named Foo with a `spec` field and Depth of 1 will generate a spec type of `FooSpec` instead of
-	// Spec if PrefixWithKindName is set to true.
-	PrefixWithKindName bool
+	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
+	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
+	// When GroupByKind is false, subresource types (such as spec and status) are prefixed with the kind name,
+	// i.e. generating FooSpec instead of Spec for kind.Name() = "Foo" and Depth=1
+	GroupByKind bool
 }
 
 func (*GoTypes) JennyName() string {
@@ -67,7 +68,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().Group)
+		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, GetGeneratedPath(g.GroupByKind, kind, ver.Version))
 	}
 
 	files := make(codejen.Files, 0)
@@ -78,7 +79,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			continue
 		}
 
-		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), filepath.Join(kind.Properties().Group, ToPackageName(ver.Version)))
+		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), GetGeneratedPath(g.GroupByKind, kind, ver.Version))
 		if err != nil {
 			return nil, err
 		}
@@ -91,7 +92,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
 	if g.Depth > 0 {
 		namePrefix := ""
-		if g.PrefixWithKindName {
+		if !g.GroupByKind {
 			namePrefix = exportField(name)
 		}
 		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix)
