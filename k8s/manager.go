@@ -332,11 +332,12 @@ type CustomResourceDefinitionSpec struct {
 
 // CustomResourceDefinitionSpecVersion is the representation of a specific version of a CRD, as part of the overall spec
 type CustomResourceDefinitionSpecVersion struct {
-	Name         string         `json:"name" yaml:"name"`
-	Served       bool           `json:"served" yaml:"served"`
-	Storage      bool           `json:"storage" yaml:"storage"`
-	Schema       map[string]any `json:"schema" yaml:"schema"`
-	Subresources map[string]any `json:"subresources,omitempty" yaml:"subresources,omitempty"`
+	Name             string         `json:"name" yaml:"name"`
+	Served           bool           `json:"served" yaml:"served"`
+	Storage          bool           `json:"storage" yaml:"storage"`
+	Schema           map[string]any `json:"schema" yaml:"schema"`
+	Subresources     map[string]any `json:"subresources,omitempty" yaml:"subresources,omitempty"`
+	SelectableFields []string       `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 }
 
 // CustomResourceDefinitionSpecNames is the struct representing the names (kind and plural) of a kubernetes CRD

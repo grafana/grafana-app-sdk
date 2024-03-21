@@ -47,6 +47,26 @@ func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
 			return CovertURLValuesToResourceCallOptions(a.(*url.Values), b.(*ResourceCallOptions), scope)
 		})
 	}
+
+	scheme.AddFieldLabelConversionFunc(
+		gv.WithKind(r.Kind.Kind()),
+		func(label, value string) (string, string, error) {
+			if label == "metadata.name" {
+				return label, value, nil
+			}
+			if r.Kind.Scope() != resource.ClusterScope {
+				if label == "metadata.namespace" {
+					return label, value, nil
+				}
+			}
+			for _, sf := range r.Kind.SelectableFields() {
+				if label == sf.FieldSelector {
+					return label, value, nil
+				}
+			}
+			return "", "", fmt.Errorf("field label not supported for %s: %s", gv.WithKind(r.Kind.Kind()), label)
+		},
+	)
 }
 
 type SubresourceRoute struct {

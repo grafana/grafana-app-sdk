@@ -3,15 +3,27 @@
 //
 
 package {{.Package}}
-
+{{$sfl := len .SelectableFields}}
 import (
+    {{if gt $sfl 0}}"fmt"{{end}}
+
     "github.com/grafana/grafana-app-sdk/resource"
 )
-
+{{$root:=.}}
 // schema is unexported to prevent accidental overwrites
-var (
+var ({{ $lsf := len .SelectableFields }}
     schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
-        resource.WithPlural("{{.Plural}}"), resource.WithScope(resource.{{.Scope}}Scope))
+        resource.WithPlural("{{.Plural}}"), resource.WithScope(resource.{{.Scope}}Scope) {{if gt $sfl 0}}, resource.WithSelectableFields([]resource.SelectableField{ {{ range .SelectableFields }}resource.SelectableField{
+            FieldSelector: "{{.}}",
+            FieldValueFunc: func(o resource.Object) (string, error) {
+                cast, ok := o.(*{{$root.Kind}})
+                if !ok {
+                    return "", fmt.Errorf("provided object must be of type *{{$root.Kind}}")
+                }
+                return cast.{{$root.ToObjectPath .}}, nil
+            },
+        },
+        }){{end}}{{ end }})
     kind{{.Kind}} = resource.Kind{
         Schema: schema{{.Kind}},
         Codecs: map[resource.KindEncoding]resource.Codec{

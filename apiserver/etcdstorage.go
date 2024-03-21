@@ -96,6 +96,17 @@ func GetAttrsFunc(kind resource.Kind) func(obj runtime.Object) (labels.Set, fiel
 		if kind.Scope() != resource.ClusterScope {
 			fields["metadata.namespace"] = object.GetNamespace()
 		}
+		for _, f := range kind.SelectableFields() {
+			if f.FieldValueFunc == nil {
+				// TODO: return error instead?
+				continue
+			}
+			v, err := f.FieldValueFunc(object)
+			if err != nil {
+				return nil, nil, err
+			}
+			fields[f.FieldSelector] = v
+		}
 		return labels.Set(object.GetLabels()), fields, nil
 	}
 }

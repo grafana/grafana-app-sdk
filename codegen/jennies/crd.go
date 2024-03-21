@@ -86,7 +86,8 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 				"type": "object",
 			},
 		},
-		Subresources: make(map[string]any),
+		Subresources:     make(map[string]any),
+		SelectableFields: kv.SelectableFields,
 	}
 
 	for k := range props {

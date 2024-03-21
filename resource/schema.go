@@ -32,6 +32,18 @@ type Schema interface {
 	ZeroListValue() ListObject
 	// Scope returns the scope of the schema object
 	Scope() SchemaScope
+	// SelectableFields returns a list of fully-qualified field selectors which can be used for querying
+	SelectableFields() []SelectableField
+}
+
+// SelectableField is a struct which represents the FieldSelector string and function to retrieve the value of that
+// FieldSelector from an Object. SelectableFields may be generic for all Object implementations,
+// or specific to one or a set.
+type SelectableField struct {
+	FieldSelector string
+	// FieldValueFunc is a function which returns the value of the FieldSelector in the provided Object,
+	// or an error if the Object is not of the correct underlying type, or the value cannot be retrieved for any reason
+	FieldValueFunc func(Object) (string, error)
 }
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
@@ -45,13 +57,14 @@ type SchemaGroup interface {
 // though the easiest way to define a schema is via codegen.
 // TODO: codegen info
 type SimpleSchema struct {
-	group    string
-	version  string
-	kind     string
-	plural   string
-	scope    SchemaScope
-	zero     Object
-	zeroList ListObject
+	group            string
+	version          string
+	kind             string
+	plural           string
+	scope            SchemaScope
+	selectableFields []SelectableField
+	zero             Object
+	zeroList         ListObject
 }
 
 // Group returns the SimpleSchema's Group
@@ -85,10 +98,16 @@ func (s *SimpleSchema) ZeroValue() Object {
 	return s.zero.Copy()
 }
 
-// ZeroValue returns a copy the SimpleSchema's zero-valued Object instance
+// ZeroListValue returns a copy the SimpleSchema's zero-valued ListObject instance
 // It can be used directly, as the returned interface is a copy.
 func (s *SimpleSchema) ZeroListValue() ListObject {
 	return s.zeroList.Copy()
+}
+
+// SelectableFields returns the list of field selectors that can be used for querying this schema
+// TODO: should this be in the kind instead of the schema?
+func (s *SimpleSchema) SelectableFields() []SelectableField {
+	return s.selectableFields
 }
 
 // SimpleSchemaGroup collects schemas with the same group and version
@@ -135,6 +154,13 @@ func WithKind(kind string) func(*SimpleSchema) {
 func WithScope(scope SchemaScope) func(schema *SimpleSchema) {
 	return func(s *SimpleSchema) {
 		s.scope = scope
+	}
+}
+
+// WithSelectableFields returns a SimpleSchemaOption that sets the SimpleSchema's SelectableFields to the provided selectableFields
+func WithSelectableFields(selectableFields []SelectableField) func(schema *SimpleSchema) {
+	return func(s *SimpleSchema) {
+		s.selectableFields = selectableFields
 	}
 }
 

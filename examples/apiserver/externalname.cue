@@ -23,6 +23,7 @@ externalName: {
                 	otherField: string
                 }
 	        }
+	        selectableFields: ["spec.host"]
 	    }
 	    "v2": {
 	    	schema: {
@@ -31,6 +32,7 @@ externalName: {
 	    			otherData: string
 	    		}
 	    	}
+	        selectableFields: ["spec.host"]
 	    }
 	}
 }
