@@ -43,3 +43,5 @@ List the resource:
 ```sh
 $ kubectl get externalname -o yaml
 ```
+
+View the OpenAPI spec for `core.grafana.internal/v1`: [https://localhost:6443/openapi/v3/apis/core.grafana.internal/v1]

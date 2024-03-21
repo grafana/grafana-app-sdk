@@ -32,9 +32,10 @@ func main() {
 		GetOpenAPIDefinitions: corev1.GetOpenAPIDefinitions,
 		// Example "foo" subresource that just prints out some JSON payload
 		Subresources: []apiserver.SubresourceRoute{{
-			Path:        "foo",
+			Path:    "foo",
+			Handler: handleFooSubresource,
+			// FIXME: Currently this is not registered with the APIServer in any way
 			OpenAPISpec: fooSubresourceOpenAPI,
-			Handler:     handleFooSubresource,
 		}},
 		// Reconciler to run for this kind
 		Reconciler: &simple.Reconciler{
