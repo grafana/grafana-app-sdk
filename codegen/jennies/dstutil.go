@@ -10,6 +10,22 @@ import (
 	"github.com/dave/dst/dstutil"
 )
 
+func addGenComments() dstutil.ApplyFunc {
+	return func(c *dstutil.Cursor) bool {
+		switch /*x :=*/ c.Node().(type) {
+		case *dst.TypeSpec:
+			c.Parent().Decorations().Start.Append("// +k8s:openapi-gen=true")
+		case *dst.StructType:
+			/*c.Parent()
+			//c.Parent().(*dst.TypeSpec).Decs.Start = []string{"// +k8s:openapi-gen=true"}
+			fmt.Println(c.Parent().Decorations())
+			fmt.Printf("%#v\n", c.Parent())
+			x.Decs.Start = append(x.Decs.Start, "// +k8s:openapi-gen=true")*/
+		}
+		return true
+	}
+}
+
 //
 // All Code in this file is taken from grafana.com/thema's internal package to allow for go post-processing
 //

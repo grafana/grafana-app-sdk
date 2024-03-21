@@ -43,7 +43,7 @@ func main() {
 	kubeConfig.APIPath = "/apis" // Don't know why this isn't set correctly by default, but it isn't
 
 	// Create a schema to use
-	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[OpinionatedModel]{}, resource.WithKind("OpinionatedCustomResource"))
+	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[OpinionatedModel]{}, &resource.TypedList[*resource.TypedSpecObject[OpinionatedModel]]{}, resource.WithKind("OpinionatedCustomResource"))
 	kind := resource.Kind{
 		Schema: schema,
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},

@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	testSchema = resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[testSpec]{}, resource.WithKind("test"))
+	testSchema = resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[testSpec]{}, &resource.TypedList[*resource.TypedSpecObject[testSpec]]{}, resource.WithKind("test"))
 	testKind   = resource.Kind{
 		Schema: testSchema,
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},

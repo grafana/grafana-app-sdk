@@ -28,6 +28,8 @@ type Schema interface {
 	Plural() string
 	// ZeroValue returns the "zero-value", "default", or "empty" version of an Object of this Schema
 	ZeroValue() Object
+	// ZeroListValue returns the "zero-value", "default", or "empty" version of a List of Objects of this Schema
+	ZeroListValue() ListObject
 	// Scope returns the scope of the schema object
 	Scope() SchemaScope
 }
@@ -43,12 +45,13 @@ type SchemaGroup interface {
 // though the easiest way to define a schema is via codegen.
 // TODO: codegen info
 type SimpleSchema struct {
-	group   string
-	version string
-	kind    string
-	plural  string
-	scope   SchemaScope
-	zero    Object
+	group    string
+	version  string
+	kind     string
+	plural   string
+	scope    SchemaScope
+	zero     Object
+	zeroList ListObject
 }
 
 // Group returns the SimpleSchema's Group
@@ -82,6 +85,12 @@ func (s *SimpleSchema) ZeroValue() Object {
 	return s.zero.Copy()
 }
 
+// ZeroValue returns a copy the SimpleSchema's zero-valued Object instance
+// It can be used directly, as the returned interface is a copy.
+func (s *SimpleSchema) ZeroListValue() ListObject {
+	return s.zeroList.Copy()
+}
+
 // SimpleSchemaGroup collects schemas with the same group and version
 // Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 type SimpleSchemaGroup struct {
@@ -97,8 +106,8 @@ func (g *SimpleSchemaGroup) Schemas() []Schema {
 
 // AddSchema creates a new SimpleSchema with the SimpleSchemaGroup's group and version,
 // adds it to the SimpleSchemaGroup, and returns the created SimpleSchema
-func (g *SimpleSchemaGroup) AddSchema(zeroVal Object, opts ...SimpleSchemaOption) *SimpleSchema {
-	s := NewSimpleSchema(g.group, g.version, zeroVal, opts...)
+func (g *SimpleSchemaGroup) AddSchema(zeroVal Object, zeroList ListObject, opts ...SimpleSchemaOption) *SimpleSchema {
+	s := NewSimpleSchema(g.group, g.version, zeroVal, zeroList, opts...)
 	g.schemas = append(g.schemas, s)
 	return s
 }
@@ -130,11 +139,12 @@ func WithScope(scope SchemaScope) func(schema *SimpleSchema) {
 }
 
 // NewSimpleSchema returns a new SimpleSchema
-func NewSimpleSchema(group, version string, zeroVal Object, opts ...SimpleSchemaOption) *SimpleSchema {
+func NewSimpleSchema(group, version string, zeroVal Object, zeroList ListObject, opts ...SimpleSchemaOption) *SimpleSchema {
 	s := SimpleSchema{
-		group:   group,
-		version: version,
-		zero:    zeroVal,
+		group:    group,
+		version:  version,
+		zero:     zeroVal,
+		zeroList: zeroList,
 	}
 	for _, opt := range opts {
 		opt(&s)

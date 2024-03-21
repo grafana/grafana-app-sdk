@@ -8,7 +8,7 @@ import (
 
 func TestNewSimpleSchema(t *testing.T) {
 	t.Run("no options", func(t *testing.T) {
-		sch := NewSimpleSchema("g", "v", &TypedSpecObject[any]{})
+		sch := NewSimpleSchema("g", "v", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[any]]{})
 		assert.Equal(t, "g", sch.Group())
 		assert.Equal(t, "v", sch.Version())
 		assert.Equal(t, "TypedSpecObject[interface {}]", sch.Kind())
@@ -17,7 +17,7 @@ func TestNewSimpleSchema(t *testing.T) {
 	})
 
 	t.Run("with kind", func(t *testing.T) {
-		sch := NewSimpleSchema("g", "v", &TypedSpecObject[any]{}, WithKind("Obj"))
+		sch := NewSimpleSchema("g", "v", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[any]]{}, WithKind("Obj"))
 		assert.Equal(t, "g", sch.Group())
 		assert.Equal(t, "v", sch.Version())
 		assert.Equal(t, "Obj", sch.Kind())
@@ -26,7 +26,7 @@ func TestNewSimpleSchema(t *testing.T) {
 	})
 
 	t.Run("with plural", func(t *testing.T) {
-		sch := NewSimpleSchema("g", "v", &TypedSpecObject[any]{}, WithKind("Obj"), WithPlural("plural"))
+		sch := NewSimpleSchema("g", "v", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[any]]{}, WithKind("Obj"), WithPlural("plural"))
 		assert.Equal(t, "g", sch.Group())
 		assert.Equal(t, "v", sch.Version())
 		assert.Equal(t, "Obj", sch.Kind())
@@ -40,7 +40,7 @@ func TestSimpleSchema_ZeroValue(t *testing.T) {
 	orig := TypedSpecObject[string]{
 		Spec: "a",
 	}
-	sch := NewSimpleSchema("g", "v", &orig)
+	sch := NewSimpleSchema("g", "v", &orig, &TypedList[*TypedSpecObject[any]]{})
 	zv := sch.ZeroValue()
 	cast, ok := zv.(*TypedSpecObject[string])
 	assert.True(t, ok)
@@ -58,7 +58,7 @@ func TestNewSimpleSchemaGroup(t *testing.T) {
 func TestSimpleSchemaGroup_AddSchema(t *testing.T) {
 	g := NewSimpleSchemaGroup("g", "v")
 	t.Run("no options", func(t *testing.T) {
-		sch := g.AddSchema(&TypedSpecObject[string]{})
+		sch := g.AddSchema(&TypedSpecObject[string]{}, &TypedList[*TypedSpecObject[string]]{})
 		assert.Equal(t, "g", sch.Group())
 		assert.Equal(t, "v", sch.Version())
 		assert.Equal(t, "TypedSpecObject[string]", sch.Kind())
@@ -67,7 +67,7 @@ func TestSimpleSchemaGroup_AddSchema(t *testing.T) {
 	})
 
 	t.Run("with kind", func(t *testing.T) {
-		sch := g.AddSchema(&TypedSpecObject[string]{}, WithKind("Obj"))
+		sch := g.AddSchema(&TypedSpecObject[string]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("Obj"))
 		assert.Equal(t, "g", sch.Group())
 		assert.Equal(t, "v", sch.Version())
 		assert.Equal(t, "Obj", sch.Kind())
@@ -76,7 +76,7 @@ func TestSimpleSchemaGroup_AddSchema(t *testing.T) {
 	})
 
 	t.Run("with plural", func(t *testing.T) {
-		sch := g.AddSchema(&TypedSpecObject[string]{}, WithKind("Obj"), WithPlural("other"))
+		sch := g.AddSchema(&TypedSpecObject[string]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("Obj"), WithPlural("other"))
 		assert.Equal(t, "g", sch.Group())
 		assert.Equal(t, "v", sch.Version())
 		assert.Equal(t, "Obj", sch.Kind())
@@ -87,8 +87,8 @@ func TestSimpleSchemaGroup_AddSchema(t *testing.T) {
 
 func TestSimpleSchemaGroup_Schemas(t *testing.T) {
 	g := NewSimpleSchemaGroup("g", "v")
-	s1 := g.AddSchema(&TypedSpecObject[int]{})
-	s2 := g.AddSchema(&TypedSpecObject[string]{})
+	s1 := g.AddSchema(&TypedSpecObject[int]{}, &TypedList[*TypedSpecObject[int]]{})
+	s2 := g.AddSchema(&TypedSpecObject[string]{}, &TypedList[*TypedSpecObject[string]]{})
 	schemas := g.Schemas()
 	assert.Len(t, schemas, 2)
 	assert.Equal(t, s1, schemas[0])
