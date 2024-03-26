@@ -14,18 +14,19 @@ import (
 	"time"
 )
 
-type Object struct {
+// +k8s:openapi-gen=true
+type CustomKind struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Spec              Spec   `json:"spec"`
 	Status            Status `json:"status"`
 }
 
-func (o *Object) GetSpec() any {
+func (o *CustomKind) GetSpec() any {
 	return o.Spec
 }
 
-func (o *Object) SetSpec(spec any) error {
+func (o *CustomKind) SetSpec(spec any) error {
 	cast, ok := spec.(Spec)
 	if !ok {
 		return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
@@ -34,13 +35,13 @@ func (o *Object) SetSpec(spec any) error {
 	return nil
 }
 
-func (o *Object) GetSubresources() map[string]any {
+func (o *CustomKind) GetSubresources() map[string]any {
 	return map[string]any{
 		"status": o.Status,
 	}
 }
 
-func (o *Object) GetSubresource(name string) (any, bool) {
+func (o *CustomKind) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
 		return o.Status, true
@@ -49,7 +50,7 @@ func (o *Object) GetSubresource(name string) (any, bool) {
 	}
 }
 
-func (o *Object) SetSubresource(name string, value any) error {
+func (o *CustomKind) SetSubresource(name string, value any) error {
 	switch name {
 	case "status":
 		cast, ok := value.(Status)
@@ -63,7 +64,7 @@ func (o *Object) SetSubresource(name string, value any) error {
 	}
 }
 
-func (o *Object) GetStaticMetadata() resource.StaticMetadata {
+func (o *CustomKind) GetStaticMetadata() resource.StaticMetadata {
 	return resource.StaticMetadata{
 		Name:      o.ObjectMeta.Name,
 		Namespace: o.ObjectMeta.Namespace,
@@ -73,7 +74,7 @@ func (o *Object) GetStaticMetadata() resource.StaticMetadata {
 	}
 }
 
-func (o *Object) SetStaticMetadata(metadata resource.StaticMetadata) {
+func (o *CustomKind) SetStaticMetadata(metadata resource.StaticMetadata) {
 	o.Name = metadata.Name
 	o.Namespace = metadata.Namespace
 	o.SetGroupVersionKind(schema.GroupVersionKind{
@@ -83,7 +84,7 @@ func (o *Object) SetStaticMetadata(metadata resource.StaticMetadata) {
 	})
 }
 
-func (o *Object) GetCommonMetadata() resource.CommonMetadata {
+func (o *CustomKind) GetCommonMetadata() resource.CommonMetadata {
 	dt := o.DeletionTimestamp
 	var deletionTimestamp *time.Time
 	if dt != nil {
@@ -115,7 +116,7 @@ func (o *Object) GetCommonMetadata() resource.CommonMetadata {
 	}
 }
 
-func (o *Object) SetCommonMetadata(metadata resource.CommonMetadata) {
+func (o *CustomKind) SetCommonMetadata(metadata resource.CommonMetadata) {
 	o.UID = types.UID(metadata.UID)
 	o.ResourceVersion = metadata.ResourceVersion
 	o.Generation = metadata.Generation
@@ -160,7 +161,7 @@ func (o *Object) SetCommonMetadata(metadata resource.CommonMetadata) {
 	}
 }
 
-func (o *Object) GetCreatedBy() string {
+func (o *CustomKind) GetCreatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -168,7 +169,7 @@ func (o *Object) GetCreatedBy() string {
 	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
 }
 
-func (o *Object) SetCreatedBy(createdBy string) {
+func (o *CustomKind) SetCreatedBy(createdBy string) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -176,7 +177,7 @@ func (o *Object) SetCreatedBy(createdBy string) {
 	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
 }
 
-func (o *Object) GetCustomMetadataField() string {
+func (o *CustomKind) GetCustomMetadataField() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -184,7 +185,7 @@ func (o *Object) GetCustomMetadataField() string {
 	return o.ObjectMeta.Annotations["grafana.com/customMetadataField"]
 }
 
-func (o *Object) SetCustomMetadataField(customMetadataField string) {
+func (o *CustomKind) SetCustomMetadataField(customMetadataField string) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -192,7 +193,7 @@ func (o *Object) SetCustomMetadataField(customMetadataField string) {
 	o.ObjectMeta.Annotations["grafana.com/customMetadataField"] = customMetadataField
 }
 
-func (o *Object) GetOtherMetadataField() string {
+func (o *CustomKind) GetOtherMetadataField() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -200,7 +201,7 @@ func (o *Object) GetOtherMetadataField() string {
 	return o.ObjectMeta.Annotations["grafana.com/otherMetadataField"]
 }
 
-func (o *Object) SetOtherMetadataField(otherMetadataField string) {
+func (o *CustomKind) SetOtherMetadataField(otherMetadataField string) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -208,7 +209,7 @@ func (o *Object) SetOtherMetadataField(otherMetadataField string) {
 	o.ObjectMeta.Annotations["grafana.com/otherMetadataField"] = otherMetadataField
 }
 
-func (o *Object) GetUpdateTimestamp() time.Time {
+func (o *CustomKind) GetUpdateTimestamp() time.Time {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -217,7 +218,7 @@ func (o *Object) GetUpdateTimestamp() time.Time {
 	return parsed
 }
 
-func (o *Object) SetUpdateTimestamp(updateTimestamp time.Time) {
+func (o *CustomKind) SetUpdateTimestamp(updateTimestamp time.Time) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -225,7 +226,7 @@ func (o *Object) SetUpdateTimestamp(updateTimestamp time.Time) {
 	o.ObjectMeta.Annotations["grafana.com/updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
 }
 
-func (o *Object) GetUpdatedBy() string {
+func (o *CustomKind) GetUpdatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -233,7 +234,7 @@ func (o *Object) GetUpdatedBy() string {
 	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
 }
 
-func (o *Object) SetUpdatedBy(updatedBy string) {
+func (o *CustomKind) SetUpdatedBy(updatedBy string) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -241,13 +242,56 @@ func (o *Object) SetUpdatedBy(updatedBy string) {
 	o.ObjectMeta.Annotations["grafana.com/updatedBy"] = updatedBy
 }
 
-func (o *Object) Copy() resource.Object {
+func (o *CustomKind) Copy() resource.Object {
 	return resource.CopyObject(o)
 }
 
-func (o *Object) DeepCopyObject() runtime.Object {
+func (o *CustomKind) DeepCopyObject() runtime.Object {
 	return o.Copy()
 }
 
 // Interface compliance compile-time check
-var _ resource.Object = &Object{}
+var _ resource.Object = &CustomKind{}
+
+// +k8s:openapi-gen=true
+type CustomKindList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+	Items           []CustomKind `json:"items"`
+}
+
+func (o *CustomKindList) DeepCopyObject() runtime.Object {
+	return o.Copy()
+}
+
+func (o *CustomKindList) Copy() resource.ListObject {
+	cpy := &CustomKindList{
+		TypeMeta: o.TypeMeta,
+		Items:    make([]CustomKind, len(o.Items)),
+	}
+	o.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	for i := 0; i < len(o.Items); i++ {
+		if item, ok := o.Items[i].Copy().(*CustomKind); ok {
+			cpy.Items[i] = *item
+		}
+	}
+	return cpy
+}
+
+func (o *CustomKindList) GetItems() []resource.Object {
+	items := make([]resource.Object, len(o.Items))
+	for i := 0; i < len(o.Items); i++ {
+		items[i] = &o.Items[i]
+	}
+	return items
+}
+
+func (o *CustomKindList) SetItems(items []resource.Object) {
+	o.Items = make([]CustomKind, len(items))
+	for i := 0; i < len(items); i++ {
+		o.Items[i] = *items[i].(*CustomKind)
+	}
+}
+
+// Interface compliance compile-time check
+var _ resource.ListObject = &CustomKindList{}

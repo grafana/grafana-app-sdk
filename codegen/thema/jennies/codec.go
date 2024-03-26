@@ -129,7 +129,7 @@ func (*CodecGenerator) generateObjectFile(kind codegen.Kind, version *codegen.Ki
 		Package:              pkg,
 		TypeName:             meta.Kind,
 		SpecTypeName:         "Spec",
-		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object
+		ObjectTypeName:       meta.Kind,
 		ObjectShortName:      "o",
 		Subresources:         make([]templates.SubresourceMetadata, 0),
 		CustomMetadataFields: customMetadataFields,
