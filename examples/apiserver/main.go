@@ -15,6 +15,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/sets"
+	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/component-base/cli"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -37,6 +39,8 @@ func main() {
 			// FIXME: Currently this is not registered with the APIServer in any way
 			OpenAPISpec: fooSubresourceOpenAPI,
 		}},
+		Mutator:   &mutatingAdmissionController{},
+		Validator: &validatingAdmissionController{},
 		// Reconciler to run for this kind
 		Reconciler: &simple.Reconciler{
 			ReconcileFunc: reconcileV1ExternalNames,
@@ -60,7 +64,11 @@ func main() {
 	// APIServerOptions is used to create the API server from one or more ResourceGroups.
 	// TODO: this will be expanded upon
 	o := simple.NewAPIServerOptions([]apiserver.ResourceGroup{resourceGroup}, os.Stdout, os.Stderr)
-	o.RecommendedOptions.Admission = nil
+	o.RecommendedOptions.Admission.Plugins = admission.NewPlugins()
+	o.RecommendedOptions.Admission.RecommendedPluginOrder = []string{}
+	o.RecommendedOptions.Admission.EnablePlugins = []string{}
+	o.RecommendedOptions.Admission.DisablePlugins = []string{}
+	o.RecommendedOptions.Admission.DefaultOffPlugins = sets.NewString()
 	o.RecommendedOptions.Authorization = nil
 	o.RecommendedOptions.Authentication = nil
 	o.RecommendedOptions.CoreAPI = nil
@@ -70,6 +78,29 @@ func main() {
 
 	code := cli.Run(cmd)
 	os.Exit(code)
+}
+
+var _ resource.MutatingAdmissionController = &mutatingAdmissionController{}
+
+type mutatingAdmissionController struct{}
+
+func (m *mutatingAdmissionController) Mutate(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+	obj := request.Object
+	obj.SetAnnotations(map[string]string{"mutated": "true"})
+	return &resource.MutatingResponse{
+		UpdatedObject: obj,
+	}, nil
+}
+
+var _ resource.ValidatingAdmissionController = &validatingAdmissionController{}
+
+type validatingAdmissionController struct{}
+
+func (v *validatingAdmissionController) Validate(ctx context.Context, request *resource.AdmissionRequest) error {
+	if request.Object.GetName() == "invalid" {
+		return k8s.NewAdmissionError(fmt.Errorf("object name cannot be 'invalid'"), http.StatusBadRequest, "invalid name")
+	}
+	return nil
 }
 
 func reconcileV1ExternalNames(ctx context.Context, request operator.ReconcileRequest) (operator.ReconcileResult, error) {

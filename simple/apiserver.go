@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"time"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
 	filestorage "github.com/grafana/grafana/pkg/apiserver/storage/file"
@@ -18,6 +19,8 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/kube-openapi/pkg/common"
 	netutils "k8s.io/utils/net"
 )
@@ -161,6 +164,7 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 				Version: r.Kind.Version(),
 			}
 			gvs = append(gvs, gv)
+
 		}
 	}
 
@@ -176,6 +180,15 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 		config: serverConfig,
 		groups: groups,
 	}
+
+	for _, g := range groups {
+		for _, r := range g.Resources {
+			r.RegisterAdmissionPlugins(o.RecommendedOptions.Admission.Plugins)
+		}
+	}
+
+	o.RecommendedOptions.Admission.RecommendedPluginOrder = o.RecommendedOptions.Admission.Plugins.Registered()
+	o.RecommendedOptions.Admission.EnablePlugins = o.RecommendedOptions.Admission.Plugins.Registered()
 	return o
 }
 
@@ -217,6 +230,12 @@ func (o *APIServerOptions) Config() (*APIServerConfig, error) {
 	if err := o.RecommendedOptions.SecureServing.ApplyTo(&serverConfig.GenericConfig.SecureServing, &serverConfig.GenericConfig.LoopbackClientConfig); err != nil {
 		return nil, err
 	}
+
+	fakev1Informers := informers.NewSharedInformerFactory(fake.NewSimpleClientset(), 10*time.Minute)
+	if err := o.RecommendedOptions.Admission.ApplyTo(&serverConfig.GenericConfig.Config, fakev1Informers, fake.NewSimpleClientset(), nil, nil); err != nil {
+		return nil, err
+	}
+
 	o.RecommendedOptions.Etcd.EnableWatchCache = false
 	//o.RecommendedOptions.Etcd.StorageConfig.Transport.ServerList = []string{"127.0.0.1:2379"}
 

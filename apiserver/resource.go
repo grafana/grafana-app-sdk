@@ -2,7 +2,9 @@ package apiserver
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/url"
@@ -12,11 +14,13 @@ import (
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana/pkg/apimachinery/apis/common/v0alpha1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	"k8s.io/apiserver/pkg/server"
@@ -33,6 +37,22 @@ type Resource struct {
 	Reconciler            operator.Reconciler // TODO: do we want this here, or only here for the simple package version?
 }
 
+func (r *Resource) RegisterAdmissionPlugins(plugins *admission.Plugins) {
+	if r.Validator == nil && r.Mutator == nil {
+		fmt.Printf("Resource %s has no admission plugins\n", r.Kind.Kind())
+		return
+	}
+	gvk := schema.GroupVersionKind{
+		Group:   r.Kind.Group(),
+		Version: r.Kind.Version(),
+		Kind:    r.Kind.Kind(),
+	}.String()
+	fmt.Printf("Registering admission plugins for %s\n", gvk)
+	plugins.Register(gvk+"Admission", func(config io.Reader) (admission.Interface, error) {
+		return &AdmissionWrapper{resource: r}, nil
+	})
+}
+
 func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
 	gv := schema.GroupVersion{
 		Group:   r.Kind.Group(),
@@ -47,6 +67,146 @@ func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
 			return CovertURLValuesToResourceCallOptions(a.(*url.Values), b.(*ResourceCallOptions), scope)
 		})
 	}
+}
+
+var _ admission.MutationInterface = &AdmissionWrapper{}
+var _ admission.ValidationInterface = &AdmissionWrapper{}
+var _ admission.Interface = &AdmissionWrapper{}
+
+type AdmissionWrapper struct {
+	resource *Resource
+}
+
+func (v *AdmissionWrapper) Handles(o admission.Operation) bool {
+	gvk := schema.GroupVersionKind{
+		Group:   v.resource.Kind.Group(),
+		Version: v.resource.Kind.Version(),
+		Kind:    v.resource.Kind.Kind(),
+	}.String()
+	if v.resource.Validator == nil && v.resource.Mutator == nil {
+		fmt.Printf("Resource %s has no admission plugins\n", gvk)
+		return false
+	}
+	fmt.Printf("Resource %s handles %s\n", gvk, o)
+	return true
+}
+
+func (v *AdmissionWrapper) Validate(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
+	gvk := schema.GroupVersionKind{
+		Group:   v.resource.Kind.Group(),
+		Version: v.resource.Kind.Version(),
+		Kind:    v.resource.Kind.Kind(),
+	}.String()
+	fmt.Printf("Validate called for %s\n", gvk)
+	if v.resource.Validator == nil {
+		fmt.Printf("Resource %s has no validator\n", gvk)
+		return nil
+	}
+
+	// skip if the gvk doesn't match
+	if a.GetKind().Kind != v.resource.Kind.Kind() || a.GetKind().Group != v.resource.Kind.Group() || a.GetKind().Version != v.resource.Kind.Version() {
+		fmt.Printf("Resource %s does not match\n", gvk)
+		return nil
+	}
+
+	userInfoExtra := make(map[string]any)
+	for k, v := range a.GetUserInfo().GetExtra() {
+		userInfoExtra[k] = v
+	}
+
+	obj, ok := a.GetObject().(resource.Object)
+	if !ok {
+		return errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
+	}
+
+	oldObj, ok := a.GetOldObject().(resource.Object)
+	if !ok {
+		return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+	}
+
+	req := &resource.AdmissionRequest{
+		Action:  resource.AdmissionAction(a.GetOperation()),
+		Kind:    a.GetKind().Kind,
+		Group:   a.GetKind().Group,
+		Version: a.GetKind().Group,
+		UserInfo: resource.AdmissionUserInfo{
+			Username: a.GetUserInfo().GetName(),
+			UID:      a.GetUserInfo().GetUID(),
+			Groups:   a.GetUserInfo().GetGroups(),
+			Extra:    userInfoExtra,
+		},
+		Object:    obj,
+		OldObject: oldObj,
+	}
+
+	return v.resource.Validator.Validate(ctx, req)
+}
+
+func (v *AdmissionWrapper) Admit(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
+	gvk := schema.GroupVersionKind{
+		Group:   v.resource.Kind.Group(),
+		Version: v.resource.Kind.Version(),
+		Kind:    v.resource.Kind.Kind(),
+	}.String()
+	fmt.Printf("Admit called for %s\n", gvk)
+	if v.resource.Mutator == nil {
+		fmt.Printf("Resource %s has no mutator\n", gvk)
+		return nil
+	}
+
+	userInfoExtra := make(map[string]any)
+	for k, v := range a.GetUserInfo().GetExtra() {
+		userInfoExtra[k] = v
+	}
+
+	obj, ok := a.GetObject().(resource.Object)
+	if !ok {
+		return errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
+	}
+
+	oldObj, ok := a.GetOldObject().(resource.Object)
+	if !ok {
+		return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+	}
+
+	req := &resource.AdmissionRequest{
+		Action:  resource.AdmissionAction(a.GetOperation()),
+		Kind:    a.GetKind().Kind,
+		Group:   a.GetKind().Group,
+		Version: a.GetKind().Group,
+		UserInfo: resource.AdmissionUserInfo{
+			Username: a.GetUserInfo().GetName(),
+			UID:      a.GetUserInfo().GetUID(),
+			Groups:   a.GetUserInfo().GetGroups(),
+			Extra:    userInfoExtra,
+		},
+		Object:    obj,
+		OldObject: oldObj,
+	}
+
+	res, err := v.resource.Mutator.Mutate(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if err := copyModifiedObjectToDestination(res.UpdatedObject, obj); err != nil {
+		return errors.NewInternalError(fmt.Errorf("unable to copy updated object to destination: %w", err))
+	}
+
+	return nil
+}
+
+func copyModifiedObjectToDestination(updatedObj runtime.Object, destination runtime.Object) error {
+	u, err := conversion.EnforcePtr(updatedObj)
+	if err != nil {
+		return fmt.Errorf("unable to enforce updated object pointer: %w", err)
+	}
+	d, err := conversion.EnforcePtr(destination)
+	if err != nil {
+		return fmt.Errorf("unable to enforce destination pointer: %w", err)
+	}
+	d.Set(u)
+	return nil
 }
 
 type SubresourceRoute struct {
