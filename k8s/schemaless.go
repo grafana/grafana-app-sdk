@@ -241,6 +241,7 @@ func (s *SchemalessClient) getClient(identifier resource.FullIdentifier) (*group
 		config:           s.clientConfig,
 		requestDurations: s.requestDurations,
 		totalRequests:    s.totalRequests,
+		listParser:       NewListParser(),
 	}
 	return s.clients[gv.Identifier()], nil
 }

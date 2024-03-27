@@ -35,6 +35,7 @@ type groupVersionClient struct {
 	config           ClientConfig
 	requestDurations *prometheus.HistogramVec
 	totalRequests    *prometheus.CounterVec
+	listParser       *ListParser
 }
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
@@ -367,7 +368,7 @@ func (g *groupVersionClient) list(
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
-	return rawToListWithParser(bytes, into, options.Limit, itemParser)
+	return g.listParser.Parse(bytes, into, options.Limit, itemParser)
 }
 
 //nolint:revive

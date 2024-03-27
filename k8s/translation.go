@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	admission "k8s.io/api/admission/v1beta1"
@@ -132,23 +133,70 @@ func rawToObject(raw []byte, into resource.Object) error {
 // ObjectParserFn is a function that parses raw bytes into a resource.Object.
 type ObjectParserFn func([]byte) (resource.Object, error)
 
-func rawToListWithParser(raw []byte, into resource.ListObject, respSize int, itemParser ObjectParserFn) error {
-	var um k8sListWithItems
-	if respSize > 0 {
-		um.Items = make([]json.RawMessage, 0, respSize)
+// ListParser
+type ListParser struct {
+	pool sync.Pool
+}
+
+// NewListParser
+func NewListParser() *ListParser {
+	return &ListParser{
+		pool: sync.Pool{
+			New: func() any {
+				return newK8sListWithItems(0)
+			},
+		},
+	}
+}
+
+func newK8sListWithItems(sz int) *k8sListWithItems {
+	res := &k8sListWithItems{}
+
+	if sz < 1 {
+		sz = 128 // TODO: do we need default size?
 	}
 
-	if err := json.Unmarshal(raw, &um); err != nil {
+	res.Items = make([]json.RawMessage, 0, sz)
+	return res
+}
+
+func resizeK8sListWithItems(lis *k8sListWithItems, newsz int) *k8sListWithItems {
+	// Always clear first
+	clear(lis.Items)
+	lis.Items = lis.Items[:0]
+
+	if newsz < 1 {
+		return lis
+	}
+
+	if cap(lis.Items)-len(lis.Items) < newsz {
+		lis.Items = append(make([]json.RawMessage, 0, len(lis.Items)+newsz), lis.Items...)
+	}
+
+	return lis
+}
+
+// Parse
+func (p *ListParser) Parse(raw []byte, into resource.ListObject, respSize int, itemParser ObjectParserFn) error {
+	lis, ok := p.pool.Get().(*k8sListWithItems)
+	if !ok {
+		lis = newK8sListWithItems(respSize)
+	} else {
+		lis = resizeK8sListWithItems(lis, respSize)
+	}
+	defer p.pool.Put(lis)
+
+	if err := json.Unmarshal(raw, &lis); err != nil {
 		return err
 	}
 
 	into.SetListMetadata(resource.ListMetadata{
-		ResourceVersion:    um.Metadata.ResourceVersion,
-		Continue:           um.Metadata.Continue,
-		RemainingItemCount: um.Metadata.RemainingItemCount,
+		ResourceVersion:    lis.Metadata.ResourceVersion,
+		Continue:           lis.Metadata.Continue,
+		RemainingItemCount: lis.Metadata.RemainingItemCount,
 	})
 
-	for _, item := range um.Items {
+	for _, item := range lis.Items {
 		obj, err := itemParser(item)
 		if err != nil {
 			into.Clear()

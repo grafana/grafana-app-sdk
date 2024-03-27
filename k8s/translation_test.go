@@ -234,7 +234,8 @@ func TestRawToListWithParser(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := rawToListWithParser(test.raw, test.into, len(test.expectedList.ListItems()), test.parser)
+			lp := NewListParser()
+			err := lp.Parse(test.raw, test.into, len(test.expectedList.ListItems()), test.parser)
 			assert.Equal(t, test.expectedError, err)
 			assert.Equal(t, test.expectedList.ListMetadata(), test.into.ListMetadata())
 			// Compare list items as JSON, as the lists are slices of pointers and will be unequal

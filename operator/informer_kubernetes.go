@@ -44,6 +44,10 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 		return nil, fmt.Errorf("client cannot be nil")
 	}
 
+	resp := listObjectWrapper{
+		Items: make([]runtime.Object, 0, 128),
+	}
+
 	return &KubernetesBasedInformer{
 		schema: sch,
 		ErrorHandler: func(err error) {
@@ -60,9 +64,18 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Schema, client ListWatch
 						attribute.String("kind.version", sch.Version()),
 						attribute.String("namespace", namespace),
 					)
-					resp := listObjectWrapper{
-						Items: make([]runtime.Object, 0, options.Limit),
+
+					// Always clear first
+					clear(resp.Items)
+					resp.Items = resp.Items[:0]
+
+					// Resize after if needed
+					if newsz := int(options.Limit); newsz > 0 {
+						if cap(resp.Items)-len(resp.Items) < newsz {
+							resp.Items = append(make([]runtime.Object, 0, len(resp.Items)+newsz), resp.Items...)
+						}
 					}
+
 					err := client.ListInto(ctx, namespace, resource.ListOptions{
 						LabelFilters: labelFilters,
 						Continue:     options.Continue,
