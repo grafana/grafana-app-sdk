@@ -434,7 +434,8 @@ func getSchemalessClientTestSetup(gvs ...schema.GroupVersion) (*SchemalessClient
 
 	for _, gv := range gvs {
 		client.clients[gv.Identifier()] = &groupVersionClient{
-			client: getMockClient(server.URL, gv.Group, gv.Version),
+			client:     getMockClient(server.URL, gv.Group, gv.Version),
+			listParser: NewListParser(),
 		}
 	}
 	return client, &s

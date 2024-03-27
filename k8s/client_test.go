@@ -610,7 +610,8 @@ func TestClient_Client(t *testing.T) {
 	restClient := getMockClient("http://localhost", testSchema.Group(), testSchema.Version())
 	client := Client{
 		client: &groupVersionClient{
-			client: restClient,
+			client:     restClient,
+			listParser: NewListParser(),
 		},
 		schema: testSchema,
 	}
@@ -678,7 +679,8 @@ func getClientTestSetup(schema resource.Schema) (*Client, *testServer) {
 	client := getMockClient(server.URL, schema.Group(), schema.Version())
 	return &Client{
 		client: &groupVersionClient{
-			client: client,
+			client:     client,
+			listParser: NewListParser(),
 		},
 		schema: schema,
 	}, &s

@@ -885,17 +885,17 @@ func (l *mockListObject) ListItems() []Object {
 	return l.List
 }
 
-func (l *mockListObject) SetItems(o []Object) {
-
-}
-
 func (l *mockListObject) ListMetadata() ListMetadata {
 	return l.ListMeta
 }
 
-func (l *mockListObject) SetListMetadata(m ListMetadata) {
+func (l *mockListObject) SetItems(o []Object) {}
 
-}
+func (l *mockListObject) AppendItem(o Object) {}
+
+func (l *mockListObject) Clear() {}
+
+func (l *mockListObject) SetListMetadata(m ListMetadata) {}
 
 type mockClientGenerator struct {
 	ClientForFunc func(Schema) (Client, error)

@@ -111,6 +111,8 @@ type ListObject interface {
 	SetListMetadata(ListMetadata)
 	ListItems() []Object
 	SetItems([]Object)
+	AppendItem(Object)
+	Clear()
 }
 
 // StaticMetadata consists of all non-mutable metadata for an object.
@@ -337,13 +339,28 @@ func (l *SimpleList[T]) ListItems() []Object {
 
 // SetItems overwrites ListItems with the contents of items, provided that each element in items is of type T
 func (l *SimpleList[T]) SetItems(items []Object) {
-	newItems := make([]T, 0)
+	l.Items = make([]T, 0, len(items))
 	for _, i := range items {
-		if cast, ok := i.(T); ok {
-			newItems = append(newItems, cast)
-		}
+		l.AppendItem(i)
 	}
-	l.Items = newItems
+}
+
+// AppendItem appends an item to the list, provided it's a valid object of type T.
+func (l *SimpleList[T]) AppendItem(item Object) {
+	if l.Items == nil {
+		l.Items = make([]T, 0, 2)
+	}
+
+	if obj, ok := item.(T); ok {
+		l.Items = append(l.Items, obj)
+	}
+}
+
+// Clear clears the list, resetting the metadata and underlying slice to zero values.
+func (l *SimpleList[T]) Clear() {
+	l.ListMeta = ListMetadata{}
+	clear(l.Items)
+	l.Items = l.Items[:0]
 }
 
 // ListMetadata returns ListMeta

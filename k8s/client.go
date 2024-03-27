@@ -45,33 +45,38 @@ func DefaultClientConfig() ClientConfig {
 
 // List lists resources in the provided namespace.
 // For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
-func (c *Client) List(ctx context.Context, namespace string, options resource.ListOptions) (
-	resource.ListObject, error) {
-	into := listImpl{}
-	err := c.client.list(ctx, namespace, c.schema.Plural(), &into, options, func(bytes []byte) (resource.Object, error) {
-		into := c.schema.ZeroValue()
-		err := rawToObject(bytes, into)
-		return into, err
-	})
-	if err != nil {
+func (c *Client) List(
+	ctx context.Context, namespace string, options resource.ListOptions,
+) (resource.ListObject, error) {
+	into := listImpl{
+		items: make([]resource.Object, 0, options.Limit),
+	}
+
+	if err := c.ListInto(ctx, namespace, options, &into); err != nil {
 		return nil, err
 	}
-	return &into, err
+
+	return &into, nil
 }
 
 // ListInto lists resources in the provided namespace, and unmarshals the response into the provided resource.ListObject
-func (c *Client) ListInto(ctx context.Context, namespace string, options resource.ListOptions,
-	into resource.ListObject) error {
+func (c *Client) ListInto(
+	ctx context.Context, namespace string, options resource.ListOptions, into resource.ListObject,
+) error {
 	if c.schema.Scope() == resource.ClusterScope && namespace != resource.NamespaceAll {
-		return fmt.Errorf("cannot list resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
-			resource.ClusterScope, namespace, resource.NamespaceAll)
+		return fmt.Errorf(
+			"cannot list resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
+			resource.ClusterScope, namespace, resource.NamespaceAll,
+		)
 	}
-	return c.client.list(ctx, namespace, c.schema.Plural(), into, options,
-		func(bytes []byte) (resource.Object, error) {
+
+	return c.client.list(
+		ctx, namespace, c.schema.Plural(), into, options, func(bytes []byte) (resource.Object, error) {
 			into := c.schema.ZeroValue()
 			err := rawToObject(bytes, into)
 			return into, err
-		})
+		},
+	)
 }
 
 // Get gets a resource of the client's internal Schema-derived kind, with the provided identifier
@@ -216,7 +221,8 @@ func (c *Client) Watch(ctx context.Context, namespace string, options resource.W
 	return c.client.watch(ctx, namespace, c.schema.Plural(), c.schema.ZeroValue(), options)
 }
 
-// Metrics returns the prometheus collectors used by this Client for registration with a prometheus exporter
+// PrometheusCollectors returns the prometheus collectors used by this Client
+// for registration with a Prometheus exporter.
 func (c *Client) PrometheusCollectors() []prometheus.Collector {
 	return c.client.metrics()
 }
@@ -245,4 +251,18 @@ func (l *listImpl) ListItems() []resource.Object {
 
 func (l *listImpl) SetItems(items []resource.Object) {
 	l.items = items
+}
+
+func (l *listImpl) Clear() {
+	l.lmd = resource.ListMetadata{}
+	clear(l.items)
+	l.items = l.items[:0]
+}
+
+func (l *listImpl) AppendItem(item resource.Object) {
+	if l.items == nil {
+		l.items = make([]resource.Object, 0, 2)
+	}
+
+	l.items = append(l.items, item)
 }

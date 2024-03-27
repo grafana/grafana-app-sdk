@@ -65,6 +65,7 @@ func (c *ClientRegistry) ClientFor(sch resource.Schema) (resource.Client, error)
 			config:           c.clientConfig,
 			requestDurations: c.requestDurations,
 			totalRequests:    c.totalRequests,
+			listParser:       NewListParser(),
 		},
 		schema: sch,
 		config: c.clientConfig,
