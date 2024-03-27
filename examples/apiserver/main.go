@@ -15,8 +15,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/util/sets"
-	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/component-base/cli"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -64,11 +62,6 @@ func main() {
 	// APIServerOptions is used to create the API server from one or more ResourceGroups.
 	// TODO: this will be expanded upon
 	o := simple.NewAPIServerOptions([]apiserver.ResourceGroup{resourceGroup}, os.Stdout, os.Stderr)
-	o.RecommendedOptions.Admission.Plugins = admission.NewPlugins()
-	o.RecommendedOptions.Admission.RecommendedPluginOrder = []string{}
-	o.RecommendedOptions.Admission.EnablePlugins = []string{}
-	o.RecommendedOptions.Admission.DisablePlugins = []string{}
-	o.RecommendedOptions.Admission.DefaultOffPlugins = sets.NewString()
 	o.RecommendedOptions.Authorization = nil
 	o.RecommendedOptions.Authentication = nil
 	o.RecommendedOptions.CoreAPI = nil

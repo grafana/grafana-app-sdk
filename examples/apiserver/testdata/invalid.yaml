@@ -1,6 +1,6 @@
 kind: ExternalName
 apiVersion: core.grafana.internal/v1
 metadata:
-  generateName: example-
+  name: invalid
 spec:
   host: 127.0.0.1

@@ -37,16 +37,12 @@ type Resource struct {
 	Reconciler            operator.Reconciler // TODO: do we want this here, or only here for the simple package version?
 }
 
-func (r *Resource) RegisterAdmissionPlugins(plugins *admission.Plugins) {
+func (r *Resource) RegisterAdmissionPlugin(plugins *admission.Plugins) {
 	if r.Validator == nil && r.Mutator == nil {
 		fmt.Printf("Resource %s has no admission plugins\n", r.Kind.Kind())
 		return
 	}
-	gvk := schema.GroupVersionKind{
-		Group:   r.Kind.Group(),
-		Version: r.Kind.Version(),
-		Kind:    r.Kind.Kind(),
-	}.String()
+	gvk := r.Kind.Group() + "/" + r.Kind.Version() + "/" + r.Kind.Kind()
 	fmt.Printf("Registering admission plugins for %s\n", gvk)
 	plugins.Register(gvk+"Admission", func(config io.Reader) (admission.Interface, error) {
 		return &AdmissionWrapper{resource: r}, nil
@@ -78,34 +74,19 @@ type AdmissionWrapper struct {
 }
 
 func (v *AdmissionWrapper) Handles(o admission.Operation) bool {
-	gvk := schema.GroupVersionKind{
-		Group:   v.resource.Kind.Group(),
-		Version: v.resource.Kind.Version(),
-		Kind:    v.resource.Kind.Kind(),
-	}.String()
 	if v.resource.Validator == nil && v.resource.Mutator == nil {
-		fmt.Printf("Resource %s has no admission plugins\n", gvk)
 		return false
 	}
-	fmt.Printf("Resource %s handles %s\n", gvk, o)
 	return true
 }
 
 func (v *AdmissionWrapper) Validate(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
-	gvk := schema.GroupVersionKind{
-		Group:   v.resource.Kind.Group(),
-		Version: v.resource.Kind.Version(),
-		Kind:    v.resource.Kind.Kind(),
-	}.String()
-	fmt.Printf("Validate called for %s\n", gvk)
 	if v.resource.Validator == nil {
-		fmt.Printf("Resource %s has no validator\n", gvk)
 		return nil
 	}
 
 	// skip if the gvk doesn't match
 	if a.GetKind().Kind != v.resource.Kind.Kind() || a.GetKind().Group != v.resource.Kind.Group() || a.GetKind().Version != v.resource.Kind.Version() {
-		fmt.Printf("Resource %s does not match\n", gvk)
 		return nil
 	}
 
@@ -114,27 +95,41 @@ func (v *AdmissionWrapper) Validate(ctx context.Context, a admission.Attributes,
 		userInfoExtra[k] = v
 	}
 
-	obj, ok := a.GetObject().(resource.Object)
+	userInfo := resource.AdmissionUserInfo{}
+	if a.GetUserInfo() != nil {
+		userInfoExtra := make(map[string]any)
+		for k, v := range a.GetUserInfo().GetExtra() {
+			userInfoExtra[k] = v
+		}
+		userInfo.Extra = userInfoExtra
+		userInfo.Groups = a.GetUserInfo().GetGroups()
+		userInfo.UID = a.GetUserInfo().GetUID()
+		userInfo.Username = a.GetUserInfo().GetName()
+	}
+
+	var (
+		obj, oldObj resource.Object
+		ok          bool
+	)
+
+	obj, ok = a.GetObject().(resource.Object)
 	if !ok {
 		return errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
 	}
 
-	oldObj, ok := a.GetOldObject().(resource.Object)
-	if !ok {
-		return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+	if a.GetOldObject() != nil {
+		oldObj, ok = a.GetOldObject().(resource.Object)
+		if !ok {
+			return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+		}
 	}
 
 	req := &resource.AdmissionRequest{
-		Action:  resource.AdmissionAction(a.GetOperation()),
-		Kind:    a.GetKind().Kind,
-		Group:   a.GetKind().Group,
-		Version: a.GetKind().Group,
-		UserInfo: resource.AdmissionUserInfo{
-			Username: a.GetUserInfo().GetName(),
-			UID:      a.GetUserInfo().GetUID(),
-			Groups:   a.GetUserInfo().GetGroups(),
-			Extra:    userInfoExtra,
-		},
+		Action:    resource.AdmissionAction(a.GetOperation()),
+		Kind:      a.GetKind().Kind,
+		Group:     a.GetKind().Group,
+		Version:   a.GetKind().Group,
+		UserInfo:  userInfo,
 		Object:    obj,
 		OldObject: oldObj,
 	}
@@ -143,43 +138,50 @@ func (v *AdmissionWrapper) Validate(ctx context.Context, a admission.Attributes,
 }
 
 func (v *AdmissionWrapper) Admit(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
-	gvk := schema.GroupVersionKind{
-		Group:   v.resource.Kind.Group(),
-		Version: v.resource.Kind.Version(),
-		Kind:    v.resource.Kind.Kind(),
-	}.String()
-	fmt.Printf("Admit called for %s\n", gvk)
 	if v.resource.Mutator == nil {
-		fmt.Printf("Resource %s has no mutator\n", gvk)
 		return nil
 	}
 
-	userInfoExtra := make(map[string]any)
-	for k, v := range a.GetUserInfo().GetExtra() {
-		userInfoExtra[k] = v
+	// skip if the gvk doesn't match
+	if a.GetKind().Kind != v.resource.Kind.Kind() || a.GetKind().Group != v.resource.Kind.Group() || a.GetKind().Version != v.resource.Kind.Version() {
+		return nil
 	}
 
-	obj, ok := a.GetObject().(resource.Object)
+	userInfo := resource.AdmissionUserInfo{}
+	if a.GetUserInfo() != nil {
+		userInfoExtra := make(map[string]any)
+		for k, v := range a.GetUserInfo().GetExtra() {
+			userInfoExtra[k] = v
+		}
+		userInfo.Extra = userInfoExtra
+		userInfo.Groups = a.GetUserInfo().GetGroups()
+		userInfo.UID = a.GetUserInfo().GetUID()
+		userInfo.Username = a.GetUserInfo().GetName()
+	}
+
+	var (
+		obj, oldObj resource.Object
+		ok          bool
+	)
+
+	obj, ok = a.GetObject().(resource.Object)
 	if !ok {
 		return errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
 	}
 
-	oldObj, ok := a.GetOldObject().(resource.Object)
-	if !ok {
-		return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+	if a.GetOldObject() != nil {
+		oldObj, ok = a.GetOldObject().(resource.Object)
+		if !ok {
+			return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+		}
 	}
 
 	req := &resource.AdmissionRequest{
-		Action:  resource.AdmissionAction(a.GetOperation()),
-		Kind:    a.GetKind().Kind,
-		Group:   a.GetKind().Group,
-		Version: a.GetKind().Group,
-		UserInfo: resource.AdmissionUserInfo{
-			Username: a.GetUserInfo().GetName(),
-			UID:      a.GetUserInfo().GetUID(),
-			Groups:   a.GetUserInfo().GetGroups(),
-			Extra:    userInfoExtra,
-		},
+		Action:    resource.AdmissionAction(a.GetOperation()),
+		Kind:      a.GetKind().Kind,
+		Group:     a.GetKind().Group,
+		Version:   a.GetKind().Group,
+		UserInfo:  userInfo,
 		Object:    obj,
 		OldObject: oldObj,
 	}
@@ -313,14 +315,11 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 			metav1.AddToGroupVersion(scheme, groupVersion)
 			priorities[len(priorities)-1-i] = groupVersion
 
-			// Also register converters
-			for _, v2 := range vers {
-				if v.Kind.Version() == v2.Kind.Version() {
-					continue
-				}
-				scheme.AddConversionFunc(v.Kind.ZeroValue(), v2.Kind.ZeroValue(), schemeConversionFunc(v.Kind, v2.Kind, converter))
-				scheme.AddConversionFunc(v2.Kind.ZeroValue(), v.Kind.ZeroValue(), schemeConversionFunc(v2.Kind, v.Kind, converter))
+			if v.Kind.Version() == latest.Kind.Version() {
+				continue
 			}
+			scheme.AddConversionFunc(v.Kind.ZeroValue(), latest.Kind.ZeroValue(), schemeConversionFunc(v.Kind, latest.Kind, converter))
+			scheme.AddConversionFunc(latest.Kind.ZeroValue(), v.Kind.ZeroValue(), schemeConversionFunc(latest.Kind, v.Kind, converter))
 		}
 
 		// Set version priorities based on the reverse-order list we built

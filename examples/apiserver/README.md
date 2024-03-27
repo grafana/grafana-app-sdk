@@ -35,13 +35,19 @@ externalnames                core.grafana.internal/v1   false        ExternalNam
 
 Create a resource:
 ```sh
-$ kubectl apply -f ./testdata/example.yaml 
+$ kubectl create -f ./testdata/example.yaml 
 externalname.core.grafana.internal/example created
 ```
 
 List the resource:
 ```sh
 $ kubectl get externalname -o yaml
+```
+
+Test validation:
+```sh
+$ kubectl create -f ./testdata/invalid.yaml
+Error from server (InternalError): error when creating "./testdata/invalid.yaml": Internal error occurred: failed to validate externalname: spec.target: Required value
 ```
 
 View the OpenAPI spec for `core.grafana.internal/v1`: [https://localhost:6443/openapi/v3/apis/core.grafana.internal/v1]

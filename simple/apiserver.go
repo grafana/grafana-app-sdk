@@ -14,7 +14,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/version"
+	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/endpoints/openapi"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
@@ -181,14 +183,17 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 		groups: groups,
 	}
 
+	o.RecommendedOptions.Admission.Plugins = admission.NewPlugins()
 	for _, g := range groups {
 		for _, r := range g.Resources {
-			r.RegisterAdmissionPlugins(o.RecommendedOptions.Admission.Plugins)
+			r.RegisterAdmissionPlugin(o.RecommendedOptions.Admission.Plugins)
 		}
 	}
 
 	o.RecommendedOptions.Admission.RecommendedPluginOrder = o.RecommendedOptions.Admission.Plugins.Registered()
 	o.RecommendedOptions.Admission.EnablePlugins = o.RecommendedOptions.Admission.Plugins.Registered()
+	o.RecommendedOptions.Admission.DisablePlugins = []string{}
+	o.RecommendedOptions.Admission.DefaultOffPlugins = sets.NewString()
 	return o
 }
 
