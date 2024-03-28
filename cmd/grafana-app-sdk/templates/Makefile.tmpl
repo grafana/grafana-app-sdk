@@ -62,7 +62,7 @@ generate:
 
 .PHONY: local/up
 local/up: local/generate
-	@sh local/scripts/cluster.sh create "local/generated/k3d-config.json"
+	@local/scripts/cluster.sh create "local/generated/k3d-config.json"
 	@cd local && tilt up
 
 .PHONY: local/generate
@@ -83,11 +83,11 @@ local/deploy_plugin:
 local/push_operator:
 	# Tag the docker image as part of localhost, which is what the generated k8s uses to avoid confusion with the real operator image
 	@docker tag "$(OPERATOR_DOCKERIMAGE):latest" "localhost/$(OPERATOR_DOCKERIMAGE):latest"
-	@sh local/scripts/push_image.sh "localhost/$(OPERATOR_DOCKERIMAGE):latest"
+	@local/scripts/push_image.sh "localhost/$(OPERATOR_DOCKERIMAGE):latest"
 
 .PHONY: local/clean
 local/clean: local/down
-	@sh local/scripts/cluster.sh delete
+	@local/scripts/cluster.sh delete
 
 .PHONY: clean
 clean:
