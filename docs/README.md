@@ -2,6 +2,8 @@
 
 This directory is a collection of documentation about the SDK library, CLI, and concepts.
 
+If you are looking for documentation for migrating your code when you upgrade SDK versions, see [migrations](./migrations/README.md).
+
 The easiest way to get a handle on the SDK is to run through the [sample project: issue tracker tutorial](./tutorials/issue-tracker/README.md). 
 Docs in this directory will help further your understanding of the concepts touched on in the tutorial.
 
