@@ -33,9 +33,6 @@ customkind: thema.#Lineage & {
 			}
 			createdBy: string
 			updatedBy: string
-			extraFields: {
-				[string]: _
-			}
 		}
 		spec:            _
 		_specIsNonEmpty: spec & struct.MinFields(0)

@@ -182,11 +182,11 @@ func toVersion(schema resource.Schema) CustomResourceDefinitionSpecVersion {
 	schemaProperties := map[string]any{
 		"spec": map[string]any{
 			"type":       openAPITypeObject,
-			"properties": toOpenAPIV3(reflect.TypeOf(obj.SpecObject())),
+			"properties": toOpenAPIV3(reflect.TypeOf(obj.GetSpec())),
 		},
 	}
 	// Check for status, scale subresources
-	if status, ok := obj.Subresources()["status"]; ok {
+	if status, ok := obj.GetSubresources()["status"]; ok {
 		schemaProperties["status"] = map[string]any{
 			"type":       openAPITypeObject,
 			"properties": toOpenAPIV3(reflect.TypeOf(status)),
@@ -194,7 +194,7 @@ func toVersion(schema resource.Schema) CustomResourceDefinitionSpecVersion {
 		// Add the subresource as an empty struct (this signals kubernetes to use the one supplied in the schema)
 		version.Subresources["status"] = struct{}{}
 	}
-	if scale, ok := obj.Subresources()["scale"]; ok {
+	if scale, ok := obj.GetSubresources()["scale"]; ok {
 		schemaProperties["scale"] = map[string]any{
 			"type":       openAPITypeObject,
 			"properties": toOpenAPIV3(reflect.TypeOf(scale)),

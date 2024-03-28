@@ -2,6 +2,7 @@ package templates
 
 import (
 	"embed"
+	"fmt"
 	"io"
 	"regexp"
 	"text/template"
@@ -15,8 +16,11 @@ var templates embed.FS
 var (
 	templateResourceObject, _ = template.ParseFS(templates, "resourceobject.tmpl")
 	templateSchema, _         = template.ParseFS(templates, "schema.tmpl")
+	templateCodec, _          = template.ParseFS(templates, "codec.tmpl")
 	templateLineage, _        = template.ParseFS(templates, "lineage.tmpl")
+	templateThemaCodec, _     = template.ParseFS(templates, "themacodec.tmpl")
 	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
+	templateTSType, _         = template.ParseFS(templates, "tstype.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -27,6 +31,41 @@ var (
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
+)
+
+var (
+	// GoTypeString is a CustomMetadataFieldGoType for "string" go types
+	GoTypeString = CustomMetadataFieldGoType{
+		GoType: "string",
+		SetFuncTemplate: func(inputVarName string, setToVarName string) string {
+			return fmt.Sprintf("%s = %s", setToVarName, inputVarName)
+		},
+		GetFuncTemplate: func(varName string) string {
+			return fmt.Sprintf("return %s", varName)
+		},
+	}
+	// GoTypeInt is a CustomMetadataFieldGoType for "int" go types
+	GoTypeInt = CustomMetadataFieldGoType{
+		GoType: "int",
+		SetFuncTemplate: func(inputVarName string, setToVarName string) string {
+			return fmt.Sprintf("%s = strconv.Itoa(%s)", setToVarName, inputVarName)
+		},
+		GetFuncTemplate: func(varName string) string {
+			return fmt.Sprintf("i, _ := strconv.Atoi(%s)\nreturn i", varName)
+		},
+		AdditionalImports: []string{"strconv"},
+	}
+	// GoTypeTime is a CustomMetadataFieldGoType for "time.Time" go types
+	GoTypeTime = CustomMetadataFieldGoType{
+		GoType: "time.Time",
+		SetFuncTemplate: func(inputVarName string, setToVarName string) string {
+			return fmt.Sprintf("%s = %s.Format(time.RFC3339)", setToVarName, inputVarName)
+		},
+		GetFuncTemplate: func(varName string) string {
+			return fmt.Sprintf("parsed, _ := time.Parse(%s, time.RFC3339)\nreturn parsed", varName)
+		},
+		AdditionalImports: []string{"time"},
+	}
 )
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
@@ -52,6 +91,16 @@ func WriteResourceObject(metadata ResourceObjectTemplateMetadata, out io.Writer)
 	return templateResourceObject.Execute(out, metadata)
 }
 
+type ResourceTSTemplateMetadata struct {
+	TypeName     string
+	FilePrefix   string
+	Subresources []SubresourceMetadata
+}
+
+func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) error {
+	return templateTSType.Execute(out, metadata)
+}
+
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
 	Package string
@@ -65,6 +114,16 @@ type SchemaMetadata struct {
 // WriteSchema executes the Resource Schema template, and writes out the generated go code to out
 func WriteSchema(metadata SchemaMetadata, out io.Writer) error {
 	return templateSchema.Execute(out, metadata)
+}
+
+// WriteCodec executes the Generic Resource Codec template, and writes out the generated go code to out
+func WriteCodec(metadata SchemaMetadata, out io.Writer) error {
+	return templateCodec.Execute(out, metadata)
+}
+
+// WriteThemaCodec executes the Thema-specific Codec template, and writes out the generated go code to out
+func WriteThemaCodec(metadata ResourceObjectTemplateMetadata, out io.Writer) error {
+	return templateThemaCodec.Execute(out, metadata)
 }
 
 // LineageMetadata is the metadata required by the lineage go code template
@@ -87,6 +146,24 @@ func WriteLineageGo(metadata LineageMetadata, out io.Writer) error {
 type ObjectMetadataField struct {
 	JSONName  string
 	FieldName string
+	GoType    CustomMetadataFieldGoType
+}
+
+// CustomMetadataFieldGoType is a struct that contains information and codegen functions for a Go type which needs
+// setters and getters in a resource.Object implementation
+// TODO: do we need the approach to be this generic/is there a less-confusing way to implement this?
+type CustomMetadataFieldGoType struct {
+	// GoType is the type string (ex. "string", "time.Time")
+	GoType string
+	// SetFuncTemplate should return a go template string that sets the value.
+	// inputVarName is the name of the variable in the SetX function (which has type of GoType),
+	// and setToVarName is the name of the string-type variable which it must be set to
+	SetFuncTemplate func(inputVarName string, setToVarName string) string
+	// GetFuncTemplate should return a go template string that gets the value as the appropriate go type.
+	// fromStringVarName is the string-type variable name which the value is currently stored as
+	GetFuncTemplate func(fromStringVarName string) string
+	// AdditionalImports is a list of any additional imports needed for the Get/Set functions or type (such as "time")
+	AdditionalImports []string
 }
 
 // WrappedTypeMetadata is the metadata required by the wrappedtype go code template

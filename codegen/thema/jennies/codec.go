@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
@@ -46,16 +47,16 @@ var (
 	_ = json.Unmarshal(commonMetadataBytes, &commonMetadataFieldMap)
 )
 
-type ResourceObjectGenerator struct {
+type CodecGenerator struct {
 	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
 	OnlyUseCurrentVersion bool
 }
 
-func (*ResourceObjectGenerator) JennyName() string {
-	return "ResourceObjectGenerator"
+func (*CodecGenerator) JennyName() string {
+	return "ThemaCodecGenerator"
 }
 
-func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
+func (r *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if r.OnlyUseCurrentVersion {
 		ver := kind.Version(kind.Properties().Current)
@@ -67,7 +68,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 			return nil, err
 		}
 		files = append(files, codejen.File{
-			RelativePath: fmt.Sprintf("%s/%s_object_gen.go", kind.Properties().MachineName, kind.Properties().MachineName),
+			RelativePath: fmt.Sprintf("%s/%s_codec_gen.go", kind.Properties().MachineName, kind.Properties().MachineName),
 			Data:         b,
 			From:         []codejen.NamedJenny{r},
 		})
@@ -75,12 +76,12 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 		allVersions := kind.Versions()
 		for i := 0; i < len(allVersions); i++ {
 			ver := allVersions[i]
-			b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
+			b, err := r.generateObjectFile(kind, &ver, jennies.ToPackageName(ver.Version))
 			if err != nil {
 				return nil, err
 			}
 			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.go", kind.Properties().MachineName, ToPackageName(ver.Version), kind.Properties().MachineName),
+				RelativePath: fmt.Sprintf("%s/%s/%s_codec_gen.go", kind.Properties().MachineName, jennies.ToPackageName(ver.Version), kind.Properties().MachineName),
 				Data:         b,
 				From:         []codejen.NamedJenny{r},
 			})
@@ -89,7 +90,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
+func (*CodecGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
 	customMetadataFields := make([]templates.ObjectMetadataField, 0)
 	mdv := version.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
 	if mdv.Exists() {
@@ -128,7 +129,7 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 		Package:              pkg,
 		TypeName:             meta.Kind,
 		SpecTypeName:         "Spec",
-		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object
+		ObjectTypeName:       meta.Kind,
 		ObjectShortName:      "o",
 		Subresources:         make([]templates.SubresourceMetadata, 0),
 		CustomMetadataFields: customMetadataFields,
@@ -147,7 +148,7 @@ func (*ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *c
 		})
 	}
 	b := bytes.Buffer{}
-	err = templates.WriteResourceObject(md, &b)
+	err = templates.WriteThemaCodec(md, &b)
 	if err != nil {
 		return nil, err
 	}

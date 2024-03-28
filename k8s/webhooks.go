@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -25,9 +26,9 @@ type WebhookServerConfig struct {
 	// TLSConfig contains cert information for running the HTTPS server
 	TLSConfig TLSConfig
 	// ValidatingControllers is a map of schemas to their corresponding ValidatingAdmissionController.
-	ValidatingControllers map[resource.Schema]resource.ValidatingAdmissionController
+	ValidatingControllers map[*resource.Kind]resource.ValidatingAdmissionController
 	// MutatingControllers is a map of schemas to their corresponding MutatingAdmissionController.
-	MutatingControllers map[resource.Schema]resource.MutatingAdmissionController
+	MutatingControllers map[*resource.Kind]resource.MutatingAdmissionController
 	// KindConverters is a map of GroupKind to a Converter which can parse any valid version of the kind
 	// and return any valid version of the kind.
 	KindConverters map[metav1.GroupKind]Converter
@@ -88,11 +89,11 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	}
 
 	for sch, controller := range config.ValidatingControllers {
-		ws.AddValidatingAdmissionController(controller, sch)
+		ws.AddValidatingAdmissionController(controller, *sch)
 	}
 
 	for sch, controller := range config.MutatingControllers {
-		ws.AddMutatingAdmissionController(controller, sch)
+		ws.AddMutatingAdmissionController(controller, *sch)
 	}
 
 	for gv, conv := range config.KindConverters {
@@ -105,12 +106,12 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 // AddValidatingAdmissionController adds a resource.ValidatingAdmissionController to the WebhookServer, associated with a given schema.
 // The schema association associates all incoming requests of the same group and kind of the schema to the schema's ZeroValue object.
 // If a ValidatingAdmissionController already exists for the provided schema, the one provided in this call will be used instead of the extant one.
-func (w *WebhookServer) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, schema resource.Schema) {
+func (w *WebhookServer) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, kind resource.Kind) {
 	if w.validatingControllers == nil {
 		w.validatingControllers = make(map[string]validatingAdmissionControllerTuple)
 	}
-	w.validatingControllers[gk(schema.Group(), schema.Kind())] = validatingAdmissionControllerTuple{
-		schema:     schema,
+	w.validatingControllers[gk(kind.Group(), kind.Kind())] = validatingAdmissionControllerTuple{
+		schema:     kind,
 		controller: controller,
 	}
 }
@@ -118,12 +119,12 @@ func (w *WebhookServer) AddValidatingAdmissionController(controller resource.Val
 // AddMutatingAdmissionController adds a resource.MutatingAdmissionController to the WebhookServer, associated with a given schema.
 // The schema association associates all incoming requests of the same group and kind of the schema to the schema's ZeroValue object.
 // If a MutatingAdmissionController already exists for the provided schema, the one provided in this call will be used instead of the extant one.
-func (w *WebhookServer) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, schema resource.Schema) {
+func (w *WebhookServer) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, kind resource.Kind) {
 	if w.mutatingControllers == nil {
 		w.mutatingControllers = make(map[string]mutatingAdmissionControllerTuple)
 	}
-	w.mutatingControllers[gk(schema.Group(), schema.Kind())] = mutatingAdmissionControllerTuple{
-		schema:     schema,
+	w.mutatingControllers[gk(kind.Group(), kind.Kind())] = mutatingAdmissionControllerTuple{
+		schema:     kind,
 		controller: controller,
 	}
 }
@@ -194,14 +195,15 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	}
 
 	// Look up the schema and controller
-	var schema resource.Schema
+	var schema resource.Kind
 	var controller resource.ValidatingAdmissionController
 	if tpl, ok := w.validatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
 	} else if w.DefaultValidatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Codecs = map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()}
 		controller = w.DefaultValidatingController
 	}
 
@@ -270,14 +272,15 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	}
 
 	// Look up the schema and controller
-	var schema resource.Schema
+	var schema resource.Kind
 	var controller resource.MutatingAdmissionController
 	if tpl, ok := w.mutatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
 	} else if w.DefaultMutatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.SimpleObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Codecs = map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()}
 		controller = w.DefaultMutatingController
 	}
 
@@ -306,7 +309,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 		pt := admission.PatchTypeJSONPatch
 		adResp.PatchType = &pt
 		// Re-use `err` here, we handle it below
-		adResp.Patch, err = w.generatePatch(admRev, mResp.UpdatedObject)
+		adResp.Patch, err = w.generatePatch(admRev, mResp.UpdatedObject, schema.Codec(resource.KindEncodingJSON))
 	}
 	if err != nil {
 		addAdmissionError(&adResp, err)
@@ -412,15 +415,16 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 	writer.Write(resp)
 }
 
-func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredObject resource.Object) ([]byte, error) {
+func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredObject resource.Object, codec resource.Codec) ([]byte, error) {
 	// We need to generate a list of JSONPatch operations for updating the existing object to the provided one.
 	// To start, we need to translate the provided object into its kubernetes bytes representation
-	newObjBytes, err := marshalJSON(alteredObject, nil, ClientConfig{})
+	buf := &bytes.Buffer{}
+	err := codec.Write(buf, alteredObject)
 	if err != nil {
 		return nil, err
 	}
 	// Now, we generate a patch using the bytes provided to us in the admission request
-	patch, err := jsonpatch.CreatePatch(admRev.Request.Object.Raw, newObjBytes)
+	patch, err := jsonpatch.CreatePatch(admRev.Request.Object.Raw, buf.Bytes())
 	if err != nil {
 		return nil, err
 	}
@@ -428,12 +432,12 @@ func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredOb
 }
 
 type validatingAdmissionControllerTuple struct {
-	schema     resource.Schema
+	schema     resource.Kind
 	controller resource.ValidatingAdmissionController
 }
 
 type mutatingAdmissionControllerTuple struct {
-	schema     resource.Schema
+	schema     resource.Kind
 	controller resource.MutatingAdmissionController
 }
 

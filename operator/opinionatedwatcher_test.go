@@ -7,12 +7,13 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestNewOpinionatedWatcher(t *testing.T) {
-	ex := &resource.SimpleObject[string]{}
+	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex, resource.WithKind("my-crd"))
 	client := &mockPatchClient{}
 
@@ -60,7 +61,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 	}
 
 	t.Run("nil watcher", func(t *testing.T) {
-		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.SimpleObject[string]{}), &mockPatchClient{})
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}), &mockPatchClient{})
 		assert.Nil(t, err)
 		w.Wrap(nil, false)
 		assert.Nil(t, w.AddFunc)
@@ -70,7 +71,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 	})
 
 	t.Run("syncToAdd=false", func(t *testing.T) {
-		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.SimpleObject[string]{}), &mockPatchClient{})
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}), &mockPatchClient{})
 		assert.Nil(t, err)
 		w.Wrap(simple, false)
 		assert.NotNil(t, w.AddFunc)
@@ -80,7 +81,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 	})
 
 	t.Run("syncToAdd=true", func(t *testing.T) {
-		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.SimpleObject[string]{}), &mockPatchClient{})
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}), &mockPatchClient{})
 		assert.Nil(t, err)
 		w.Wrap(simple, true)
 		assert.NotNil(t, w.AddFunc)
@@ -91,7 +92,7 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 }
 
 func TestOpinionatedWatcher_Add(t *testing.T) {
-	ex := &resource.SimpleObject[string]{}
+	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex)
 	client := &mockPatchClient{}
 	o, err := NewOpinionatedWatcher(schema, client)
@@ -104,10 +105,9 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 
 	t.Run("deleted, pending us, patch error", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
 		patchErr := fmt.Errorf("I AM ERROR")
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 			assert.Equal(t, resource.PatchOpRemove, request.Operations[0].Operation)
@@ -119,10 +119,9 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 
 	t.Run("deleted, pending us, delete error", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 			assert.Fail(t, "patch should not be called if delete call fails")
 			return nil
@@ -138,10 +137,9 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 
 	t.Run("deleted, pending us, success", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 			return nil
 		}
@@ -155,10 +153,9 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 
 	t.Run("deleted, not waiting on us", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer + "_not"}
-		obj.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer + "_not"})
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 			assert.Fail(t, "patch should not be called, our finalizer isn't in the list")
 			return nil
@@ -173,9 +170,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 
 	t.Run("sync", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		obj.SetFinalizers([]string{o.finalizer})
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
 			assert.Fail(t, "patch should not be called, our finalizer isn't in the list")
 			return nil
@@ -239,7 +234,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 }
 
 func TestOpinionatedWatcher_Update(t *testing.T) {
-	ex := &resource.SimpleObject[string]{}
+	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex)
 	client := &mockPatchClient{}
 	o, err := NewOpinionatedWatcher(schema, client)
@@ -266,10 +261,8 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		}
 		old := schema.ZeroValue()
 		new := schema.ZeroValue()
-		md := old.CommonMetadata()
-		md.Generation = 1
-		old.SetCommonMetadata(md)
-		new.SetCommonMetadata(md)
+		old.SetGeneration(1)
+		new.SetGeneration(1)
 		err := o.Update(context.TODO(), old, new)
 		assert.Nil(t, err)
 	})
@@ -284,20 +277,18 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			return nil
 		}
 		new := schema.ZeroValue()
-		md := new.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer + "_not"}
-		new.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		new.SetDeletionTimestamp(&dt)
+		new.SetFinalizers([]string{o.finalizer + "_not"})
 		err := o.Update(context.TODO(), schema.ZeroValue(), new)
 		assert.Nil(t, err)
 	})
 
 	t.Run("delete, delete error", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
 		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
 			assert.Fail(t, "update should not be called")
 			return nil
@@ -317,10 +308,9 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 
 	t.Run("delete, patch error", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.DeletionTimestamp = &time.Time{}
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
 		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
 			assert.Fail(t, "update should not be called")
 			return nil
@@ -340,9 +330,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 
 	t.Run("finalizer update event", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		obj.SetFinalizers([]string{o.finalizer})
 
 		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
 			assert.Fail(t, "update should not be called")
@@ -359,11 +347,9 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 
 	t.Run("update", func(t *testing.T) {
 		obj := schema.ZeroValue()
-		md := obj.CommonMetadata()
-		md.Finalizers = []string{o.finalizer}
-		obj.SetCommonMetadata(md)
+		obj.SetFinalizers([]string{o.finalizer})
 		obj2 := schema.ZeroValue()
-		obj2.SetCommonMetadata(md)
+		obj2.SetFinalizers([]string{o.finalizer})
 
 		updateErr := fmt.Errorf("SOY ERROR")
 		o.UpdateFunc = func(c context.Context, old resource.Object, new resource.Object) error {
@@ -386,7 +372,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 }
 
 func TestOpinionatedWatcher_Delete(t *testing.T) {
-	ex := &resource.SimpleObject[string]{}
+	ex := &resource.TypedSpecObject[string]{}
 	schema := resource.NewSimpleSchema("group", "version", ex)
 	client := &mockPatchClient{}
 	o, err := NewOpinionatedWatcher(schema, client)

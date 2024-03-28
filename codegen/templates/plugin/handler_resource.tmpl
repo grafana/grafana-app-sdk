@@ -17,10 +17,10 @@ import (
 )
 
 type {{.Kind}}Service interface {
-	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedStoreList[*{{.MachineName}}.Object], error)
-	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.Object, error)
-	Add(ctx context.Context, obj *{{.MachineName}}.Object) (*{{.MachineName}}.Object, error)
-	Update(ctx context.Context, id resource.Identifier, obj *{{.MachineName}}.Object) (*{{.MachineName}}.Object, error)
+	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
+	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.{{.Kind}}, error)
+	Add(ctx context.Context, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
+	Update(ctx context.Context, id resource.Identifier, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
 	Delete(ctx context.Context, id resource.Identifier) error
 }
 
@@ -70,7 +70,7 @@ func (p *Plugin) handle{{.Kind}}Create(ctx context.Context, req router.JSONReque
 		return nil, plugin.NewError(http.StatusBadRequest, err.Error())
 	}
 
-	t := {{.MachineName}}.Object{}
+	t := {{.MachineName}}.{{.Kind}}{}
 	// TODO: this should eventually be unmarshalled via a method in the Object itself, so Thema can handle it
 	err = json.Unmarshal(body, &t)
 	if err != nil {
@@ -82,7 +82,7 @@ func (p *Plugin) handle{{.Kind}}Create(ctx context.Context, req router.JSONReque
 	    log.DefaultLogger.Error("Error getting {{.Kind}}Service: " + err.Error())
         return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
     }
-	t.StaticMeta.Namespace = p.namespace
+	t.SetNamespace(p.namespace)
 	obj, err := svc.Add(ctx, &t)
 	if err != nil {
 		if e, ok := err.(errWithStatusCode); ok {
@@ -102,7 +102,7 @@ func (p *Plugin) handle{{.Kind}}Update(ctx context.Context, req router.JSONReque
 		return nil, plugin.NewError(http.StatusBadRequest, err.Error())
 	}
 
-	t := {{.MachineName}}.Object{}
+	t := {{.MachineName}}.{{.Kind}}{}
 	// TODO: this should eventually be unmarshalled via a method in the Object itself, so Thema can handle it
 	err = json.Unmarshal(body, &t)
 	if err != nil {

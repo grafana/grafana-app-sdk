@@ -5,124 +5,293 @@
 package customkind
 
 import (
-	"encoding/json"
-
+	"fmt"
 	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
+	"time"
 )
 
-// ObjectUnmarshalFunc is used to override the default Object.Unmarshal behavior, if desired.
-var ObjectUnmarshalFunc func(into *Object, objBytes resource.ObjectBytes, config resource.UnmarshalConfig) error
-
-// Object is a resource.Object-implementing wrapper for CustomKind.
-// It contains static and object metadata, as well as the CustomKind struct itself.
-type Object struct {
-	// StaticMeta contains the static metadata (name, namespace, group, version, kind) that uniquely identifies this resource
-	// it is distinct from the Metadata field, which contains all other metadata for the object.
-	// StaticMeta should not be mutated on an existing object (as this will then cause it to indicate a new object instead).
-	// TODO: this may end up merged with Metadata in the future
-	StaticMeta resource.StaticMetadata `json:"staticMetadata"`
-	// Metadata contains all the common and kind-specific metadata for the object.
-	Metadata Metadata `json:"metadata"`
-	// Spec contains the spec contents for the object
-	Spec   Spec   `json:"spec"`
-	Status Status `json:"status"`
+// +k8s:openapi-gen=true
+type CustomKind struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata"`
+	Spec              Spec   `json:"spec"`
+	Status            Status `json:"status"`
 }
 
-// CommonMetadata returns the resource.CommonMetadata associated with this Object.
-// The CommonMetadata can be overwritten with a SetCommonMetadata call,
-// or individual parts changed directly from the Metadata field.
-func (o *Object) CommonMetadata() resource.CommonMetadata {
-	return resource.CommonMetadata{
-		UID:               o.Metadata.Uid,
-		ResourceVersion:   o.Metadata.ResourceVersion,
-		Generation:        o.Metadata.Generation,
-		Labels:            o.Metadata.Labels,
-		CreationTimestamp: o.Metadata.CreationTimestamp,
-		UpdateTimestamp:   o.Metadata.UpdateTimestamp,
-		DeletionTimestamp: o.Metadata.DeletionTimestamp,
-		CreatedBy:         o.Metadata.CreatedBy,
-		UpdatedBy:         o.Metadata.UpdatedBy,
-		Finalizers:        o.Metadata.Finalizers,
-		ExtraFields:       o.Metadata.ExtraFields,
-	}
-}
-
-// SetCommonMetadata overwrites the resource.CommonMetadata associated with this Object
-// with the provided CommonMetadata.
-// In practice, this overwrites the Metadata fields that correlate to the CommonMetadata fields with the new values provided.
-func (o *Object) SetCommonMetadata(metadata resource.CommonMetadata) {
-	o.Metadata.Uid = metadata.UID
-	o.Metadata.ResourceVersion = metadata.ResourceVersion
-	o.Metadata.Generation = metadata.Generation
-	o.Metadata.Labels = metadata.Labels
-	o.Metadata.CreationTimestamp = metadata.CreationTimestamp
-	o.Metadata.UpdateTimestamp = metadata.UpdateTimestamp
-	o.Metadata.DeletionTimestamp = metadata.DeletionTimestamp
-	o.Metadata.CreatedBy = metadata.CreatedBy
-	o.Metadata.UpdatedBy = metadata.UpdatedBy
-	o.Metadata.Finalizers = metadata.Finalizers
-	o.Metadata.ExtraFields = metadata.ExtraFields
-}
-
-// StaticMetadata returns the resource.StaticMetadata associated with this Object.
-// The StaticMetadata can be overwritten with a SetStaticMetadata call,
-// or individual parts changed directly from the StaticMeta field.
-func (o *Object) StaticMetadata() resource.StaticMetadata {
-	return o.StaticMeta
-}
-
-// SetStaticMetadata overwrites the resource.StaticMetadata associated with this Object
-// with the provided StaticMetadata.
-func (o *Object) SetStaticMetadata(metadata resource.StaticMetadata) {
-	o.StaticMeta = metadata
-}
-
-func (o *Object) CustomMetadata() resource.CustomMetadata {
-	return resource.SimpleCustomMetadata{
-		"customMetadataField": o.Metadata.CustomMetadataField,
-		"otherMetadataField":  o.Metadata.OtherMetadataField,
-	}
-}
-
-// SpecObject returns the actual "schema" CustomKind object, which holds the main body of data.
-func (o *Object) SpecObject() any {
+func (o *CustomKind) GetSpec() any {
 	return o.Spec
 }
 
-// Subresources returns a map of subresource name(s) to the object value for that subresource.
-func (o *Object) Subresources() map[string]any {
+func (o *CustomKind) SetSpec(spec any) error {
+	cast, ok := spec.(Spec)
+	if !ok {
+		return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
+	}
+	o.Spec = cast
+	return nil
+}
+
+func (o *CustomKind) GetSubresources() map[string]any {
 	return map[string]any{
 		"status": o.Status,
 	}
 }
 
-// Copy returns a full copy of the Object with all its data
-func (o *Object) Copy() resource.Object {
+func (o *CustomKind) GetSubresource(name string) (any, bool) {
+	switch name {
+	case "status":
+		return o.Status, true
+	default:
+		return nil, false
+	}
+}
+
+func (o *CustomKind) SetSubresource(name string, value any) error {
+	switch name {
+	case "status":
+		cast, ok := value.(Status)
+		if !ok {
+			return fmt.Errorf("cannot set status type %#v, not of type Status", value)
+		}
+		o.Status = cast
+		return nil
+	default:
+		return fmt.Errorf("subresource '%s' does not exist", name)
+	}
+}
+
+func (o *CustomKind) GetStaticMetadata() resource.StaticMetadata {
+	return resource.StaticMetadata{
+		Name:      o.ObjectMeta.Name,
+		Namespace: o.ObjectMeta.Namespace,
+		Group:     o.GroupVersionKind().Group,
+		Version:   o.GroupVersionKind().Version,
+		Kind:      o.GroupVersionKind().Kind,
+	}
+}
+
+func (o *CustomKind) SetStaticMetadata(metadata resource.StaticMetadata) {
+	o.Name = metadata.Name
+	o.Namespace = metadata.Namespace
+	o.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   metadata.Group,
+		Version: metadata.Version,
+		Kind:    metadata.Kind,
+	})
+}
+
+func (o *CustomKind) GetCommonMetadata() resource.CommonMetadata {
+	dt := o.DeletionTimestamp
+	var deletionTimestamp *time.Time
+	if dt != nil {
+		deletionTimestamp = &dt.Time
+	}
+	// Legacy ExtraFields support
+	extraFields := make(map[string]any)
+	if o.Annotations != nil {
+		extraFields["annotations"] = o.Annotations
+	}
+	if o.ManagedFields != nil {
+		extraFields["managedFields"] = o.ManagedFields
+	}
+	if o.OwnerReferences != nil {
+		extraFields["ownerReferences"] = o.OwnerReferences
+	}
+	return resource.CommonMetadata{
+		UID:               string(o.UID),
+		ResourceVersion:   o.ResourceVersion,
+		Generation:        o.Generation,
+		Labels:            o.Labels,
+		CreationTimestamp: o.CreationTimestamp.Time,
+		DeletionTimestamp: deletionTimestamp,
+		Finalizers:        o.Finalizers,
+		UpdateTimestamp:   o.GetUpdateTimestamp(),
+		CreatedBy:         o.GetCreatedBy(),
+		UpdatedBy:         o.GetUpdatedBy(),
+		ExtraFields:       extraFields,
+	}
+}
+
+func (o *CustomKind) SetCommonMetadata(metadata resource.CommonMetadata) {
+	o.UID = types.UID(metadata.UID)
+	o.ResourceVersion = metadata.ResourceVersion
+	o.Generation = metadata.Generation
+	o.Labels = metadata.Labels
+	o.CreationTimestamp = metav1.NewTime(metadata.CreationTimestamp)
+	if metadata.DeletionTimestamp != nil {
+		dt := metav1.NewTime(*metadata.DeletionTimestamp)
+		o.DeletionTimestamp = &dt
+	} else {
+		o.DeletionTimestamp = nil
+	}
+	o.Finalizers = metadata.Finalizers
+	if o.Annotations == nil {
+		o.Annotations = make(map[string]string)
+	}
+	if !metadata.UpdateTimestamp.IsZero() {
+		o.SetUpdateTimestamp(metadata.UpdateTimestamp)
+	}
+	if metadata.CreatedBy != "" {
+		o.SetCreatedBy(metadata.CreatedBy)
+	}
+	if metadata.UpdatedBy != "" {
+		o.SetUpdatedBy(metadata.UpdatedBy)
+	}
+	// Legacy support for setting Annotations, ManagedFields, and OwnerReferences via ExtraFields
+	if metadata.ExtraFields != nil {
+		if annotations, ok := metadata.ExtraFields["annotations"]; ok {
+			if cast, ok := annotations.(map[string]string); ok {
+				o.Annotations = cast
+			}
+		}
+		if managedFields, ok := metadata.ExtraFields["managedFields"]; ok {
+			if cast, ok := managedFields.([]metav1.ManagedFieldsEntry); ok {
+				o.ManagedFields = cast
+			}
+		}
+		if ownerReferences, ok := metadata.ExtraFields["ownerReferences"]; ok {
+			if cast, ok := ownerReferences.([]metav1.OwnerReference); ok {
+				o.OwnerReferences = cast
+			}
+		}
+	}
+}
+
+func (o *CustomKind) GetCreatedBy() string {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
+}
+
+func (o *CustomKind) SetCreatedBy(createdBy string) {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
+}
+
+func (o *CustomKind) GetCustomMetadataField() string {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	return o.ObjectMeta.Annotations["grafana.com/customMetadataField"]
+}
+
+func (o *CustomKind) SetCustomMetadataField(customMetadataField string) {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	o.ObjectMeta.Annotations["grafana.com/customMetadataField"] = customMetadataField
+}
+
+func (o *CustomKind) GetOtherMetadataField() string {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	return o.ObjectMeta.Annotations["grafana.com/otherMetadataField"]
+}
+
+func (o *CustomKind) SetOtherMetadataField(otherMetadataField string) {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	o.ObjectMeta.Annotations["grafana.com/otherMetadataField"] = otherMetadataField
+}
+
+func (o *CustomKind) GetUpdateTimestamp() time.Time {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	parsed, _ := time.Parse(o.ObjectMeta.Annotations["grafana.com/updateTimestamp"], time.RFC3339)
+	return parsed
+}
+
+func (o *CustomKind) SetUpdateTimestamp(updateTimestamp time.Time) {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	o.ObjectMeta.Annotations["grafana.com/updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
+}
+
+func (o *CustomKind) GetUpdatedBy() string {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
+}
+
+func (o *CustomKind) SetUpdatedBy(updatedBy string) {
+	if o.ObjectMeta.Annotations == nil {
+		o.ObjectMeta.Annotations = make(map[string]string)
+	}
+
+	o.ObjectMeta.Annotations["grafana.com/updatedBy"] = updatedBy
+}
+
+func (o *CustomKind) Copy() resource.Object {
 	return resource.CopyObject(o)
 }
 
-// Unmarshal uses an internal bound Lineage to unmarshal the spec object and all provided subresources.
-// After unmarshaling, they will be available via the SpecObject() and Subresources() calls.
-// If the spec or any subresources cannot be unmarshaled, it will return an error.
-func (o *Object) Unmarshal(objBytes resource.ObjectBytes, config resource.UnmarshalConfig) error {
-	if ObjectUnmarshalFunc != nil {
-		return ObjectUnmarshalFunc(o, objBytes, config)
-	}
+func (o *CustomKind) DeepCopyObject() runtime.Object {
+	return o.Copy()
+}
 
-	// Attempt raw JSON unmarshal for each subresource
-	err := json.Unmarshal(objBytes.Spec, &o.Spec)
-	if err != nil {
-		return err
+// Interface compliance compile-time check
+var _ resource.Object = &CustomKind{}
+
+// +k8s:openapi-gen=true
+type CustomKindList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+	Items           []CustomKind `json:"items"`
+}
+
+func (o *CustomKindList) DeepCopyObject() runtime.Object {
+	return o.Copy()
+}
+
+func (o *CustomKindList) Copy() resource.ListObject {
+	cpy := &CustomKindList{
+		TypeMeta: o.TypeMeta,
+		Items:    make([]CustomKind, len(o.Items)),
 	}
-	err = json.Unmarshal(objBytes.Metadata, &o.Metadata)
-	if err != nil {
-		return err
-	}
-	if sr, ok := objBytes.Subresources["status"]; ok {
-		err = json.Unmarshal(sr, &o.Status)
-		if err != nil {
-			return err
+	o.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	for i := 0; i < len(o.Items); i++ {
+		if item, ok := o.Items[i].Copy().(*CustomKind); ok {
+			cpy.Items[i] = *item
 		}
 	}
-	return nil
+	return cpy
 }
+
+func (o *CustomKindList) GetItems() []resource.Object {
+	items := make([]resource.Object, len(o.Items))
+	for i := 0; i < len(o.Items); i++ {
+		items[i] = &o.Items[i]
+	}
+	return items
+}
+
+func (o *CustomKindList) SetItems(items []resource.Object) {
+	o.Items = make([]CustomKind, len(items))
+	for i := 0; i < len(items); i++ {
+		o.Items[i] = *items[i].(*CustomKind)
+	}
+}
+
+// Interface compliance compile-time check
+var _ resource.ListObject = &CustomKindList{}

@@ -33,7 +33,11 @@ func main() {
 	kubeConfig.APIPath = "/apis" // Don't know why this isn't set correctly by default, but it isn't
 
 	// Create a schema to use
-	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.SimpleObject[BasicModel]{}, resource.WithKind("BasicCustomResource"))
+	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, resource.WithKind("BasicCustomResource"))
+	kind := resource.Kind{
+		Schema: schema,
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
 
 	// Register the schema (if it doesn't already exist)
 	manager, err := k8s.NewManager(*kubeConfig)
@@ -52,7 +56,7 @@ func main() {
 
 	// Get a client for our schema
 	clientGenerator := k8s.NewClientRegistry(*kubeConfig, k8s.ClientConfig{})
-	client, err := clientGenerator.ClientFor(schema)
+	client, err := clientGenerator.ClientFor(kind)
 	if err != nil {
 		panic(fmt.Errorf("error creating client for schema: %w", err))
 	}
@@ -61,7 +65,7 @@ func main() {
 	watcher := &BasicWatcher{}
 
 	// Create the Informer
-	informer, err := operator.NewKubernetesBasedInformer(schema, client, "default")
+	informer, err := operator.NewKubernetesBasedInformer(kind, client, "default")
 	if err != nil {
 		panic(fmt.Errorf("unable to create informer: %w", err))
 	}
@@ -72,7 +76,7 @@ func main() {
 
 	// Add a basic error handler to log errors. The function is called if a watcher function returns an error.
 	// If no ErrorHandler is defined, the error is swallowed.
-	informer.ErrorHandler = func(err error) {
+	informer.ErrorHandler = func(ctx context.Context, err error) {
 		log.Printf("\u001B[0;31mERROR: %s\u001B[0m", err.Error())
 	}
 

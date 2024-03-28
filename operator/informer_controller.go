@@ -84,7 +84,7 @@ var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject res
 	if newAction != retryAction {
 		return false
 	}
-	if getGeneration(newObject) == getGeneration(retryObject) {
+	if newObject.GetGeneration() == retryObject.GetGeneration() {
 		return false
 	}
 	return true
@@ -310,8 +310,8 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 		}
 
 		// Metrics for the whole reconcile process
-		eventStart := c.startEvent(string(ResourceActionCreate), obj.StaticMetadata().Kind)
-		defer c.completeEvent(string(ResourceActionCreate), obj.StaticMetadata().Kind, eventStart)
+		eventStart := c.startEvent(string(ResourceActionCreate), obj.GetStaticMetadata().Kind)
+		defer c.completeEvent(string(ResourceActionCreate), obj.GetStaticMetadata().Kind, eventStart)
 
 		ctx, span := GetTracer().Start(ctx, "controller-event-add")
 		defer span.End()
@@ -324,7 +324,7 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 			c.dequeueIfRequired(retryKey, obj, ResourceActionCreate)
 
 			// Do the watcher's Add, check for error
-			c.wrapWatcherCall(string(ResourceActionCreate), obj.StaticMetadata().Kind, func() {
+			c.wrapWatcherCall(string(ResourceActionCreate), obj.GetStaticMetadata().Kind, func() {
 				err := watcher.Add(ctx, obj)
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
@@ -365,8 +365,8 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 		}
 
 		// Metrics for the whole reconcile process
-		eventStart := c.startEvent(string(ResourceActionUpdate), newObj.StaticMetadata().Kind)
-		defer c.completeEvent(string(ResourceActionUpdate), newObj.StaticMetadata().Kind, eventStart)
+		eventStart := c.startEvent(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind)
+		defer c.completeEvent(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind, eventStart)
 
 		ctx, span := GetTracer().Start(ctx, "controller-event-update")
 		defer span.End()
@@ -379,7 +379,7 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
 
 			// Do the watcher's Update, check for error
-			c.wrapWatcherCall(string(ResourceActionUpdate), newObj.StaticMetadata().Kind, func() {
+			c.wrapWatcherCall(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind, func() {
 				err := watcher.Update(ctx, oldObj, newObj)
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(ctx, err)
@@ -420,8 +420,8 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 		}
 
 		// Metrics for the whole reconcile process
-		eventStart := c.startEvent(string(ResourceActionDelete), obj.StaticMetadata().Kind)
-		defer c.completeEvent(string(ResourceActionDelete), obj.StaticMetadata().Kind, eventStart)
+		eventStart := c.startEvent(string(ResourceActionDelete), obj.GetStaticMetadata().Kind)
+		defer c.completeEvent(string(ResourceActionDelete), obj.GetStaticMetadata().Kind, eventStart)
 
 		ctx, span := GetTracer().Start(ctx, "controller-event-delete")
 		defer span.End()
@@ -433,11 +433,11 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Dequeue retries according to the RetryDequeuePolicy
 			c.dequeueIfRequired(retryKey, obj, ResourceActionDelete)
 
-			c.inflightActions.WithLabelValues(string(ResourceActionUpdate), obj.StaticMetadata().Kind).Inc()
-			defer c.inflightActions.WithLabelValues(string(ResourceActionUpdate), obj.StaticMetadata().Kind).Dec()
+			c.inflightActions.WithLabelValues(string(ResourceActionUpdate), obj.GetStaticMetadata().Kind).Inc()
+			defer c.inflightActions.WithLabelValues(string(ResourceActionUpdate), obj.GetStaticMetadata().Kind).Dec()
 
 			// Do the watcher's Delete, check for error
-			c.wrapWatcherCall(string(ResourceActionDelete), obj.StaticMetadata().Kind, func() {
+			c.wrapWatcherCall(string(ResourceActionDelete), obj.GetStaticMetadata().Kind, func() {
 				err := watcher.Delete(ctx, obj)
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
@@ -486,13 +486,13 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 	// Metrics for the reconcile action
 	action := ResourceActionFromReconcileAction(req.Action)
 	if c.inflightActions != nil {
-		c.inflightActions.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Inc()
-		defer c.inflightActions.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Dec()
+		c.inflightActions.WithLabelValues(string(action), req.Object.GetStaticMetadata().Kind).Inc()
+		defer c.inflightActions.WithLabelValues(string(action), req.Object.GetStaticMetadata().Kind).Dec()
 	}
 	if c.reconcilerLatency != nil {
 		start := time.Now()
 		defer func() {
-			c.reconcilerLatency.WithLabelValues(string(action), req.Object.StaticMetadata().Kind).Observe(time.Since(start).Seconds())
+			c.reconcilerLatency.WithLabelValues(string(action), req.Object.GetStaticMetadata().Kind).Observe(time.Since(start).Seconds())
 		}()
 	}
 
@@ -612,14 +612,14 @@ func (*InformerController) keyForWatcherEvent(resourceKind string, watcherIndex 
 	if obj == nil {
 		return fmt.Sprintf("%s:%d:nil:nil", resourceKind, watcherIndex)
 	}
-	return fmt.Sprintf("%s:%d:%s:%s", resourceKind, watcherIndex, obj.StaticMetadata().Namespace, obj.StaticMetadata().Name)
+	return fmt.Sprintf("%s:%d:%s:%s", resourceKind, watcherIndex, obj.GetNamespace(), obj.GetName())
 }
 
 func (*InformerController) keyForReconcilerEvent(resourceKind string, reconcilerIndex int, obj resource.Object) string {
 	if obj == nil {
 		return fmt.Sprintf("reconcile:%s:%d:nil:nil", resourceKind, reconcilerIndex)
 	}
-	return fmt.Sprintf("reconcile:%s:%d:%s:%s", resourceKind, reconcilerIndex, obj.StaticMetadata().Namespace, obj.StaticMetadata().Name)
+	return fmt.Sprintf("reconcile:%s:%d:%s:%s", resourceKind, reconcilerIndex, obj.GetNamespace(), obj.GetName())
 }
 
 func (c *InformerController) queueRetry(key string, err error, toRetry func() (*time.Duration, error), action ResourceAction, obj resource.Object) {

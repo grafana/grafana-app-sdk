@@ -13,18 +13,18 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type SchemaGenerator struct {
+type CodecGenerator struct {
 	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
 	OnlyUseCurrentVersion bool
 }
 
-func (*SchemaGenerator) JennyName() string {
-	return "SchemaGenerator"
+func (*CodecGenerator) JennyName() string {
+	return "CodecGenerator"
 }
 
-// Generate creates one or more schema go files for the provided Kind
+// Generate creates one or more codec go files for the provided Kind
 // nolint:dupl
-func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
+func (c *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	meta := kind.Properties()
 
 	if meta.APIResource.Scope != string(resource.NamespacedScope) && meta.APIResource.Scope != string(resource.ClusterScope) {
@@ -33,9 +33,9 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	}
 
 	files := make(codejen.Files, 0)
-	if s.OnlyUseCurrentVersion {
+	if c.OnlyUseCurrentVersion {
 		b := bytes.Buffer{}
-		err := templates.WriteSchema(templates.SchemaMetadata{
+		err := templates.WriteCodec(templates.SchemaMetadata{
 			Package: meta.MachineName,
 			Group:   meta.APIResource.Group,
 			Version: meta.Current,
@@ -52,13 +52,13 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: fmt.Sprintf("%s/%s_schema_gen.go", meta.MachineName, meta.MachineName),
-			From:         []codejen.NamedJenny{s},
+			RelativePath: fmt.Sprintf("%s/%s_codec_gen.go", meta.MachineName, meta.MachineName),
+			From:         []codejen.NamedJenny{c},
 		})
 	} else {
 		for _, ver := range kind.Versions() {
 			b := bytes.Buffer{}
-			err := templates.WriteSchema(templates.SchemaMetadata{
+			err := templates.WriteCodec(templates.SchemaMetadata{
 				Package: ToPackageName(ver.Version),
 				Group:   meta.APIResource.Group,
 				Version: ver.Version,
@@ -75,8 +75,8 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			}
 			files = append(files, codejen.File{
 				Data:         formatted,
-				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.MachineName, ToPackageName(ver.Version), meta.MachineName),
-				From:         []codejen.NamedJenny{s},
+				RelativePath: fmt.Sprintf("%s/%s/%s_codec_gen.go", meta.MachineName, ToPackageName(ver.Version), meta.MachineName),
+				From:         []codejen.NamedJenny{c},
 			})
 		}
 	}

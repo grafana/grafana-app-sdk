@@ -33,6 +33,9 @@ func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 		&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: !versioned,
 		},
+		&jennies.CodecGenerator{
+			OnlyUseCurrentVersion: !versioned,
+		},
 	)
 	return g
 }
@@ -84,6 +87,21 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool
 func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(&jennies.TypeScriptTypes{
+		GenerateOnlyCurrent: !versioned,
+	})
+	return g
+}
+
+// TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
+// The `versioned` parameter governs whether to generate all versions where codegen.frontend == true,
+// or just generate code for the current version.
+// If `versioned` is true, the paths to the generated files will include the version.
+func TypeScriptResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer(namerFunc)
+	g.Append(&jennies.TypeScriptTypes{
+		GenerateOnlyCurrent: !versioned,
+		Depth:               1,
+	}, &jennies.TypeScriptResourceTypes{
 		GenerateOnlyCurrent: !versioned,
 	})
 	return g

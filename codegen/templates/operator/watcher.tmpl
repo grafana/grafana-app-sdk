@@ -21,54 +21,54 @@ func New{{.Kind}}Watcher() (*{{.Kind}}Watcher, error) {
 	return &{{.Kind}}Watcher{}, nil
 }
 
-// Add handles add events for {{.MachineName}}.Object resources.
+// Add handles add events for {{.MachineName}}.{{.Kind}} resources.
 func (s *{{.Kind}}Watcher) Add(ctx context.Context, rObj resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-add")
 	defer span.End()
-    object, ok := rObj.(*{{.MachineName}}.Object)
+    object, ok := rObj.(*{{.MachineName}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
-            rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
+        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+            rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
     }
 
     // TODO
-    logging.FromContext(ctx).Debug("Added resource", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug("Added resource", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 
-// Update handles update events for {{.MachineName}}.Object resources.
+// Update handles update events for {{.MachineName}}.{{.Kind}} resources.
 func (s *{{.Kind}}Watcher) Update(ctx context.Context, rOld resource.Object, rNew resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-update")
 	defer span.End()
-    oldObject, ok := rOld.(*{{.MachineName}}.Object)
+    oldObject, ok := rOld.(*{{.MachineName}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
-            rOld.StaticMetadata().Name, rOld.StaticMetadata().Namespace, rOld.StaticMetadata().Kind)
+        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+            rOld.GetStaticMetadata().Name, rOld.GetStaticMetadata().Namespace, rOld.GetStaticMetadata().Kind)
     }
 
-    _, ok = rNew.(*{{.MachineName}}.Object)
+    _, ok = rNew.(*{{.MachineName}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
-            rNew.StaticMetadata().Name, rNew.StaticMetadata().Namespace, rNew.StaticMetadata().Kind)
+        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+            rNew.GetStaticMetadata().Name, rNew.GetStaticMetadata().Namespace, rNew.GetStaticMetadata().Kind)
     }
 
     // TODO
-    logging.FromContext(ctx).Debug("Updated resource", "name", oldObject.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug("Updated resource", "name", oldObject.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 
-// Delete handles delete events for {{.MachineName}}.Object resources.
+// Delete handles delete events for {{.MachineName}}.{{.Kind}} resources.
 func (s *{{.Kind}}Watcher) Delete(ctx context.Context, rObj resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-delete")
 	defer span.End()
-    object, ok := rObj.(*{{.MachineName}}.Object)
+    object, ok := rObj.(*{{.MachineName}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
-            rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
+        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+            rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
     }
 
     // TODO
-    logging.FromContext(ctx).Debug("Deleted resource", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug("Deleted resource", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 
@@ -77,13 +77,13 @@ func (s *{{.Kind}}Watcher) Delete(ctx context.Context, rObj resource.Object) err
 func (s *{{.Kind}}Watcher) Sync(ctx context.Context, rObj resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-sync")
 	defer span.End()
-    object, ok := rObj.(*{{.MachineName}}.Object)
+    object, ok := rObj.(*{{.MachineName}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.Object (name=%s, namespace=%s, kind=%s)",
-            rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
+        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+            rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
     }
 
     // TODO
-    logging.FromContext(ctx).Debug("Possible resource update", "name", object.StaticMetadata().Identifier().Name)
+    logging.FromContext(ctx).Debug("Possible resource update", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }

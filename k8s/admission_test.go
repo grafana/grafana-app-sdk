@@ -9,6 +9,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestNewOpinionatedMutatingAdmissionController(t *testing.T) {
@@ -48,23 +49,21 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-						},
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
 					},
 				},
 			},
 			expected: &resource.MutatingResponse{
 				UpdatedObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
-							UpdateTimestamp:   cTimestamp,
-							Labels: map[string]string{
-								versionLabel: "v1-0",
-							},
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy:       "me",
+							resource.AnnotationUpdateTimestamp: cTimestamp.Format(time.RFC3339),
+						},
+						Labels: map[string]string{
+							versionLabel: "v1-0",
 						},
 					},
 				},
@@ -80,27 +79,25 @@ func TestOpinionatedMutatingAdmissionController_Mutate(t *testing.T) {
 					Username: "you",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							Labels: map[string]string{
-								"foo": "bar",
-							},
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Labels: map[string]string{
+							"foo": "bar",
 						},
 					},
 				},
 			},
 			expected: &resource.MutatingResponse{
 				UpdatedObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							UpdateTimestamp:   now(),
-							UpdatedBy:         "you",
-							Labels: map[string]string{
-								"foo":        "bar",
-								versionLabel: "v1-1",
-							},
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationUpdatedBy:       "you",
+							resource.AnnotationUpdateTimestamp: cTimestamp.Format(time.RFC3339),
+						},
+						Labels: map[string]string{
+							"foo":        "bar",
+							versionLabel: "v1-1",
 						},
 					},
 				},
@@ -156,10 +153,10 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "someone",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "someone",
 						},
 					},
 				},
@@ -176,11 +173,11 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
-							UpdatedBy:         "someone else",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
+							resource.AnnotationUpdatedBy: "someone else",
 						},
 					},
 				},
@@ -197,10 +194,10 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							UpdateTimestamp:   time.Now(),
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationUpdateTimestamp: time.Now().Format(time.RFC3339),
 						},
 					},
 				},
@@ -219,10 +216,8 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-						},
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
 					},
 				},
 			},
@@ -240,10 +235,8 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-						},
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
 					},
 				},
 			},
@@ -259,18 +252,18 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "someone",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "someone",
 						},
 					},
 				},
 				OldObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
 						},
 					},
 				},
@@ -287,19 +280,19 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
-							UpdatedBy:         "someone else",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
+							resource.AnnotationUpdatedBy: "someone else",
 						},
 					},
 				},
 				OldObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
 						},
 					},
 				},
@@ -316,20 +309,20 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
-							UpdateTimestamp:   time.Now(),
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy:       "someone",
+							resource.AnnotationUpdateTimestamp: time.Now().Format(time.RFC3339),
 						},
 					},
 				},
 				OldObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							UpdateTimestamp:   time.Time{},
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy:       "someone",
+							resource.AnnotationUpdateTimestamp: time.Time{}.Format(time.RFC3339),
 						},
 					},
 				},
@@ -348,18 +341,18 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
 						},
 					},
 				},
 				OldObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
 						},
 					},
 				},
@@ -378,18 +371,18 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 					Username: "me",
 				},
 				Object: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
 						},
 					},
 				},
 				OldObject: &TestResourceObject{
-					Metadata: TestResourceObjectMetadata{
-						CommonMetadata: resource.CommonMetadata{
-							CreationTimestamp: cTimestamp,
-							CreatedBy:         "me",
+					ObjectMeta: metav1.ObjectMeta{
+						CreationTimestamp: metav1.NewTime(cTimestamp),
+						Annotations: map[string]string{
+							resource.AnnotationCreatedBy: "me",
 						},
 					},
 				},
@@ -403,6 +396,7 @@ func TestOpinionatedValidatingAdmissionController_Validate(t *testing.T) {
 			err := NewOpinionatedValidatingAdmissionController(&testValidatingAdmissionController{
 				ValidateFunc: test.validateFunc,
 			}).Validate(context.Background(), &test.request)
+			fmt.Println(err)
 			assert.Equal(t, test.expected, err)
 		})
 	}

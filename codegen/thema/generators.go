@@ -71,6 +71,9 @@ func ResourceGenerator() *codejen.JennyList[kindsys.Custom] {
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: true,
 		}, kindsysCustomToKind),
+		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&themajennies.CodecGenerator{
+			OnlyUseCurrentVersion: true,
+		}, kindsysCustomToKind),
 		&themajennies.LineageGenerator{},
 		&themajennies.CUEGenerator{},
 	)

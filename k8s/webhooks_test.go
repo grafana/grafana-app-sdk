@@ -68,11 +68,11 @@ func TestNewWebhookServer(t *testing.T) {
 			},
 			DefaultValidatingController: defVal,
 			DefaultMutatingController:   defMut,
-			ValidatingControllers: map[resource.Schema]resource.ValidatingAdmissionController{
-				testSchema: schVal,
+			ValidatingControllers: map[*resource.Kind]resource.ValidatingAdmissionController{
+				&testKind: schVal,
 			},
-			MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
-				testSchema: schMut,
+			MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+				&testKind: schMut,
 			},
 		})
 
@@ -81,13 +81,13 @@ func TestNewWebhookServer(t *testing.T) {
 		assert.Equal(t, defMut, srv.DefaultMutatingController)
 		assert.Equal(t, map[string]validatingAdmissionControllerTuple{
 			gk(testSchema.Group(), testSchema.Kind()): {
-				schema:     testSchema,
+				schema:     testKind,
 				controller: schVal,
 			},
 		}, srv.validatingControllers)
 		assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
 			gk(testSchema.Group(), testSchema.Kind()): {
-				schema:     testSchema,
+				schema:     testKind,
 				controller: schMut,
 			},
 		}, srv.mutatingControllers)
@@ -106,8 +106,14 @@ func TestWebhookServer_AddMutatingAdmissionController(t *testing.T) {
 	c1 := &testMutatingAdmissionController{}
 	c2 := &testMutatingAdmissionController{}
 	c3 := &testMutatingAdmissionController{}
-	sch1 := resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar"))
-	sch2 := resource.NewSimpleSchema("bar", "v1", &TestResourceObject{}, resource.WithKind("foo"))
+	sch1 := resource.Kind{
+		Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	sch2 := resource.Kind{
+		Schema: resource.NewSimpleSchema("bar", "v1", &TestResourceObject{}, resource.WithKind("foo")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
 
 	assert.Empty(t, srv.mutatingControllers)
 	srv.AddMutatingAdmissionController(c1, sch1)
@@ -148,8 +154,14 @@ func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
 	c1 := &testValidatingAdmissionController{}
 	c2 := &testValidatingAdmissionController{}
 	c3 := &testValidatingAdmissionController{}
-	sch1 := resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar"))
-	sch2 := resource.NewSimpleSchema("bar", "v1", &TestResourceObject{}, resource.WithKind("foo"))
+	sch1 := resource.Kind{
+		Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	sch2 := resource.Kind{
+		Schema: resource.NewSimpleSchema("bar", "v1", &TestResourceObject{}, resource.WithKind("foo")),
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
 
 	assert.Empty(t, srv.validatingControllers)
 	srv.AddValidatingAdmissionController(c1, sch1)
@@ -179,7 +191,8 @@ func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
 }
 
 var admissionRequestObject = &TestResourceObject{}
-var admissionRequestObjectBytes, _ = marshalJSON(admissionRequestObject, nil, ClientConfig{})
+var admissionRequestObjectBytes = &bytes.Buffer{}
+var _ = resource.NewJSONCodec().Write(admissionRequestObjectBytes, admissionRequestObject)
 var admissionRequestBytes = []byte(`{
 	"request": {
 		"uid": "foo",
@@ -188,7 +201,7 @@ var admissionRequestBytes = []byte(`{
 			"version": "v1",
 			"kind": "bar"
 		},
-		"object": ` + string(admissionRequestObjectBytes) + `
+		"object": ` + admissionRequestObjectBytes.String() + `
 	}
 }`)
 var admissionRequestBytesNoDefaults = []byte(`{
@@ -201,6 +214,7 @@ var admissionRequestBytesNoDefaults = []byte(`{
 		},
 		"object": {
 			"kind": "Test",
+			"apiVersion": "foo/v1",
 			"metadata": {
 				"creationTimestamp": "2023-07-06T20:49:10Z"
 			},
@@ -254,7 +268,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 				DefaultMutatingController: &testMutatingAdmissionController{
 					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 						obj := request.Object
-						cmd := obj.CommonMetadata()
+						cmd := obj.GetCommonMetadata()
 						cmd.CreatedBy = "me"
 						cmd.UpdatedBy = "you"
 						cmd.UpdateTimestamp = cmd.CreationTimestamp.UTC()
@@ -285,8 +299,11 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 						}, nil
 					},
 				},
-				MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
-					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testMutatingAdmissionController{
+				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testMutatingAdmissionController{
 						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 							return nil, NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 						},
@@ -306,8 +323,11 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 						return nil, NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 					},
 				},
-				MutatingControllers: map[resource.Schema]resource.MutatingAdmissionController{
-					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testMutatingAdmissionController{
+				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testMutatingAdmissionController{
 						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 							obj := request.Object.(*TestResourceObject)
 							obj.Spec.StringField = "foobar"
@@ -416,8 +436,11 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 						return NewAdmissionError(fmt.Errorf("I AM ERROR"), http.StatusConflict, "err_reason")
 					},
 				},
-				ValidatingControllers: map[resource.Schema]resource.ValidatingAdmissionController{
-					resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")): &testValidatingAdmissionController{
+				ValidatingControllers: map[*resource.Kind]resource.ValidatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testValidatingAdmissionController{
 						ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 							return nil
 						},

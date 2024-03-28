@@ -9,10 +9,26 @@ import (
 )
 
 // schema is unexported to prevent accidental overwrites
-var schema = resource.NewSimpleSchema("custom.ext.grafana.com", "v0-0", &Object{}, resource.WithKind("CustomKind"),
-	resource.WithPlural("customkinds"), resource.WithScope(resource.NamespacedScope))
+var (
+	kindSchema = resource.NewSimpleSchema("custom.ext.grafana.com", "v0-0", &CustomKind{}, resource.WithKind("CustomKind"),
+		resource.WithPlural("customkinds"), resource.WithScope(resource.NamespacedScope))
+	kind = resource.Kind{
+		Schema: kindSchema,
+		Codecs: map[resource.KindEncoding]resource.Codec{
+			resource.KindEncodingJSON: &JSONCodec{},
+		},
+	}
+)
+
+// Kind returns a resource.Kind for this Schema with a JSON codec
+func Kind() resource.Kind {
+	return kind
+}
 
 // Schema returns a resource.SimpleSchema representation of CustomKind
 func Schema() *resource.SimpleSchema {
-	return schema
+	return kindSchema
 }
+
+// Interface compliance checks
+var _ resource.Schema = kindSchema

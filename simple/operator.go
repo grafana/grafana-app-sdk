@@ -40,10 +40,10 @@ type WebhookConfig struct {
 	DefaultMutator resource.MutatingAdmissionController
 	// Validators is an optional map of schema => ValidatingAdmissionController to use for the schema on admission.
 	// This can be empty or nil and specific ValidatingAdmissionControllers can be set later with Operator.ValidateKind
-	Validators map[resource.Schema]resource.ValidatingAdmissionController
+	Validators map[*resource.Kind]resource.ValidatingAdmissionController
 	// Mutators is an optional map of schema => MutatingAdmissionController to use for the schema on admission.
 	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
-	Mutators map[resource.Schema]resource.MutatingAdmissionController
+	Mutators map[*resource.Kind]resource.MutatingAdmissionController
 	// Converters is an optional map of GroupKind => Converter to use for CRD version conversion requests.
 	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
 	Converters map[metav1.GroupKind]k8s.Converter
@@ -179,25 +179,26 @@ func (o *Operator) RegisterMetricsCollectors(collectors ...prometheus.Collector)
 
 // WatchKind will watch the specified kind (schema) with opinionated logic, passing the relevant events on to the SyncWatcher.
 // You can configure the query used for watching the kind using ListWatchOptions.
-func (o *Operator) WatchKind(schema resource.Schema, watcher SyncWatcher, options ListWatchOptions) error {
-	client, err := o.clientGen.ClientFor(schema)
+func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options ListWatchOptions) error {
+	client, err := o.clientGen.ClientFor(kind)
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(schema, client, options.Namespace, options.LabelFilters)
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, options.LabelFilters)
 	if err != nil {
 		return err
 	}
-	kindStr := o.label(schema, options)
+	inf.ErrorHandler = o.ErrorHandler
+	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
 		return err
 	}
-	ow, err := operator.NewOpinionatedWatcherWithFinalizer(schema, client, func(sch resource.Schema) string {
+	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, client, func(sch resource.Schema) string {
 		if o.Name != "" {
-			return fmt.Sprintf("%s-%s-finalizer", o.Name, schema.Plural())
+			return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
 		}
-		return fmt.Sprintf("%s-finalizer", schema.Plural())
+		return fmt.Sprintf("%s-finalizer", kind.Plural())
 	})
 	if err != nil {
 		return err
@@ -209,23 +210,24 @@ func (o *Operator) WatchKind(schema resource.Schema, watcher SyncWatcher, option
 
 // ReconcileKind will watch the specified kind (schema) with opinionated logic, passing the events on to the provided Reconciler.
 // You can configure the query used for watching the kind using ListWatchOptions.
-func (o *Operator) ReconcileKind(schema resource.Schema, reconciler operator.Reconciler, options ListWatchOptions) error {
-	client, err := o.clientGen.ClientFor(schema)
+func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconciler, options ListWatchOptions) error {
+	client, err := o.clientGen.ClientFor(kind)
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(schema, client, options.Namespace, options.LabelFilters)
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, options.LabelFilters)
 	if err != nil {
 		return err
 	}
-	kindStr := o.label(schema, options)
+	inf.ErrorHandler = o.ErrorHandler
+	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
 		return err
 	}
-	finalizer := fmt.Sprintf("%s-finalizer", schema.Plural())
+	finalizer := fmt.Sprintf("%s-finalizer", kind.Plural())
 	if o.Name != "" {
-		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, schema.Plural())
+		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
 	}
 	or, err := operator.NewOpinionatedReconciler(client, finalizer)
 	or.Reconciler = reconciler
@@ -237,21 +239,21 @@ func (o *Operator) ReconcileKind(schema resource.Schema, reconciler operator.Rec
 
 // ValidateKind provides a validation path for the provided kind (schema) in the validating webhook,
 // using the provided ValidatingAdmissionController for the validation logic.
-func (o *Operator) ValidateKind(schema resource.Schema, controller resource.ValidatingAdmissionController) error {
+func (o *Operator) ValidateKind(kind resource.Kind, controller resource.ValidatingAdmissionController) error {
 	if o.admission == nil {
 		return fmt.Errorf("webhooks are not enabled")
 	}
-	o.admission.AddValidatingAdmissionController(controller, schema)
+	o.admission.AddValidatingAdmissionController(controller, kind)
 	return nil
 }
 
 // MutateKind provides a mutation path for the provided kind (schema) in the mutating webhook,
 // using the provided MutatingAdmissionController for the mutation logic.
-func (o *Operator) MutateKind(schema resource.Schema, controller resource.MutatingAdmissionController) error {
+func (o *Operator) MutateKind(kind resource.Kind, controller resource.MutatingAdmissionController) error {
 	if o.admission == nil {
 		return fmt.Errorf("webhooks are not enabled")
 	}
-	o.admission.AddMutatingAdmissionController(controller, schema)
+	o.admission.AddMutatingAdmissionController(controller, kind)
 	return nil
 }
 

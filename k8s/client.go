@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 
@@ -17,6 +18,7 @@ import (
 type Client struct {
 	client *groupVersionClient
 	schema resource.Schema
+	codec  resource.Codec
 	config ClientConfig
 }
 
@@ -47,10 +49,10 @@ func DefaultClientConfig() ClientConfig {
 // For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
 func (c *Client) List(ctx context.Context, namespace string, options resource.ListOptions) (
 	resource.ListObject, error) {
-	into := listImpl{}
-	err := c.client.list(ctx, namespace, c.schema.Plural(), &into, options, func(bytes []byte) (resource.Object, error) {
+	into := resource.UntypedList{}
+	err := c.client.list(ctx, namespace, c.schema.Plural(), &into, options, func(raw []byte) (resource.Object, error) {
 		into := c.schema.ZeroValue()
-		err := rawToObject(bytes, into)
+		err := c.codec.Read(bytes.NewReader(raw), into)
 		return into, err
 	})
 	if err != nil {
@@ -67,9 +69,9 @@ func (c *Client) ListInto(ctx context.Context, namespace string, options resourc
 			resource.ClusterScope, namespace, resource.NamespaceAll)
 	}
 	return c.client.list(ctx, namespace, c.schema.Plural(), into, options,
-		func(bytes []byte) (resource.Object, error) {
+		func(raw []byte) (resource.Object, error) {
 			into := c.schema.ZeroValue()
-			err := rawToObject(bytes, into)
+			err := c.codec.Read(bytes.NewReader(raw), into)
 			return into, err
 		})
 }
@@ -90,7 +92,7 @@ func (c *Client) GetInto(ctx context.Context, identifier resource.Identifier, in
 	if into == nil {
 		return fmt.Errorf("into cannot be nil")
 	}
-	return c.client.get(ctx, identifier, c.schema.Plural(), into)
+	return c.client.get(ctx, identifier, c.schema.Plural(), into, c.codec)
 }
 
 // Create creates a new resource, and returns the resulting created resource
@@ -128,7 +130,7 @@ func (c *Client) CreateInto(ctx context.Context, identifier resource.Identifier,
 		Kind:      c.schema.Kind(),
 	})
 
-	return c.client.create(ctx, c.schema.Plural(), obj, into)
+	return c.client.create(ctx, c.schema.Plural(), obj, into, c.codec)
 }
 
 // Update updates the provided resource, and returns the updated resource from kubernetes
@@ -168,19 +170,15 @@ func (c *Client) UpdateInto(ctx context.Context, identifier resource.Identifier,
 			return err
 		}
 
-		md := obj.CommonMetadata()
-		md.ResourceVersion = existingMd.ObjectMetadata.ResourceVersion
-		obj.SetCommonMetadata(md)
+		obj.SetResourceVersion(existingMd.ObjectMeta.ResourceVersion)
 	} else {
-		md := obj.CommonMetadata()
-		md.ResourceVersion = options.ResourceVersion
-		obj.SetCommonMetadata(md)
+		obj.SetResourceVersion(options.ResourceVersion)
 	}
 
 	if options.Subresource != "" {
-		return c.client.updateSubresource(ctx, c.schema.Plural(), options.Subresource, obj, into, options)
+		return c.client.updateSubresource(ctx, c.schema.Plural(), options.Subresource, obj, into, options, c.codec)
 	}
-	return c.client.update(ctx, c.schema.Plural(), obj, into, options)
+	return c.client.update(ctx, c.schema.Plural(), obj, into, options, c.codec)
 }
 
 // Patch performs a JSON Patch on the provided resource, and returns the updated object
@@ -197,7 +195,7 @@ func (c *Client) Patch(ctx context.Context, identifier resource.Identifier, patc
 // PatchInto performs a JSON Patch on the provided resource, and marshals the updated version into the `into` field
 func (c *Client) PatchInto(ctx context.Context, identifier resource.Identifier, patch resource.PatchRequest,
 	options resource.PatchOptions, into resource.Object) error {
-	return c.client.patch(ctx, identifier, c.schema.Plural(), patch, into, options)
+	return c.client.patch(ctx, identifier, c.schema.Plural(), patch, into, options, c.codec)
 }
 
 // Delete deletes the specified resource
@@ -213,7 +211,7 @@ func (c *Client) Watch(ctx context.Context, namespace string, options resource.W
 		return nil, fmt.Errorf("cannot watch resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
 			resource.ClusterScope, namespace, resource.NamespaceAll)
 	}
-	return c.client.watch(ctx, namespace, c.schema.Plural(), c.schema.ZeroValue(), options)
+	return c.client.watch(ctx, namespace, c.schema.Plural(), c.schema.ZeroValue(), options, c.codec)
 }
 
 // Metrics returns the prometheus collectors used by this Client for registration with a prometheus exporter
@@ -224,25 +222,4 @@ func (c *Client) PrometheusCollectors() []prometheus.Collector {
 // RESTClient returns the underlying rest.Interface used to communicate with kubernetes
 func (c *Client) RESTClient() rest.Interface {
 	return c.client.client
-}
-
-type listImpl struct {
-	lmd   resource.ListMetadata
-	items []resource.Object
-}
-
-func (l *listImpl) ListMetadata() resource.ListMetadata {
-	return l.lmd
-}
-
-func (l *listImpl) SetListMetadata(md resource.ListMetadata) {
-	l.lmd = md
-}
-
-func (l *listImpl) ListItems() []resource.Object {
-	return l.items
-}
-
-func (l *listImpl) SetItems(items []resource.Object) {
-	l.items = items
 }

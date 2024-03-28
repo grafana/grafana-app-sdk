@@ -108,7 +108,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// If we're pending deletion, check on the finalizers to see if it's waiting on us.
 	// An "add" event would trigger if the informer was restart or resyncing,
 	// so we may have missed the delete/update event.
-	if object.CommonMetadata().DeletionTimestamp != nil {
+	if object.GetDeletionTimestamp() != nil {
 		span.AddEvent("object is deleted and pending finalizer removal")
 
 		// Check if we're the finalizer it's waiting for. If we're not, we can drop this whole event.
@@ -171,16 +171,14 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
-	oldGen := getGeneration(old)
-	newGen := getGeneration(new)
-	if newGen > 0 && oldGen == newGen {
+	if new.GetGeneration() > 0 && old.GetGeneration() == new.GetGeneration() {
 		return nil
 	}
 
 	// TODO: finalizers part of object metadata?
 	oldFinalizers := o.getFinalizers(old)
 	newFinalizers := o.getFinalizers(new)
-	if !slices.Contains(newFinalizers, o.finalizer) && new.CommonMetadata().DeletionTimestamp == nil {
+	if !slices.Contains(newFinalizers, o.finalizer) && new.GetDeletionTimestamp() == nil {
 		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
 		// Either way, we need to try calling AddFunc
 		err := o.addFunc(ctx, new)
@@ -196,7 +194,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 
 	// Check if the deletion timestamp is non-nil.
 	// This denotes that the resource was deletes, but has one or more finalizers blocking it from actually deleting.
-	if new.CommonMetadata().DeletionTimestamp != nil {
+	if new.GetDeletionTimestamp() != nil {
 		// If our finalizer is in the list, treat this as a delete.
 		// Otherwise, drop the event and don't handle it as an update.
 		if !slices.Contains(newFinalizers, o.finalizer) {
@@ -275,7 +273,7 @@ func (o *OpinionatedWatcher) addFinalizer(ctx context.Context, object resource.O
 		return nil
 	}
 
-	return o.client.PatchInto(ctx, object.StaticMetadata().Identifier(), resource.PatchRequest{
+	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 		Operations: []resource.PatchOperation{{
 			Operation: resource.PatchOpAdd,
 			Path:      "/metadata/finalizers",
@@ -290,7 +288,7 @@ func (o *OpinionatedWatcher) removeFinalizer(ctx context.Context, object resourc
 		return nil
 	}
 
-	return o.client.PatchInto(ctx, object.StaticMetadata().Identifier(), resource.PatchRequest{
+	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 		Operations: []resource.PatchOperation{{
 			Operation: resource.PatchOpRemove,
 			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, o.finalizer)),
@@ -299,12 +297,8 @@ func (o *OpinionatedWatcher) removeFinalizer(ctx context.Context, object resourc
 }
 
 func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {
-	if object.CommonMetadata().Finalizers != nil {
-		return object.CommonMetadata().Finalizers
+	if object.GetFinalizers() != nil {
+		return object.GetFinalizers()
 	}
 	return make([]string, 0)
-}
-
-func getGeneration(object resource.Object) int64 {
-	return object.CommonMetadata().Generation
 }

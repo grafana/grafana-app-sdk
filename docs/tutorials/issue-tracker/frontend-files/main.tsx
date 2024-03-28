@@ -3,7 +3,8 @@ import { css } from '@emotion/css';
 import { useForm } from 'react-hook-form';
 import { GrafanaTheme2 } from '@grafana/data';
 import { useStyles2, Button, IconButton, Field, Input, Card, TagList } from '@grafana/ui';
-import { Issue, IssueClient } from '../api/issue_client';
+import { IssueClient } from '../api/issue_client';
+import { Issue } from '../generated/issue/v1/issue_object_gen';
 import { useState, useEffect } from 'react';
 
 // This is used for the create new issue form
@@ -49,7 +50,7 @@ export const MainPage = () => {
 
     const updateStatus = async (issue: Issue, newStatus: string) => {
     issue.spec.status = newStatus;
-        await ic.update(issue.staticMetadata.name, issue);
+        await ic.update(issue.metadata.name, issue);
         await listIssues();
     }
 
@@ -93,7 +94,7 @@ export const MainPage = () => {
         {issuesData.length > 0 && (
         <ul>
             {issuesData.map((issue: any) => (
-            <li key={issue.staticMetadata.name}>
+            <li key={issue.metadata.name}>
                 <Card>
                 <Card.Heading>{issue.spec.title}</Card.Heading>
                 <Card.Description>{issue.spec.description}</Card.Description>
@@ -108,7 +109,7 @@ export const MainPage = () => {
                     size={'md'}
                     aria-label="delete-issue"
                     onClick={() => {
-                        deleteIssue(issue.staticMetadata.name);
+                        deleteIssue(issue.metadata.name);
                     }}
                     >
                     Delete

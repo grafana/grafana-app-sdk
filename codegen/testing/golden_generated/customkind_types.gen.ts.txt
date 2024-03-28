@@ -46,7 +46,6 @@ export interface CustomKind {
     customMetadataField: string;
     updateTimestamp: string;
     createdBy: string;
-    updatedBy: string;
     uid: string;
     creationTimestamp: string;
     deletionTimestamp?: string;
@@ -60,10 +59,7 @@ export interface CustomKind {
      * Have to do this gnarly regex instead
      */
     otherMetadataField: string;
-    /**
-     * extraFields is reserved for any fields that are pulled from the API server metadata but do not have concrete fields in the CUE metadata
-     */
-    extraFields: Record<string, unknown>;
+    updatedBy: string;
     labels: Record<string, string>;
   };
   spec: {
