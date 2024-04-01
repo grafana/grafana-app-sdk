@@ -12,7 +12,7 @@ For this tutorial, we have one pre-written, that we'll discuss a few parts of. E
 curl -o plugin/src/api/issue_client.ts https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/issue-client.ts
 ```
 
-The client uses grafana libraries to make fetch requests to perform relevent actions. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
+The client uses grafana libraries to make fetch requests to perform relevent actions, and uses the generated `Issue` type in `generated/issue/v1/issue_object_gen.ts` that mirrors our generated go `v1.Issue` type. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
 
 ## Main Page
 
@@ -22,7 +22,71 @@ Either copy [the contents of this file](frontend-files/main.tsx) into `plugin/sr
 curl -o plugin/src/pages/main.tsx https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/main.tsx
 ```
 
-TODO: breakdown of the file contents?
+We've now updated the main page to display a list of our `Issue` resources, with some basic options.
+
+```TypeScript
+const [issuesData, setIssuesData] = useState(issues);
+useEffect(() => {
+    const fetchData = async () => {
+        const client = new IssueClient()
+        const issues = await client.list();
+        setIssuesData(issues.data.items);
+    }
+
+    fetchData().catch(console.error);
+}, []);
+```
+Here we list issues using the `IssueClient` we created in the previous section, and push them into the state, so that our issue list returned by this function is populated with the initial list of issues from the API server.
+
+Next we define a few functions to call to manipulate issues:
+```TypeScript
+// IssueClient to share for all our functions
+const ic = new IssueClient();
+
+const listIssues = async() => {
+    const issues = await ic.list();
+    setIssuesData(issues.data.items);
+}
+
+const createIssue = async (title: string, description: string) => {
+    await ic.create(title, description);
+    await listIssues();
+};
+
+const deleteIssue = async (id: string) => {
+    await ic.delete(id);
+    await listIssues();
+};
+
+const updateStatus = async (issue: Issue, newStatus: string) => {
+issue.spec.status = newStatus;
+    await ic.update(issue.metadata.name, issue);
+    await listIssues();
+}
+```
+
+Finally, we have to display the information. We define one more function:
+```TypeScript
+const getActions = (issue: Issue) => {
+    if(issue.spec.status === 'open') {
+        return (
+        <Card.Actions>
+            <Button key="mark-in-progress" onClick={() => {updateStatus(issue, 'in_progress')}}>Start Progress</Button>
+        </Card.Actions>
+        )
+    } else if(issue.spec.status === 'in_progress') {
+        return (
+        <Card.Actions>
+            <Button key="mark-open" onClick={() => {updateStatus(issue, 'open')}}>Stop Progress</Button>
+            <Button key="mark-closed" onClick={() => {updateStatus(issue, 'closed')}}>Complete</Button>
+        </Card.Actions>
+        )
+    } else {
+        return <Card.Actions></Card.Actions>
+    }
+}
+```
+That we'll use in our display output to show the correct Issue status and display button(s) to transition its status. Then it's just a matter of returning the appropriate HTML in our `return` function, populating the data from `issuesData` where appropriate, which we know will get set to the list of issues from the API server.
 
 ## Redeploy
 
