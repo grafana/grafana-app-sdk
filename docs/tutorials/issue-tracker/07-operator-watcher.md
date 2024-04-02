@@ -49,11 +49,11 @@ func NewIssueWatcher() (*IssueWatcher, error) {
 ```
 So we have `IssueWatcher`, which implements `operator.ResourceWatcher`. The `Add`, `Update`, `Delete`, and `Sync` functions are all relatively self-explanatory, but let's examine the `Add` one just to be on the same page:
 ```go
-// Add handles add events for issue.Object resources.
+// Add handles add events for issue.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
-	object, ok := rObj.(*issue.Object)
+	object, ok := rObj.(*issue.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Object (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
 	}
 
@@ -62,7 +62,7 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	return nil
 }
 ```
-Each method does a check to see if the provided `resource.Object` is of type `*issue.Object` (it always should be, provided we gave the informer a client with the correct `resource.Schema`). We then just print a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
+Each method does a check to see if the provided `resource.Object` is of type `*issue.Issue` (it always should be, provided we gave the informer a client with the correct `resource.Schema`). We then just print a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
 
 So what else can we do in our watcher?
 
