@@ -2,6 +2,9 @@
 
 The preferred way of writing kinds for use with codegen provided by the `grafana-app-sdk` CLI is using CUE (support for other input types in the future). If you are familiar with CUE, the base definition of a kind [exists in codegen/cuekind/def.cue](https://github.com/grafana/grafana-app-sdk/blob/main/codegen/cuekind/def.cue). However, given that a CUE definition may not be the easiest to understand, especially if you lack familiarity with CUE, we will go in-depth into writing kinds in CUE here. _No prior CUE knowledge or experience is required_. 
 
+> [!TIP]
+> You can generate a kind with descriptive comments of all fields with `grafana-app-sdk project kind add <KindName>`
+
 Defining a kind can be thought of as being split into two parts: the kind metadata, and the schemas for each version. A simple kind, without any versions (which makes it invalid, but it's a place to start) would look like this:
 ```cue
 foo: {
@@ -17,8 +20,8 @@ foo: {
 }
 ```
 
-> [!TIP]
-> You can generate a kind with descriptive comments of all fields with `grafana-app-sdk project kind add <KindName>`
+> [!NOTE]  
+> When using `grafana-app-sdk project kind add`, `group` is automatically set to the plugin ID.
 
 ## Schemas
 
@@ -247,6 +250,10 @@ You can define further, more complex validation and admission control via your o
 ### Examples
 
 Example complex schemas used for codegen testing can be found in the [cuekind codegen testing directory](../../codegen/cuekind/testing/).
+
+## Non-API Resource Kinds
+
+If you wish to use the kind codegen tooling for non-API Server resources, you can do so, with fewer restrictions on your schema. **Non-API Resource Kinds cannot be used with an API Server or with an operator**, but can sometimes be useful as contract guarantees between front-end and back-end, as the go and TypeScript are generated from the same source. For nearly all purposes where you would write a kind, you would want to use an API Resource Kind as described in previous sections. However, to create a non-API Resource Kind, you simply need to omit the `apiResource` field in your kind. By doing so, the `schema` for each of your versions no longer has the restriciton of needing a `spec` and other subresources. The generated go code will not include anything aside from the kind (no `resource.Object` implementation, `resource.Kind`, or `Codec`).
 
 ## Recommended Reading
 

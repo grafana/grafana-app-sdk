@@ -7,12 +7,9 @@ A Kind is a concept [borrowed from Kubernetes](https://kubernetes.io/docs/concep
 A Kind is composed of several components:
 * A unique name (also, slightly confusingly, called Kind)
 * A Group it belongs to
-* A version
-* A schema for the `spec` and any subresources
+* One or more versions, and a schema for the `spec` and any subresources for each version
 
-In the kubernetes API, a kind is identified by the top-level attributes `kind` and `apiVersion`. A kind can also be considered the totally of all `apiVersion` values that are valid for the `kind` value, which is how we define them in the API. In-code, a kind is typically a single `kind` and `apiVersion` combination.
-
-TODO: this ^ might be slightly confusing.
+In a kubernetes-compatible API server, a kind is identified by the top-level attributes `kind` and `apiVersion` (where the `apiVersion` consists of the `group` and `version`--the group is used to identify the kind, and the version the specific schema). A kind is sometimes referenced as the Group and Kind combination (called GroupKind), or as the totality of Group, Kind, and Version (called GroupVersionKind, or GVK), which is the way to uniquely identify the schema of a resource.
 
 Kinds are the core of apps, as they are the data structure for all app data. Apps interact with an API server to read, write, update, delete, list and watch kinds. For more on this, see [Operators and Event-Based Design](../operators.md).
 
