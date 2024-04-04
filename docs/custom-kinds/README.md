@@ -9,6 +9,8 @@ A Kind is composed of several components:
 * A Group it belongs to
 * One or more versions, and a schema for the `spec` and any subresources for each version
 
+(a `spec` is essentially the body of the resource: for a resource like a grafana dashboard, it would be the panels. Subresources are additional payloads that are not considered part of the main body of the resource, but may be used by applications for their purposes. They are returned alongside the `spec` in reads, but must be updated via a separate call, and can have different RBAC associated with them. In kubernetes, `status` is considered a subresource).
+
 In a kubernetes-compatible API server, a kind is identified by the top-level attributes `kind` and `apiVersion` (where the `apiVersion` consists of the `group` and `version`--the group is used to identify the kind, and the version the specific schema). A kind is sometimes referenced as the Group and Kind combination (called GroupKind), or as the totality of Group, Kind, and Version (called GroupVersionKind, or GVK), which is the way to uniquely identify the schema of a resource.
 
 Kinds are the core of apps, as they are the data structure for all app data. Apps interact with an API server to read, write, update, delete, list and watch kinds. For more on this, see [Operators and Event-Based Design](../operators.md).

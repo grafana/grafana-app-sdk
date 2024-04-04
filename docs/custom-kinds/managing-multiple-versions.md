@@ -1,6 +1,6 @@
 # Managing Multiple Kind Versions
 
-There are two kinds of versions for a kind: a fixed version, such as `v1`, and a mutable, alpha or beta version, such as `v1alpha1`. When publishing a kind, be aware that you should never change the definition of a fixed version, as clients will rely on that kind version being constant when working with the API.
+There are two kinds of versions for a kind: a fixed version, such as `v1`, and a mutable, alpha or beta version, such as `v1alpha1`. When publishing a kind, be aware that you should never change the definition of a fixed version, as clients will rely on that kind version being constant when working with the API. For more details on kubernetes version conventions, see [Custom Resource Definitions Versions](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/).
 
 ## Operators & Multiple Versions
 
@@ -31,7 +31,7 @@ However, now that you have two versions, you'll need to be able to support both 
 By default, the API server will convert between these versions by simply taking the JSON schema from one and pushing it into the other (depending on what is stored), 
 but often that is not a good enough conversion, and you'll need to define how to convert between versions yourself.
 
-To do this, you'll need to add a Conversion Webhook to your operator. If you're using the `simple.Operator` type, this can be done either in the initial config with the `Converters` field, or via the `ConvertKind` method. If you are not using `simple.Operator`, you'll need to create a `WebhookServer` controller to add to your operator with `k8s.NewWebhookServer` (you may already have this if you're using [Admission Control](./admission-control.md), as Conversion webhooks are exposed on the same server as Validation and Mutation webhooks). All of these different methods require two things: a `k8s.Converter`-implementing type, and TLS information. Let's go over each, then give some examples.
+To do this, you'll need to add a Conversion Webhook to your operator. If you're using the `simple.Operator` type, this can be done either in the initial config with the `simple.OperatorConfig.Webhooks.Converters` field, or via the `ConvertKind` method on `simple.Operator`. If you are not using `simple.Operator`, you'll need to create a `k8s.WebhookServer` controller to add to your operator with `k8s.NewWebhookServer` (you may already have this if you're using [Admission Control](./admission-control.md), as Conversion webhooks are exposed on the same server as Validation and Mutation webhooks). All of these different methods require two things: a `k8s.Converter`-implementing type, and TLS information. Let's go over each, then give some examples.
 
 ### Converter
 
