@@ -47,7 +47,7 @@ type Converter interface {
 	Convert(obj RawKind, targetAPIVersion string) ([]byte, error)
 }
 ```
-`k8s.RawKind` contains the raw (JSON) bytes of an object, and kind informtion (Group, Version, Kind). To implement `k8s.Converter` we need a function which can accept any version of our kind and return any version of our kind. When we register `k8s.Converter`s with the `WebhookServer`, we can generally assume that the input 
+`k8s.RawKind` contains the raw (JSON) bytes of an object, and kind information (Group, Version, Kind). To implement `k8s.Converter` we need a function which can accept any version of our kind and return any version of our kind. When we register `k8s.Converter`s with the `WebhookServer`, we can generally assume that the input 
 `RawKind` will be of the Group and Kind we specify, and the output will also be of the Group and Kind we specify, so it's safe to error on anything unexpected. Let's put together a very simple converter for an object with two versions defined as:
 ```cue
 myKind: {
