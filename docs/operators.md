@@ -25,7 +25,9 @@ This watcher adds some internal finalizer logic to make sure events cannot be mi
 and adds a fourth hook: `Sync`, which is called when a resource _may_ have been changed during operator downtime, 
 but there isn't a way to be sure (with a vanilla Watcher in a kubernetes-like environment, these events would be called as `Add`).
 
-<!-- TODO brifely describe the retry logic for this -->
+A Reconciler has its reconciling logic described under the `Reconcile` function.
+The `Reconcile` flow allows for explicit failure (returning an error), which uses the normal retry policy of the `operator.InformerController`, or supplying a `RetryAfter` time in response explicitly telling the `operator.InformerController` to try this exact same Reconcile action again after the request interval has passed.
+As for the watcher, the SDK also offers an _Opinionated_ reconciler, designed for kubernetes-like storage layers, called `operator.OpinionatedReconciler`, and adds some internal finalizer logic to make sure events cannot be missed during operator downtime.
 
 ## Event-Based Design
 
