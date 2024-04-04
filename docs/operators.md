@@ -40,7 +40,7 @@ While the SDK is geared toward this type of design, you can still put all of you
 if you either need to have calls be completely synchronous, or the business logic is very simple.
 
 **Forthcoming:** the SDK codegen utility offers the ability to create a simple CRUDL backend plugin API 
-and an operator template given only one or more Schemas defined in CUE (see [Schema Management](schema_management.md)). 
+and an operator template given only one or more Schemas defined in CUE (see [Kinds documentation](custom-kinds/README.md)).
 
 ## A Simple Operator
 
@@ -104,4 +104,4 @@ func main() {
 Note that this is not the only way to run an operator. In fact, operators, being just a call to `Run()` on the operator object, 
 can be run as part of a back-end plugin alongside your API instead of as standalone applications.
 
-For more details, see the [Operator Examples](../examples/operator) or the [Operator Package README](../operator/README.md).
+For more details, see the [Operator Examples](../examples/operator), which contains two examples, a [basic operator](../examples/operator/basic/README.md) and an [opinionated one](../examples/operator/opinionated/README.md).
