@@ -19,8 +19,15 @@ go install github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk@latest
 If you're unfamiliar with `go install`, it's similar to `go get`, but will compile a binary for the `main` package in what it pulls, and put that in `$GOPATH/bin`. If you don't have `$GOPATH/bin` in your path, you will want to add it, otherwise the CLI commands won't work for you. You can check if the CLI was installed successfully with:
 You can then check if the install was successful by running.
 
-**Note:** currently [there is a bug](https://github.com/grafana/grafana-app-sdk/issues/189) preventing `go install` from succeeding, 
-to install the grafana-app-sdk, use the binary process listed below, or clone this repository, run `make build`, and copy `target/grafana-app-sdk` into your `PATH`.
+> [!NOTE]  
+> There is currently a [known issue with running go install](https://github.com/grafana/grafana-app-sdk/issues/189) for many versions. 
+> You can install locally with
+> ```shell
+> git clone git@github.com:grafana/grafana-app-sdk.git && cd grafana-app-sdk/cmd/grafana-app-sdk && go install 
+> ```
+> But be advised this will install the latest `main` commit. To install a specific version, use `git checkout <version>` before running `go install`.
+>
+> Alternatively, you can install by running `make build` in the repository root, and copying `target/grafana-app-sdk` into your `PATH`.
 
 If you're not comfortable using `go install`, the [github releases page](https://github.com/grafana/grafana-app-sdk/releases) for the project includes a binary for each architecture per release. You can download the binary and add it to your `PATH` to use the SDK CLI the same way as if you used `go install`.
 ```shell
