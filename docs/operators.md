@@ -14,9 +14,9 @@ An operator consists, broadly, of collections of runnable controllers, one type 
 but a user can easily extend this by having a new controller which implements the `operator.Controller` interface.
 
 The controller offered by the SDK is the `operator.InformerController`, which is a controller that is composed of two sets of objects:
-* **Informers**, which are given a particular CRD and will notify the controller on changes, and
-* **Watchers**, which subscribe to changes for a particular CRD kind and will be notified about any changes from a relevant Informer
-Multiple Watchers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.
+* **Informers**, which are given a particular CRD and will notify the controller on changes;
+* **Watchers**, which subscribe to changes for a particular CRD kind and will be notified about any changes from a relevant Informer. Multiple Watchers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.;
+* **Reconcilers**, which subscribe to changes in the state of a particular CRD kind and will be noticied about any changes from a relevant Informer, its objective is to ensure that the current state of resources matches the desired state. Multiple Reconcilers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.
 
 A Watcher has three hooks for reacting to changes: `Add`, `Update`, and `Delete`. 
 When the relevant change occurs for the resource they watch, the appropriate hook is called. 
@@ -24,6 +24,8 @@ The SDK also offers an _Opinionated_ watcher, designed for kubernetes-like stora
 This watcher adds some internal finalizer logic to make sure events cannot be missed during operator downtime, 
 and adds a fourth hook: `Sync`, which is called when a resource _may_ have been changed during operator downtime, 
 but there isn't a way to be sure (with a vanilla Watcher in a kubernetes-like environment, these events would be called as `Add`).
+
+<!-- TODO brifely describe the retry logic for this -->
 
 ## Event-Based Design
 
@@ -49,7 +51,8 @@ import (
 	"context"
 	"fmt"
 	
-	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/simple"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -58,37 +61,38 @@ func main() {
 	kubeConfig := getKubeConfig()
 	
 	// Create a new operator
-	op := operator.New()
-	
-	// Create a controller to add to the operator
-	controller := operator.NewInformerController()
-	
-	// Create an informer to add to the controller
-	// MyTypeCustomResource is the generated CustomResource from schema_management.md
-	informer, err := operator.NewInformerFor(kubeConfig, MyTypeCustomResource, operator.NamespaceAll)
-	if err != nil {
-		// Do something with the error
-		panic(err)
-    }
-	
-	controller.AddInformer(informer)
-	
+	op, err := simple.NewOperator(simple.OperatorConfig{
+		Name:       "issue-operator",
+		KubeConfig: kubeConfig.RestConfig,
+		Metrics: simple.MetricsConfig{
+			Enabled: true,
+		},
+		Tracing: simple.TracingConfig{
+			Enabled: true,
+			OpenTelemetryConfig: simple.OpenTelemetryConfig{
+				Host:        cfg.OTelConfig.Host,
+				Port:        cfg.OTelConfig.Port,
+				ConnType:    simple.OTelConnType(cfg.OTelConfig.ConnType),
+				ServiceName: cfg.OTelConfig.ServiceName,
+			},
+		},
+		ErrorHandler: func(ctx context.Context, err error) {
+			logging.FromContext(ctx).Error(err.Error())
+		},
+	})
+
 	// Create a watcher which prints some lines when a resource is added
-	// We'll use an opinionated watcher, as that's best practice if you don't need to do anything fancy
-	watcher, err := operator.NewOpinionatedWatcher(kubeConfig, MyTypeCustomResource)
-	if err != nil {
-		// Do something with the error
-		panic(err)
-	}
-	watcher.AddFunc = func(ctx context.Context, object runtime.Object) error {
-		fmt.Println("Hey, a resource got added!")
-		return nil
+	watcher := simple.Watcher{
+		AddFunc: func(ctx context.Context, object resource.Object) error {
+			fmt.Println("Hey, a resource got added!")
+			return nil
+    	},
     }
-	
-	controller.AddWatcher(watcher, MyTypeCustomResource.Kind())
-	
-	// Now, add the controller to the operator, and run it
-	op.AddController(controller)
+
+	// Let the operator use given watcher for the 'MyResource' kind
+	op.WatchKind(MyResource.Schema(), watcher, simple.ListWatchOptions{
+		Namespace: "default",
+	})
 
 	stopCh := make(chan struct{}, 1) // Close this channel to stop the operator
 	op.Run(stopCh)
