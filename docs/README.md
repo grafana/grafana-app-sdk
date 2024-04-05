@@ -17,7 +17,7 @@ Godocs on exported library package code (such as `resource`, `operator`, `plugin
 | [Resource Stores](./resource-stores.md) | Describes the various "Store" types in the `resource` package, and why you may want to use one or another |
 | [Design Patterns](./design-patterns.md) | The typical design patterns of an app built with the SDK |
 | [Operators & Event-Based Design](./operators.md) | A brief primer on what operators/controllers are and working with event-based code |
-| [Custom Kinds & CUE](./custom-kinds.md) | A look at writing custom kinds in CUE |
+| [Custom Kinds](./custom-kinds/README.md) | What are kinds, how to write them, and how to use them |
 | [Code Generation](./code-generation.md) | How to use CUE and the CLI for code generation. |
 | [Local Dev Environment Setup](./local-development.md) | How to use the CLI to set up a local development & testing environment |
 | [Kubernetes Concepts](./kubernetes.md) | A primer on some kubernetes concepts which are relevant to using the SDK backed by a kubernetes API server |
