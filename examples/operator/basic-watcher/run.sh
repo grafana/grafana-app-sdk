@@ -7,4 +7,4 @@ CLUSTER_NAME=${1:-"operator-app-sdk-example"}
 sh "${ROOT_DIR}/examples/create_cluster.sh"
 
 # TODO: run in cluster?
-go run basic.go --kubecfg="${HOME}/.kube/config"
+go run watcher.go --kubecfg="${HOME}/.kube/config"
