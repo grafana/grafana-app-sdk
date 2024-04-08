@@ -37,6 +37,9 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 	case OTelConnTypeGRPC:
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
+
+		// TODO: replace with grpc.NewClient, before we upgrade to 2.x.
+		// nolint: staticcheck
 		conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 			// Note the use of insecure transport here. TLS is recommended in production.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
