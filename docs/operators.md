@@ -13,10 +13,10 @@ this will eventually be removed in favor of an abstraction that will produce the
 An operator consists, broadly, of collections of runnable controllers, one type of which is defined in the SDK, 
 but a user can easily extend this by having a new controller which implements the `operator.Controller` interface.
 
-The controller offered by the SDK is the `operator.InformerController`, which is a controller that is composed of two sets of objects:
-* **Informers**, which are given a particular CRD and will notify the controller on changes, and
-* **Watchers**, which subscribe to changes for a particular CRD kind and will be notified about any changes from a relevant Informer
-Multiple Watchers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.
+The controller offered by the SDK is the `operator.InformerController`, which is a controller that is composed of three sets of objects:
+* **Informers**, which are given a particular CRD and will notify the controller on changes - when resources change, Watchers and Reconcilers will be triggered, performing the according actions;
+* **Watchers**, which subscribe to changes for a particular CRD kind and will be notified about any changes from a relevant Informer. Multiple Watchers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.;
+* **Reconcilers**, which subscribe to changes in the state of a particular CRD kind and will be noticied about any changes from a relevant Informer, its objective is to ensure that the current state of resources matches the desired state. Multiple Reconcilers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.
 
 A Watcher has three hooks for reacting to changes: `Add`, `Update`, and `Delete`. 
 When the relevant change occurs for the resource they watch, the appropriate hook is called. 
@@ -24,6 +24,12 @@ The SDK also offers an _Opinionated_ watcher, designed for kubernetes-like stora
 This watcher adds some internal finalizer logic to make sure events cannot be missed during operator downtime, 
 and adds a fourth hook: `Sync`, which is called when a resource _may_ have been changed during operator downtime, 
 but there isn't a way to be sure (with a vanilla Watcher in a kubernetes-like environment, these events would be called as `Add`).
+
+A Reconciler has its reconciling logic described under the `Reconcile` function.
+The `Reconcile` flow allows for explicit failure (returning an error), which uses the normal retry policy of the `operator.InformerController`, or supplying a `RetryAfter` time in response explicitly telling the `operator.InformerController` to try this exact same Reconcile action again after the request interval has passed.
+As for the watcher, the SDK also offers an _Opinionated_ reconciler, designed for kubernetes-like storage layers, called `operator.OpinionatedReconciler`, and adds some internal finalizer logic to make sure events cannot be missed during operator downtime.
+
+Please note that it's enough to specify a Watcher or a Reconciler for a resource. The choice between the two depends on operator needs. 
 
 ## Event-Based Design
 
@@ -35,12 +41,12 @@ where a call to the API will kick off a workflow, rather than start the workflow
 While the SDK is geared toward this type of design, you can still put all of your business logic in your API endpoints 
 if you either need to have calls be completely synchronous, or the business logic is very simple.
 
-**Forthcoming:** the SDK codegen utility offers the ability to create a simple CRUDL backend plugin API 
-and an operator template given only one or more Schemas defined in CUE (see [Schema Management](schema_management.md)). 
+The SDK codegen utility offers the ability to create a simple CRUDL backend plugin API 
+and an operator template given only one or more Schemas defined in CUE (see [CLI documentation](cli.md) for more info).
 
 ## A Simple Operator
 
-Let's walk through the creation of a simple operator:
+Let's walk through the creation of a simple operator, using a Reconciler:
 
 ```golang
 package main
@@ -49,7 +55,8 @@ import (
 	"context"
 	"fmt"
 	
-	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/simple"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
@@ -58,37 +65,39 @@ func main() {
 	kubeConfig := getKubeConfig()
 	
 	// Create a new operator
-	op := operator.New()
-	
-	// Create a controller to add to the operator
-	controller := operator.NewInformerController()
-	
-	// Create an informer to add to the controller
-	// MyTypeCustomResource is the generated CustomResource from schema_management.md
-	informer, err := operator.NewInformerFor(kubeConfig, MyTypeCustomResource, operator.NamespaceAll)
-	if err != nil {
-		// Do something with the error
-		panic(err)
+	op, err := simple.NewOperator(simple.OperatorConfig{
+		Name:       "issue-operator",
+		KubeConfig: kubeConfig.RestConfig,
+		Metrics: simple.MetricsConfig{
+			Enabled: true,
+		},
+		Tracing: simple.TracingConfig{
+			Enabled: true,
+			OpenTelemetryConfig: simple.OpenTelemetryConfig{
+				Host:        cfg.OTelConfig.Host,
+				Port:        cfg.OTelConfig.Port,
+				ConnType:    simple.OTelConnType(cfg.OTelConfig.ConnType),
+				ServiceName: cfg.OTelConfig.ServiceName,
+			},
+		},
+		ErrorHandler: func(ctx context.Context, err error) {
+			logging.FromContext(ctx).Error(err.Error())
+		},
+	})
+
+	// Create a reconciler which prints some lines when the resource changes
+	reconciler := simple.Reconciler{
+		ReconcileFunc: func(ctx context.Context, req operator.ReconcileRequest) (operator.ReconcileResult, error) {
+			fmt.Printf("Hey, resource state changed! action: %s")
+			
+			return operator.ReconcileResult{}, nil
+    	},
     }
-	
-	controller.AddInformer(informer)
-	
-	// Create a watcher which prints some lines when a resource is added
-	// We'll use an opinionated watcher, as that's best practice if you don't need to do anything fancy
-	watcher, err := operator.NewOpinionatedWatcher(kubeConfig, MyTypeCustomResource)
-	if err != nil {
-		// Do something with the error
-		panic(err)
-	}
-	watcher.AddFunc = func(ctx context.Context, object runtime.Object) error {
-		fmt.Println("Hey, a resource got added!")
-		return nil
-    }
-	
-	controller.AddWatcher(watcher, MyTypeCustomResource.Kind())
-	
-	// Now, add the controller to the operator, and run it
-	op.AddController(controller)
+
+	// Let the operator use given reconciler for the 'MyResource' kind
+	op.ReconcileKind(MyResource.Schema(), reconciler, simple.ListWatchOptions{
+		Namespace: "default",
+	})
 
 	stopCh := make(chan struct{}, 1) // Close this channel to stop the operator
 	op.Run(stopCh)
@@ -98,4 +107,4 @@ func main() {
 Note that this is not the only way to run an operator. In fact, operators, being just a call to `Run()` on the operator object, 
 can be run as part of a back-end plugin alongside your API instead of as standalone applications.
 
-For more details, see the [Operator Examples](../examples/operator) or the [Operator Package README](../operator/README.md).
+For more details, see the [Operator Examples](../examples/operator), which contains two examples, a [basic operator](../examples/operator/basic/README.md) and an [opinionated one](../examples/operator/opinionated/README.md).
