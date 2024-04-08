@@ -46,7 +46,7 @@ and an operator template given only one or more Schemas defined in CUE (see [CLI
 
 ## A Simple Operator
 
-Let's walk through the creation of a simple operator:
+Let's walk through the creation of a simple operator, using a Reconciler:
 
 ```golang
 package main
@@ -85,16 +85,17 @@ func main() {
 		},
 	})
 
-	// Create a watcher which prints some lines when a resource is added
-	watcher := simple.Watcher{
-		AddFunc: func(ctx context.Context, object resource.Object) error {
-			fmt.Println("Hey, a resource got added!")
-			return nil
+	// Create a reconciler which prints some lines when the resource changes
+	reconciler := simple.Reconciler{
+		ReconcileFunc: func(ctx context.Context, req operator.ReconcileRequest) (operator.ReconcileResult, error) {
+			fmt.Printf("Hey, resource state changed! action: %s")
+			
+			return operator.ReconcileResult{}, nil
     	},
     }
 
-	// Let the operator use given watcher for the 'MyResource' kind
-	op.WatchKind(MyResource.Schema(), watcher, simple.ListWatchOptions{
+	// Let the operator use given reconciler for the 'MyResource' kind
+	op.ReconcileKind(MyResource.Schema(), reconciler, simple.ListWatchOptions{
 		Namespace: "default",
 	})
 
