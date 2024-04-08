@@ -102,8 +102,8 @@ type Server struct {
 }
 
 func (c completedConfig) NewServer() (*Server, error) {
-	//scheme := c.ExtraConfig.Scheme
-	//codecs := c.ExtraConfig.Codecs
+	scheme := c.ExtraConfig.Scheme
+	codecs := c.ExtraConfig.Codecs
 	openapiGetters := []common.GetOpenAPIDefinitions{}
 
 	for _, g := range c.ExtraConfig.ResourceGroups {
@@ -129,10 +129,10 @@ func (c completedConfig) NewServer() (*Server, error) {
 		GenericAPIServer: genericServer,
 	}
 
-	//parameterCodec := runtime.NewParameterCodec(scheme)
+	parameterCodec := runtime.NewParameterCodec(scheme)
 	provider := apiserver.NewRESTStorageProvider(c.GenericConfig.RESTOptionsGetter)
 	for _, g := range c.ExtraConfig.ResourceGroups {
-		apiGroupInfo, err := g.APIGroupInfo(provider)
+		apiGroupInfo, err := g.APIGroupInfo(scheme, codecs, parameterCodec, provider)
 		if err != nil {
 			return nil, err
 		}
@@ -166,7 +166,6 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 				Version: r.Kind.Version(),
 			}
 			gvs = append(gvs, gv)
-
 		}
 	}
 
@@ -184,8 +183,9 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 	}
 
 	o.RecommendedOptions.Admission.Plugins = admission.NewPlugins()
-	for _, g := range groups {
-		for _, r := range g.Resources {
+	for gid, g := range groups {
+		for rid, _ := range g.Resources {
+			r := &groups[gid].Resources[rid]
 			r.RegisterAdmissionPlugin(o.RecommendedOptions.Admission.Plugins)
 		}
 	}

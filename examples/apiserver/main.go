@@ -54,14 +54,11 @@ func main() {
 	// apiserver.Resource items must be added to an apiserver.ResourceGroup.
 	// Currently, there is no validation that the Name in the ResourceGroup matches the Group in each added Resource
 	// TODO: have a Validate() method on ResourceGroup to check that?
-	resourceGroup := apiserver.ResourceGroup{
-		Name:      corev1.ExternalNameKind().Group(),
-		Resources: []apiserver.Resource{externalNameV1, externalNameV2},
-	}
+	resourceGroup := apiserver.NewResourceGroup(corev1.ExternalNameKind().Group(), []apiserver.Resource{externalNameV1, externalNameV2})
 
 	// APIServerOptions is used to create the API server from one or more ResourceGroups.
 	// TODO: this will be expanded upon
-	o := simple.NewAPIServerOptions([]apiserver.ResourceGroup{resourceGroup}, os.Stdout, os.Stderr)
+	o := simple.NewAPIServerOptions([]apiserver.ResourceGroup{*resourceGroup}, os.Stdout, os.Stderr)
 	o.RecommendedOptions.Authorization = nil
 	o.RecommendedOptions.Authentication = nil
 	o.RecommendedOptions.CoreAPI = nil

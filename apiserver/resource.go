@@ -37,18 +37,6 @@ type Resource struct {
 	Reconciler            operator.Reconciler // TODO: do we want this here, or only here for the simple package version?
 }
 
-func (r *Resource) RegisterAdmissionPlugin(plugins *admission.Plugins) {
-	if r.Validator == nil && r.Mutator == nil {
-		fmt.Printf("Resource %s has no admission plugins\n", r.Kind.Kind())
-		return
-	}
-	gvk := r.Kind.Group() + "/" + r.Kind.Version() + "/" + r.Kind.Kind()
-	fmt.Printf("Registering admission plugins for %s\n", gvk)
-	plugins.Register(gvk+"Admission", func(config io.Reader) (admission.Interface, error) {
-		return &AdmissionWrapper{resource: r}, nil
-	})
-}
-
 func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
 	gv := schema.GroupVersion{
 		Group:   r.Kind.Group(),
@@ -65,137 +53,111 @@ func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
 	}
 }
 
-var _ admission.MutationInterface = &AdmissionWrapper{}
-var _ admission.ValidationInterface = &AdmissionWrapper{}
-var _ admission.Interface = &AdmissionWrapper{}
-
-type AdmissionWrapper struct {
-	resource *Resource
+func (r *Resource) RegisterAdmissionPlugin(plugins *admission.Plugins) {
+	if r.Validator == nil && r.Mutator == nil {
+		return
+	}
+	gvk := r.Kind.Group() + "/" + r.Kind.Version() + "/" + r.Kind.Kind()
+	plugins.Register(gvk+"Admission", func(config io.Reader) (admission.Interface, error) {
+		return r, nil
+	})
 }
 
-func (v *AdmissionWrapper) Handles(o admission.Operation) bool {
-	if v.resource.Validator == nil && v.resource.Mutator == nil {
+func (r *Resource) Handles(o admission.Operation) bool {
+	if r.Validator == nil && r.Mutator == nil {
 		return false
 	}
 	return true
 }
 
-func (v *AdmissionWrapper) Validate(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
-	if v.resource.Validator == nil {
+func (r *Resource) Validate(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
+	if r.Validator == nil {
 		return nil
 	}
 
-	// skip if the gvk doesn't match
-	if a.GetKind().Kind != v.resource.Kind.Kind() || a.GetKind().Group != v.resource.Kind.Group() || a.GetKind().Version != v.resource.Kind.Version() {
+	if !r.matchesResouce(a) {
 		return nil
 	}
 
-	userInfoExtra := make(map[string]any)
-	for k, v := range a.GetUserInfo().GetExtra() {
-		userInfoExtra[k] = v
-	}
-
-	userInfo := resource.AdmissionUserInfo{}
-	if a.GetUserInfo() != nil {
-		userInfoExtra := make(map[string]any)
-		for k, v := range a.GetUserInfo().GetExtra() {
-			userInfoExtra[k] = v
-		}
-		userInfo.Extra = userInfoExtra
-		userInfo.Groups = a.GetUserInfo().GetGroups()
-		userInfo.UID = a.GetUserInfo().GetUID()
-		userInfo.Username = a.GetUserInfo().GetName()
-	}
-
-	var (
-		obj, oldObj resource.Object
-		ok          bool
-	)
-
-	obj, ok = a.GetObject().(resource.Object)
-	if !ok {
-		return errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
-	}
-
-	if a.GetOldObject() != nil {
-		oldObj, ok = a.GetOldObject().(resource.Object)
-		if !ok {
-			return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
-		}
-	}
-
-	req := &resource.AdmissionRequest{
-		Action:    resource.AdmissionAction(a.GetOperation()),
-		Kind:      a.GetKind().Kind,
-		Group:     a.GetKind().Group,
-		Version:   a.GetKind().Group,
-		UserInfo:  userInfo,
-		Object:    obj,
-		OldObject: oldObj,
-	}
-
-	return v.resource.Validator.Validate(ctx, req)
-}
-
-func (v *AdmissionWrapper) Admit(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
-	if v.resource.Mutator == nil {
-		return nil
-	}
-
-	// skip if the gvk doesn't match
-	if a.GetKind().Kind != v.resource.Kind.Kind() || a.GetKind().Group != v.resource.Kind.Group() || a.GetKind().Version != v.resource.Kind.Version() {
-		return nil
-	}
-
-	userInfo := resource.AdmissionUserInfo{}
-	if a.GetUserInfo() != nil {
-		userInfoExtra := make(map[string]any)
-		for k, v := range a.GetUserInfo().GetExtra() {
-			userInfoExtra[k] = v
-		}
-		userInfo.Extra = userInfoExtra
-		userInfo.Groups = a.GetUserInfo().GetGroups()
-		userInfo.UID = a.GetUserInfo().GetUID()
-		userInfo.Username = a.GetUserInfo().GetName()
-	}
-
-	var (
-		obj, oldObj resource.Object
-		ok          bool
-	)
-
-	obj, ok = a.GetObject().(resource.Object)
-	if !ok {
-		return errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
-	}
-
-	if a.GetOldObject() != nil {
-		oldObj, ok = a.GetOldObject().(resource.Object)
-		if !ok {
-			return errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
-		}
-	}
-
-	req := &resource.AdmissionRequest{
-		Action:    resource.AdmissionAction(a.GetOperation()),
-		Kind:      a.GetKind().Kind,
-		Group:     a.GetKind().Group,
-		Version:   a.GetKind().Group,
-		UserInfo:  userInfo,
-		Object:    obj,
-		OldObject: oldObj,
-	}
-
-	res, err := v.resource.Mutator.Mutate(ctx, req)
+	req, err := buildAdmissionRequest(a)
 	if err != nil {
 		return err
 	}
 
-	if err := copyModifiedObjectToDestination(res.UpdatedObject, obj); err != nil {
+	return r.Validator.Validate(ctx, req)
+}
+
+func (r *Resource) Admit(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
+	if r.Mutator == nil {
+		return nil
+	}
+
+	if !r.matchesResouce(a) {
+		return nil
+	}
+
+	req, err := buildAdmissionRequest(a)
+	if err != nil {
+		return err
+	}
+
+	res, err := r.Mutator.Mutate(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	if err := copyModifiedObjectToDestination(res.UpdatedObject, req.Object); err != nil {
 		return errors.NewInternalError(fmt.Errorf("unable to copy updated object to destination: %w", err))
 	}
 
 	return nil
+}
+
+func (r *Resource) matchesResouce(a admission.Attributes) bool {
+	kindMatch := a.GetKind().Kind == r.Kind.Kind()
+	groupMatch := a.GetKind().Group == r.Kind.Group()
+	versionMatch := a.GetKind().Version == r.Kind.Version()
+	return kindMatch && groupMatch && versionMatch
+}
+
+func buildAdmissionRequest(a admission.Attributes) (*resource.AdmissionRequest, error) {
+	var (
+		userInfo    = resource.AdmissionUserInfo{}
+		obj, oldObj resource.Object
+		ok          bool
+	)
+	if a.GetUserInfo() != nil {
+		userInfoExtra := make(map[string]any)
+		for k, v := range a.GetUserInfo().GetExtra() {
+			userInfoExtra[k] = v
+		}
+		userInfo.Extra = userInfoExtra
+		userInfo.Groups = a.GetUserInfo().GetGroups()
+		userInfo.UID = a.GetUserInfo().GetUID()
+		userInfo.Username = a.GetUserInfo().GetName()
+	}
+
+	obj, ok = a.GetObject().(resource.Object)
+	if !ok {
+		return nil, errors.NewInternalError(fmt.Errorf("new obj is not a valid resource.Object"))
+	}
+
+	if a.GetOldObject() != nil {
+		oldObj, ok = a.GetOldObject().(resource.Object)
+		if !ok {
+			return nil, errors.NewInternalError(fmt.Errorf("old object is not a valid resource.Object"))
+		}
+	}
+
+	return &resource.AdmissionRequest{
+		Action:    resource.AdmissionAction(a.GetOperation()),
+		Kind:      a.GetKind().Kind,
+		Group:     a.GetKind().Group,
+		Version:   a.GetKind().Group,
+		UserInfo:  userInfo,
+		Object:    obj,
+		OldObject: oldObj,
+	}, nil
 }
 
 func copyModifiedObjectToDestination(updatedObj runtime.Object, destination runtime.Object) error {
@@ -248,30 +210,18 @@ type ResourceGroup struct {
 	// This SHOULD be supplied if multiple versions of the same GroupKind exist in the ResourceGroup.
 	// If not supplied, a GenericConverter will be used for all conversions.
 	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
-	Converters map[metav1.GroupKind]Converter
+	converters map[metav1.GroupKind]Converter
 }
 
-func (g *ResourceGroup) Scheme() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	g.AddToScheme(scheme)
-	return scheme
+func NewResourceGroup(name string, resources []Resource) *ResourceGroup {
+	g := &ResourceGroup{
+		Name:      name,
+		Resources: resources,
+	}
+	return g
 }
 
-func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
-	// we need to add the options to empty v1
-	// TODO fix the server code to avoid this
-	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-
-	// TODO: keep the generic API server from wanting this
-	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
-	scheme.AddUnversionedTypes(unversioned,
-		&metav1.Status{},
-		&metav1.APIVersions{},
-		&metav1.APIGroupList{},
-		&metav1.APIGroup{},
-		&metav1.APIResourceList{},
-	)
-
+func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) error {
 	// TODO: this assumes items in the Resources slice are ordered by version
 	versions := make(map[metav1.GroupKind][]Resource)
 	for _, r := range g.Resources {
@@ -291,14 +241,15 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 			Group:   latest.Kind.Group(),
 			Version: runtime.APIVersionInternal,
 		}
+
 		scheme.AddKnownTypeWithName(gv.WithKind(gk.Kind), latest.Kind.ZeroValue())
 		scheme.AddKnownTypeWithName(gv.WithKind(gk.Kind+"List"), latest.Kind.ZeroListValue())
 
 		// Get the converter for this GroupKind, or use a Generic one if none was supplied
 		var converter Converter = GenericConverter{}
-		if g.Converters != nil {
+		if g.converters != nil {
 			ok := false
-			converter, ok = g.Converters[gk]
+			converter, ok = g.converters[gk]
 			if !ok {
 				converter = GenericConverter{}
 			}
@@ -325,6 +276,7 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) {
 		// Set version priorities based on the reverse-order list we built
 		scheme.SetVersionPriority(priorities...)
 	}
+	return nil
 }
 
 type StorageProviderFunc func(resource.Kind, *runtime.Scheme, generic.RESTOptionsGetter) (rest.Storage, error)
@@ -343,10 +295,7 @@ type StorageProvider2 interface {
 	StandardStorage(kind resource.Kind, scheme *runtime.Scheme) (StandardStorage, error)
 }
 
-func (g *ResourceGroup) APIGroupInfo(storageProvider StorageProvider2) (*server.APIGroupInfo, error) {
-	scheme := g.Scheme()                                // TODO: have this be an argument?
-	parameterCodec := runtime.NewParameterCodec(scheme) // TODO: have this be an argument?
-	codecs := serializer.NewCodecFactory(scheme)        // TODO: codec based on kinds?
+func (g *ResourceGroup) APIGroupInfo(scheme *runtime.Scheme, codecs serializer.CodecFactory, parameterCodec runtime.ParameterCodec, storageProvider StorageProvider2) (*server.APIGroupInfo, error) {
 	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
 	for _, r := range g.Resources {
 		plural := strings.ToLower(r.Kind.Plural())
