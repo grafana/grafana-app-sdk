@@ -39,8 +39,8 @@ where a call to the API will kick off a workflow, rather than start the workflow
 While the SDK is geared toward this type of design, you can still put all of your business logic in your API endpoints 
 if you either need to have calls be completely synchronous, or the business logic is very simple.
 
-**Forthcoming:** the SDK codegen utility offers the ability to create a simple CRUDL backend plugin API 
-and an operator template given only one or more Schemas defined in CUE (see [Kinds documentation](custom-kinds/README.md)).
+The SDK codegen utility offers the ability to create a simple CRUDL backend plugin API 
+and an operator template given only one or more Schemas defined in CUE (see [CLI documentation](cli.md) for more info).
 
 ## A Simple Operator
 
