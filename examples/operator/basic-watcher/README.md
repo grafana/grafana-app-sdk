@@ -1,7 +1,6 @@
 # Basic Watcher Example
 
 This example code is a super-basic one-file example of a very simple kubernetes custom resource operator with a Watcher, using the SDK. 
-It doesn't handle synchronization or missed events, and is extremely noisy due to not filtering updates.
 
 ## To Run
 

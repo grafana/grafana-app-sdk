@@ -1,7 +1,6 @@
 # Basic Reconciler Example
 
 This example code is a super-basic one-file example of a very simple kubernetes custom resource operator with a Reconciler, using the SDK.
-It doesn't handle synchronization or missed events, and is extremely noisy due to not filtering updates.
 
 ## To Run
 
@@ -16,7 +15,7 @@ It doesn't handle synchronization or missed events, and is extremely noisy due t
 Start a local kubernetes cluster or use a remote one to which you have permission to create CRD's and monitor them.
 Set your kube context to the appropriate cluster, then run the operator:
 ```shell
-$ go run basic.go --kubecfg="path_to_your_kube_config"
+$ go run reconciler.go --kubecfg="path_to_your_kube_config"
 ```
 
 
