@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
@@ -25,7 +26,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Kubernetes' configuration for all our interactions
+	// Kubernetes configuration for all our interactions
 	kubeConfig, err := clientcmd.BuildConfigFromFlags("", *kubeCfgFile)
 	if err != nil {
 		panic(err)
@@ -55,7 +56,7 @@ func main() {
 	}
 
 	simpleOperator, err := simple.NewOperator(simple.OperatorConfig{
-		Name:       "simple-watcher-operator",
+		Name:       "simple-reconciler-operator",
 		KubeConfig: *kubeConfig,
 		Metrics: simple.MetricsConfig{
 			Enabled: true,
@@ -68,31 +69,24 @@ func main() {
 		panic(fmt.Errorf("unable to initialise operator: %w", err))
 	}
 
-	// Set up the watcher
-	watcher := &simple.Watcher{
-		AddFunc: func(ctx context.Context, object resource.Object) error {
-			log.Printf("Added object: %v\n", object)
-			return nil
-		},
-		UpdateFunc: func(ctx context.Context, old, new resource.Object) error {
-			log.Printf("Updated object:\n\told: %v\n\tnew: %v\n", old, new)
-			return nil
-		},
-		DeleteFunc: func(ctx context.Context, object resource.Object) error {
-			log.Printf("Deleted object: %v\n", object)
-			return nil
-		},
-		SyncFunc: func(ctx context.Context, object resource.Object) error {
-			log.Printf("Synced object: %v\n", object)
-			return nil
+	// Set up the reconciler
+	reconciler := &simple.Reconciler{
+		ReconcileFunc: func(ctx context.Context, request operator.ReconcileRequest) (operator.ReconcileResult, error) {
+			log.Printf(
+				"Reconciling object:\n\taction: %s\n\tobject: %v\n",
+				operator.ResourceActionFromReconcileAction(request.Action),
+				request.Object,
+			)
+
+			return operator.ReconcileResult{}, nil
 		},
 	}
 
-	err = simpleOperator.WatchKind(kind, watcher, simple.ListWatchOptions{
+	err = simpleOperator.ReconcileKind(kind, reconciler, simple.ListWatchOptions{
 		Namespace: "default",
 	})
 	if err != nil {
-		panic(fmt.Errorf("unable to watch kind: %w", err))
+		panic(fmt.Errorf("unable to reconcile kind: %w", err))
 	}
 
 	// Create the stop channel
