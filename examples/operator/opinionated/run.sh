@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ROOT_DIR=$(git rev-parse --show-toplevel)
-CLUSTER_NAME=${1:-"operator-app-sdk-example"}
+CLUSTER_NAME=${2:-"operator-app-sdk-example"}
 
 # Create the cluster
 sh "${ROOT_DIR}/examples/create_cluster.sh"
@@ -10,4 +10,15 @@ sh "${ROOT_DIR}/examples/create_cluster.sh"
 #kubectl --context="k3d-${CLUSTER_NAME}" apply -f "${ROOT_DIR}/examples/operator/opinionated/opinionated.yaml"
 
 # TODO: run in cluster?
-go run opinionated.go --kubecfg="${HOME}/.kube/config"
+case "$1" in
+  watcher)
+    go run watcher.go opinionated.go --kubecfg="${HOME}/.kube/config"
+    ;;
+  reconciler)
+    go run reconciler.go opinionated.go --kubecfg="${HOME}/.kube/config"
+    ;;
+  *)
+    echo "unknown option: $1" >&2
+    exit 2
+    ;;
+esac
