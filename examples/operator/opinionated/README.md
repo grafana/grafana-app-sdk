@@ -18,7 +18,7 @@ Start a local kubernetes cluster or use a remote one to which you have permissio
 Set your kube context to the appropriate cluster, then run the operator:
 
 ```shell
-$ go run <watcher/reconciler>.go opinionated.go --kubecfg="path_to_your_kube_config"
+$ go run <watcher/reconciler>/main.go --kubecfg="path_to_your_kube_config"
 ```
 
 You may see one each of an error message about failing to watch and list the custom resource,

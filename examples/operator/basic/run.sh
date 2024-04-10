@@ -9,10 +9,10 @@ sh "${ROOT_DIR}/examples/create_cluster.sh"
 # TODO: run in cluster?
 case "$1" in
   watcher)
-    go run watcher.go basic.go --kubecfg="${HOME}/.kube/config"
+    go run watcher/main.go --kubecfg="${HOME}/.kube/config"
     ;;
   reconciler)
-    go run reconciler.go basic.go --kubecfg="${HOME}/.kube/config"
+    go run reconciler/main.go --kubecfg="${HOME}/.kube/config"
     ;;
   *)
     echo "unknown option: $1" >&2

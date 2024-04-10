@@ -17,6 +17,15 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+// These are for pretty printing in the logs
+const (
+	nc     = "\033[0m"
+	red    = "\033[1;31m"
+	green  = "\033[1;32m"
+	yellow = "\033[1;33m"
+	blue   = "\033[1;34m"
+)
+
 func main() {
 	log.SetPrefix("\033[0;37m")
 	kubeCfgFile := flag.String("kubecfg", "", "kube config path")
@@ -134,4 +143,9 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("error running operator: %w", err))
 	}
+}
+
+type OpinionatedModel struct {
+	Number int    `json:"numField"`
+	String string `json:"stringField"`
 }
