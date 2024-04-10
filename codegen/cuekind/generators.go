@@ -20,23 +20,30 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // or just generate code for the current version.
 // If `versioned` is true, the paths to the generated files will include the version, and
 // the package name will be the version, rather than the kind.
-func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+// If `groupKinds` is true, kinds within the same group will exist in the same package.
+// When combined with `versioned`, each version package will contain all kinds in the group
+// which have a schema for that version.
+func ResourceGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
 			GenerateOnlyCurrent:  !versioned,
 			Depth:                1,
 			AddKubernetesCodegen: true,
+			GroupByKind:          !groupKinds,
 		},
 		&jennies.ResourceObjectGenerator{
 			OnlyUseCurrentVersion:       !versioned,
-			SubresourceTypesArePrefixed: true,
+			SubresourceTypesArePrefixed: groupKinds,
+			GroupByKind:                 !groupKinds,
 		},
 		&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: !versioned,
+			GroupByKind:           !groupKinds,
 		},
 		&jennies.CodecGenerator{
 			OnlyUseCurrentVersion: !versioned,
+			GroupByKind:           !groupKinds,
 		},
 	)
 	return g

@@ -62,14 +62,19 @@ func ResourceGenerator() *codejen.JennyList[kindsys.Custom] {
 	g := codejen.JennyListWithNamer[kindsys.Custom](kindsysNamerFunc)
 	g.Append(
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.GoTypes{
-			GenerateOnlyCurrent: true,
-			Depth:               1,
+			GenerateOnlyCurrent:  true,
+			Depth:                1,
+			GroupByKind:          true,
+			AddKubernetesCodegen: true,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.ResourceObjectGenerator{
-			OnlyUseCurrentVersion: true,
+			OnlyUseCurrentVersion:       true,
+			GroupByKind:                 true,
+			SubresourceTypesArePrefixed: false,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: true,
+			GroupByKind:           true,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&themajennies.CodecGenerator{
 			OnlyUseCurrentVersion: true,

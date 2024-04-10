@@ -275,7 +275,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true), func(kind codegen.Kind) bool {
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, true), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {
