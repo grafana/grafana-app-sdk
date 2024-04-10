@@ -1,23 +1,26 @@
-# Basic Watcher Example
+# Basic Example
 
-This example code is a super-basic one-file example of a very simple kubernetes custom resource operator with a Watcher, using the SDK. 
+This example code is a super-basic one-file example of a very simple kubernetes custom resource operator with a
+Watcher or a Reconciler, using the SDK `simple` package.
 
 ## To Run
 
 ### Using the run script
+
 1. Make sure you have k3d and go1.18+ installed
-2. Run the following to create a local k3d cluster and start the operator:
+2. Run the following to create a local k3d cluster and start the operator (you can choose between watcher and reconciler):
     ```shell
-   $ ./run.sh
+   $ ./run.sh <watcher/reconciler>
     ```
 
 ### Manually
+
 Start a local kubernetes cluster or use a remote one to which you have permission to create CRD's and monitor them.
 Set your kube context to the appropriate cluster, then run the operator:
-```shell
-$ go run watcher.go --kubecfg="path_to_your_kube_config"
-```
 
+```shell
+$ go run <watcher/reconciler>.go basic.go --kubecfg="path_to_your_kube_config"
+```
 
 You may see one each of an error message about failing to watch and list the custom resource,
 this is due to a slight delay between the custom resource being added, and the control plane knowing it exists.
@@ -26,12 +29,18 @@ This will only happen on the first run, when the resource definition doesn't yet
 ## Usage
 
 The operator will monitor for changes to any BasicCustomResource in your cluster, and log them. To demonstrate, run:
+
 ```shell
 $ kubectl create -f example.yaml
 ```
-You should see a log line for the added resource. The "noisy" part comes next, as you'll see repeated log lines for near-constant updates by kubernetes itself. These are all metadata updates, and can be filtered in a practical setting. For examples of such filtering, see the [opinionated](../opinionated/README.md) or `/example/operator/boilerplate` examples.
+
+You should see a log line for the added resource. The "noisy" part comes next, as you'll see repeated log lines for
+near-constant updates by kubernetes itself. These are all metadata updates, and can be filtered in a practical setting.
+For examples of such filtering, see the [opinionated](../opinionated/README.md) or `/example/operator/boilerplate`
+examples.
 
 Finally, you can delete the custom resource and see the delete event with
+
 ```shell
 $ kubectl delete BasicCustomResource test-resource
 ```
@@ -39,12 +48,17 @@ $ kubectl delete BasicCustomResource test-resource
 ## Managing Custom Resources
 
 You can see the custom resource created by the operator (and all custom resources in your cluster) with
+
 ```shell
 $ kubectl get CustomResourceDefinitions
 ```
+
 If you want to remove the custom resource definition created by the operator, you can do so with
+
 ```shell
 $ kubectl delete CustomResourceDefinition basiccustomresources.example.grafana.com
 ```
+
 Note that if there are any BasicCustomResources in your cluster, they will be deleted.
-If the operator is running, you will begin seeing errors in the console output, as the list/watch requests to kubernetes will now result in errors.
+If the operator is running, you will begin seeing errors in the console output, as the list/watch requests to kubernetes
+will now result in errors.
