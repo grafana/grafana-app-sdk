@@ -59,9 +59,10 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchCl
 					)
 					resp := resource.UntypedList{}
 					err := client.ListInto(ctx, namespace, resource.ListOptions{
-						LabelFilters: labelFilters,
-						Continue:     options.Continue,
-						Limit:        int(options.Limit),
+						LabelFilters:    labelFilters,
+						Continue:        options.Continue,
+						Limit:           int(options.Limit),
+						ResourceVersion: options.ResourceVersion,
 					}, &resp)
 					if err != nil {
 						return nil, err

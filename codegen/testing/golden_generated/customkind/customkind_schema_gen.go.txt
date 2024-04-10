@@ -10,7 +10,7 @@ import (
 
 // schema is unexported to prevent accidental overwrites
 var (
-	kindSchema = resource.NewSimpleSchema("custom.ext.grafana.com", "v0-0", &Object{}, resource.WithKind("CustomKind"),
+	kindSchema = resource.NewSimpleSchema("custom.ext.grafana.com", "v0-0", &CustomKind{}, resource.WithKind("CustomKind"),
 		resource.WithPlural("customkinds"), resource.WithScope(resource.NamespacedScope))
 	kind = resource.Kind{
 		Schema: kindSchema,

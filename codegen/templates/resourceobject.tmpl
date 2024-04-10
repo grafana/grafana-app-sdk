@@ -232,3 +232,6 @@ func ({{.ObjectShortName}} *{{.TypeName}}List) SetItems(items []resource.Object)
 		o.Items[i] = *items[i].(*{{.TypeName}})
 	}
 }
+
+// Interface compliance compile-time check
+var _ resource.ListObject = &{{.TypeName}}List{}

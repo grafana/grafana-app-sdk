@@ -41,6 +41,8 @@ type UpdateOptions struct {
 
 // ListOptions are the options passed to a Client.List call
 type ListOptions struct {
+	// ResourceVersion to list at
+	ResourceVersion string
 	// LabelFilters are a set of label filter strings to use when listing
 	LabelFilters []string
 	// Limit limits the number of returned results from the List call, when >0.

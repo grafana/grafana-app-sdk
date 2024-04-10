@@ -421,6 +421,11 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 					},
 				},
 			}
+			rawCRD["spec"] = spec
+			f.Data, err = yaml.Marshal(rawCRD)
+			if err != nil {
+				return nil, fmt.Errorf("unable to re-marshal CRD YAML after added conversion strategy: %w", err)
+			}
 		}
 
 		output.Write(append(f.Data, []byte("\n---\n")...))

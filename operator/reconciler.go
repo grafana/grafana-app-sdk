@@ -49,7 +49,7 @@ const (
 type ReconcileRequest struct {
 	// Action is the action that triggered this ReconcileRequest
 	Action ReconcileAction
-	// Object is the object art the time of the received action
+	// Object is the object at the time of the received action
 	Object resource.Object
 	// State is a user-defined map of state values that can be provided on retried ReconcileRequests.
 	// See State in ReconcileResult. It will always be nil on an initial Reconcile call,

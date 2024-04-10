@@ -3,27 +3,35 @@
 ![Build Status](https://github.com/grafana/grafana-app-sdk/actions/workflows/main.yml/badge.svg) 
 ![Release Status](https://github.com/grafana/grafana-app-sdk/actions/workflows/release.yml/badge.svg)
 
-<hr/>
+> [!WARNING]  
+> **This repository is currently *experimental*, which means that interfaces and behavior may change as it evolves.**
+> Minor version increments may result in breaking changes, see [Migrations](docs/migrations/README.md) for details.
 
-**This repository is currently *experimental*, which means that interfaces and behavior may change as it evolves.**
-
-<hr/>
-
-The `grafana-app-sdk` is an SDK used for developing apps/extensions for grafana. It encompasses the following:
-* Code generation and project boilerplate generation from a CLI
-* Storage and version management of unique schemas (kinds)
-* An reconciler/event-based model for handling changes to data
-* Both simple building blocks and opinionated solutions for building operators and plugins
-* An interface layer over your storage system, allowing any compatible API-server-like system to be plugged in
+The `grafana-app-sdk` is an SDK used for developing apps for grafana app platform. It consists of a CLI for generating code and projects, and a set of libraries used to make building apps easier.
 
 ## Quickstart
 
 If you want to try out using the SDK, there is a [tutorial to build a simple issue tracker](docs/tutorials/issue-tracker/README.md) which starts you from zero and brings you through to deploying a simple app built using the SDK.
 
+## Documentation
+
+Please see the [docs directory](docs/README.md) for documentation on concepts and design patterns. For go API documentation, see [godocs on pkg.go.dev](https://pkg.go.dev/github.com/grafana/grafana-app-sdk#section-directories).
+
 ## Installation of the CLI
 
 ### go install
-The simplest way to install the CLI is with `go install`. To get the latest version, use:
+
+The simplest way to install the CLI is with `go install`. 
+
+> [!NOTE]  
+> There is currently a [known issue with running go install](https://github.com/grafana/grafana-app-sdk/issues/189) for many versions. 
+> You can install locally with
+> ```shell
+> git clone git@github.com:grafana/grafana-app-sdk.git && cd grafana-app-sdk/cmd/grafana-app-sdk && go install 
+> ```
+> But be advised this will install the latest `main` commit. To install a specific version, use `git checkout <version>` before running `go install`.
+
+To get the latest version, use:
 ```bash
 go install github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk@latest
 ```
@@ -65,42 +73,14 @@ Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overv
 | `version` | Prints the version (use `-v` for a verbose print) |
 | `generate` | Generates code from your CUE kinds (defaults to CUE in `schemas`, use `-c`/`--cuepath` to speficy a different CUE path) |
 | `project init <module name>` | Creates a project template, including directory structure, go module, CUE module, and Makefile |
+| `project kind add <kind name>` | Add a boilerplate kind in CUE with descriptive comments for all fields |
 | `project component add <component>` | Add boilerplate code for a component to your project. `<component>` options are `frontend`, `backend`, and `operator` |
 | `project local init` | Initialize the `./local` directory for a local development environment (done automatically by `project init`) |
 | `project local generate` | Generate a YAML bundle for local deployment, based on your CUE kinds and `./local/config.yaml` |
 
-## Library Usage
+## Examples
 
-Read more about the library usage in the [docs](docs/README.md) directory.
-
-### `resource`
-
-Package exposing interfaces for resources and client, and the various kind of `Store` objects, which allow you to use key/value store-like objects for handling your data. 
-
-See [Resource Objects](docs/resource-objects.md) and [Resource Stores](docs/resource-stores.md) for more information on how to work with resource `Objects` and use `Store` objects.
-
-### `operator`
-
-Package containing operator code, for building out event-based and/or reconciler-based operators.
-
-
-See [Operators & Event-Based Design](docs/operators.md) for more details on building operators.
-
-### `k8s`
-
-Implementation of a storage layer using a kubernetes-compatible API server.
-
-### `plugin`
-
-Wrapper for the grafana backend plugin go SDK which adds layers on top for dealing with lazy-loading, encoding kube configs in secure JSON data, and HTTP-like routing.
-
-See [Writing Back-End Plugins](docs/plugin-backend.md) for more details on using the `plugin` package.
-
-## Dependencies
-
-The grafana-app-sdk code generation uses [kindsys](https://github.com/grafana/grafana-app-sdk/kindsys) for it's CUE kind definitions, and [thema](https://github.com/grafana/thema) for the generated code's unmarshaling.
-
-If you use the generated code, you must take a project dependency on [thema](https://github.com/grafana/thema), as it is used as a dependency in the generated code (kindsys is only used in the generation process, and is not needed in your project).
+The [examples](./examples) directory contains small examples of different grafana-app-sdk functionality. For a complete example app, you can follow the [tutorial project](docs/tutorials/issue-tracker/README.md) to build a functioning simple app with no prior knowledge necessary.
 
 ## Further Reading
 

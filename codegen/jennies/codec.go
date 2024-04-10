@@ -65,7 +65,7 @@ func (c *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: fmt.Sprintf("%s/%s_codec_gen.go", meta.Group, meta.MachineName),
+			RelativePath: fmt.Sprintf("%s/%s_codec_gen.go", meta.MachineName, meta.MachineName),
 			From:         []codejen.NamedJenny{c},
 		})
 	} else {

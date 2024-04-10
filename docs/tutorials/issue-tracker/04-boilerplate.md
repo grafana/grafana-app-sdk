@@ -161,6 +161,8 @@ So, what are these new bits of code doing?
 
 ## Go Code from backend component
 
+**Important note**: the back-end part of the plugin is primarily used as a proxy to the app API server, in order to allow the user to use grafana auth to make the request to the grafana resource API, and let the plugin make the request to the API server using credentials for the API server. The final state of app platform will allow for grafana auth to be used with the API server, and direct access to the API server from outside of the back-end, so the eventual goal is to both allow and encourage the front-end to directly interact with the API server and kubernetes-style APIs.
+
 ### `pkg/plugin`
 
 The `project add` didn't actually generate too many files for our back-end boilerplate, just a couple of go files in `pkg/plugin` and then some code in `pkg/plugin/secure`:
@@ -329,7 +331,10 @@ plugin
 │   ├── generated
 │   │   └── issue
 │   │       └── v1
-│   │           └── types.gen.ts
+│   │           └── issue_object_gen.ts
+│   │           └── types.metadata.gen.ts
+│   │           └── types.spec.gen.ts
+│   │           └── types.status.gen.ts
 │   ├── module.ts
 │   ├── pages
 │   │   ├── index.tsx
@@ -356,7 +361,50 @@ We can also safely _ignore_ a lot of this generation. If you create a grafana pl
 
 That leaves us with just our varying TypeScript files.
 
-TODO TypeScript gen explanation
+### Pages
+
+`pages/` contains the acual front-end pages to be displayed for the app. `main.tsx` is your main plugin page, which by default just contains a simple statement declaring it your main landing page:
+
+```TypeScript
+export const MainPage = () => {
+  useStyles2(getStyles);
+
+  return (
+      <div>
+        <h1>Main Landing Page</h1>
+        <div>This is your main landing page</div>
+      </div>
+  );
+};
+```
+
+`MainPage` is used by the router when displaying pages--you can add more by creating other exported functions and registering them in the router.
+
+### Router
+
+`components/Routes/Router.tsx` contains the router for your app frontend. By default only the `MainPage` is routed, and matches any path:
+```TypeScript
+export const Routes = () => {
+  useNavigation();
+
+  return (
+    <Switch>
+      <Route exact path={prefixRoute(ROUTES.Main)} component={MainPage} />
+
+      {/* Default page */}
+      <Route exact path="*">
+        <Redirect to={prefixRoute(ROUTES.Main)} />
+      </Route>
+    </Switch>
+  );
+};
+```
+
+`ROUTES.Main` is a constant pulled from `constants.ts`. `useNavigation` and `prefixRoute` are pulled from `utils`.
+
+### Types
+
+`generated/issue/v1` contains the types for our v1 `Issue` kind, which we can use to interact with the plugin backend (and API server).
 
 ## Go Code & Dockerfile from operator component
 

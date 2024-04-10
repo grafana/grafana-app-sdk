@@ -68,7 +68,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, GetGeneratedPath(g.GroupByKind, kind, ver.Version))
+		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, ToPackageName(kind.Properties().MachineName))
 	}
 
 	files := make(codejen.Files, 0)

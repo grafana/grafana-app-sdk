@@ -18,9 +18,9 @@ type JSONCodec struct{}
 
 // Read reads JSON-encoded bytes from `reader` and unmarshals them into `into`
 func (*JSONCodec) Read(reader io.Reader, into resource.Object) error {
-	cast, ok := into.(*Object)
+	cast, ok := into.(*CustomKind)
 	if !ok {
-		return fmt.Errorf("can only read into type *customkind.Object")
+		return fmt.Errorf("can only read into type *customkind.CustomKind")
 	}
 
 	temp := &resource.TypedSpecStatusObject[json.RawMessage, json.RawMessage]{}
