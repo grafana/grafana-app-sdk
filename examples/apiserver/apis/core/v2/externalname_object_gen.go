@@ -260,3 +260,6 @@ func (o *ExternalNameList) SetItems(items []resource.Object) {
 		o.Items[i] = *items[i].(*ExternalName)
 	}
 }
+
+// Interface compliance compile-time check
+var _ resource.ListObject = &ExternalNameList{}
