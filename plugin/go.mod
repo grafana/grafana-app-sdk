@@ -3,7 +3,7 @@ module github.com/grafana/grafana-app-sdk/plugin
 go 1.22.2
 
 require (
-	github.com/grafana/grafana-plugin-sdk-go v0.221.0
+	github.com/grafana/grafana-plugin-sdk-go v0.222.0
 	github.com/prometheus/client_golang v1.19.0
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.25.0
