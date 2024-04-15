@@ -18,6 +18,13 @@ func GetOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenA
 		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameSpec":                schema_apiserver_apis_core_v1_ExternalNameSpec(ref),
 		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNameStatus":              schema_apiserver_apis_core_v1_ExternalNameStatus(ref),
 		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.ExternalNamestatusOperatorState": schema_apiserver_apis_core_v1_ExternalNamestatusOperatorState(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKind":                        schema_apiserver_apis_core_v1_TestKind(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindList":                    schema_apiserver_apis_core_v1_TestKindList(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindOperatorState":           schema_apiserver_apis_core_v1_TestKindOperatorState(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindSpec":                    schema_apiserver_apis_core_v1_TestKindSpec(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindStatus":                  schema_apiserver_apis_core_v1_TestKindStatus(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindSubType":                 schema_apiserver_apis_core_v1_TestKindSubType(ref),
+		"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindstatusOperatorState":     schema_apiserver_apis_core_v1_TestKindstatusOperatorState(ref),
 	}
 }
 
@@ -239,6 +246,307 @@ func schema_apiserver_apis_core_v1_ExternalNamestatusOperatorState(ref common.Re
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Description: "ExternalNamestatusOperatorState defines model for ExternalNamestatus.#OperatorState.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"descriptiveState": {
+						SchemaProps: spec.SchemaProps{
+							Description: "descriptiveState is an optional more descriptive state field which has no requirements on format",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"details": {
+						SchemaProps: spec.SchemaProps{
+							Description: "details contains any extra information that is operator-specific",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"object"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"lastEvaluation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "lastEvaluation is the ResourceVersion last evaluated",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"state": {
+						SchemaProps: spec.SchemaProps{
+							Description: "state describes the state of the lastEvaluation. It is limited to three possible states for machine evaluation.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"lastEvaluation", "state"},
+			},
+		},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKind(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+					"spec": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindSpec"),
+						},
+					},
+					"status": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindStatus"),
+						},
+					},
+				},
+				Required: []string{"metadata", "spec", "status"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindSpec", "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindStatus", "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKindList(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						},
+					},
+					"items": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"array"},
+							Items: &spec.SchemaOrArray{
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKind"),
+									},
+								},
+							},
+						},
+					},
+				},
+				Required: []string{"metadata", "items"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKind", "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKindOperatorState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TestKindOperatorState defines model for TestKindOperatorState.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"descriptiveState": {
+						SchemaProps: spec.SchemaProps{
+							Description: "descriptiveState is an optional more descriptive state field which has no requirements on format",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"details": {
+						SchemaProps: spec.SchemaProps{
+							Description: "details contains any extra information that is operator-specific",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"object"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"lastEvaluation": {
+						SchemaProps: spec.SchemaProps{
+							Description: "lastEvaluation is the ResourceVersion last evaluated",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"state": {
+						SchemaProps: spec.SchemaProps{
+							Description: "state describes the state of the lastEvaluation. It is limited to three possible states for machine evaluation.",
+							Default:     "",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+				},
+				Required: []string{"lastEvaluation", "state"},
+			},
+		},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKindSpec(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TestKindSpec defines model for TestKindSpec.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"stringField": {
+						SchemaProps: spec.SchemaProps{
+							Default: "",
+							Type:    []string{"string"},
+							Format:  "",
+						},
+					},
+					"subtypeField": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindSubType"),
+						},
+					},
+				},
+				Required: []string{"stringField", "subtypeField"},
+			},
+		},
+		Dependencies: []string{
+			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindSubType"},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKindStatus(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TestKindStatus defines model for TestKindStatus.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"additionalFields": {
+						SchemaProps: spec.SchemaProps{
+							Description: "additionalFields is reserved for future use",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Type:   []string{"object"},
+										Format: "",
+									},
+								},
+							},
+						},
+					},
+					"operatorStates": {
+						SchemaProps: spec.SchemaProps{
+							Description: "operatorStates is a map of operator ID to operator state evaluations. Any operator which consumes this kind SHOULD add its state evaluation information to this field.",
+							Type:        []string{"object"},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: true,
+								Schema: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Default: map[string]interface{}{},
+										Ref:     ref("github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindstatusOperatorState"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		Dependencies: []string{
+			"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/core/v1.TestKindstatusOperatorState"},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKindSubType(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TestKindSubType defines model for TestKindSubType.",
+				Type:        []string{"object"},
+				Properties: map[string]spec.Schema{
+					"subField1": {
+						SchemaProps: spec.SchemaProps{
+							Default: 0,
+							Type:    []string{"integer"},
+							Format:  "int64",
+						},
+					},
+					"subField2": {
+						SchemaProps: spec.SchemaProps{
+							Default: false,
+							Type:    []string{"boolean"},
+							Format:  "",
+						},
+					},
+				},
+				Required: []string{"subField1", "subField2"},
+			},
+		},
+	}
+}
+
+func schema_apiserver_apis_core_v1_TestKindstatusOperatorState(ref common.ReferenceCallback) common.OpenAPIDefinition {
+	return common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "TestKindstatusOperatorState defines model for TestKindstatus.#OperatorState.",
 				Type:        []string{"object"},
 				Properties: map[string]spec.Schema{
 					"descriptiveState": {

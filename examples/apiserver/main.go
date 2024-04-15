@@ -50,11 +50,16 @@ func main() {
 		GetOpenAPIDefinitions: corev2.GetOpenAPIDefinitions,
 		// No Reconciler for this one, because we'd get duplicate events (one each for v1 and v2 of the kind)
 	}
+	// v1 TestKind
+	testKindV1 := apiserver.Resource{
+		Kind:                  corev1.TestKindKind(),
+		GetOpenAPIDefinitions: corev1.GetOpenAPIDefinitions,
+	}
 
 	// apiserver.Resource items must be added to an apiserver.ResourceGroup.
 	// Currently, there is no validation that the Name in the ResourceGroup matches the Group in each added Resource
 	// TODO: have a Validate() method on ResourceGroup to check that?
-	resourceGroup := apiserver.NewResourceGroup(corev1.ExternalNameKind().Group(), []apiserver.Resource{externalNameV1, externalNameV2})
+	resourceGroup := apiserver.NewResourceGroup(corev1.ExternalNameKind().Group(), []apiserver.Resource{externalNameV1, externalNameV2, testKindV1})
 
 	// APIServerOptions is used to create the API server from one or more ResourceGroups.
 	// TODO: this will be expanded upon

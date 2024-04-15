@@ -303,7 +303,10 @@ func (g *ResourceGroup) APIGroupInfo(scheme *runtime.Scheme, codecs serializer.C
 		if err != nil {
 			return nil, err
 		}
-		store := map[string]rest.Storage{}
+		store, ok := apiGroupInfo.VersionedResourcesStorageMap[r.Kind.Version()]
+		if !ok {
+			store = map[string]rest.Storage{}
+		}
 		// Resource storage
 		store[plural] = s
 		// Subresource storage
