@@ -14,7 +14,7 @@ require (
 	github.com/grafana/cuetsy v0.1.10
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/labstack/echo/v4 v4.11.4
+	github.com/labstack/echo/v4 v4.12.0
 	github.com/matryer/moq v0.3.4
 	github.com/prometheus/client_golang v1.19.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
