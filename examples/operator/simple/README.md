@@ -1,7 +1,9 @@
-# Basic Example
+# Example of `simple` package usage
 
-This example code is a super-basic one-file example of a very simple kubernetes custom resource operator with a
-Watcher or a Reconciler, using the SDK `simple` package.
+This example code is a one-file example of a kubernetes custom resource operator with a Watcher or a Reconciler, using the SDK `simple` package.
+
+Such example is to demonstrate the usage of such package, which is a wrap around the "opinionated" logic defined in [operator.OpinionatedWatcher](../../../operator/opinionatedwatcher.go#L38) and [operator.OpinionatedReconciler](../../../operator/reconciler.go#L135), meant to simplify its usage. 
+Worth mentioning that, as per such wrap, this example operator behavior will remain similar to the one in the ["opinionated" example](../opinionated/README.md).
 
 ## To Run
 
@@ -34,12 +36,9 @@ The operator will monitor for changes to any BasicCustomResource in your cluster
 $ kubectl create -f example.yaml
 ```
 
-You should see a log line for the added resource. The "noisy" part comes next, as you'll see repeated log lines for
-near-constant updates by kubernetes itself. These are all metadata updates, and can be filtered in a practical setting.
-For examples of such filtering, see the [opinionated](../opinionated/README.md) or `/example/operator/boilerplate`
-examples.
+You should see a log line for the added resource. 
 
-Finally, you can delete the custom resource and see the delete event with
+You can delete the custom resource and see the delete event with
 
 ```shell
 $ kubectl delete BasicCustomResource test-resource
@@ -60,5 +59,8 @@ $ kubectl delete CustomResourceDefinition basiccustomresources.example.grafana.c
 ```
 
 Note that if there are any BasicCustomResources in your cluster, they will be deleted.
+
+If the operator is not currently running, this command will hang while it waits for the resource deletion
+(you can either run the operator, or remove the finalizer from each resource yourself via a kubectl patch).
 If the operator is running, you will begin seeing errors in the console output, as the list/watch requests to kubernetes
 will now result in errors.
