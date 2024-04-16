@@ -24,7 +24,7 @@ jobs:
       uses: golangci/golangci-lint-action@v3
       with:
         version: v1.55.2
-        args: --timeout 5m
+        args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   test:
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +40,8 @@ jobs:
         go-version: "1.21"
     # make test
     - name: Test
-      run: go test -v ./...
+      # find all go.mod files and run go test against directories containing go.mod files
+      run: go test -v $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   build:
     runs-on: ubuntu-latest
     steps:
