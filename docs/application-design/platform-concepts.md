@@ -34,9 +34,10 @@ Standardizing the API makes it easy to extend it, build tools that integrate wit
 
 Most important limitations are:
 
-* All routes have to be resource-oriented. Think about how you structure your application's logic around resources & subresources. For example, if you want to have a resource with some usage stats, you cannot have an RPC-lime API for it, you have to create a dedicated `FooStats` subresource (assuming your resource is called `Foo`), which would contain a stats object.
+* All routes have to be resource-oriented. Think about how you structure your application's logic around resources & subresources. For example, if you want to have a resource with some usage stats, you cannot have an RPC-like API for it, you have to create a dedicated `FooStats` subresource (assuming your resource is called `Foo`), which would contain a stats object.
 * Clients can always call any of the supported API versions, but only one version is considered "primary". When rolling out a new API version, you may need to think how you'd migrate existing data.
 * Namespacing allows for isolating tenants but also means that if you want to move a resource from one tenant to another, you have to create it in the new namespace and delete it in the old one, there is no "move" operation.
+* Similarly to the previous point, there is no "rename" operation. Changing an object's `metadata.name` is not possible after the object has been created, so if you need to rename objects, you have to perform the same "create a copy with a new name and delete the old object" series of operations. A common pattern for app developers is to treat `metadata.name` as an identifier instead (which it is) and use another field for user-facing, editable name. That way users can still rename the objects, without having to "create new and delete old" every time they do that.
 
 ## Asynchronous business logic
 
@@ -60,7 +61,7 @@ The storage exposes a relatively simple (compared to e.g. SQL) API:
 
 * `Get` - returns a single object for a given API group, version and Kind, using object's UID.
 * `List` - fetches a list of objects for a given API group, version and Kind, e.g. all Dashboards. It supports pagination and some basic filtering by namespaces or object labels.
-* `Watch` - works similarly to `List` but instead of returning immediately, instead opens a stream, which receives newly created objects, objects which have been updated or deleted. It lets the client "watch" for changes of a specific Kind, hence the name.
+* `Watch` - works similarly to `List` but instead of returning immediately, instead opens a stream, which receives newly created objects, objects which have been updated and objects which have been deleted. In other words, it lets the client "watch" for changes of a specific Kind, hence the name.
 * `Create` - creates a new object from the data in the request.
 * `Update` - updates a specific object given its UID. Optionally the object's resource version could be supplied to perform optimistic locking - the update will be applied only if the version of the object in the storage is the same as the one provided in the request.
 * `Delete` - deletes an existing object by its UID.
