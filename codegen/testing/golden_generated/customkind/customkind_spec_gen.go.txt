@@ -14,6 +14,7 @@ const (
 )
 
 // InnerObject1 defines model for InnerObject1.
+// +k8s:openapi-gen=true
 type InnerObject1 struct {
 	InnerField1 string         `json:"innerField1"`
 	InnerField2 []string       `json:"innerField2"`
@@ -21,12 +22,14 @@ type InnerObject1 struct {
 }
 
 // InnerObject2 defines model for InnerObject2.
+// +k8s:openapi-gen=true
 type InnerObject2 struct {
 	Details map[string]interface{} `json:"details"`
 	Name    string                 `json:"name"`
 }
 
 // Spec defines model for Spec.
+// +k8s:openapi-gen=true
 type Spec struct {
 	BoolField  bool             `json:"boolField"`
 	Enum       SpecEnum         `json:"enum"`
@@ -41,15 +44,18 @@ type Spec struct {
 }
 
 // SpecEnum defines model for Spec.Enum.
+// +k8s:openapi-gen=true
 type SpecEnum string
 
 // Type1 defines model for Type1.
+// +k8s:openapi-gen=true
 type Type1 struct {
 	Group   string   `json:"group"`
 	Options []string `json:"options,omitempty"`
 }
 
 // Type2 defines model for Type2.
+// +k8s:openapi-gen=true
 type Type2 struct {
 	Details map[string]interface{} `json:"details"`
 	Group   string                 `json:"group"`

@@ -1,0 +1,10 @@
+kind: TestKind
+apiVersion: core.grafana.internal/v1
+metadata:
+  name: example
+  namespace: "default"
+spec:
+  stringField: "foo"
+  subtypeField:
+    subField1: 1
+    subField2: true

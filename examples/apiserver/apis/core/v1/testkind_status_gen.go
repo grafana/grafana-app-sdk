@@ -1,0 +1,70 @@
+package v1
+
+// Defines values for TestKindOperatorStateState.
+const (
+	TestKindOperatorStateStateFailed     TestKindOperatorStateState = "failed"
+	TestKindOperatorStateStateInProgress TestKindOperatorStateState = "in_progress"
+	TestKindOperatorStateStateSuccess    TestKindOperatorStateState = "success"
+)
+
+// Defines values for TestKindstatusOperatorStateState.
+const (
+	TestKindstatusOperatorStateStateFailed     TestKindstatusOperatorStateState = "failed"
+	TestKindstatusOperatorStateStateInProgress TestKindstatusOperatorStateState = "in_progress"
+	TestKindstatusOperatorStateStateSuccess    TestKindstatusOperatorStateState = "success"
+)
+
+// TestKindOperatorState defines model for TestKindOperatorState.
+// +k8s:openapi-gen=true
+type TestKindOperatorState struct {
+	// descriptiveState is an optional more descriptive state field which has no requirements on format
+	DescriptiveState *string `json:"descriptiveState,omitempty"`
+
+	// details contains any extra information that is operator-specific
+	Details map[string]interface{} `json:"details,omitempty"`
+
+	// lastEvaluation is the ResourceVersion last evaluated
+	LastEvaluation string `json:"lastEvaluation"`
+
+	// state describes the state of the lastEvaluation.
+	// It is limited to three possible states for machine evaluation.
+	State TestKindOperatorStateState `json:"state"`
+}
+
+// TestKindOperatorStateState state describes the state of the lastEvaluation.
+// It is limited to three possible states for machine evaluation.
+// +k8s:openapi-gen=true
+type TestKindOperatorStateState string
+
+// TestKindStatus defines model for TestKindStatus.
+// +k8s:openapi-gen=true
+type TestKindStatus struct {
+	// additionalFields is reserved for future use
+	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
+
+	// operatorStates is a map of operator ID to operator state evaluations.
+	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
+	OperatorStates map[string]TestKindstatusOperatorState `json:"operatorStates,omitempty"`
+}
+
+// TestKindstatusOperatorState defines model for TestKindstatus.#OperatorState.
+// +k8s:openapi-gen=true
+type TestKindstatusOperatorState struct {
+	// descriptiveState is an optional more descriptive state field which has no requirements on format
+	DescriptiveState *string `json:"descriptiveState,omitempty"`
+
+	// details contains any extra information that is operator-specific
+	Details map[string]interface{} `json:"details,omitempty"`
+
+	// lastEvaluation is the ResourceVersion last evaluated
+	LastEvaluation string `json:"lastEvaluation"`
+
+	// state describes the state of the lastEvaluation.
+	// It is limited to three possible states for machine evaluation.
+	State TestKindstatusOperatorStateState `json:"state"`
+}
+
+// TestKindstatusOperatorStateState state describes the state of the lastEvaluation.
+// It is limited to three possible states for machine evaluation.
+// +k8s:openapi-gen=true
+type TestKindstatusOperatorStateState string

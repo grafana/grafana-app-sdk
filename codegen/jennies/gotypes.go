@@ -48,6 +48,14 @@ type GoTypes struct {
 	// Typically, a value of 0 is "safest" for NamingDepth, as it prevents overlapping names for types.
 	// However, if you know that your fields have unique names up to a certain depth, you may configure this to be higher.
 	NamingDepth int
+
+	AddKubernetesCodegen bool
+
+	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
+	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
+	// When GroupByKind is false, subresource types (such as spec and status) are prefixed with the kind name,
+	// i.e. generating FooSpec instead of Spec for kind.Name() = "Foo" and Depth=1
+	GroupByKind bool
 }
 
 func (*GoTypes) JennyName() string {
@@ -60,7 +68,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
+		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, ToPackageName(kind.Properties().MachineName))
 	}
 
 	files := make(codejen.Files, 0)
@@ -71,7 +79,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			continue
 		}
 
-		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), filepath.Join(kind.Properties().MachineName, ToPackageName(ver.Version)))
+		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), GetGeneratedPath(g.GroupByKind, kind, ver.Version))
 		if err != nil {
 			return nil, err
 		}
@@ -83,13 +91,22 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 
 func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
 	if g.Depth > 0 {
-		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix)
+		namePrefix := ""
+		if !g.GroupByKind {
+			namePrefix = exportField(name)
+		}
+		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix)
 	}
 
+	applyFuncs := make([]dstutil.ApplyFunc, 0)
+	if g.AddKubernetesCodegen {
+		applyFuncs = append(applyFuncs, addGenComments())
+	}
 	goBytes, err := GoTypesFromCUE(version.Schema, CUEGoConfig{
 		PackageName: packageName,
 		Name:        exportField(sanitizeLabelString(name)),
 		Version:     version.Version,
+		ApplyFuncs:  applyFuncs,
 	}, 0)
 	if err != nil {
 		return nil, err
@@ -101,16 +118,22 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 	}}, nil
 }
 
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
+		applyFuncs := make([]dstutil.ApplyFunc, 0)
+		if g.AddKubernetesCodegen && fieldName[len(fieldName)-1] != "metadata" { // metadata hack because of thema
+			applyFuncs = append(applyFuncs, addGenComments())
+		}
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
 			PackageName: packageName,
 			Name:        exportField(strings.Join(fieldName, "")),
+			NamePrefix:  namePrefix,
 			Version:     kv.Version,
+			ApplyFuncs:  applyFuncs,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
 		if err != nil {
 			return nil, err
@@ -129,7 +152,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix)
+		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix)
 		if err != nil {
 			return nil, err
 		}
@@ -151,11 +174,13 @@ type CUEGoConfig struct {
 
 	// UseGoDeclInComments sets the name of the fields and structs at the beginning of each comment.
 	UseGoDeclInComments bool
+
+	NamePrefix string
 }
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
 	openAPIConfig := CUEOpenAPIConfig{
-		Name:    cfg.Name,
+		Name:    cfg.NamePrefix + cfg.Name,
 		Version: cfg.Version,
 		NameFunc: func(value cue.Value, path cue.Path) string {
 			i := 0
@@ -170,7 +195,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 			if i > 0 {
 				path = cue.MakePath(path.Selectors()[i:]...)
 			}
-			return strings.Trim(path.String(), "?#")
+			return cfg.NamePrefix + strings.Trim(path.String(), "?#")
 		},
 	}
 
