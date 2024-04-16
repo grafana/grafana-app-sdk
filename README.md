@@ -62,7 +62,7 @@ A typical grafana app deployment might look more like:
 
 ![Application Using SDK Diagram](docs/diagrams/design_pattern_simple.png)
 
-For more details on application design, see [App Design](docs/app_design.md).
+For more details on application design, see [application design documentation](docs/application-design/README.md).
 
 ## CLI Usage
 
