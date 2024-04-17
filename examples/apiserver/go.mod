@@ -115,3 +115,4 @@ replace github.com/grafana/grafana-app-sdk => ../..
 replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
 
 replace github.com/prometheus/common => github.com/prometheus/common v0.47.0 // indirect
+replace github.com/prometheus/client_golang => github.com/prometheus/client_golang v1.18.0 // indirect

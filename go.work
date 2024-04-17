@@ -3,6 +3,7 @@ go 1.22.2
 use (
 	.
 	./plugin
+	examples/apiserver
 )
 
 // Required for compatibility with grafana/grafana-plugin-sdk-go & grafana/thema
