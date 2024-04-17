@@ -104,7 +104,6 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("unable to create controller: %w", err))
 	}
-
 	// Since we're not running multiple watchers or informers, we can directly add the watcher to the informer,
 	// without needing an InformerController to manage it.
 	informer.AddEventHandler(watcher)
@@ -141,8 +140,4 @@ func main() {
 type OpinionatedModel struct {
 	Number int    `json:"numField"`
 	String string `json:"stringField"`
-}
-
-type OpinionatedStatus struct {
-	Something string `json:"something"`
 }
