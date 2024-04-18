@@ -98,7 +98,7 @@ func extractOtherMetadataField(annotations map[string]string) string {
 }
 func extractUpdateTimestamp(annotations map[string]string) time.Time {
 
-	parsed, _ := time.Parse(annotations["updateTimestamp"], time.RFC3339)
+	parsed, _ := time.Parse(time.RFC3339, annotations["updateTimestamp"])
 	return parsed
 }
 func extractUpdatedBy(annotations map[string]string) string {

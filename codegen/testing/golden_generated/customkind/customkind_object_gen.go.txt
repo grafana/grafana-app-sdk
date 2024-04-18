@@ -214,7 +214,7 @@ func (o *CustomKind) GetUpdateTimestamp() time.Time {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	parsed, _ := time.Parse(o.ObjectMeta.Annotations["grafana.com/updateTimestamp"], time.RFC3339)
+	parsed, _ := time.Parse(time.RFC3339, o.ObjectMeta.Annotations["grafana.com/updateTimestamp"])
 	return parsed
 }
 

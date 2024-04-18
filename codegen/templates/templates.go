@@ -62,7 +62,7 @@ var (
 			return fmt.Sprintf("%s = %s.Format(time.RFC3339)", setToVarName, inputVarName)
 		},
 		GetFuncTemplate: func(varName string) string {
-			return fmt.Sprintf("parsed, _ := time.Parse(%s, time.RFC3339)\nreturn parsed", varName)
+			return fmt.Sprintf("parsed, _ := time.Parse(time.RFC3339, %s)\nreturn parsed", varName)
 		},
 		AdditionalImports: []string{"time"},
 	}
