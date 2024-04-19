@@ -1,6 +1,7 @@
 module github.com/grafana/grafana-app-sdk
 
 go 1.21
+toolchain go1.22.2
 
 // Required for compatibility with grafana/grafana-plugin-sdk-go & grafana/thema
 replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
@@ -31,10 +32,10 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	google.golang.org/grpc v1.63.2
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.29.4
-	k8s.io/apiextensions-apiserver v0.29.4
-	k8s.io/apimachinery v0.29.4
-	k8s.io/client-go v0.29.4
+	k8s.io/api v0.30.0
+	k8s.io/apiextensions-apiserver v0.30.0
+	k8s.io/apimachinery v0.30.0
+	k8s.io/client-go v0.30.0
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b
 )
 
@@ -106,8 +107,7 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/klog/v2 v2.110.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20240220201932-37d671a357a5 // indirect
+	k8s.io/klog/v2 v2.120.1 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
