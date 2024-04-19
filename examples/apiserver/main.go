@@ -39,10 +39,11 @@ func main() {
 		}},
 		Mutator:   &mutatingAdmissionController{},
 		Validator: &validatingAdmissionController{},
-		// Reconciler to run for this kind
-		Reconciler: &simple.Reconciler{
+		// Reconciler to run for this kind. We use simple.ResourceReconcilerFunc to wrap our simple reconciler
+		// inside a no-op instantiation function, since we don't need the ClientGenerator or OptionsGetter in our reconciler
+		Reconciler: simple.ResourceReconcilerFunc(&simple.Reconciler{
 			ReconcileFunc: reconcileV1ExternalNames,
-		},
+		}),
 	}
 	// Create an API Server Resource for the v2 ExternalName
 	externalNameV2 := apiserver.Resource{

@@ -13,7 +13,7 @@ import (
 // ReconcilersPostStartHook returns a PostStartHook function that creates a controller and adds an informer/reconciler
 // pair for each Reconciler in a Resource in the ResourceGroup(s). The informer(s) will use a client from the
 // PostStartHookContext, and the controller will run indefinitely until the PostStartContext's StopCh is closed.
-func ReconcilersPostStartHook(groups ...ResourceGroup) func(ctx genericapiserver.PostStartHookContext) error {
+func ReconcilersPostStartHook(getter OptionsGetter, groups ...ResourceGroup) func(ctx genericapiserver.PostStartHookContext) error {
 	return func(ctx genericapiserver.PostStartHookContext) error {
 		// We need the loopback config to run reconcilers
 		if ctx.LoopbackClientConfig == nil {
@@ -35,7 +35,11 @@ func ReconcilersPostStartHook(groups ...ResourceGroup) func(ctx genericapiserver
 			for _, r := range g.Resources {
 				if r.Reconciler != nil {
 					kindStr := fmt.Sprintf("%s.%s/%s", r.Kind.Plural(), r.Kind.Group(), r.Kind.Version())
-					err := controller.AddReconciler(r.Reconciler, kindStr)
+					reconciler, err := r.Reconciler(clientRegistry, getter)
+					if err != nil {
+						return fmt.Errorf("error creating reconciler for %s: %w", kindStr, err)
+					}
+					err = controller.AddReconciler(reconciler, kindStr)
 					if err != nil {
 						return fmt.Errorf("error adding reconciler for %s: %w", kindStr, err)
 					}

@@ -27,13 +27,15 @@ import (
 	"k8s.io/kube-openapi/pkg/common"
 )
 
+var _ APIGroupProvider = &ResourceGroup{}
+
 type Resource struct {
 	Kind                  resource.Kind
 	GetOpenAPIDefinitions common.GetOpenAPIDefinitions
 	Subresources          []SubresourceRoute
 	Validator             resource.ValidatingAdmissionController
 	Mutator               resource.MutatingAdmissionController
-	Reconciler            operator.Reconciler // TODO: do we want this here, or only here for the simple package version?
+	Reconciler            func(generator resource.ClientGenerator, getter OptionsGetter) (operator.Reconciler, error)
 }
 
 func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
@@ -338,7 +340,11 @@ func (g *ResourceGroup) GetPostStartRunners(generator resource.ClientGenerator, 
 	for _, r := range g.Resources {
 		if r.Reconciler != nil {
 			kindStr := fmt.Sprintf("%s.%s/%s", r.Kind.Plural(), r.Kind.Group(), r.Kind.Version())
-			err := c.AddReconciler(r.Reconciler, kindStr)
+			reconciler, err := r.Reconciler(generator, getter)
+			if err != nil {
+				return nil, fmt.Errorf("error creating reconciler for %s: %w", kindStr, err)
+			}
+			err = c.AddReconciler(reconciler, kindStr)
 			if err != nil {
 				return nil, fmt.Errorf("error adding reconciler for %s: %w", kindStr, err)
 			}

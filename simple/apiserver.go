@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/apiserver"
+	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
 	filestorage "github.com/grafana/grafana/pkg/apiserver/storage/file"
 	"github.com/spf13/cobra"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -260,7 +262,7 @@ func (o *APIServerOptions) Config() (*APIServerConfig, error) {
 		panic(err)
 	}
 	serverConfig.GenericConfig.RESTOptionsGetter = restStorage
-	serverConfig.GenericConfig.AddPostStartHook("start-resource-informers", apiserver.ReconcilersPostStartHook(o.groups...))
+	serverConfig.GenericConfig.AddPostStartHook("start-resource-informers", apiserver.ReconcilersPostStartHook(nil, o.groups...))
 
 	return serverConfig, nil
 }
@@ -277,4 +279,10 @@ func (o *APIServerOptions) Run(stopCh <-chan struct{}) error {
 	}
 
 	return server.GenericAPIServer.PrepareRun().Run(stopCh)
+}
+
+func ResourceReconcilerFunc(reconciler operator.Reconciler) func(generator resource.ClientGenerator, getter apiserver.OptionsGetter) (operator.Reconciler, error) {
+	return func(generator resource.ClientGenerator, getter apiserver.OptionsGetter) (operator.Reconciler, error) {
+		return reconciler, nil
+	}
 }
