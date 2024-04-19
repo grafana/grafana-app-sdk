@@ -132,7 +132,11 @@ func (c completedConfig) NewServer() (*Server, error) {
 	parameterCodec := runtime.NewParameterCodec(scheme)
 	provider := apiserver.NewRESTStorageProvider(c.GenericConfig.RESTOptionsGetter)
 	for _, g := range c.ExtraConfig.ResourceGroups {
-		apiGroupInfo, err := g.APIGroupInfo(scheme, codecs, parameterCodec, provider)
+		apiGroupInfo, err := g.APIGroupInfo(provider, apiserver.APIGroupInfoOptions{
+			Scheme:         scheme,
+			Codecs:         codecs,
+			ParameterCodec: parameterCodec,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -183,12 +187,15 @@ func NewAPIServerOptions(groups []apiserver.ResourceGroup, out, errOut io.Writer
 	}
 
 	o.RecommendedOptions.Admission.Plugins = admission.NewPlugins()
-	for gid, g := range groups {
+	for i := 0; i < len(groups); i++ {
+		groups[i].RegisterAdmissionPlugins(o.RecommendedOptions.Admission.Plugins)
+	}
+	/*for gid, g := range groups {
 		for rid, _ := range g.Resources {
 			r := &groups[gid].Resources[rid]
 			r.RegisterAdmissionPlugin(o.RecommendedOptions.Admission.Plugins)
 		}
-	}
+	}*/
 
 	o.RecommendedOptions.Admission.RecommendedPluginOrder = o.RecommendedOptions.Admission.Plugins.Registered()
 	o.RecommendedOptions.Admission.EnablePlugins = o.RecommendedOptions.Admission.Plugins.Registered()

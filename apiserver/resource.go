@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
@@ -291,12 +290,13 @@ type SubresourceStorage interface {
 	rest.Patcher
 }
 
-type StorageProvider2 interface {
-	StandardStorage(kind resource.Kind, scheme *runtime.Scheme) (StandardStorage, error)
-}
-
-func (g *ResourceGroup) APIGroupInfo(scheme *runtime.Scheme, codecs serializer.CodecFactory, parameterCodec runtime.ParameterCodec, storageProvider StorageProvider2) (*server.APIGroupInfo, error) {
-	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, parameterCodec, codecs)
+func (g *ResourceGroup) APIGroupInfo(storageProvider StorageProvider, options APIGroupInfoOptions) (*server.APIGroupInfo, error) {
+	scheme := options.Scheme
+	if scheme == nil {
+		scheme = runtime.NewScheme()
+		g.AddToScheme(scheme)
+	}
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(g.Name, scheme, options.ParameterCodec, options.Codecs)
 	for _, r := range g.Resources {
 		plural := strings.ToLower(r.Kind.Plural())
 		s, err := storageProvider.StandardStorage(r.Kind, scheme)
@@ -324,6 +324,43 @@ func (g *ResourceGroup) APIGroupInfo(scheme *runtime.Scheme, codecs serializer.C
 		apiGroupInfo.VersionedResourcesStorageMap[r.Kind.Version()] = store
 	}
 	return &apiGroupInfo, nil
+}
+
+func (g *ResourceGroup) RegisterAdmissionPlugins(plugins *admission.Plugins) {
+	for i := 0; i < len(g.Resources); i++ {
+		g.Resources[i].RegisterAdmissionPlugin(plugins)
+	}
+}
+
+func (g *ResourceGroup) GetPostStartRunners(generator resource.ClientGenerator, getter OptionsGetter) ([]Runner, error) {
+	c := operator.NewInformerController(operator.DefaultInformerControllerConfig()) // TODO: get config from OptionsGetter?
+	reconcilerCount := 0
+	for _, r := range g.Resources {
+		if r.Reconciler != nil {
+			kindStr := fmt.Sprintf("%s.%s/%s", r.Kind.Plural(), r.Kind.Group(), r.Kind.Version())
+			err := c.AddReconciler(r.Reconciler, kindStr)
+			if err != nil {
+				return nil, fmt.Errorf("error adding reconciler for %s: %w", kindStr, err)
+			}
+			client, err := generator.ClientFor(r.Kind)
+			if err != nil {
+				return nil, fmt.Errorf("error creating kubernetes client for %s: %w", kindStr, err)
+			}
+			informer, err := operator.NewKubernetesBasedInformer(r.Kind, client, resource.NamespaceAll)
+			if err != nil {
+				return nil, fmt.Errorf("error creating informer for %s: %w", kindStr, err)
+			}
+			err = c.AddInformer(informer, kindStr)
+			if err != nil {
+				return nil, fmt.Errorf("error adding informer for %s to controller: %w", kindStr, err)
+			}
+			reconcilerCount++
+		}
+	}
+	if reconcilerCount == 0 {
+		return nil, nil
+	}
+	return []Runner{c}, nil
 }
 
 func schemeConversionFunc(r1, r2 resource.Kind, converter k8s.Converter) func(any, any, conversion.Scope) error {
