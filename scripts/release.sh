@@ -45,4 +45,8 @@ echo "Making a '${RELEASE}' release with tag '${TAG}'..."
 git tag -s "${TAG}" -m "Release ${TAG}"
 git push origin "${TAG}"
 
+echo "Tagging submodules with the release tag"
+git tag -s "plugin/${TAG}" -m "Plugin submodule release ${TAG}"
+git push origin "plugin/${TAG}"
+
 exit 0
