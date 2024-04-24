@@ -1,78 +1,78 @@
 # Code Generation
 
-Code generation is done via the CLI, with 
+Code generation done by the grafana-app-sdk can be broadly split into two buckets: what we call **kind code generation** which is run to generate code from your CUE kinds which can be used in your app, and **project component generation**, which is a run-once kind of codegen that scaffolds your project with boilerplate code that you can then alter as you see fit.
+
+**code generation** is done with the `generate` command in the CLI, and **project component generation** is done with the `project component add` command in the CLI (also note that `project init` is a special case of codegen that scaffolds your initial project with opinionated defaults). The general workflow is that component generation is run only once, while kind code generation is run whenever you update or add a kind, or whenever you update your version of the grafana-app-sdk (to ensure that your generated code works with the new library version).
+
+## Kind Code Generation
+
+Code generation turns kinds written in CUE into go and TypeScript code which can be used to write your app logic. 
+A full breakdown on writing CUE kinds and using them with the CLI's code generation can be found in the [Writing Kinds](./custom-kinds/writing-kinds.md) document.
+
+Kind codegen uses `grafana-app-sdk generate` as its base commands, and uses a few flags that you can leave as default values if you use the setup that `grafana-app-sdk project init` gives you. The full command looks like:
 ```
-grafana-app-sdk generate [-c|--cuepath=kinds] [-g|--gogenpath=pkg/generated] [-t|--tsgenpath=plugin/src/generated]
+grafana-app-sdk generate [-c|--cuepath=kinds] [-g|--gogenpath=pkg/generated] [-t|--tsgenpath=plugin/src/generated] [--crdencoding=json] [--crdpath=definitions]
 ```
-Code is generated from [Custom Kinds](./custom-kinds.md), and either gives you code that is designed to work with the `resource` package, 
-or base types with multi-version marshal/unmarshal capabilities.
+This command scans the `cuepath` for CUE files, and parses all top-level fields in all present CUE files as CUE kinds. If kind validation encounters any errors, no files will be written, and the validation error(s) will be printed out. On successful generation: 
+* kind go code will be written to `gogenpath`, with a package for each unique kind-version combination
+* kind TypeScript code will be written to `tsgenpath`, with a folder for each unique kind-version combination
+* kind CRD files will be written to `crdpath`, encoded as JSON or YAML based on `crdencoding`, with a CRD file per kind
 
-Currently, the switch between these types depends on the presence of `crd` in the kind (`crd` being present creates a `resource`-package-compatible set of files, its absense generates more simple files with just the marshal/unmarshal). 
-This may change in the future to be based on package or initial namespace in CUE.
+> ![IMPORTANT]
+> Because the interfaces that the grafana-app-sdk libraries use can change, be sure to run kind code generation using a version of the `grafana-app-sdk` CLI that matches the version of the dependency you use in your project. Whenever you update the dependency, make sure you re-run the kind code generation as well.
 
-The codegen generates two types of code and possibly accessory files (such as Custom Resource Definitions). 
-Where the code lives, and what kind of code is generated can be controlled via CLI flags and the kind's `codegen` trait respectively.
+Please see [Writing Kinds](./custom-kinds/writing-kinds.md) for a more detailed look at kind code generation from CUE.
 
-`-g` or `--gogenpath` governs where the generated go code is placed. By default this is `pkg/generated`. 
-The next portion of the path is always set to `(resource|models)/<LOWER(kind name)>/`.
+## Project Component Generation
 
-`-t` ot `--tsgenpath` governs where the generated TypeScript code is placed. This defaults to `plugin/src/generated`, 
-and all generated TS files will be in that folder.
+Project component generation is used to add boilerplate code for a "component" of your app. Components understood by the SDK are:
+* `frontend` - a frontend plugin for your app, written in TypeScript. This is deployed in grafana as a standard app plugin, and is coupled with the `backend` component (if it exists) when deployed.
+* `backend` - a backend component to an app plugin, written in go. This is deployed in grafana as a standard app plugin, and is coupled with the `frontend` component when deployed.
+* `operator` - a standalone operator, written in go (see [Operator-based applications](./application-design/README.md#operator-based-applications) in [Application design patterns](./application-design/README.md)).
 
-Whether go code, TypeScript code, or both is generated is governed by the `codegen` trait in your kind:
-```cue
-myKind: {
-    name: "Foo"
-    group: "foo-app"
-    codegen: {
-        frontend: true // this defaults to true and dictates whether TypeScript code is generated
-        backend: true // this defaults to true and dictates whether go code is generated
-    }
-    lineage: {...}
-}
+Multiple components can be specified in the same command. The full syntax is:
 ```
-Since these have defaults, you can leave `codegen` out entirely if you are ok with the default values, or only specify the fields you want to change.
+grafana-app-sdk project component add <list of space-separated components> [-c|--cuepath=kinds]
+```
 
-## `resource`-package code (`crd` present)
+A list of valid components can also be found by running 
+```
+grafana-app-sdk project component add
+```
+Without any components to add
 
-For code compatible with the `resource` package interfaces, you get a few main pieces of exported code. 
-All go files generated will be under `pkg/generated/resource/<your kind name>/`, with a package of `LOWER(kind name)`. 
-Types generated:
-* `Object` - this is the type which implements `resource.Object`. It contains your spec, status, metadata, and static metadata.
-* `Schema()` - this function returns a `resource.Schema` implementation for your kind.
-* `Spec` - the struct for the spec component of your lineage's latest schema
-* `Status` - the struct for the status component of your lineage's latest schema (with kindsys status info joined in)
-* `Metadata` - the struct for the metadata component of your lineage's latest schema (with kindsys metadata info joined in)
+### frontend
 
-Some interesting bits to note about the implementation within the go codegen:
-* The kind's lineage is extracted and re-written in your generated files so thema can bind it at runtime
-* Currently, the `Unmarshal` method in `Object` only handles a `JSON` wire format
+The frontend component generates TypeScript code and configuration for a grafana plugin in `plugin`, similar to the output of the npm [grafana/create-plugin](https://www.npmjs.com/package/@grafana/create-plugin) tool (if you would like to use `create-plugin` instead, see the [Get started](https://grafana.com/developers/plugin-tools/) docs, and create an app plugin).
 
-TypeScript interfaces will be generated for each kind that adhere to the latest schema as-written in the lineage. 
-To use these against an API server, a translation layer must be in-place like what exists in the SDK go library. 
-Implementation of this layer in TypeScript is currently forthcoming. 
-Currently, the best method is to expose a backend API via the plugin that accepts the TypeScript-interface-style 
-(or similar--the generated `Object` struct is nearly identical to the kind schema format with the addition of the `StaticMeta` field which adds identifier information), 
-and have the back-end plugin do the reads and writes from the storage layer.
+### backend
 
-As the only valid argument for the flag `--type` is currently `kubernetes`, Custom Resource Definition files will also be generated in `--crdpath` (defaults to `definitions`). 
-The format of the file can be governed by `--crdencoding` (valid values of `json` or `yaml`, defaults to `json`). 
+The backend component generates plugin backend code in `pkg/plugin` for setting up a a set of HTTP handlers to proxy Create, Read, Update, Delete, and List requests to the API server, using a `TypedStore`, and pulling kube config information for the API server from the `secureJsonData` of the plugin. It also adds a `main.go` to `plugin/pkg`, which is the entrypoint for the back-end component of the grafana app plugin.
 
-The default value of `--type` is subject to change in the future as other storage layer options become available based on what is decided to be the stand use-case for the SDK codegen.
+> [!NOTE]
+> `backend` component generation will eventually be deprecated in favor of the frontend component communicating directly with the API server, rather than through a back-end proxy.
 
-## Simple Model Code
+### operator
 
-The code generation for non-`resource` package code (sometimes referred to as `model` code) generates fewer exported types. 
-The generated files are located in `pkg/generated/models/<your kind name>/`, with a package of `LOWER(kind name)`.
-Types generated:
-* `<kind name>` - A go struct with the latest schema in your kind's lineage
-* `Marshal()` - a function to marshal the type using a specific version
-* `Unmarshal()` - a function to unmarshal bytes into the type (from any schema version)
+The operator component generates a boilerplate watcher for each kind in `cuepath` in `pkg/watchers/`. The rest of the operator code is generated in `cmd/operator`, and includes configuration, telemetry, a `main` file that sets up an operator using the `simple` package, and a Dockerfile for building a deploying a docker image for your operator. The generated boilerplate code works with the `operator` targets in the `Makefile` generated by `grafana-app-sdk project init`.
 
-The generated typescript code for a model is identical to the resource type codegen.
+> [!NOTE]
+> The `project` command also has a `kind` target, which can be used to generate a boilerplate kind, with
+> ```
+> grafana-app-sdk project kind add <kind name> [--plugin-id] [-c|--cuepath=kinds]
+> ```
+> This is not a component command, but is useful for quickly generating a CUE kind in your `cuepath`.
+
+## Project Initialization
+
+Project initialization is a special case of code generation used to initialize a new app-sdk project. It is not required to work with the app-sdk, but exists as a convenient way of setting up a project with the default workflow of the grafana-app-sdk. The syntax is:
+```
+grafana-app-sdk project init <project go module name>
+```
+This sets up your project with a go module, a `kinds` directory with a CUE module, a `Makefile` with some sample targets, and a `local` directory that can be used with `grafana-app-sdk project local` commands (see [Local Development & Testing](./local-development.md)).
 
 ## Examples & Testing
 
-Code generation is done as part of the [issue tracker tutorial](./tutorials/issue-tracker/03-generate-schema-code.md).
+Code generation for both kinds and project components is done as part of the [issue tracker tutorial](./tutorials/issue-tracker/README.md) ([kind code generation](./tutorials/issue-tracker/03-generate-kind-code.md), [project component generation](./tutorials/issue-tracker/04-boilerplate.md)).
 
-Automated testing of code generation from CUE kinds is done using the files in [codegen/testing/cue](../codegen/testing/cue/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).
+Automated testing of kind code generation is done using the files in [codegen/testing/cue](../codegen/testing/cue/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).
