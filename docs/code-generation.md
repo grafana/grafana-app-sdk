@@ -18,7 +18,7 @@ This command scans the `cuepath` for CUE files, and parses all top-level fields 
 * kind TypeScript code will be written to `tsgenpath`, with a folder for each unique kind-version combination
 * kind CRD files will be written to `crdpath`, encoded as JSON or YAML based on `crdencoding`, with a CRD file per kind
 
-> ![IMPORTANT]
+> [!IMPORTANT]
 > Because the interfaces that the grafana-app-sdk libraries use can change, be sure to run kind code generation using a version of the `grafana-app-sdk` CLI that matches the version of the dependency you use in your project. Whenever you update the dependency, make sure you re-run the kind code generation as well.
 
 Please see [Writing Kinds](./custom-kinds/writing-kinds.md) for a more detailed look at kind code generation from CUE.
