@@ -1,16 +1,20 @@
 # Resource Stores
 
-The `resource` package offers several different `Store` objects for interacting with objects in your storage. 
-These stores are built on top of whatever `resource.Client` you use to talk to your storage API server, 
-and present a way of interacting with objects that follows a key/value store interface. 
-There are currently three types of Store, and they all have the same set of methods, but work with different inputs and/or return values:
+While you can use a `resource.Client` directly to interact with the API server, the `resource` package also offers several types which allow you to treat the API server as a storage system and interact with it via key-value store paradigms. These use `resource.Client` under the hood, but handle some of the more annoying or repetitive tasks that you often need to do, and introduce some streamling and extra opinionated functionality.
 
-* `SimpleStore` - SimpleStore uses it's own implementation of `resource.Object`, called `SimpleStoreResource`, and assumes that you never want to manipulate object metadata, 
-    instead accepting only creates/updates to the spec object and subresources. Interaction with metadata is limitd to `CommonMetadata`, and only via `ObjectMetadataOption` 
-    functions which can be passed to add and update calls.
-* `TypedStore` - TypedStore works with a concrete implementation of `resource.Object` which you provide when constructing it. 
-    It always accepts and returns objects of the provided type, making it easy to work with without needing to do type casts. 
-    It allows you to manipulate the entire objects, unlike `SimpleStore`, at the cost of some added complexity.
-* `Store` - Store is the fully generic Store, working with any resources which implement `resource.Object`, not just the one you bind to it at construction. 
-    To that end, it is the most cumbersome to use, as if you need to access the underlying types you have to do type casting, 
-    but it allows you to work with resources of different kinds using the same store.
+There are three types of store provided by the `resource` package, but be aware that `SimpleStore` is currently deprecated and will not have new funtionality added to it.
+
+## TypedStore
+
+`resource.TypedStore` allows you to work with a provided kind, using the type directly instead of interfacing with `resource.Object`. It provides the following methods:
+* **Get** - Gets an existing object by `resource.Identifier`
+* **Add** - Creates a new object (errors if the object exists)
+* **Update** - Updates an existing object (errors if the object doesn't exist)
+* **Upsert** - Updates an existing object, or creates the object if it doesn't exist
+* **UpdateSubresource** - Updates a subresource of the object--this must be done separately from **Update**, which does not update subresources
+* **Delete** - Deletes an existing object (errors if the object doesn't exist)
+* **ForceDelete** - Deletes an existing object, does not error if the object doesn't exist
+* **List** - List all object in a namespace with provided filters
+
+It is important to keep in mind that, like a typical key-value store, `Update` overwrites the entire object, so the standard pattern for usage is get-and-update to ensure that you don't erase fields. To update only specific parts of an object, use `Client.Patch`.
+
