@@ -7,35 +7,18 @@ By default, the operator is run as a separate container alongside your grafana d
 The operator is a logical pattern which runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
 * One or more informers, which subscribe to events for a particular resource kind and namespace
 * One or more watchers, which consume events for particular kinds
-In our case, we have these lines in our boilerplate `cmd/operator/main.go`:
+In our case, the boilerplate code uses the `simple.Operator` operator type, which handles dealing with tying together informers and watchers (or reconcilers) in an `InformerController` for us in `cmd/operator/main.go`:
 ```golang
-issueInformer, err := operator.NewKubernetesBasedInformer(issue.Schema(), issueClient, kubeConfig.Namespace)
-if err != nil {
-	panic(err)
-}
-err = controller.AddInformer(issueInformer, issue.Schema().Kind())
-if err != nil {
-	panic(err)
-}
-```
-Creating an informer which receives events for our Issue kind (and adding it to the controller), and this:
-```go
 issueWatcher, err := watchers.NewIssueWatcher()
 if err != nil {
+	logging.DefaultLogger.With("error", err).Error("Unable to create IssueWatcher")
 	panic(err)
 }
-issueOpinionatedWatcher, err := operator.NewOpinionatedWatcher(issue.Schema(), issueClient)
-if err != nil {
-	panic(err)
-}
-issueOpinionatedWatcher.Wrap(issueWatcher, false)
-issueOpinionatedWatcher.SyncFunc = issueWatcher.Sync
-err = controller.AddWatcher(issueOpinionatedWatcher, issue.Schema().Kind())
-if err != nil {
-	panic(err)
-}
+err = runner.WatchKind(issue.Kind(), issueWatcher, simple.ListWatchOptions{
+	Namespace: resource.NamespaceAll,
+})
 ```
-Creating a watcher for receiving the events. It wraps this watcher in an `operator.OpinionatedWatcher`, which adds some control logic around using finalizers to make sure delete events can't be missed if the operator is down, and adds that occur during downtime are still processed. It also gives us a `SyncFunc`, which fires on startup for every Issue that was known the the controller _before_ the downtime, but may have updated during it. It's generally good practice to use the `operator.OpinionatedWatcher`, unless you want to implement this kind of logic yourself.
+This code creates a watcher for receiving events, and then has the `simple.Operator` attach it to its own internal controller, and create an informer for it that uses the filtering provided in `simple.ListWatchOptions`. As a nice addition to this, `simpple.Operator.WatchKind` also wraps our `IssueWatcher` in an `operator.OpinionatedWatcher`, which handles making sure the operator is always in-the-know on events via finalizers (so, for example, a `delete` event is blocked from completing until it gets processed by our operator).
 
 The other thing we're doing here is calling `watchers.NewIssueWatcher()`. The `watchers` package was added by our `project add operator` command, so let's take a look at what's there:
 ```go
@@ -71,4 +54,4 @@ Well, right now, we could integrate with some third-party service, maybe you wan
 Well, as we saw before, your plugin API isn't the only way to interact with Issues. You can create, update, or delete them via `kubectl`. But even if you restrict `kubectl` access, but perhaps another plugin operator may want to create an Issue in response to one of _their_ events. If they did that via directly interfacing with the storage layer, you wouldn't notice that it happened. The operator ensures that no matter _how_ the mutation in the storage layer occurred (API, kubectl, other access), you are informed and can take action.
 
 ### Prev: [Writing Our Front-End](06-frontend.md)
-### Next: [Wrap-Up and Further Reading](08-wrap-up.md)
+### Next: [Adding Admission Control](08-adding-admission-control.md)
