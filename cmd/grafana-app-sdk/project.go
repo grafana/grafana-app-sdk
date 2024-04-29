@@ -191,7 +191,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 func projectWriteGoModule(path, moduleName string, overwrite bool) (string, error) {
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
-	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.21\n\n// Required as the project does not inherit the replace directive from grafana-app-sdk and grafana-plugin-sdk-go\nreplace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0\n", moduleName))
+	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.21\n", moduleName))
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {
