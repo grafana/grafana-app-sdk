@@ -58,7 +58,7 @@ func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 	if t.sch.Scope() == ClusterScope {
 		if obj.GetNamespace() != "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() mustbe empty for cluster-scoped objects")
+			return n, fmt.Errorf("obj.GetNamespace() must be empty for cluster-scoped objects")
 		}
 	} else {
 		if obj.GetNamespace() == "" {
