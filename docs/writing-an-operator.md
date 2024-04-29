@@ -251,10 +251,10 @@ err = simple.SetTraceProvider(simple.OpenTelemetryConfig{
 ```
 There's a lot more code there, and it's a bit more complicated to follow, but now you have the option to tweak many more things. We can customize error handling for each component, or mess with the configuration and settings of informers or the informer controller (we could even use different informer controllers for different kinds if we wanted to use separate retry or dequeue policies). We could remove the opinionated wrappers on the watcher or reconciler (or both). Tracing setup is decoupled from the operator entirely here, so we can set it up however we like. Not using `simple` gives us many more options, at the expense of a more complex workflow.
 
-
 ## Considerations When Writing an Operator
 
 When writing an operator, it's important to take a few things into consideration:
+* If you make an update to the object you're doing the reconcile (or watch) event for, this will trigger _another_ reconcile (or watch) event. Generally, favor only updating subresources (specifically `status`) and some metadata in your reconcile (or watch) events, as a `status` update should not trigger the `metadata.generation` value to increase (only `metadata.resourceVersion`), which will allow you to filter events out. Using the `operator.OpinionatedWatcher` and `operator.OpinionatedReconciler` will filter these events for you; if you prefer not to use them or want to do your own event filtering, keep in mind how updates within your reconcile loop will be received.
 * the operator is taking action on _every_ consumed event. Finding ways to escape from a reconcile or watcher event early will help your overall program logic. 
 * all objects for the kind(s) you are watching are cached to memory by default (there is [an open issue](https://github.com/grafana/grafana-app-sdk/issues/263) to allow customization of this).
 * don't rely on retries to track operator state; use the `status` subresource to track operator success/failure, so that your operator can work out state from a fresh start (a restart will remove all pending retries, which are stored purely in-memory). This also allows a user to track operator status by viewing the `status` subresource.
