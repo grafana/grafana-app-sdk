@@ -251,6 +251,15 @@ err = simple.SetTraceProvider(simple.OpenTelemetryConfig{
 ```
 There's a lot more code there, and it's a bit more complicated to follow, but now you have the option to tweak many more things. We can customize error handling for each component, or mess with the configuration and settings of informers or the informer controller (we could even use different informer controllers for different kinds if we wanted to use separate retry or dequeue policies). We could remove the opinionated wrappers on the watcher or reconciler (or both). Tracing setup is decoupled from the operator entirely here, so we can set it up however we like. Not using `simple` gives us many more options, at the expense of a more complex workflow.
 
+## Reconciler vs Watcher
+
+Both reconcilers and watchers are used for the [reconciliation process](./application-design/platform-concepts.md#asynchronous-business-logic). Whether you use one or the other is down to preference, and use-case. Both reconcilers and watchers are powered by the same informer design within an `InformerController`, with just slightly different handling logic. They both have an `Opinionated` variant that can wrap the interface as well.
+
+The major difference between a `Reconciler` and a `Watcher` is that a `Reconciler` has a single function, `Reconcile`, which is called for every event for a kind, while a `Watcher` has a function for each event type (`Add`, `Update`, `Delete`). There are more minor differences in how these events are handled as well:
+* A `Reconciler` can return a response with an explicit "retry after this time period" message, while a `Watcher` will only return success/fail (`nil` or `error`).
+* A `Watcher` will give you the previous state of the resource on an update event, while a Reconcile event will not.
+* A `Reconciler` can pass state between retries in-memory if stoaring state in the API server is failing, however, this will only persist until the operator is restarted and should not be relied upon excepting situations where the API server cannot be reached.
+
 ## Considerations When Writing an Operator
 
 When writing an operator, it's important to take a few things into consideration:
