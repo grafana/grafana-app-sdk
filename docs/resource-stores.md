@@ -45,7 +45,7 @@ The most useful aspect of this example is that we can directly work with the ret
 
 ## Store
 
-`resource.Store` is a generic store that allows for working with any kind, not just a single one like `TypedStore` or `SimpleStore`. This comes with the downside that arguments are returned types now use `resource.Object` instead of concrete types. If you're only working with a single kind, prefer using `resource.TypedStore` (you may want to consider multiple `resource.TypedStore` instances for multiple kinds as well if you find the workflow simpler, as the reasource overhead isn't that signficant, considering that `resource.Store` still utilizes a `resource.Client` instance per kind under the hood). 
+`resource.Store` is a generic store that allows for working with any kind, not just a single one like `TypedStore`. This comes with the downside that arguments are returned types now use `resource.Object` instead of concrete types. If you're only working with a single kind, prefer using `resource.TypedStore` (you may want to consider multiple `resource.TypedStore` instances for multiple kinds as well if you find the workflow simpler, as the reasource overhead isn't that signficant, considering that `resource.Store` still utilizes a `resource.Client` instance per kind under the hood). 
 
 In order to work with multiple kinds properly, each kind must be registered with the store. This can be done at any time prior to using the kind in an argument to a store method. If you attempt to work with a kind which is not registered, the store will return an error. You can register one or more kinds with `Register` and `RegisterGroup`. You can also optionally supply any number of kind groups to be registered when creating the store with `NewStore`.
 
