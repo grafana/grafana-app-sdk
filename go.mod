@@ -1,7 +1,6 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.21
-toolchain go1.22.2
+go 1.22.2
 
 // Required for compatibility with grafana/grafana-plugin-sdk-go & grafana/thema
 replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
