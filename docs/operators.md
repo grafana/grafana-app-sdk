@@ -107,4 +107,4 @@ func main() {
 Note that this is not the only way to run an operator. In fact, operators, being just a call to `Run()` on the operator object, 
 can be run as part of a back-end plugin alongside your API instead of as standalone applications.
 
-For more details, see the [Operator Examples](../examples/operator), which contains two examples, a [basic operator](../examples/operator/basic/README.md) and an [opinionated one](../examples/operator/opinionated/README.md).
+For more details, see [Writing an Operator](writing-an-operator.md), which goes into more details on writing an operator using the `simple` or `operator` package(s). There are also the [Operator Examples](../examples/operator), which contain two examples, a [basic operator](../examples/operator/basic/README.md) and an [opinionated one](../examples/operator/opinionated/README.md).

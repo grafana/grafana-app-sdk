@@ -1,5 +1,7 @@
 package kinds
 
+import "time"
+
 // This is our issue definition, which contains metadata about the schema, and the schema itself, as a Lineage
 issue: {
 	// Kind is the human-readable name which is used for generated type names.
@@ -30,7 +32,7 @@ issue: {
 		// [OPTIONAL]
 		// fronend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
 		// Will default to true if not present.
-		frontend: false
+		frontend: true
 		// [OPTIONAL]
 		// backend tells the CLI to generate backend-end code (Go types) for the schema.
 		// Will default to true if not present.
@@ -57,38 +59,10 @@ issue: {
 					description: string
 					status: string
 				}
+				status: {
+					processedTimestamp: string & time.Time
+				}
 			}
 		}
 	}
-}
-
-// apiIssue is a version of issue which is meant for API usage, and thus has different codegen parameters and a different schema.
-// Most of the top-level fields are the same as "issue," but are commented where they diverge.
-apiIssue: {
-	kind: "Issue"
-	// Note that we omit the "apiResource" field. This means that this kind is NOT intended to be expressed as an API server resource
-
-	codegen: {
-		// frontend is set to "true" so we generate front-end code (TypeScript interface) for this as well as back-end.
-		// Since this is the model we'll be using for our API, we want a corresponding TypeScript interface.
-		frontend: true
-		backend: true
-	}
-    versions: {
-        "v1": {
-			// As this is not an API-server-expressed resource, we do not need to follow the format of:
-			// {
-			//     metadata: { ... } // optional
-			//     spec: { ... }
-			//     status: { ... } // optional
-			// }
-			// Instead, one object will be generated for us based on the contents of `schema`.
-        	schema: {
-				id: string
-				title: string
-				description: string
-				status: "open" | "in_progress" | "closed"
-			}
-        }
-    }
 }

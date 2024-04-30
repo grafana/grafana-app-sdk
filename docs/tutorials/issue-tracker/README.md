@@ -31,4 +31,5 @@ OK, with all that out of the way, let's jump in with [Initializing Our Project](
 5. [Local Deployment](05-local-deployment.md)
 6. [Writing Our Front-End](06-frontend.md)
 7. [Adding Operator Code](07-operator-watcher.md)
-8. [Wrap-Up and Further Reading](08-wrap-up.md)
+8. [Adding Admission Control](08-adding-admission-control.md)
+9. [Wrap-Up and Further Reading](09-wrap-up.md)
