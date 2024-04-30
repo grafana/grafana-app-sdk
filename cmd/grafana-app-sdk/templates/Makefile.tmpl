@@ -76,7 +76,8 @@ local/down:
 .PHONY: local/deploy_plugin
 local/deploy_plugin:
 	-tilt disable grafana
-	cp -R plugin/dist local/mounted-files/plugin/dist
+	@mkdir -p local/mounted-files/plugin/dist
+	cp -R plugin/dist/* local/mounted-files/plugin/dist/
 	-tilt enable grafana
 
 .PHONY: local/push_operator
