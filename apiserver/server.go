@@ -1,6 +1,10 @@
 package apiserver
 
 import (
+	"fmt"
+	"strings"
+
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -83,6 +87,8 @@ func (cfg *Config) Complete() CompletedConfig {
 		Minor: "0",
 	}
 
+	c.GenericConfig.AddPostStartHook("post-start-operator", OperatorPostStartHook(nil, cfg.ExtraConfig.ResourceGroups...))
+
 	return CompletedConfig{&c}
 }
 
@@ -97,8 +103,12 @@ func (c completedConfig) New() (*APIServer, error) {
 		GenericAPIServer: genericServer,
 	}
 
+	scheme := runtime.NewScheme()
+
 	for _, g := range c.ExtraConfig.ResourceGroups {
-		apiGroupInfo, err := g.APIGroupInfo(c.ExtraConfig.Storage, APIGroupInfoOptions{})
+		apiGroupInfo, err := g.APIGroupInfo(c.ExtraConfig.Storage, APIGroupInfoOptions{
+			Scheme: scheme,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -108,4 +118,34 @@ func (c completedConfig) New() (*APIServer, error) {
 	}
 
 	return s, nil
+}
+
+// OperatorPostStartHook returns a PostStartHook function which will run an operator with runners provided by the passed APIGroupProvider instances
+func OperatorPostStartHook(getter OptionsGetter, groups ...APIGroupProvider) func(genericapiserver.PostStartHookContext) error {
+	return func(ctx genericapiserver.PostStartHookContext) error {
+		// We need the loopback config to run reconcilers
+		if ctx.LoopbackClientConfig == nil {
+			return fmt.Errorf("missing LoopbackClientConfig from PostStartHookContext")
+		}
+
+		// We have to fix some aspects of the loopback config, like adding /apis, and replacing [::1] if the host is set to that,
+		// otherwise the kubernetes client can't talk to the API server over the interface
+		ctx.LoopbackClientConfig.Host = strings.Replace(ctx.LoopbackClientConfig.Host, "[::1]", "127.0.0.1", 1)
+		ctx.LoopbackClientConfig.APIPath = "/apis"
+
+		// Create the client registry from the loopback config, and controller we'll be running our reconcilers and informers in
+		clientRegistry := k8s.NewClientRegistry(*ctx.LoopbackClientConfig, k8s.DefaultClientConfig())
+		op := operator.New()
+		for i := 0; i < len(groups); i++ {
+			runners, err := groups[i].GetPostStartRunners(clientRegistry, getter)
+			if err != nil {
+				return err
+			}
+			for _, r := range runners {
+				op.AddController(r)
+			}
+		}
+		go op.Run(ctx.StopCh)
+		return nil
+	}
 }
