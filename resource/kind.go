@@ -38,6 +38,24 @@ type Kind struct {
 	Codecs map[KindEncoding]Codec
 }
 
+// GroupVersionKind returns a kubernetes metav1.GroupVersionKind composed of the Kind's Group(), Version(), and Kind()
+func (k *Kind) GroupVersionKind() metav1.GroupVersionKind {
+	return metav1.GroupVersionKind{
+		Group:   k.Group(),
+		Version: k.Version(),
+		Kind:    k.Kind(),
+	}
+}
+
+// GroupVersionResource returns a kubernetes metav1.GroupVersionResource composed of the Kind's Group(), Version(), and Plural()
+func (k *Kind) GroupVersionResource() metav1.GroupVersionResource {
+	return metav1.GroupVersionResource{
+		Group:    k.Group(),
+		Version:  k.Version(),
+		Resource: k.Plural(),
+	}
+}
+
 // Codec is a nil-safe way of accessing the Codecs map in the Kind.
 // It will return nil if the map key does not exist, or the key is explicitly set to nil.
 func (k *Kind) Codec(encoding KindEncoding) Codec {
