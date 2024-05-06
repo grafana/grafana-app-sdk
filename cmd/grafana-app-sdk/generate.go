@@ -123,6 +123,27 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	// Jennies that need to be run post-file-write
+	switch format {
+	case FormatCUE:
+		files, err = postGenerateFilesCue(os.DirFS(cuePath), kindGenConfig{
+			GoGenBasePath: goGenPath,
+			TSGenBasePath: tsGenPath,
+			StorageType:   storageType,
+			CRDEncoding:   encType,
+			CRDPath:       crdPath,
+		}, selectors...)
+		if err != nil {
+			return err
+		}
+	}
+	for _, f := range files {
+		err = writeFile(f.RelativePath, f.Data)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -254,7 +275,8 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true), func(kind codegen.Kind) bool {
+	// TODO: flag for groupKinds
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, true), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {
@@ -313,4 +335,23 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	allFiles = append(allFiles, tsResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
 	return allFiles, nil
+}
+
+func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
+	// Get the repo from the go.mod file
+	repo, err := getGoModule(filepath.Join("", "go.mod"))
+	if err != nil {
+		return nil, err
+	}
+	parser, err := cuekind.NewParser()
+	if err != nil {
+		return nil, err
+	}
+	generator, err := codegen.NewGenerator[codegen.Kind](parser, modFS)
+	if err != nil {
+		return nil, err
+	}
+	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, cfg.GoGenBasePath, true), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	}, selectors...)
 }

@@ -56,7 +56,7 @@ func TestResourceGenerator(t *testing.T) {
 	fmt.Println(err)
 	require.Nil(t, err)
 
-	files, err := ResourceGenerator(false).Generate(kinds...)
+	files, err := ResourceGenerator(false, false).Generate(kinds...)
 	require.Nil(t, err)
 	// Check number of files generated
 	// 5 -> object, spec, metadata, status, schema, codec
