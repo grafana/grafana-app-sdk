@@ -59,7 +59,7 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 
 				err := gengo.Execute(generators.NameSystems(),
 					generators.DefaultNameSystem(),
-					o.getTargetsFunc(ToPackageName(ver.Version), filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(k.Properties().Group)), ToPackageName(ver.Version)), fs),
+					o.getTargetsFunc(ToPackageName(ver.Version), filepath.Join(o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version)), fs),
 					gengo.StdBuildTag,
 					[]string{fmt.Sprintf("%s/%s/%s", o.GoModName, o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version))},
 				)
@@ -101,6 +101,7 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 }
 
 func (o *OpenAPI) getTargetsFunc(packageName string, packagePath string, fs *codejen.FS) func(context *generator.Context) []generator.Target {
+	fmt.Println(packagePath)
 	return func(context *generator.Context) []generator.Target {
 		context.FileTypes[generator.GoFileType] = &GoFile{
 			FS:     fs,

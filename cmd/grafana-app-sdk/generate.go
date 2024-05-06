@@ -276,7 +276,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 	// Resource
 	// TODO: flag for groupKinds
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, true), func(kind codegen.Kind) bool {
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, false), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {
@@ -351,7 +351,8 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	if err != nil {
 		return nil, err
 	}
-	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, cfg.GoGenBasePath, true), func(kind codegen.Kind) bool {
+	// TODO: group by kind from args?
+	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, cfg.GoGenBasePath+"/resource", true, false), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 }

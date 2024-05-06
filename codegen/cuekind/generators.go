@@ -129,12 +129,13 @@ func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen
 	return g
 }
 
-func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
+func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(&jennies.OpenAPI{
 		GenerateOnlyCurrent: !versioned,
 		GoModName:           projectRepo,
 		GoGenPath:           goGenPath,
+		GroupByKind:         !groupKinds,
 	})
 	return g
 }
