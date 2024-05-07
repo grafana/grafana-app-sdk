@@ -11,9 +11,9 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
-    {{$repo := .Repo}}{{$codegenPath := .CodegenPath}}{{$versioned := .ResourcesAreVersioned}}{{ $root := . }}{{ range .Resources }}
-    {{ if $versioned }}{{.MachineName}} "{{$repo}}/{{$codegenPath}}/resource/{{.MachineName}}/{{ $root.ToPackageName .Current }}"{{ else }}"{{$repo}}/{{$codegenPath}}/resource/{{.MachineName}}"{{ end }}{{ end}}{{ if ne .WatcherPackage "" }}
-	"{{$repo}}/pkg/{{.WatcherPackage}}"{{end}}
+    {{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
+	{{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{.MachineName}} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName .MachineName }}{{ if $.ResourcesAreVersioned }}/{{ $.ToPackageName .Current}}{{end}}"{{ end }}
+    {{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
 )
 
 func main() {
@@ -61,20 +61,20 @@ func main() {
         panic(err)
     }
 
-    // Wrap our resource watchers in OpinionatedWatchers, then add them to the controller
-    {{ $p := .WatcherPackage }}{{ range .Resources }}{{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
+    // Wrap our resource watchers in OpinionatedWatchers, then add them to the controllera
+    {{ $p := .WatcherPackage }}{{ range $key, $val := .GVToKind }}{{ range $val }}{{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
     if err != nil {
         logging.DefaultLogger.With("error", err).Error("Unable to create {{.Kind}}Watcher")
         panic(err)
     }
-    err = runner.WatchKind({{.MachineName}}.Kind(), {{.MachineName}}Watcher, simple.ListWatchOptions{
+    err = runner.WatchKind({{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}.Kind(){{end}}, {{.MachineName}}Watcher, simple.ListWatchOptions{
         Namespace: resource.NamespaceAll,
     })
     if err != nil {
         logging.DefaultLogger.With("error", err).Error("Error adding {{.Kind}} watcher to controller")
         panic(err)
     }
-    {{ end }}
+    {{ end }}{{ end }}
 
     stopCh := make(chan struct{})
 

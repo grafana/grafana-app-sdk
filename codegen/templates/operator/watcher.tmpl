@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"go.opentelemetry.io/otel"
 
-	{{ if ne .Version "" }}{{.MachineName}} "{{.Repo}}/{{.CodegenPath}}/resource/{{.MachineName}}/{{.ToPackageName .Version}}"
+	{{ if ne .Version "" }}{{.MachineName}} "{{.Repo}}/{{.CodegenPath}}/resource/{{.KindPackage}}"
 	{{ else }}"{{.Repo}}/{{.CodegenPath}}/resource/{{.MachineName}}"{{ end }}
 )
 

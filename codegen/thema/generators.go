@@ -137,9 +137,9 @@ func TypeScriptModelsGenerator() *codejen.JennyList[kindsys.Custom] {
 func OperatorGenerator(projectRepo, codegenPath string) *codejen.JennyList[kindsys.Custom] {
 	g := codejen.JennyListWithNamer[kindsys.Custom](kindsysNamerFunc)
 	g.Append(
-		codejen.AdaptOneToOne(jennies.WatcherJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
+		codejen.AdaptOneToOne(jennies.WatcherJenny(projectRepo, codegenPath, false, true), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorKubeConfigJenny{}, kindsysCustomToKind),
-		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
+		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath, false, true), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorConfigJenny{}, kindsysCustomToKind),
 	)
 	return g

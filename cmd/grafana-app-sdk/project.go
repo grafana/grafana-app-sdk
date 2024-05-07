@@ -475,9 +475,9 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors...)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == "group")
 			case FormatThema:
-				err = addComponentOperator(path, generator.(*codegen.Generator[kindsys.Custom]), selectors...)
+				err = addComponentOperator(path, generator.(*codegen.Generator[kindsys.Custom]), selectors, false)
 			}
 			if err != nil {
 				fmt.Printf("%s\n", err.Error())
@@ -498,7 +498,7 @@ type anyGenerator interface {
 	*codegen.Generator[codegen.Kind] | *codegen.Generator[kindsys.Custom]
 }
 
-func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors ...string) error {
+func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool) error {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
 	if err != nil {
@@ -508,7 +508,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	var files codejen.Files
 	switch cast := any(generator).(type) {
 	case *codegen.Generator[codegen.Kind]:
-		files, err = cast.Generate(cuekind.OperatorGenerator(repo, "pkg/generated", true), selectors...)
+		files, err = cast.Generate(cuekind.OperatorGenerator(repo, "pkg/generated", true, groupKinds), selectors...)
 		if err != nil {
 			return err
 		}

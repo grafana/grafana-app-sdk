@@ -118,12 +118,12 @@ func TypeScriptResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind
 
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
-func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
+func OperatorGenerator(projectRepo, codegenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(
-		jennies.WatcherJenny(projectRepo, codegenPath, versioned),
+		jennies.WatcherJenny(projectRepo, codegenPath, versioned, !groupKinds),
 		&jennies.OperatorKubeConfigJenny{},
-		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned),
+		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned, !groupKinds),
 		&jennies.OperatorConfigJenny{},
 	)
 	return g
