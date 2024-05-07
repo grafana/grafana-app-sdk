@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"text/template"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 //go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl
@@ -187,10 +189,20 @@ type BackendPluginRouterTemplateMetadata struct {
 	Resources             []codegen.KindProperties
 	PluginID              string
 	ResourcesAreVersioned bool
+	KindsAreGrouped       bool
+}
+
+type extendedBackendPluginRouterTemplateMetadata struct {
+	BackendPluginRouterTemplateMetadata
+	GVToKind map[schema.GroupVersion][]codegen.KindProperties
 }
 
 func (BackendPluginRouterTemplateMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
+}
+
+func (BackendPluginRouterTemplateMetadata) ToPackageNameVariable(input string) string {
+	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
 // WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out
@@ -206,6 +218,7 @@ type BackendPluginHandlerTemplateMetadata struct {
 	TypeName       string
 	IsResource     bool
 	Version        string
+	KindPackage    string
 }
 
 func (BackendPluginHandlerTemplateMetadata) ToPackageName(input string) string {
@@ -223,7 +236,20 @@ func WriteBackendPluginHandler(metadata BackendPluginHandlerTemplateMetadata, ou
 
 // WriteBackendPluginMain executes the Backend Plugin Main template, and writes out the generated go code to out
 func WriteBackendPluginMain(metadata BackendPluginRouterTemplateMetadata, out io.Writer) error {
-	return templateBackendMain.Execute(out, metadata)
+	md := extendedBackendPluginRouterTemplateMetadata{
+		BackendPluginRouterTemplateMetadata: metadata,
+		GVToKind:                            make(map[schema.GroupVersion][]codegen.KindProperties),
+	}
+	for _, k := range md.Resources {
+		gv := schema.GroupVersion{k.Group, k.Current}
+		l, ok := md.GVToKind[gv]
+		if !ok {
+			l = make([]codegen.KindProperties, 0)
+		}
+		l = append(l, k)
+		md.GVToKind[gv] = l
+	}
+	return templateBackendMain.Execute(out, md)
 }
 
 // GetBackendPluginSecurePackageFiles returns go files for the `secure` package in the backend plugin, as a map of

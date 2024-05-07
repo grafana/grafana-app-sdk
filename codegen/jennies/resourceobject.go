@@ -158,7 +158,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 			continue
 		}
 		md.Subresources = append(md.Subresources, templates.SubresourceMetadata{
-			TypeName: exportField(it.Label()),
+			TypeName: typePrefix + exportField(it.Label()),
 			JSONName: it.Label(),
 		})
 	}

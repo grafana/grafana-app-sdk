@@ -104,7 +104,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 
 	g := codejen.JennyListWithNamer(kindsysNamerFunc)
 	g.Append(
-		codejen.AdaptOneToOne(jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, false), kindsysCustomToKind),
+		codejen.AdaptOneToOne(jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, false, true), kindsysCustomToKind),
 		jennies.StaticManyToOneGenerator[kindsys.Custom](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
@@ -118,7 +118,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
 		codejen.AdaptManyToOne(jennies.RouterCodeGenerator(projectRepo), kindsysCustomToKind),
-		codejen.AdaptManyToOne(jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, false), kindsysCustomToKind),
+		codejen.AdaptManyToOne(jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, false, true), kindsysCustomToKind),
 	)
 	return g
 }

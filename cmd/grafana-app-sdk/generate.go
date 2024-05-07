@@ -40,6 +40,8 @@ Currently only allowed value is 'kubernetes', which will generate Custom Resourc
 files. Allowed values are 'json' and 'yaml'. Only applicable if type=kubernetes.`)
 	generateCmd.Flags().String("crdpath", "definitions", `Path where Custom Resource 
 Definitions will be created. Only applicable if type=kubernetes`)
+	generateCmd.Flags().String("kindpackaging", "group", `Kind go packaging.
+Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -88,6 +90,14 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	grouping, err := cmd.Flags().GetString("kindpackaging")
+	if err != nil {
+		return err
+	}
+	if grouping != "group" && grouping != "kind" {
+		return fmt.Errorf("--kindpackaging must be one of 'group'|'kind'")
+	}
+
 	var files codejen.Files
 	switch format {
 	case FormatThema:
@@ -108,6 +118,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			StorageType:   storageType,
 			CRDEncoding:   encType,
 			CRDPath:       crdPath,
+			GroupKinds:    grouping == "group",
 		}, selectors...)
 		if err != nil {
 			return err
@@ -132,6 +143,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			StorageType:   storageType,
 			CRDEncoding:   encType,
 			CRDPath:       crdPath,
+			GroupKinds:    grouping == "group",
 		}, selectors...)
 		if err != nil {
 			return err
@@ -153,6 +165,7 @@ type kindGenConfig struct {
 	StorageType   string
 	CRDEncoding   string
 	CRDPath       string
+	GroupKinds    bool
 }
 
 func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
@@ -275,8 +288,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	// TODO: flag for groupKinds
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, false), func(kind codegen.Kind) bool {
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {
@@ -352,7 +364,7 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 		return nil, err
 	}
 	// TODO: group by kind from args?
-	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, cfg.GoGenBasePath+"/resource", true, false), func(kind codegen.Kind) bool {
+	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, cfg.GoGenBasePath+"/resource", true, cfg.GroupKinds), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 }

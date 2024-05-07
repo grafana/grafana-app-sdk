@@ -65,12 +65,12 @@ func ModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 }
 
 // BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
+func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
 
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
-		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, versioned),
+		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, versioned, !groupKinds),
 		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
@@ -84,7 +84,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
 		jennies.RouterCodeGenerator(projectRepo),
-		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, versioned),
+		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, versioned, !groupKinds),
 	)
 	return g
 }

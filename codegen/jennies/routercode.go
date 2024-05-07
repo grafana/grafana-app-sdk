@@ -19,12 +19,14 @@ func RouterCodeGenerator(projectRepo string) codejen.ManyToOne[codegen.Kind] {
 
 type routerCodeGenerator struct {
 	projectRepo string
+	groupByKind bool
 }
 
 func (r *routerCodeGenerator) Generate(decls ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.BackendPluginRouterTemplateMetadata{
-		Repo:      r.projectRepo,
-		Resources: make([]codegen.KindProperties, 0),
+		Repo:            r.projectRepo,
+		Resources:       make([]codegen.KindProperties, 0),
+		KindsAreGrouped: !r.groupByKind,
 	}
 
 	for _, decl := range decls {
@@ -47,11 +49,12 @@ func (*routerCodeGenerator) JennyName() string {
 	return "routerCodeGenerator"
 }
 
-func RouterHandlerCodeGenerator(projectRepo, apiCodegenPath string, generatedKindsAreVersioned bool) codejen.OneToOne[codegen.Kind] {
+func RouterHandlerCodeGenerator(projectRepo, apiCodegenPath string, generatedKindsAreVersioned bool, groupByKind bool) codejen.OneToOne[codegen.Kind] {
 	return &routerHandlerCodeGenerator{
 		projectRepo:                projectRepo,
 		apiCodegenPath:             apiCodegenPath,
 		generatedKindsAreVersioned: generatedKindsAreVersioned,
+		groupByKind:                groupByKind,
 	}
 }
 
@@ -59,6 +62,7 @@ type routerHandlerCodeGenerator struct {
 	projectRepo                string
 	apiCodegenPath             string
 	generatedKindsAreVersioned bool
+	groupByKind                bool
 }
 
 func (h *routerHandlerCodeGenerator) Generate(decl codegen.Kind) (*codejen.File, error) {
@@ -76,6 +80,7 @@ func (h *routerHandlerCodeGenerator) Generate(decl codegen.Kind) (*codejen.File,
 		TypeName:       exportField(decl.Properties().Kind),
 		IsResource:     meta.APIResource != nil,
 		Version:        ver,
+		KindPackage:    GetGeneratedPath(h.groupByKind, decl, ver),
 	}, &b)
 	if err != nil {
 		return nil, err
