@@ -113,6 +113,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 	}}, nil
 }
 
+//nolint:goconst
 func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)

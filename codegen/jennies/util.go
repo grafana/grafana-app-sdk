@@ -17,6 +17,8 @@ func ToPackageName(input string) string {
 // generated code should be grouped by kind or by GroupVersion.
 // When groupByKind is true, the path will be <kind>/<version>.
 // When groupByKind is false, the path will be <group>/<version>.
+//
+//nolint:revive
 func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) string {
 	if groupByKind {
 		return filepath.Join(ToPackageName(kind.Properties().MachineName), ToPackageName(version))

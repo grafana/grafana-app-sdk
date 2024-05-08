@@ -82,7 +82,7 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
 	projectAddComponentCmd.Flags().String("plugin-id", "", "Plugin ID")
-	projectAddComponentCmd.Flags().String("kindgrouping", "kind", `Kind go package grouping.
+	projectAddComponentCmd.Flags().String("kindgrouping", kindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
 	projectAddKindCmd.Flags().String("type", "resource", "Kind codegen type. 'resource' or 'model'")
 	projectAddKindCmd.Flags().String("plugin-id", "", "Plugin ID")
@@ -368,7 +368,7 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-//nolint:revive,funlen
+//nolint:revive,funlen,gocyclo
 func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		fmt.Println(`Usage: grafana-app-sdk project add component [options] <components>
@@ -425,7 +425,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if kindGrouping != "group" && kindGrouping != "kind" {
+	if kindGrouping != kindGroupingGroup && kindGrouping != kindGroupingKind {
 		return fmt.Errorf("--kindgrouping must be one of 'group'|'kind'")
 	}
 
@@ -458,7 +458,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), selectors, pluginID, kindGrouping == "group")
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), selectors, pluginID, kindGrouping == kindGroupingGroup)
 			case FormatThema:
 				err = addComponentBackend(path, generator.(*codegen.Generator[kindsys.Custom]), selectors, pluginID, false)
 			}
@@ -475,7 +475,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == "group")
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingGroup)
 			case FormatThema:
 				err = addComponentOperator(path, generator.(*codegen.Generator[kindsys.Custom]), selectors, false)
 			}

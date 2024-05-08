@@ -8,8 +8,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/grafana/grafana-app-sdk/codegen"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
 //go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl
@@ -242,7 +243,7 @@ func WriteBackendPluginMain(metadata BackendPluginRouterTemplateMetadata, out io
 		GVToKind:                            make(map[schema.GroupVersion][]codegen.KindProperties),
 	}
 	for _, k := range md.Resources {
-		gv := schema.GroupVersion{k.Group, k.Current}
+		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
 		l, ok := md.GVToKind[gv]
 		if !ok {
 			l = make([]codegen.KindProperties, 0)
@@ -327,7 +328,7 @@ func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
 		GVToKind:             make(map[schema.GroupVersion][]codegen.KindProperties),
 	}
 	for _, k := range md.Resources {
-		gv := schema.GroupVersion{k.Group, k.Current}
+		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
 		l, ok := md.GVToKind[gv]
 		if !ok {
 			l = make([]codegen.KindProperties, 0)

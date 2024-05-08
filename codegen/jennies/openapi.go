@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/gengo/v2"
 	"k8s.io/gengo/v2/generator"
 	"k8s.io/kube-openapi/cmd/openapi-gen/args"
 	"k8s.io/kube-openapi/pkg/generators"
+
+	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
 // OpenAPI jenny uses kube-openapi to build OpenAPI spec.
@@ -40,11 +41,7 @@ func (*OpenAPI) JennyName() string {
 func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 	fs := codejen.NewFS()
 	if o.GenerateOnlyCurrent {
-		/*ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
-		}
-		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)*/
+		return nil, nil
 	}
 
 	// Group kinds by package name
@@ -59,19 +56,13 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 
 				err := gengo.Execute(generators.NameSystems(),
 					generators.DefaultNameSystem(),
-					o.getTargetsFunc(ToPackageName(ver.Version), filepath.Join(o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version)), fs),
+					o.getTargetsFunc(filepath.Join(o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version)), fs),
 					gengo.StdBuildTag,
 					[]string{fmt.Sprintf("%s/%s/%s", o.GoModName, o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version))},
 				)
 				if err != nil {
 					return nil, err
 				}
-
-				/*generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), filepath.Join(kind.Properties().MachineName, ToPackageName(ver.Version)))
-				if err != nil {
-					return nil, err
-				}
-				files = append(files, generated...)*/
 			}
 		}
 	} else {
@@ -84,10 +75,10 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 				gvs[schema.GroupVersion{Group: k.Properties().Group, Version: v.Version}] = struct{}{}
 			}
 		}
-		for gv, _ := range gvs {
+		for gv := range gvs {
 			err := gengo.Execute(generators.NameSystems(),
 				generators.DefaultNameSystem(),
-				o.getTargetsFunc(ToPackageName(gv.Version), filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(gv.Group)), ToPackageName(gv.Version)), fs),
+				o.getTargetsFunc(filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(gv.Group)), ToPackageName(gv.Version)), fs),
 				gengo.StdBuildTag,
 				[]string{filepath.Join(o.GoModName, o.GoGenPath, ToPackageName(gv.Group), ToPackageName(gv.Version))},
 			)
@@ -100,8 +91,7 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 	return fs.AsFiles(), nil
 }
 
-func (o *OpenAPI) getTargetsFunc(packageName string, packagePath string, fs *codejen.FS) func(context *generator.Context) []generator.Target {
-	fmt.Println(packagePath)
+func (o *OpenAPI) getTargetsFunc(packagePath string, fs *codejen.FS) func(context *generator.Context) []generator.Target {
 	return func(context *generator.Context) []generator.Target {
 		context.FileTypes[generator.GoFileType] = &GoFile{
 			FS:     fs,
@@ -115,36 +105,13 @@ func (o *OpenAPI) getTargetsFunc(packageName string, packagePath string, fs *cod
 	}
 }
 
-/*func (o *OpenAPI) getTargetsFunc(ver *codegen.KindVersion, packageName string, packagePath string) func(context *generator.Context) []generator.Target {
-	return func(context *generator.Context) []generator.Target {
-		return []generator.Target{
-			&generator.SimpleTarget{
-				PkgName:       packageName, // `path` vs. `filepath` because packages use '/'
-				PkgPath:       packagePath,
-				PkgDir:        "",
-				HeaderComment: []byte(""),
-				GeneratorsFunc: func(c *generator.Context) (generators []generator.Generator) {
-					return []generator.Generator{
-						newOpenAPIGen(
-							args.OutputFile,
-							args.OutputPkg,
-						),
-						newAPIViolationGen(),
-					}
-				},
-				FilterFunc: apiTypeFilterFunc,
-			},
-		}
-	}
-}*/
-
 type GoFile struct {
 	FS     *codejen.FS
 	Source codejen.NamedJenny
 }
 
-func (g *GoFile) AssembleFile(f *generator.File, pathname string) error {
-	fmt.Println("HELLO")
+//nolint:revive
+func (g *GoFile) AssembleFile(f *generator.File, _ string) error {
 	buf := &bytes.Buffer{}
 
 	// Writing go file copied from k8s.io/gengo/generator.assembleGolangFile

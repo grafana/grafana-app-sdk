@@ -12,15 +12,16 @@ import (
 
 func addGenComments() dstutil.ApplyFunc {
 	return func(c *dstutil.Cursor) bool {
-		switch /*x :=*/ c.Node().(type) {
+		switch c.Node().(type) {
 		case *dst.TypeSpec:
 			c.Parent().Decorations().Start.Append("// +k8s:openapi-gen=true")
 		case *dst.StructType:
-			/*c.Parent()
+			// TODO: is there a way of getting to the typedef from the struct cursor?
+			/* c.Parent()
 			//c.Parent().(*dst.TypeSpec).Decs.Start = []string{"// +k8s:openapi-gen=true"}
 			fmt.Println(c.Parent().Decorations())
 			fmt.Printf("%#v\n", c.Parent())
-			x.Decs.Start = append(x.Decs.Start, "// +k8s:openapi-gen=true")*/
+			x.Decs.Start = append(x.Decs.Start, "// +k8s:openapi-gen=true") */
 		}
 		return true
 	}
