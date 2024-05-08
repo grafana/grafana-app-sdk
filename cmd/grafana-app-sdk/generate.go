@@ -40,7 +40,7 @@ Currently only allowed value is 'kubernetes', which will generate Custom Resourc
 files. Allowed values are 'json' and 'yaml'. Only applicable if type=kubernetes.`)
 	generateCmd.Flags().String("crdpath", "definitions", `Path where Custom Resource 
 Definitions will be created. Only applicable if type=kubernetes`)
-	generateCmd.Flags().String("kindpackaging", "group", `Kind go packaging.
+	generateCmd.Flags().String("kindgrouping", "kind", `Kind go package grouping.
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
 	generateCmd.Flags().Bool("postprocess", false, "Whether to run post-processing on the generated files after they are written to disk. Post-processing includes code generation based on +k8s comments on types. Post-processing will fail if the dependencies required by the generated code are absent from go.mod.")
 	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
@@ -92,12 +92,12 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	grouping, err := cmd.Flags().GetString("kindpackaging")
+	grouping, err := cmd.Flags().GetString("kindgrouping")
 	if err != nil {
 		return err
 	}
 	if grouping != "group" && grouping != "kind" {
-		return fmt.Errorf("--kindpackaging must be one of 'group'|'kind'")
+		return fmt.Errorf("--kindgrouping must be one of 'group'|'kind'")
 	}
 	postProcess, err := cmd.Flags().GetBool("postprocess")
 	if err != nil {

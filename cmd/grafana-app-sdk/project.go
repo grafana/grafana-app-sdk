@@ -82,7 +82,7 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
 	projectAddComponentCmd.Flags().String("plugin-id", "", "Plugin ID")
-	projectAddComponentCmd.Flags().String("kindpackaging", "group", `Kind go packaging.
+	projectAddComponentCmd.Flags().String("kindgrouping", "kind", `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
 	projectAddKindCmd.Flags().String("type", "resource", "Kind codegen type. 'resource' or 'model'")
 	projectAddKindCmd.Flags().String("plugin-id", "", "Plugin ID")
@@ -421,12 +421,12 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 
-	kindGrouping, err := cmd.Flags().GetString("kindpackaging")
+	kindGrouping, err := cmd.Flags().GetString("kindgrouping")
 	if err != nil {
 		return err
 	}
 	if kindGrouping != "group" && kindGrouping != "kind" {
-		return fmt.Errorf("--kindpackaging must be one of 'group'|'kind'")
+		return fmt.Errorf("--kindgrouping must be one of 'group'|'kind'")
 	}
 
 	// Create the generator (used for generating non-static code)
