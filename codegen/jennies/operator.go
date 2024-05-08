@@ -44,12 +44,13 @@ func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
 	props := kind.Properties()
 	b := bytes.Buffer{}
 	err := templates.WriteWatcher(templates.WatcherMetadata{
-		KindProperties: props,
-		PackageName:    "watchers",
-		Repo:           w.projectRepo,
-		CodegenPath:    w.codegenPath,
-		Version:        ver,
-		KindPackage:    GetGeneratedPath(w.groupByKind, kind, ver),
+		KindProperties:  props,
+		PackageName:     "watchers",
+		Repo:            w.projectRepo,
+		CodegenPath:     w.codegenPath,
+		Version:         ver,
+		KindPackage:     GetGeneratedPath(w.groupByKind, kind, ver),
+		KindsAreGrouped: !w.groupByKind,
 	}, &b)
 	if err != nil {
 		return nil, err

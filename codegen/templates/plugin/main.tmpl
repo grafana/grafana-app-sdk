@@ -20,7 +20,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 
-	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.APICodegenPath}}/resource/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
+	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.APICodegenPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
 	{{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{.MachineName}} "{{$.Repo}}/{{$.APICodegenPath}}/resource/{{ $.ToPackageName .MachineName }}{{ if $.ResourcesAreVersioned }}/{{ $.ToPackageName .Current}}{{end}}"{{ end }}
     {{end}}{{end}}"{{.Repo}}/pkg/plugin"
 )

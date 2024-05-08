@@ -74,13 +74,14 @@ func (h *routerHandlerCodeGenerator) Generate(decl codegen.Kind) (*codejen.File,
 	}
 	b := bytes.Buffer{}
 	err := templates.WriteBackendPluginHandler(templates.BackendPluginHandlerTemplateMetadata{
-		KindProperties: meta,
-		Repo:           h.projectRepo,
-		APICodegenPath: h.apiCodegenPath,
-		TypeName:       exportField(decl.Properties().Kind),
-		IsResource:     meta.APIResource != nil,
-		Version:        ver,
-		KindPackage:    GetGeneratedPath(h.groupByKind, decl, ver),
+		KindProperties:  meta,
+		Repo:            h.projectRepo,
+		APICodegenPath:  h.apiCodegenPath,
+		TypeName:        exportField(decl.Properties().Kind),
+		IsResource:      meta.APIResource != nil,
+		Version:         ver,
+		KindPackage:     GetGeneratedPath(h.groupByKind, decl, ver),
+		KindsAreGrouped: !h.groupByKind,
 	}, &b)
 	if err != nil {
 		return nil, err

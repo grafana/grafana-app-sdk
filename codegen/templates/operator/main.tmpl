@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
-    {{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
+    {{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
 	{{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{.MachineName}} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName .MachineName }}{{ if $.ResourcesAreVersioned }}/{{ $.ToPackageName .Current}}{{end}}"{{ end }}
     {{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
 )

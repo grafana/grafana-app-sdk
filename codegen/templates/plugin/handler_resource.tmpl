@@ -13,7 +13,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 
-	{{ if .Version }}{{.MachineName}} "{{.Repo}}/{{.APICodegenPath}}/resource/{{.KindPackage}}"{{else}}"{{.Repo}}/{{.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
+	{{ if .Version }}{{.MachineName}} "{{.Repo}}/{{.APICodegenPath}}{{ if not .KindsAreGrouped }}/resource{{end}}/{{.KindPackage}}"{{else}}"{{.Repo}}/{{.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
 )
 
 type {{.Kind}}Service interface {

@@ -213,12 +213,13 @@ func WriteBackendPluginRouter(metadata BackendPluginRouterTemplateMetadata, out 
 // BackendPluginHandlerTemplateMetadata is the metadata required by the Backend Plugin Handler template
 type BackendPluginHandlerTemplateMetadata struct {
 	codegen.KindProperties
-	Repo           string
-	APICodegenPath string
-	TypeName       string
-	IsResource     bool
-	Version        string
-	KindPackage    string
+	Repo            string
+	APICodegenPath  string
+	TypeName        string
+	IsResource      bool
+	Version         string
+	KindPackage     string
+	KindsAreGrouped bool
 }
 
 func (BackendPluginHandlerTemplateMetadata) ToPackageName(input string) string {
@@ -276,11 +277,12 @@ func GetBackendPluginSecurePackageFiles() (map[string][]byte, error) {
 
 type WatcherMetadata struct {
 	codegen.KindProperties
-	PackageName string
-	Repo        string
-	CodegenPath string
-	Version     string
-	KindPackage string
+	PackageName     string
+	Repo            string
+	CodegenPath     string
+	Version         string
+	KindPackage     string
+	KindsAreGrouped bool
 }
 
 func (WatcherMetadata) ToPackageName(input string) string {
