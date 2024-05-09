@@ -10,7 +10,7 @@ import (
 
 // schema is unexported to prevent accidental overwrites
 var (
-    schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, resource.WithKind("{{.Kind}}"),
+    schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
         resource.WithPlural("{{.Plural}}"), resource.WithScope(resource.{{.Scope}}Scope))
     kind{{.Kind}} = resource.Kind{
         Schema: schema{{.Kind}},
