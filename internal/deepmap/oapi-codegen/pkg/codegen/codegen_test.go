@@ -6,24 +6,17 @@ import (
 	"testing"
 
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/golangci/lint-1"
-	"github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/util"
 )
 
 const (
 	remoteRefFile = `https://raw.githubusercontent.com/deepmap/oapi-codegen/master/examples/petstore-expanded` +
 		`/petstore-expanded.yaml`
-	remoteRefImport = `github.com/deepmap/oapi-codegen/examples/petstore-expanded`
+	remoteRefImport = `github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/examples/petstore-expanded`
 )
-
-func checkLint(t *testing.T, filename string, code []byte) {
-	linter := new(lint.Linter)
-	problems, err := linter.Lint(filename, code)
-	assert.NoError(t, err)
-	assert.Len(t, problems, 0)
-}
 
 func TestExampleOpenAPICodeGeneration(t *testing.T) {
 
@@ -90,9 +83,44 @@ type GetTestByNameResponse struct {
 	assert.Contains(t, code, "type EnumTestEnumNames int")
 	assert.Contains(t, code, "Two  EnumTestEnumNames = 2")
 	assert.Contains(t, code, "Double EnumTestEnumVarnames = 2")
+}
 
-	// Make sure the generated code is valid:
-	checkLint(t, "test.gen.go", []byte(code))
+func TestExtPropGoTypeSkipOptionalPointer(t *testing.T) {
+	packageName := "api"
+	opts := Configuration{
+		PackageName: packageName,
+		Generate: GenerateOptions{
+			EchoServer:   true,
+			Models:       true,
+			EmbeddedSpec: true,
+			Strict:       true,
+		},
+	}
+	spec := "test_specs/x-go-type-skip-optional-pointer.yaml"
+	swagger, err := util.LoadSwagger(spec)
+	require.NoError(t, err)
+
+	// Run our code generation:
+	code, err := Generate(swagger, opts)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, code)
+
+	// Check that we have valid (formattable) code:
+	_, err = format.Source([]byte(code))
+	assert.NoError(t, err)
+
+	// Check that optional pointer fields are skipped if requested
+	assert.Contains(t, code, "NullableFieldSkipFalse *string `json:\"nullableFieldSkipFalse\"`")
+	assert.Contains(t, code, "NullableFieldSkipTrue  string  `json:\"nullableFieldSkipTrue\"`")
+	assert.Contains(t, code, "OptionalField          *string `json:\"optionalField,omitempty\"`")
+	assert.Contains(t, code, "OptionalFieldSkipFalse *string `json:\"optionalFieldSkipFalse,omitempty\"`")
+	assert.Contains(t, code, "OptionalFieldSkipTrue  string  `json:\"optionalFieldSkipTrue,omitempty\"`")
+
+	// Check that the extension applies on custom types as well
+	assert.Contains(t, code, "CustomTypeWithSkipTrue string  `json:\"customTypeWithSkipTrue,omitempty\"`")
+
+	// Check that the extension has no effect on required fields
+	assert.Contains(t, code, "RequiredField          string  `json:\"requiredField\"`")
 }
 
 func TestGoTypeImport(t *testing.T) {
@@ -136,13 +164,13 @@ func TestGoTypeImport(t *testing.T) {
 	for _, imp := range imports {
 		assert.Contains(t, code, imp)
 	}
-
-	// Make sure the generated code is valid:
-	checkLint(t, "test.gen.go", []byte(code))
-
 }
 
 func TestRemoteExternalReference(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping test that interacts with the network")
+	}
+
 	packageName := "api"
 	opts := Configuration{
 		PackageName: packageName,
@@ -170,7 +198,7 @@ func TestRemoteExternalReference(t *testing.T) {
 	assert.Contains(t, code, "package api")
 
 	// Check import
-	assert.Contains(t, code, `externalRef0 "github.com/deepmap/oapi-codegen/examples/petstore-expanded"`)
+	assert.Contains(t, code, `externalRef0 "github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/examples/petstore-expanded"`)
 
 	// Check generated oneOf structure:
 	assert.Contains(t, code, `
@@ -197,10 +225,6 @@ func (t *ExampleSchema_Item) FromExternalRef0NewPet(v externalRef0.NewPet) error
 // FromExternalRef0NewPet overwrites any union data inside the ExampleSchema_Item as the provided externalRef0.NewPet
 func (t *ExampleSchema_Item) FromExternalRef0NewPet(v externalRef0.NewPet) error {
 `)
-
-	// Make sure the generated code is valid:
-	checkLint(t, "test.gen.go", []byte(code))
-
 }
 
 //go:embed test_spec.yaml
