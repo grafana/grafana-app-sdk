@@ -17,6 +17,7 @@ func addGenComments() dstutil.ApplyFunc {
 			c.Parent().Decorations().Start.Append("// +k8s:openapi-gen=true")
 		case *dst.StructType:
 			// TODO: is there a way of getting to the typedef from the struct cursor?
+			// This would allow us to not add the +k8s comment to every type, and just the types that require OpenAPI
 			/* c.Parent()
 			//c.Parent().(*dst.TypeSpec).Decs.Start = []string{"// +k8s:openapi-gen=true"}
 			fmt.Println(c.Parent().Decorations())
