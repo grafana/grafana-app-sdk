@@ -20,17 +20,17 @@ func (siw *ServerInterfaceWrapper) {{$opid}}(w http.ResponseWriter, r *http.Requ
   var {{$varName := .GoVariableName}}{{$varName}} {{.TypeDef}}
 
   {{if .IsPassThrough}}
-  {{$varName}} = chi.URLParam(r, "{{.ParamName}}")
+  {{$varName}} = r.PathValue("{{.ParamName}}")
   {{end}}
   {{if .IsJson}}
-  err = json.Unmarshal([]byte(chi.URLParam(r, "{{.ParamName}}")), &{{$varName}})
+  err = json.Unmarshal([]byte(r.PathValue("{{.ParamName}}")), &{{$varName}})
   if err != nil {
     siw.ErrorHandlerFunc(w, r, &UnmarshalingParamError{ParamName: "{{.ParamName}}", Err: err})
     return
   }
   {{end}}
   {{if .IsStyled}}
-  err = runtime.BindStyledParameterWithOptions("{{.Style}}", "{{.ParamName}}", chi.URLParam(r, "{{.ParamName}}"), &{{$varName}}, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: {{.Explode}}, Required: {{.Required}}})
+  err = runtime.BindStyledParameterWithOptions("{{.Style}}", "{{.ParamName}}", r.PathValue("{{.ParamName}}"), &{{$varName}}, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: {{.Explode}}, Required: {{.Required}}})
   if err != nil {
     siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "{{.ParamName}}", Err: err})
     return
@@ -193,7 +193,7 @@ func (siw *ServerInterfaceWrapper) {{$opid}}(w http.ResponseWriter, r *http.Requ
 
 type UnescapedCookieParamError struct {
     ParamName string
-  	Err error
+    Err error
 }
 
 func (e *UnescapedCookieParamError) Error() string {
