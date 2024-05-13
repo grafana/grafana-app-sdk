@@ -33,10 +33,10 @@ func TestNewStore(t *testing.T) {
 		assert.Equal(t, generator, store.clients)
 	})
 	t.Run("register groups", func(t *testing.T) {
-		g1s1 := Kind{NewSimpleSchema("g1", "1", &TypedSpecObject[any]{}, WithKind("g1s1")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
-		g1s2 := Kind{NewSimpleSchema("g1", "2", &TypedSpecObject[any]{}, WithKind("g1s2")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
-		g2s1 := Kind{NewSimpleSchema("g2", "1", &TypedSpecObject[any]{}, WithKind("g2s1")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
-		g2s2 := Kind{NewSimpleSchema("g2", "2", &TypedSpecObject[any]{}, WithKind("g2s2")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g1s1 := Kind{NewSimpleSchema("g1", "1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("g1s1")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g1s2 := Kind{NewSimpleSchema("g1", "2", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("g1s2")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g2s1 := Kind{NewSimpleSchema("g2", "1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("g2s1")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+		g2s2 := Kind{NewSimpleSchema("g2", "2", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("g2s2")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 		g1 := &TestGroup{[]Kind{g1s1, g1s2}}
 		g2 := &TestGroup{[]Kind{g2s1, g2s2}}
 
@@ -54,7 +54,7 @@ func TestStore_List(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 
@@ -127,7 +127,7 @@ func TestStore_Get(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 
@@ -184,7 +184,7 @@ func TestStore_Add(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 	obj := &TypedSpecObject[any]{
@@ -284,7 +284,7 @@ func TestStore_SimpleAdd(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 	obj := &TypedSpecObject[any]{
@@ -350,7 +350,7 @@ func TestStore_Update(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 	obj := &TypedSpecObject[any]{
@@ -452,7 +452,7 @@ func TestStore_UpdateSubresource(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 
@@ -522,7 +522,7 @@ func TestStore_Upsert(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 	obj := &TypedSpecObject[any]{
@@ -681,7 +681,7 @@ func TestStore_Delete(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("kind")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("kind")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 
@@ -733,7 +733,7 @@ func TestStore_ForceDelete(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	ctx := context.TODO()
 
@@ -801,7 +801,7 @@ func TestStore_Client(t *testing.T) {
 	client := &mockClient{}
 	generator := &mockClientGenerator{}
 	store := NewStore(generator)
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 
 	t.Run("unregistered kind", func(t *testing.T) {
@@ -844,7 +844,7 @@ func TestStore_Register(t *testing.T) {
 	assert.Nil(t, c)
 	assert.Equal(t, fmt.Errorf("resource kind 'test' is not registered in store"), err)
 
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	store.Register(kind)
 	generator.ClientForFunc = func(knd Kind) (Client, error) {
 		assert.Equal(t, kind, knd)
@@ -868,7 +868,7 @@ func TestStore_RegisterGroup(t *testing.T) {
 	assert.Nil(t, c)
 	assert.Equal(t, fmt.Errorf("resource kind 'test' is not registered in store"), err)
 
-	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
+	kind := Kind{NewSimpleSchema("g1", "v1", &TypedSpecObject[any]{}, &TypedList[*TypedSpecObject[string]]{}, WithKind("test")), map[KindEncoding]Codec{KindEncodingJSON: &JSONCodec{}}}
 	group := &TestGroup{[]Kind{kind}}
 	store.RegisterGroup(group)
 	generator.ClientForFunc = func(knd Kind) (Client, error) {

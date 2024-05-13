@@ -17,7 +17,7 @@ import (
 
 var (
 	testResource = resource.Kind{
-		Schema: resource.NewSimpleSchema("test.resource", "v1", &Test{}, resource.WithKind("Test")),
+		Schema: resource.NewSimpleSchema("test.resource", "v1", &Test{}, &resource.UntypedList{}, resource.WithKind("Test")),
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
 	}
 	testResourceGroup = &rg{[]resource.Kind{testResource}}
