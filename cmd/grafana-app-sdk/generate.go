@@ -39,7 +39,7 @@ func setupGenerateCmd() {
 	generateCmd.Flags().String("type", "kubernetes", `Storage layer type. 
 Currently only allowed value is 'kubernetes', which will generate Custom Resource Definition files for each selector.`)
 	generateCmd.Flags().String("crdencoding", "json", `Encoding for Custom Resource Definition 
-files. Allowed values are 'json' and 'yaml'. Only applicable if type=kubernetes.`)
+files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD generation.`)
 	generateCmd.Flags().String("crdpath", "definitions", `Path where Custom Resource 
 Definitions will be created. Only applicable if type=kubernetes`)
 	generateCmd.Flags().String("kindgrouping", kindGroupingKind, `Kind go package grouping.
@@ -209,15 +209,17 @@ func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (co
 	allFiles = append(allFiles, files...)
 
 	// Schema definition generation (CRD-only currently)
-	switch cfg.StorageType {
-	case "kubernetes":
-		files, err = generateCRDsThema(parser, cfg.CRDPath, cfg.CRDEncoding, selectors)
-		if err != nil {
-			return nil, err
+	if cfg.CRDEncoding != "none" {
+		switch cfg.StorageType {
+		case "kubernetes":
+			files, err = generateCRDsThema(parser, cfg.CRDPath, cfg.CRDEncoding, selectors)
+			if err != nil {
+				return nil, err
+			}
+			allFiles = append(allFiles, files...)
+		default:
+			return nil, fmt.Errorf("unknown storage type '%s'", cfg.StorageType)
 		}
-		allFiles = append(allFiles, files...)
-	default:
-		return nil, fmt.Errorf("unknown storage type '%s'", cfg.StorageType)
 	}
 	return allFiles, nil
 }
@@ -341,18 +343,21 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		tsResourceFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
 	}
 	// CRD
-	encFunc := json.Marshal
-	if cfg.CRDEncoding == "yaml" {
-		encFunc = yaml.Marshal
-	}
-	crdFiles, err := generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource != nil
-	}, selectors...)
-	if err != nil {
-		return nil, err
-	}
-	for i, f := range crdFiles {
-		crdFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+	var crdFiles codejen.Files
+	if cfg.CRDEncoding != "none" {
+		encFunc := json.Marshal
+		if cfg.CRDEncoding == "yaml" {
+			encFunc = yaml.Marshal
+		}
+		crdFiles, err := generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
+			return kind.Properties().APIResource != nil
+		}, selectors...)
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range crdFiles {
+			crdFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+		}
 	}
 
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
