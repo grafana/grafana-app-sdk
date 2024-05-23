@@ -17,7 +17,7 @@ import (
 )
 
 type {{.Kind}}Service interface {
-	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
+	List(ctx context.Context, namespace string, perPage int, filters ...string) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
 	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.{{.Kind}}, error)
 	Add(ctx context.Context, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
 	Update(ctx context.Context, id resource.Identifier, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
@@ -37,7 +37,7 @@ func (p *Plugin) handle{{.Kind}}List(ctx context.Context, req router.JSONRequest
 	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
 	    return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
 	}
-	return svc.List(ctx, p.namespace, filters...)
+	return svc.List(ctx, p.namespace, 500, filters...)
 }
 
 func (p *Plugin) handle{{.Kind}}Get(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {

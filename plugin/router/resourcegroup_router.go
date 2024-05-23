@@ -14,7 +14,7 @@ import (
 type Store interface {
 	Add(ctx context.Context, obj resource.Object) (resource.Object, error)
 	Get(ctx context.Context, kind string, identifier resource.Identifier) (resource.Object, error)
-	List(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error)
+	List(ctx context.Context, kind, namespace string, perPage int, filters ...string) (resource.ListObject, error)
 	Update(ctx context.Context, obj resource.Object) (resource.Object, error)
 	Delete(ctx context.Context, kind string, identifier resource.Identifier) error
 }
@@ -108,7 +108,7 @@ func (router *ResourceGroupRouter) createResource(cr resource.Schema) JSONHandle
 
 func (router *ResourceGroupRouter) listResources(cr resource.Schema) JSONHandlerFunc {
 	return func(ctx context.Context, request JSONRequest) (JSONResponse, error) {
-		resources, err := router.store.List(ctx, cr.Kind(), router.namespace) // TODO: support labels
+		resources, err := router.store.List(ctx, cr.Kind(), router.namespace, 0) // TODO: support labels and pagination
 		if err != nil {
 			return nil, plugin.WrapError(http.StatusInternalServerError, err)
 		}

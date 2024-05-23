@@ -75,7 +75,7 @@ func (s fakeStore) Get(ctx context.Context, kind string, identifier resource.Ide
 	return nil, nil
 }
 
-func (s fakeStore) List(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error) {
+func (s fakeStore) List(ctx context.Context, kind, namespace string, _ int, filters ...string) (resource.ListObject, error) {
 	if s.listFunc != nil {
 		return s.listFunc(ctx, kind, namespace, filters...)
 	}

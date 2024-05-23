@@ -169,16 +169,50 @@ func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) 
 	return err
 }
 
-// List lists all resources in the provided namespace, optionally filtered by the provided filters
-func (t *TypedStore[T]) List(ctx context.Context, namespace string, filters ...string) (*TypedList[T], error) {
-	resp := &TypedList[T]{}
-	err := t.client.ListInto(ctx, namespace, ListOptions{
+// List lists all resources in the provided namespace, optionally filtered by the provided filters.
+// It will auto-list all pages in the response using the perPage limit for requests.
+// To list a single page of results, use ListPage.
+func (t *TypedStore[T]) List(ctx context.Context, namespace string, perPage int, filters ...string) (*TypedList[T], error) {
+	resp, err := t.ListPage(ctx, namespace, ListOptions{
+		Limit:        perPage,
 		LabelFilters: filters,
-	}, resp)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if resp.Continue == "" {
+		return resp, nil
+	}
+	for resp.Continue != "" {
+		page, err := t.ListPage(ctx, namespace, ListOptions{
+			Continue:     resp.Continue,
+			Limit:        perPage,
+			LabelFilters: filters,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.Continue = page.Continue
+		resp.ResourceVersion = page.ResourceVersion
+		resp.Items = append(resp.Items, page.Items...)
+	}
+	return resp, nil
+}
+
+// ListPage lists a single page of resources, with no auto-paging logic like List.
+// This is semantically identical to calling Client().ListInto(ctx, namespace, options, &TypedList[T])
+func (t *TypedStore[T]) ListPage(ctx context.Context, namespace string, options ListOptions) (*TypedList[T], error) {
+	resp := &TypedList[T]{}
+	err := t.client.ListInto(ctx, namespace, options, resp)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
+}
+
+// Client returns the underlying Client for this store.
+func (t *TypedStore[T]) Client() Client {
+	return t.client
 }
 
 //nolint:revive

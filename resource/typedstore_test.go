@@ -409,19 +409,20 @@ func TestTypedStore_List(t *testing.T) {
 		client.ListIntoFunc = func(ctx context.Context, namespace string, options ListOptions, into ListObject) error {
 			return cerr
 		}
-		ret, err := store.List(ctx, ns)
+		ret, err := store.List(ctx, ns, 0)
 		assert.Nil(t, ret)
 		assert.Equal(t, cerr, err)
 	})
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("success, no pagination", func(t *testing.T) {
 		client.ListIntoFunc = func(c context.Context, namespace string, options ListOptions, into ListObject) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, ns, namespace)
+			assert.Equal(t, 0, options.Limit)
 			into.SetItems(list.GetItems())
 			return nil
 		}
-		ret, err := store.List(ctx, ns)
+		ret, err := store.List(ctx, ns, 0)
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.GetItems()), len(ret.Items))
 		for i := 0; i < len(ret.Items); i++ {
@@ -429,6 +430,28 @@ func TestTypedStore_List(t *testing.T) {
 			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret.Items[i].GetStaticMetadata())
 			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret.Items[i].GetCommonMetadata())
 			assert.Equal(t, list.Items[i].Status, ret.Items[i].Status)
+		}
+	})
+
+	t.Run("success, with two pages", func(t *testing.T) {
+		client.ListIntoFunc = func(c context.Context, namespace string, options ListOptions, into ListObject) error {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, ns, namespace)
+			assert.Equal(t, 2, options.Limit)
+			into.SetItems(list.GetItems())
+			if options.Continue == "" {
+				into.SetContinue("continue")
+			}
+			return nil
+		}
+		ret, err := store.List(ctx, ns, 2)
+		assert.Nil(t, err)
+		assert.Equal(t, len(list.GetItems())*2, len(ret.Items))
+		for i := 0; i < len(ret.Items); i++ {
+			assert.Equal(t, list.Items[i%2].Spec, ret.Items[i].Spec)
+			assert.Equal(t, list.Items[i%2].GetStaticMetadata(), ret.Items[i].GetStaticMetadata())
+			assert.Equal(t, list.Items[i%2].GetCommonMetadata(), ret.Items[i].GetCommonMetadata())
+			assert.Equal(t, list.Items[i%2].Status, ret.Items[i].Status)
 		}
 	})
 
@@ -441,7 +464,7 @@ func TestTypedStore_List(t *testing.T) {
 			into.SetItems(list.GetItems())
 			return nil
 		}
-		ret, err := store.List(ctx, ns, filters...)
+		ret, err := store.List(ctx, ns, 0, filters...)
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.GetItems()), len(ret.Items))
 		for i := 0; i < len(ret.Items); i++ {
