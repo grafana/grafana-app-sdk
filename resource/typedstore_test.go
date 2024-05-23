@@ -409,7 +409,7 @@ func TestTypedStore_List(t *testing.T) {
 		client.ListIntoFunc = func(ctx context.Context, namespace string, options ListOptions, into ListObject) error {
 			return cerr
 		}
-		ret, err := store.List(ctx, ns, 0)
+		ret, err := store.List(ctx, StoreListOptions{Namespace: ns})
 		assert.Nil(t, ret)
 		assert.Equal(t, cerr, err)
 	})
@@ -422,7 +422,7 @@ func TestTypedStore_List(t *testing.T) {
 			into.SetItems(list.GetItems())
 			return nil
 		}
-		ret, err := store.List(ctx, ns, 0)
+		ret, err := store.List(ctx, StoreListOptions{Namespace: ns})
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.GetItems()), len(ret.Items))
 		for i := 0; i < len(ret.Items); i++ {
@@ -444,7 +444,7 @@ func TestTypedStore_List(t *testing.T) {
 			}
 			return nil
 		}
-		ret, err := store.List(ctx, ns, 2)
+		ret, err := store.List(ctx, StoreListOptions{Namespace: ns, PerPage: 2})
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.GetItems())*2, len(ret.Items))
 		for i := 0; i < len(ret.Items); i++ {
@@ -464,7 +464,7 @@ func TestTypedStore_List(t *testing.T) {
 			into.SetItems(list.GetItems())
 			return nil
 		}
-		ret, err := store.List(ctx, ns, 0, filters...)
+		ret, err := store.List(ctx, StoreListOptions{Namespace: ns, Filters: filters})
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.GetItems()), len(ret.Items))
 		for i := 0; i < len(ret.Items); i++ {

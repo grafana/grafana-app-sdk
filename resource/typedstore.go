@@ -172,10 +172,10 @@ func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) 
 // List lists all resources in the provided namespace, optionally filtered by the provided filters.
 // It will auto-list all pages in the response using the perPage limit for requests.
 // To list a single page of results, use ListPage.
-func (t *TypedStore[T]) List(ctx context.Context, namespace string, perPage int, filters ...string) (*TypedList[T], error) {
-	resp, err := t.ListPage(ctx, namespace, ListOptions{
-		Limit:        perPage,
-		LabelFilters: filters,
+func (t *TypedStore[T]) List(ctx context.Context, options StoreListOptions) (*TypedList[T], error) {
+	resp, err := t.ListPage(ctx, options.Namespace, ListOptions{
+		Limit:        options.PerPage,
+		LabelFilters: options.Filters,
 	})
 	if err != nil {
 		return nil, err
@@ -184,10 +184,10 @@ func (t *TypedStore[T]) List(ctx context.Context, namespace string, perPage int,
 		return resp, nil
 	}
 	for resp.Continue != "" {
-		page, err := t.ListPage(ctx, namespace, ListOptions{
+		page, err := t.ListPage(ctx, options.Namespace, ListOptions{
 			Continue:     resp.Continue,
-			Limit:        perPage,
-			LabelFilters: filters,
+			Limit:        options.PerPage,
+			LabelFilters: options.Filters,
 		})
 		if err != nil {
 			return nil, err

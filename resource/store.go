@@ -32,6 +32,12 @@ type KindCollection interface {
 	Kinds() []Kind
 }
 
+type StoreListOptions struct {
+	Namespace string
+	PerPage   int
+	Filters   []string
+}
+
 // Store presents Schema's resource Objects as a simple Key-Value store,
 // abstracting the need to track clients or issue requests.
 // If you wish to directly use a client managed by the store,
@@ -247,14 +253,14 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 // List lists all resources of kind in the provided namespace, with optional label filters.
 // It will auto-list all pages in the response using the perPage limit for requests.
 // To list a single page of results, use ListPage.
-func (s *Store) List(ctx context.Context, kind string, namespace string, perPage int, filters ...string) (ListObject, error) {
+func (s *Store) List(ctx context.Context, kind string, options StoreListOptions) (ListObject, error) {
 	client, err := s.getClient(kind)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.List(ctx, namespace, ListOptions{
-		Limit:        perPage,
-		LabelFilters: filters,
+	resp, err := client.List(ctx, options.Namespace, ListOptions{
+		Limit:        options.PerPage,
+		LabelFilters: options.Filters,
 	})
 	if err != nil {
 		return nil, err
@@ -263,10 +269,10 @@ func (s *Store) List(ctx context.Context, kind string, namespace string, perPage
 		return resp, nil
 	}
 	for resp.GetContinue() != "" {
-		page, err := client.List(ctx, namespace, ListOptions{
+		page, err := client.List(ctx, options.Namespace, ListOptions{
 			Continue:     resp.GetContinue(),
-			Limit:        perPage,
-			LabelFilters: filters,
+			Limit:        options.PerPage,
+			LabelFilters: options.Filters,
 		})
 		if err != nil {
 			return nil, err

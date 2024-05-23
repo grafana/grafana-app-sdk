@@ -59,7 +59,7 @@ func TestStore_List(t *testing.T) {
 	ctx := context.TODO()
 
 	t.Run("unregistered Schema", func(t *testing.T) {
-		list, err := store.List(context.TODO(), kind.Kind()+"no", "", 0)
+		list, err := store.List(context.TODO(), kind.Kind()+"no", StoreListOptions{})
 		require.Nil(t, list)
 		assert.Equal(t, fmt.Errorf("resource kind '%sno' is not registered in store", kind.Kind()), err)
 	})
@@ -69,7 +69,7 @@ func TestStore_List(t *testing.T) {
 		generator.ClientForFunc = func(kind Kind) (Client, error) {
 			return nil, cerr
 		}
-		list, err := store.List(ctx, kind.Kind(), "", 0)
+		list, err := store.List(ctx, kind.Kind(), StoreListOptions{})
 		require.Nil(t, list)
 		assert.Equal(t, cerr, err)
 	})
@@ -83,7 +83,7 @@ func TestStore_List(t *testing.T) {
 		client.ListFunc = func(ctx context.Context, namespace string, options ListOptions) (ListObject, error) {
 			return nil, cerr
 		}
-		list, err := store.List(ctx, kind.Kind(), ns, 0)
+		list, err := store.List(ctx, kind.Kind(), StoreListOptions{Namespace: ns})
 		require.Nil(t, list)
 		assert.Equal(t, cerr, err)
 	})
@@ -100,7 +100,7 @@ func TestStore_List(t *testing.T) {
 			assert.Equal(t, 0, options.Limit)
 			return ret, nil
 		}
-		list, err := store.List(ctx, kind.Kind(), ns, 0)
+		list, err := store.List(ctx, kind.Kind(), StoreListOptions{Namespace: ns})
 		assert.Nil(t, err)
 		assert.Equal(t, ret, list)
 	})
@@ -131,7 +131,7 @@ func TestStore_List(t *testing.T) {
 			}
 			return ret1, nil
 		}
-		list, err := store.List(ctx, kind.Kind(), ns, 1)
+		list, err := store.List(ctx, kind.Kind(), StoreListOptions{Namespace: ns, PerPage: 1})
 		assert.Nil(t, err)
 		assert.Equal(t, ret2.GetResourceVersion(), list.GetResourceVersion())
 		assert.Equal(t, 2, len(list.GetItems()))
@@ -153,7 +153,7 @@ func TestStore_List(t *testing.T) {
 			assert.Equal(t, filters, options.LabelFilters)
 			return ret, nil
 		}
-		list, err := store.List(ctx, kind.Kind(), ns, 0, filters...)
+		list, err := store.List(ctx, kind.Kind(), StoreListOptions{Namespace: ns, Filters: filters})
 		assert.Nil(t, err)
 		assert.Equal(t, ret, list)
 	})
