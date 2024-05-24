@@ -44,6 +44,29 @@ func main() {
 		Reconciler: simple.ResourceReconcilerFunc(&simple.Reconciler{
 			ReconcileFunc: reconcileV1ExternalNames,
 		}),
+		Converter: &apiserver.TypedResourceConverter[*corev2.ExternalName, *corev1.ExternalName]{
+			FromInternalFunc: func(src *corev2.ExternalName, dst *corev1.ExternalName) error {
+				src.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
+				dst.Spec.Host = src.Spec.Host
+				dst.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   corev1.ExternalNameKind().Group(),
+					Version: corev1.ExternalNameKind().Version(),
+					Kind:    corev1.ExternalNameKind().Kind(),
+				})
+				return nil
+			},
+			ToInternalFunc: func(src *corev1.ExternalName, dst *corev2.ExternalName) error {
+				src.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
+				dst.Spec.Host = src.Spec.Host
+				dst.Spec.OtherData = "upconverted data"
+				dst.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   corev1.ExternalNameKind().Group(),
+					Version: corev1.ExternalNameKind().Version(),
+					Kind:    corev1.ExternalNameKind().Kind(),
+				})
+				return nil
+			},
+		},
 	}
 	// Create an API Server Resource for the v2 ExternalName
 	externalNameV2 := apiserver.Resource{

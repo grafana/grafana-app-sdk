@@ -36,6 +36,7 @@ type Resource struct {
 	Validator             resource.ValidatingAdmissionController
 	Mutator               resource.MutatingAdmissionController
 	Reconciler            func(generator resource.ClientGenerator, getter OptionsGetter) (operator.Reconciler, error)
+	Converter             ResourceConverter
 }
 
 func (r *Resource) AddToScheme(scheme *runtime.Scheme) {
@@ -207,11 +208,6 @@ func (GenericConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byt
 type ResourceGroup struct {
 	Name      string
 	Resources []Resource
-	// Converters is an optional map of GroupKind => Converter to use for CRD version conversion requests.
-	// This SHOULD be supplied if multiple versions of the same GroupKind exist in the ResourceGroup.
-	// If not supplied, a GenericConverter will be used for all conversions.
-	// This can be empty or nil and specific MutatingAdmissionControllers can be set later with Operator.MutateKind
-	converters map[metav1.GroupKind]Converter
 }
 
 func NewResourceGroup(name string, resources []Resource) *ResourceGroup {
@@ -246,16 +242,6 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) error {
 		scheme.AddKnownTypeWithName(gv.WithKind(gk.Kind), latest.Kind.ZeroValue())
 		scheme.AddKnownTypeWithName(gv.WithKind(gk.Kind+"List"), latest.Kind.ZeroListValue())
 
-		// Get the converter for this GroupKind, or use a Generic one if none was supplied
-		var converter Converter = GenericConverter{}
-		if g.converters != nil {
-			ok := false
-			converter, ok = g.converters[gk]
-			if !ok {
-				converter = GenericConverter{}
-			}
-		}
-
 		// Register each added version with the scheme
 		priorities := make([]schema.GroupVersion, len(vers))
 		for i, v := range vers {
@@ -270,8 +256,21 @@ func (g *ResourceGroup) AddToScheme(scheme *runtime.Scheme) error {
 			if v.Kind.Version() == latest.Kind.Version() {
 				continue
 			}
-			scheme.AddConversionFunc(v.Kind.ZeroValue(), latest.Kind.ZeroValue(), schemeConversionFunc(v.Kind, latest.Kind, converter))
-			scheme.AddConversionFunc(latest.Kind.ZeroValue(), v.Kind.ZeroValue(), schemeConversionFunc(latest.Kind, v.Kind, converter))
+			converter := v.Converter
+			if converter == nil {
+				converter = &GenericObjectConverter{GVK: schema.GroupVersionKind{
+					Group:   v.Kind.Group(),
+					Version: v.Kind.Version(),
+					Kind:    v.Kind.Kind(),
+				}}
+			}
+
+			scheme.AddConversionFunc(v.Kind.ZeroValue(), latest.Kind.ZeroValue(), func(a, b interface{}, scope conversion.Scope) error {
+				return converter.ToInternal(a, b)
+			})
+			scheme.AddConversionFunc(latest.Kind.ZeroValue(), v.Kind.ZeroValue(), func(a, b interface{}, scope conversion.Scope) error {
+				return converter.FromInternal(a, b)
+			})
 		}
 
 		// Set version priorities based on the reverse-order list we built
