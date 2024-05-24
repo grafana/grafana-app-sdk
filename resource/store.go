@@ -250,8 +250,9 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 	return err
 }
 
-// List lists all resources of kind in the provided namespace, with optional label filters.
-// It will auto-list all pages in the response using the perPage limit for requests.
+// List lists all resources using the Namespace and Filters provided in options. An empty namespace in options is
+// equivalent to NamespaceAll, and an empty or nil Filters slice will be ignored.
+// List will automatically paginate through results, fetching pages based on options.PerPage.
 // To list a single page of results, use ListPage.
 func (s *Store) List(ctx context.Context, kind string, options StoreListOptions) (ListObject, error) {
 	client, err := s.getClient(kind)

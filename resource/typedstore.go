@@ -169,8 +169,9 @@ func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) 
 	return err
 }
 
-// List lists all resources in the provided namespace, optionally filtered by the provided filters.
-// It will auto-list all pages in the response using the perPage limit for requests.
+// List lists all resources using the Namespace and Filters provided in options. An empty namespace in options is
+// equivalent to NamespaceAll, and an empty or nil Filters slice will be ignored.
+// List will automatically paginate through results, fetching pages based on options.PerPage.
 // To list a single page of results, use ListPage.
 func (t *TypedStore[T]) List(ctx context.Context, options StoreListOptions) (*TypedList[T], error) {
 	resp, err := t.ListPage(ctx, options.Namespace, ListOptions{
