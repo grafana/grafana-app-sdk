@@ -181,9 +181,6 @@ func (t *TypedStore[T]) List(ctx context.Context, options StoreListOptions) (*Ty
 	if err != nil {
 		return nil, err
 	}
-	if resp.Continue == "" {
-		return resp, nil
-	}
 	for resp.Continue != "" {
 		page, err := t.ListPage(ctx, options.Namespace, ListOptions{
 			Continue:     resp.Continue,

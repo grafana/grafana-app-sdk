@@ -266,9 +266,6 @@ func (s *Store) List(ctx context.Context, kind string, options StoreListOptions)
 	if err != nil {
 		return nil, err
 	}
-	if resp.GetContinue() == "" {
-		return resp, nil
-	}
 	for resp.GetContinue() != "" {
 		page, err := client.List(ctx, options.Namespace, ListOptions{
 			Continue:     resp.GetContinue(),
