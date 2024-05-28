@@ -54,11 +54,12 @@ func ResourceGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codeg
 // or just generate code for the current version.
 // If `versioned` is true, the paths to the generated files will include the version, and
 // the package name will be the version, rather than the kind.
-func ModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+func ModelsGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
 			GenerateOnlyCurrent: !versioned,
+			GroupByKind:         !groupKinds,
 		},
 	)
 	return g
