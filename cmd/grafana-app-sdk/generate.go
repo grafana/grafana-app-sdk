@@ -314,7 +314,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		resourceFiles[i].RelativePath = filepath.Join(relativePath, f.RelativePath)
 	}
 	// Model
-	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true), func(kind codegen.Kind) bool {
+	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource == nil
 	}, selectors...)
 	if err != nil {

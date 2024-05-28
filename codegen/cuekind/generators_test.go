@@ -75,7 +75,7 @@ func TestModelsGenerator(t *testing.T) {
 	fmt.Println(err)
 	require.Nil(t, err)
 
-	files, err := ModelsGenerator(false).Generate(kinds...)
+	files, err := ModelsGenerator(false, true).Generate(kinds...)
 	require.Nil(t, err)
 	// Check number of files generated
 	// 1 -> just the go type
