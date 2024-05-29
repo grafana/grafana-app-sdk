@@ -32,6 +32,12 @@ type KindCollection interface {
 	Kinds() []Kind
 }
 
+type StoreListOptions struct {
+	Namespace string
+	PerPage   int
+	Filters   []string
+}
+
 // Store presents Schema's resource Objects as a simple Key-Value store,
 // abstracting the need to track clients or issue requests.
 // If you wish to directly use a client managed by the store,
@@ -244,16 +250,47 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 	return err
 }
 
-// List lists all resources of kind in the provided namespace, with optional label filters.
-func (s *Store) List(ctx context.Context, kind string, namespace string, filters ...string) (ListObject, error) {
+// List lists all resources using the Namespace and Filters provided in options. An empty namespace in options is
+// equivalent to NamespaceAll, and an empty or nil Filters slice will be ignored.
+// List will automatically paginate through results, fetching pages based on options.PerPage.
+// To list a single page of results, use ListPage.
+func (s *Store) List(ctx context.Context, kind string, options StoreListOptions) (ListObject, error) {
+	client, err := s.getClient(kind)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.List(ctx, options.Namespace, ListOptions{
+		Limit:        options.PerPage,
+		LabelFilters: options.Filters,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for resp.GetContinue() != "" {
+		page, err := client.List(ctx, options.Namespace, ListOptions{
+			Continue:     resp.GetContinue(),
+			Limit:        options.PerPage,
+			LabelFilters: options.Filters,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.SetContinue(page.GetContinue())
+		resp.SetResourceVersion(page.GetResourceVersion())
+		resp.SetItems(append(resp.GetItems(), page.GetItems()...))
+	}
+	return resp, nil
+}
+
+// ListPage lists a single page of resources, with no auto-paging logic like List.
+// This is semantically identical to calling Client(kind).List(ctx, namespace, options)
+func (s *Store) ListPage(ctx context.Context, kind string, namespace string, options ListOptions) (ListObject, error) {
 	client, err := s.getClient(kind)
 	if err != nil {
 		return nil, err
 	}
 
-	return client.List(ctx, namespace, ListOptions{
-		LabelFilters: filters,
-	})
+	return client.List(ctx, namespace, options)
 }
 
 // Client returns a Client for the provided kind, if that kind is tracked by the Store

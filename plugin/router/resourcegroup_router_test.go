@@ -54,7 +54,7 @@ type TestStatus struct {
 type fakeStore struct {
 	addFunc    func(ctx context.Context, obj resource.Object) (resource.Object, error)
 	getFunc    func(ctx context.Context, kind string, identifier resource.Identifier) (resource.Object, error)
-	listFunc   func(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error)
+	listFunc   func(ctx context.Context, kind string, options resource.StoreListOptions) (resource.ListObject, error)
 	updateFunc func(ctx context.Context, obj resource.Object) (resource.Object, error)
 	deleteFunc func(ctx context.Context, kind string, identifier resource.Identifier) error
 }
@@ -75,9 +75,9 @@ func (s fakeStore) Get(ctx context.Context, kind string, identifier resource.Ide
 	return nil, nil
 }
 
-func (s fakeStore) List(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error) {
+func (s fakeStore) List(ctx context.Context, kind string, options resource.StoreListOptions) (resource.ListObject, error) {
 	if s.listFunc != nil {
-		return s.listFunc(ctx, kind, namespace, filters...)
+		return s.listFunc(ctx, kind, options)
 	}
 
 	return nil, nil
@@ -185,7 +185,7 @@ func TestResourceGroupRouter_Create(t *testing.T) {
 func TestResourceGroupRouter_List(t *testing.T) {
 	t.Run("returns error as store returns error", func(t *testing.T) {
 		router, err := router.NewResourceGroupRouterWithStore(testResourceGroup, metav1.NamespaceDefault, fakeStore{
-			listFunc: func(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error) {
+			listFunc: func(ctx context.Context, kind string, options resource.StoreListOptions) (resource.ListObject, error) {
 				require.Equal(t, "Test", kind)
 
 				return nil, errors.New("error")
@@ -219,7 +219,7 @@ func TestResourceGroupRouter_List(t *testing.T) {
 		secondResource.Spec.SomeInfo = "second_resource_info"
 
 		router, err := router.NewResourceGroupRouterWithStore(testResourceGroup, metav1.NamespaceDefault, fakeStore{
-			listFunc: func(ctx context.Context, kind, namespace string, filters ...string) (resource.ListObject, error) {
+			listFunc: func(ctx context.Context, kind string, options resource.StoreListOptions) (resource.ListObject, error) {
 				require.Equal(t, "Test", kind)
 
 				list := resource.TypedList[*Test]{}

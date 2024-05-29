@@ -169,16 +169,48 @@ func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) 
 	return err
 }
 
-// List lists all resources in the provided namespace, optionally filtered by the provided filters
-func (t *TypedStore[T]) List(ctx context.Context, namespace string, filters ...string) (*TypedList[T], error) {
+// List lists all resources using the Namespace and Filters provided in options. An empty namespace in options is
+// equivalent to NamespaceAll, and an empty or nil Filters slice will be ignored.
+// List will automatically paginate through results, fetching pages based on options.PerPage.
+// To list a single page of results, use ListPage.
+func (t *TypedStore[T]) List(ctx context.Context, options StoreListOptions) (*TypedList[T], error) {
+	resp, err := t.ListPage(ctx, options.Namespace, ListOptions{
+		Limit:        options.PerPage,
+		LabelFilters: options.Filters,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for resp.Continue != "" {
+		page, err := t.ListPage(ctx, options.Namespace, ListOptions{
+			Continue:     resp.Continue,
+			Limit:        options.PerPage,
+			LabelFilters: options.Filters,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.Continue = page.Continue
+		resp.ResourceVersion = page.ResourceVersion
+		resp.Items = append(resp.Items, page.Items...)
+	}
+	return resp, nil
+}
+
+// ListPage lists a single page of resources, with no auto-paging logic like List.
+// This is semantically identical to calling Client().ListInto(ctx, namespace, options, &TypedList[T])
+func (t *TypedStore[T]) ListPage(ctx context.Context, namespace string, options ListOptions) (*TypedList[T], error) {
 	resp := &TypedList[T]{}
-	err := t.client.ListInto(ctx, namespace, ListOptions{
-		LabelFilters: filters,
-	}, resp)
+	err := t.client.ListInto(ctx, namespace, options, resp)
 	if err != nil {
 		return nil, err
 	}
 	return resp, nil
+}
+
+// Client returns the underlying Client for this store.
+func (t *TypedStore[T]) Client() Client {
+	return t.client
 }
 
 //nolint:revive
