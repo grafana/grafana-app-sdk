@@ -7,6 +7,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // KindEncoding is the wire encoding of the Kind objects.
@@ -70,6 +71,31 @@ func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
 	return codec.Write(out, obj)
 }
 
+// GroupVersionKind is a convenience method that assembles a schema.GroupVersionKind from Group(), Version(), and Kind()
+func (k *Kind) GroupVersionKind() schema.GroupVersionKind {
+	if k.Schema == nil {
+		return schema.GroupVersionKind{}
+	}
+	return schema.GroupVersionKind{
+		Group:   k.Group(),
+		Version: k.Version(),
+		Kind:    k.Kind(),
+	}
+}
+
+// GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Plural()
+func (k *Kind) GroupVersionResource() schema.GroupVersionResource {
+	if k.Schema == nil {
+		return schema.GroupVersionResource{}
+	}
+	return schema.GroupVersionResource{
+		Group:    k.Group(),
+		Version:  k.Version(),
+		Resource: k.Plural(),
+	}
+}
+
+// NewJSONCodec returns a pointer to a new JSONCodec instance
 func NewJSONCodec() *JSONCodec {
 	return &JSONCodec{}
 }

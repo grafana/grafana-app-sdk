@@ -62,14 +62,19 @@ func ResourceGenerator() *codejen.JennyList[kindsys.Custom] {
 	g := codejen.JennyListWithNamer[kindsys.Custom](kindsysNamerFunc)
 	g.Append(
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.GoTypes{
-			GenerateOnlyCurrent: true,
-			Depth:               1,
+			GenerateOnlyCurrent:  true,
+			Depth:                1,
+			GroupByKind:          true,
+			AddKubernetesCodegen: true,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.ResourceObjectGenerator{
-			OnlyUseCurrentVersion: true,
+			OnlyUseCurrentVersion:       true,
+			GroupByKind:                 true,
+			SubresourceTypesArePrefixed: false,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: true,
+			GroupByKind:           true,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&themajennies.CodecGenerator{
 			OnlyUseCurrentVersion: true,
@@ -99,7 +104,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 
 	g := codejen.JennyListWithNamer(kindsysNamerFunc)
 	g.Append(
-		codejen.AdaptOneToOne(jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, false), kindsysCustomToKind),
+		codejen.AdaptOneToOne(jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, false, true), kindsysCustomToKind),
 		jennies.StaticManyToOneGenerator[kindsys.Custom](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
@@ -113,7 +118,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string) *codejen.Jenny
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
 		codejen.AdaptManyToOne(jennies.RouterCodeGenerator(projectRepo), kindsysCustomToKind),
-		codejen.AdaptManyToOne(jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, false), kindsysCustomToKind),
+		codejen.AdaptManyToOne(jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, false, true), kindsysCustomToKind),
 	)
 	return g
 }
@@ -132,9 +137,9 @@ func TypeScriptModelsGenerator() *codejen.JennyList[kindsys.Custom] {
 func OperatorGenerator(projectRepo, codegenPath string) *codejen.JennyList[kindsys.Custom] {
 	g := codejen.JennyListWithNamer[kindsys.Custom](kindsysNamerFunc)
 	g.Append(
-		codejen.AdaptOneToOne(jennies.WatcherJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
+		codejen.AdaptOneToOne(jennies.WatcherJenny(projectRepo, codegenPath, false, true), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorKubeConfigJenny{}, kindsysCustomToKind),
-		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath, false), kindsysCustomToKind),
+		codejen.AdaptManyToOne(jennies.OperatorMainJenny(projectRepo, codegenPath, false, true), kindsysCustomToKind),
 		codejen.AdaptManyToOne[codegen.Kind, kindsys.Custom](&jennies.OperatorConfigJenny{}, kindsysCustomToKind),
 	)
 	return g

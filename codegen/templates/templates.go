@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"text/template"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
@@ -103,12 +106,13 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
-	Package string
-	Group   string
-	Version string
-	Kind    string
-	Plural  string
-	Scope   string
+	Package    string
+	Group      string
+	Version    string
+	Kind       string
+	Plural     string
+	Scope      string
+	FuncPrefix string
 }
 
 // WriteSchema executes the Resource Schema template, and writes out the generated go code to out
@@ -186,10 +190,20 @@ type BackendPluginRouterTemplateMetadata struct {
 	Resources             []codegen.KindProperties
 	PluginID              string
 	ResourcesAreVersioned bool
+	KindsAreGrouped       bool
+}
+
+type extendedBackendPluginRouterTemplateMetadata struct {
+	BackendPluginRouterTemplateMetadata
+	GVToKind map[schema.GroupVersion][]codegen.KindProperties
 }
 
 func (BackendPluginRouterTemplateMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
+}
+
+func (BackendPluginRouterTemplateMetadata) ToPackageNameVariable(input string) string {
+	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
 // WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out
@@ -200,11 +214,13 @@ func WriteBackendPluginRouter(metadata BackendPluginRouterTemplateMetadata, out 
 // BackendPluginHandlerTemplateMetadata is the metadata required by the Backend Plugin Handler template
 type BackendPluginHandlerTemplateMetadata struct {
 	codegen.KindProperties
-	Repo           string
-	APICodegenPath string
-	TypeName       string
-	IsResource     bool
-	Version        string
+	Repo            string
+	APICodegenPath  string
+	TypeName        string
+	IsResource      bool
+	Version         string
+	KindPackage     string
+	KindsAreGrouped bool
 }
 
 func (BackendPluginHandlerTemplateMetadata) ToPackageName(input string) string {
@@ -222,7 +238,20 @@ func WriteBackendPluginHandler(metadata BackendPluginHandlerTemplateMetadata, ou
 
 // WriteBackendPluginMain executes the Backend Plugin Main template, and writes out the generated go code to out
 func WriteBackendPluginMain(metadata BackendPluginRouterTemplateMetadata, out io.Writer) error {
-	return templateBackendMain.Execute(out, metadata)
+	md := extendedBackendPluginRouterTemplateMetadata{
+		BackendPluginRouterTemplateMetadata: metadata,
+		GVToKind:                            make(map[schema.GroupVersion][]codegen.KindProperties),
+	}
+	for _, k := range md.Resources {
+		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
+		l, ok := md.GVToKind[gv]
+		if !ok {
+			l = make([]codegen.KindProperties, 0)
+		}
+		l = append(l, k)
+		md.GVToKind[gv] = l
+	}
+	return templateBackendMain.Execute(out, md)
 }
 
 // GetBackendPluginSecurePackageFiles returns go files for the `secure` package in the backend plugin, as a map of
@@ -249,10 +278,12 @@ func GetBackendPluginSecurePackageFiles() (map[string][]byte, error) {
 
 type WatcherMetadata struct {
 	codegen.KindProperties
-	PackageName string
-	Repo        string
-	CodegenPath string
-	Version     string
+	PackageName     string
+	Repo            string
+	CodegenPath     string
+	Version         string
+	KindPackage     string
+	KindsAreGrouped bool
 }
 
 func (WatcherMetadata) ToPackageName(input string) string {
@@ -274,15 +305,38 @@ type OperatorMainMetadata struct {
 	CodegenPath           string
 	WatcherPackage        string
 	ResourcesAreVersioned bool
+	KindsAreGrouped       bool
 	Resources             []codegen.KindProperties
+}
+
+type extendedOperatorMainMetadata struct {
+	OperatorMainMetadata
+	GVToKind map[schema.GroupVersion][]codegen.KindProperties
 }
 
 func (OperatorMainMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
 }
 
+func (OperatorMainMetadata) ToPackageNameVariable(input string) string {
+	return strings.ReplaceAll(ToPackageName(input), "_", "")
+}
+
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
-	return templateOperatorMain.Execute(out, metadata)
+	md := extendedOperatorMainMetadata{
+		OperatorMainMetadata: metadata,
+		GVToKind:             make(map[schema.GroupVersion][]codegen.KindProperties),
+	}
+	for _, k := range md.Resources {
+		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
+		l, ok := md.GVToKind[gv]
+		if !ok {
+			l = make([]codegen.KindProperties, 0)
+		}
+		l = append(l, k)
+		md.GVToKind[gv] = l
+	}
+	return templateOperatorMain.Execute(out, md)
 }
 
 func WriteOperatorConfig(out io.Writer) error {

@@ -15,6 +15,7 @@ const (
 )
 
 // OperatorState defines model for OperatorState.
+// +k8s:openapi-gen=true
 type OperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
@@ -32,9 +33,11 @@ type OperatorState struct {
 
 // OperatorStateState state describes the state of the lastEvaluation.
 // It is limited to three possible states for machine evaluation.
+// +k8s:openapi-gen=true
 type OperatorStateState string
 
 // Status defines model for Status.
+// +k8s:openapi-gen=true
 type Status struct {
 	// additionalFields is reserved for future use
 	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
@@ -46,6 +49,7 @@ type Status struct {
 }
 
 // StatusOperatorState defines model for status.#OperatorState.
+// +k8s:openapi-gen=true
 type StatusOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
@@ -63,4 +67,5 @@ type StatusOperatorState struct {
 
 // StatusOperatorStateState state describes the state of the lastEvaluation.
 // It is limited to three possible states for machine evaluation.
+// +k8s:openapi-gen=true
 type StatusOperatorStateState string
