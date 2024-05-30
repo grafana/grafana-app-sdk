@@ -1,0 +1,35 @@
+/**
+ * metadata contains embedded CommonMetadata and can be extended with custom string fields
+ * TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
+ * without external reference as using the CommonMetadata reference breaks thema codegen.
+ */
+export interface Metadata {
+  createdBy: string;
+  creationTimestamp: string;
+  /**
+   * All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
+   * Can't use this as it's not yet enforced CUE:
+   * ...string
+   * Have to do this gnarly regex instead
+   */
+  customMetadataField: string;
+  deletionTimestamp?: string;
+  finalizers: string[];
+  generation: number;
+  labels: Record<string, string>;
+  /**
+   * All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
+   * Can't use this as it's not yet enforced CUE:
+   * ...string
+   * Have to do this gnarly regex instead
+   */
+  otherMetadataField: string;
+  resourceVersion: string;
+  uid: string;
+  updateTimestamp: string;
+  updatedBy: string;
+}
+
+export const defaultMetadata: Partial<Metadata> = {
+  finalizers: [],
+};

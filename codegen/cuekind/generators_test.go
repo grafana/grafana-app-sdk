@@ -124,7 +124,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "typescript")
+		compareToGolden(t, files, "typescript/unversioned")
 	})
 
 	t.Run("model", func(t *testing.T) {
@@ -137,7 +137,26 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "typescript")
+		compareToGolden(t, files, "typescript/unversioned")
+	})
+}
+
+func TestTypeScriptResourceGenerator(t *testing.T) {
+	// Ideally, we test only that this outputs the right jennies,
+	// but right now we just test the whole pipeline from thema -> written files
+
+	parser, err := NewParser()
+	require.Nil(t, err)
+
+	t.Run("versioned", func(t *testing.T) {
+		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind")
+		require.Nil(t, err)
+		files, err := TypeScriptResourceGenerator(true).Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		assert.Len(t, files, 8)
+		// Check content against the golden files
+		compareToGolden(t, files, "typescript/versioned")
 	})
 }
 

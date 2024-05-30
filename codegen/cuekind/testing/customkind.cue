@@ -7,7 +7,6 @@ customKind: {
 	kind: "CustomKind"
 	current: "v1-0"
 	apiResource: {}
-	codegen: frontend: false
 	versions: {
 		"v0-0": {
 			schema: {
@@ -18,7 +17,6 @@ customKind: {
 			}
 		}
 		"v1-0": {
-			codegen: frontend: true
 			schema: {
 				#InnerObject1: {
                     innerField1: string
@@ -50,7 +48,7 @@ customKind: {
                         [string]: #Type2
                     }
                     timestamp: string & time.Time @cuetsy(kind="string")
-                    enum: "val1" | "val2" | "val3" | "val4" | *"default" @cuetsy(kind="enum",memberNames="val1","val2","val3","val4", "default")
+                    enum: "val1" | "val2" | "val3" | "val4" | *"default" @cuetsy(kind="enum")
                     i32: int32 & <= 123456
                     i64: int64 & >= 123456
                     boolField: bool | *false

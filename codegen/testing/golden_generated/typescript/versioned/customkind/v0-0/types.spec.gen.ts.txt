@@ -1,0 +1,4 @@
+export interface Spec {
+  deprecatedField: string;
+  field1: string;
+}

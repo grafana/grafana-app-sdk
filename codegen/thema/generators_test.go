@@ -97,7 +97,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "typescript")
+		compareToGolden(t, files, "typescript/unversioned")
 	})
 	t.Run("model", func(t *testing.T) {
 		files, err := parser.Generate(TypeScriptModelsGenerator(), "customKind2")
@@ -105,7 +105,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "typescript")
+		compareToGolden(t, files, "typescript/unversioned")
 	})
 }
 

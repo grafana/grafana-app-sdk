@@ -1,0 +1,27 @@
+export enum enum {
+  Default = 'default',
+  Val1 = 'val1',
+  Val2 = 'val2',
+  Val3 = 'val3',
+  Val4 = 'val4',
+}
+
+export const defaultenum: enum = enum.Default;
+
+export interface Spec {
+  boolField: boolean;
+  enum: ('val1' | 'val2' | 'val3' | 'val4' | 'default');
+  field1: string;
+  floatField: number;
+  i32: number;
+  i64: number;
+  inner: InnerObject1;
+  map: Record<string, Type2>;
+  timestamp: string;
+  union: UnionType;
+}
+
+export const defaultSpec: Partial<Spec> = {
+  boolField: false,
+  enum: 'default',
+};
