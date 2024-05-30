@@ -33,7 +33,7 @@ func TestCRDGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "crd")
 	})
 
 	t.Run("YAML", func(t *testing.T) {
@@ -42,7 +42,7 @@ func TestCRDGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "crd")
 	})
 }
 
@@ -56,13 +56,35 @@ func TestResourceGenerator(t *testing.T) {
 	fmt.Println(err)
 	require.Nil(t, err)
 
-	files, err := ResourceGenerator(false, false).Generate(kinds...)
-	require.Nil(t, err)
-	// Check number of files generated
-	// 5 -> object, spec, metadata, status, schema, codec
-	assert.Len(t, files, 6)
-	// Check content against the golden files
-	compareToGolden(t, files, "")
+	t.Run("unversioned", func(t *testing.T) {
+		files, err := ResourceGenerator(false, false).Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 6 -> object, spec, metadata, status, schema, codec
+		assert.Len(t, files, 6)
+		// Check content against the golden files
+		compareToGolden(t, files, "go/unversioned")
+	})
+
+	t.Run("group by kind", func(t *testing.T) {
+		files, err := ResourceGenerator(true, false).Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 12 (6 -> object, spec, metadata, status, schema, codec) * 2 versions
+		assert.Len(t, files, 12)
+		// Check content against the golden files
+		compareToGolden(t, files, "go/groupbykind")
+	})
+
+	t.Run("group by group", func(t *testing.T) {
+		files, err := ResourceGenerator(true, true).Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 12 (6 -> object, spec, metadata, status, schema, codec) * 2 versions
+		assert.Len(t, files, 12)
+		// Check content against the golden files
+		compareToGolden(t, files, "go/groupbygroup")
+	})
 }
 
 func TestModelsGenerator(t *testing.T) {
@@ -75,13 +97,15 @@ func TestModelsGenerator(t *testing.T) {
 	fmt.Println(err)
 	require.Nil(t, err)
 
-	files, err := ModelsGenerator(false, true).Generate(kinds...)
-	require.Nil(t, err)
-	// Check number of files generated
-	// 1 -> just the go type
-	assert.Len(t, files, 1)
-	// Check content against the golden files
-	compareToGolden(t, files, "")
+	t.Run("unversioned", func(t *testing.T) {
+		files, err := ModelsGenerator(false, true).Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 1 -> just the go type
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "go/unversioned")
+	})
 }
 
 func TestTypeScriptModelsGenerator(t *testing.T) {
@@ -100,7 +124,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "typescript")
 	})
 
 	t.Run("model", func(t *testing.T) {
@@ -113,14 +137,14 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "typescript")
 	})
 }
 
 func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 	for _, f := range files {
 		// Check if there's a golden generated file to compare against
-		file, err := os.ReadFile(filepath.Join(ReferenceOutputDirectory, f.RelativePath+".txt"))
+		file, err := os.ReadFile(filepath.Join(ReferenceOutputDirectory, pathPrefix, f.RelativePath+".txt"))
 		require.Nil(t, err)
 		// Compare the contents of the file to the generated contents
 		// Use strings for easier-to-read diff in the event of a mismatch

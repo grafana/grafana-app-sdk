@@ -5,11 +5,20 @@ import "time"
 customKind: {
 	group: "custom"
 	kind: "CustomKind"
-	current: "v0-0"
+	current: "v1-0"
 	apiResource: {}
+	codegen: frontend: false
 	versions: {
 		"v0-0": {
-			version: "v0-0"
+			schema: {
+				spec: {
+					field1: string
+					deprecatedField: string
+				}
+			}
+		}
+		"v1-0": {
+			codegen: frontend: true
 			schema: {
 				#InnerObject1: {
                     innerField1: string

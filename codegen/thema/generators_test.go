@@ -33,7 +33,7 @@ func TestCRDGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "crd")
 	})
 
 	t.Run("YAML", func(t *testing.T) {
@@ -42,7 +42,7 @@ func TestCRDGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "crd")
 	})
 }
 
@@ -65,7 +65,7 @@ func TestResourceGenerator(t *testing.T) {
 		}
 	}
 	// Check content against the golden files
-	compareToGolden(t, files, "")
+	compareToGolden(t, files, "go/unversioned")
 }
 
 func TestModelsGenerator(t *testing.T) {
@@ -81,7 +81,7 @@ func TestModelsGenerator(t *testing.T) {
 	// 4 -> go type, lineage, functions wrapper for type/lineage, cue module
 	assert.Len(t, files, 4)
 	// Check content against the golden files
-	compareToGolden(t, files, "")
+	compareToGolden(t, files, "go/unversioned")
 }
 
 func TestTypeScriptModelsGenerator(t *testing.T) {
@@ -97,7 +97,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "typescript")
 	})
 	t.Run("model", func(t *testing.T) {
 		files, err := parser.Generate(TypeScriptModelsGenerator(), "customKind2")
@@ -105,14 +105,14 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 		// Check number of files generated
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "")
+		compareToGolden(t, files, "typescript")
 	})
 }
 
 func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 	for _, f := range files {
 		// Check if there's a golden generated file to compare against
-		file, err := os.ReadFile(filepath.Join(ReferenceOutputDirectory, f.RelativePath+".txt"))
+		file, err := os.ReadFile(filepath.Join(ReferenceOutputDirectory, pathPrefix, f.RelativePath+".txt"))
 		require.Nil(t, err)
 		// Compare the contents of the file to the generated contents
 		// Use strings for easier-to-read diff in the event of a mismatch
