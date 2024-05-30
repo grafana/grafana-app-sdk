@@ -53,7 +53,8 @@ func TestResourceGenerator(t *testing.T) {
 	parser, err := NewParser()
 	require.Nil(t, err)
 	kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind")
-	fmt.Println(err)
+	require.Nil(t, err)
+	sameGroupKinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "testKind2")
 	require.Nil(t, err)
 
 	t.Run("unversioned", func(t *testing.T) {
@@ -82,6 +83,15 @@ func TestResourceGenerator(t *testing.T) {
 		// Check number of files generated
 		// 12 (6 -> object, spec, metadata, status, schema, codec) * 2 versions
 		assert.Len(t, files, 12)
+		// Check content against the golden files
+		compareToGolden(t, files, "go/groupbygroup")
+	})
+
+	t.Run("group by group, multiple kinds", func(t *testing.T) {
+		files, err := ResourceGenerator(true, true).Generate(sameGroupKinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		assert.Len(t, files, 18)
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")
 	})
