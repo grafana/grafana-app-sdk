@@ -52,8 +52,10 @@ jobs:
         find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
         diff pkg/generated/resource/customkind cmp/customkind > diff.txt
         cat diff.txt
-        difflines=$(wc -l diff.txt)
+        sed -i '/^Common subdirectories/d' diff.txt
+        difflines=$(wc -l diff.txt | awk '{ print $1 }')
         echo "DiffLines=${difflines}" >> $GITHUB_ENV
+        cat diff.txt
     - name: Compare generated code
       if: ${{ env.DiffLines != '1' }}
       uses: actions/github-script@v3
