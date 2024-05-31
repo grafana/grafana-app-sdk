@@ -6,6 +6,9 @@ import (
 	"io"
 	"io/fs"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
@@ -139,6 +142,8 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 			}
 			someKind.AllVersions = append(someKind.AllVersions, v)
 		}
+		// Now we need to sort AllVersions, as map key order is random
+		slices.SortFunc(someKind.AllVersions, sortVersions)
 		kinds = append(kinds, someKind)
 	}
 	return kinds, nil
@@ -211,4 +216,44 @@ func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
 	}
 
 	return nil
+}
+
+var (
+	kubeVersionMatcher  = regexp.MustCompile(`v([0-9]+)([a-z]+[0-9]+)?`)
+	themaVersionMatcher = regexp.MustCompile(`v([0-9]+)\-([0-9]+)`)
+)
+
+// sortVersions is a sort function for codegen.KindVersion objects
+//
+//nolint:gocritic
+func sortVersions(a, b codegen.KindVersion) int {
+	var aparts []string
+	var bparts []string
+	if kubeVersionMatcher.MatchString(a.Version) {
+		aparts = kubeVersionMatcher.FindStringSubmatch(a.Version)
+	} else if themaVersionMatcher.MatchString(a.Version) {
+		aparts = themaVersionMatcher.FindStringSubmatch(a.Version)
+	} else {
+		aparts = []string{a.Version}
+	}
+	if kubeVersionMatcher.MatchString(b.Version) {
+		bparts = kubeVersionMatcher.FindStringSubmatch(b.Version)
+	} else if themaVersionMatcher.MatchString(b.Version) {
+		bparts = themaVersionMatcher.FindStringSubmatch(b.Version)
+	} else {
+		bparts = []string{b.Version}
+	}
+	if aparts[1] != bparts[1] {
+		return strings.Compare(aparts[1], bparts[1])
+	}
+	if len(aparts) > 2 {
+		if len(bparts) > 2 {
+			return strings.Compare(aparts[2], bparts[2])
+		}
+		return 1
+	}
+	if len(bparts) > 2 {
+		return -1
+	}
+	return 0
 }

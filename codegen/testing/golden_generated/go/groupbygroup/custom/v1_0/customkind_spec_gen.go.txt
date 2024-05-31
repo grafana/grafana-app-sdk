@@ -1,0 +1,62 @@
+package v1_0
+
+import (
+	"time"
+)
+
+// Defines values for CustomKindSpecEnum.
+const (
+	CustomKindSpecEnumDefault CustomKindSpecEnum = "default"
+	CustomKindSpecEnumVal1    CustomKindSpecEnum = "val1"
+	CustomKindSpecEnumVal2    CustomKindSpecEnum = "val2"
+	CustomKindSpecEnumVal3    CustomKindSpecEnum = "val3"
+	CustomKindSpecEnumVal4    CustomKindSpecEnum = "val4"
+)
+
+// CustomKindInnerObject1 defines model for CustomKindInnerObject1.
+// +k8s:openapi-gen=true
+type CustomKindInnerObject1 struct {
+	InnerField1 string                   `json:"innerField1"`
+	InnerField2 []string                 `json:"innerField2"`
+	InnerField3 []CustomKindInnerObject2 `json:"innerField3"`
+}
+
+// CustomKindInnerObject2 defines model for CustomKindInnerObject2.
+// +k8s:openapi-gen=true
+type CustomKindInnerObject2 struct {
+	Details map[string]interface{} `json:"details"`
+	Name    string                 `json:"name"`
+}
+
+// CustomKindSpec defines model for CustomKindSpec.
+// +k8s:openapi-gen=true
+type CustomKindSpec struct {
+	BoolField  bool                       `json:"boolField"`
+	Enum       CustomKindSpecEnum         `json:"enum"`
+	Field1     string                     `json:"field1"`
+	FloatField float64                    `json:"floatField"`
+	I32        int                        `json:"i32"`
+	I64        int                        `json:"i64"`
+	Inner      CustomKindInnerObject1     `json:"inner"`
+	Map        map[string]CustomKindType2 `json:"map"`
+	Timestamp  time.Time                  `json:"timestamp"`
+	Union      interface{}                `json:"union"`
+}
+
+// CustomKindSpecEnum defines model for CustomKindSpec.Enum.
+// +k8s:openapi-gen=true
+type CustomKindSpecEnum string
+
+// CustomKindType1 defines model for CustomKindType1.
+// +k8s:openapi-gen=true
+type CustomKindType1 struct {
+	Group   string   `json:"group"`
+	Options []string `json:"options,omitempty"`
+}
+
+// CustomKindType2 defines model for CustomKindType2.
+// +k8s:openapi-gen=true
+type CustomKindType2 struct {
+	Details map[string]interface{} `json:"details"`
+	Group   string                 `json:"group"`
+}

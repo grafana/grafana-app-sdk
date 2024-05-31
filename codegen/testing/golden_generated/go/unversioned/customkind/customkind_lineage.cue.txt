@@ -63,6 +63,14 @@ customkind: thema.#Lineage & {
 	schemas: [{
 		version: [0, 0]
 		schema: {
+			spec: {
+				field1:          string
+				deprecatedField: string
+			}
+		}
+	}, {
+		version: [1, 0]
+		schema: {
 			#InnerObject1: {
 				innerField1: string
 				innerField2: [...string]

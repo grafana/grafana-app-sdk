@@ -8,10 +8,19 @@ customKind: {
     name: "CustomKind"
     crd: {}
     group: "custom"
+    latest: [1,0]
     lineage: {
         name: "customkind",
         schemas: [{
-            version: [0,0]
+        	version: [0,0]
+        	schema: {
+        		spec: {
+					field1: string
+					deprecatedField: string
+				}
+        	}
+        },{
+            version: [1,0]
             schema: {
                 #InnerObject1: {
                     innerField1: string
