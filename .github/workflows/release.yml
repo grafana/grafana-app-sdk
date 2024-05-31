@@ -48,7 +48,7 @@ jobs:
         grafana-app-sdk project init codegen-tests
         cp ../codegen/cuekind/testing/customkind.cue kinds/customkind.cue
         grafana-app-sdk generate
-        mkdir -p cmp && cp ../codegen/testing/golden_generated/go/groupbykind/customkind cmp/customkind
+        mkdir -p cmp && cp -R ../codegen/testing/golden_generated/go/groupbykind/customkind cmp/customkind
         find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
         export CODEGENDIFF=$(diff pkg/generated/resource/customkind cmp/customkind)
     - name: Compare generated code
