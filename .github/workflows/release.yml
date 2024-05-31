@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     steps:
     # git checkout
@@ -21,12 +21,11 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: "1.21"
+        go-version: "1.22"
     # make test
     - name: Test
       run: go test -v ./...
-  release:
-    needs: test
+  integration-test:
     runs-on: ubuntu-latest
     steps:
     # git checkout
@@ -38,13 +37,14 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
-    # Release
-    - name: Create Release
-      uses: goreleaser/goreleaser-action@v4
-      with:
-        distribution: goreleaser
-        version: latest
-        args: release --clean
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        go-version: "1.22"
+    # Install the CLI
+    - name: Install the CLI
+      run: cd cmd/grafana-app-sdk && go install && cd -
+    # Generate code
+    - name: Generate code from test file
+      run: | 
+        mkdir -p codegen-tests && cd codegen-tests
+        grafana-app-sdk project init codegen-tests
+        cp ../codegen/cuekind/testing/customkind.cue kinds/customkind.cue
+        grafana-app-sdk generate
