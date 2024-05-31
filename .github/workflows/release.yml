@@ -55,7 +55,7 @@ jobs:
         difflines=$(wc -l diff.txt)
         echo "DiffLines=${difflines}" >> $GITHUB_ENV
     - name: Compare generated code
-      if: ${{ env.DiffLines != "1" }}
+      if: ${{ env.DiffLines != '1' }}
       uses: actions/github-script@v3
       with:
         script: |
