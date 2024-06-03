@@ -137,8 +137,8 @@ github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1/go.mod h1:wJfORR
 github.com/gorilla/websocket v1.4.1/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d h1:hrXbGJ5jgp6yNITzs5o+zXq0V5yT3siNJ+uM8LGwWKk=
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d/go.mod h1:zmwwM/DRyQB7pfuBjTWII3CWtxcXh8LTwAYGfDfpR6s=
-github.com/grafana/cog v0.0.0-20240529130920-083c489f684f h1:GBywjeAKDSdEZuchYJ6U4qNbfXaUOxXo9jIWVDRDoDw=
-github.com/grafana/cog v0.0.0-20240529130920-083c489f684f/go.mod h1:A+ggqoURW2MB0Y5bxfi7DZOtxKYqwLuugRfMI+sT/0w=
+github.com/grafana/cog v0.0.0-20240603130906-42de25f609a6 h1:WWQFmxHrAyYepeRYLmzGb1SsknCT7ZUbhgZ2/4JSzPQ=
+github.com/grafana/cog v0.0.0-20240603130906-42de25f609a6/go.mod h1:A+ggqoURW2MB0Y5bxfi7DZOtxKYqwLuugRfMI+sT/0w=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26 h1:HX927q4X1n451pnGb8U0wq74i8PCzuxVjzv7TyD10kc=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26/go.mod h1:Pn9nfzCk7nV0mvNgwusgCjCROZP6nm4GpwTnmEhLT24=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 h1:bkypFPDjIYGfCYD5mRBvpqxfYX1YCS1PXdKYWi8FsN0=

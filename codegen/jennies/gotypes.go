@@ -156,11 +156,11 @@ type CUEGoConfig struct {
 }
 
 // TODO(kgz): what to do with `maxNamingDepth`?
-// TODO(kgz): handle `cfg.NamePrefix`
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
 	codegenOpts := []cog.SingleSchemaOption{
 		cog.CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name)),
 		cog.GoTypes(),
+		cog.SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)),
 	}
 
 	if cfg.AddKubernetesOpenAPIGenComment {
