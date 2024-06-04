@@ -17,7 +17,7 @@ import (
 )
 
 type {{.Kind}}Service interface {
-	List(ctx context.Context, resource.StoreListOptions) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
+	List(ctx context.Context, opts resource.StoreListOptions) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
 	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.{{.Kind}}, error)
 	Add(ctx context.Context, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
 	Update(ctx context.Context, id resource.Identifier, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
