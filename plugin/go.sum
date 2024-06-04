@@ -77,10 +77,8 @@ github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e h1:JKmoR8x90Iww1
 github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
 github.com/gorilla/mux v1.8.1/go.mod h1:AKf9I4AEqPTmMytcMc0KkNouC66V3BtZ4qD5fmWSiMQ=
-github.com/grafana/grafana-app-sdk v0.17.0 h1:1jh1/kwLVgv0EZ+e4cYZveGgW9hSlajFbZ7aZvjoCJc=
-github.com/grafana/grafana-app-sdk v0.17.0/go.mod h1:1GrZue6aEhdePelNzbrqXEJrsQF7Nv72y7BKm3B3jgY=
-github.com/grafana/grafana-app-sdk v0.17.1 h1:NOAdzP2sepapb1LbkQO3bz6TSZorCG4sJANQwV84T1I=
-github.com/grafana/grafana-app-sdk v0.17.1/go.mod h1:1GrZue6aEhdePelNzbrqXEJrsQF7Nv72y7BKm3B3jgY=
+github.com/grafana/grafana-app-sdk v0.17.2 h1:puR4DoeffcDD5m7QNS5XyoAefUAoGuNdauazDou4CSg=
+github.com/grafana/grafana-app-sdk v0.17.2/go.mod h1:1GrZue6aEhdePelNzbrqXEJrsQF7Nv72y7BKm3B3jgY=
 github.com/grafana/grafana-plugin-sdk-go v0.233.0 h1:ChaKY9gR0ergpr7yO01pS3jC3PlerVK9QeE85PWBzyM=
 github.com/grafana/grafana-plugin-sdk-go v0.233.0/go.mod h1:A9Q2/JidtxEqYlbWsetIriqfhcK2HX0Nh9lyDvlkRKU=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1 h1:qnpSQwGEnkcRpTqNOIR6bJbR0gAorgP9CSALpRcKoAA=
