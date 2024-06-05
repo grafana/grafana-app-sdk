@@ -65,8 +65,8 @@ jobs:
           const fs = require('fs');
           let diff = '';
           const options = {
-            outStream: null,
-            errStream: null,
+            outStream: new  stream.Writable ({write: (a,b,cb) => cb()})(),
+            errStream: new  stream.Writable ({write: (a,b,cb) => cb()})(),
             ignoreReturnCode: true,
             listeners: {
               stdout: (data) => {
@@ -79,7 +79,7 @@ jobs:
           console.log(diff);
           console.log('::endgroup::');
           if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-            core.setFailed('Non-zero length diff');
+            core.setFailed('Generated CRD comparison to codegen/testing/golden_generated failed, see diff for details');
           }
           diff = '';
           await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
