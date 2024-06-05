@@ -2,8 +2,8 @@ name: Release
 
 on:
   push:
-    branches:
-    - main
+    tags:
+      - 'v*'
 
 permissions:
   contents: write
@@ -128,3 +128,26 @@ jobs:
         go mod tidy
         go build cmd/operator/*.go
         go build plugin/pkg/*.go
+    release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    # git checkout
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    # Go env
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+    # Release
+    - name: Create Release
+      uses: goreleaser/goreleaser-action@v4
+      with:
+        distribution: goreleaser
+        version: latest
+        args: release --clean
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
