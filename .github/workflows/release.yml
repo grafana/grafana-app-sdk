@@ -45,7 +45,7 @@ jobs:
     - name: Copy test CUE files & data
       run: | 
         mkdir -p codegen-tests && cd codegen-tests
-        grafana-app-sdk project init codegen-tests
+        grafana-app-sdk project init "github.com/grafana/grafana-app-sdk/codegen-tests"
         cp ../codegen/cuekind/testing/*.cue kinds/
         mkdir -p cmp && cp -R ../codegen/testing/golden_generated/* cmp/
         find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
