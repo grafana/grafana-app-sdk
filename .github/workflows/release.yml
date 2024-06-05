@@ -128,8 +128,8 @@ jobs:
         go mod tidy
         go build cmd/operator/*.go
         go build plugin/pkg/*.go
-    release:
-    needs: test
+  release:
+    needs: ['unit-test','integration-test']
     runs-on: ubuntu-latest
     steps:
     # git checkout
