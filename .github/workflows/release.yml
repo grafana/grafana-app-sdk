@@ -14,12 +14,12 @@ jobs:
     steps:
     # git checkout
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
     # Go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: "1.22"
     # make test
@@ -36,7 +36,7 @@ jobs:
         path: 'grafana-app-sdk'
     # Go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: "1.22"
     # Install the CLI
@@ -47,7 +47,7 @@ jobs:
     - name: Copy test CUE files & data
       run: | 
         mkdir -p codegen-tests && cd codegen-tests
-        grafana-app-sdk project init "github.com/grafana/grafana-app-sdk/codegen-tests"
+        grafana-app-sdk project init "codegen-tests"
         cp ../grafana-app-sdk/codegen/cuekind/testing/*.cue kinds/
         mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
         find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
