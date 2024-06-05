@@ -1,0 +1,5 @@
+export interface Spec {
+  intField: number;
+  stringField: string;
+  timeField: string;
+}
