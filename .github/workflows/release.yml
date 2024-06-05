@@ -73,12 +73,14 @@ jobs:
           await io.cp('codegen/testing/golden_generated/typescript/versioned', 'codegen-tests/cmp/ts', { recursive: true, force: false });
           const files = fs.readdirSync('codegen-tests/cmp/ts');
           for (const file of files) {
+            print(file);
             if (file.endsWith('.txt')) {
               io.mv(file, substring(0, file.length - 4));
             }
           }
           let diff = '';
           const options = {
+            ignoreReturnCode: true,
             listeners: {
               stdout: (data) => {
                 diff += data.toString();
