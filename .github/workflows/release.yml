@@ -53,6 +53,7 @@ jobs:
       run: | 
         cd codegen-tests
         grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1
+        grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2
         diff pkg/gen1/resource/customkind cmp/go/groupbykind/customkind > diff.txt
         sed -i '/^Common subdirectories/d' diff.txt
         difflines=$(wc -l diff.txt | awk '{ print $1 }')
@@ -74,14 +75,14 @@ jobs:
           };
           await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
           console.log('\'grafana-app-sdk generate --kindgrouping=kind\' go code diff:');
-          console.log(diff);
+          console.log(diff.replace(/^Common subdirectories.*$/gm, ''));
           if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
             core.setFailed('Non-zero length diff');
           }
           diff = '';
           await exec.exec('diff', ['codegen-tests/cmp/go/groupbygroup', 'codegen-tests/pkg/gen2'], options);
           console.log('\'grafana-app-sdk generate --kindgrouping=group\' go code diff:');
-          console.log(diff);
+          console.log(diff.replace(/^Common subdirectories.*$/gm, ''));
           if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
             core.setFailed('Non-zero length diff');
           }
