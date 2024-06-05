@@ -121,5 +121,5 @@ jobs:
     - name: Bootstrap project
       run: |
         cd codegen-tests
-        grafana-app-sdk project component add frontent backend operator --plugin-id=codegen-tests
+        grafana-app-sdk project component add frontend backend operator --plugin-id=codegen-tests
         make compile/operator
