@@ -42,23 +42,44 @@ jobs:
     - name: Install the CLI
       run: cd cmd/grafana-app-sdk && go install && cd -
     # Generate code
-    - name: Copy test CUE files
+    - name: Copy test CUE files & data
       run: | 
         mkdir -p codegen-tests && cd codegen-tests
         grafana-app-sdk project init codegen-tests
         cp ../codegen/cuekind/testing/*.cue kinds/
+        mkdir -p cmp && cp ../codegen/testing/golden_generated/* cmp/
+        find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
     - name: Generate code
       run: | 
         cd codegen-tests
         grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1
-        mkdir -p cmp/go1 && cp -R ../codegen/testing/golden_generated/go/groupbykind/* cmp/go1
-        find ./cmp/go1 -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
         diff pkg/gen1/resource/customkind cmp/go1/customkind > diff.txt
         echo "GoCodeDiff="
         sed -i '/^Common subdirectories/d' diff.txt
         difflines=$(wc -l diff.txt | awk '{ print $1 }')
         echo "GoGroupByKindDiff=${difflines}" >> $GITHUB_ENV
     - name: Compare generated go code
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          let diff = '';
+          const options = {
+            outStream: null,
+            ignoreReturnCode: true,
+            listeners: {
+              stdout: (data) => {
+                diff += data.toString();
+              }
+            }
+          };
+          await exec.exec('diff', ['codegen-tests/cmp/go/versioned', 'codegen-tests/pkg/gen1/resource'], options);
+          console.log('\'grafana-app-sdk generate --kindgrouping=kind\' go code diff:');
+          console.log(diff);
+          if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
+            core.setFailed('Non-zero length diff');
+          }
+    - name: Compare generated go code 2
       if: ${{ env.GoGroupByKindDiff != '0' }}
       uses: actions/github-script@v3
       with:
@@ -87,9 +108,10 @@ jobs:
             }
           };
           await exec.exec('diff', ['codegen-tests/cmp/ts/versioned', 'codegen-tests/ts/gen1'], options);
-          //if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
-          //  core.setFailed('Non-zero length diff');
-          //}
+          console.log(diff);
+          if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
+            core.setFailed('Non-zero length diff');
+          }
     - name: Compare generated TypeScript code 2
       run: | 
         cd codegen-tests
