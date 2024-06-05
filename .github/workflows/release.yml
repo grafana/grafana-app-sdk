@@ -30,10 +30,10 @@ jobs:
     steps:
     # git checkout
     - name: Checkout code
-      uses: actions/checkout@v3
-      working-directory: ./grafana-app-sdk
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        path: 'grafana-app-sdk'
     # Go env
     - name: Set up Go
       uses: actions/setup-go@v4
