@@ -65,8 +65,8 @@ jobs:
           const fs = require('fs');
           let diff = '';
           const options = {
-            outStream: new  stream.Writable ({write: (a,b,cb) => cb()})(),
-            errStream: new  stream.Writable ({write: (a,b,cb) => cb()})(),
+            outStream: new Writable ({write: (a,b,cb) => cb()})(),
+            errStream: new Writable ({write: (a,b,cb) => cb()})(),
             ignoreReturnCode: true,
             listeners: {
               stdout: (data) => {
