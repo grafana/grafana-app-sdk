@@ -53,7 +53,7 @@ jobs:
         grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1
         mkdir -p cmp/go1 && cp -R ../codegen/testing/golden_generated/go/groupbykind/* cmp/go1
         find ./cmp/go1 -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
-        diff pkg/generated/resource/customkind cmp/customkind > diff.txt
+        diff pkg/gen1/resource/customkind cmp/go1/customkind > diff.txt
         echo "'grafana-app-sdk generate --kindgrouping=kind' golang output diff from golden:"
         cat diff.txt
         sed -i '/^Common subdirectories/d' diff.txt
