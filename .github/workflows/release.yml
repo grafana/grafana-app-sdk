@@ -52,13 +52,13 @@ jobs:
     - name: Generate code
       run: | 
         cd codegen-tests
-        grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1
-        grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2
+        grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --crdencoding=json
+        grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --crdencoding=yaml
         diff pkg/gen1/resource/customkind cmp/go/groupbykind/customkind > diff.txt
         sed -i '/^Common subdirectories/d' diff.txt
         difflines=$(wc -l diff.txt | awk '{ print $1 }')
         echo "GoGroupByKindDiff=${difflines}" >> $GITHUB_ENV
-    - name: Compare generated go code
+    - name: Compare generated code
       uses: actions/github-script@v7
       with:
         script: |
@@ -66,6 +66,7 @@ jobs:
           let diff = '';
           const options = {
             outStream: null,
+            errStream: null,
             ignoreReturnCode: true,
             listeners: {
               stdout: (data) => {
@@ -73,17 +74,25 @@ jobs:
               }
             }
           };
+          await exec.exec('diff', ['codegen-tests/cmp/crd', 'codegen-tests/definitions'], options);
+          console.log('::group::Generated CRD diff:');
+          console.log(diff);
+          console.log('::endgroup::');
+          if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
+            core.setFailed('Non-zero length diff');
+          }
+          diff = '';
           await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
           console.log('\'grafana-app-sdk generate --kindgrouping=kind\' go code diff:');
-          console.log(diff.replace(/^Common subdirectories.*$/gm, ''));
-          if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
+          console.log(diff);
+          if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
             core.setFailed('Non-zero length diff');
           }
           diff = '';
           await exec.exec('diff', ['codegen-tests/cmp/go/groupbygroup', 'codegen-tests/pkg/gen2'], options);
           console.log('\'grafana-app-sdk generate --kindgrouping=group\' go code diff:');
-          console.log(diff.replace(/^Common subdirectories.*$/gm, ''));
-          if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
+          console.log(diff);
+          if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
             core.setFailed('Non-zero length diff');
           }
     - name: Compare generated go code 2
