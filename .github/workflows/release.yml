@@ -74,26 +74,37 @@ jobs:
               }
             }
           };
+          let anyFailed = false;
+          core.startGroup('CRD Diff');
           await exec.exec('diff', ['codegen-tests/cmp/crd', 'codegen-tests/definitions'], options);
-          console.log('::group::Generated CRD diff:');
           console.log(diff);
-          console.log('::endgroup::');
           if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-            core.setFailed('Generated CRD comparison to codegen/testing/golden_generated failed, see diff for details');
+            core.error('Generated CRD comparison to codegen/testing/golden_generated failed, see diff for details');
+            anyFailed = true;
           }
           diff = '';
+          core.endGroup();
+          core.startGroup('Go --kindgrouping=kind Diff');
           await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
-          console.log('\'grafana-app-sdk generate --kindgrouping=kind\' go code diff:');
           console.log(diff);
           if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-            core.setFailed('Non-zero length diff');
+            core.error('Generated go with --groupbykind=kind comparison to codegen/testing/golden_generated failed, see diff for details');
+            anyFailed = true;
           }
           diff = '';
-          await exec.exec('diff', ['codegen-tests/cmp/go/groupbygroup', 'codegen-tests/pkg/gen2'], options);
-          console.log('\'grafana-app-sdk generate --kindgrouping=group\' go code diff:');
+          core.endGroup();
+          core.startGroup('Go --kindgrouping=group Diff');
+          await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
           console.log(diff);
           if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-            core.setFailed('Non-zero length diff');
+            core.error('Generated go with --groupbykind=kind comparison to codegen/testing/golden_generated failed, see diff for details');
+            anyFailed = true;
+          }
+          diff = '';
+          core.endGroup();
+
+          if(anyFailed) {
+            core.setFailed('Diff between generated code from potential release build of grafana-app-sdk and codegen/testing/golden_generated failed');
           }
     - name: Compare generated go code 2
       if: ${{ env.GoGroupByKindDiff != '0' }}
