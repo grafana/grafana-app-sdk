@@ -77,10 +77,15 @@ jobs:
               io.mv(file, substring(0, file.length - 4));
             }
           }
-          const dircompare = require('dir-compare');
-          const res = dircompare.compareSync('codegen-tests/cmp/ts', 'codegen-tests/ts/gen1', { compareSize: true });
-          print(res);
-          //fs.readFileSync('/my/cool/file', 'utf8');
+          let diff = '';
+          const options = {};
+          options.listeners = {
+            stdout: (data: Buffer) => {
+              diff += data.toString();
+            }
+          };
+          await exec.exec('diff', ['codegen-tests/cmp/ts', 'codegen-tests/ts/gen1'], options)
+          print(diff);
     - name: Compare generated TypeScript code 2
       run: | 
         cd codegen-tests
