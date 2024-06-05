@@ -85,8 +85,11 @@ jobs:
               }
             }
           };
-          await exec.exec('diff', ['codegen-tests/cmp/ts', 'codegen-tests/ts/gen1'], options);
+          await exec.exec('diff', ['codegen-tests/cmp/ts/versioned', 'codegen-tests/ts/gen1'], options);
           print(diff);
+          if(diff.replace(/^Common subdirectories.*$/gm, '').length > 0) {
+            core.setFailed('Non-zero length diff');
+          }
     - name: Compare generated TypeScript code 2
       run: | 
         cd codegen-tests
