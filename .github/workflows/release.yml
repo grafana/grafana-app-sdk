@@ -70,7 +70,7 @@ jobs:
         script: |
           //const fs = require('fs')
           await io.mkdirP('codegen-tests/cmp/ts');
-          await io.cp('codegen/testing/golden_generated/typescript/versioned/*', 'codegen-tests/cmp/ts', { recursive: true, force: false });
+          await io.cp('codegen/testing/golden_generated/typescript/versioned', 'codegen-tests/cmp/ts', { recursive: true, force: false });
           const files = fs.readdirSync('codegen-tests/cmp/ts');
           for (const file of files) {
             if (file.endsWith('.txt')) {
