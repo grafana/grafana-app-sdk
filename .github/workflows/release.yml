@@ -78,13 +78,14 @@ jobs:
             }
           }
           let diff = '';
-          const options = {};
-          options.listeners = {
-            stdout: (data: Buffer) => {
-              diff += data.toString();
+          const options = {
+            listeners: {
+              stdout: (data) => {
+                diff += data.toString();
+              }
             }
           };
-          await exec.exec('diff', ['codegen-tests/cmp/ts', 'codegen-tests/ts/gen1'], options)
+          await exec.exec('diff', ['codegen-tests/cmp/ts', 'codegen-tests/ts/gen1'], options);
           print(diff);
     - name: Compare generated TypeScript code 2
       run: | 
