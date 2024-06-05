@@ -31,6 +31,7 @@ jobs:
     # git checkout
     - name: Checkout code
       uses: actions/checkout@v3
+      working-directory: ./grafana-app-sdk
       with:
         fetch-depth: 0
     # Go env
@@ -41,17 +42,18 @@ jobs:
     # Install the CLI
     - name: Install the CLI
       run: cd cmd/grafana-app-sdk && go install && cd -
+      working-directory: ./grafana-app-sdk
     # Generate code
     - name: Copy test CUE files & data
       run: | 
         mkdir -p codegen-tests && cd codegen-tests
         grafana-app-sdk project init "github.com/grafana/grafana-app-sdk/codegen-tests"
-        cp ../codegen/cuekind/testing/*.cue kinds/
-        mkdir -p cmp && cp -R ../codegen/testing/golden_generated/* cmp/
+        cp ../grafana-app-sdk/codegen/cuekind/testing/*.cue kinds/
+        mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
         find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
     - name: Generate code
       run: | 
-        cd codegen-tests
+        cd ../codegen-tests
         grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --crdencoding=json
         grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --crdencoding=yaml
         diff pkg/gen1/resource/customkind cmp/go/groupbykind/customkind > diff.txt
