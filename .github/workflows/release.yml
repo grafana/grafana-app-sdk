@@ -122,4 +122,6 @@ jobs:
       run: |
         cd codegen-tests
         grafana-app-sdk project component add frontend backend operator --plugin-id=codegen-tests
-        make compile/operator
+        go mod tidy
+        go build cmd/operator/*.go
+        go build plugin/pkg/*.go
