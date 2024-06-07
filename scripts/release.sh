@@ -45,8 +45,19 @@ echo "Making a '${RELEASE}' release with tag '${TAG}'..."
 git tag -s "${TAG}" -m "Release ${TAG}"
 git push origin "${TAG}"
 
-echo "Tagging submodules with the release tag"
+echo "Updating the plugin module to use the new release for the main module"
+git checkout -b "plugin-release/${TAG}"
+cd $(git rev-parse --show-toplevel)/plugin
+go get github.com/grafana/grafana-app-sdk@${TAG}
+git add go.mod go.sum
+git commit -m "Plugin module release branch ${TAG}"
+git push -u origin "plugin-release/${TAG}"
+
+echo "Tagging submodule with the release tag"
 git tag -s "plugin/${TAG}" -m "Plugin submodule release ${TAG}"
 git push origin "plugin/${TAG}"
+
+echo "Returning to main branch"
+git checkout main
 
 exit 0
