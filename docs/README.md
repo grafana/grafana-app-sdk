@@ -32,7 +32,7 @@ but importantly, all of the tooling outside of the `k8s` package is actually imp
 
 To work directly with resources, you can use an instance of a `resource.Client`, or one of the [Store](./resource-stores.md)-type objects which simplifies interactions by allowing you to treat the system as a key-value store.
 
-An important component of the SDK is the use of the operator pattern. Using the `operator` package, you can set up an operator to watch for changes to one or more kinds, and take actions based on the nature of those changes. This allows behavior to be decoupled from the actual input API, which is especially useful in the context of an API server which has multiple paths for a user to enter, modify, or delete resources. For more details on this, see [Design Patterns](./design-patterns.md).
+An important component of the SDK is the use of the operator pattern. Using the `operator` package, you can set up an operator to watch for changes to one or more kinds, and take actions based on the nature of those changes. This allows behavior to be decoupled from the actual input API, which is especially useful in the context of an API server which has multiple paths for a user to enter, modify, or delete resources. For more details on this, see [Design Patterns](./application-design/README.md).
 
 Finally, there is also layering on top of the grafana backend plugin SDK, allowing you to create a REST API backend which can tie into your kinds, 
 to create a proxy to the back-end API server. This package will eventually become deprecated in favor of direct API server access from the front-end, 
