@@ -9,7 +9,7 @@ require (
 	cuelang.org/go v0.8.2
 	github.com/getkin/kin-openapi v0.123.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
-	github.com/grafana/cog v0.0.0-20240603130906-42de25f609a6
+	github.com/grafana/cog v0.0.0-20240612153742-9da3256be0c3
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/matryer/moq v0.3.4
@@ -64,7 +64,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/huandu/xstrings v1.4.0 // indirect
+	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/imdario/mergo v0.3.12 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect

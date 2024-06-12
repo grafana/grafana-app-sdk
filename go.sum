@@ -137,8 +137,8 @@ github.com/gopherjs/gopherjs v0.0.0-20181017120253-0766667cb4d1/go.mod h1:wJfORR
 github.com/gorilla/websocket v1.4.1/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d h1:hrXbGJ5jgp6yNITzs5o+zXq0V5yT3siNJ+uM8LGwWKk=
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d/go.mod h1:zmwwM/DRyQB7pfuBjTWII3CWtxcXh8LTwAYGfDfpR6s=
-github.com/grafana/cog v0.0.0-20240603130906-42de25f609a6 h1:WWQFmxHrAyYepeRYLmzGb1SsknCT7ZUbhgZ2/4JSzPQ=
-github.com/grafana/cog v0.0.0-20240603130906-42de25f609a6/go.mod h1:A+ggqoURW2MB0Y5bxfi7DZOtxKYqwLuugRfMI+sT/0w=
+github.com/grafana/cog v0.0.0-20240612153742-9da3256be0c3 h1:+4Mdp5Tu5OwQiX6bJOaYsjYOgk72zWCddZh53kUDmRQ=
+github.com/grafana/cog v0.0.0-20240612153742-9da3256be0c3/go.mod h1:ldzzH0ZOWXvgKm4huFoTpXOzWelfIYL3DA5W1PlmACg=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26 h1:HX927q4X1n451pnGb8U0wq74i8PCzuxVjzv7TyD10kc=
 github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26/go.mod h1:Pn9nfzCk7nV0mvNgwusgCjCROZP6nm4GpwTnmEhLT24=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.20.0 h1:bkypFPDjIYGfCYD5mRBvpqxfYX1YCS1PXdKYWi8FsN0=
@@ -151,8 +151,8 @@ github.com/hashicorp/go-multierror v1.1.1/go.mod h1:iw975J/qwKPdAO1clOe2L8331t/9
 github.com/hashicorp/go-version v1.2.0/go.mod h1:fltr4n8CU8Ke44wwGCBoEymUuxUHl09ZGVZPK5anwXA=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
-github.com/huandu/xstrings v1.4.0 h1:D17IlohoQq4UcpqD7fDk80P7l+lwAmlFaBHgOipl2FU=
-github.com/huandu/xstrings v1.4.0/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
+github.com/huandu/xstrings v1.5.0 h1:2ag3IFq9ZDANvthTwTiqSSZLjDc+BedvHPAp5tJy2TI=
+github.com/huandu/xstrings v1.5.0/go.mod h1:y5/lhBue+AyNmUVz9RLU9xbLR0o4KIIExikq4ovT0aE=
 github.com/hydrogen18/memlistener v0.0.0-20200120041712-dcc25e7acd91/go.mod h1:qEIFzExnS6016fRpRfxrExeVn2gbClQA99gQhnIcdhE=
 github.com/imdario/mergo v0.3.12 h1:b6R2BslTbIEToALKP7LxUvijTsNI9TAe80pLWN2g/HU=
 github.com/imdario/mergo v0.3.12/go.mod h1:jmQim1M+e3UYxmgPu/WyfjB3N3VflVyUjjjwH0dnCYA=

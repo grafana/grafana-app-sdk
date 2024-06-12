@@ -201,10 +201,8 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 }
 
 func generateTypescriptBytes(v cue.Value, name string) ([]byte, error) {
-	codegenOpts := []cog.SingleSchemaOption{
-		cog.CUEValue("", v, cog.ForceEnvelope(name)),
-		cog.TypescriptTypes(),
-	}
-
-	return cog.TypesFromSchema(context.Background(), codegenOpts...)
+	return cog.TypesFromSchema().
+		CUEValue("", v, cog.ForceEnvelope(name)).
+		Typescript().
+		Run(context.Background())
 }

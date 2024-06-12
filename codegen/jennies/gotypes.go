@@ -84,16 +84,15 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix)
 	}
 
-	codegenOpts := []cog.SingleSchemaOption{
-		cog.CUEValue(packageName, version.Schema, cog.ForceEnvelope(name)),
-		cog.GoTypes(),
-	}
+	codegenPipeline := cog.TypesFromSchema().
+		CUEValue(packageName, version.Schema, cog.ForceEnvelope(name)).
+		Golang()
 
 	if g.AddKubernetesCodegen {
-		codegenOpts = append(codegenOpts, cog.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true")))
+		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
 	}
 
-	goBytes, err := cog.TypesFromSchema(context.Background(), codegenOpts...)
+	goBytes, err := codegenPipeline.Run(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -155,19 +154,33 @@ type CUEGoConfig struct {
 	NamePrefix string
 }
 
-// TODO(kgz): what to do with `maxNamingDepth`?
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
-	codegenOpts := []cog.SingleSchemaOption{
-		cog.CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name)),
-		cog.GoTypes(),
-		cog.SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)),
+	nameFunc := func(value cue.Value, path cue.Path) string {
+		i := 0
+		for ; i < len(path.Selectors()) && i < len(v.Path().Selectors()); i++ {
+			if maxNamingDepth > 0 && i >= maxNamingDepth {
+				break
+			}
+			if !SelEq(path.Selectors()[i], v.Path().Selectors()[i]) {
+				break
+			}
+		}
+		if i > 0 {
+			path = cue.MakePath(path.Selectors()[i:]...)
+		}
+		return strings.Trim(path.String(), "?#")
 	}
+
+	codegenPipeline := cog.TypesFromSchema().
+		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
+		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
+		Golang()
 
 	if cfg.AddKubernetesOpenAPIGenComment {
-		codegenOpts = append(codegenOpts, cog.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true")))
+		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
 	}
 
-	return cog.TypesFromSchema(context.Background(), codegenOpts...)
+	return codegenPipeline.Run(context.Background())
 }
 
 // SanitizeLabelString strips characters from a string that are not allowed for
