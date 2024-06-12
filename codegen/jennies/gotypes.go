@@ -9,6 +9,7 @@ import (
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
@@ -155,20 +156,20 @@ type CUEGoConfig struct {
 }
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
-	nameFunc := func(value cue.Value, path cue.Path) string {
+	nameFunc := func(value cue.Value, definitionPath cue.Path) string {
 		i := 0
-		for ; i < len(path.Selectors()) && i < len(v.Path().Selectors()); i++ {
+		for ; i < len(definitionPath.Selectors()) && i < len(v.Path().Selectors()); i++ {
 			if maxNamingDepth > 0 && i >= maxNamingDepth {
 				break
 			}
-			if !SelEq(path.Selectors()[i], v.Path().Selectors()[i]) {
+			if !SelEq(definitionPath.Selectors()[i], v.Path().Selectors()[i]) {
 				break
 			}
 		}
 		if i > 0 {
-			path = cue.MakePath(path.Selectors()[i:]...)
+			definitionPath = cue.MakePath(definitionPath.Selectors()[i:]...)
 		}
-		return strings.Trim(path.String(), "?#")
+		return strings.Trim(definitionPath.String(), "?#")
 	}
 
 	codegenPipeline := cog.TypesFromSchema().
