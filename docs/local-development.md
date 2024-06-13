@@ -33,7 +33,7 @@ Let's break down what each of these files is for:
 | File | Purpose |
 |------|---------|
 | `Tiltfile` | Tiltfile written in [Starlark](https://github.com/bazelbuild/starlark). This configures Tilt. |
-| `additional/` | Directory containing user-generated and source-controlled kubernetes YAML files to play on top of the generated ones. |
+| `additional/` | Directory containing user-generated and source-controlled kubernetes YAML files to apply alongside the generated ones. |
 | `config.yaml` | Configuration file for the `grafana-app-sdk` CLI to use when generating kubernetes manifests and the K3D config. |
 | `mounted-files/` | Everything in here gets mounted in the K3D cluster. `mounted-files/plugin` is where the built plugin should be placed to be properly mounted in the grafana instance. |
 | `scripts/cluster.sh` | K3D cluster control scripts. |
