@@ -43,6 +43,15 @@ func TestNewOpinionatedWatcher(t *testing.T) {
 		assert.NotNil(t, o)
 		assert.Equal(t, finalizer, o.finalizer)
 	})
+
+	t.Run("finalizer too long", func(t *testing.T) {
+		finalizer := "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789"
+		o, err := NewOpinionatedWatcherWithFinalizer(schema, client, func(_ resource.Schema) string {
+			return finalizer
+		})
+		assert.Equal(t, fmt.Errorf("finalizer length cannot exceed 63 chars"), err)
+		assert.Nil(t, o)
+	})
 }
 
 func TestOpinionatedWatcher_Wrap(t *testing.T) {
