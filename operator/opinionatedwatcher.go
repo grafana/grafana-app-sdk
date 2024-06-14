@@ -68,7 +68,7 @@ func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient,
 	}
 	finalizer := supplier(sch)
 	if len(finalizer) > 63 {
-		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars")
+		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
 	}
 	return &OpinionatedWatcher{
 		client:    client,
