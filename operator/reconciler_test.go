@@ -36,6 +36,14 @@ func TestNewOpinionatedReconciler(t *testing.T) {
 		assert.Equal(t, finalizer, op.finalizer)
 		assert.Equal(t, client, op.client)
 	})
+
+	t.Run("finzlizer too long", func(t *testing.T) {
+		finalizer := "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789"
+		client := &mockPatchClient{}
+		op, err := NewOpinionatedReconciler(client, finalizer)
+		assert.Equal(t, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer), err)
+		assert.Nil(t, op)
+	})
 }
 
 func TestOpinionatedReconciler_Reconcile(t *testing.T) {
