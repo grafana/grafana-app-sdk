@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -35,6 +36,10 @@ type ClientConfig struct {
 	CustomMetadataIsAnyType bool
 
 	MetricsConfig metrics.Config
+
+	// NegotiatedSerializerProvider is a function which provides a runtime.NegotiatedSerializer for the underlying
+	// kubernetes rest.RESTClient, if defined.
+	NegotiatedSerializerProvider func(kind resource.Kind) runtime.NegotiatedSerializer
 }
 
 // DefaultClientConfig returns a ClientConfig using defaults that assume you have used the SDK codegen tooling
@@ -42,6 +47,11 @@ func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
 		CustomMetadataIsAnyType: false,
 		MetricsConfig:           metrics.DefaultConfig(""),
+		NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
+			return &KindNegotiatedSerializer{
+				Kind: kind,
+			}
+		},
 	}
 }
 
