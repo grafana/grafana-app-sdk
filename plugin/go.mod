@@ -3,7 +3,7 @@ module github.com/grafana/grafana-app-sdk/plugin
 go 1.22.2
 
 require (
-	github.com/grafana/grafana-app-sdk v0.17.4
+	github.com/grafana/grafana-app-sdk v0.17.5
 	github.com/grafana/grafana-plugin-sdk-go v0.236.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0
@@ -111,7 +111,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/api v0.30.2 // indirect
-	k8s.io/apiextensions-apiserver v0.30.1 // indirect
+	k8s.io/apiextensions-apiserver v0.30.2 // indirect
 	k8s.io/klog/v2 v2.120.1 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
