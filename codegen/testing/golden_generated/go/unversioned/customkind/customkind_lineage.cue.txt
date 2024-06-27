@@ -11,7 +11,7 @@ customkind: thema.#Lineage & {
 	joinSchema: {
 		metadata: {
 			{
-				uid:               string
+				uid: string
 				creationTimestamp: time.Time & {
 					string
 				}
@@ -71,32 +71,32 @@ customkind: thema.#Lineage & {
 	}, {
 		version: [1, 0]
 		schema: {
-			#InnerObject1: {
-				innerField1: string
-				innerField2: [...string]
-				innerField3: [...#InnerObject2]
-			}
-			#InnerObject2: {
-				name: string
-				details: {
-					[string]: _
-				}
-			}
-			#Type1: {
-				group: string
-				options?: [...string]
-			}
-			#Type2: {
-				group: string
-				details: {
-					[string]: _
-				}
-			}
-			#UnionType: #Type1 | #Type2
 			spec: {
-				field1: string
-				inner:  #InnerObject1
-				union:  #UnionType
+				#InnerObject1: {
+					innerField1: string
+					innerField2: [...string]
+					innerField3: [...#InnerObject2]
+				}
+				#InnerObject2: {
+					name: string
+					details: {
+						[string]: _
+					}
+				}
+				#Type1: {
+					group: string
+					options?: [...string]
+				}
+				#Type2: {
+					group: string
+					details: {
+						[string]: _
+					}
+				}
+				#UnionType: #Type1 | #Type2
+				field1:     string
+				inner:      #InnerObject1
+				union:      #UnionType
 				map: {
 					[string]: #Type2
 				}

@@ -12,39 +12,40 @@ customKind: {
     lineage: {
         name: "customkind",
         schemas: [{
-        	version: [0,0]
-        	schema: {
-        		spec: {
-					field1: string
-					deprecatedField: string
-				}
-        	}
+            version: [0,0]
+            schema: {
+                spec: {
+                    field1: string
+                    deprecatedField: string
+                }
+            }
         },{
             version: [1,0]
             schema: {
-                #InnerObject1: {
-                    innerField1: string
-                    innerField2: [...string]
-                    innerField3: [...#InnerObject2]
-                }
-                #InnerObject2: {
-                    name: string
-                    details: {
-                        [string]: _
-                    }
-                }
-                #Type1: {
-                    group: string
-                    options?: [...string]
-                }
-                #Type2: {
-                    group: string
-                    details: {
-                        [string]: _
-                    }
-                }
-                #UnionType: #Type1 | #Type2
                 spec: {
+                    #InnerObject1: {
+                        innerField1: string
+                        innerField2: [...string]
+                        innerField3: [...#InnerObject2]
+                    }
+                    #InnerObject2: {
+                        name: string
+                        details: {
+                            [string]: _
+                        }
+                    }
+                    #Type1: {
+                        group: string
+                        options?: [...string]
+                    }
+                    #Type2: {
+                        group: string
+                        details: {
+                            [string]: _
+                        }
+                    }
+                    #UnionType: #Type1 | #Type2
+
                     field1: string
                     inner: #InnerObject1
                     union: #UnionType

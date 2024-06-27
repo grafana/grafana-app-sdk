@@ -1,27 +1,73 @@
-export enum enum {
-  Default = 'default',
-  Val1 = 'val1',
-  Val2 = 'val2',
-  Val3 = 'val3',
-  Val4 = 'val4',
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+export interface InnerObject1 {
+	innerField1: string;
+	innerField2: string[];
+	innerField3: InnerObject2[];
 }
 
-export const defaultenum: enum = enum.Default;
+export const defaultInnerObject1 = (): InnerObject1 => ({
+	innerField1: "",
+	innerField2: [],
+	innerField3: [],
+});
+
+export interface InnerObject2 {
+	name: string;
+	details: Record<string, any>;
+}
+
+export const defaultInnerObject2 = (): InnerObject2 => ({
+	name: "",
+	details: {},
+});
+
+export interface Type1 {
+	group: string;
+	options?: string[];
+}
+
+export const defaultType1 = (): Type1 => ({
+	group: "",
+});
+
+export interface Type2 {
+	group: string;
+	details: Record<string, any>;
+}
+
+export const defaultType2 = (): Type2 => ({
+	group: "",
+	details: {},
+});
+
+export type UnionType = Type1 | Type2;
+
+export const defaultUnionType = (): UnionType => (defaultType1());
 
 export interface Spec {
-  boolField: boolean;
-  enum: ('val1' | 'val2' | 'val3' | 'val4' | 'default');
-  field1: string;
-  floatField: number;
-  i32: number;
-  i64: number;
-  inner: InnerObject1;
-  map: Record<string, Type2>;
-  timestamp: string;
-  union: UnionType;
+	field1: string;
+	inner: InnerObject1;
+	union: UnionType;
+	map: Record<string, Type2>;
+	timestamp: string;
+	enum: "val1" | "val2" | "val3" | "val4" | "default";
+	i32: number;
+	i64: number;
+	boolField: boolean;
+	floatField: number;
 }
 
-export const defaultSpec: Partial<Spec> = {
-  boolField: false,
-  enum: 'default',
-};
+export const defaultSpec = (): Spec => ({
+	field1: "",
+	inner: defaultInnerObject1(),
+	union: defaultUnionType(),
+	map: {},
+	timestamp: "",
+	enum: "default",
+	i32: 0,
+	i64: 0,
+	boolField: false,
+	floatField: 0,
+});
+

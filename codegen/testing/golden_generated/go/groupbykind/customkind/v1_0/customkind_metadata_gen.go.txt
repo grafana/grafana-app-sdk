@@ -1,34 +1,31 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v1_0
 
-import (
-	"time"
-)
+import "time"
 
-// Metadata defines model for Metadata.
+// metadata contains embedded CommonMetadata and can be extended with custom string fields
+// TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
+// without external reference as using the CommonMetadata reference breaks thema codegen.
 type Metadata struct {
-	CreatedBy           string            `json:"createdBy"`
-	CreationTimestamp   time.Time         `json:"creationTimestamp"`
-	CustomMetadataField string            `json:"customMetadataField"`
-	DeletionTimestamp   *time.Time        `json:"deletionTimestamp,omitempty"`
-	Finalizers          []string          `json:"finalizers"`
-	Generation          int64             `json:"generation"`
-	Labels              map[string]string `json:"labels"`
-	OtherMetadataField  string            `json:"otherMetadataField"`
-	ResourceVersion     string            `json:"resourceVersion"`
-	Uid                 string            `json:"uid"`
-	UpdateTimestamp     time.Time         `json:"updateTimestamp"`
-	UpdatedBy           string            `json:"updatedBy"`
-}
-
-// _kubeObjectMetadata is metadata found in a kubernetes object's metadata field.
-// It is not exhaustive and only includes fields which may be relevant to a kind's implementation,
-// As it is also intended to be generic enough to function with any API Server.
-type KubeObjectMetadata struct {
-	CreationTimestamp time.Time         `json:"creationTimestamp"`
-	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty"`
-	Finalizers        []string          `json:"finalizers"`
-	Generation        int64             `json:"generation"`
-	Labels            map[string]string `json:"labels"`
-	ResourceVersion   string            `json:"resourceVersion"`
-	Uid               string            `json:"uid"`
+	// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
+	// Can't use this as it's not yet enforced CUE:
+	// ...string
+	// Have to do this gnarly regex instead
+	CustomMetadataField string     `json:"customMetadataField"`
+	UpdateTimestamp     time.Time  `json:"updateTimestamp"`
+	CreatedBy           string     `json:"createdBy"`
+	Uid                 string     `json:"uid"`
+	CreationTimestamp   time.Time  `json:"creationTimestamp"`
+	DeletionTimestamp   *time.Time `json:"deletionTimestamp,omitempty"`
+	Finalizers          []string   `json:"finalizers"`
+	ResourceVersion     string     `json:"resourceVersion"`
+	Generation          int64      `json:"generation"`
+	// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
+	// Can't use this as it's not yet enforced CUE:
+	// ...string
+	// Have to do this gnarly regex instead
+	OtherMetadataField string            `json:"otherMetadataField"`
+	UpdatedBy          string            `json:"updatedBy"`
+	Labels             map[string]string `json:"labels"`
 }
