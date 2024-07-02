@@ -1,8 +1,9 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v0_0
 
-// Spec defines model for Spec.
 // +k8s:openapi-gen=true
 type Spec struct {
-	DeprecatedField string `json:"deprecatedField"`
 	Field1          string `json:"field1"`
+	DeprecatedField string `json:"deprecatedField"`
 }

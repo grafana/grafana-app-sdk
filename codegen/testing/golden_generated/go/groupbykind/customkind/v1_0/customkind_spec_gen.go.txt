@@ -1,62 +1,58 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v1_0
 
-import (
-	"time"
-)
+import "time"
 
-// Defines values for SpecEnum.
-const (
-	SpecEnumDefault SpecEnum = "default"
-	SpecEnumVal1    SpecEnum = "val1"
-	SpecEnumVal2    SpecEnum = "val2"
-	SpecEnumVal3    SpecEnum = "val3"
-	SpecEnumVal4    SpecEnum = "val4"
-)
-
-// InnerObject1 defines model for InnerObject1.
 // +k8s:openapi-gen=true
-type InnerObject1 struct {
-	InnerField1 string         `json:"innerField1"`
-	InnerField2 []string       `json:"innerField2"`
-	InnerField3 []InnerObject2 `json:"innerField3"`
+type SpecInnerObject1 struct {
+	InnerField1 string             `json:"innerField1"`
+	InnerField2 []string           `json:"innerField2"`
+	InnerField3 []SpecInnerObject2 `json:"innerField3"`
 }
 
-// InnerObject2 defines model for InnerObject2.
 // +k8s:openapi-gen=true
-type InnerObject2 struct {
-	Details map[string]interface{} `json:"details"`
-	Name    string                 `json:"name"`
+type SpecInnerObject2 struct {
+	Name    string         `json:"name"`
+	Details map[string]any `json:"details"`
 }
 
-// Spec defines model for Spec.
 // +k8s:openapi-gen=true
-type Spec struct {
-	BoolField  bool             `json:"boolField"`
-	Enum       SpecEnum         `json:"enum"`
-	Field1     string           `json:"field1"`
-	FloatField float64          `json:"floatField"`
-	I32        int              `json:"i32"`
-	I64        int              `json:"i64"`
-	Inner      InnerObject1     `json:"inner"`
-	Map        map[string]Type2 `json:"map"`
-	Timestamp  time.Time        `json:"timestamp"`
-	Union      interface{}      `json:"union"`
-}
-
-// SpecEnum defines model for Spec.Enum.
-// +k8s:openapi-gen=true
-type SpecEnum string
-
-// Type1 defines model for Type1.
-// +k8s:openapi-gen=true
-type Type1 struct {
+type SpecType1 struct {
 	Group   string   `json:"group"`
 	Options []string `json:"options,omitempty"`
 }
 
-// Type2 defines model for Type2.
 // +k8s:openapi-gen=true
-type Type2 struct {
-	Details map[string]interface{} `json:"details"`
-	Group   string                 `json:"group"`
+type SpecType2 struct {
+	Group   string         `json:"group"`
+	Details map[string]any `json:"details"`
 }
+
+// +k8s:openapi-gen=true
+type SpecUnionType any
+
+// +k8s:openapi-gen=true
+type Spec struct {
+	Field1     string               `json:"field1"`
+	Inner      SpecInnerObject1     `json:"inner"`
+	Union      SpecUnionType        `json:"union"`
+	Map        map[string]SpecType2 `json:"map"`
+	Timestamp  time.Time            `json:"timestamp"`
+	Enum       SpecEnum             `json:"enum"`
+	I32        int32                `json:"i32"`
+	I64        int64                `json:"i64"`
+	BoolField  bool                 `json:"boolField"`
+	FloatField float64              `json:"floatField"`
+}
+
+// +k8s:openapi-gen=true
+type SpecEnum string
+
+const (
+	SpecEnumVal1    SpecEnum = "val1"
+	SpecEnumVal2    SpecEnum = "val2"
+	SpecEnumVal3    SpecEnum = "val3"
+	SpecEnumVal4    SpecEnum = "val4"
+	SpecEnumDefault SpecEnum = "default"
+)

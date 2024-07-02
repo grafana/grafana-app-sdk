@@ -54,7 +54,7 @@ func TestResourceGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	files, err := parser.Generate(ResourceGenerator(), "customKind")
-	require.Nil(t, err)
+	require.NoError(t, err)
 	// Check number of files generated
 	// 8 -> object, spec, metadata, status, lineage (CUE), lineage (go), schema, codec, cue.mod/module.cue
 	assert.Len(t, files, 9)
