@@ -165,9 +165,11 @@ func processDeltas(
 	// from oldest to newest
 	for _, d := range deltas {
 		obj := d.Object
-
 		switch d.Type {
 		case cache.Sync, cache.Replaced, cache.Added, cache.Updated:
+			// TODO: it would be nice to treat cache.Sync events differently here,
+			// so we could tell the difference between a cache sync (period re-emission of all items in the cache)
+			// from an update sourced from the API server watch request.
 			if old, exists, err := clientState.Get(obj); err == nil && exists {
 				if err := clientState.Update(obj); err != nil {
 					return err
