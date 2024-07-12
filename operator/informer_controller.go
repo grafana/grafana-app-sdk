@@ -295,11 +295,23 @@ func (c *InformerController) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
-// PrometheusCollectors returns the prometheus metric collectors used by this informer to allow for registration
+// PrometheusCollectors returns the prometheus metric collectors used by this informer, as well as collectors used by
+// any registered informer or watcher which implements metrics.Provider, to allow for registration
 func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
-	return []prometheus.Collector{
+	collectors := []prometheus.Collector{
 		c.totalEvents, c.reconcileLatency, c.inflightEvents, c.inflightActions, c.reconcilerLatency, c.watcherLatency,
 	}
+	c.informers.RangeAll(func(key string, index int, value Informer) {
+		if cast, ok := value.(metrics.Provider); ok {
+			collectors = append(collectors, cast.PrometheusCollectors()...)
+		}
+	})
+	c.watchers.RangeAll(func(key string, index int, value ResourceWatcher) {
+		if cast, ok := value.(metrics.Provider); ok {
+			collectors = append(collectors, cast.PrometheusCollectors()...)
+		}
+	})
+	return collectors
 }
 
 // nolint:dupl

@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -44,7 +46,7 @@ func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace 
 		Addrs:     addrs,
 		TrackKeys: true,
 	})
-	return NewCustomCacheInformer(c, ListerWatcher(client, kind, namespace), kind.ZeroValue())
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace), kind.ZeroValue())
 }
 
 // NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
@@ -54,9 +56,10 @@ func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchCl
 		Addrs:     addrs,
 		TrackKeys: true,
 	})
-	return NewCustomCacheInformer(c, ListerWatcher(client, kind, namespace, labelFilters...), kind.ZeroValue())
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters...), kind.ZeroValue())
 }
 
+// NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
 func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, exampleObject resource.Object) *CustomCacheInformer {
 	return &CustomCacheInformer{
 		store:         store,
@@ -64,6 +67,14 @@ func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, exampleOb
 		objectType:    exampleObject,
 		processor:     newInformerProcessor(),
 	}
+}
+
+// PrometheusCollectors returns a list of prometheus collectors used by the informer and its objects (such as the cache).
+func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
+	if cast, ok := c.store.(metrics.Provider); ok {
+		return cast.PrometheusCollectors()
+	}
+	return nil
 }
 
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
@@ -258,7 +269,9 @@ func newInformer(
 	return cache.New(cfg)
 }
 
-func ListerWatcher(client ListWatchClient, sch resource.Schema, namespace string, labelFilters ...string) cache.ListerWatcher {
+// NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
+// The List and Watch requests will always use the provided namespace and labelFilters.
+func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace string, labelFilters ...string) cache.ListerWatcher {
 	return &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			ctx, span := GetTracer().Start(context.Background(), "informer-list")

@@ -59,15 +59,32 @@ func NewMemcachedStore(kind resource.Kind, cfg MemcachedStoreConfig) *MemcachedS
 		readLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.Metrics.Namespace,
 			Subsystem:                       "informer",
-			Name:                            "cache_read_duration_ms",
-			Help:                            "Time (in milliseconds) spent on cache read operations",
+			Name:                            "cache_read_duration_seconds",
+			Help:                            "Time (in seconds) spent on cache read operations",
 			Buckets:                         metrics.LatencyBuckets,
 			NativeHistogramBucketFactor:     cfg.Metrics.NativeHistogramBucketFactor,
 			NativeHistogramMaxBucketNumber:  cfg.Metrics.NativeHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: time.Hour,
-		}, []string{"event_type", "kind"}),
+		}, []string{"kind"}),
+		writeLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Namespace:                       cfg.Metrics.Namespace,
+			Subsystem:                       "informer",
+			Name:                            "cache_write_duration_seconds",
+			Help:                            "Time (in seconds) spent on cache write operations",
+			Buckets:                         metrics.LatencyBuckets,
+			NativeHistogramBucketFactor:     cfg.Metrics.NativeHistogramBucketFactor,
+			NativeHistogramMaxBucketNumber:  cfg.Metrics.NativeHistogramMaxBucketNumber,
+			NativeHistogramMinResetDuration: time.Hour,
+		}, []string{"kind"}),
 		trackKeys: cfg.TrackKeys,
 		keys:      sync.Map{},
+	}
+}
+
+// PrometheusCollectors returns a list of prometheus collectors used by the MemcachedStore
+func (m *MemcachedStore) PrometheusCollectors() []prometheus.Collector {
+	return []prometheus.Collector{
+		m.readLatency, m.writeLatency,
 	}
 }
 
@@ -80,10 +97,12 @@ func (m *MemcachedStore) Add(obj interface{}) error {
 	if err != nil {
 		return err
 	}
+	start := time.Now()
 	err = m.client.Add(&memcache.Item{
 		Key:   key,
 		Value: o,
 	})
+	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	if m.trackKeys && err == nil {
 		m.keys.Store(trackKey, struct{}{})
 	}
@@ -98,17 +117,22 @@ func (m *MemcachedStore) Update(obj interface{}) error {
 	if err != nil {
 		return err
 	}
-	return m.client.Replace(&memcache.Item{
+	start := time.Now()
+	err = m.client.Replace(&memcache.Item{
 		Key:   key,
 		Value: o,
 	})
+	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
+	return err
 }
 func (m *MemcachedStore) Delete(obj interface{}) error {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
 		return err
 	}
+	start := time.Now()
 	err = m.client.Delete(key)
+	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	if err == nil && m.trackKeys {
 		m.keys.Delete(trackKey)
 	}
@@ -162,7 +186,9 @@ func (m *MemcachedStore) GetByKey(key string) (item interface{}, exists bool, er
 }
 
 func (m *MemcachedStore) getByKey(key string) (item interface{}, exists bool, err error) {
+	start := time.Now()
 	fromCache, err := m.client.Get(key)
+	m.readLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	if err != nil && !errors.Is(err, memcache.ErrCacheMiss) {
 		return nil, false, err
 	}

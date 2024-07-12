@@ -177,6 +177,73 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	close(stopCh)
 }
 
+func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
+	events := make(chan watch.Event)
+	store := newUnsafeCache()
+	inf := NewCustomCacheInformer(store, &mockListWatcher{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			return &resource.UntypedList{}, nil
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			return &mockWatch{
+				events: events,
+			}, nil
+		},
+	}, &resource.UntypedObject{})
+	wg := sync.WaitGroup{}
+	inf.AddEventHandler(&SimpleWatcher{
+		AddFunc: func(ctx context.Context, object resource.Object) error {
+			wg.Done()
+			return nil
+		},
+		UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+			wg.Done()
+			return nil
+		},
+		DeleteFunc: func(ctx context.Context, object resource.Object) error {
+			wg.Done()
+			return nil
+		},
+	})
+	stopCh := make(chan struct{})
+	go inf.Run(stopCh)
+
+	obj := &resource.UntypedObject{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "default",
+			Name:            "foo",
+			ResourceVersion: "1",
+		},
+	}
+	wg.Add(1)
+	events <- watch.Event{
+		Type:   watch.Added,
+		Object: obj,
+	}
+	assert.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
+	key, _ := store.keyFunc(obj)
+	assert.Equal(t, obj, store.items[key])
+	updated := obj.Copy()
+	updated.SetResourceVersion("2")
+	wg.Add(1)
+	events <- watch.Event{
+		Type:   watch.Modified,
+		Object: updated,
+	}
+	assert.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
+	assert.Equal(t, updated, store.items[key])
+	wg.Add(1)
+	events <- watch.Event{
+		Type:   watch.Deleted,
+		Object: updated,
+	}
+	assert.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
+	_, ok := store.items[key]
+	assert.False(t, ok)
+
+	close(stopCh)
+}
+
 func waitOrTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	doneCh := make(chan struct{})
 	go func() {
