@@ -19,7 +19,14 @@ import (
 
 var _ Informer = &CustomCacheInformer{}
 
+const processorBufferSize = 1024
+
 type CustomCacheInformer struct {
+	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
+	// This is distinct from a full resync, as no information is fetched from the API server.
+	// Changes to this value after run() is called will not take effect.
+	CacheResyncInterval time.Duration
+
 	started           bool
 	startedLock       sync.Mutex
 	store             cache.Store
@@ -30,21 +37,38 @@ type CustomCacheInformer struct {
 	processor         *informerProcessor
 }
 
+// NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
+// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
+func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) *CustomCacheInformer {
+	c := NewMemcachedStore(kind, MemcachedStoreConfig{
+		Addrs:     addrs,
+		TrackKeys: true,
+	})
+	return NewCustomCacheInformer(c, ListerWatcher(client, kind, namespace), kind.ZeroValue())
+}
+
+// NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
+// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
+func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchClient, namespace string, labelFilters []string, addrs ...string) *CustomCacheInformer {
+	c := NewMemcachedStore(kind, MemcachedStoreConfig{
+		Addrs:     addrs,
+		TrackKeys: true,
+	})
+	return NewCustomCacheInformer(c, ListerWatcher(client, kind, namespace, labelFilters...), kind.ZeroValue())
+}
+
 func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, exampleObject resource.Object) *CustomCacheInformer {
 	return &CustomCacheInformer{
 		store:         store,
 		listerWatcher: lw,
 		objectType:    exampleObject,
-		processor: &informerProcessor{
-			listeners: make(map[*informerProcessorListener]bool),
-		},
+		processor:     newInformerProcessor(),
 	}
 }
 
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
-	c.processor.addListener(&informerProcessorListener{
-		events: make(chan informerProcessorListenerEvent),
-		handler: cache.ResourceEventHandlerFuncs{
+	c.processor.addListener(newInformerProcessorListener(
+		cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {
 				cast, ok := obj.(resource.Object)
 				if !ok {
@@ -67,8 +91,7 @@ func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
 				}
 				handler.Delete(context.TODO(), cast)
 			},
-		},
-	})
+		}, processorBufferSize))
 	return nil
 }
 
@@ -83,7 +106,7 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 		c.startedLock.Lock()
 		defer c.startedLock.Unlock()
 
-		c.controller = newInformer(c.listerWatcher, c.objectType, time.Minute, c, c.store, nil)
+		c.controller = newInformer(c.listerWatcher, c.objectType, c.CacheResyncInterval, c, c.store, nil)
 		c.started = true
 	}()
 
@@ -131,25 +154,22 @@ func (c *CustomCacheInformer) LastSyncResourceVersion() string {
 }
 
 func (c *CustomCacheInformer) OnAdd(obj interface{}, isInInitialList bool) {
-	c.processor.distribute(informerProcessorListenerEvent{
-		eventType: informerEventAdd,
-		obj:       obj,
-		isList:    isInInitialList,
+	c.processor.distribute(informerEventAdd{
+		obj:             obj,
+		isInInitialList: isInInitialList,
 	})
 }
 
 func (c *CustomCacheInformer) OnUpdate(oldObj interface{}, newObj interface{}) {
-	c.processor.distribute(informerProcessorListenerEvent{
-		eventType: informerEventUpdate,
-		obj:       newObj,
-		old:       oldObj,
+	c.processor.distribute(informerEventUpdate{
+		obj: newObj,
+		old: oldObj,
 	})
 }
 
 func (c *CustomCacheInformer) OnDelete(obj interface{}) {
-	c.processor.distribute(informerProcessorListenerEvent{
-		eventType: informerEventDelete,
-		obj:       obj,
+	c.processor.distribute(informerEventDelete{
+		obj: obj,
 	})
 }
 
