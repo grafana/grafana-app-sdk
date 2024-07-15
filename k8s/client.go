@@ -47,11 +47,11 @@ func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
 		CustomMetadataIsAnyType: false,
 		MetricsConfig:           metrics.DefaultConfig(""),
-		NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
+		/* NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
 			return &KindNegotiatedSerializer{
 				Kind: kind,
 			}
-		},
+		},*/
 	}
 }
 

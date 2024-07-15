@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
-	"github.com/grafana/grafana-app-sdk/metrics"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/grafana/grafana-app-sdk/metrics"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 var _ cache.Store = &MemcachedStore{}
@@ -88,7 +89,7 @@ func (m *MemcachedStore) PrometheusCollectors() []prometheus.Collector {
 	}
 }
 
-func (m *MemcachedStore) Add(obj interface{}) error {
+func (m *MemcachedStore) Add(obj any) error {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
 		return err
@@ -108,7 +109,7 @@ func (m *MemcachedStore) Add(obj interface{}) error {
 	}
 	return err
 }
-func (m *MemcachedStore) Update(obj interface{}) error {
+func (m *MemcachedStore) Update(obj any) error {
 	key, _, err := m.getKey(obj)
 	if err != nil {
 		return err
@@ -125,7 +126,7 @@ func (m *MemcachedStore) Update(obj interface{}) error {
 	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	return err
 }
-func (m *MemcachedStore) Delete(obj interface{}) error {
+func (m *MemcachedStore) Delete(obj any) error {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
 		return err
@@ -138,12 +139,12 @@ func (m *MemcachedStore) Delete(obj interface{}) error {
 	}
 	return err
 }
-func (m *MemcachedStore) List() []interface{} {
+func (m *MemcachedStore) List() []any {
 	// TODO: do we want to support this even with the trackKeys feature turned on?
 	if !m.trackKeys {
 		return nil
 	}
-	items := make([]interface{}, 0)
+	items := make([]any, 0)
 	m.keys.Range(func(key, value any) bool {
 		item, exists, err := m.GetByKey(key.(string))
 		if !exists || err != nil {
@@ -166,7 +167,7 @@ func (m *MemcachedStore) ListKeys() []string {
 	})
 	return keys
 }
-func (m *MemcachedStore) Get(obj interface{}) (item interface{}, exists bool, err error) {
+func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
 		return nil, false, err
@@ -177,7 +178,7 @@ func (m *MemcachedStore) Get(obj interface{}) (item interface{}, exists bool, er
 	}
 	return item, exists, err
 }
-func (m *MemcachedStore) GetByKey(key string) (item interface{}, exists bool, err error) {
+func (m *MemcachedStore) GetByKey(key string) (item any, exists bool, err error) {
 	item, exists, err = m.getByKey(fmt.Sprintf("%s/%s", m.kind.Plural(), key))
 	if m.trackKeys && exists && err == nil {
 		m.keys.LoadOrStore(key, struct{}{})
@@ -185,7 +186,7 @@ func (m *MemcachedStore) GetByKey(key string) (item interface{}, exists bool, er
 	return item, exists, err
 }
 
-func (m *MemcachedStore) getByKey(key string) (item interface{}, exists bool, err error) {
+func (m *MemcachedStore) getByKey(key string) (item any, exists bool, err error) {
 	start := time.Now()
 	fromCache, err := m.client.Get(key)
 	m.readLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
@@ -202,10 +203,10 @@ func (m *MemcachedStore) getByKey(key string) (item interface{}, exists bool, er
 	return item, true, nil
 }
 
-func (m *MemcachedStore) Replace([]interface{}, string) error {
+func (*MemcachedStore) Replace([]any, string) error {
 	return nil
 }
-func (m *MemcachedStore) Resync() error {
+func (*MemcachedStore) Resync() error {
 	return nil
 }
 

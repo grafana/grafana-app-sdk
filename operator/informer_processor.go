@@ -5,7 +5,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -34,12 +33,6 @@ type informerEventCacheSync struct {
 	obj any
 }
 
-type informerEvent interface {
-	Action() ResourceAction
-	OldObject() resource.Object
-	Object() resource.Object
-}
-
 type informerProcessor struct {
 	listeners    map[*informerProcessorListener]bool
 	listenersMux sync.RWMutex
@@ -62,16 +55,15 @@ func (p *informerProcessor) addListener(l *informerProcessorListener) {
 func (p *informerProcessor) distribute(event any) {
 	p.listenersMux.RLock()
 	defer p.listenersMux.RUnlock()
-	for listener, _ := range p.listeners {
+	for listener := range p.listeners {
 		listener.push(event)
 	}
 }
 
 func (p *informerProcessor) run(stopCh <-chan struct{}) {
 	p.listenersMux.Lock()
-	for listener, _ := range p.listeners {
+	for listener := range p.listeners {
 		go func(l *informerProcessorListener) {
-			//p.wg.Start(l.pop)
 			p.wg.Start(l.run)
 		}(listener)
 	}
@@ -80,7 +72,7 @@ func (p *informerProcessor) run(stopCh <-chan struct{}) {
 	<-stopCh
 	p.listenersMux.Lock()
 	p.started = false
-	for listener, _ := range p.listeners {
+	for listener := range p.listeners {
 		listener.stop()
 	}
 	p.listenersMux.Unlock()
@@ -108,8 +100,12 @@ func (l *informerProcessorListener) push(event any) {
 	l.events <- event
 }
 
+// pop will continuously read messages from the events channel, and write them to a buffer.
+// while any contents exist in the buffer, it will also attempt to write them out to the toProcess channel.
+// This allows writes to the events channel to not be blocked by processing of the handler, which instead consumes
+// from the toProcess channel.
 func (l *informerProcessorListener) pop() {
-	// TODO: should this whole thing be a goroutine in run()?
+	// TODO: should this whole thing be a goroutine in run(), rather than a separate method?
 	defer close(l.toProcess)
 
 	var nextCh chan<- any
@@ -136,6 +132,8 @@ func (l *informerProcessorListener) pop() {
 	}
 }
 
+// run starts pop to move events from the events channel to the toProcess channel,
+// then reads events from the toProcess channel and dispatches them to the handler based on event type
 func (l *informerProcessorListener) run() {
 	go l.pop()
 
@@ -160,6 +158,7 @@ func (l *informerProcessorListener) run() {
 	}, 1*time.Second, stopCh)
 }
 
+// stop stops the run and pop processes. Because the channels are closed, the listener cannot be re-used.
 func (l *informerProcessorListener) stop() {
 	close(l.events)
 }

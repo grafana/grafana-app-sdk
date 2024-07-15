@@ -7,16 +7,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/metrics"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
+
+	"github.com/grafana/grafana-app-sdk/metrics"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 var _ Informer = &CustomCacheInformer{}
@@ -28,6 +30,9 @@ type CustomCacheInformer struct {
 	// This is distinct from a full resync, as no information is fetched from the API server.
 	// Changes to this value after run() is called will not take effect.
 	CacheResyncInterval time.Duration
+	// ErrorHandler is called if the informer encounters an error which does not stop the informer from running,
+	// but may stop it from processing a given event.
+	ErrorHandler func(context.Context, error)
 
 	started           bool
 	startedLock       sync.Mutex
@@ -35,8 +40,8 @@ type CustomCacheInformer struct {
 	controller        cache.Controller
 	listerWatcher     cache.ListerWatcher
 	objectType        resource.Object
-	objectDescription string
 	processor         *informerProcessor
+	objectTransformer func(any) (resource.Object, error)
 }
 
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
@@ -46,7 +51,7 @@ func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace 
 		Addrs:     addrs,
 		TrackKeys: true,
 	})
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace), kind.ZeroValue())
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace), kind)
 }
 
 // NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
@@ -56,16 +61,21 @@ func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchCl
 		Addrs:     addrs,
 		TrackKeys: true,
 	})
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters...), kind.ZeroValue())
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters...), kind)
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
-func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, exampleObject resource.Object) *CustomCacheInformer {
+func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind resource.Kind) *CustomCacheInformer {
 	return &CustomCacheInformer{
 		store:         store,
 		listerWatcher: lw,
-		objectType:    exampleObject,
-		processor:     newInformerProcessor(),
+		// TODO: objectType being set doesn't allow for a generic untyped object to be passed
+		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
+		// objectType:    kind.ZeroValue(),
+		processor: newInformerProcessor(),
+		objectTransformer: func(a any) (resource.Object, error) {
+			return toResourceObject(a, kind)
+		},
 	}
 }
 
@@ -77,35 +87,15 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 	return nil
 }
 
+// AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
-	c.processor.addListener(newInformerProcessorListener(
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				cast, ok := obj.(resource.Object)
-				if !ok {
-					// Hmm
-				}
-				handler.Add(context.TODO(), cast)
-			},
-			UpdateFunc: func(oldObj, newObj interface{}) {
-				ocast, ok := oldObj.(resource.Object)
-				if !ok {
-					// Hmm
-				}
-				ncast, ok := newObj.(resource.Object)
-				handler.Update(context.TODO(), ocast, ncast)
-			},
-			DeleteFunc: func(obj interface{}) {
-				cast, ok := obj.(resource.Object)
-				if !ok {
-					// Hmm
-				}
-				handler.Delete(context.TODO(), cast)
-			},
-		}, processorBufferSize))
+	c.processor.addListener(newInformerProcessorListener(toResourceEventHandlerFuncs(handler, c.objectTransformer, c.errorHandler), processorBufferSize))
 	return nil
 }
 
+// Run runs the informer until stopCh is closed or receives a message.
+// While running, events from the ListerWatcher will be propagated to all registered ResourceWatcher handlers,
+// and current state of all resources will be stored in the custom cache.Store.
 func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 
@@ -126,7 +116,6 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	var wg wait.Group
 	defer wg.Wait()              // Wait for Processor to stop
 	defer close(processorStopCh) // Tell Processor to stop
-	//wg.StartWithChannel(processorStopCh, c.cacheMutationDetector.Run)
 	wg.StartWithChannel(processorStopCh, c.processor.run)
 
 	defer func() {
@@ -138,12 +127,14 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	return nil
 }
 
+// HasStarted returns true if the informer is already running
 func (c *CustomCacheInformer) HasStarted() bool {
 	c.startedLock.Lock()
 	defer c.startedLock.Unlock()
 	return c.started
 }
 
+// HasSynced returns true if the informer has synced all events from the initial list request.
 func (c *CustomCacheInformer) HasSynced() bool {
 	c.startedLock.Lock()
 	defer c.startedLock.Unlock()
@@ -154,6 +145,8 @@ func (c *CustomCacheInformer) HasSynced() bool {
 	return c.controller.HasSynced()
 }
 
+// LastSyncResourceVersion delegates to the underlying cache.Reflector's method,
+// if the informer has started. Otherwise, it returns an empty string.
 func (c *CustomCacheInformer) LastSyncResourceVersion() string {
 	c.startedLock.Lock()
 	defer c.startedLock.Unlock()
@@ -164,109 +157,33 @@ func (c *CustomCacheInformer) LastSyncResourceVersion() string {
 	return c.controller.LastSyncResourceVersion()
 }
 
-func (c *CustomCacheInformer) OnAdd(obj interface{}, isInInitialList bool) {
+// OnAdd implements cache.ResourceEventHandler, and distributes the add event to all registered ResourceWatcher handlers.
+func (c *CustomCacheInformer) OnAdd(obj any, isInInitialList bool) {
 	c.processor.distribute(informerEventAdd{
 		obj:             obj,
 		isInInitialList: isInInitialList,
 	})
 }
 
-func (c *CustomCacheInformer) OnUpdate(oldObj interface{}, newObj interface{}) {
+// OnUpdate implements cache.ResourceEventHandler, and distributes the update event to all registered ResourceWatcher handlers.
+func (c *CustomCacheInformer) OnUpdate(oldObj any, newObj any) {
 	c.processor.distribute(informerEventUpdate{
 		obj: newObj,
 		old: oldObj,
 	})
 }
 
-func (c *CustomCacheInformer) OnDelete(obj interface{}) {
+// OnDelete implements cache.ResourceEventHandler, and distributes the delete event to all registered ResourceWatcher handlers.
+func (c *CustomCacheInformer) OnDelete(obj any) {
 	c.processor.distribute(informerEventDelete{
 		obj: obj,
 	})
 }
 
-// Multiplexes updates in the form of a list of Deltas into a Store, and informs
-// a given handler of events OnUpdate, OnAdd, OnDelete
-func processDeltas(
-	// Object which receives event notifications from the given deltas
-	handler cache.ResourceEventHandler,
-	clientState cache.Store,
-	deltas cache.Deltas,
-	isInInitialList bool,
-) error {
-	// from oldest to newest
-	for _, d := range deltas {
-		obj := d.Object
-		switch d.Type {
-		case cache.Sync, cache.Replaced, cache.Added, cache.Updated:
-			// TODO: it would be nice to treat cache.Sync events differently here,
-			// so we could tell the difference between a cache sync (period re-emission of all items in the cache)
-			// from an update sourced from the API server watch request.
-			if old, exists, err := clientState.Get(obj); err == nil && exists {
-				if err := clientState.Update(obj); err != nil {
-					return err
-				}
-				handler.OnUpdate(old, obj)
-			} else {
-				if err := clientState.Add(obj); err != nil {
-					return err
-				}
-				handler.OnAdd(obj, isInInitialList)
-			}
-		case cache.Deleted:
-			if err := clientState.Delete(obj); err != nil {
-				return err
-			}
-			handler.OnDelete(obj)
-		}
+func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
+	if c.ErrorHandler != nil {
+		c.ErrorHandler(ctx, err)
 	}
-	return nil
-}
-
-// newInformer returns a controller for populating the store while also
-// providing event notifications.
-//
-// Parameters
-//   - lw is list and watch functions for the source of the resource you want to
-//     be informed of.
-//   - objType is an object of the type that you expect to receive.
-//   - resyncPeriod: if non-zero, will re-list this often (you will get OnUpdate
-//     calls, even if nothing changed). Otherwise, re-list will be delayed as
-//     long as possible (until the upstream source closes the watch or times out,
-//     or you stop the controller).
-//   - h is the object you want notifications sent to.
-//   - clientState is the store you want to populate
-func newInformer(
-	lw cache.ListerWatcher,
-	objType runtime.Object,
-	resyncPeriod time.Duration,
-	h cache.ResourceEventHandler,
-	clientState cache.Store,
-	transformer cache.TransformFunc,
-) cache.Controller {
-	// This will hold incoming changes. Note how we pass clientState in as a
-	// KeyLister, that way resync operations will result in the correct set
-	// of update/delete deltas.
-	fifo := cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
-		KnownObjects:          clientState,
-		EmitDeltaTypeReplaced: true,
-		Transformer:           transformer,
-	})
-
-	cfg := &cache.Config{
-		Queue:            fifo,
-		ListerWatcher:    lw,
-		ObjectType:       objType,
-		FullResyncPeriod: resyncPeriod,
-		RetryOnError:     false,
-
-		Process: func(obj interface{}, isInInitialList bool) error {
-			if deltas, ok := obj.(cache.Deltas); ok {
-				return processDeltas(h, clientState, deltas, isInInitialList)
-			}
-			return errors.New("object given as Process argument is not Deltas")
-		},
-	}
-	return cache.New(cfg)
 }
 
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
@@ -331,4 +248,162 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace str
 			return w, nil
 		},
 	}
+}
+
+func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) (resource.Object, error), errorHandler func(context.Context, error)) *cache.ResourceEventHandlerFuncs {
+	return &cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj any) {
+			ctx, span := GetTracer().Start(context.Background(), "informer-event-add")
+			defer span.End()
+			cast, err := transformer(obj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			gvk := cast.GroupVersionKind()
+			span.SetAttributes(
+				attribute.String("kind.name", gvk.Kind),
+				attribute.String("kind.group", gvk.Group),
+				attribute.String("kind.version", gvk.Version),
+				attribute.String("namespace", cast.GetNamespace()),
+				attribute.String("name", cast.GetName()),
+			)
+			err = handler.Add(ctx, cast)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+			}
+		},
+		UpdateFunc: func(oldObj, newObj any) {
+			ctx, span := GetTracer().Start(context.Background(), "informer-event-update")
+			defer span.End()
+			cOld, err := transformer(oldObj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			// None of these should change between old and new, so we can set them here with old's values
+			gvk := cOld.GroupVersionKind()
+			span.SetAttributes(
+				attribute.String("kind.name", gvk.Kind),
+				attribute.String("kind.group", gvk.Group),
+				attribute.String("kind.version", gvk.Version),
+				attribute.String("namespace", cOld.GetNamespace()),
+				attribute.String("name", cOld.GetName()),
+			)
+			cNew, err := transformer(newObj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			err = handler.Update(ctx, cOld, cNew)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+			}
+		},
+		DeleteFunc: func(obj any) {
+			ctx, span := GetTracer().Start(context.Background(), "informer-event-delete")
+			defer span.End()
+			cast, err := transformer(obj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			gvk := cast.GroupVersionKind()
+			span.SetAttributes(
+				attribute.String("kind.name", gvk.Kind),
+				attribute.String("kind.group", gvk.Group),
+				attribute.String("kind.version", gvk.Version),
+				attribute.String("namespace", cast.GetNamespace()),
+				attribute.String("name", cast.GetName()),
+			)
+			err = handler.Delete(ctx, cast)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+			}
+		},
+	}
+}
+
+// newInformer is copied from the kubernetes unexported method of the same name in client-go/tools/cache/controller.go,
+// to allow the CustomCacheInformer to create a new cache.Controller informer that specifies the KnownObjects cache.Store
+// to use in the cache.DeltaFIFO used by the controller, as otherwise this cannot be specified in all exported methods.
+func newInformer(
+	lw cache.ListerWatcher,
+	objType runtime.Object,
+	resyncPeriod time.Duration,
+	h cache.ResourceEventHandler,
+	clientState cache.Store,
+	transformer cache.TransformFunc,
+) cache.Controller {
+	// This will hold incoming changes. Note how we pass clientState in as a
+	// KeyLister, that way resync operations will result in the correct set
+	// of update/delete deltas.
+	fifo := cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
+		KnownObjects:          clientState,
+		EmitDeltaTypeReplaced: true,
+		Transformer:           transformer,
+	})
+
+	cfg := &cache.Config{
+		Queue:            fifo,
+		ListerWatcher:    lw,
+		ObjectType:       objType,
+		FullResyncPeriod: resyncPeriod,
+		RetryOnError:     false,
+
+		Process: func(obj any, isInInitialList bool) error {
+			if deltas, ok := obj.(cache.Deltas); ok {
+				return processDeltas(h, clientState, deltas, isInInitialList)
+			}
+			return errors.New("object given as Process argument is not Deltas")
+		},
+	}
+	return cache.New(cfg)
+}
+
+// processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,
+// as it is required by the newInformer call.
+// Multiplexes updates in the form of a list of Deltas into a Store, and informs
+// a given handler of events OnUpdate, OnAdd, OnDelete.
+func processDeltas(
+	// Object which receives event notifications from the given deltas
+	handler cache.ResourceEventHandler,
+	clientState cache.Store,
+	deltas cache.Deltas,
+	isInInitialList bool,
+) error {
+	// from oldest to newest
+	for _, d := range deltas {
+		obj := d.Object
+		switch d.Type {
+		case cache.Sync, cache.Replaced, cache.Added, cache.Updated:
+			// TODO: it would be nice to treat cache.Sync events differently here,
+			// so we could tell the difference between a cache sync (period re-emission of all items in the cache)
+			// from an update sourced from the API server watch request.
+			if old, exists, err := clientState.Get(obj); err == nil && exists {
+				if err := clientState.Update(obj); err != nil {
+					return err
+				}
+				handler.OnUpdate(old, obj)
+			} else {
+				if err := clientState.Add(obj); err != nil {
+					return err
+				}
+				handler.OnAdd(obj, isInInitialList)
+			}
+		case cache.Deleted:
+			if err := clientState.Delete(obj); err != nil {
+				return err
+			}
+			handler.OnDelete(obj)
+		}
+	}
+	return nil
 }

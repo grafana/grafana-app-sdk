@@ -16,13 +16,19 @@ import (
 	"k8s.io/client-go/tools/cache"
 )
 
+var (
+	untypedKind = resource.Kind{
+		Schema: resource.NewSimpleSchema("foo", "bar", &resource.UntypedObject{}, &resource.UntypedList{}, resource.WithKind("test")),
+	}
+)
+
 func TestCustomCacheInformer_Run(t *testing.T) {
 	t.Run("Test stop", func(t *testing.T) {
 		inf := NewCustomCacheInformer(newUnsafeCache(), &mockListWatcher{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				return nil, fmt.Errorf("I AM ERROR")
 			},
-		}, &resource.UntypedObject{})
+		}, untypedKind)
 		stopCh := make(chan struct{})
 		stopped := false
 		go func() {
@@ -46,7 +52,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 				events: events,
 			}, nil
 		},
-	}, &resource.UntypedObject{})
+	}, untypedKind)
 	addObj := &resource.UntypedObject{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "default",
@@ -125,7 +131,7 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 				events: events,
 			}, nil
 		},
-	}, &resource.UntypedObject{})
+	}, untypedKind)
 	numHandlers := 100
 	addWG := sync.WaitGroup{}
 	updateWG := sync.WaitGroup{}
@@ -189,7 +195,7 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 				events: events,
 			}, nil
 		},
-	}, &resource.UntypedObject{})
+	}, untypedKind)
 	wg := sync.WaitGroup{}
 	inf.AddEventHandler(&SimpleWatcher{
 		AddFunc: func(ctx context.Context, object resource.Object) error {
