@@ -413,7 +413,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 					"conversionReviewVersions": []string{"v1"},
 					"clientConfig": map[string]any{
 						"service": map[string]any{
-							"name":      "convtest-app-operator",
+							"name":      props.PluginID + "-operator",
 							"namespace": "default",
 							"path":      "/convert",
 						},
