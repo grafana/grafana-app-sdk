@@ -46,22 +46,20 @@ type CustomCacheInformer struct {
 
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) *CustomCacheInformer {
-	c := NewMemcachedStore(kind, MemcachedStoreConfig{
-		Addrs:     addrs,
-		TrackKeys: true,
-	})
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace), kind)
+func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) (*CustomCacheInformer, error) {
+	return NewMemcachedInformerWithLabelFilters(kind, client, namespace, nil, addrs...)
 }
 
 // NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchClient, namespace string, labelFilters []string, addrs ...string) *CustomCacheInformer {
-	c := NewMemcachedStore(kind, MemcachedStoreConfig{
-		Addrs:     addrs,
-		TrackKeys: true,
+func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchClient, namespace string, labelFilters []string, addrs ...string) (*CustomCacheInformer, error) {
+	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
+		Addrs: addrs,
 	})
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters...), kind)
+	if err != nil {
+		return nil, err
+	}
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters...), kind), nil
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
