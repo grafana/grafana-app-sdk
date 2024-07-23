@@ -4,7 +4,7 @@ go 1.22.2
 
 require (
 	github.com/grafana/grafana-app-sdk v0.17.7
-	github.com/grafana/grafana-plugin-sdk-go v0.240.0
+	github.com/grafana/grafana-plugin-sdk-go v0.241.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.28.0
@@ -93,7 +93,7 @@ require (
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
 	golang.org/x/mod v0.19.0 // indirect
 	golang.org/x/net v0.27.0 // indirect
-	golang.org/x/oauth2 v0.20.0 // indirect
+	golang.org/x/oauth2 v0.21.0 // indirect
 	golang.org/x/sync v0.7.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect
 	golang.org/x/term v0.22.0 // indirect
