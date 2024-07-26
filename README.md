@@ -21,15 +21,7 @@ Please see the [docs directory](docs/README.md) for documentation on concepts an
 
 ### go install
 
-The simplest way to install the CLI is with `go install`. 
-
-> [!NOTE]  
-> There is currently a [known issue with running go install](https://github.com/grafana/grafana-app-sdk/issues/189) for many versions. 
-> You can install locally with
-> ```shell
-> git clone git@github.com:grafana/grafana-app-sdk.git && cd grafana-app-sdk/cmd/grafana-app-sdk && go install 
-> ```
-> But be advised this will install the latest `main` commit. To install a specific version, use `git checkout <version>` before running `go install`.
+The simplest way to install the CLI is with `go install`.
 
 To get the latest version, use:
 ```bash
