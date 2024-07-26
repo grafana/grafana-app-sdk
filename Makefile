@@ -46,7 +46,7 @@ clean:
 	@rm -rf $(VENDOR)
 
 .PHONY: build
-build:
+build: update-workspace
 	@go build -ldflags="-X 'main.version=dev-$(BRANCH)' -X 'main.source=$(HOST)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(shell date -u "+%FT%TZ")'" -o "$(BIN_DIR)/grafana-app-sdk" cmd/grafana-app-sdk/*.go
 
 .PHONY: install
@@ -56,3 +56,8 @@ ifndef GOPATH
 	exit 1
 endif
 	@cp "$(BIN_DIR)/grafana-app-sdk" "${GOPATH}/bin/grafana-app-sdk"
+
+.PHONY: update-workspace
+update-workspace:
+	@echo "updating workspace"
+	go mod download
