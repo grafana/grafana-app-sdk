@@ -6,6 +6,30 @@ on:
     - main
 
 jobs:
+  check:
+    name: Go Workspace Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set go version
+        uses: actions/setup-go@v4
+        with:
+          go-version-file: go.mod
+
+      - name: Update workspace
+        run: make update-workspace
+
+      - name: Check for go mod & workspace changes
+        run: |
+          if ! git diff --exit-code --quiet; then
+            echo "Changes detected:"
+            git diff
+            echo "Please run 'make update-workspace' and commit the changes."
+            exit 1
+          fi
   lint:
     runs-on: ubuntu-latest
     steps:
