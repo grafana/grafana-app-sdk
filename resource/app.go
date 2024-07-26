@@ -44,6 +44,10 @@ const (
 )
 
 type AppManifestData struct {
+	Capabilities AppCapabilities
+}
+
+type AppCapabilities struct {
 	Validator bool
 	Mutator   bool
 	Converter bool

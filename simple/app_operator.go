@@ -2,6 +2,10 @@ package simple
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"os"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -29,6 +33,9 @@ type SOperatorConfig struct {
 	MetricsConfig MetricsConfig
 	// AppConfig contains the configuration needed for creating and running the underlying App
 	AppConfig resource.AppConfig
+	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
+	// if empty, it defaults to os.DirFS(".")
+	Filesystem fs.FS
 }
 
 type OperatorWebhookConfig struct {
@@ -39,6 +46,12 @@ type OperatorWebhookConfig struct {
 }
 
 func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{}) error {
+	// Get capabilities from manifest
+	capabilities, err := s.getCapabilities(config)
+	if err != nil {
+		return fmt.Errorf("unable to get app manifest capabilities: %w", err)
+	}
+
 	// Create the app
 	app, err := s.provider.NewApp(config.AppConfig)
 	if err != nil {
@@ -49,10 +62,19 @@ func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{})
 	op := operator.New()
 
 	// Admission control
-	validator, vOK := app.(resource.ValidatorApp)
-	mutator, mOK := app.(resource.MutatorApp)
-	converter, cOK := app.(resource.ConverterApp)
-	if vOK || mOK || cOK {
+	if capabilities.Validator || capabilities.Mutator || capabilities.Converter {
+		validator, ok := app.(resource.ValidatorApp)
+		if capabilities.Validator && !ok {
+			return fmt.Errorf("manifest has validator capability, but App does not implement ValidatorApp")
+		}
+		mutator, ok := app.(resource.MutatorApp)
+		if capabilities.Mutator && !ok {
+			return fmt.Errorf("manifest has mutator capability, but App does not implement MutatorApp")
+		}
+		converter, ok := app.(resource.ConverterApp)
+		if capabilities.Converter && !ok {
+			return fmt.Errorf("manifest has converter capability, but App does not implement ConverterApp")
+		}
 		webhooks, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
 			Port:      config.WebhookConfig.Port,
 			TLSConfig: config.WebhookConfig.TLSConfig,
@@ -61,13 +83,13 @@ func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{})
 			return err
 		}
 		for _, kind := range app.ManagedKinds() {
-			if vOK {
+			if capabilities.Validator {
 				webhooks.AddValidatingAdmissionController(validator, kind)
 			}
-			if mOK {
+			if capabilities.Mutator {
 				webhooks.AddMutatingAdmissionController(mutator, kind)
 			}
-			if cOK {
+			if capabilities.Converter {
 				webhooks.AddConverter(toWebhookConverter(converter), metav1.GroupKind{
 					Group: kind.Group(),
 					Kind:  kind.Kind(),
@@ -91,6 +113,39 @@ func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{})
 	}
 
 	return op.Run(stopCh)
+}
+
+func (s *StandaloneOperator) getCapabilities(cfg SOperatorConfig) (*resource.AppCapabilities, error) {
+	// TODO: get from various places
+	manifest := s.provider.Manifest()
+	capabilities := resource.AppCapabilities{}
+	switch manifest.Location.Type {
+	case resource.AppManifestLocationEmbedded:
+		if manifest.ManifestData == nil {
+			return nil, fmt.Errorf("no ManifestData in AppManifest")
+		}
+		capabilities = manifest.ManifestData.Capabilities
+	case resource.AppManifestLocationFilePath:
+		// TODO: more correct version?
+		dir := cfg.Filesystem
+		if dir == nil {
+			dir = os.DirFS(".")
+		}
+		if contents, err := fs.ReadFile(dir, manifest.Location.Path); err == nil {
+			m := resource.AppManifest{}
+			if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
+				capabilities = m.ManifestData.Capabilities
+			} else {
+				return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
+		}
+	case resource.AppManifestLocationAPIServerResource:
+		// TODO: fetch from API server
+		return nil, fmt.Errorf("apiserver location not supported yet")
+	}
+	return &capabilities, nil
 }
 
 func toWebhookConverter(app resource.ConverterApp) k8s.Converter {
