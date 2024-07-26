@@ -20,6 +20,9 @@ import (
 var _ cache.Store = &MemcachedStore{}
 
 const (
+	// MemcachedStoreDefaultPageSize is the default page size for MemcachedStore.List() operations
+	MemcachedStoreDefaultPageSize = 500
+
 	keysCacheKey = "%s-keys"
 )
 
@@ -34,6 +37,7 @@ type MemcachedStore struct {
 	keys         sync.Map
 	trackKeys    bool
 	syncTicker   *time.Ticker
+	pageSize     int
 }
 
 // MemcachedStoreConfig is a collection of config values for a MemcachedStore
@@ -60,6 +64,8 @@ type MemcachedStoreConfig struct {
 	Timeout time.Duration
 	// MaxIdleConns is the max number of idle memcached connections. Leave 0 to default.
 	MaxIdleConns int
+	// PageSize is the page size to use for List requests on the store. If 0, it defaults to MemcachedStoreDefaultPageSize.
+	PageSize int
 }
 
 // NewMemcachedStore returns a new MemcachedStore for the specified Kind using the provided config.
@@ -97,6 +103,10 @@ func NewMemcachedStore(kind resource.Kind, cfg MemcachedStoreConfig) (*Memcached
 		}, []string{"kind"}),
 		trackKeys: cfg.KeySyncInterval != 0,
 		keys:      sync.Map{},
+		pageSize:  MemcachedStoreDefaultPageSize,
+	}
+	if cfg.PageSize > 0 {
+		store.pageSize = cfg.PageSize
 	}
 	if store.trackKeys {
 		err := store.setKeysFromCache()
@@ -178,15 +188,14 @@ func (m *MemcachedStore) List() []any {
 	if !m.trackKeys {
 		return nil
 	}
-	items := make([]any, 0)
 	keys := m.ListKeys()
-	pageSize := 500
-	for i := 0; i < len(keys); i += pageSize {
+	items := make([]any, len(keys))
+	for i := 0; i < len(keys); i += m.pageSize {
 		var fetchKeys []string
-		if i+pageSize > len(keys) {
+		if i+m.pageSize > len(keys) {
 			fetchKeys = keys[i:]
 		} else {
-			fetchKeys = keys[i : i+pageSize]
+			fetchKeys = keys[i : i+m.pageSize]
 		}
 		for j := 0; j < len(fetchKeys); j++ {
 			fetchKeys[j] = fmt.Sprintf("%s/%s", m.kind.Plural(), fetchKeys[j])
@@ -196,8 +205,8 @@ func (m *MemcachedStore) List() []any {
 			// TODO: ???
 			return nil
 		}
-		for _, val := range res {
-			items = append(items, val)
+		for resKey := range res {
+			items[i] = res[resKey]
 		}
 	}
 	return items
@@ -208,22 +217,10 @@ func (m *MemcachedStore) ListKeys() []string {
 		return nil
 	}
 	keys := make([]string, 0)
-	item, err := m.client.Get(fmt.Sprintf(keysCacheKey, m.kind.Plural()))
-	if err != nil {
-		if errors.Is(err, memcache.ErrCacheMiss) {
-			return []string{}
-		}
-		// error getting from cache, fall back to local in-memory store
-		m.keys.Range(func(key, value any) bool {
-			keys = append(keys, key.(string))
-			return true
-		})
-	} else {
-		err = json.Unmarshal(item.Value, &keys)
-		if err != nil {
-			return nil
-		}
-	}
+	m.keys.Range(func(key, value any) bool {
+		keys = append(keys, key.(string))
+		return true
+	})
 	return keys
 }
 func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
@@ -300,15 +297,11 @@ func (m *MemcachedStore) setKeysFromCache() error {
 }
 
 func (m *MemcachedStore) syncKeys() error {
-	current := make([]string, 0)
 	item, err := m.client.Get(fmt.Sprintf(keysCacheKey, m.kind.Plural()))
 	if err != nil {
 		if !errors.Is(err, memcache.ErrCacheMiss) {
 			return err
 		}
-		// The memcached was cleared at some point, default to having no keys now,
-		// because we don't know what keys have been added since the clear
-		m.keys = sync.Map{}
 		item = &memcache.Item{
 			Key:   fmt.Sprintf(keysCacheKey, m.kind.Plural()),
 			Value: []byte("[]"),
@@ -317,10 +310,6 @@ func (m *MemcachedStore) syncKeys() error {
 		if err != nil {
 			return err
 		}
-	}
-	err = json.Unmarshal(item.Value, &current)
-	if err != nil {
-		return err
 	}
 	externalKeys := make([]string, 0)
 	m.keys.Range(func(key, value any) bool {

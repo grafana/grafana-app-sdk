@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -73,6 +74,9 @@ func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind reso
 		processor: newInformerProcessor(),
 		objectTransformer: func(a any) (resource.Object, error) {
 			return toResourceObject(a, kind)
+		},
+		ErrorHandler: func(ctx context.Context, err error) {
+			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
 		},
 	}
 }

@@ -87,6 +87,11 @@ func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
 }
 
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
+	// Nil check
+	if obj == nil {
+		return nil, fmt.Errorf("object cannot be nil")
+	}
+
 	// First, check if it's already a resource.Object
 	if cast, ok := obj.(resource.Object); ok {
 		return cast, nil
