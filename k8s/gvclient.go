@@ -15,7 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	errors2 "k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -544,7 +544,7 @@ type k8sErrBody struct {
 // if the status code is a non-success (>= 300).
 func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
 	if err != nil {
-		statusErr := &errors2.StatusError{}
+		statusErr := &k8serrors.StatusError{}
 		if errors.As(err, &statusErr) {
 			if statusCode == 0 || (statusErr.ErrStatus.Code > 0 && statusCode != int(statusErr.ErrStatus.Code)) {
 				return NewServerResponseError(statusErr, int(statusErr.ErrStatus.Code))

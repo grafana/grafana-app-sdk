@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	errors2 "k8s.io/apimachinery/pkg/api/errors"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -21,13 +21,13 @@ func TestParseKubernetesError(t *testing.T) {
 		name:       "status error",
 		bytes:      nil,
 		statusCode: 0,
-		err: &errors2.StatusError{
+		err: &k8serrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "I AM ERROR",
 				Code:    http.StatusInternalServerError,
 			},
 		},
-		expectedErr: NewServerResponseError(&errors2.StatusError{
+		expectedErr: NewServerResponseError(&k8serrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "I AM ERROR",
 				Code:    http.StatusInternalServerError,
@@ -37,13 +37,13 @@ func TestParseKubernetesError(t *testing.T) {
 		name:       "status error, code conflicts with returned response code",
 		bytes:      nil,
 		statusCode: http.StatusConflict,
-		err: &errors2.StatusError{
+		err: &k8serrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "I AM ERROR",
 				Code:    http.StatusInternalServerError,
 			},
 		},
-		expectedErr: NewServerResponseError(&errors2.StatusError{
+		expectedErr: NewServerResponseError(&k8serrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "I AM ERROR",
 				Code:    http.StatusInternalServerError,
@@ -53,12 +53,12 @@ func TestParseKubernetesError(t *testing.T) {
 		name:       "status error, code conflicts with returned response code (status.Code 0)",
 		bytes:      nil,
 		statusCode: http.StatusConflict,
-		err: &errors2.StatusError{
+		err: &k8serrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "I AM ERROR",
 			},
 		},
-		expectedErr: NewServerResponseError(&errors2.StatusError{
+		expectedErr: NewServerResponseError(&k8serrors.StatusError{
 			ErrStatus: metav1.Status{
 				Message: "I AM ERROR",
 			},
