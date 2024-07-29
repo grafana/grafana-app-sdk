@@ -38,6 +38,7 @@ type MemcachedStore struct {
 	trackKeys    bool
 	syncTicker   *time.Ticker
 	pageSize     int
+	cacheKeysKey string
 }
 
 // MemcachedStoreConfig is a collection of config values for a MemcachedStore
@@ -66,6 +67,10 @@ type MemcachedStoreConfig struct {
 	MaxIdleConns int
 	// PageSize is the page size to use for List requests on the store. If 0, it defaults to MemcachedStoreDefaultPageSize.
 	PageSize int
+	// ShardKey is a unique identifier for this MemcachedStore instance if you are using multiple.
+	// If present, each shard will track the keys they manage in the underlying memcached separately.
+	// To take advantage of this behavior, a shard key should be non-random and identical each run.
+	ShardKey string
 }
 
 // NewMemcachedStore returns a new MemcachedStore for the specified Kind using the provided config.
@@ -101,9 +106,10 @@ func NewMemcachedStore(kind resource.Kind, cfg MemcachedStoreConfig) (*Memcached
 			NativeHistogramMaxBucketNumber:  cfg.Metrics.NativeHistogramMaxBucketNumber,
 			NativeHistogramMinResetDuration: time.Hour,
 		}, []string{"kind"}),
-		trackKeys: cfg.KeySyncInterval != 0,
-		keys:      sync.Map{},
-		pageSize:  MemcachedStoreDefaultPageSize,
+		trackKeys:    cfg.KeySyncInterval != 0,
+		keys:         sync.Map{},
+		pageSize:     MemcachedStoreDefaultPageSize,
+		cacheKeysKey: fmt.Sprintf(keysCacheKey, kind.Plural()),
 	}
 	if cfg.PageSize > 0 {
 		store.pageSize = cfg.PageSize
@@ -123,6 +129,9 @@ func NewMemcachedStore(kind resource.Kind, cfg MemcachedStoreConfig) (*Memcached
 				}
 			}
 		}()
+	}
+	if cfg.ShardKey != "" {
+		store.cacheKeysKey = fmt.Sprintf("%s-%s", store.cacheKeysKey, cfg.ShardKey)
 	}
 	return store, nil
 }
@@ -278,7 +287,7 @@ func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string
 }
 
 func (m *MemcachedStore) setKeysFromCache() error {
-	item, err := m.client.Get(fmt.Sprintf(keysCacheKey, m.kind.Plural()))
+	item, err := m.client.Get(m.cacheKeysKey)
 	if err != nil {
 		if errors.Is(err, memcache.ErrCacheMiss) {
 			return nil
@@ -297,13 +306,13 @@ func (m *MemcachedStore) setKeysFromCache() error {
 }
 
 func (m *MemcachedStore) syncKeys() error {
-	item, err := m.client.Get(fmt.Sprintf(keysCacheKey, m.kind.Plural()))
+	_, err := m.client.Get(m.cacheKeysKey)
 	if err != nil {
 		if !errors.Is(err, memcache.ErrCacheMiss) {
 			return err
 		}
-		item = &memcache.Item{
-			Key:   fmt.Sprintf(keysCacheKey, m.kind.Plural()),
+		item := &memcache.Item{
+			Key:   m.cacheKeysKey,
 			Value: []byte("[]"),
 		}
 		err = m.client.Add(item)
@@ -321,7 +330,7 @@ func (m *MemcachedStore) syncKeys() error {
 		return err
 	}
 	return m.client.Replace(&memcache.Item{
-		Key:   fmt.Sprintf(keysCacheKey, m.kind.Plural()),
+		Key:   m.cacheKeysKey,
 		Value: externalKeysJSON,
 	})
 }
