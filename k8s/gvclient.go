@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -450,12 +451,13 @@ func (g *groupVersionClient) metrics() []prometheus.Collector {
 // WatchResponse wraps a kubernetes watch.Interface in order to implement resource.WatchResponse.
 // The underlying watch.Interface can be accessed with KubernetesWatch().
 type WatchResponse struct {
-	watch   watch.Interface
-	ch      chan resource.WatchEvent
-	stopCh  chan struct{}
-	ex      resource.Object
-	codec   resource.Codec
-	started bool
+	watch    watch.Interface
+	ch       chan resource.WatchEvent
+	stopCh   chan struct{}
+	ex       resource.Object
+	codec    resource.Codec
+	started  bool
+	startMux sync.Mutex
 }
 
 //nolint:revive,staticcheck
@@ -490,9 +492,12 @@ func (w *WatchResponse) start() {
 // Stop stops the translation channel between the kubernetes watch.Interface,
 // and stops the continued watch request encapsulated by the watch.Interface.
 func (w *WatchResponse) Stop() {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	w.stopCh <- struct{}{}
 	close(w.ch)
 	w.watch.Stop()
+	w.started = false
 }
 
 // WatchEvents returns a channel that receives watch events.
@@ -500,9 +505,12 @@ func (w *WatchResponse) Stop() {
 // This channel will stop receiving events if KubernetesWatch() is called, as that halts the event translation process.
 // If Stop() is called, ths channel is closed.
 func (w *WatchResponse) WatchEvents() <-chan resource.WatchEvent {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	if !w.started {
 		// Start the translation buffer
 		go w.start()
+		w.started = true
 	}
 	return w.ch
 }
@@ -511,9 +519,12 @@ func (w *WatchResponse) WatchEvents() <-chan resource.WatchEvent {
 // Calling this method will shut down the translation channel between the watch.Interface and ResultChan().
 // Using both KubernetesWatch() and ResultChan() simultaneously is not supported, and may result in undefined behavior.
 func (w *WatchResponse) KubernetesWatch() watch.Interface {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	// Stop the internal channel with the translation layer
 	if w.started {
 		w.stopCh <- struct{}{}
+		w.started = false
 	}
 	return w.watch
 }
