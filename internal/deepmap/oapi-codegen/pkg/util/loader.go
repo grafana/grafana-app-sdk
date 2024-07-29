@@ -19,19 +19,9 @@ func LoadSwagger(filePath string) (swagger *openapi3.T, err error) {
 	}
 }
 
-func LoadSwaggerWithCircularReferenceCount(filePath string, circularReferenceCount int) (swagger *openapi3.T, err error) {
-	// get a copy of the existing count
-	existingCircularReferenceCount := openapi3.CircularReferenceCounter
-	if circularReferenceCount > 0 {
-		openapi3.CircularReferenceCounter = circularReferenceCount
-	}
-
-	swagger, err = LoadSwagger(filePath)
-
-	if circularReferenceCount > 0 {
-		// and make sure to reset it
-		openapi3.CircularReferenceCounter = existingCircularReferenceCount
-	}
-
-	return swagger, err
+func LoadSwaggerWithCircularReferenceCount(filePath string, _ int) (*openapi3.T, error) {
+	// FYI(@radiohead):
+	// github.com/getkin/kin-openapi/openapi3 has implemented reference backtracking in v0.126.0,
+	// so there is no longer a need for special handling of circular references.
+	return LoadSwagger(filePath)
 }
