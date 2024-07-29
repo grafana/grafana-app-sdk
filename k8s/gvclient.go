@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	errors2 "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -541,11 +543,23 @@ type k8sErrBody struct {
 // Ths method will parse the response body for a better error message if available, and return a *ServerResponseError
 // if the status code is a non-success (>= 300).
 func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
+	if err != nil {
+		statusErr := &errors2.StatusError{}
+		if errors.As(err, &statusErr) {
+			if statusCode == 0 || (statusErr.ErrStatus.Code > 0 && statusCode != int(statusErr.ErrStatus.Code)) {
+				return NewServerResponseError(statusErr, int(statusErr.ErrStatus.Code))
+			}
+			return NewServerResponseError(statusErr, statusCode)
+		}
+	}
 	if len(responseBytes) > 0 {
 		parsed := k8sErrBody{}
 		// If we can parse the response body, use the error contained there instead, because it's clearer
 		if e := json.Unmarshal(responseBytes, &parsed); e == nil {
 			err = fmt.Errorf(parsed.Message)
+			if statusCode == 0 && parsed.Code > 0 {
+				statusCode = parsed.Code
+			}
 		}
 	}
 	// HTTP error?
