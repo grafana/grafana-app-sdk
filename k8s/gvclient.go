@@ -492,6 +492,8 @@ func (w *WatchResponse) start() {
 // Stop stops the translation channel between the kubernetes watch.Interface,
 // and stops the continued watch request encapsulated by the watch.Interface.
 func (w *WatchResponse) Stop() {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	w.stopCh <- struct{}{}
 	close(w.ch)
 	w.watch.Stop()
@@ -517,6 +519,8 @@ func (w *WatchResponse) WatchEvents() <-chan resource.WatchEvent {
 // Calling this method will shut down the translation channel between the watch.Interface and ResultChan().
 // Using both KubernetesWatch() and ResultChan() simultaneously is not supported, and may result in undefined behavior.
 func (w *WatchResponse) KubernetesWatch() watch.Interface {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	// Stop the internal channel with the translation layer
 	if w.started {
 		w.stopCh <- struct{}{}
