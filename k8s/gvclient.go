@@ -19,6 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -460,13 +461,21 @@ type WatchResponse struct {
 	startMux sync.Mutex
 }
 
-//nolint:revive,staticcheck
+//nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
 	for {
 		select {
 		case evt := <-w.watch.ResultChan():
+			if evt.Object == nil {
+				if logging.DefaultLogger != nil {
+					logging.DefaultLogger.Warn("Received nil object in watch event")
+				}
+				break
+			}
 			var obj resource.Object
-			if cast, ok := evt.Object.(intoObject); ok {
+			if cast, ok := evt.Object.(resource.Object); ok {
+				obj = cast
+			} else if cast, ok := evt.Object.(intoObject); ok {
 				obj = w.ex.Copy()
 				err := cast.Into(obj, w.codec)
 				if err != nil {
@@ -477,6 +486,11 @@ func (w *WatchResponse) start() {
 				obj = cast.ResourceObject()
 			} else {
 				// TODO: hmm
+				if logging.DefaultLogger != nil {
+					logging.DefaultLogger.Error(
+						"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
+						"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
+				}
 			}
 			w.ch <- resource.WatchEvent{
 				EventType: string(evt.Type),
