@@ -10,6 +10,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
@@ -213,6 +214,7 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 	})
 	stopCh := make(chan struct{})
 	go inf.Run(stopCh)
+	defer close(stopCh)
 
 	obj := &resource.UntypedObject{
 		ObjectMeta: metav1.ObjectMeta{
@@ -226,7 +228,7 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 		Type:   watch.Added,
 		Object: obj,
 	}
-	assert.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
+	require.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
 	key, _ := store.keyFunc(obj)
 	assert.Equal(t, obj, store.items[key])
 	updated := obj.Copy()
@@ -236,18 +238,16 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 		Type:   watch.Modified,
 		Object: updated,
 	}
-	assert.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
+	require.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
 	assert.Equal(t, updated, store.items[key])
 	wg.Add(1)
 	events <- watch.Event{
 		Type:   watch.Deleted,
 		Object: updated,
 	}
-	assert.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
+	require.True(t, waitOrTimeout(&wg, time.Second), "timed out waiting for event")
 	_, ok := store.items[key]
 	assert.False(t, ok)
-
-	close(stopCh)
 }
 
 func waitOrTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
