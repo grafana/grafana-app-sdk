@@ -3,8 +3,8 @@ module github.com/grafana/grafana-app-sdk/plugin
 go 1.22.4
 
 require (
-	github.com/grafana/grafana-app-sdk v0.17.10
-	github.com/grafana/grafana-plugin-sdk-go v0.241.0
+	github.com/grafana/grafana-app-sdk v0.18.0
+	github.com/grafana/grafana-plugin-sdk-go v0.242.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.28.0
@@ -25,7 +25,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/elazarl/goproxy v0.0.0-20230731152917-f99041a5c027 // indirect
 	github.com/fatih/color v1.15.0 // indirect
-	github.com/getkin/kin-openapi v0.126.0 // indirect
+	github.com/getkin/kin-openapi v0.127.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
