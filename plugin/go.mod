@@ -3,7 +3,7 @@ module github.com/grafana/grafana-app-sdk/plugin
 go 1.22.4
 
 require (
-	github.com/grafana/grafana-app-sdk v0.17.7
+	github.com/grafana/grafana-app-sdk v0.17.10
 	github.com/grafana/grafana-plugin-sdk-go v0.241.0
 	github.com/prometheus/client_golang v1.19.1
 	github.com/stretchr/testify v1.9.0
@@ -76,7 +76,6 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/smartystreets/goconvey v1.6.4 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/ugorji/go/codec v1.2.11 // indirect
 	github.com/unknwon/bra v0.0.0-20200517080246-1e3013ecaff8 // indirect
 	github.com/unknwon/com v1.0.1 // indirect
 	github.com/unknwon/log v0.0.0-20150304194804-e617c87089d3 // indirect

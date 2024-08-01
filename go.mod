@@ -5,7 +5,7 @@ go 1.22.4
 require (
 	cuelang.org/go v0.5.0
 	github.com/dave/dst v0.27.3
-	github.com/getkin/kin-openapi v0.126.0
+	github.com/getkin/kin-openapi v0.127.0
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
@@ -37,6 +37,7 @@ require (
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cockroachdb/apd/v2 v2.0.2 // indirect

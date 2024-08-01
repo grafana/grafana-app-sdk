@@ -21,7 +21,7 @@ func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *Clie
 	kubeCconfig.UserAgent = rest.DefaultKubernetesUserAgent()
 
 	return &ClientRegistry{
-		clients:      make(map[schema.GroupVersion]rest.Interface),
+		clients:      make(map[schema.GroupVersionKind]rest.Interface),
 		cfg:          kubeCconfig,
 		clientConfig: clientConfig,
 		requestDurations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -46,7 +46,7 @@ func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *Clie
 // ClientRegistry implements resource.ClientGenerator, and keeps a cache of kubernetes clients based on
 // GroupVersion (the largest unit a kubernetes rest.RESTClient can work with).
 type ClientRegistry struct {
-	clients          map[schema.GroupVersion]rest.Interface
+	clients          map[schema.GroupVersionKind]rest.Interface
 	cfg              rest.Config
 	clientConfig     ClientConfig
 	mutex            sync.Mutex
@@ -89,25 +89,30 @@ func (c *ClientRegistry) PrometheusCollectors() []prometheus.Collector {
 func (c *ClientRegistry) getClient(sch resource.Kind) (rest.Interface, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	gv := schema.GroupVersion{
+	gvk := schema.GroupVersionKind{
 		Group:   sch.Group(),
 		Version: sch.Version(),
+		Kind:    sch.Kind(),
 	}
 
-	if c, ok := c.clients[gv]; ok {
+	if c, ok := c.clients[gvk]; ok {
 		return c, nil
 	}
 
 	ccfg := c.cfg
-	ccfg.GroupVersion = &gv
-	// TODO: needs a bit more testing before we can use this
-	// ccfg.NegotiatedSerializer = &KindNegotiatedSerializer{
-	// 	Kind: sch,
-	// }
+	ccfg.GroupVersion = &schema.GroupVersion{
+		Group:   gvk.Group,
+		Version: gvk.Version,
+	}
+	if c.clientConfig.NegotiatedSerializerProvider != nil {
+		ccfg.NegotiatedSerializer = c.clientConfig.NegotiatedSerializerProvider(sch)
+	} else {
+		ccfg.NegotiatedSerializer = &GenericNegotiatedSerializer{}
+	}
 	client, err := rest.RESTClientFor(&ccfg)
 	if err != nil {
 		return nil, err
 	}
-	c.clients[gv] = client
+	c.clients[gvk] = client
 	return client, nil
 }
