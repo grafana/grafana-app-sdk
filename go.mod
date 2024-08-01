@@ -5,7 +5,7 @@ go 1.22.4
 require (
 	cuelang.org/go v0.5.0
 	github.com/dave/dst v0.27.3
-	github.com/getkin/kin-openapi v0.126.0
+	github.com/getkin/kin-openapi v0.127.0
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
