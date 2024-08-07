@@ -245,75 +245,104 @@ func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix s
 
 	loader := openapi3.NewLoader()
 	oT, err := loader.LoadFromData(yml)
+	if err != nil {
+		return "", err
+	}
 
-	return copyProps(oT.Components, oT.Components.Schemas[subresource].Value, fmt.Sprintf("o.%s", exportField(subresource)), fmt.Sprintf("cpy.%s", exportField(subresource)), namePrefix)
+	return generateSchemaCopyCode(oT.Components, oT.Components.Schemas[subresource].Value, fmt.Sprintf("o.%s", exportField(subresource)), fmt.Sprintf("cpy.%s", exportField(subresource)), namePrefix)
 }
 
-func copyProps(root *openapi3.Components, sch *openapi3.Schema, srcName, dstName, namingPrefix string) (string, error) {
+func generateSchemaCopyCode(root *openapi3.Components, sch *openapi3.Schema, srcName, dstName, namingPrefix string) (string, error) {
 	buf := strings.Builder{}
 	for k, v := range sch.Properties {
-		ek := exportField(k)
 		isPointer := !slices.Contains(sch.Required, k)
-		if v.Ref != "" {
-			ref, err := lookupRef(root, v.Ref)
-			if err != nil {
-				return "", err
-			}
-			refTypeName := namingPrefix + strings.Join(strings.Split(strings.Trim(v.Ref, "#/components/schemas/"), "/"), "")
-			if v.Value.Type.Is("object") {
-				if isPointer {
-					buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n%s.%s = &%s{}\n", srcName, ek, dstName, ek, refTypeName))
-				}
-				str, err := copyProps(root, ref, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
-				if err != nil {
-					return "", err
-				}
-				buf.WriteString(str)
-				if isPointer {
-					buf.WriteString("}\n")
-				}
-			}
-			continue
+		str, err := generateSchemaRefCopyCode(root, k, v, isPointer, srcName, dstName, namingPrefix)
+		if err != nil {
+			return "", err
 		}
-
-		if v.Value.Type.Is("object") {
-			if v.Value.AdditionalProperties.Schema == nil {
-				// map[string]any
-				// TODO something better
-				buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]any)\n", dstName, ek))
-				buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
-				buf.WriteString(fmt.Sprintf("%s.%s[key] = val\n}\n", dstName, ek))
-				continue
-			}
-			buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]%s)\n", dstName, ek, oapiTypeToGoType(v.Value.AdditionalProperties.Schema, namingPrefix)))
-			buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
-			buf.WriteString(fmt.Sprintf("cpyVal := %s{}\n", oapiTypeToGoType(v.Value.AdditionalProperties.Schema, namingPrefix)))
-			ref, err := lookupRef(root, v.Value.AdditionalProperties.Schema.Ref)
-			if err != nil {
-				return "", err
-			}
-			copyStr, err := copyProps(root, ref, "val", "cpyVal", namingPrefix)
-			if err != nil {
-				return "", err
-			}
-			buf.WriteString(fmt.Sprintf("%s\n%s.%s[key] = cpyVal\n}\n", copyStr, dstName, ek))
-			continue
-		}
-		if v.Value.Type.Is("array") {
-			buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
-			buf.WriteString(fmt.Sprintf("%s.%s = make([]%s, len(%s.%s))\n", dstName, ek, oapiTypeToGoType(v.Value.Items, namingPrefix), srcName, ek))
-			buf.WriteString(fmt.Sprintf("copy(%s.%s, %s.%s)\n", dstName, ek, srcName, ek))
-			buf.WriteString("}\n")
-			continue
-		}
-		if isPointer {
-			buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
-			buf.WriteString(fmt.Sprintf("%sCopy := *%s.%s\n", k, srcName, ek))
-			buf.WriteString(fmt.Sprintf("%s.%s = &%sCopy\n}\n", dstName, ek, k))
-		} else {
-			buf.WriteString(fmt.Sprintf("%s.%s = %s.%s\n", dstName, ek, srcName, ek))
-		}
+		buf.WriteString(str)
 	}
+	return buf.String(), nil
+}
+
+func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRef *openapi3.SchemaRef, isPointer bool, srcName, dstName, namingPrefix string) (string, error) {
+	fmt.Println(srcName + "." + field)
+	ek := exportField(field)
+	buf := strings.Builder{}
+	if schemaRef.Ref != "" {
+		// $ref to another object schema
+		ref, err := lookupRef(root, schemaRef.Ref)
+		if err != nil {
+			return "", err
+		}
+		refTypeName := namingPrefix + strings.Join(strings.Split(schemaRef.Ref, "/")[3:], "")
+		if schemaRef.Value.Type.Is("object") {
+			if isPointer {
+				buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n%s.%s = &%s{}\n", srcName, ek, dstName, ek, refTypeName))
+			}
+			str, err := generateSchemaCopyCode(root, ref, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(str)
+			if isPointer {
+				buf.WriteString("}\n")
+			}
+		}
+		return buf.String(), nil
+	}
+
+	// Not a ref, examine the schema
+	schema := schemaRef.Value
+
+	if schemaRef.Value.Type.Is("object") {
+		if schemaRef.Value.AdditionalProperties.Schema == nil {
+			if len(schema.Properties) > 0 {
+				// Embedded struct
+				for key, prop := range schema.Properties {
+					str, err := generateSchemaRefCopyCode(root, key, prop, !slices.Contains(schema.Required, key), fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
+					if err != nil {
+						return "", err
+					}
+					buf.WriteString(str)
+				}
+				return buf.String(), nil
+			}
+			// map[string]any
+			// TODO something better
+			buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]any)\n", dstName, ek))
+			buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
+			buf.WriteString(fmt.Sprintf("%s.%s[key] = val\n}\n", dstName, ek))
+			return buf.String(), nil
+		}
+		buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]%s)\n", dstName, ek, oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
+		buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
+		buf.WriteString(fmt.Sprintf("cpyVal := %s{}\n", oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
+		ref, err := lookupRef(root, schema.AdditionalProperties.Schema.Ref)
+		if err != nil {
+			return "", err
+		}
+		copyStr, err := copyProps(root, ref, "val", "cpyVal", namingPrefix)
+		if err != nil {
+			return "", err
+		}
+		buf.WriteString(fmt.Sprintf("%s\n%s.%s[key] = cpyVal\n}\n", copyStr, dstName, ek))
+		return buf.String(), nil
+	}
+	if schema.Type.Is("array") {
+		buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
+		buf.WriteString(fmt.Sprintf("%s.%s = make([]%s, len(%s.%s))\n", dstName, ek, oapiTypeToGoType(schema.Items, namingPrefix), srcName, ek))
+		buf.WriteString(fmt.Sprintf("copy(%s.%s, %s.%s)\n", dstName, ek, srcName, ek))
+		buf.WriteString("}\n")
+		return buf.String(), nil
+	}
+	if isPointer {
+		buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
+		buf.WriteString(fmt.Sprintf("%sCopy := *%s.%s\n", field, srcName, ek))
+		buf.WriteString(fmt.Sprintf("%s.%s = &%sCopy\n}\n", dstName, ek, field))
+		return buf.String(), nil
+	}
+	buf.WriteString(fmt.Sprintf("%s.%s = %s.%s\n", dstName, ek, srcName, ek))
 	return buf.String(), nil
 }
 
