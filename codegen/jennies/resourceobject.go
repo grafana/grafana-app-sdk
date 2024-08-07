@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/grafana/codejen"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -61,6 +62,10 @@ type ResourceObjectGenerator struct {
 	// When GroupByKind is false, subresource types (such as spec and status) are assumed to be prefixed with the
 	// kind name, which can be accomplished by setting GroupByKind=false on the GoTypesGenerator.
 	GroupByKind bool
+
+	// GenericCopy toggles whether the generated code for Copy() calls the generic resource.CopyObject method,
+	// or generates code to deep-copy the entire struct.
+	GenericCopy bool
 }
 
 func (*ResourceObjectGenerator) JennyName() string {
@@ -162,6 +167,25 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 			JSONName: it.Label(),
 		})
 	}
+	if !r.GenericCopy {
+		// Deep copy code
+		buf := strings.Builder{}
+		buf.WriteString(fmt.Sprintf("cpy := &%s{}\n\n// Copy metadata\no.ObjectMeta.DeepCopyInto(&cpy.ObjectMeta)\n\n// Copy Spec\n", md.TypeName))
+		specCopy, err := generateCopyCodeFor(version, "spec", typePrefix)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(specCopy + "\n")
+		for _, sr := range md.Subresources {
+			srCopy, err := generateCopyCodeFor(version, sr.JSONName, typePrefix+"Status")
+			if err != nil {
+				return nil, err
+			}
+			buf.WriteString(fmt.Sprintf("\n\n// Copy %s\n%s\n", sr.TypeName, srCopy))
+		}
+		buf.WriteString("return cpy")
+		md.CopyCode = buf.String()
+	}
 	b := bytes.Buffer{}
 	err = templates.WriteResourceObject(md, &b)
 	if err != nil {
@@ -192,4 +216,170 @@ func goTypeFromCUEValue(value cue.Value) templates.CustomMetadataFieldGoType {
 		return templates.GoTypeString
 	}
 	return templates.CustomMetadataFieldGoType{}
+}
+
+// functions for copy codegen
+func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix string) (string, error) {
+	v := version.Schema.LookupPath(cue.MakePath(cue.Str(subresource)))
+	openAPIConfig := CUEOpenAPIConfig{
+		Name:    subresource,
+		Version: version.Version,
+		NameFunc: func(value cue.Value, path cue.Path) string {
+			i := 0
+			for ; i < len(path.Selectors()) && i < len(v.Path().Selectors()); i++ {
+				if !SelEq(path.Selectors()[i], v.Path().Selectors()[i]) {
+					break
+				}
+			}
+			if i > 0 {
+				path = cue.MakePath(path.Selectors()[i:]...)
+			}
+			return strings.Trim(path.String(), "?#")
+		},
+	}
+
+	yml, err := CUEValueToOAPIYAML(v, openAPIConfig)
+	if err != nil {
+		return "", err
+	}
+
+	loader := openapi3.NewLoader()
+	oT, err := loader.LoadFromData(yml)
+
+	return copyProps(oT.Components, oT.Components.Schemas[subresource].Value, fmt.Sprintf("o.%s", exportField(subresource)), fmt.Sprintf("cpy.%s", exportField(subresource)), namePrefix)
+}
+
+func copyProps(root *openapi3.Components, sch *openapi3.Schema, srcName, dstName, namingPrefix string) (string, error) {
+	buf := strings.Builder{}
+	for k, v := range sch.Properties {
+		ek := exportField(k)
+		isPointer := !slices.Contains(sch.Required, k)
+		if v.Ref != "" {
+			ref, err := lookupRef(root, v.Ref)
+			if err != nil {
+				return "", err
+			}
+			refTypeName := namingPrefix + strings.Join(strings.Split(strings.Trim(v.Ref, "#/components/schemas/"), "/"), "")
+			if v.Value.Type.Is("object") {
+				if isPointer {
+					buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n%s.%s = &%s{}\n", srcName, ek, dstName, ek, refTypeName))
+				}
+				str, err := copyProps(root, ref, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
+				if err != nil {
+					return "", err
+				}
+				buf.WriteString(str)
+				if isPointer {
+					buf.WriteString("}\n")
+				}
+			}
+			continue
+		}
+
+		if v.Value.Type.Is("object") {
+			if v.Value.AdditionalProperties.Schema == nil {
+				// map[string]any
+				// TODO something better
+				buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]any)\n", dstName, ek))
+				buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
+				buf.WriteString(fmt.Sprintf("%s.%s[key] = val\n}\n", dstName, ek))
+				continue
+			}
+			buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]%s)\n", dstName, ek, oapiTypeToGoType(v.Value.AdditionalProperties.Schema, namingPrefix)))
+			buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
+			buf.WriteString(fmt.Sprintf("cpyVal := %s{}\n", oapiTypeToGoType(v.Value.AdditionalProperties.Schema, namingPrefix)))
+			ref, err := lookupRef(root, v.Value.AdditionalProperties.Schema.Ref)
+			if err != nil {
+				return "", err
+			}
+			copyStr, err := copyProps(root, ref, "val", "cpyVal", namingPrefix)
+			if err != nil {
+				return "", err
+			}
+			buf.WriteString(fmt.Sprintf("%s\n%s.%s[key] = cpyVal\n}\n", copyStr, dstName, ek))
+			continue
+		}
+		if v.Value.Type.Is("array") {
+			buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
+			buf.WriteString(fmt.Sprintf("%s.%s = make([]%s, len(%s.%s))\n", dstName, ek, oapiTypeToGoType(v.Value.Items, namingPrefix), srcName, ek))
+			buf.WriteString(fmt.Sprintf("copy(%s.%s, %s.%s)\n", dstName, ek, srcName, ek))
+			buf.WriteString("}\n")
+			continue
+		}
+		if isPointer {
+			buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
+			buf.WriteString(fmt.Sprintf("%sCopy := *%s.%s\n", k, srcName, ek))
+			buf.WriteString(fmt.Sprintf("%s.%s = &%sCopy\n}\n", dstName, ek, k))
+		} else {
+			buf.WriteString(fmt.Sprintf("%s.%s = %s.%s\n", dstName, ek, srcName, ek))
+		}
+	}
+	return buf.String(), nil
+}
+
+func oapiTypeToGoType(v *openapi3.SchemaRef, refNamePrefix string) string {
+	if v.Value.Type.Is("integer") {
+		switch v.Value.Format {
+		case "int32", "int64":
+			return v.Value.Format
+		}
+		return "int"
+	}
+	if v.Value.Type.Is("boolean") {
+		return "bool"
+	}
+	if v.Value.Type.Is("object") {
+		if v.Ref != "" {
+			return refNamePrefix + strings.Join(strings.Split(v.Ref, "/")[3:], "")
+		}
+		// TODO: inline structs
+		return "any"
+	}
+	if v.Value.Type.Is("array") {
+		return "[]" + oapiTypeToGoType(v.Value.Items, refNamePrefix)
+	}
+	if v.Value.Type.Is("string") {
+		if v.Value.Format == "date-time" {
+			return "time.Time"
+		}
+		return "string"
+	}
+	if v.Value.Type.Is("number") {
+		if v.Value.Format == "double" {
+			return "float64"
+		}
+		if v.Value.Format == "float" {
+			return "float32"
+		}
+	}
+	return "any"
+}
+
+func lookupRef(root *openapi3.Components, ref string) (*openapi3.Schema, error) {
+	parts := strings.Split(ref, "/")
+	if len(parts) < 3 || strings.Join(parts[:3], "/") != "#/components/schemas" {
+		return nil, fmt.Errorf("only references to #/components/schemas are supported")
+	}
+	for k, v := range root.Schemas {
+		if k == parts[3] {
+			if len(parts) > 4 {
+				return lookupRefInSchema(v.Value.Properties, strings.Join(parts[3:], "/"))
+			}
+			return v.Value, nil
+		}
+	}
+	return nil, fmt.Errorf("reference %s not found", ref)
+}
+
+func lookupRefInSchema(sch openapi3.Schemas, ref string) (*openapi3.Schema, error) {
+	parts := strings.Split(ref, "/")
+	for k, v := range sch {
+		if k == parts[0] {
+			if len(parts) > 1 {
+				return lookupRefInSchema(v.Value.Properties, strings.Join(parts[1:], "/"))
+			}
+			return v.Value, nil
+		}
+	}
+	return nil, fmt.Errorf("reference %s not found", ref)
 }

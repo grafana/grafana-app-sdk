@@ -183,7 +183,7 @@ func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Set{{.FieldName}}({{.JSONNa
 {{end}}
 
 func ({{.ObjectShortName}} *{{.TypeName}}) Copy() resource.Object {
-    return resource.CopyObject({{.ObjectShortName}})
+    {{ if eq .CopyCode "" }}return resource.CopyObject({{.ObjectShortName}}){{ else }}{{ .CopyCode }}{{ end }}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyObject() runtime.Object {

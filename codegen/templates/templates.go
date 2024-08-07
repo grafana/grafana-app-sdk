@@ -78,6 +78,7 @@ type ResourceObjectTemplateMetadata struct {
 	SpecTypeName         string
 	ObjectTypeName       string
 	ObjectShortName      string
+	CopyCode             string
 	Subresources         []SubresourceMetadata
 	CustomMetadataFields []ObjectMetadataField
 }
