@@ -10,6 +10,16 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+type OpinionatedOptions struct {
+	// Finalizer is the finalizer name to use when adding a finalizer in the opinionated workflow.
+	// It must be between 1 and 63 characters, and contain only alphanumeric characters, '-', and '.'.
+	// If empty, a default will be used.
+	Finalizer string
+	// PropagateNonGenerationChanges can be set to true to have the opinionated logic propagate updates
+	// which do not change the generation of the object.
+	PropagateNonGenerationChanges bool
+}
+
 // PatchClient is a Client capable of making PatchInto requests. This is used by OpinionatedWatch to update finalizers.
 type PatchClient interface {
 	PatchInto(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error
@@ -36,13 +46,14 @@ type PatchClient interface {
 //
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
-	AddFunc    func(ctx context.Context, object resource.Object) error
-	UpdateFunc func(ctx context.Context, old resource.Object, new resource.Object) error
-	DeleteFunc func(ctx context.Context, object resource.Object) error
-	SyncFunc   func(ctx context.Context, object resource.Object) error
-	finalizer  string
-	schema     resource.Schema
-	client     PatchClient
+	AddFunc             func(ctx context.Context, object resource.Object) error
+	UpdateFunc          func(ctx context.Context, old resource.Object, new resource.Object) error
+	DeleteFunc          func(ctx context.Context, object resource.Object) error
+	SyncFunc            func(ctx context.Context, object resource.Object) error
+	finalizer           string
+	schema              resource.Schema
+	client              PatchClient
+	propagateAllUpdates bool
 }
 
 // FinalizerSupplier represents a function that creates string finalizer from provider schema.
@@ -55,25 +66,36 @@ func DefaultFinalizerSupplier(sch resource.Schema) string {
 
 // NewOpinionatedWatcher sets up a new OpinionatedWatcher and returns a pointer to it.
 func NewOpinionatedWatcher(sch resource.Schema, client PatchClient) (*OpinionatedWatcher, error) {
-	return NewOpinionatedWatcherWithFinalizer(sch, client, DefaultFinalizerSupplier)
+	return NewOpinionatedWatcherWithOptions(sch, client, OpinionatedOptions{
+		Finalizer: DefaultFinalizerSupplier(sch),
+	})
 }
 
 // NewOpinionatedWatcherWithFinalizer sets up a new OpinionatedWatcher with finalizer from provided supplier and returns a pointer to it.
-func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient, supplier FinalizerSupplier) (*OpinionatedWatcher, error) {
+func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient, finalizer FinalizerSupplier) (*OpinionatedWatcher, error) {
+	return NewOpinionatedWatcherWithOptions(sch, client, OpinionatedOptions{
+		Finalizer: finalizer(sch),
+	})
+}
+
+func NewOpinionatedWatcherWithOptions(sch resource.Schema, client PatchClient, opts OpinionatedOptions) (*OpinionatedWatcher, error) {
 	if sch == nil {
 		return nil, fmt.Errorf("schema cannot be nil")
 	}
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
 	}
-	finalizer := supplier(sch)
-	if len(finalizer) > 63 {
-		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
+	if len(opts.Finalizer) == 0 {
+		return nil, fmt.Errorf("finalizer cannot be empty")
+	}
+	if len(opts.Finalizer) > 63 {
+		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", opts)
 	}
 	return &OpinionatedWatcher{
-		client:    client,
-		schema:    sch,
-		finalizer: finalizer,
+		client:              client,
+		schema:              sch,
+		finalizer:           opts.Finalizer,
+		propagateAllUpdates: opts.PropagateNonGenerationChanges,
 	}, nil
 }
 
@@ -175,11 +197,10 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 	}
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if new.GetGeneration() > 0 && old.GetGeneration() == new.GetGeneration() {
+	if !o.propagateAllUpdates && new.GetGeneration() > 0 && old.GetGeneration() == new.GetGeneration() {
 		return nil
 	}
 
-	// TODO: finalizers part of object metadata?
 	oldFinalizers := o.getFinalizers(old)
 	newFinalizers := o.getFinalizers(new)
 	if !slices.Contains(newFinalizers, o.finalizer) && new.GetDeletionTimestamp() == nil {

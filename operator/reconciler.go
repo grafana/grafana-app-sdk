@@ -116,18 +116,18 @@ func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 // NewOpinionatedReconciler creates a new OpinionatedReconciler.
 // To have the new OpinionatedReconciler wrap an existing reconciler,
 // set the `OpinionatedReconciler.Reconciler` value or use `OpinionatedReconciler.Wrap()`
-func NewOpinionatedReconciler(client PatchClient, finalizer string) (*OpinionatedReconciler, error) {
+func NewOpinionatedReconciler(client PatchClient, opts OpinionatedOptions) (*OpinionatedReconciler, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
 	}
-	if finalizer == "" {
+	if opts.Finalizer == "" {
 		return nil, fmt.Errorf("finalizer cannot be empty")
 	}
-	if len(finalizer) > 63 {
-		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
+	if len(opts.Finalizer) > 63 {
+		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", opts.Finalizer)
 	}
 	return &OpinionatedReconciler{
-		finalizer: finalizer,
+		finalizer: opts.Finalizer,
 		client:    client,
 	}, nil
 }
