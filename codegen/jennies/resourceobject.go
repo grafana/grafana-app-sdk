@@ -266,7 +266,6 @@ func generateSchemaCopyCode(root *openapi3.Components, sch *openapi3.Schema, src
 }
 
 func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRef *openapi3.SchemaRef, isPointer bool, srcName, dstName, namingPrefix string) (string, error) {
-	fmt.Println(srcName + "." + field)
 	ek := exportField(field)
 	buf := strings.Builder{}
 	if schemaRef.Ref != "" {
@@ -296,38 +295,7 @@ func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRe
 	schema := schemaRef.Value
 
 	if schemaRef.Value.Type.Is("object") {
-		if schemaRef.Value.AdditionalProperties.Schema == nil {
-			if len(schema.Properties) > 0 {
-				// Embedded struct
-				for key, prop := range schema.Properties {
-					str, err := generateSchemaRefCopyCode(root, key, prop, !slices.Contains(schema.Required, key), fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
-					if err != nil {
-						return "", err
-					}
-					buf.WriteString(str)
-				}
-				return buf.String(), nil
-			}
-			// map[string]any
-			// TODO something better
-			buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]any)\n", dstName, ek))
-			buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
-			buf.WriteString(fmt.Sprintf("%s.%s[key] = val\n}\n", dstName, ek))
-			return buf.String(), nil
-		}
-		buf.WriteString(fmt.Sprintf("%s.%s = make(map[string]%s)\n", dstName, ek, oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
-		buf.WriteString(fmt.Sprintf("for key, val := range %s.%s {\n", srcName, ek))
-		buf.WriteString(fmt.Sprintf("cpyVal := %s{}\n", oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
-		ref, err := lookupRef(root, schema.AdditionalProperties.Schema.Ref)
-		if err != nil {
-			return "", err
-		}
-		copyStr, err := copyProps(root, ref, "val", "cpyVal", namingPrefix)
-		if err != nil {
-			return "", err
-		}
-		buf.WriteString(fmt.Sprintf("%s\n%s.%s[key] = cpyVal\n}\n", copyStr, dstName, ek))
-		return buf.String(), nil
+		return generateObjectCopyCode(root, schemaRef.Value, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
 	}
 	if schema.Type.Is("array") {
 		buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
@@ -343,6 +311,48 @@ func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRe
 		return buf.String(), nil
 	}
 	buf.WriteString(fmt.Sprintf("%s.%s = %s.%s\n", dstName, ek, srcName, ek))
+	return buf.String(), nil
+}
+
+func generateObjectCopyCode(root *openapi3.Components, schema *openapi3.Schema, srcGoField, dstGoField, namingPrefix string) (string, error) {
+	if schema.AdditionalProperties.Schema == nil {
+		// No AdditionalProperties, either an untyped map of embedded struct
+		if len(schema.Properties) > 0 {
+			// Embedded struct
+			buf := strings.Builder{}
+			for key, prop := range schema.Properties {
+				str, err := generateSchemaRefCopyCode(root, key, prop, !slices.Contains(schema.Required, key), srcGoField, dstGoField, namingPrefix)
+				if err != nil {
+					return "", err
+				}
+				buf.WriteString(str)
+			}
+			return buf.String(), nil
+		}
+		// map[string]any
+		// TODO something better
+		buf := strings.Builder{}
+		buf.WriteString(fmt.Sprintf("%s = make(map[string]any)\n", dstGoField))
+		buf.WriteString(fmt.Sprintf("for key, val := range %s {\n", srcGoField))
+		buf.WriteString(fmt.Sprintf("%s[key] = val\n}\n", dstGoField))
+		return buf.String(), nil
+	}
+
+	// Object has AdditionalProperties, making it a typed map
+	// Look up value type from $ref and have it use copy code for that for each value in the map
+	buf := strings.Builder{}
+	buf.WriteString(fmt.Sprintf("%s = make(map[string]%s)\n", dstGoField, oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
+	buf.WriteString(fmt.Sprintf("for key, val := range %s {\n", srcGoField))
+	buf.WriteString(fmt.Sprintf("cpyVal := %s{}\n", oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
+	ref, err := lookupRef(root, schema.AdditionalProperties.Schema.Ref)
+	if err != nil {
+		return "", err
+	}
+	copyStr, err := generateSchemaCopyCode(root, ref, "val", "cpyVal", namingPrefix)
+	if err != nil {
+		return "", err
+	}
+	buf.WriteString(fmt.Sprintf("%s\n%s[key] = cpyVal\n}\n", copyStr, dstGoField))
 	return buf.String(), nil
 }
 
