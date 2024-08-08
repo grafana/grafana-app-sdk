@@ -23,7 +23,7 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // If `groupKinds` is true, kinds within the same group will exist in the same package.
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
-func ResourceGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func ResourceGenerator(versioned bool, groupKinds bool, genericCopy bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
@@ -36,6 +36,7 @@ func ResourceGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codeg
 			OnlyUseCurrentVersion:       !versioned,
 			SubresourceTypesArePrefixed: groupKinds,
 			GroupByKind:                 !groupKinds,
+			GenericCopy:                 genericCopy,
 		},
 		&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: !versioned,

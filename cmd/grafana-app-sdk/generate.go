@@ -46,6 +46,8 @@ Definitions will be created. Only applicable if type=kubernetes`)
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
 	generateCmd.Flags().Bool("postprocess", false, "Whether to run post-processing on the generated files after they are written to disk. Post-processing includes code generation based on +k8s comments on types. Post-processing will fail if the dependencies required by the generated code are absent from go.mod.")
 	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
+	generateCmd.Flags().Bool("simplecopy", false, "Governs whether the generated go resource.Object implementations use a generated deep copy method, or the reflection-based resource.CopyObject. Set this to true if you are having problems with the generated deep copy code.")
+	generateCmd.Flags().Lookup("simplecopy").NoOptDefVal = "true"
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -105,6 +107,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	simpleCopy, err := cmd.Flags().GetBool("simplecopy")
+	if err != nil {
+		return err
+	}
 
 	var files codejen.Files
 	switch format {
@@ -127,6 +133,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			CRDEncoding:   encType,
 			CRDPath:       crdPath,
 			GroupKinds:    grouping == kindGroupingGroup,
+			GenericCopy:   simpleCopy,
 		}, selectors...)
 		if err != nil {
 			return err
@@ -175,6 +182,7 @@ type kindGenConfig struct {
 	CRDEncoding   string
 	CRDPath       string
 	GroupKinds    bool
+	GenericCopy   bool
 }
 
 func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
@@ -300,7 +308,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, cfg.GroupKinds, cfg.GenericCopy), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {

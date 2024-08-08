@@ -71,6 +71,7 @@ func ResourceGenerator() *codejen.JennyList[kindsys.Custom] {
 			OnlyUseCurrentVersion:       true,
 			GroupByKind:                 true,
 			SubresourceTypesArePrefixed: false,
+			GenericCopy:                 true,
 		}, kindsysCustomToKind),
 		codejen.AdaptOneToMany[codegen.Kind, kindsys.Custom](&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: true,

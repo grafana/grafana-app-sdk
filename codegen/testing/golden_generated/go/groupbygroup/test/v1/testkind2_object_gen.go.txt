@@ -19,7 +19,7 @@ type TestKind2 struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Spec              TestKind2Spec   `json:"spec"`
-	TestKind2Status   TestKind2Status `json:"status"`
+	Status            TestKind2Status `json:"status"`
 }
 
 func (o *TestKind2) GetSpec() any {
@@ -37,14 +37,14 @@ func (o *TestKind2) SetSpec(spec any) error {
 
 func (o *TestKind2) GetSubresources() map[string]any {
 	return map[string]any{
-		"status": o.TestKind2Status,
+		"status": o.Status,
 	}
 }
 
 func (o *TestKind2) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
-		return o.TestKind2Status, true
+		return o.Status, true
 	default:
 		return nil, false
 	}
@@ -57,7 +57,7 @@ func (o *TestKind2) SetSubresource(name string, value any) error {
 		if !ok {
 			return fmt.Errorf("cannot set status type %#v, not of type TestKind2Status", value)
 		}
-		o.TestKind2Status = cast
+		o.Status = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)
@@ -211,7 +211,37 @@ func (o *TestKind2) SetUpdatedBy(updatedBy string) {
 }
 
 func (o *TestKind2) Copy() resource.Object {
-	return resource.CopyObject(o)
+	cpy := &TestKind2{}
+
+	// Copy metadata
+	o.ObjectMeta.DeepCopyInto(&cpy.ObjectMeta)
+
+	// Copy Spec
+	cpy.Spec.TestField = o.Spec.TestField
+
+	// Copy Status
+	cpy.Status.AdditionalFields = make(map[string]any)
+	for key, val := range o.Status.AdditionalFields {
+		cpy.Status.AdditionalFields[key] = val
+	}
+	cpy.Status.OperatorStates = make(map[string]TestKind2StatusOperatorState)
+	for key, val := range o.Status.OperatorStates {
+		cpyVal := TestKind2StatusOperatorState{}
+		if val.DescriptiveState != nil {
+			descriptiveStateCopy := *val.DescriptiveState
+			cpyVal.DescriptiveState = &descriptiveStateCopy
+		}
+		cpyVal.Details = make(map[string]any)
+		for key, val := range val.Details {
+			cpyVal.Details[key] = val
+		}
+		cpyVal.LastEvaluation = val.LastEvaluation
+		cpyVal.State = val.State
+
+		cpy.Status.OperatorStates[key] = cpyVal
+	}
+
+	return cpy
 }
 
 func (o *TestKind2) DeepCopyObject() runtime.Object {

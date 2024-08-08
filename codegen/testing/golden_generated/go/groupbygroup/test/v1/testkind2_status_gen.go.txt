@@ -7,11 +7,11 @@ const (
 	TestKind2OperatorStateStateSuccess    TestKind2OperatorStateState = "success"
 )
 
-// Defines values for TestKind2statusOperatorStateState.
+// Defines values for TestKind2StatusOperatorStateState.
 const (
-	TestKind2statusOperatorStateStateFailed     TestKind2statusOperatorStateState = "failed"
-	TestKind2statusOperatorStateStateInProgress TestKind2statusOperatorStateState = "in_progress"
-	TestKind2statusOperatorStateStateSuccess    TestKind2statusOperatorStateState = "success"
+	TestKind2StatusOperatorStateStateFailed     TestKind2StatusOperatorStateState = "failed"
+	TestKind2StatusOperatorStateStateInProgress TestKind2StatusOperatorStateState = "in_progress"
+	TestKind2StatusOperatorStateStateSuccess    TestKind2StatusOperatorStateState = "success"
 )
 
 // TestKind2OperatorState defines model for TestKind2OperatorState.
@@ -44,12 +44,12 @@ type TestKind2Status struct {
 
 	// operatorStates is a map of operator ID to operator state evaluations.
 	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
-	OperatorStates map[string]TestKind2statusOperatorState `json:"operatorStates,omitempty"`
+	OperatorStates map[string]TestKind2StatusOperatorState `json:"operatorStates,omitempty"`
 }
 
-// TestKind2statusOperatorState defines model for TestKind2status.#OperatorState.
+// TestKind2StatusOperatorState defines model for TestKind2Status.#OperatorState.
 // +k8s:openapi-gen=true
-type TestKind2statusOperatorState struct {
+type TestKind2StatusOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
 
@@ -61,10 +61,10 @@ type TestKind2statusOperatorState struct {
 
 	// state describes the state of the lastEvaluation.
 	// It is limited to three possible states for machine evaluation.
-	State TestKind2statusOperatorStateState `json:"state"`
+	State TestKind2StatusOperatorStateState `json:"state"`
 }
 
-// TestKind2statusOperatorStateState state describes the state of the lastEvaluation.
+// TestKind2StatusOperatorStateState state describes the state of the lastEvaluation.
 // It is limited to three possible states for machine evaluation.
 // +k8s:openapi-gen=true
-type TestKind2statusOperatorStateState string
+type TestKind2StatusOperatorStateState string
