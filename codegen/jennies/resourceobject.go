@@ -173,18 +173,20 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 		buf.WriteString(fmt.Sprintf("cpy := &%s{}\n\n// Copy metadata\no.ObjectMeta.DeepCopyInto(&cpy.ObjectMeta)\n\n// Copy Spec\n", md.TypeName))
 		specCopy, err := generateCopyCodeFor(version, "spec", typePrefix)
 		if err != nil {
-			return nil, err
-		}
-		buf.WriteString(specCopy + "\n")
-		for _, sr := range md.Subresources {
-			srCopy, err := generateCopyCodeFor(version, sr.JSONName, typePrefix+"Status")
-			if err != nil {
-				return nil, err
+			// If the generated copy code fails, fall back on the generic behavior
+			md.CopyCode = "return resource.CopyObject(o)"
+		} else {
+			buf.WriteString(specCopy + "\n")
+			for _, sr := range md.Subresources {
+				srCopy, err := generateCopyCodeFor(version, sr.JSONName, typePrefix+"Status")
+				if err != nil {
+					return nil, err
+				}
+				buf.WriteString(fmt.Sprintf("\n\n// Copy %s\n%s\n", sr.TypeName, srCopy))
 			}
-			buf.WriteString(fmt.Sprintf("\n\n// Copy %s\n%s\n", sr.TypeName, srCopy))
+			buf.WriteString("return cpy")
+			md.CopyCode = buf.String()
 		}
-		buf.WriteString("return cpy")
-		md.CopyCode = buf.String()
 	}
 	b := bytes.Buffer{}
 	err = templates.WriteResourceObject(md, &b)
@@ -242,6 +244,7 @@ func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix s
 	if err != nil {
 		return "", err
 	}
+	fmt.Println(string(yml))
 
 	loader := openapi3.NewLoader()
 	oT, err := loader.LoadFromData(yml)
@@ -253,10 +256,18 @@ func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix s
 }
 
 func generateSchemaCopyCode(root *openapi3.Components, sch *openapi3.Schema, srcName, dstName, namingPrefix string) (string, error) {
+	// Sort fields so that the generated code is deterministic
+	fields := make([]string, 0, len(sch.Properties))
+	for k := range sch.Properties {
+		fields = append(fields, k)
+	}
+	slices.Sort(fields)
+
+	// For each field, append the copy code generated for the SchemaRef to the string builder
 	buf := strings.Builder{}
-	for k, v := range sch.Properties {
+	for _, k := range fields {
 		isPointer := !slices.Contains(sch.Required, k)
-		str, err := generateSchemaRefCopyCode(root, k, v, isPointer, srcName, dstName, namingPrefix)
+		str, err := generateSchemaRefCopyCode(root, k, sch.Properties[k], isPointer, srcName, dstName, namingPrefix)
 		if err != nil {
 			return "", err
 		}
@@ -266,29 +277,14 @@ func generateSchemaCopyCode(root *openapi3.Components, sch *openapi3.Schema, src
 }
 
 func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRef *openapi3.SchemaRef, isPointer bool, srcName, dstName, namingPrefix string) (string, error) {
+	// Exported field name to use for the go field names
 	ek := exportField(field)
 	buf := strings.Builder{}
+
+	// If this SchemaRef is a reference to another schema ($ref != ""), we need to look up that schema and
+	// generate copy code using that schema's definition
 	if schemaRef.Ref != "" {
-		// $ref to another object schema
-		ref, err := lookupRef(root, schemaRef.Ref)
-		if err != nil {
-			return "", err
-		}
-		refTypeName := namingPrefix + strings.Join(strings.Split(schemaRef.Ref, "/")[3:], "")
-		if schemaRef.Value.Type.Is("object") {
-			if isPointer {
-				buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n%s.%s = &%s{}\n", srcName, ek, dstName, ek, refTypeName))
-			}
-			str, err := generateSchemaCopyCode(root, ref, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
-			if err != nil {
-				return "", err
-			}
-			buf.WriteString(str)
-			if isPointer {
-				buf.WriteString("}\n")
-			}
-		}
-		return buf.String(), nil
+		return generateRefObjectCopyCode(root, schemaRef, isPointer, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
 	}
 
 	// Not a ref, examine the schema
@@ -314,6 +310,36 @@ func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRe
 	return buf.String(), nil
 }
 
+func generateRefObjectCopyCode(root *openapi3.Components, schemaRef *openapi3.SchemaRef, isPointer bool, srcGoField, dstGoField, namingPrefix string) (string, error) {
+	ref, err := lookupOpenAPISchemaRef(root, schemaRef.Ref)
+	if err != nil {
+		return "", err
+	}
+
+	// Special cases for oneOf, allOf, etc. as the go codegen turns those into untyped interfaces
+	if len(ref.AllOf) > 0 || len(ref.AnyOf) > 0 || len(ref.OneOf) > 0 {
+		return fmt.Sprintf("%s = %s", srcGoField, dstGoField), nil
+	}
+
+	buf := strings.Builder{}
+	// Generate the correct go type name from the reference and naming prefix
+	refTypeName := namingPrefix + strings.Join(strings.Split(schemaRef.Ref, "/")[3:], "")
+	if schemaRef.Value.Type.Is("object") {
+		if isPointer {
+			buf.WriteString(fmt.Sprintf("if %s != nil {\n%s = &%s{}\n", srcGoField, dstGoField, refTypeName))
+		}
+		str, err := generateSchemaCopyCode(root, ref, srcGoField, dstGoField, namingPrefix)
+		if err != nil {
+			return "", err
+		}
+		buf.WriteString(str)
+		if isPointer {
+			buf.WriteString("}\n")
+		}
+	}
+	return buf.String(), nil
+}
+
 func generateObjectCopyCode(root *openapi3.Components, schema *openapi3.Schema, srcGoField, dstGoField, namingPrefix string) (string, error) {
 	if schema.AdditionalProperties.Schema == nil {
 		// No AdditionalProperties, either an untyped map of embedded struct
@@ -330,7 +356,7 @@ func generateObjectCopyCode(root *openapi3.Components, schema *openapi3.Schema, 
 			return buf.String(), nil
 		}
 		// map[string]any
-		// TODO something better
+		// TODO something better?
 		buf := strings.Builder{}
 		buf.WriteString(fmt.Sprintf("%s = make(map[string]any)\n", dstGoField))
 		buf.WriteString(fmt.Sprintf("for key, val := range %s {\n", srcGoField))
@@ -344,7 +370,7 @@ func generateObjectCopyCode(root *openapi3.Components, schema *openapi3.Schema, 
 	buf.WriteString(fmt.Sprintf("%s = make(map[string]%s)\n", dstGoField, oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
 	buf.WriteString(fmt.Sprintf("for key, val := range %s {\n", srcGoField))
 	buf.WriteString(fmt.Sprintf("cpyVal := %s{}\n", oapiTypeToGoType(schema.AdditionalProperties.Schema, namingPrefix)))
-	ref, err := lookupRef(root, schema.AdditionalProperties.Schema.Ref)
+	ref, err := lookupOpenAPISchemaRef(root, schema.AdditionalProperties.Schema.Ref)
 	if err != nil {
 		return "", err
 	}
@@ -356,6 +382,8 @@ func generateObjectCopyCode(root *openapi3.Components, schema *openapi3.Schema, 
 	return buf.String(), nil
 }
 
+// oapiTypeToGoType returns the go type based on the provided OpenAPI type.
+// For object reference types, the go type is assumed to be <refNamePrefix> + <ucFirst(split($ref,'/')[3:].join(”))>
 func oapiTypeToGoType(v *openapi3.SchemaRef, refNamePrefix string) string {
 	if v.Value.Type.Is("integer") {
 		switch v.Value.Format {
@@ -394,7 +422,10 @@ func oapiTypeToGoType(v *openapi3.SchemaRef, refNamePrefix string) string {
 	return "any"
 }
 
-func lookupRef(root *openapi3.Components, ref string) (*openapi3.Schema, error) {
+// lookupOpenAPISchemaRef looks up and returns a Schema by its $ref path from the root openapi3.Components
+// $ref paths that don't begin with '#/components/schemas' are not supported by this lookup method.
+// If no schema can be found, an error is returned.
+func lookupOpenAPISchemaRef(root *openapi3.Components, ref string) (*openapi3.Schema, error) {
 	parts := strings.Split(ref, "/")
 	if len(parts) < 3 || strings.Join(parts[:3], "/") != "#/components/schemas" {
 		return nil, fmt.Errorf("only references to #/components/schemas are supported")
@@ -402,7 +433,7 @@ func lookupRef(root *openapi3.Components, ref string) (*openapi3.Schema, error) 
 	for k, v := range root.Schemas {
 		if k == parts[3] {
 			if len(parts) > 4 {
-				return lookupRefInSchema(v.Value.Properties, strings.Join(parts[3:], "/"))
+				return lookupOpenAPISchemaRefInSchema(v.Value.Properties, strings.Join(parts[3:], "/"))
 			}
 			return v.Value, nil
 		}
@@ -410,12 +441,15 @@ func lookupRef(root *openapi3.Components, ref string) (*openapi3.Schema, error) 
 	return nil, fmt.Errorf("reference %s not found", ref)
 }
 
-func lookupRefInSchema(sch openapi3.Schemas, ref string) (*openapi3.Schema, error) {
+// lookupOpenAPISchemaRefInSchema looks up and returns a Schema based on the $ref path provided,
+// assuming the ref path is local to the provided schema.
+// If no schema can be found, an error is returned.
+func lookupOpenAPISchemaRefInSchema(sch openapi3.Schemas, ref string) (*openapi3.Schema, error) {
 	parts := strings.Split(ref, "/")
 	for k, v := range sch {
 		if k == parts[0] {
 			if len(parts) > 1 {
-				return lookupRefInSchema(v.Value.Properties, strings.Join(parts[1:], "/"))
+				return lookupOpenAPISchemaRefInSchema(v.Value.Properties, strings.Join(parts[1:], "/"))
 			}
 			return v.Value, nil
 		}
