@@ -163,8 +163,9 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 			continue
 		}
 		md.Subresources = append(md.Subresources, templates.SubresourceMetadata{
-			TypeName: typePrefix + exportField(it.Label()),
-			JSONName: it.Label(),
+			TypeName:  typePrefix + exportField(it.Label()),
+			FieldName: exportField(it.Label()),
+			JSONName:  it.Label(),
 		})
 	}
 	if !r.GenericCopy {
@@ -178,11 +179,11 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 		} else {
 			buf.WriteString(specCopy + "\n")
 			for _, sr := range md.Subresources {
-				srCopy, err := generateCopyCodeFor(version, sr.JSONName, typePrefix+"Status")
+				srCopy, err := generateCopyCodeFor(version, sr.JSONName, sr.TypeName)
 				if err != nil {
 					return nil, err
 				}
-				buf.WriteString(fmt.Sprintf("\n\n// Copy %s\n%s\n", sr.TypeName, srCopy))
+				buf.WriteString(fmt.Sprintf("\n\n// Copy %s\n%s\n", sr.FieldName, srCopy))
 			}
 			buf.WriteString("return cpy")
 			md.CopyCode = buf.String()
@@ -236,7 +237,7 @@ func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix s
 			if i > 0 {
 				path = cue.MakePath(path.Selectors()[i:]...)
 			}
-			return strings.Trim(path.String(), "?#")
+			return namePrefix + exportField(strings.Trim(path.String(), "?#"))
 		},
 	}
 
@@ -244,7 +245,6 @@ func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix s
 	if err != nil {
 		return "", err
 	}
-	fmt.Println(string(yml))
 
 	loader := openapi3.NewLoader()
 	oT, err := loader.LoadFromData(yml)
@@ -252,7 +252,7 @@ func generateCopyCodeFor(version *codegen.KindVersion, subresource, namePrefix s
 		return "", err
 	}
 
-	return generateSchemaCopyCode(oT.Components, oT.Components.Schemas[subresource].Value, fmt.Sprintf("o.%s", exportField(subresource)), fmt.Sprintf("cpy.%s", exportField(subresource)), namePrefix)
+	return generateSchemaCopyCode(oT.Components, oT.Components.Schemas[subresource].Value, fmt.Sprintf("o.%s", exportField(subresource)), fmt.Sprintf("cpy.%s", exportField(subresource)), "")
 }
 
 func generateSchemaCopyCode(root *openapi3.Components, sch *openapi3.Schema, srcName, dstName, namingPrefix string) (string, error) {
@@ -279,7 +279,6 @@ func generateSchemaCopyCode(root *openapi3.Components, sch *openapi3.Schema, src
 func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRef *openapi3.SchemaRef, isPointer bool, srcName, dstName, namingPrefix string) (string, error) {
 	// Exported field name to use for the go field names
 	ek := exportField(field)
-	buf := strings.Builder{}
 
 	// If this SchemaRef is a reference to another schema ($ref != ""), we need to look up that schema and
 	// generate copy code using that schema's definition
@@ -289,25 +288,37 @@ func generateSchemaRefCopyCode(root *openapi3.Components, field string, schemaRe
 
 	// Not a ref, examine the schema
 	schema := schemaRef.Value
+	if schema == nil {
+		// No $ref and no schema, this is a malformed SchemaRef object
+		return "", fmt.Errorf("encountered openapi3.SchemaRef with no $ref or schema: %s", schemaRef.RefPath())
+	}
 
-	if schemaRef.Value.Type.Is("object") {
+	// Non-ref object type (this is a map or an inline struct)
+	if schema.Type.Is("object") {
 		return generateObjectCopyCode(root, schemaRef.Value, fmt.Sprintf("%s.%s", srcName, ek), fmt.Sprintf("%s.%s", dstName, ek), namingPrefix)
 	}
+
+	// Array type gets converted into a slice, which we copy the values from with the go builtin copy() function
 	if schema.Type.Is("array") {
+		buf := strings.Builder{}
 		buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
 		buf.WriteString(fmt.Sprintf("%s.%s = make([]%s, len(%s.%s))\n", dstName, ek, oapiTypeToGoType(schema.Items, namingPrefix), srcName, ek))
 		buf.WriteString(fmt.Sprintf("copy(%s.%s, %s.%s)\n", dstName, ek, srcName, ek))
 		buf.WriteString("}\n")
 		return buf.String(), nil
 	}
+
+	// Pointer to a standard type, we need to indirect it to get the value, then create a pointer to that value
 	if isPointer {
+		buf := strings.Builder{}
 		buf.WriteString(fmt.Sprintf("if %s.%s != nil {\n", srcName, ek))
 		buf.WriteString(fmt.Sprintf("%sCopy := *%s.%s\n", field, srcName, ek))
 		buf.WriteString(fmt.Sprintf("%s.%s = &%sCopy\n}\n", dstName, ek, field))
 		return buf.String(), nil
 	}
-	buf.WriteString(fmt.Sprintf("%s.%s = %s.%s\n", dstName, ek, srcName, ek))
-	return buf.String(), nil
+
+	// Just a normal value field which we can copy with an assignment
+	return fmt.Sprintf("%s.%s = %s.%s\n", dstName, ek, srcName, ek), nil
 }
 
 func generateRefObjectCopyCode(root *openapi3.Components, schemaRef *openapi3.SchemaRef, isPointer bool, srcGoField, dstGoField, namingPrefix string) (string, error) {
@@ -342,7 +353,7 @@ func generateRefObjectCopyCode(root *openapi3.Components, schemaRef *openapi3.Sc
 
 func generateObjectCopyCode(root *openapi3.Components, schema *openapi3.Schema, srcGoField, dstGoField, namingPrefix string) (string, error) {
 	if schema.AdditionalProperties.Schema == nil {
-		// No AdditionalProperties, either an untyped map of embedded struct
+		// No AdditionalProperties, either an untyped map or embedded struct
 		if len(schema.Properties) > 0 {
 			// Embedded struct
 			buf := strings.Builder{}
