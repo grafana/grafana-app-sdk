@@ -48,13 +48,14 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	if s.OnlyUseCurrentVersion {
 		b := bytes.Buffer{}
 		err := templates.WriteSchema(templates.SchemaMetadata{
-			Package:    meta.MachineName,
-			Group:      meta.APIResource.Group,
-			Version:    meta.Current,
-			Kind:       meta.Kind,
-			Plural:     meta.PluralMachineName,
-			Scope:      meta.APIResource.Scope,
-			FuncPrefix: prefix,
+			Package:          meta.MachineName,
+			Group:            meta.APIResource.Group,
+			Version:          meta.Current,
+			Kind:             meta.Kind,
+			Plural:           meta.PluralMachineName,
+			Scope:            meta.APIResource.Scope,
+			SelectableFields: kind.Version(meta.Current).SelectableFields,
+			FuncPrefix:       prefix,
 		}, &b)
 		if err != nil {
 			return nil, err
@@ -72,13 +73,14 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		for _, ver := range kind.Versions() {
 			b := bytes.Buffer{}
 			err := templates.WriteSchema(templates.SchemaMetadata{
-				Package:    ToPackageName(ver.Version),
-				Group:      meta.APIResource.Group,
-				Version:    ver.Version,
-				Kind:       meta.Kind,
-				Plural:     meta.PluralMachineName,
-				Scope:      meta.APIResource.Scope,
-				FuncPrefix: prefix,
+				Package:          ToPackageName(ver.Version),
+				Group:            meta.APIResource.Group,
+				Version:          ver.Version,
+				Kind:             meta.Kind,
+				Plural:           meta.PluralMachineName,
+				Scope:            meta.APIResource.Scope,
+				SelectableFields: ver.SelectableFields,
+				FuncPrefix:       prefix,
 			}, &b)
 			if err != nil {
 				return nil, err

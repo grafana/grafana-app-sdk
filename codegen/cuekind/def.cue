@@ -124,6 +124,10 @@ Kind: S={
 				// backend indicates whether back-end Go code should be generated for this kind's schema
 				backend: bool | *S.codegen.backend
 			}
+			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
+			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
+			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
+			selectableFields: [...string]
 		}
 	}
 	machineName: strings.ToLower(strings.Replace(S.kind, "-", "_", -1))

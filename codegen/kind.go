@@ -50,9 +50,10 @@ type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema  cue.Value             `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen KindCodegenProperties `json:"codegen"`
-	Served  bool                  `json:"served"`
+	Schema           cue.Value             `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen          KindCodegenProperties `json:"codegen"`
+	Served           bool                  `json:"served"`
+	SelectableFields []string              `json:"selectableFields"`
 }
 
 // AnyKind is a simple implementation of Kind

@@ -106,13 +106,30 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
-	Package    string
-	Group      string
-	Version    string
-	Kind       string
-	Plural     string
-	Scope      string
-	FuncPrefix string
+	Package          string
+	Group            string
+	Version          string
+	Kind             string
+	Plural           string
+	Scope            string
+	SelectableFields []string
+	FuncPrefix       string
+}
+
+func (SchemaMetadata) ToObjectPath(s string) string {
+	parts := make([]string, 0)
+	for i, part := range strings.Split(s, ".") {
+		if i == 0 && part == "metadata" {
+			part = "ObjectMeta"
+		}
+		if len(part) > 0 {
+			part = strings.ToUpper(part[:1]) + part[1:]
+		} else {
+			part = strings.ToUpper(part)
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ".")
 }
 
 // WriteSchema executes the Resource Schema template, and writes out the generated go code to out
