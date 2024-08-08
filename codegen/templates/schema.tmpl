@@ -23,7 +23,7 @@ var (
                 return cast.{{$root.ToObjectPath .}}, nil
             },
         },
-        }){{end}}{{ end }})
+        {{ end }} }){{ end }})
     kind{{.Kind}} = resource.Kind{
         Schema: schema{{.Kind}},
         Codecs: map[resource.KindEncoding]resource.Codec{
