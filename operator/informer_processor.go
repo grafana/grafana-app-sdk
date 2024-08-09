@@ -72,9 +72,7 @@ func (p *informerProcessor) distribute(event any) {
 func (p *informerProcessor) run(stopCh <-chan struct{}) {
 	p.listenersMux.Lock()
 	for listener := range p.listeners {
-		go func(l *informerProcessorListener) {
-			p.wg.Start(l.run)
-		}(listener)
+		p.wg.Start(listener.run)
 	}
 	p.started = true
 	p.listenersMux.Unlock()
