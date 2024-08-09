@@ -118,6 +118,7 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	var wg wait.Group
 	defer wg.Wait()              // Wait for Processor to stop
 	defer close(processorStopCh) // Tell Processor to stop
+	c.processor.startedCh = make(chan struct{}, 1)
 	wg.StartWithChannel(processorStopCh, c.processor.run)
 
 	defer func() {
@@ -125,6 +126,8 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 		defer c.startedLock.Unlock()
 		c.started = false
 	}()
+	// Wait for the processor to complete startup before running the controller (otherwise events may be dropped by distribution)
+	<-c.processor.startedCh
 	c.controller.Run(stopCh)
 	return nil
 }
