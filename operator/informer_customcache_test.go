@@ -44,6 +44,7 @@ func TestCustomCacheInformer_Run(t *testing.T) {
 
 func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 	events := make(chan watch.Event)
+	defer close(events)
 	inf := NewCustomCacheInformer(newUnsafeCache(), &mockListWatcher{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return &resource.UntypedList{}, nil
@@ -92,6 +93,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 	}
 
 	stopCh := make(chan struct{})
+	defer close(stopCh)
 	go inf.Run(stopCh)
 
 	// Add
@@ -117,12 +119,12 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 		Object: addObj,
 	}
 	assert.True(t, waitOrTimeout(&wg, time.Second*10), "event was not distributed to all handlers within 10 seconds")
-	close(stopCh)
 }
 
 func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	numEvents := 1000
 	events := make(chan watch.Event, numEvents)
+	defer close(events)
 	inf := NewCustomCacheInformer(newUnsafeCache(), &mockListWatcher{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return &resource.UntypedList{}, nil
@@ -154,6 +156,7 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 		})
 	}
 	stopCh := make(chan struct{})
+	defer close(stopCh)
 	go inf.Run(stopCh)
 	for i := 0; i < numEvents; i++ {
 		etype := watch.Added
@@ -181,11 +184,11 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	assert.True(t, waitOrTimeout(&addWG, time.Second*10), "all add events were not distributed within 10 seconds")
 	assert.True(t, waitOrTimeout(&updateWG, time.Second*10), "all add events were not distributed within 10 seconds")
 	assert.True(t, waitOrTimeout(&deleteWG, time.Second*10), "all add events were not distributed within 10 seconds")
-	close(stopCh)
 }
 
 func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 	events := make(chan watch.Event)
+	defer close(events)
 	store := newUnsafeCache()
 	inf := NewCustomCacheInformer(store, &mockListWatcher{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
