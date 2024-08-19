@@ -9,6 +9,8 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/buffer"
+
+	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 /*
@@ -38,6 +40,7 @@ type informerProcessor struct {
 	listenersMux sync.RWMutex
 	wg           wait.Group
 	started      bool
+	startedCh    chan struct{}
 }
 
 func newInformerProcessor() *informerProcessor {
@@ -53,6 +56,13 @@ func (p *informerProcessor) addListener(l *informerProcessorListener) {
 }
 
 func (p *informerProcessor) distribute(event any) {
+	if !p.started {
+		// Drop events if we're not started to prevent us from not being able to start if listener.push() blocks
+		if logging.DefaultLogger != nil {
+			logging.DefaultLogger.Warn("Received event for informer distribution while processor is not started, dropping event")
+		}
+		return
+	}
 	p.listenersMux.RLock()
 	defer p.listenersMux.RUnlock()
 	for listener := range p.listeners {
@@ -63,12 +73,16 @@ func (p *informerProcessor) distribute(event any) {
 func (p *informerProcessor) run(stopCh <-chan struct{}) {
 	p.listenersMux.Lock()
 	for listener := range p.listeners {
-		go func(l *informerProcessorListener) {
-			p.wg.Start(l.run)
-		}(listener)
+		p.wg.Start(listener.run)
 	}
 	p.started = true
 	p.listenersMux.Unlock()
+	if p.startedCh != nil {
+		// Run in a goroutine to prevent blocking if the channel buffer is full
+		go func() {
+			p.startedCh <- struct{}{}
+		}()
+	}
 	<-stopCh
 	p.listenersMux.Lock()
 	p.started = false
