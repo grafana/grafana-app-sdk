@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk/plugin
 
-go 1.22.4
+go 1.22.5
 
 require (
 	github.com/grafana/grafana-app-sdk v0.18.0
