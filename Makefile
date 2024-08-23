@@ -21,7 +21,7 @@ $(GOSUM): $(SOURCES) $(GOMOD)
 $(GOWORKSUM): $(GOWORK) $(GOMOD)
 	go work sync
 
-LINTER_VERSION := 1.55.2
+LINTER_VERSION := 1.60.3
 LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint
