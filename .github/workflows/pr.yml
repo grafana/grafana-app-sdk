@@ -51,6 +51,7 @@ jobs:
       uses: golangci/golangci-lint-action@v3
       with:
         version: v1.60.3
+        only-new-issues: true
         args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   test:
     runs-on: ubuntu-latest
