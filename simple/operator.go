@@ -142,8 +142,9 @@ type Operator struct {
 }
 
 type ListWatchOptions struct {
-	Namespace    string
-	LabelFilters []string
+	Namespace      string
+	LabelFilters   []string
+	FieldSelectors []string
 }
 
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
@@ -191,7 +192,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options Li
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, options.LabelFilters)
+	inf, err := operator.NewKubernetesBasedInformerWithFiltersAndFieldSelectors(kind, client, options.Namespace, options.LabelFilters, options.FieldSelectors)
 	if err != nil {
 		return err
 	}
@@ -225,7 +226,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, options.LabelFilters)
+	inf, err := operator.NewKubernetesBasedInformerWithFiltersAndFieldSelectors(kind, client, options.Namespace, options.LabelFilters, options.FieldSelectors)
 	if err != nil {
 		return err
 	}
@@ -281,5 +282,5 @@ func (o *Operator) ConvertKind(gk metav1.GroupKind, converter k8s.Converter) err
 
 func (*Operator) label(schema resource.Schema, options ListWatchOptions) string {
 	// TODO: hash?
-	return fmt.Sprintf("%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","))
+	return fmt.Sprintf("%s-%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","), strings.Join(options.FieldSelectors, ","))
 }

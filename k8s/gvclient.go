@@ -356,6 +356,9 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	if len(options.LabelFilters) > 0 {
 		req = req.Param("labelSelector", strings.Join(options.LabelFilters, ","))
 	}
+	if len(options.FieldSelectors) > 0 {
+		req = req.Param("fieldSelector", strings.Join(options.FieldSelectors, ","))
+	}
 	if options.Limit > 0 {
 		req = req.Param("limit", strconv.Itoa(options.Limit))
 	}
@@ -398,6 +401,9 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	}
 	if len(options.LabelFilters) > 0 {
 		req = req.Param("labelSelector", strings.Join(options.LabelFilters, ","))
+	}
+	if len(options.FieldSelectors) > 0 {
+		req = req.Param("fieldSelector", strings.Join(options.FieldSelectors, ","))
 	}
 	if options.ResourceVersion != "" {
 		req = req.Param("resourceVersion", options.ResourceVersion)

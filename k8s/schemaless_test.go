@@ -419,6 +419,32 @@ func TestSchemalessClient_List(t *testing.T) {
 		assert.Equal(t, responseObj.GetSpec(), item.GetSpec())
 		assert.Equal(t, responseObj.GetSubresources(), item.GetSubresources())
 	})
+
+	t.Run("success, with fieldSelectors", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			// Check for filter params
+			assert.Equal(t, "a,b", r.URL.Query().Get("fieldSelector"))
+			listBytes, err := json.Marshal(listResp)
+			assert.Nil(t, err)
+			writer.Write(listBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s", id.Namespace, fmt.Sprintf("%ss", id.Kind)), r.URL.Path)
+		}
+
+		into := resource.TypedList[*resource.TypedSpecObject[testSpec]]{}
+		err := client.List(ctx, id, resource.ListOptions{
+			FieldSelectors: []string{"a", "b"},
+		}, &into, &resource.TypedSpecObject[testSpec]{})
+		assert.Nil(t, err)
+		assert.Len(t, into.GetItems(), 1)
+		item, ok := into.GetItems()[0].(*resource.TypedSpecObject[testSpec])
+		assert.True(t, ok)
+		assert.Equal(t, responseObj.GetStaticMetadata(), item.GetStaticMetadata())
+		assert.Equal(t, responseObj.GetCommonMetadata(), item.GetCommonMetadata())
+		assert.Equal(t, responseObj.GetSpec(), item.GetSpec())
+		assert.Equal(t, responseObj.GetSubresources(), item.GetSubresources())
+	})
 }
 
 func getSchemalessClientTestSetup(gvs ...schema.GroupVersion) (*SchemalessClient, *testServer) {
