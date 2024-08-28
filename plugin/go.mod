@@ -4,7 +4,7 @@ go 1.22.5
 
 require (
 	github.com/grafana/grafana-app-sdk v0.18.2
-	github.com/grafana/grafana-plugin-sdk-go v0.244.0
+	github.com/grafana/grafana-plugin-sdk-go v0.245.0
 	github.com/prometheus/client_golang v1.20.2
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.29.0
