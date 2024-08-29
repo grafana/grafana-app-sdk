@@ -20,19 +20,16 @@ type KubernetesBasedInformer struct {
 	schema              resource.Kind
 }
 
-var EmptyLabelFilters []string
-var EmptyFieldSelectors []string
-
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests.
 func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
 	*KubernetesBasedInformer, error) {
-	return NewKubernetesBasedInformerWithFiltersAndFieldSelectors(sch, client, namespace, EmptyLabelFilters, EmptyFieldSelectors)
+	return NewKubernetesBasedInformerWithFilters(sch, client, namespace, ListWatchFilterOptions{})
 }
 
 // NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFiltersAndFieldSelectors(sch resource.Kind, client ListWatchClient, namespace string, labelFilters []string, fieldSelectors []string) (
+func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, namespace string, listOptions ListWatchFilterOptions) (
 	*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
@@ -44,7 +41,7 @@ func NewKubernetesBasedInformerWithFiltersAndFieldSelectors(sch resource.Kind, c
 			// Do nothing
 		},
 		SharedIndexInformer: cache.NewSharedIndexInformer(
-			NewListerWatcher(client, sch, namespace, labelFilters, fieldSelectors),
+			NewListerWatcher(client, sch, namespace, listOptions),
 			nil,
 			time.Second*30,
 			cache.Indexers{

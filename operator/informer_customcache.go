@@ -26,6 +26,12 @@ var _ Informer = &CustomCacheInformer{}
 
 const processorBufferSize = 1024
 
+// Label and field selectors for filtering resources in ListWatch requests and Informers.
+type ListWatchFilterOptions struct {
+	LabelFilters   []string
+	FieldSelectors []string
+}
+
 type CustomCacheInformer struct {
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
@@ -48,19 +54,19 @@ type CustomCacheInformer struct {
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
 func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) (*CustomCacheInformer, error) {
-	return NewMemcachedInformerWithLabelFiltersAndFieldSelectors(kind, client, namespace, nil, nil, addrs...)
+	return NewMemcachedInformerWithLabelFilters(kind, client, namespace, ListWatchFilterOptions{}, addrs...)
 }
 
 // NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformerWithLabelFiltersAndFieldSelectors(kind resource.Kind, client ListWatchClient, namespace string, labelFilters []string, fieldSelectors []string, addrs ...string) (*CustomCacheInformer, error) {
+func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchClient, namespace string, filterOptions ListWatchFilterOptions, addrs ...string) (*CustomCacheInformer, error) {
 	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
 		Addrs: addrs,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters, fieldSelectors), kind), nil
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, filterOptions), kind), nil
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
@@ -193,7 +199,7 @@ func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
 
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
 // The List and Watch requests will always use the provided namespace and labelFilters.
-func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace string, labelFilters []string, fieldSelectors []string) cache.ListerWatcher {
+func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace string, filterOptions ListWatchFilterOptions) cache.ListerWatcher {
 	return &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			ctx, span := GetTracer().Start(context.Background(), "informer-list")
@@ -206,8 +212,8 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace str
 			)
 			resp := resource.UntypedList{}
 			err := client.ListInto(ctx, namespace, resource.ListOptions{
-				LabelFilters:    labelFilters,
-				FieldSelectors:  fieldSelectors,
+				LabelFilters:    filterOptions.LabelFilters,
+				FieldSelectors:  filterOptions.FieldSelectors,
 				Continue:        options.Continue,
 				Limit:           int(options.Limit),
 				ResourceVersion: options.ResourceVersion,
@@ -229,8 +235,8 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace str
 			opts := resource.WatchOptions{
 				ResourceVersion:      options.ResourceVersion,
 				ResourceVersionMatch: string(options.ResourceVersionMatch),
-				LabelFilters:         labelFilters,
-				FieldSelectors:       fieldSelectors,
+				LabelFilters:         filterOptions.LabelFilters,
+				FieldSelectors:       filterOptions.FieldSelectors,
 			}
 			// TODO: can't defer the cancel call for the context, because it should only be canceled if the
 			// _caller_ of WatchFunc finishes with the WatchResponse before the timeout elapses...

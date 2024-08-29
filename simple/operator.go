@@ -192,7 +192,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options Li
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFiltersAndFieldSelectors(kind, client, options.Namespace, options.LabelFilters, options.FieldSelectors)
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, operator.ListWatchFilterOptions{LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors})
 	if err != nil {
 		return err
 	}
@@ -226,7 +226,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFiltersAndFieldSelectors(kind, client, options.Namespace, options.LabelFilters, options.FieldSelectors)
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, operator.ListWatchFilterOptions{LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors})
 	if err != nil {
 		return err
 	}
