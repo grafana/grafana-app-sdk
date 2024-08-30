@@ -226,7 +226,7 @@ func (m *MemcachedStore) ListKeys() []string {
 		return nil
 	}
 	keys := make([]string, 0)
-	m.keys.Range(func(key, value any) bool {
+	m.keys.Range(func(key, _ any) bool {
 		keys = append(keys, key.(string))
 		return true
 	})
@@ -321,7 +321,7 @@ func (m *MemcachedStore) syncKeys() error {
 		}
 	}
 	externalKeys := make([]string, 0)
-	m.keys.Range(func(key, value any) bool {
+	m.keys.Range(func(key, _ any) bool {
 		externalKeys = append(externalKeys, key.(string))
 		return true
 	})

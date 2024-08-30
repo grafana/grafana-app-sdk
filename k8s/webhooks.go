@@ -445,6 +445,7 @@ func gk(group, kind string) string {
 	return fmt.Sprintf("%s.%s", kind, group)
 }
 
+//nolint:gosec
 func addAdmissionError(resp *admission.AdmissionResponse, err error) {
 	if err == nil || resp == nil {
 		return

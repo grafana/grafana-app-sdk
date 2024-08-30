@@ -38,10 +38,8 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchCl
 	}
 
 	return &KubernetesBasedInformer{
-		schema: sch,
-		ErrorHandler: func(ctx context.Context, err error) {
-			// Do nothing
-		},
+		schema:       sch,
+		ErrorHandler: DefaultErrorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			NewListerWatcher(client, sch, namespace, labelFilters...),
 			nil,
