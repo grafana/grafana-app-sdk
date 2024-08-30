@@ -1,7 +1,6 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.22.5
-toolchain go1.23.0
+go 1.23.0
 
 require (
 	cuelang.org/go v0.5.0
