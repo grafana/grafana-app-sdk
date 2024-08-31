@@ -45,7 +45,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: "1.23"
+        go-version: "1.23.0"
     # make lint
     - name: Lint
       uses: golangci/golangci-lint-action@v3
@@ -65,7 +65,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: "1.23"
+        go-version: "1.23.0"
     # make test
     - name: Test
       # find all go.mod files and run go test against directories containing go.mod files
@@ -82,7 +82,10 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: "1.23"
+        go-version: "1.23.0"
+       # Preflight checks
+    - name: Preflight checks
+      run: make check-go-version
     # make build
     - name: Build
       run: go build -v cmd/grafana-app-sdk/*.go

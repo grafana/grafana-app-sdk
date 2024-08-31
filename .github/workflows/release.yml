@@ -21,7 +21,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: "1.23"
+        go-version: "1.23.0"
     # make test
     - name: Test
       run: go test -v ./...
@@ -38,7 +38,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: "1.23"
+        go-version: "1.23.0"
     # Install the CLI
     - name: Install the CLI
       run: cd cmd/grafana-app-sdk && go install && cd -
@@ -141,7 +141,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: '1.23.0'
     # Release
     - name: Create Release
       uses: goreleaser/goreleaser-action@v4
