@@ -18,9 +18,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set go version
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: 'go.mod'
 
       - name: Update workspace
         run: make update-workspace
@@ -43,9 +43,9 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.23.0"
+        go-version-file: 'go.mod'
     # make lint
     - name: Lint
       uses: golangci/golangci-lint-action@v3
@@ -63,9 +63,9 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.23.0"
+        go-version-file: 'go.mod'
     # make test
     - name: Test
       # find all go.mod files and run go test against directories containing go.mod files
@@ -80,9 +80,9 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.23.0"
+        go-version-file: 'go.mod'
        # Preflight checks
     - name: Preflight checks
       run: make check-go-version
