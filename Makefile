@@ -9,7 +9,7 @@ GOWORK		:= go.work
 GOWORKSUM 	:= go.work.sum
 VENDOR  	:= vendor
 COVOUT  	:= coverage.out
-GOVERSION   := $(shell awk '/^go / {print $$2}' .go-version)
+GOVERSION   := $(shell awk '/^go / {print $$2}' go.work)
 GOBINARY    := $(shell which go)
 
 BIN_DIR := target
