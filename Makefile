@@ -9,10 +9,23 @@ GOWORK		:= go.work
 GOWORKSUM 	:= go.work.sum
 VENDOR  	:= vendor
 COVOUT  	:= coverage.out
+GOVERSION   := $(shell awk '/^go / {print $$2}' .go-version)
+GOBINARY    := $(shell which go)
 
 BIN_DIR := target
 
-all: deps lint test build
+.PHONY: check-go-version
+check-go-version:
+	@if [ -z "$(GOBINARY)" ]; then \
+		echo "Error: No Go binary found. It's a no-go!"; \
+		exit 1; \
+	fi; \
+	if [ "$$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//')" != "$(GOVERSION)" ]; then \
+		echo "Error: Go version $(GOVERSION) is required, but version $$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//') is installed."; \
+		exit 1; \
+	fi
+
+all: check-go-version deps lint test build
 
 deps: $(GOSUM) $(GOWORKSUM)
 $(GOSUM): $(SOURCES) $(GOMOD)
