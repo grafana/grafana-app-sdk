@@ -179,7 +179,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 	openAPIConfig := CUEOpenAPIConfig{
 		Name:    cfg.NamePrefix + cfg.Name,
 		Version: cfg.Version,
-		NameFunc: func(value cue.Value, path cue.Path) string {
+		NameFunc: func(_ cue.Value, path cue.Path) string {
 			i := 0
 			for ; i < len(path.Selectors()) && i < len(v.Path().Selectors()); i++ {
 				if maxNamingDepth > 0 && i >= maxNamingDepth {
