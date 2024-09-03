@@ -8,14 +8,6 @@ diff /Users/austinpond/github/oapi-codegen/pkg/codegen/codegen_test.go internal/
 < 	"github.com/deepmap/oapi-codegen/v2/pkg/util"
 ---
 > 	"github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/util"
-18c18
-< 	remoteRefImport = `github.com/deepmap/oapi-codegen/v2/examples/petstore-expanded`
----
-> 	remoteRefImport = `github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/examples/petstore-expanded`
-201c201
-< 	assert.Contains(t, code, `externalRef0 "github.com/deepmap/oapi-codegen/v2/examples/petstore-expanded"`)
----
-> 	assert.Contains(t, code, `externalRef0 "github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/examples/petstore-expanded"`)
 diff /Users/austinpond/github/oapi-codegen/pkg/codegen/merge_schemas.go internal/deepmap/oapi-codegen/pkg/codegen/merge_schemas.go
 13c13
 < func MergeSchemas(allOf []*openapi3.SchemaRef, path []string) (Schema, error) {
@@ -52,7 +44,7 @@ diff /Users/austinpond/github/oapi-codegen/pkg/codegen/operations.go internal/de
 ---
 > 	"github.com/grafana/grafana-app-sdk/internal/deepmap/oapi-codegen/pkg/util"
 diff /Users/austinpond/github/oapi-codegen/pkg/codegen/schema.go internal/deepmap/oapi-codegen/pkg/codegen/schema.go
-277c277
+272c272
 < 		mergedSchema, err := MergeSchemas(schema.AllOf, path)
 ---
 > 		mergedSchema, err := MergeSchemas(schema, path)

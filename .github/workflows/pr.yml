@@ -6,6 +6,33 @@ on:
     - main
 
 jobs:
+  check:
+    name: Go Workspace Check
+    runs-on: ubuntu-latest
+    # Exlude dependabot from this check--it can't run make update-workspace, 
+    # We'll just force the next PR author to do it instead for now
+    if: ${{ github.actor != 'dependabot[bot]' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set go version
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Update workspace
+        run: make update-workspace
+
+      - name: Check for go mod & workspace changes
+        run: |
+          if ! git diff --exit-code --quiet; then
+            echo "Changes detected:"
+            git diff
+            echo "Please run 'make update-workspace' and commit the changes."
+            exit 1
+          fi
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -16,14 +43,15 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.21"
+        go-version-file: 'go.mod'
     # make lint
     - name: Lint
       uses: golangci/golangci-lint-action@v3
       with:
-        version: v1.55.2
+        version: v1.60.3
+        only-new-issues: true
         args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   test:
     runs-on: ubuntu-latest
@@ -35,9 +63,9 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.21"
+        go-version-file: 'go.mod'
     # make test
     - name: Test
       # find all go.mod files and run go test against directories containing go.mod files
@@ -52,9 +80,12 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.21"
+        go-version-file: 'go.mod'
+       # Preflight checks
+    - name: Preflight checks
+      run: make check-go-version
     # make build
     - name: Build
       run: go build -v cmd/grafana-app-sdk/*.go

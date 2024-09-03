@@ -4,20 +4,24 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -450,21 +454,30 @@ func (g *groupVersionClient) metrics() []prometheus.Collector {
 // WatchResponse wraps a kubernetes watch.Interface in order to implement resource.WatchResponse.
 // The underlying watch.Interface can be accessed with KubernetesWatch().
 type WatchResponse struct {
-	watch   watch.Interface
-	ch      chan resource.WatchEvent
-	stopCh  chan struct{}
-	ex      resource.Object
-	codec   resource.Codec
-	started bool
+	watch    watch.Interface
+	ch       chan resource.WatchEvent
+	stopCh   chan struct{}
+	ex       resource.Object
+	codec    resource.Codec
+	started  bool
+	startMux sync.Mutex
 }
 
-//nolint:revive,staticcheck
+//nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
 	for {
 		select {
 		case evt := <-w.watch.ResultChan():
+			if evt.Object == nil {
+				if logging.DefaultLogger != nil {
+					logging.DefaultLogger.Warn("Received nil object in watch event")
+				}
+				break
+			}
 			var obj resource.Object
-			if cast, ok := evt.Object.(intoObject); ok {
+			if cast, ok := evt.Object.(resource.Object); ok {
+				obj = cast
+			} else if cast, ok := evt.Object.(intoObject); ok {
 				obj = w.ex.Copy()
 				err := cast.Into(obj, w.codec)
 				if err != nil {
@@ -475,6 +488,11 @@ func (w *WatchResponse) start() {
 				obj = cast.ResourceObject()
 			} else {
 				// TODO: hmm
+				if logging.DefaultLogger != nil {
+					logging.DefaultLogger.Error(
+						"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
+						"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
+				}
 			}
 			w.ch <- resource.WatchEvent{
 				EventType: string(evt.Type),
@@ -490,9 +508,12 @@ func (w *WatchResponse) start() {
 // Stop stops the translation channel between the kubernetes watch.Interface,
 // and stops the continued watch request encapsulated by the watch.Interface.
 func (w *WatchResponse) Stop() {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	w.stopCh <- struct{}{}
 	close(w.ch)
 	w.watch.Stop()
+	w.started = false
 }
 
 // WatchEvents returns a channel that receives watch events.
@@ -500,9 +521,12 @@ func (w *WatchResponse) Stop() {
 // This channel will stop receiving events if KubernetesWatch() is called, as that halts the event translation process.
 // If Stop() is called, ths channel is closed.
 func (w *WatchResponse) WatchEvents() <-chan resource.WatchEvent {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	if !w.started {
 		// Start the translation buffer
 		go w.start()
+		w.started = true
 	}
 	return w.ch
 }
@@ -511,9 +535,12 @@ func (w *WatchResponse) WatchEvents() <-chan resource.WatchEvent {
 // Calling this method will shut down the translation channel between the watch.Interface and ResultChan().
 // Using both KubernetesWatch() and ResultChan() simultaneously is not supported, and may result in undefined behavior.
 func (w *WatchResponse) KubernetesWatch() watch.Interface {
+	w.startMux.Lock()
+	defer w.startMux.Unlock()
 	// Stop the internal channel with the translation layer
 	if w.started {
 		w.stopCh <- struct{}{}
+		w.started = false
 	}
 	return w.watch
 }
@@ -529,12 +556,26 @@ type k8sErrBody struct {
 // but the response body often has more details about the nature of the failure (for example, missing a required field).
 // Ths method will parse the response body for a better error message if available, and return a *ServerResponseError
 // if the status code is a non-success (>= 300).
+//
+//nolint:govet
 func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
+	if err != nil {
+		statusErr := &k8serrors.StatusError{}
+		if errors.As(err, &statusErr) {
+			if statusCode == 0 || (statusErr.ErrStatus.Code > 0 && statusCode != int(statusErr.ErrStatus.Code)) {
+				return NewServerResponseError(statusErr, int(statusErr.ErrStatus.Code))
+			}
+			return NewServerResponseError(statusErr, statusCode)
+		}
+	}
 	if len(responseBytes) > 0 {
 		parsed := k8sErrBody{}
 		// If we can parse the response body, use the error contained there instead, because it's clearer
 		if e := json.Unmarshal(responseBytes, &parsed); e == nil {
 			err = fmt.Errorf(parsed.Message)
+			if statusCode == 0 && parsed.Code > 0 {
+				statusCode = parsed.Code
+			}
 		}
 	}
 	// HTTP error?

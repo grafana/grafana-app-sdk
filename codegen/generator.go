@@ -27,7 +27,7 @@ type Generator[T any] struct {
 }
 
 func (g *Generator[T]) Generate(jennies JennyList[T], selectors ...string) (codejen.Files, error) {
-	return g.FilteredGenerate(jennies, func(t T) bool {
+	return g.FilteredGenerate(jennies, func(_ T) bool {
 		return true
 	}, selectors...)
 }

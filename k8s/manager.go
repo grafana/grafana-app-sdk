@@ -332,17 +332,25 @@ type CustomResourceDefinitionSpec struct {
 
 // CustomResourceDefinitionSpecVersion is the representation of a specific version of a CRD, as part of the overall spec
 type CustomResourceDefinitionSpecVersion struct {
-	Name         string         `json:"name" yaml:"name"`
-	Served       bool           `json:"served" yaml:"served"`
-	Storage      bool           `json:"storage" yaml:"storage"`
-	Schema       map[string]any `json:"schema" yaml:"schema"`
-	Subresources map[string]any `json:"subresources,omitempty" yaml:"subresources,omitempty"`
+	Name             string                                    `json:"name" yaml:"name"`
+	Served           bool                                      `json:"served" yaml:"served"`
+	Storage          bool                                      `json:"storage" yaml:"storage"`
+	Schema           map[string]any                            `json:"schema" yaml:"schema"`
+	Subresources     map[string]any                            `json:"subresources,omitempty" yaml:"subresources,omitempty"`
+	SelectableFields []CustomResourceDefinitionSelectableField `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 }
 
 // CustomResourceDefinitionSpecNames is the struct representing the names (kind and plural) of a kubernetes CRD
 type CustomResourceDefinitionSpecNames struct {
 	Kind   string `json:"kind" yaml:"kind"`
 	Plural string `json:"plural" yaml:"plural"`
+}
+
+// CustomResourceDefinitionSelectableField is the struct representing a selectable field in a kubernetes CRD.
+// This is a copy of https://pkg.go.dev/k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1#SelectableField
+// with YAML tags attached to the field.
+type CustomResourceDefinitionSelectableField struct {
+	JSONPath string `json:"jsonPath" yaml:"jsonPath"`
 }
 
 // DeepCopyObject is an implementation of the receiver method required for implementing runtime.Object.

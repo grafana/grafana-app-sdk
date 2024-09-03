@@ -18,7 +18,7 @@ var replArgRegex = regexp.MustCompile(`\{([^\}^\:]+):?([^\}^\:]*)\}`)
 // that is used for handling requests when a handler can't be found for a given route.
 // This can be overridden in the Router.
 var DefaultNotFoundHandler HandlerFunc = func(
-	ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender,
+	_ context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender,
 ) {
 	_ = sender.Send(&backend.CallResourceResponse{
 		Status: http.StatusNotFound,
@@ -277,6 +277,8 @@ func (r *Router) CallResource(
 }
 
 // ListenAndServe hooks into the backend of the plugin SDK to handle and serve resource API requests
+// nolint: staticcheck
+// TODO: migration to backend.Manage requires plugin ID
 func (r *Router) ListenAndServe() error {
 	return backend.Serve(backend.ServeOpts{
 		CallResourceHandler: r,

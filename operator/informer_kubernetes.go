@@ -6,10 +6,6 @@ import (
 	"reflect"
 	"time"
 
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
@@ -42,70 +38,10 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchCl
 	}
 
 	return &KubernetesBasedInformer{
-		schema: sch,
-		ErrorHandler: func(ctx context.Context, err error) {
-			// Do nothing
-		},
+		schema:       sch,
+		ErrorHandler: DefaultErrorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
-			&cache.ListWatch{
-				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-					ctx, span := GetTracer().Start(context.Background(), "informer-list")
-					defer span.End()
-					span.SetAttributes(
-						attribute.String("kind.name", sch.Kind()),
-						attribute.String("kind.group", sch.Group()),
-						attribute.String("kind.version", sch.Version()),
-						attribute.String("namespace", namespace),
-					)
-					resp := resource.UntypedList{}
-					err := client.ListInto(ctx, namespace, resource.ListOptions{
-						LabelFilters:    labelFilters,
-						Continue:        options.Continue,
-						Limit:           int(options.Limit),
-						ResourceVersion: options.ResourceVersion,
-					}, &resp)
-					if err != nil {
-						return nil, err
-					}
-					return &resp, nil
-				},
-				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-					ctx, span := GetTracer().Start(context.Background(), "informer-watch")
-					defer span.End()
-					span.SetAttributes(
-						attribute.String("kind.name", sch.Kind()),
-						attribute.String("kind.group", sch.Group()),
-						attribute.String("kind.version", sch.Version()),
-						attribute.String("namespace", namespace),
-					)
-					opts := resource.WatchOptions{
-						ResourceVersion:      options.ResourceVersion,
-						ResourceVersionMatch: string(options.ResourceVersionMatch),
-						LabelFilters:         labelFilters,
-					}
-					// TODO: can't defer the cancel call for the context, because it should only be canceled if the
-					// _caller_ of WatchFunc finishes with the WatchResponse before the timeout elapses...
-					// Seems to be a limitation of the kubernetes implementation here
-					/* if options.TimeoutSeconds != nil {
-						timeout := time.Duration(*options.TimeoutSeconds) * time.Second
-						ctx, cancel = context.WithTimeout(ctx, timeout)
-					}*/
-					watchResp, err := client.Watch(ctx, namespace, opts)
-					if err != nil {
-						return nil, err
-					}
-					if cast, ok := watchResp.(KubernetesCompatibleWatch); ok {
-						return cast.KubernetesWatch(), nil
-					}
-					// If we can't extract a pure watch.Interface from the watch response, we have to make one
-					w := &watchWrapper{
-						watch: watchResp,
-						ch:    make(chan watch.Event),
-					}
-					go w.start()
-					return w, nil
-				},
-			},
+			NewListerWatcher(client, sch, namespace, labelFilters...),
 			nil,
 			time.Second*30,
 			cache.Indexers{
@@ -122,84 +58,7 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
-	_, err := k.SharedIndexInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-add")
-			defer span.End()
-			cast, err := k.toResourceObject(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-				return
-			}
-			gvk := cast.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cast.GetNamespace()),
-				attribute.String("name", cast.GetName()),
-			)
-			err = handler.Add(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-			}
-		},
-		UpdateFunc: func(oldObj, newObj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-update")
-			defer span.End()
-			cOld, err := k.toResourceObject(oldObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-				return
-			}
-			// None of these should change between old and new, so we can set them here with old's values
-			gvk := cOld.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cOld.GetNamespace()),
-				attribute.String("name", cOld.GetName()),
-			)
-			cNew, err := k.toResourceObject(newObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-				return
-			}
-			err = handler.Update(ctx, cOld, cNew)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-			}
-		},
-		DeleteFunc: func(obj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-delete")
-			defer span.End()
-			cast, err := k.toResourceObject(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-				return
-			}
-			gvk := cast.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cast.GetNamespace()),
-				attribute.String("name", cast.GetName()),
-			)
-			err = handler.Delete(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				k.errorHandler(ctx, err)
-			}
-		},
-	})
+	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler))
 
 	return err
 }
@@ -216,6 +75,21 @@ func (k *KubernetesBasedInformer) Schema() resource.Schema {
 }
 
 func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
+	return toResourceObject(obj, k.schema)
+}
+
+func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
+	if k.ErrorHandler != nil {
+		k.ErrorHandler(ctx, err)
+	}
+}
+
+func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
+	// Nil check
+	if obj == nil {
+		return nil, fmt.Errorf("object cannot be nil")
+	}
+
 	// First, check if it's already a resource.Object
 	if cast, ok := obj.(resource.Object); ok {
 		return cast, nil
@@ -228,20 +102,14 @@ func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, er
 
 	// Next, see if it has an `Into` method for casting to a resource.Object
 	if cast, ok := obj.(ConvertableIntoResourceObject); ok {
-		newObj := k.schema.ZeroValue()
+		newObj := kind.ZeroValue()
 		// TODO: better
-		err := cast.Into(newObj, k.schema.Codec(resource.KindEncodingJSON))
+		err := cast.Into(newObj, kind.Codec(resource.KindEncodingJSON))
 		return newObj, err
 	}
 	// TODO: other methods...?
 
 	return nil, fmt.Errorf("unable to cast %v into resource.Object", reflect.TypeOf(obj))
-}
-
-func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
-	if k.ErrorHandler != nil {
-		k.ErrorHandler(ctx, err)
-	}
 }
 
 // ConvertableIntoResourceObject describes any object which can be marshaled into a resource.Object.

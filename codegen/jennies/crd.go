@@ -3,6 +3,7 @@ package jennies
 
 import (
 	"fmt"
+	"strings"
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
@@ -88,6 +89,22 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 		},
 		Subresources: make(map[string]any),
 	}
+	if len(kv.SelectableFields) > 0 {
+		sf := make([]k8s.CustomResourceDefinitionSelectableField, len(kv.SelectableFields))
+		for i, field := range kv.SelectableFields {
+			field = strings.Trim(field, " ")
+			if field == "" {
+				continue
+			}
+			if field[0] != '.' {
+				field = fmt.Sprintf(".%s", field)
+			}
+			sf[i] = k8s.CustomResourceDefinitionSelectableField{
+				JSONPath: field,
+			}
+		}
+		def.SelectableFields = sf
+	}
 
 	for k := range props {
 		if k != "spec" {
@@ -127,7 +144,7 @@ func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) 
 	oyaml, err := CUEValueToOAPIYAML(v, CUEOpenAPIConfig{
 		Name:    name,
 		Version: version,
-		NameFunc: func(val cue.Value, path cue.Path) string {
+		NameFunc: func(_ cue.Value, _ cue.Path) string {
 			return ""
 		},
 		ExpandReferences: true,
