@@ -38,7 +38,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v5
       with:
-        go-version-file: 'go.mod'
+        go-version-file: './grafana-app-sdk/go.mod'
     # Install the CLI
     - name: Install the CLI
       run: cd cmd/grafana-app-sdk && go install && cd -

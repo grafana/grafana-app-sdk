@@ -2,6 +2,11 @@ module github.com/grafana/grafana-app-sdk
 
 go 1.23.0
 
+retract (
+	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
+	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
+)
+
 require (
 	cuelang.org/go v0.5.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
