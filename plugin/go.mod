@@ -3,7 +3,7 @@ module github.com/grafana/grafana-app-sdk/plugin
 go 1.23.0
 
 require (
-	github.com/grafana/grafana-app-sdk v0.18.3
+	github.com/grafana/grafana-app-sdk v0.18.4
 	github.com/grafana/grafana-plugin-sdk-go v0.245.0
 	github.com/prometheus/client_golang v1.20.2
 	github.com/stretchr/testify v1.9.0
