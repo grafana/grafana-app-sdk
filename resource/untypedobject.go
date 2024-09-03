@@ -26,6 +26,8 @@ var (
 )
 
 // UntypedObject implements Object and represents a generic implementation of an instance of any kubernetes Kind.
+// For an unstructured implementation of Object which leaves the metadata and subresources as part of the unstructured data,
+// treating the whole object as unstructured, see RawUntypedObject.
 type UntypedObject struct {
 	metav1.TypeMeta
 	metav1.ObjectMeta `json:"metadata"`
