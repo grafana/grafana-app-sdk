@@ -66,17 +66,27 @@ type AppConfig struct {
 	ExtraConfig map[string]any
 }
 
+// AppProvider represents a type which can provide an app manifest, and create a new App when given a configuration.
+// It should be used by runners to determine an app's capabilities and create an instance of the app to run.
 type AppProvider interface {
 	Manifest() AppManifest
 	NewApp(AppConfig) (App, error)
 }
 
+// Runnable represents a type which can be run until it errors or the provided channel is stopped (or receives a message)
 type Runnable interface {
+	// Run runs the process and blocks until one of the following conditions are met:
+	// * An unrecoverable error occurs, in which case it returns the error
+	// * The provided channel is closed, in which case processing should stop and the method should return
+	// * The provided channel is sent a message, in which case processing should stop and the method should return
+	// * The process completes and does not need to run again
 	Run(<-chan struct{}) error
 }
 
 type App interface {
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
+	// If there are multiple versions of a Kind, each one SHOULD be returned by this method,
+	// as app runners may depend on having access to all kinds.
 	ManagedKinds() []Kind
 	// Runner returns a Runnable with an app main loop. Any business logic that is not/can not be exposed
 	// via other App interfaces should be contained within this method.

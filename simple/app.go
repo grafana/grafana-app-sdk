@@ -12,19 +12,26 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+var _ resource.AppProvider = &AppProvider{}
+
+// AppProvider is a simple implementation of resource.AppProvider which returns AppManifest when Manifest is called,
+// and calls NewAppFunc when NewApp is called.
 type AppProvider struct {
 	AppManifest resource.AppManifest
 	NewAppFunc  func(config resource.AppConfig) (resource.App, error)
 }
 
+// Manifest returns the AppManifest in the AppProvider
 func (a *AppProvider) Manifest() resource.AppManifest {
 	return a.AppManifest
 }
 
+// NewApp calls NewAppFunc and returns the result
 func (a *AppProvider) NewApp(settings resource.AppConfig) (resource.App, error) {
 	return a.NewAppFunc(settings)
 }
 
+// NewAppProvider is a convenience method for creating a new AppProvider
 func NewAppProvider(manifest resource.AppManifest, newAppFunc func(cfg resource.AppConfig) (resource.App, error)) *AppProvider {
 	return &AppProvider{
 		AppManifest: manifest,

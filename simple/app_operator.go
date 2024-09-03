@@ -31,6 +31,8 @@ type SOperatorConfig struct {
 	WebhookConfig OperatorWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig MetricsConfig
+	// TracingConfig contains the configuration for sending traces, if desired
+	TracingConfig TracingConfig
 	// AppConfig contains the configuration needed for creating and running the underlying App
 	AppConfig resource.AppConfig
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
@@ -56,6 +58,14 @@ func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{})
 	app, err := s.provider.NewApp(config.AppConfig)
 	if err != nil {
 		return err
+	}
+
+	// Set up tracing, if enabled
+	if config.TracingConfig.Enabled {
+		err := SetTraceProvider(config.TracingConfig.OpenTelemetryConfig)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Build the operator
@@ -108,7 +118,10 @@ func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{})
 	// Metrics
 	if config.MetricsConfig.Enabled {
 		exporter := metrics.NewExporter(config.MetricsConfig.ExporterConfig)
-		exporter.RegisterCollectors(op.PrometheusCollectors()...)
+		err = exporter.RegisterCollectors(op.PrometheusCollectors()...)
+		if err != nil {
+			return err
+		}
 		op.AddController(exporter)
 	}
 
