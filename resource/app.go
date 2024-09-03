@@ -22,6 +22,33 @@ type RawObject struct {
 	Encoding KindEncoding `json:"-"`
 }
 
+func NewEmbeddedAppManifest(manifestData AppManifestData) AppManifest {
+	return AppManifest{
+		Location: AppManifestLocation{
+			Type: AppManifestLocationEmbedded,
+		},
+		ManifestData: &manifestData,
+	}
+}
+
+func NewOnDiskAppManifest(path string) AppManifest {
+	return AppManifest{
+		Location: AppManifestLocation{
+			Type: AppManifestLocationFilePath,
+			Path: path,
+		},
+	}
+}
+
+func NewAAPIServerAppManifest(resourceName string) AppManifest {
+	return AppManifest{
+		Location: AppManifestLocation{
+			Type: AppManifestLocationAPIServerResource,
+			Path: resourceName,
+		},
+	}
+}
+
 type AppManifest struct {
 	// ManifestData must be present if Location.Type == "embedded"
 	ManifestData *AppManifestData

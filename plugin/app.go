@@ -114,7 +114,7 @@ func (a *App) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest
 	}, nil
 }
 func (a *App) ConvertObject(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error) {
-	if !a.isInitialized() {
+	/*if !a.isInitialized() {
 		return nil, fmt.Errorf("app is not initialized")
 	}
 	convReq := resource.ConversionRequest{
@@ -141,6 +141,7 @@ func (a *App) ConvertObject(ctx context.Context, req *backend.ConversionRequest)
 			return &backend.ConversionResponse{
 				Allowed: false,
 				Result: &backend.StatusResult{
+					Status: "Failure",
 					Message: "invalid target GroupVersionKind",
 				},
 			}, nil
@@ -177,7 +178,8 @@ func (a *App) ConvertObject(ctx context.Context, req *backend.ConversionRequest)
 	return &backend.ConversionResponse{
 		Allowed:     true,
 		ObjectBytes: converted.Raw,
-	}, nil
+	}, nil*/
+	return &backend.ConversionResponse{}, nil
 }
 
 func (a *App) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
