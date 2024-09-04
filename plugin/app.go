@@ -3,16 +3,21 @@ package plugin
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 
+	sdkApp "github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/app"
+	pluginApp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
+	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -20,9 +25,17 @@ var (
 	_ backend.AdmissionHandler = &App{}
 )
 
+type capabilities struct {
+	conversion bool
+	mutation   bool
+	validation bool
+}
+
 type App struct {
-	provider       resource.AppProvider
-	app            resource.App
+	provider       sdkApp.AppProvider
+	app            sdkApp.App
+	manifestData   *sdkApp.ManifestData
+	capabilities   map[string]capabilities
 	initialized    bool
 	initializedMux sync.RWMutex
 	runnerStopCh   chan struct{}
@@ -36,7 +49,7 @@ type Options struct {
 }
 
 func (a *App) Run(pluginID string, opts Options) error {
-	return app.Manage(pluginID, a.instanceFactory, app.ManageOpts{
+	return pluginApp.Manage(pluginID, a.instanceFactory, pluginApp.ManageOpts{
 		GRPCSettings: opts.GRPCSettings,
 		TracingOpts:  opts.TracingOpts,
 	})
@@ -46,8 +59,8 @@ func (a *App) ValidateAdmission(ctx context.Context, req *backend.AdmissionReque
 	if !a.isInitialized() {
 		return nil, fmt.Errorf("app is not initialized")
 	}
-	validator, ok := a.app.(resource.ValidatorApp)
-	if !ok {
+	// If validation isn't supported, just return allowed
+	if c, ok := a.getCapabilities(req.Kind.Kind, req.Kind.Version); !ok || !c.validation {
 		return &backend.ValidationResponse{
 			Allowed: true,
 		}, nil
@@ -56,7 +69,7 @@ func (a *App) ValidateAdmission(ctx context.Context, req *backend.AdmissionReque
 	if err != nil {
 		return nil, err
 	}
-	err = validator.Validate(ctx, adm)
+	err = a.app.Validate(ctx, adm)
 	if err != nil {
 		return &backend.ValidationResponse{
 			Allowed: false,
@@ -73,8 +86,8 @@ func (a *App) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest
 	if !a.isInitialized() {
 		return nil, fmt.Errorf("app is not initialized")
 	}
-	mutator, ok := a.app.(resource.MutatorApp)
-	if !ok {
+	// If mutation isn't supported, just return allowed with no changes
+	if c, ok := a.getCapabilities(req.Kind.Kind, req.Kind.Version); !ok || !c.mutation {
 		return &backend.MutationResponse{
 			Allowed: true,
 		}, nil
@@ -83,7 +96,7 @@ func (a *App) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest
 	if err != nil {
 		return nil, err
 	}
-	resp, err := mutator.Mutate(ctx, adm)
+	resp, err := a.app.Mutate(ctx, adm)
 	if err != nil {
 		return &backend.MutationResponse{
 			Allowed: false,
@@ -113,85 +126,109 @@ func (a *App) MutateAdmission(ctx context.Context, req *backend.AdmissionRequest
 		ObjectBytes: buf.Bytes(),
 	}, nil
 }
+
+type mdUnmarshaler struct {
+	APIVersion string `json:"apiVersion" yaml:"apiVersion"`
+	Kind       string `json:"kind" yaml:"kind"`
+}
+
 func (a *App) ConvertObject(ctx context.Context, req *backend.ConversionRequest) (*backend.ConversionResponse, error) {
-	/*if !a.isInitialized() {
+	if !a.isInitialized() {
 		return nil, fmt.Errorf("app is not initialized")
 	}
-	convReq := resource.ConversionRequest{
-		SourceGVK: schema.GroupVersionKind{
-			Group:   req.Kind.Group,
-			Version: req.Kind.Version,
-			Kind:    req.Kind.Kind,
-		},
-		TargetGVK: schema.GroupVersionKind{
-			Group:   req.Kind.Group,
-			Version: req.TargetVersion,
-			Kind:    req.Kind.Kind,
-		},
-		Raw: resource.RawObject{
-			Raw:      req.ObjectBytes,
-			Encoding: resource.KindEncodingJSON,
-		},
-	}
-	converter, ok := a.app.(resource.ConverterApp)
-	if !ok {
-		// Do a basic conversion
-		dstKind, ok := a.gvkKinds[convReq.TargetGVK.String()]
-		if !ok {
-			return &backend.ConversionResponse{
-				Allowed: false,
-				Result: &backend.StatusResult{
-					Status: "Failure",
+	resp := &backend.ConversionResponse{}
+	for _, obj := range req.Objects {
+		srcGVK := schema.GroupVersionKind{}
+		enc := resource.KindEncodingUnknown
+		// We don't have kind information in the request, so we need to do a partial unmarshal on the object to get
+		// source GroupVersion, and Kind
+		switch obj.ContentType {
+		case "application/json":
+			enc = resource.KindEncodingJSON
+			dst := mdUnmarshaler{}
+			err := json.Unmarshal(obj.Raw, &mdUnmarshaler{})
+			if err != nil {
+				return nil, err
+			}
+			srcGVK = schema.FromAPIVersionAndKind(dst.APIVersion, dst.Kind)
+		case "application/x-yaml", "application/yaml":
+			enc = resource.KindEncodingYAML
+			dst := mdUnmarshaler{}
+			err := yaml.Unmarshal(obj.Raw, &mdUnmarshaler{})
+			if err != nil {
+				return nil, err
+			}
+			srcGVK = schema.FromAPIVersionAndKind(dst.APIVersion, dst.Kind)
+		}
+		convReq := sdkApp.ConversionRequest{
+			SourceGVK: srcGVK,
+			TargetGVK: schema.GroupVersionKind{
+				Group:   req.TargetVersion.Group,
+				Version: req.TargetVersion.Version,
+				Kind:    srcGVK.Kind,
+			},
+			Raw: sdkApp.RawObject{
+				Raw:      obj.Raw,
+				Encoding: enc,
+			},
+		}
+		if c, ok := a.getCapabilities(srcGVK.Kind, srcGVK.Version); !ok || !c.conversion {
+			// The app doesn't have conversion capabilities, but we received a conversion request.
+			// If we error here, the app will error, so instead do a basic conversion
+			dstKind, ok := a.gvkKinds[convReq.TargetGVK.String()]
+			if !ok {
+				resp.Result = &backend.StatusResult{
+					Status:  "Failure",
 					Message: "invalid target GroupVersionKind",
-				},
-			}, nil
-		}
-		obj, err := dstKind.Read(bytes.NewReader(req.ObjectBytes), resource.KindEncodingJSON)
-		if err != nil {
-			return &backend.ConversionResponse{
-				Allowed: false,
-				Result: &backend.StatusResult{
+				}
+				return resp, nil
+			}
+			converted, err := dstKind.Read(bytes.NewReader(obj.Raw), resource.KindEncoding(obj.ContentType))
+			if err != nil {
+				resp.Result = &backend.StatusResult{
+					Status:  "Failure",
 					Message: err.Error(),
-				},
-			}, nil
-		}
-		obj.SetGroupVersionKind(dstKind.GroupVersionKind())
-		buf := bytes.Buffer{}
-		err = dstKind.Write(obj, &buf, resource.KindEncodingJSON)
-		if err != nil {
-			return &backend.ConversionResponse{
-				Allowed: false,
-				Result: &backend.StatusResult{
+				}
+				return resp, nil
+			}
+			converted.SetGroupVersionKind(dstKind.GroupVersionKind())
+			buf := bytes.Buffer{}
+			err = dstKind.Write(converted, &buf, resource.KindEncoding(obj.ContentType))
+			if err != nil {
+				resp.Result = &backend.StatusResult{
+					Status:  "Failure",
 					Message: err.Error(),
-				},
-			}, nil
+				}
+				return resp, nil
+			}
+			resp.Objects = append(resp.Objects, backend.RawObject{
+				Raw:         buf.Bytes(),
+				ContentType: obj.ContentType,
+			})
+		} else {
+			converted, err := a.app.Convert(ctx, convReq)
+			if err != nil {
+				resp.Result = &backend.StatusResult{
+					Status:  "Failure",
+					Message: err.Error(),
+				}
+				return resp, nil
+			}
+			resp.Objects = append(resp.Objects, backend.RawObject{
+				Raw:         converted.Raw,
+				ContentType: string(converted.Encoding),
+			})
 		}
-		return &backend.ConversionResponse{
-			Allowed:     true,
-			ObjectBytes: buf.Bytes(),
-		}, nil
 	}
-	converted, err := converter.Convert(ctx, convReq)
-	if err != nil {
-		return nil, err
+	resp.Result = &backend.StatusResult{
+		Status: "Success",
 	}
-	return &backend.ConversionResponse{
-		Allowed:     true,
-		ObjectBytes: converted.Raw,
-	}, nil*/
-	return &backend.ConversionResponse{}, nil
+	return resp, nil
 }
 
 func (a *App) CallResource(ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender) error {
 	if !a.isInitialized() {
 		return fmt.Errorf("app is not initialized")
-	}
-
-	caller, ok := a.app.(resource.SubresourceApp)
-	if !ok {
-		return sender.Send(&backend.CallResourceResponse{
-			Status: http.StatusNotFound,
-		})
 	}
 
 	segments := strings.Split(req.Path, "/")
@@ -229,7 +266,7 @@ func (a *App) CallResource(ctx context.Context, req *backend.CallResourceRequest
 		headers: make(http.Header),
 	}
 
-	err := caller.CallSubresource(ctx, &w, &resource.SubresourceRequest{
+	err := a.app.CallSubresource(ctx, &w, &sdkApp.SubresourceRequest{
 		ResourceIdentifier: id,
 		SubresourcePath:    path,
 		Method:             req.Method,
@@ -252,10 +289,12 @@ func (a *App) instanceFactory(ctx context.Context, settings backend.AppInstanceS
 	// For now, we have to hard-code the kubeconfig loading as it's not provided in settings
 	a.initializedMux.Lock()
 	defer a.initializedMux.Unlock()
-	app, err := a.provider.NewApp(resource.AppConfig{})
+	app, err := a.provider.NewApp(sdkApp.AppConfig{})
+	a.manifestData, err = a.fetchManifestData()
 	if err != nil {
 		return nil, err
 	}
+	a.setCapabilities(a.manifestData)
 	a.app = app
 	for _, kind := range a.app.ManagedKinds() {
 		a.gvkKinds[kind.GroupVersionKind().String()] = kind
@@ -326,6 +365,59 @@ func (a *App) pluginAdmissionRequestToResourceAdmissionRequest(req *backend.Admi
 			Username: req.PluginContext.User.Name,
 		},
 	}, &kind, nil
+}
+
+func (a *App) getCapabilities(kind, version string) (capabilities, bool) {
+	c, ok := a.capabilities[fmt.Sprintf("%s/%s", kind, version)]
+	return c, ok
+}
+
+func (a *App) setCapabilities(manifestData *sdkApp.ManifestData) {
+	if manifestData == nil {
+		return
+	}
+	for _, kind := range manifestData.Kinds {
+		for _, version := range kind.Versions {
+			if version.Admission == nil {
+				continue
+			}
+			a.capabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
+				conversion: kind.Conversion,
+				mutation:   version.Admission.SupportsAnyMutation(),
+				validation: version.Admission.SupportsAnyValidation(),
+			}
+		}
+	}
+}
+
+func (a *App) fetchManifestData() (*sdkApp.ManifestData, error) {
+	// TODO: get from various places
+	manifest := a.provider.Manifest()
+	data := sdkApp.ManifestData{}
+	switch manifest.Location.Type {
+	case sdkApp.ManifestLocationEmbedded:
+		if manifest.ManifestData == nil {
+			return nil, fmt.Errorf("no ManifestData in Manifest")
+		}
+		data = *manifest.ManifestData
+	case sdkApp.ManifestLocationFilePath:
+		// TODO: more correct version?
+		dir := os.DirFS(".")
+		if contents, err := fs.ReadFile(dir, manifest.Location.Path); err == nil {
+			m := sdkApp.Manifest{}
+			if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
+				data = *m.ManifestData
+			} else {
+				return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
+		}
+	case sdkApp.ManifestLocationAPIServerResource:
+		// TODO: fetch from API server
+		return nil, fmt.Errorf("apiserver location not supported yet")
+	}
+	return &data, nil
 }
 
 type responseWriter struct {

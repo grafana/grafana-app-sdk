@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -12,27 +13,27 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var _ resource.AppProvider = &AppProvider{}
+var _ app.AppProvider = &AppProvider{}
 
 // AppProvider is a simple implementation of resource.AppProvider which returns AppManifest when Manifest is called,
 // and calls NewAppFunc when NewApp is called.
 type AppProvider struct {
-	AppManifest resource.AppManifest
-	NewAppFunc  func(config resource.AppConfig) (resource.App, error)
+	AppManifest app.Manifest
+	NewAppFunc  func(config app.AppConfig) (app.App, error)
 }
 
 // Manifest returns the AppManifest in the AppProvider
-func (a *AppProvider) Manifest() resource.AppManifest {
+func (a *AppProvider) Manifest() app.Manifest {
 	return a.AppManifest
 }
 
 // NewApp calls NewAppFunc and returns the result
-func (a *AppProvider) NewApp(settings resource.AppConfig) (resource.App, error) {
+func (a *AppProvider) NewApp(settings app.AppConfig) (app.App, error) {
 	return a.NewAppFunc(settings)
 }
 
 // NewAppProvider is a convenience method for creating a new AppProvider
-func NewAppProvider(manifest resource.AppManifest, newAppFunc func(cfg resource.AppConfig) (resource.App, error)) *AppProvider {
+func NewAppProvider(manifest app.Manifest, newAppFunc func(cfg app.AppConfig) (app.App, error)) *AppProvider {
 	return &AppProvider{
 		AppManifest: manifest,
 		NewAppFunc:  newAppFunc,
@@ -40,10 +41,11 @@ func NewAppProvider(manifest resource.AppManifest, newAppFunc func(cfg resource.
 }
 
 var (
-	_ resource.FullApp = &App{}
+	_ app.App = &App{}
 )
 
 // App is a simple, opinionated implementation of resource.App.
+// It must be created with NewApp to be valid.
 type App struct {
 	informerController *operator.InformerController
 	operator           *operator.Operator
@@ -72,9 +74,13 @@ type AppManagedKind struct {
 	Watcher           operator.ResourceWatcher
 	Validator         resource.ValidatingAdmissionController
 	Mutator           resource.MutatingAdmissionController
-	SubresourceRoutes map[string]func(ctx context.Context, writer http.ResponseWriter, req *resource.SubresourceRequest) error
+	SubresourceRoutes map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error
 }
 
+// NewApp creates a new instance of App, managing the kinds provided in AppConfig.ManagedKinds.
+// AppConfig MUST contain a valid KubeConfig to be valid. Kinds can be managed by the app either with
+// App.ManageKind or via AppConfig.ManagedKinds.
+// Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
 	app := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
@@ -104,13 +110,13 @@ func (a *App) ManagedKinds() []resource.Kind {
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
 // added via AddRunnable. The returned resource.Runnable also implements metrics.Provider, allowing the caller
 // to gather prometheus.Collector objects used by all underlying runners.
-func (a *App) Runner() resource.Runnable {
+func (a *App) Runner() app.Runnable {
 	return a.operator
 }
 
 // AddRunnable adds an arbitrary resource.Runnable runner to the App, which will be encapsulated as part of Runner().Run().
 // If the provided runner also implements metrics.Provider, PrometheusCollectors() will be called when called on Runner().
-func (a *App) AddRunnable(runner resource.Runnable) {
+func (a *App) AddRunnable(runner app.Runnable) {
 	a.operator.AddController(runner)
 }
 
@@ -120,6 +126,7 @@ type ReconcileOptions struct {
 	UsePlain     bool
 }
 
+// ManageKind introduces a new kind to manage.
 func (a *App) ManageKind(kind AppManagedKind, options ReconcileOptions) error {
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	if kind.Reconciler != nil || kind.Watcher != nil {
@@ -195,7 +202,7 @@ func (a *App) Mutate(ctx context.Context, req *resource.AdmissionRequest) (*reso
 	return k.Mutator.Mutate(ctx, req)
 }
 
-func (a *App) Convert(ctx context.Context, req resource.ConversionRequest) (*resource.RawObject, error) {
+func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
@@ -210,12 +217,12 @@ func (a *App) Convert(ctx context.Context, req resource.ConversionRequest) (*res
 		Version:    req.SourceGVK.Version,
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
-	return &resource.RawObject{
+	return &app.RawObject{
 		Raw: converted,
 	}, err
 }
 
-func (a *App) CallSubresource(ctx context.Context, writer http.ResponseWriter, req *resource.SubresourceRequest) error {
+func (a *App) CallSubresource(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
 	k, ok := a.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
 	if !ok {
 		writer.WriteHeader(http.StatusNotFound)

@@ -1,0 +1,28 @@
+package {{.Package}}
+
+import (
+    "github.com/grafana/grafana-app-sdk/app"
+)
+
+var appManifestData = app.ManifestData{
+    AppName: "{{.AppName}}",
+    Group: "{{.Group}}",
+    Kinds: []app.ManifestKind{ {{ range .Kinds }}
+        {
+            Kind: "{{.Kind}}",
+            Scope: "{{.Scope}}",
+            Conversion: {{.Conversion}},
+            Versions: []app.ManifestKindVersion{ {{ range .Versions }}
+            {
+                Name: "{{.Name}}",
+                Admission: &app.AdmissionCapabilities{}, // TODO
+            },
+            {{ end }} }
+        },
+        {{ end }} },
+}
+
+func LocalManifest() app.Manifest {
+    return app.NewEmbeddedManifest(appManifestData)
+}
+
