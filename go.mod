@@ -3,8 +3,8 @@ module github.com/grafana/grafana-app-sdk
 go 1.23.0
 
 retract (
-	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
+	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 )
 
 require (
@@ -27,7 +27,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.29.0
 	go.opentelemetry.io/otel/sdk v1.29.0
 	go.opentelemetry.io/otel/trace v1.29.0
-	golang.org/x/text v0.17.0
+	golang.org/x/text v0.18.0
 	golang.org/x/tools v0.24.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	google.golang.org/grpc v1.66.0
