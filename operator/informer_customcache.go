@@ -48,12 +48,12 @@ type CustomCacheInformer struct {
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
 func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) (*CustomCacheInformer, error) {
-	return NewMemcachedInformerWithLabelFilters(kind, client, ListWatchOptions{Namespace: namespace}, addrs...)
+	return NewMemcachedInformerWithFilters(kind, client, ListWatchOptions{Namespace: namespace}, addrs...)
 }
 
-// NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
+// NewMemcachedInformerWithFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchClient, filterOptions ListWatchOptions, addrs ...string) (*CustomCacheInformer, error) {
+func NewMemcachedInformerWithFilters(kind resource.Kind, client ListWatchClient, filterOptions ListWatchOptions, addrs ...string) (*CustomCacheInformer, error) {
 	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
 		Addrs: addrs,
 	})
