@@ -57,7 +57,7 @@ type RetryPolicy func(err error, attempt int) (bool, time.Duration)
 // retry time = initialDelay * (2^attempt).
 // If maxAttempts is exceeded, it will return false for the retry.
 func ExponentialBackoffRetryPolicy(initialDelay time.Duration, maxAttempts int) RetryPolicy {
-	return func(err error, attempt int) (bool, time.Duration) {
+	return func(_ error, attempt int) (bool, time.Duration) {
 		if attempt > maxAttempts {
 			return false, 0
 		}
@@ -77,7 +77,7 @@ type RetryDequeuePolicy func(newAction ResourceAction, newObject resource.Object
 // 2. If the newAction and retryAction are different, keep the retry (for example, a queued create retry, and a received update action)
 // 3. If the generation of newObject and retryObject is the same, keep the retry
 // 4. Otherwise, dequeue the retry
-var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject resource.Object, retryAction ResourceAction, retryObject resource.Object, retryError error) bool {
+var OpinionatedRetryDequeuePolicy = func(newAction ResourceAction, newObject resource.Object, retryAction ResourceAction, retryObject resource.Object, _ error) bool {
 	if newAction == ResourceActionDelete {
 		return true
 	}
@@ -301,12 +301,12 @@ func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
 	collectors := []prometheus.Collector{
 		c.totalEvents, c.reconcileLatency, c.inflightEvents, c.inflightActions, c.reconcilerLatency, c.watcherLatency,
 	}
-	c.informers.RangeAll(func(key string, index int, value Informer) {
+	c.informers.RangeAll(func(_ string, _ int, value Informer) {
 		if cast, ok := value.(metrics.Provider); ok {
 			collectors = append(collectors, cast.PrometheusCollectors()...)
 		}
 	})
-	c.watchers.RangeAll(func(key string, index int, value ResourceWatcher) {
+	c.watchers.RangeAll(func(_ string, _ int, value ResourceWatcher) {
 		if cast, ok := value.(metrics.Provider); ok {
 			collectors = append(collectors, cast.PrometheusCollectors()...)
 		}

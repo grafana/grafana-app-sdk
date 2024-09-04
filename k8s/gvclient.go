@@ -562,6 +562,8 @@ type k8sErrBody struct {
 // but the response body often has more details about the nature of the failure (for example, missing a required field).
 // Ths method will parse the response body for a better error message if available, and return a *ServerResponseError
 // if the status code is a non-success (>= 300).
+//
+//nolint:govet
 func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
 	if err != nil {
 		statusErr := &k8serrors.StatusError{}

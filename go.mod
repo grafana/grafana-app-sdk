@@ -1,8 +1,11 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.23
+go 1.23.0
 
-toolchain go1.23.0
+retract (
+	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
+	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
+)
 
 require (
 	cuelang.org/go v0.5.0
@@ -27,7 +30,7 @@ require (
 	golang.org/x/text v0.17.0
 	golang.org/x/tools v0.24.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
-	google.golang.org/grpc v1.65.0
+	google.golang.org/grpc v1.66.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.31.0
 	k8s.io/apiextensions-apiserver v0.31.0

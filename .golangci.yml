@@ -7,6 +7,8 @@ run:
 linters-settings:
   funlen:
     lines: 100
+    statements: 60
+    ignore-comments: true
   goimports:
     local-prefixes: github.com/grafana/grafana-app-sdk
   revive:

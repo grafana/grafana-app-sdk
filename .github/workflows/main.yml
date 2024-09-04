@@ -16,9 +16,9 @@ jobs:
         fetch-depth: 0
     # Go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.23"
+        go-version-file: 'go.mod'
     # make test
     - name: Test
       run: go test -v ./...
@@ -32,9 +32,12 @@ jobs:
         fetch-depth: 0
     # Go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.23"
+        go-version-file: 'go.mod'
+    # Preflight checks
+    - name: Preflight checks
+      run: make check-go-version
     # make build
     - name: Build
       run: go build -v cmd/grafana-app-sdk/*.go

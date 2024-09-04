@@ -144,7 +144,7 @@ func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) 
 	oyaml, err := CUEValueToOAPIYAML(v, CUEOpenAPIConfig{
 		Name:    name,
 		Version: version,
-		NameFunc: func(val cue.Value, path cue.Path) string {
+		NameFunc: func(_ cue.Value, _ cue.Path) string {
 			return ""
 		},
 		ExpandReferences: true,

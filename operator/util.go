@@ -37,7 +37,7 @@ func (l *ListMap[K, V]) ItemAt(key K, index int) (V, bool) {
 // It calls rangeFunc for each item in all lists. `key` is the list's map key,
 // `index` is the index within the list, and `value` is the value pointer, as in a normal `range` operation.
 func (l *ListMap[K, V]) RangeAll(rangeFunc func(key K, index int, value V)) {
-	l.internal.Range(func(key K, value []V) bool {
+	l.internal.Range(func(key K, _ []V) bool {
 		l.Range(key, func(i int, v V) {
 			rangeFunc(key, i, v)
 		})
@@ -49,7 +49,7 @@ func (l *ListMap[K, V]) RangeAll(rangeFunc func(key K, index int, value V)) {
 // It does not lock the map for writing, so new keys may be added during this call which may not be present in the result.
 func (l *ListMap[K, V]) Keys() []K {
 	keys := make([]K, 0)
-	l.internal.Range(func(key K, value []V) bool {
+	l.internal.Range(func(key K, _ []V) bool {
 		keys = append(keys, key)
 		return true
 	})

@@ -1,10 +1,15 @@
 module github.com/grafana/grafana-app-sdk/plugin
 
-go 1.22.5
+go 1.23.0
+
+retract (
+	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
+	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
+)
 
 require (
-	github.com/grafana/grafana-app-sdk v0.18.2
-	github.com/grafana/grafana-plugin-sdk-go v0.244.0
+	github.com/grafana/grafana-app-sdk v0.18.3
+	github.com/grafana/grafana-plugin-sdk-go v0.245.0
 	github.com/prometheus/client_golang v1.20.2
 	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.29.0
@@ -107,7 +112,7 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240822170219-fc7c04adadcd // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240822170219-fc7c04adadcd // indirect
-	google.golang.org/grpc v1.65.0 // indirect
+	google.golang.org/grpc v1.66.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/fsnotify/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
