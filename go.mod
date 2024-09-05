@@ -17,7 +17,7 @@ require (
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/matryer/moq v0.5.0
-	github.com/prometheus/client_golang v1.20.2
+	github.com/prometheus/client_golang v1.20.3
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
@@ -27,7 +27,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.29.0
 	go.opentelemetry.io/otel/sdk v1.29.0
 	go.opentelemetry.io/otel/trace v1.29.0
-	golang.org/x/text v0.17.0
+	golang.org/x/text v0.18.0
 	golang.org/x/tools v0.24.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
 	google.golang.org/grpc v1.66.0
