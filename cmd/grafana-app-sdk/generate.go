@@ -177,6 +177,7 @@ type kindGenConfig struct {
 	GroupKinds    bool
 }
 
+//nolint:goconst
 func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
 	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), modFS)
 	if err != nil {
@@ -269,6 +270,7 @@ func generateFrontendModelsThema(parser *themagen.CustomKindParser, genPath stri
 	return files, nil
 }
 
+//nolint:goconst
 func generateCRDsThema(parser *themagen.CustomKindParser, genPath string, encoding string, selectors []string) (codejen.Files, error) {
 	var ms themagen.Generator
 	if encoding == "yaml" {

@@ -4,9 +4,10 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // ConversionRequest is a request to convert a Kind from one version to another
@@ -33,16 +34,17 @@ type SubresourceRequest struct {
 	Body               []byte
 }
 
-type AppConfig struct {
-	Kubeconfig  rest.Config
-	ExtraConfig map[string]any
+type Config struct {
+	Kubeconfig   rest.Config
+	ManifestData ManifestData
+	ExtraConfig  map[string]any
 }
 
 // Provider represents a type which can provide an app manifest, and create a new App when given a configuration.
 // It should be used by runners to determine an app's capabilities and create an instance of the app to run.
 type Provider interface {
 	Manifest() Manifest
-	NewApp(AppConfig) (App, error)
+	NewApp(Config) (App, error)
 }
 
 // Runnable represents a type which can be run until it errors or the provided channel is stopped (or receives a message)

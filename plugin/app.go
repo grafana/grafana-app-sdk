@@ -11,14 +11,16 @@ import (
 	"strings"
 	"sync"
 
-	sdkApp "github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
-	pluginApp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
+	pluginapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	sdkapp "github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 var (
@@ -32,9 +34,9 @@ type capabilities struct {
 }
 
 type App struct {
-	provider       sdkApp.Provider
-	app            sdkApp.App
-	manifestData   *sdkApp.ManifestData
+	provider       sdkapp.Provider
+	app            sdkapp.App
+	manifestData   *sdkapp.ManifestData
 	capabilities   map[string]capabilities
 	initialized    bool
 	initializedMux sync.RWMutex
@@ -49,7 +51,7 @@ type Options struct {
 }
 
 func (a *App) Run(pluginID string, opts Options) error {
-	return pluginApp.Manage(pluginID, a.instanceFactory, pluginApp.ManageOpts{
+	return pluginapp.Manage(pluginID, a.instanceFactory, pluginapp.ManageOpts{
 		GRPCSettings: opts.GRPCSettings,
 		TracingOpts:  opts.TracingOpts,
 	})
@@ -160,14 +162,14 @@ func (a *App) ConvertObject(ctx context.Context, req *backend.ConversionRequest)
 			}
 			srcGVK = schema.FromAPIVersionAndKind(dst.APIVersion, dst.Kind)
 		}
-		convReq := sdkApp.ConversionRequest{
+		convReq := sdkapp.ConversionRequest{
 			SourceGVK: srcGVK,
 			TargetGVK: schema.GroupVersionKind{
 				Group:   req.TargetVersion.Group,
 				Version: req.TargetVersion.Version,
 				Kind:    srcGVK.Kind,
 			},
-			Raw: sdkApp.RawObject{
+			Raw: sdkapp.RawObject{
 				Raw:      obj.Raw,
 				Encoding: enc,
 			},
@@ -266,7 +268,7 @@ func (a *App) CallResource(ctx context.Context, req *backend.CallResourceRequest
 		headers: make(http.Header),
 	}
 
-	err := a.app.CallSubresource(ctx, &w, &sdkApp.SubresourceRequest{
+	err := a.app.CallSubresource(ctx, &w, &sdkapp.SubresourceRequest{
 		ResourceIdentifier: id,
 		SubresourcePath:    path,
 		Method:             req.Method,
@@ -281,16 +283,23 @@ func (a *App) CallResource(ctx context.Context, req *backend.CallResourceRequest
 }
 
 // TODO: need to map plugin context into a non-plugin version
-//func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
+// func (a *App) QueryData(ctx context.Context, req *backend.QueryDataRequest) (*backend.QueryDataResponse, error) {
 //
-//}
+// }
 
-func (a *App) instanceFactory(ctx context.Context, settings backend.AppInstanceSettings) (instancemgmt.Instance, error) {
+func (a *App) instanceFactory(_ context.Context, _ backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	// For now, we have to hard-code the kubeconfig loading as it's not provided in settings
 	a.initializedMux.Lock()
 	defer a.initializedMux.Unlock()
-	app, err := a.provider.NewApp(sdkApp.AppConfig{})
+	// TODO: get kubeconfig?
+	var err error
 	a.manifestData, err = a.fetchManifestData()
+	if err != nil {
+		return nil, err
+	}
+	app, err := a.provider.NewApp(sdkapp.Config{
+		ManifestData: *a.manifestData,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +313,14 @@ func (a *App) instanceFactory(ctx context.Context, settings backend.AppInstanceS
 	a.runnerStopCh = make(chan struct{})
 	runner := a.app.Runner()
 	if runner != nil {
-		go runner.Run(a.runnerStopCh)
+		go func() {
+			err := runner.Run(a.runnerStopCh)
+			if err != nil {
+				logging.DefaultLogger.With("error", err).Error("runner stopped unexpectedly")
+			} else {
+				logging.DefaultLogger.Info("runner stopped")
+			}
+		}()
 	}
 	return a, nil
 }
@@ -372,7 +388,7 @@ func (a *App) getCapabilities(kind, version string) (capabilities, bool) {
 	return c, ok
 }
 
-func (a *App) setCapabilities(manifestData *sdkApp.ManifestData) {
+func (a *App) setCapabilities(manifestData *sdkapp.ManifestData) {
 	if manifestData == nil {
 		return
 	}
@@ -390,30 +406,30 @@ func (a *App) setCapabilities(manifestData *sdkApp.ManifestData) {
 	}
 }
 
-func (a *App) fetchManifestData() (*sdkApp.ManifestData, error) {
+func (a *App) fetchManifestData() (*sdkapp.ManifestData, error) {
 	// TODO: get from various places
 	manifest := a.provider.Manifest()
-	data := sdkApp.ManifestData{}
+	data := sdkapp.ManifestData{}
 	switch manifest.Location.Type {
-	case sdkApp.ManifestLocationEmbedded:
+	case sdkapp.ManifestLocationEmbedded:
 		if manifest.ManifestData == nil {
 			return nil, fmt.Errorf("no ManifestData in Manifest")
 		}
 		data = *manifest.ManifestData
-	case sdkApp.ManifestLocationFilePath:
+	case sdkapp.ManifestLocationFilePath:
 		// TODO: more correct version?
 		dir := os.DirFS(".")
-		if contents, err := fs.ReadFile(dir, manifest.Location.Path); err == nil {
-			m := sdkApp.Manifest{}
-			if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
-				data = *m.ManifestData
-			} else {
-				return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
-			}
-		} else {
+		contents, err := fs.ReadFile(dir, manifest.Location.Path)
+		if err != nil {
 			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
 		}
-	case sdkApp.ManifestLocationAPIServerResource:
+		m := sdkapp.Manifest{}
+		if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
+			data = *m.ManifestData
+		} else {
+			return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
+		}
+	case sdkapp.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server
 		return nil, fmt.Errorf("apiserver location not supported yet")
 	}

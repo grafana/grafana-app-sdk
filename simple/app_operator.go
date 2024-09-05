@@ -8,13 +8,14 @@ import (
 	"io/fs"
 	"os"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // StandaloneOperator runs an app as a standalone operator, capable of exposing admission (validation, mutation)
@@ -26,7 +27,7 @@ type StandaloneOperator struct {
 	provider app.Provider
 }
 
-// NewStandaloneOperator creates a new, properly-initalized instance of a StandaloneOperator,
+// NewStandaloneOperator creates a new, properly-initialized instance of a StandaloneOperator,
 // which will use the given app.Provider to instantiate a new underlying app.
 func NewStandaloneOperator(provider app.Provider) (*StandaloneOperator, error) {
 	if provider == nil {
@@ -46,7 +47,7 @@ type OperatorAppConfig struct {
 	// TracingConfig contains the configuration for sending traces, if desired
 	TracingConfig TracingConfig
 	// AppConfig contains the configuration needed for creating and running the underlying App
-	AppConfig app.AppConfig
+	AppConfig app.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
 	// if empty, it defaults to os.DirFS(".")
 	Filesystem fs.FS
@@ -76,6 +77,7 @@ func (s *StandaloneOperator) Run(config OperatorAppConfig, stopCh <-chan struct{
 	if err != nil {
 		return fmt.Errorf("unable to get app manifest capabilities: %w", err)
 	}
+	config.AppConfig.ManifestData = *manifestData
 
 	// Create the app
 	a, err := s.provider.NewApp(config.AppConfig)
@@ -175,15 +177,15 @@ func (s *StandaloneOperator) getManifestData(cfg OperatorAppConfig) (*app.Manife
 		if dir == nil {
 			dir = os.DirFS(".")
 		}
-		if contents, err := fs.ReadFile(dir, manifest.Location.Path); err == nil {
-			m := app.Manifest{}
-			if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
-				data = *m.ManifestData
-			} else {
-				return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
-			}
-		} else {
+		contents, err := fs.ReadFile(dir, manifest.Location.Path)
+		if err != nil {
 			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
+		}
+		m := app.Manifest{}
+		if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
+			data = *m.ManifestData
+		} else {
+			return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
 		}
 	case app.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server

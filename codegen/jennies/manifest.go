@@ -7,6 +7,7 @@ import (
 	"go/format"
 
 	"github.com/grafana/codejen"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -47,13 +48,13 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 	output["spec"] = manifest
 
 	files := make(codejen.Files, 0)
-	bytes, err := m.Encoder(output)
+	out, err := m.Encoder(output)
 	if err != nil {
 		return nil, err
 	}
 	files = append(files, codejen.File{
 		RelativePath: "manifest." + m.FileExtension,
-		Data:         bytes,
+		Data:         out,
 		From:         []codejen.NamedJenny{m},
 	})
 
@@ -65,7 +66,7 @@ type ManifestGoGenerator struct {
 	Package string
 }
 
-func (g *ManifestGoGenerator) JennyName() string {
+func (*ManifestGoGenerator) JennyName() string {
 	return "ManifestGoGenerator"
 }
 

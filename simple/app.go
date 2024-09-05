@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"net/http"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 )
 
 var _ app.Provider = &AppProvider{}
@@ -21,7 +22,7 @@ type Converter k8s.Converter
 // and calls NewAppFunc when NewApp is called.
 type AppProvider struct {
 	AppManifest app.Manifest
-	NewAppFunc  func(config app.AppConfig) (app.App, error)
+	NewAppFunc  func(config app.Config) (app.App, error)
 }
 
 // Manifest returns the AppManifest in the AppProvider
@@ -30,12 +31,12 @@ func (a *AppProvider) Manifest() app.Manifest {
 }
 
 // NewApp calls NewAppFunc and returns the result
-func (a *AppProvider) NewApp(settings app.AppConfig) (app.App, error) {
+func (a *AppProvider) NewApp(settings app.Config) (app.App, error) {
 	return a.NewAppFunc(settings)
 }
 
 // NewAppProvider is a convenience method for creating a new AppProvider
-func NewAppProvider(manifest app.Manifest, newAppFunc func(cfg app.AppConfig) (app.App, error)) *AppProvider {
+func NewAppProvider(manifest app.Manifest, newAppFunc func(cfg app.Config) (app.App, error)) *AppProvider {
 	return &AppProvider{
 		AppManifest: manifest,
 		NewAppFunc:  newAppFunc,
@@ -60,6 +61,7 @@ type App struct {
 
 // AppConfig is the configuration used by App
 type AppConfig struct {
+	Name           string
 	Kubeconfig     rest.Config
 	InformerConfig AppInformerConfig
 	ManagedKinds   []AppManagedKind
@@ -71,6 +73,7 @@ type AppInformerConfig struct {
 	ErrorHandler       func(context.Context, error)
 	RetryPolicy        operator.RetryPolicy
 	RetryDequeuePolicy operator.RetryDequeuePolicy
+	FinalizerSupplier  operator.FinalizerSupplier
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -99,7 +102,7 @@ type AppManagedKind struct {
 // App.ManageKind or via AppConfig.ManagedKinds.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
-	app := &App{
+	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
 		operator:           operator.New(),
 		clientGenerator:    k8s.NewClientRegistry(config.Kubeconfig, k8s.DefaultClientConfig()),
@@ -109,13 +112,16 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 	}
 	for _, kind := range config.ManagedKinds {
-		app.ManageKind(kind, ReconcileOptions{})
+		err := a.ManageKind(kind, ReconcileOptions{})
+		if err != nil {
+			return nil, err
+		}
 	}
 	for gk, converter := range config.Converters {
-		app.converters[gk.String()] = converter
+		a.converters[gk.String()] = converter
 	}
-	app.operator.AddController(app.informerController)
-	return app, nil
+	a.operator.AddController(a.informerController)
+	return a, nil
 }
 
 // ManagedKinds returns a slice of all Kinds managed by this App
@@ -146,6 +152,8 @@ type ReconcileOptions struct {
 	Namespace string
 	// LabelFilters are any label filters to apply to the ListWatch request
 	LabelFilters []string
+	// FieldSelectors are any field selector filters to apply to the ListWatch request
+	FieldSelectors []string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
 }
@@ -158,29 +166,37 @@ func (a *App) ManageKind(kind AppManagedKind, options ReconcileOptions) error {
 		if err != nil {
 			return err
 		}
-		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, options.Namespace, options.LabelFilters)
+		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.ListWatchOptions{
+			Namespace:      options.Namespace,
+			LabelFilters:   options.LabelFilters,
+			FieldSelectors: options.FieldSelectors,
+		})
 		if err != nil {
 			return err
 		}
-		a.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
+		err = a.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
+		if err != nil {
+			return fmt.Errorf("could not add informer to controller: %v", err)
+		}
 		if kind.Reconciler != nil {
 			reconciler := kind.Reconciler
 			if !options.UsePlain {
-				op, err := operator.NewOpinionatedReconciler(client, "TODO")
+				op, err := operator.NewOpinionatedReconciler(client, a.getFinalizer(kind.Kind))
 				if err != nil {
 					return err
 				}
 				op.Wrap(kind.Reconciler)
 				reconciler = op
 			}
-			a.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
+			err = a.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
+			if err != nil {
+				return fmt.Errorf("could not add reconciler to controller: %v", err)
+			}
 		}
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
 			if !options.UsePlain {
-				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, client, func(sch resource.Schema) string {
-					return "TODO"
-				})
+				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, client, a.getFinalizer)
 				if err != nil {
 					return err
 				}
@@ -192,7 +208,10 @@ func (a *App) ManageKind(kind AppManagedKind, options ReconcileOptions) error {
 				}
 				watcher = op
 			}
-			a.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
+			err = a.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
+			if err != nil {
+				return fmt.Errorf("could not add watcher to controller: %v", err)
+			}
 		}
 	}
 	return nil
@@ -227,7 +246,7 @@ func (a *App) Mutate(ctx context.Context, req *resource.AdmissionRequest) (*reso
 	return k.Mutator.Mutate(ctx, req)
 }
 
-func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
@@ -259,6 +278,16 @@ func (a *App) CallSubresource(ctx context.Context, writer http.ResponseWriter, r
 		return nil
 	}
 	return handler(ctx, writer, req)
+}
+
+func (a *App) getFinalizer(sch resource.Schema) string {
+	if a.cfg.InformerConfig.FinalizerSupplier != nil {
+		return a.cfg.InformerConfig.FinalizerSupplier(sch)
+	}
+	if a.cfg.Name != "" {
+		return fmt.Sprintf("%s-%s-finalizer", a.cfg.Name, sch.Plural())
+	}
+	return fmt.Sprintf("%s-finalizer", sch.Plural())
 }
 
 type syncWatcher interface {
