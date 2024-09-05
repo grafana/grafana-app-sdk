@@ -2,11 +2,14 @@
 package jennies
 
 import (
+	"bytes"
 	"fmt"
+	"go/format"
 
 	"github.com/grafana/codejen"
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 type ManifestOutputEncoder func(any) ([]byte, error)
@@ -39,7 +42,7 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 	output["apiVersion"] = "apps.grafana.com/v1"
 	output["kind"] = "AppManifest"
 	output["metadata"] = map[string]string{
-		"name": m.AppName,
+		"name": manifest.AppName,
 	}
 	output["spec"] = manifest
 
@@ -59,6 +62,7 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 
 type ManifestGoGenerator struct {
 	AppName string
+	Package string
 }
 
 func (g *ManifestGoGenerator) JennyName() string {
@@ -75,7 +79,27 @@ func (g *ManifestGoGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, er
 		manifest.AppName = g.AppName
 	}
 
-	return nil, nil
+	buf := bytes.Buffer{}
+	err = templates.WriteManifestGoFile(templates.ManifestGoFileMetadata{
+		Package:      g.Package,
+		ManifestData: *manifest,
+	}, &buf)
+	if err != nil {
+		return nil, err
+	}
+
+	formatted, err := format.Source(buf.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	files := make(codejen.Files, 0)
+	files = append(files, codejen.File{
+		Data:         formatted,
+		RelativePath: "manifest.go",
+		From:         []codejen.NamedJenny{g},
+	})
+
+	return files, nil
 }
 
 func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {

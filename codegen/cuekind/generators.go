@@ -151,6 +151,15 @@ func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, 
 	return g
 }
 
+func ManifestGoGenerator(pkg string, appName string) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(&jennies.ManifestGoGenerator{
+		Package: pkg,
+		AppName: appName,
+	})
+	return g
+}
+
 func namerFunc(k codegen.Kind) string {
 	if k == nil {
 		return "nil"

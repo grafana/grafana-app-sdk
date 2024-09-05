@@ -379,12 +379,23 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		}
 	}
 
+	goManifestFiles, err := generator.FilteredGenerate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	for i, f := range goManifestFiles {
+		goManifestFiles[i].RelativePath = filepath.Join(cfg.GoGenBasePath, f.RelativePath)
+	}
+
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
 	allFiles = append(allFiles, modelFiles...)
 	allFiles = append(allFiles, tsModelFiles...)
 	allFiles = append(allFiles, tsResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
 	allFiles = append(allFiles, manifestFiles...)
+	allFiles = append(allFiles, goManifestFiles...)
 	return allFiles, nil
 }
 
