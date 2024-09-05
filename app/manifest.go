@@ -1,5 +1,6 @@
 package app
 
+// NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
 func NewEmbeddedManifest(manifestData ManifestData) Manifest {
 	return Manifest{
 		Location: ManifestLocation{
@@ -9,6 +10,7 @@ func NewEmbeddedManifest(manifestData ManifestData) Manifest {
 	}
 }
 
+// NewOnDiskManifest returns a Manifest which points to a path on-disk to load ManifestData from
 func NewOnDiskManifest(path string) Manifest {
 	return Manifest{
 		Location: ManifestLocation{
@@ -18,6 +20,7 @@ func NewOnDiskManifest(path string) Manifest {
 	}
 }
 
+// NewAPIServerManifest returns a Manifest which points to a resource in an API server to load the ManifestData from
 func NewAPIServerManifest(resourceName string) Manifest {
 	return Manifest{
 		Location: ManifestLocation{
@@ -27,10 +30,12 @@ func NewAPIServerManifest(resourceName string) Manifest {
 	}
 }
 
+// Manifest is a type which represents the Location and Data in an App Manifest.
 type Manifest struct {
 	// ManifestData must be present if Location.Type == "embedded"
 	ManifestData *ManifestData
-	Location     ManifestLocation
+	// Location indicates the place where the ManifestData should be loaded from
+	Location ManifestLocation
 }
 
 type ManifestLocation struct {

@@ -3,6 +3,7 @@ package simple
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -16,17 +17,27 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// StandaloneOperator runs an app as a standalone operator, capable of exposing admission (validation, mutation)
+// and conversion as webhooks, and running a main control loop with reconcilers and watchers.
+// It relies on the Kinds managed by the app.App already existing in the API server it talks to, either as CRD's
+// or another type. It does not support certain advanced app.App functionality which is not natively supported by
+// CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewStandaloneOperator.
 type StandaloneOperator struct {
-	provider app.AppProvider
+	provider app.Provider
 }
 
-func NewStandaloneOperator(provider app.AppProvider) *StandaloneOperator {
+// NewStandaloneOperator creates a new, properly-initalized instance of a StandaloneOperator,
+// which will use the given app.Provider to instantiate a new underlying app.
+func NewStandaloneOperator(provider app.Provider) (*StandaloneOperator, error) {
+	if provider == nil {
+		return nil, errors.New("provider cannot be nil")
+	}
 	return &StandaloneOperator{
 		provider: provider,
-	}
+	}, nil
 }
 
-type SOperatorConfig struct {
+type OperatorAppConfig struct {
 	// WebhookConfig contains configuration information for exposing k8s webhooks.
 	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
 	WebhookConfig OperatorWebhookConfig
@@ -54,7 +65,12 @@ type capabilities struct {
 	validation bool
 }
 
-func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{}) error {
+// Run runs the StandaloneOperator using the provided config, until stopCh is closed or receives a message, or an unrecoverable error occurs
+func (s *StandaloneOperator) Run(config OperatorAppConfig, stopCh <-chan struct{}) error {
+	if s.provider == nil {
+		return errors.New("provider cannot be nil, instantiate StandaloneOperator with NewStandaloneOperator")
+	}
+
 	// Get capabilities from manifest
 	manifestData, err := s.getManifestData(config)
 	if err != nil {
@@ -144,8 +160,7 @@ func (s *StandaloneOperator) Run(config SOperatorConfig, stopCh <-chan struct{})
 	return op.Run(stopCh)
 }
 
-func (s *StandaloneOperator) getManifestData(cfg SOperatorConfig) (*app.ManifestData, error) {
-	// TODO: get from various places
+func (s *StandaloneOperator) getManifestData(cfg OperatorAppConfig) (*app.ManifestData, error) {
 	manifest := s.provider.Manifest()
 	data := app.ManifestData{}
 	switch manifest.Location.Type {

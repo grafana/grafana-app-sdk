@@ -13,9 +13,11 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var _ app.AppProvider = &AppProvider{}
+var _ app.Provider = &AppProvider{}
 
-// AppProvider is a simple implementation of resource.AppProvider which returns AppManifest when Manifest is called,
+type Converter k8s.Converter
+
+// AppProvider is a simple implementation of app.Provider which returns AppManifest when Manifest is called,
 // and calls NewAppFunc when NewApp is called.
 type AppProvider struct {
 	AppManifest app.Manifest
@@ -53,27 +55,42 @@ type App struct {
 	kinds              map[string]AppManagedKind
 	internalKinds      map[string]resource.Kind
 	cfg                AppConfig
-	converters         map[string]k8s.Converter
+	converters         map[string]Converter
 }
 
+// AppConfig is the configuration used by App
 type AppConfig struct {
 	Kubeconfig     rest.Config
 	InformerConfig AppInformerConfig
 	ManagedKinds   []AppManagedKind
+	Converters     map[schema.GroupKind]Converter
 }
 
+// AppInformerConfig contains configuration for the App's internal operator.InformerController
 type AppInformerConfig struct {
 	ErrorHandler       func(context.Context, error)
 	RetryPolicy        operator.RetryPolicy
 	RetryDequeuePolicy operator.RetryDequeuePolicy
 }
 
+// AppManagedKind is a Kind and associated functionality used by an App.
 type AppManagedKind struct {
-	Kind              resource.Kind
-	Reconciler        operator.Reconciler
-	Watcher           operator.ResourceWatcher
-	Validator         resource.ValidatingAdmissionController
-	Mutator           resource.MutatingAdmissionController
+	// Kind is the resource.Kind being managed. This is equivalent to a kubernetes GroupVersionKind
+	Kind resource.Kind
+	// Reconciler is an optional reconciler to run for this Kind. Only one version of a Kind should have a Reconciler,
+	// otherwise, duplicate events will be received.
+	Reconciler operator.Reconciler
+	// Watcher is an optional Watcher to run for this Kind. Only one version of a Kind should have a Watcher,
+	// otherwise, duplicate events will be received.
+	Watcher operator.ResourceWatcher
+	// Validator is an optional ValidatingAdmissionController for the Kind. It will be run only for validation
+	// of this specific version.
+	Validator resource.ValidatingAdmissionController
+	// Mutator is an optional MutatingAdmissionController for the Kind. It will be run only for mutation
+	// of this specific version.
+	Mutator resource.MutatingAdmissionController
+	// SubresourceRoutes are an optional map of subresource paths to a route handler.
+	// If supported by the runner, calls to these subresources on this particular version will call this handler.
 	SubresourceRoutes map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error
 }
 
@@ -88,11 +105,14 @@ func NewApp(config AppConfig) (*App, error) {
 		clientGenerator:    k8s.NewClientRegistry(config.Kubeconfig, k8s.DefaultClientConfig()),
 		kinds:              make(map[string]AppManagedKind),
 		internalKinds:      make(map[string]resource.Kind),
-		converters:         make(map[string]k8s.Converter),
+		converters:         make(map[string]Converter),
 		cfg:                config,
 	}
 	for _, kind := range config.ManagedKinds {
 		app.ManageKind(kind, ReconcileOptions{})
+	}
+	for gk, converter := range config.Converters {
+		app.converters[gk.String()] = converter
 	}
 	app.operator.AddController(app.informerController)
 	return app, nil
@@ -120,10 +140,14 @@ func (a *App) AddRunnable(runner app.Runnable) {
 	a.operator.AddController(runner)
 }
 
+// ReconcileOptions are settings for the reconciliation loop
 type ReconcileOptions struct {
-	Namespace    string
+	// Namespace is the namespace to use in the ListWatch request
+	Namespace string
+	// LabelFilters are any label filters to apply to the ListWatch request
 	LabelFilters []string
-	UsePlain     bool
+	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
+	UsePlain bool
 }
 
 // ManageKind introduces a new kind to manage.
@@ -174,6 +198,7 @@ func (a *App) ManageKind(kind AppManagedKind, options ReconcileOptions) error {
 	return nil
 }
 
+// RegisterKindConverter adds a converter for a GroupKind, which will then be processed on Convert calls
 func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Converter) {
 	a.converters[groupKind.String()] = converter
 }

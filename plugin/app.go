@@ -32,7 +32,7 @@ type capabilities struct {
 }
 
 type App struct {
-	provider       sdkApp.AppProvider
+	provider       sdkApp.Provider
 	app            sdkApp.App
 	manifestData   *sdkApp.ManifestData
 	capabilities   map[string]capabilities

@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// ConversionRequest is a request to convert a Kind from one version to another
 type ConversionRequest struct {
 	SourceGVK schema.GroupVersionKind
 	TargetGVK schema.GroupVersionKind
@@ -23,6 +24,7 @@ type RawObject struct {
 	Encoding resource.KindEncoding `json:"-"`
 }
 
+// SubresourceRequest is a request to a custom subresource
 type SubresourceRequest struct {
 	ResourceIdentifier resource.FullIdentifier
 	SubresourcePath    string
@@ -36,9 +38,9 @@ type AppConfig struct {
 	ExtraConfig map[string]any
 }
 
-// AppProvider represents a type which can provide an app manifest, and create a new App when given a configuration.
+// Provider represents a type which can provide an app manifest, and create a new App when given a configuration.
 // It should be used by runners to determine an app's capabilities and create an instance of the app to run.
-type AppProvider interface {
+type Provider interface {
 	Manifest() Manifest
 	NewApp(AppConfig) (App, error)
 }
@@ -56,8 +58,17 @@ type Runnable interface {
 type AdmissionRequest resource.AdmissionRequest
 type MutatingResponse resource.MutatingResponse
 
+// App represents an app platform application logical structure.
+// An App is typically run with a wrapper, such as simple.NewStandaloneOperator,
+// which will present a runtime layer (such as kubernetes webhooks in the case of an operator),
+// and translate those into calls to the App. The wrapper is typically also responsible for lifecycle management
+// and running the Runnable provided by Runner().
+// Pre-built implementations of App exist in the simple package, but any type which implements App
+// should be capable of being run by an app wrapper.
 type App interface {
+	// Validate validates the incoming request, and returns an error if validation fails
 	Validate(ctx context.Context, request *resource.AdmissionRequest) error
+	// Mutate runs mutation on the incoming request, responding with a MutatingResponse on success, or an error on failure
 	Mutate(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error)
 	// Convert converts the object based on the ConversionRequest, returning a RawObject which MUST contain
 	// the converted bytes and encoding (Raw and Encoding respectively), and MAY contain the Object representation of those bytes.
