@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
@@ -88,7 +89,7 @@ func main() {
 		},
 	}
 
-	err = simpleOperator.WatchKind(kind, watcher, simple.ListWatchOptions{
+	err = simpleOperator.WatchKind(kind, watcher, operator.ListWatchOptions{
 		Namespace: "default",
 	})
 	if err != nil {

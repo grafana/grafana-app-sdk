@@ -33,9 +33,10 @@ type KindCollection interface {
 }
 
 type StoreListOptions struct {
-	Namespace string
-	PerPage   int
-	Filters   []string
+	Namespace      string
+	PerPage        int
+	Filters        []string
+	FieldSelectors []string
 }
 
 // Store presents Schema's resource Objects as a simple Key-Value store,
@@ -260,17 +261,19 @@ func (s *Store) List(ctx context.Context, kind string, options StoreListOptions)
 		return nil, err
 	}
 	resp, err := client.List(ctx, options.Namespace, ListOptions{
-		Limit:        options.PerPage,
-		LabelFilters: options.Filters,
+		Limit:          options.PerPage,
+		LabelFilters:   options.Filters,
+		FieldSelectors: options.FieldSelectors,
 	})
 	if err != nil {
 		return nil, err
 	}
 	for resp.GetContinue() != "" {
 		page, err := client.List(ctx, options.Namespace, ListOptions{
-			Continue:     resp.GetContinue(),
-			Limit:        options.PerPage,
-			LabelFilters: options.Filters,
+			Continue:       resp.GetContinue(),
+			Limit:          options.PerPage,
+			LabelFilters:   options.Filters,
+			FieldSelectors: options.FieldSelectors,
 		})
 		if err != nil {
 			return nil, err

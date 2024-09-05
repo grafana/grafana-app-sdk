@@ -82,7 +82,7 @@ func main() {
 		},
 	}
 
-	err = simpleOperator.ReconcileKind(kind, reconciler, simple.ListWatchOptions{
+	err = simpleOperator.ReconcileKind(kind, reconciler, operator.ListWatchOptions{
 		Namespace: "default",
 	})
 	if err != nil {
