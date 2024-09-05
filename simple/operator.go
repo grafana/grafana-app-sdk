@@ -141,11 +141,6 @@ type Operator struct {
 	metricsExporter    *metrics.Exporter
 }
 
-type ListWatchOptions struct {
-	Namespace    string
-	LabelFilters []string
-}
-
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
 type SyncWatcher interface {
 	operator.ResourceWatcher
@@ -186,12 +181,12 @@ func (o *Operator) RegisterMetricsCollectors(collectors ...prometheus.Collector)
 
 // WatchKind will watch the specified kind (schema) with opinionated logic, passing the relevant events on to the SyncWatcher.
 // You can configure the query used for watching the kind using ListWatchOptions.
-func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options ListWatchOptions) error {
+func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options operator.ListWatchOptions) error {
 	client, err := o.clientGen.ClientFor(kind)
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, options.LabelFilters)
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors})
 	if err != nil {
 		return err
 	}
@@ -220,12 +215,12 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options Li
 
 // ReconcileKind will watch the specified kind (schema) with opinionated logic, passing the events on to the provided Reconciler.
 // You can configure the query used for watching the kind using ListWatchOptions.
-func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconciler, options ListWatchOptions) error {
+func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconciler, options operator.ListWatchOptions) error {
 	client, err := o.clientGen.ClientFor(kind)
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, options.Namespace, options.LabelFilters)
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors})
 	if err != nil {
 		return err
 	}
@@ -279,7 +274,7 @@ func (o *Operator) ConvertKind(gk metav1.GroupKind, converter k8s.Converter) err
 	return nil
 }
 
-func (*Operator) label(schema resource.Schema, options ListWatchOptions) string {
+func (*Operator) label(schema resource.Schema, options operator.ListWatchOptions) string {
 	// TODO: hash?
-	return fmt.Sprintf("%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","))
+	return fmt.Sprintf("%s-%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","), strings.Join(options.FieldSelectors, ","))
 }

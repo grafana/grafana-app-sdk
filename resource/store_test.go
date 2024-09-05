@@ -157,6 +157,25 @@ func TestStore_List(t *testing.T) {
 		assert.Nil(t, err)
 		assert.Equal(t, ret, list)
 	})
+
+	t.Run("list, with field selectors", func(t *testing.T) {
+		ns := "foo"
+		selectors := []string{"a", "b", "c"}
+		ret := &UntypedList{}
+		generator.ClientForFunc = func(kind Kind) (Client, error) {
+			return client, nil
+		}
+		client.ListFunc = func(c context.Context, namespace string, options ListOptions) (ListObject, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, ns, namespace)
+			assert.Equal(t, 0, options.Limit)
+			assert.Equal(t, selectors, options.FieldSelectors)
+			return ret, nil
+		}
+		list, err := store.List(ctx, kind.Kind(), StoreListOptions{Namespace: ns, FieldSelectors: selectors})
+		assert.Nil(t, err)
+		assert.Equal(t, ret, list)
+	})
 }
 
 func TestStore_Get(t *testing.T) {

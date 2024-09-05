@@ -20,18 +20,16 @@ type KubernetesBasedInformer struct {
 	schema              resource.Kind
 }
 
-var EmptyLabelFilters []string
-
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests.
 func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
 	*KubernetesBasedInformer, error) {
-	return NewKubernetesBasedInformerWithFilters(sch, client, namespace, EmptyLabelFilters)
+	return NewKubernetesBasedInformerWithFilters(sch, client, ListWatchOptions{Namespace: namespace})
 }
 
 // NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, namespace string, labelFilters []string) (
+func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, listOptions ListWatchOptions) (
 	*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
@@ -41,7 +39,7 @@ func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchCl
 		schema:       sch,
 		ErrorHandler: DefaultErrorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
-			NewListerWatcher(client, sch, namespace, labelFilters...),
+			NewListerWatcher(client, sch, listOptions),
 			nil,
 			time.Second*30,
 			cache.Indexers{
