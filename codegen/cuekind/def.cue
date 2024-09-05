@@ -70,6 +70,10 @@ Schema: {
 	_specIsNonEmpty: spec & struct.MinFields(0)
 }
 
+#AdmissionCapability: {
+	operations: [...string]
+}
+
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
 	kind: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
@@ -107,6 +111,14 @@ Kind: S={
 		// scope determines whether resources of this kind exist globally ("Cluster") or
 		// within Kubernetes namespaces.
 		scope: "Cluster" | *"Namespaced"
+		// validation determines whether there is code-based validation for this kind. Used for generating the manifest.
+		validation: #AdmissionCapability | *{
+			operations: []
+		}
+		mutation: #AdmissionCapability | *{
+			operations: []
+		}
+		conversion: bool | *false
 	}
 	// isCRD is true if the `crd` trait is present in the kind.
 	isAPIResource: apiResource != _|_
@@ -128,6 +140,8 @@ Kind: S={
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
 			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
 			selectableFields: [...string]
+			validation: #AdmissionCapability | *S.apiResource.validation
+			mutation: #AdmissionCapability | *S.apiResource.mutation
 		}
 	}
 	machineName: strings.ToLower(strings.Replace(S.kind, "-", "_", -1))

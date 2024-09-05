@@ -66,7 +66,7 @@ type ManifestKind struct {
 
 type ManifestKindVersion struct {
 	Name      string                 `yaml:"name" json:"name"`
-	Admission *AdmissionCapabilities `json:"admission" yaml:"admission"`
+	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
 	Schema    any                    `json:"schema" yaml:"schema"` // TODO: actual schema
 }
 

@@ -359,12 +359,32 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			crdFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
 		}
 	}
+	// Manifest
+	var manifestFiles codejen.Files
+	if cfg.CRDEncoding != "none" {
+		encFunc := func(v any) ([]byte, error) {
+			return json.MarshalIndent(v, "", "    ")
+		}
+		if cfg.CRDEncoding == "yaml" {
+			encFunc = yaml.Marshal
+		}
+		manifestFiles, err = generator.FilteredGenerate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""), func(kind codegen.Kind) bool {
+			return kind.Properties().APIResource != nil
+		}, selectors...)
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range manifestFiles {
+			manifestFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+		}
+	}
 
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
 	allFiles = append(allFiles, modelFiles...)
 	allFiles = append(allFiles, tsModelFiles...)
 	allFiles = append(allFiles, tsResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
+	allFiles = append(allFiles, manifestFiles...)
 	return allFiles, nil
 }
 

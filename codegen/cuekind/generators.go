@@ -141,6 +141,16 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bo
 	return g
 }
 
+func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, appName string) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(&jennies.ManifestGenerator{
+		AppName:       appName,
+		Encoder:       encoder,
+		FileExtension: extension,
+	})
+	return g
+}
+
 func namerFunc(k codegen.Kind) string {
 	if k == nil {
 		return "nil"
