@@ -36,8 +36,15 @@ type KindProperties struct {
 
 // APIResourceProperties contains information about a Kind expressible as a kubernetes API resource
 type APIResourceProperties struct {
-	Group string `json:"group"`
-	Scope string `json:"scope"`
+	Group      string                  `json:"group"`
+	Scope      string                  `json:"scope"`
+	Validation KindAdmissionCapability `json:"validation"`
+	Mutation   KindAdmissionCapability `json:"mutation"`
+	Conversion bool                    `json:"conversion"`
+}
+
+type KindAdmissionCapability struct {
+	Operations []string `json:"operations"`
 }
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
@@ -50,10 +57,12 @@ type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema           cue.Value             `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen          KindCodegenProperties `json:"codegen"`
-	Served           bool                  `json:"served"`
-	SelectableFields []string              `json:"selectableFields"`
+	Schema           cue.Value               `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen          KindCodegenProperties   `json:"codegen"`
+	Served           bool                    `json:"served"`
+	SelectableFields []string                `json:"selectableFields"`
+	Validation       KindAdmissionCapability `json:"validation"`
+	Mutation         KindAdmissionCapability `json:"mutation"`
 }
 
 // AnyKind is a simple implementation of Kind
