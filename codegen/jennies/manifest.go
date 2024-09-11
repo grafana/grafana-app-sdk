@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"strings"
 
 	"github.com/grafana/codejen"
 
@@ -153,9 +154,13 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 				Name: version.Version,
 			}
 			if len(version.Mutation.Operations) > 0 {
+				operations, err := sanitizeAdmissionOperations(version.Mutation.Operations)
+				if err != nil {
+					return nil, fmt.Errorf("mutation operations error: %w", err)
+				}
 				mver.Admission = &app.AdmissionCapabilities{
 					Mutation: &app.MutationCapability{
-						Operations: version.Mutation.Operations,
+						Operations: operations,
 					},
 				}
 			}
@@ -163,8 +168,12 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 				if mver.Admission == nil {
 					mver.Admission = &app.AdmissionCapabilities{}
 				}
+				operations, err := sanitizeAdmissionOperations(version.Validation.Operations)
+				if err != nil {
+					return nil, fmt.Errorf("validation operations error: %w", err)
+				}
 				mver.Admission.Validation = &app.ValidationCapability{
-					Operations: version.Validation.Operations,
+					Operations: operations,
 				}
 			}
 			mkind.Versions = append(mkind.Versions, mver)
@@ -173,4 +182,27 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 	}
 
 	return &manifest, nil
+}
+
+var validAdmissionOperations = map[codegen.KindAdmissionCapabilityOperation]app.AdmissionOperation{
+	codegen.AdmissionCapabilityOperationAny:     app.AdmissionOperationAny,
+	codegen.AdmissionCapabilityOperationConnect: app.AdmissionOperationConnect,
+	codegen.AdmissionCapabilityOperationCreate:  app.AdmissionOperationCreate,
+	codegen.AdmissionCapabilityOperationDelete:  app.AdmissionOperationDelete,
+	codegen.AdmissionCapabilityOperationUpdate:  app.AdmissionOperationUpdate,
+}
+
+func sanitizeAdmissionOperations(operations []codegen.KindAdmissionCapabilityOperation) ([]app.AdmissionOperation, error) {
+	sanitized := make([]app.AdmissionOperation, 0)
+	for _, op := range operations {
+		translated, ok := validAdmissionOperations[codegen.KindAdmissionCapabilityOperation(strings.ToUpper(string(op)))]
+		if !ok {
+			return nil, fmt.Errorf("invalid operation %q", op)
+		}
+		if translated == app.AdmissionOperationAny && len(operations) > 1 {
+			return nil, fmt.Errorf("cannot use any ('*') operation alongside named operations")
+		}
+		sanitized = append(sanitized, translated)
+	}
+	return sanitized, nil
 }

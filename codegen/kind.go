@@ -43,8 +43,18 @@ type APIResourceProperties struct {
 	Conversion bool                    `json:"conversion"`
 }
 
+type KindAdmissionCapabilityOperation string
+
+const (
+	AdmissionCapabilityOperationCreate  KindAdmissionCapabilityOperation = "CREATE"
+	AdmissionCapabilityOperationUpdate  KindAdmissionCapabilityOperation = "UPDATE"
+	AdmissionCapabilityOperationDelete  KindAdmissionCapabilityOperation = "DELETE"
+	AdmissionCapabilityOperationConnect KindAdmissionCapabilityOperation = "CONNECT"
+	AdmissionCapabilityOperationAny     KindAdmissionCapabilityOperation = "*"
+)
+
 type KindAdmissionCapability struct {
-	Operations []string `json:"operations"`
+	Operations []KindAdmissionCapabilityOperation `json:"operations"`
 }
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion

@@ -368,6 +368,23 @@ type ManifestGoFileMetadata struct {
 	ManifestData app.ManifestData
 }
 
+func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
+	switch strings.ToUpper(string(input)) {
+	case string(app.AdmissionOperationCreate):
+		return "AdmissionOperationCreate"
+	case string(app.AdmissionOperationUpdate):
+		return "AdmissionOperationUpdate"
+	case string(app.AdmissionOperationDelete):
+		return "AdmissionOperationDelete"
+	case string(app.AdmissionOperationConnect):
+		return "AdmissionOperationConnect"
+	case string(app.AdmissionOperationAny):
+		return "AdmissionOperationAny"
+	default:
+		return fmt.Sprintf("AdmissionOperation(\"%s\")", input)
+	}
+}
+
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 	return templateManifestGoFile.Execute(out, metadata)
 }

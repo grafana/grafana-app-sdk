@@ -17,9 +17,9 @@ var appManifestData = app.ManifestData{
 					Name: "v1",
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
-							Operations: []string{
-								"create",
-								"update",
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
 							},
 						},
 					},
@@ -29,15 +29,15 @@ var appManifestData = app.ManifestData{
 					Name: "v2",
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
-							Operations: []string{
-								"create",
-								"update",
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
 							},
 						},
 						Validation: &app.MutationCapability{
-							Operations: []string{
-								"create",
-								"update",
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
 							},
 						},
 					},

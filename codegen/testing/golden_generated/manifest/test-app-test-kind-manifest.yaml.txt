@@ -13,18 +13,18 @@ spec:
               admission:
                 validation:
                     operations:
-                        - create
-                        - update
+                        - CREATE
+                        - UPDATE
             - name: v2
               admission:
                 validation:
                     operations:
-                        - create
-                        - update
+                        - CREATE
+                        - UPDATE
                 mutation:
                     operations:
-                        - create
-                        - update
+                        - CREATE
+                        - UPDATE
           conversion: true
         - kind: TestKind2
           scope: Namespaced

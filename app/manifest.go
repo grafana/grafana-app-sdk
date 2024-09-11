@@ -120,12 +120,22 @@ func (c AdmissionCapabilities) SupportsAnyMutation() bool {
 type ValidationCapability struct {
 	// Operations is the list of operations that the validation capability is used for.
 	// If this list if empty or nil, this is equivalent to the app having no validation capability.
-	Operations []string `json:"operations,omitempty" yaml:"operations,omitempty"`
+	Operations []AdmissionOperation `json:"operations,omitempty" yaml:"operations,omitempty"`
 }
 
 // MutationCapability is the details of a mutation capability for a kind's admission control
 type MutationCapability struct {
 	// Operations is the list of operations that the mutation capability is used for.
 	// If this list if empty or nil, this is equivalent to the app having no mutation capability.
-	Operations []string `json:"operations,omitempty" yaml:"operations,omitempty"`
+	Operations []AdmissionOperation `json:"operations,omitempty" yaml:"operations,omitempty"`
 }
+
+type AdmissionOperation string
+
+const (
+	AdmissionOperationAny     AdmissionOperation = "*"
+	AdmissionOperationCreate  AdmissionOperation = "CREATE"
+	AdmissionOperationUpdate  AdmissionOperation = "UPDATE"
+	AdmissionOperationDelete  AdmissionOperation = "DELETE"
+	AdmissionOperationConnect AdmissionOperation = "CONNECT"
+)

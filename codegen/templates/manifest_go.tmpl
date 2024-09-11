@@ -17,13 +17,13 @@ var appManifestData = app.ManifestData{
                 Name: "{{.Name}}", {{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
-                        {{ if .Admission.Validation.Operations }} Operations: []string{
-                        {{ range .Admission.Validation.Operations }}"{{ . }}",
+                        {{ if .Admission.Validation.Operations }} Operations: []app.AdmissionOperation{
+                        {{ range .Admission.Validation.Operations }}app.{{ $.ToAdmissionOperationName . }},
                         {{ end }} }, {{ end }}
                     }, {{ end }}
                     {{ if .Admission.Mutation }} Validation: &app.MutationCapability{
-                        {{ if .Admission.Mutation.Operations }} Operations: []string{
-                        {{ range .Admission.Mutation.Operations }}"{{ . }}",
+                        {{ if .Admission.Mutation.Operations }} Operations: []app.AdmissionOperation{
+                        {{ range .Admission.Mutation.Operations }}app.{{ $.ToAdmissionOperationName . }},
                         {{ end }} }, {{ end }}
                     }, {{ end }}
                 }, {{ end }}
