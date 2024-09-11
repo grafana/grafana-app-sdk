@@ -9,11 +9,11 @@ retract (
 
 require (
 	github.com/grafana/grafana-app-sdk v0.19.0
-	github.com/grafana/grafana-plugin-sdk-go v0.247.0
+	github.com/grafana/grafana-plugin-sdk-go v0.248.0
 	github.com/prometheus/client_golang v1.20.3
 	github.com/stretchr/testify v1.9.0
-	go.opentelemetry.io/otel v1.29.0
-	go.opentelemetry.io/otel/trace v1.29.0
+	go.opentelemetry.io/otel v1.30.0
+	go.opentelemetry.io/otel/trace v1.30.0
 	k8s.io/apimachinery v0.31.0
 	k8s.io/client-go v0.31.0
 )
@@ -95,7 +95,7 @@ require (
 	go.opentelemetry.io/contrib/samplers/jaegerremote v0.23.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.29.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.29.0 // indirect
-	go.opentelemetry.io/otel/metric v1.29.0 // indirect
+	go.opentelemetry.io/otel/metric v1.30.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.29.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
