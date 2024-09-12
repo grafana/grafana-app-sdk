@@ -1,0 +1,43 @@
+package {{.Package}}
+
+import (
+    "github.com/grafana/grafana-app-sdk/app"
+)
+
+var appManifestData = app.ManifestData{
+    AppName: "{{.ManifestData.AppName}}",
+    Group: "{{.ManifestData.Group}}",
+    Kinds: []app.ManifestKind{ {{ range .ManifestData.Kinds }}
+        {
+            Kind: "{{.Kind}}",
+            Scope: "{{.Scope}}",
+            Conversion: {{.Conversion}},
+            Versions: []app.ManifestKindVersion{ {{ range .Versions }}
+            {
+                Name: "{{.Name}}", {{ if .Admission }}
+                Admission: &app.AdmissionCapabilities{
+                    {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
+                        {{ if .Admission.Validation.Operations }} Operations: []app.AdmissionOperation{
+                        {{ range .Admission.Validation.Operations }}app.{{ $.ToAdmissionOperationName . }},
+                        {{ end }} }, {{ end }}
+                    }, {{ end }}
+                    {{ if .Admission.Mutation }} Validation: &app.MutationCapability{
+                        {{ if .Admission.Mutation.Operations }} Operations: []app.AdmissionOperation{
+                        {{ range .Admission.Mutation.Operations }}app.{{ $.ToAdmissionOperationName . }},
+                        {{ end }} }, {{ end }}
+                    }, {{ end }}
+                }, {{ end }}
+            },
+            {{ end }} },
+        },
+        {{ end }} },
+}
+
+func LocalManifest() app.Manifest {
+    return app.NewEmbeddedManifest(appManifestData)
+}
+
+func RemoteManifest() app.Manifest {
+    return app.NewAPIServerManifest("{{ .ManifestData.AppName }}")
+}
+

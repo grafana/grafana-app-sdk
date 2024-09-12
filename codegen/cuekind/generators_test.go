@@ -170,6 +170,53 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	})
 }
 
+func TestManifestGenerator(t *testing.T) {
+	parser, err := NewParser()
+	require.Nil(t, err)
+
+	t.Run("resource", func(t *testing.T) {
+		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "testKind2")
+		require.Nil(t, err)
+		files, err := ManifestGenerator(yaml.Marshal, "yaml", "test-app-test-kind").Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 5 -> object, spec, metadata, status, schema
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "manifest")
+	})
+
+	t.Run("model", func(t *testing.T) {
+		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind2")
+		fmt.Println(err)
+		require.Nil(t, err)
+		files, err := ManifestGenerator(yaml.Marshal, "yaml", "test-app-custom-kind-2").Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 5 -> object, spec, metadata, status, schema
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "manifest")
+	})
+}
+
+func TestManifestGoGenerator(t *testing.T) {
+	parser, err := NewParser()
+	require.Nil(t, err)
+
+	t.Run("resource", func(t *testing.T) {
+		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "testKind2")
+		require.Nil(t, err)
+		files, err := ManifestGoGenerator("generated", "test-app").Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 5 -> object, spec, metadata, status, schema
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "manifest/go/testkinds")
+	})
+}
+
 func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 	for _, f := range files {
 		// Check if there's a golden generated file to compare against
