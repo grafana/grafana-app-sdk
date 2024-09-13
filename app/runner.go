@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
@@ -24,8 +26,15 @@ func NewMultiRunner() *MultiRunner {
 
 // MultiRunner implements Runnable for running multiple Runnable instances.
 type MultiRunner struct {
-	Runners      []Runnable
+	Runners []Runnable
+	// ErrorHandler is called if one of the Runners returns an error. If the function call returns true,
+	// the context will be canceled and all other Runners will also be prompted to exit.
+	// If ErrorHandler is nil, RunnableCollectorDefaultErrorHandler is used.
 	ErrorHandler func(context.Context, error) bool
+	// ExitWait is how long to wait for Runners to exit after ErrorHandler returns true or the context is canceled
+	// before stopping execution and returning a timeout error instead of exiting gracefully.
+	// If ExitWait is nil, Run execution will always block until all Runners have exited.
+	ExitWait *time.Duration
 }
 
 // Run runs all Runners in separate goroutines, and calls ErrorHandler if any of them exits early with an error.
@@ -55,12 +64,24 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 			}
 			if handler(propagatedContext, err) {
 				cancel()
-				wg.Wait() // Wait for all the runners to stop
+				if m.ExitWait != nil {
+					if waitOrTimeout(wg, *m.ExitWait) {
+						return fmt.Errorf("exit wait time exceeded waiting for Runners to complete: %w", err)
+					}
+				} else {
+					wg.Wait() // Wait for all the runners to stop
+				}
 				return err
 			}
 		case <-ctx.Done():
 			cancel()
-			wg.Wait() // Wait for all the runners to stop
+			if m.ExitWait != nil {
+				if waitOrTimeout(wg, *m.ExitWait) {
+					return fmt.Errorf("exit wait time exceeded waiting for Runners to complete")
+				}
+			} else {
+				wg.Wait() // Wait for all the runners to stop
+			}
 			return nil
 		}
 	}
@@ -84,4 +105,18 @@ func (m *MultiRunner) AddRunnable(runnable Runnable) {
 		m.Runners = make([]Runnable, 0)
 	}
 	m.Runners = append(m.Runners, runnable)
+}
+
+func waitOrTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	ch := make(chan struct{})
+	go func() {
+		defer close(ch)
+		wg.Wait()
+	}()
+	select {
+	case <-ch:
+		return false
+	case <-time.After(timeout):
+		return true
+	}
 }
