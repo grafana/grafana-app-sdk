@@ -8,6 +8,7 @@ import (
     "syscall"
 
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
@@ -67,7 +68,7 @@ func main() {
         logging.DefaultLogger.With("error", err).Error("Unable to create {{.Kind}}Watcher")
         panic(err)
     }
-    err = runner.WatchKind({{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}.Kind(){{end}}, {{.MachineName}}Watcher, simple.ListWatchOptions{
+    err = runner.WatchKind({{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}.Kind(){{end}}, {{.MachineName}}Watcher, operator.ListWatchOptions{
         Namespace: resource.NamespaceAll,
     })
     if err != nil {
