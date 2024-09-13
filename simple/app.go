@@ -65,6 +65,7 @@ type AppConfig struct {
 	KubeConfig     rest.Config
 	InformerConfig AppInformerConfig
 	ManagedKinds   []AppManagedKind
+	UnmanagedKinds []AppUnmanagedKind
 	Converters     map[schema.GroupKind]Converter
 }
 
@@ -99,6 +100,18 @@ type AppManagedKind struct {
 	ReconcileOptions ReconcileOptions
 }
 
+// AppUnmanagedKind is a Kind which an App does not manage, but still may want to watch or reconcile as part of app functionality
+type AppUnmanagedKind struct {
+	// Kind is the resource.Kind the App has an interest in, but does not manage.
+	Kind resource.Kind
+	// Reconciler is an optional reconciler to run for this Kind.
+	Reconciler operator.Reconciler
+	// Watcher is an optional Watcher to run for this Kind.
+	Watcher operator.ResourceWatcher
+	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
+	ReconcileOptions ReconcileOptions
+}
+
 // ReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
 type ReconcileOptions struct {
 	// Namespace is the namespace to use in the ListWatch request
@@ -127,6 +140,12 @@ func NewApp(config AppConfig) (*App, error) {
 	}
 	for _, kind := range config.ManagedKinds {
 		err := a.ManageKind(kind)
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, kind := range config.UnmanagedKinds {
+		err := a.WatchKind(kind)
 		if err != nil {
 			return nil, err
 		}
@@ -190,6 +209,18 @@ func (a *App) AddRunnable(runner app.Runnable) {
 // ManageKind introduces a new kind to manage.
 func (a *App) ManageKind(kind AppManagedKind) error {
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
+	if kind.Reconciler != nil || kind.Watcher != nil {
+		return a.WatchKind(AppUnmanagedKind{
+			Kind:             kind.Kind,
+			Reconciler:       kind.Reconciler,
+			Watcher:          kind.Watcher,
+			ReconcileOptions: kind.ReconcileOptions,
+		})
+	}
+	return nil
+}
+
+func (a *App) WatchKind(kind AppUnmanagedKind) error {
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		client, err := a.clientGenerator.ClientFor(kind.Kind)
 		if err != nil {
