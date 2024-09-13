@@ -14,7 +14,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
-	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -66,8 +65,8 @@ type capabilities struct {
 	validation bool
 }
 
-// Run runs the StandaloneOperator using the provided config, until stopCh is closed or receives a message, or an unrecoverable error occurs
-func (s *StandaloneOperator) Run(config OperatorAppConfig, stopCh <-chan struct{}) error {
+// Run runs the StandaloneOperator using the provided config, until the provided context.Context is closed, or an unrecoverable error occurs
+func (s *StandaloneOperator) Run(ctx context.Context, config OperatorAppConfig) error {
 	if s.provider == nil {
 		return errors.New("provider cannot be nil, instantiate StandaloneOperator with NewStandaloneOperator")
 	}
@@ -94,7 +93,7 @@ func (s *StandaloneOperator) Run(config OperatorAppConfig, stopCh <-chan struct{
 	}
 
 	// Build the operator
-	op := operator.New()
+	runner := app.NewMultiRunner()
 
 	// Admission control
 	anyWebhooks := false
@@ -140,26 +139,26 @@ func (s *StandaloneOperator) Run(config OperatorAppConfig, stopCh <-chan struct{
 				})
 			}
 		}
-		op.AddController(webhooks)
+		runner.AddRunnable(&k8sRunnable{runner: webhooks})
 	}
 
 	// Main loop
-	runner := a.Runner()
-	if runner != nil {
-		op.AddController(runner)
+	r := a.Runner()
+	if r != nil {
+		runner.AddRunnable(r)
 	}
 
 	// Metrics
 	if config.MetricsConfig.Enabled {
 		exporter := metrics.NewExporter(config.MetricsConfig.ExporterConfig)
-		err = exporter.RegisterCollectors(op.PrometheusCollectors()...)
+		err = exporter.RegisterCollectors(runner.PrometheusCollectors()...)
 		if err != nil {
 			return err
 		}
-		op.AddController(exporter)
+		runner.AddRunnable(&k8sRunnable{runner: exporter})
 	}
 
-	return op.Run(stopCh)
+	return runner.Run(ctx)
 }
 
 func (s *StandaloneOperator) getManifestData(cfg OperatorAppConfig) (*app.ManifestData, error) {

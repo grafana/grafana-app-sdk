@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
@@ -51,7 +52,7 @@ var (
 // It must be created with NewApp to be valid.
 type App struct {
 	informerController *operator.InformerController
-	operator           *operator.Operator
+	runner             *app.MultiRunner
 	clientGenerator    resource.ClientGenerator
 	kinds              map[string]AppManagedKind
 	internalKinds      map[string]resource.Kind
@@ -131,7 +132,7 @@ type ReconcileOptions struct {
 func NewApp(config AppConfig) (*App, error) {
 	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
-		operator:           operator.New(),
+		runner:             app.NewMultiRunner(),
 		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
 		kinds:              make(map[string]AppManagedKind),
 		internalKinds:      make(map[string]resource.Kind),
@@ -153,7 +154,9 @@ func NewApp(config AppConfig) (*App, error) {
 	for gk, converter := range config.Converters {
 		a.RegisterKindConverter(gk, converter)
 	}
-	a.operator.AddController(a.informerController)
+	a.runner.AddRunnable(&k8sRunnable{
+		runner: a.informerController,
+	})
 	return a, nil
 }
 
@@ -197,13 +200,13 @@ func (a *App) ManagedKinds() []resource.Kind {
 // added via AddRunnable. The returned resource.Runnable also implements metrics.Provider, allowing the caller
 // to gather prometheus.Collector objects used by all underlying runners.
 func (a *App) Runner() app.Runnable {
-	return a.operator
+	return a.runner
 }
 
 // AddRunnable adds an arbitrary resource.Runnable runner to the App, which will be encapsulated as part of Runner().Run().
 // If the provided runner also implements metrics.Provider, PrometheusCollectors() will be called when called on Runner().
 func (a *App) AddRunnable(runner app.Runnable) {
-	a.operator.AddController(runner)
+	a.runner.AddRunnable(runner)
 }
 
 // ManageKind introduces a new kind to manage.
@@ -280,6 +283,12 @@ func (a *App) WatchKind(kind AppUnmanagedKind) error {
 // RegisterKindConverter adds a converter for a GroupKind, which will then be processed on Convert calls
 func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Converter) {
 	a.converters[groupKind.String()] = converter
+}
+
+// PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
+func (a *App) PrometheusCollectors() []prometheus.Collector {
+	// TODO: other collectors?
+	return a.runner.PrometheusCollectors()
 }
 
 // Validate implements app.App and handles Validating Admission Requests
@@ -362,4 +371,16 @@ type syncWatcher interface {
 
 func gvk(group, version, kind string) string {
 	return fmt.Sprintf("%s/%s/%s", group, version, kind)
+}
+
+type k8sRunner interface {
+	Run(<-chan struct{}) error
+}
+
+type k8sRunnable struct {
+	runner k8sRunner
+}
+
+func (k *k8sRunnable) Run(ctx context.Context) error {
+	return k.runner.Run(ctx.Done())
 }

@@ -68,10 +68,9 @@ type Provider interface {
 type Runnable interface {
 	// Run runs the process and blocks until one of the following conditions are met:
 	// * An unrecoverable error occurs, in which case it returns the error
-	// * The provided channel is closed, in which case processing should stop and the method should return
-	// * The provided channel is sent a message, in which case processing should stop and the method should return
+	// * The provided context completes
 	// * The process completes and does not need to run again
-	Run(<-chan struct{}) error
+	Run(context.Context) error
 }
 
 type AdmissionRequest resource.AdmissionRequest
