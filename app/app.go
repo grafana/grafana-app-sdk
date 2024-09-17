@@ -50,9 +50,13 @@ type Config struct {
 	KubeConfig rest.Config
 	// ManifestData is the fetched ManifestData the runner is using for determining app kinds and capabilities.
 	ManifestData ManifestData
-	// ExtraConfig is additional configuration information, which may be app or runner specific
-	ExtraConfig map[string]any
+	// SpecificConfig is app-specific config (as opposed to generic config)
+	SpecificConfig SpecificConfig
 }
+
+// SpecificConfig is app-specific configuration which can vary from app to app
+// TODO: better type than any
+type SpecificConfig any
 
 // Provider represents a type which can provide an app manifest, and create a new App when given a configuration.
 // It should be used by runners to determine an app's capabilities and create an instance of the app to run.
@@ -60,6 +64,8 @@ type Provider interface {
 	// Manifest returns a Manifest, which may contain ManifestData or may point to a location where ManifestData can be fetched from.
 	// The runner should use the ManifestData to determine app capabilities.
 	Manifest() Manifest
+	// SpecificConfig is any app-specific config that cannot be loaded by the runner that should be provided in NewApp
+	SpecificConfig() SpecificConfig
 	// NewApp creates a new App instance using the provided config, or returns an error if an App cannot be instantiated.
 	NewApp(Config) (App, error)
 }

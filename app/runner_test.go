@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -184,6 +185,95 @@ func TestMultiRunner_PrometheusCollectors(t *testing.T) {
 			Collectors: []prometheus.Collector{collector},
 		})
 	}
+	assert.ElementsMatch(t, collectors, runner.PrometheusCollectors())
+}
+
+func TestSingleRunner_Run(t *testing.T) {
+	t.Run("single run, cancel", func(t *testing.T) {
+		// This should behave like a normal Runnable
+		runner := NewSingletonRunner(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+		}, false)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			time.Sleep(time.Second)
+			cancel()
+		}()
+		err := runOrTimeout(ctx, runner, time.Second*5)
+		assert.Nil(t, err)
+	})
+
+	t.Run("multiple runs, one cancel, StopOnAny=false", func(t *testing.T) {
+		runner := NewSingletonRunner(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+		}, false)
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
+		go func() {
+			// This one isn't ever canceled, so it'll run until it hits the timeout
+			err := runOrTimeout(context.Background(), runner, time.Second*5)
+			assert.Equal(t, testTimeoutError, err)
+			wg.Done()
+		}()
+		go func() {
+			// We cancel this run 1 second in, so it should exit then
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				time.Sleep(time.Second)
+				cancel()
+			}()
+			err := runOrTimeout(ctx, runner, time.Second*5)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		wg.Wait()
+	})
+
+	t.Run("multiple runs, once cancel, StopOnAny=true", func(t *testing.T) {
+		runner := NewSingletonRunner(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
+				return nil
+			},
+		}, true)
+		wg := &sync.WaitGroup{}
+		wg.Add(2)
+		go func() {
+			// This one isn't ever canceled, but with StopOnAny=true, the other call to Run() being canceled should cancel this
+			err := runOrTimeout(context.Background(), runner, time.Second*5)
+			assert.Equal(t, ErrOtherRunStopped, err)
+			wg.Done()
+		}()
+		go func() {
+			// We cancel this run 1 second in, so it should exit then
+			ctx, cancel := context.WithCancel(context.Background())
+			go func() {
+				time.Sleep(time.Second)
+				cancel()
+			}()
+			err := runOrTimeout(ctx, runner, time.Second*5)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		wg.Wait()
+	})
+}
+
+func TestSingleRunner_PrometheusCollectors(t *testing.T) {
+	collectors := []prometheus.Collector{
+		prometheus.NewCounter(prometheus.CounterOpts{}),
+		prometheus.NewGauge(prometheus.GaugeOpts{}),
+		prometheus.NewHistogram(prometheus.HistogramOpts{}),
+	}
+	runner := NewSingletonRunner(&testRunnable{
+		Collectors: collectors,
+	}, false)
 	assert.ElementsMatch(t, collectors, runner.PrometheusCollectors())
 }
 

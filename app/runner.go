@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -119,4 +120,78 @@ func waitOrTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return true
 	}
+}
+
+var (
+	ErrOtherRunStopped = errors.New("run stopped by another run call")
+)
+
+func NewSingletonRunner(runnable Runnable, stopOnAny bool) *SingletonRunner {
+	return &SingletonRunner{
+		Wrapped:   runnable,
+		StopOnAny: stopOnAny,
+	}
+}
+
+// SingletonRunner runs a single Runnable but allows for multiple distinct calls to Run() which cn have independent lifecycles
+type SingletonRunner struct {
+	Wrapped Runnable
+	// StopOnAny tells the SingletonRunner to stop all Run() calls if any one of them is stopped
+	StopOnAny bool
+
+	mux     sync.Mutex
+	running bool
+	wg      sync.WaitGroup
+	cancel  context.CancelCauseFunc
+	ctx     context.Context
+}
+
+// Run runs until the provided context.Context is closed, the underlying Runnable completes, or
+// another call to Run is stopped and StopOnAny is set to true (in which case ErrOtherRunStopped is returned)
+func (s *SingletonRunner) Run(ctx context.Context) error {
+	s.wg.Add(1)
+	defer s.wg.Done()
+	go func(c context.Context) {
+		<-ctx.Done()
+		if s.StopOnAny && s.cancel != nil {
+			s.cancel(ErrOtherRunStopped)
+		}
+	}(ctx)
+
+	func() {
+		s.mux.Lock()
+		defer s.mux.Unlock()
+		if !s.running {
+			s.running = true
+			// Stop cancel propagation and set up our own cancel function
+			derived := context.WithoutCancel(ctx)
+			s.ctx, s.cancel = context.WithCancelCause(derived)
+			go func() {
+				s.wg.Wait()
+				s.mux.Lock()
+				s.running = false
+				s.mux.Unlock()
+			}()
+
+			go func() {
+				err := s.Wrapped.Run(s.ctx)
+				s.cancel(err)
+			}()
+		}
+	}()
+
+	select {
+	case <-s.ctx.Done():
+		return context.Cause(s.ctx)
+	case <-ctx.Done():
+	}
+	return nil
+}
+
+// PrometheusCollectors implements metrics.Provider by returning prometheus collectors for the wrapped Runnable if it implements metrics.Provider.
+func (s *SingletonRunner) PrometheusCollectors() []prometheus.Collector {
+	if cast, ok := s.Wrapped.(metrics.Provider); ok {
+		return cast.PrometheusCollectors()
+	}
+	return nil
 }

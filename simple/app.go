@@ -22,13 +22,18 @@ type Converter k8s.Converter
 // AppProvider is a simple implementation of app.Provider which returns AppManifest when Manifest is called,
 // and calls NewAppFunc when NewApp is called.
 type AppProvider struct {
-	AppManifest app.Manifest
-	NewAppFunc  func(config app.Config) (app.App, error)
+	AppManifest       app.Manifest
+	AppSpecificConfig app.SpecificConfig
+	NewAppFunc        func(config app.Config) (app.App, error)
 }
 
 // Manifest returns the AppManifest in the AppProvider
 func (a *AppProvider) Manifest() app.Manifest {
 	return a.AppManifest
+}
+
+func (a *AppProvider) SpecificConfig() app.SpecificConfig {
+	return a.AppSpecificConfig
 }
 
 // NewApp calls NewAppFunc and returns the result
@@ -37,10 +42,11 @@ func (a *AppProvider) NewApp(settings app.Config) (app.App, error) {
 }
 
 // NewAppProvider is a convenience method for creating a new AppProvider
-func NewAppProvider(manifest app.Manifest, newAppFunc func(cfg app.Config) (app.App, error)) *AppProvider {
+func NewAppProvider(manifest app.Manifest, cfg app.SpecificConfig, newAppFunc func(cfg app.Config) (app.App, error)) *AppProvider {
 	return &AppProvider{
-		AppManifest: manifest,
-		NewAppFunc:  newAppFunc,
+		AppManifest:       manifest,
+		AppSpecificConfig: cfg,
+		NewAppFunc:        newAppFunc,
 	}
 }
 

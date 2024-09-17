@@ -7,9 +7,12 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -23,18 +26,45 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewStandaloneOperator.
 type StandaloneOperator struct {
-	provider app.Provider
+	config        OperatorAppConfig
+	webhookServer *webhookServerRunner
+	metricsServer *metricsServerRunner
+	startMux      sync.Mutex
+	running       bool
+	runningWG     sync.WaitGroup
 }
 
-// NewStandaloneOperator creates a new, properly-initialized instance of a StandaloneOperator,
-// which will use the given app.Provider to instantiate a new underlying app.
-func NewStandaloneOperator(provider app.Provider) (*StandaloneOperator, error) {
-	if provider == nil {
-		return nil, errors.New("provider cannot be nil")
+// NewStandaloneOperator creates a new, properly-initialized instance of a StandaloneOperator
+func NewStandaloneOperator(cfg OperatorAppConfig) (*StandaloneOperator, error) {
+	// Validate the KubeConfig by constructing a rest.RESTClient with it
+	// TODO: this requires a GroupVersion, which gets set up based on the kind
+	// _, err := rest.RESTClientFor(&cfg.KubeConfig)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
+	// }
+
+	op := StandaloneOperator{
+		config: cfg,
 	}
-	return &StandaloneOperator{
-		provider: provider,
-	}, nil
+
+	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
+		ws, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
+			Port: cfg.WebhookConfig.Port,
+			TLSConfig: k8s.TLSConfig{
+				CertPath: cfg.WebhookConfig.TLSConfig.CertPath,
+				KeyPath:  cfg.WebhookConfig.TLSConfig.KeyPath,
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		op.webhookServer = newWebhookServerRunner(ws)
+	}
+	if cfg.MetricsConfig.Enabled {
+		exporter := metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
+		op.metricsServer = newMetricsServerRunner(exporter)
+	}
+	return &op, nil
 }
 
 type OperatorAppConfig struct {
@@ -45,8 +75,8 @@ type OperatorAppConfig struct {
 	MetricsConfig MetricsConfig
 	// TracingConfig contains the configuration for sending traces, if desired
 	TracingConfig TracingConfig
-	// AppConfig contains the configuration needed for creating and running the underlying App
-	AppConfig app.Config
+	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
+	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
 	// if empty, it defaults to os.DirFS(".")
 	Filesystem fs.FS
@@ -65,31 +95,55 @@ type capabilities struct {
 	validation bool
 }
 
-// Run runs the StandaloneOperator using the provided config, until the provided context.Context is closed, or an unrecoverable error occurs
-func (s *StandaloneOperator) Run(ctx context.Context, config OperatorAppConfig) error {
-	if s.provider == nil {
-		return errors.New("provider cannot be nil, instantiate StandaloneOperator with NewStandaloneOperator")
+// Run runs the StandaloneOperator for the app built from the provided app.AppProvider, until the provided context.Context is closed,
+// or an unrecoverable error occurs. If an app.App cannot be instantiated from the app.AppProvider, an error will be returned.
+// Webserver components of Run (such as webhooks and the prometheus exporter) will remain running so long as at least one Run() call is still active.
+func (s *StandaloneOperator) Run(ctx context.Context, provider app.Provider) error {
+	if provider == nil {
+		return errors.New("provider cannot be nil")
 	}
 
 	// Get capabilities from manifest
-	manifestData, err := s.getManifestData(config)
+	manifestData, err := s.getManifestData(provider)
 	if err != nil {
 		return fmt.Errorf("unable to get app manifest capabilities: %w", err)
 	}
-	config.AppConfig.ManifestData = *manifestData
+	appConfig := app.Config{
+		KubeConfig:     s.config.KubeConfig,
+		ManifestData:   *manifestData,
+		SpecificConfig: provider.SpecificConfig(),
+	}
 
 	// Create the app
-	a, err := s.provider.NewApp(config.AppConfig)
+	a, err := provider.NewApp(appConfig)
 	if err != nil {
 		return err
 	}
 
-	// Set up tracing, if enabled
-	if config.TracingConfig.Enabled {
-		err := SetTraceProvider(config.TracingConfig.OpenTelemetryConfig)
-		if err != nil {
-			return err
+	s.runningWG.Add(1)
+	defer s.runningWG.Done()
+
+	err = func() error {
+		s.startMux.Lock()
+		defer s.startMux.Unlock()
+		if !s.running {
+			s.running = true
+			go func() {
+				s.runningWG.Wait()
+				s.running = false
+			}()
+			// Set up tracing, if enabled
+			if s.config.TracingConfig.Enabled {
+				err := SetTraceProvider(s.config.TracingConfig.OpenTelemetryConfig)
+				if err != nil {
+					return err
+				}
+			}
 		}
+		return nil
+	}()
+	if err != nil {
+		return err
 	}
 
 	// Build the operator
@@ -114,12 +168,8 @@ func (s *StandaloneOperator) Run(ctx context.Context, config OperatorAppConfig) 
 		}
 	}
 	if anyWebhooks {
-		webhooks, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
-			Port:      config.WebhookConfig.Port,
-			TLSConfig: config.WebhookConfig.TLSConfig,
-		})
-		if err != nil {
-			return err
+		if s.webhookServer == nil {
+			return errors.New("app has capabilities that require webhooks, but webhook server was not provided TLS config")
 		}
 		for _, kind := range a.ManagedKinds() {
 			c, ok := vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind(), kind.Version())]
@@ -127,19 +177,19 @@ func (s *StandaloneOperator) Run(ctx context.Context, config OperatorAppConfig) 
 				continue
 			}
 			if c.validation {
-				webhooks.AddValidatingAdmissionController(a, kind)
+				s.webhookServer.AddValidatingAdmissionController(a, kind)
 			}
 			if c.mutation {
-				webhooks.AddMutatingAdmissionController(a, kind)
+				s.webhookServer.AddMutatingAdmissionController(a, kind)
 			}
 			if c.conversion {
-				webhooks.AddConverter(toWebhookConverter(a), metav1.GroupKind{
+				s.webhookServer.AddConverter(toWebhookConverter(a), metav1.GroupKind{
 					Group: kind.Group(),
 					Kind:  kind.Kind(),
 				})
 			}
 		}
-		runner.AddRunnable(&k8sRunnable{runner: webhooks})
+		runner.AddRunnable(s.webhookServer)
 	}
 
 	// Main loop
@@ -149,20 +199,19 @@ func (s *StandaloneOperator) Run(ctx context.Context, config OperatorAppConfig) 
 	}
 
 	// Metrics
-	if config.MetricsConfig.Enabled {
-		exporter := metrics.NewExporter(config.MetricsConfig.ExporterConfig)
-		err = exporter.RegisterCollectors(runner.PrometheusCollectors()...)
+	if s.metricsServer != nil {
+		err = s.metricsServer.RegisterCollectors(runner.PrometheusCollectors()...)
 		if err != nil {
 			return err
 		}
-		runner.AddRunnable(&k8sRunnable{runner: exporter})
+		runner.AddRunnable(s.metricsServer)
 	}
 
 	return runner.Run(ctx)
 }
 
-func (s *StandaloneOperator) getManifestData(cfg OperatorAppConfig) (*app.ManifestData, error) {
-	manifest := s.provider.Manifest()
+func (s *StandaloneOperator) getManifestData(provider app.Provider) (*app.ManifestData, error) {
+	manifest := provider.Manifest()
 	data := app.ManifestData{}
 	switch manifest.Location.Type {
 	case app.ManifestLocationEmbedded:
@@ -172,7 +221,7 @@ func (s *StandaloneOperator) getManifestData(cfg OperatorAppConfig) (*app.Manife
 		data = *manifest.ManifestData
 	case app.ManifestLocationFilePath:
 		// TODO: more correct version?
-		dir := cfg.Filesystem
+		dir := s.config.Filesystem
 		if dir == nil {
 			dir = os.DirFS(".")
 		}
@@ -218,4 +267,56 @@ type simpleK8sConverter struct {
 
 func (s *simpleK8sConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
 	return s.convertFunc(obj, targetAPIVersion)
+}
+
+func newWebhookServerRunner(ws *k8s.WebhookServer) *webhookServerRunner {
+	return &webhookServerRunner{
+		server: ws,
+		runner: app.NewSingletonRunner(&k8sRunnable{
+			runner: ws,
+		}, false),
+	}
+}
+
+type webhookServerRunner struct {
+	runner *app.SingletonRunner
+	server *k8s.WebhookServer
+}
+
+func (s *webhookServerRunner) Run(ctx context.Context) error {
+	return s.runner.Run(ctx)
+}
+
+func (s *webhookServerRunner) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, kind resource.Kind) {
+	s.server.AddValidatingAdmissionController(controller, kind)
+}
+
+func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, kind resource.Kind) {
+	s.server.AddMutatingAdmissionController(controller, kind)
+}
+
+func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
+	s.server.AddConverter(converter, groupKind)
+}
+
+func newMetricsServerRunner(exporter *metrics.Exporter) *metricsServerRunner {
+	return &metricsServerRunner{
+		server: exporter,
+		runner: app.NewSingletonRunner(&k8sRunnable{
+			runner: exporter,
+		}, false),
+	}
+}
+
+type metricsServerRunner struct {
+	runner *app.SingletonRunner
+	server *metrics.Exporter
+}
+
+func (m *metricsServerRunner) Run(ctx context.Context) error {
+	return m.runner.Run(ctx)
+}
+
+func (m *metricsServerRunner) RegisterCollectors(metrics ...prometheus.Collector) error {
+	return m.server.RegisterCollectors(metrics...)
 }
