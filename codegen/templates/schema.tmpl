@@ -19,8 +19,12 @@ var (
                 cast, ok := o.(*{{$root.Kind}})
                 if !ok {
                     return "", fmt.Errorf("provided object must be of type *{{$root.Kind}}")
+                }{{ if .Optional }}
+                if cast.{{$root.ToObjectPath .Field}} == nil {
+                    return "", nil
                 }
-                return cast.{{$root.ToObjectPath .}}, nil
+                return *cast.{{$root.ToObjectPath .Field}}, nil{{ else }}
+                return cast.{{$root.ToObjectPath .Field}}, nil{{ end }}
             },
         },
         {{ end }} }){{ end }})

@@ -115,12 +115,20 @@ type SchemaMetadata struct {
 	Kind             string
 	Plural           string
 	Scope            string
-	SelectableFields []string
+	SelectableFields []SchemaMetadataSeletableField
 	FuncPrefix       string
+}
+
+type SchemaMetadataSeletableField struct {
+	Field    string
+	Optional bool
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
 	parts := make([]string, 0)
+	if len(s) > 0 && s[0] == '.' {
+		s = s[1:]
+	}
 	for i, part := range strings.Split(s, ".") {
 		if i == 0 && part == "metadata" {
 			part = "ObjectMeta"
