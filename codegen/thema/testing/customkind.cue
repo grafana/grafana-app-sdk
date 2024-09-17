@@ -66,6 +66,13 @@ customKind: {
                     otherMetadataField: string
                 }
             }
+            additionalPrinterColumns: [
+                {
+                    jsonPath: ".spec.field1"
+                    name: "FIELD ONE"
+                    type: "string"
+                }
+            ]
         }]
     }
 }

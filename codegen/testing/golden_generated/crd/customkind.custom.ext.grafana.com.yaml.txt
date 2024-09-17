@@ -222,6 +222,10 @@ spec:
                 type: object
           subresources:
             status: {}
+          additionalPrinterColumns:
+            - name: FIELD ONE
+              type: string
+              jsonPath: .spec.field1
     names:
         kind: CustomKind
         plural: customkinds
