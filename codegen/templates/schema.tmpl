@@ -14,13 +14,17 @@ import (
 var (
     schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
         resource.WithPlural("{{.Plural}}"), resource.WithScope(resource.{{.Scope}}Scope) {{if gt $sfl 0}}, resource.WithSelectableFields([]resource.SelectableField{ {{ range .SelectableFields }}resource.SelectableField{
-            FieldSelector: "{{.}}",
+            FieldSelector: "{{.Field}}",
             FieldValueFunc: func(o resource.Object) (string, error) {
                 cast, ok := o.(*{{$root.Kind}})
                 if !ok {
                     return "", fmt.Errorf("provided object must be of type *{{$root.Kind}}")
+                }{{ if .Optional }}
+                if cast.{{$root.ToObjectPath .Field}} == nil {
+                    return "", nil
                 }
-                return cast.{{$root.ToObjectPath .}}, nil
+                return *cast.{{$root.ToObjectPath .Field}}, nil{{ else }}
+                return cast.{{$root.ToObjectPath .Field}}, nil{{ end }}
             },
         },
         {{ end }} }){{ end }})

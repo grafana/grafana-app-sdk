@@ -31,6 +31,7 @@ var generateCmd = &cobra.Command{
 	RunE: generateCmdFunc,
 }
 
+//nolint:goconst
 func setupGenerateCmd() {
 	generateCmd.PersistentFlags().StringP("gogenpath", "g", "pkg/generated/",
 		"Path to directory where generated go code will reside")
