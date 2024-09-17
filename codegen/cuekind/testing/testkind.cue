@@ -30,6 +30,13 @@ testKind: {
 				}
 			}
 			mutation: operations: ["create","update"]
+			additionalPrinterColumns: [
+                {
+                    jsonPath: ".spec.stringField"
+                    name: "STRING FIELD"
+                    type: "string"
+                }
+            ]
 		}
 	}
 }

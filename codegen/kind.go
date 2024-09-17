@@ -63,16 +63,26 @@ type KindCodegenProperties struct {
 	Backend  bool `json:"backend"`
 }
 
+type AdditionalPrinterColumn struct {
+	Name        string  `json:"name"`
+	Type        string  `json:"type"`
+	Format      *string `json:"format,omitempty"`
+	Description *string `json:"description,omitempty"`
+	Priority    *int32  `json:"priority"`
+	JSONPath    string  `json:"jsonPath"`
+}
+
 type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema           cue.Value               `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen          KindCodegenProperties   `json:"codegen"`
-	Served           bool                    `json:"served"`
-	SelectableFields []string                `json:"selectableFields"`
-	Validation       KindAdmissionCapability `json:"validation"`
-	Mutation         KindAdmissionCapability `json:"mutation"`
+	Schema                   cue.Value                 `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen                  KindCodegenProperties     `json:"codegen"`
+	Served                   bool                      `json:"served"`
+	SelectableFields         []string                  `json:"selectableFields"`
+	Validation               KindAdmissionCapability   `json:"validation"`
+	Mutation                 KindAdmissionCapability   `json:"mutation"`
+	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
 }
 
 // AnyKind is a simple implementation of Kind

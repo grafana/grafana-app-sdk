@@ -125,6 +125,10 @@ spec:
                 type: object
           subresources:
             status: {}
+          additionalPrinterColumns:
+            - name: STRING FIELD
+              type: string
+              jsonPath: .spec.stringField
     names:
         kind: TestKind
         plural: testkinds

@@ -24,14 +24,14 @@ func TestCRDGenerator(t *testing.T) {
 
 	parser, err := NewParser()
 	require.Nil(t, err)
-	kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind")
+	kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "customKind")
 	require.Nil(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
 		files, err := CRDGenerator(json.Marshal, "json").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 1)
+		assert.Len(t, files, 2)
 		// Check content against the golden files
 		compareToGolden(t, files, "crd")
 	})
@@ -40,7 +40,7 @@ func TestCRDGenerator(t *testing.T) {
 		files, err := CRDGenerator(yaml.Marshal, "yaml").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 1)
+		assert.Len(t, files, 2)
 		// Check content against the golden files
 		compareToGolden(t, files, "crd")
 	})
