@@ -74,7 +74,7 @@ Schema: {
 	operations: [...string]
 }
 
-AdditionalPrinterColumns: {
+#AdditionalPrinterColumns: {
 	// name is a human readable name for the column.
 	name: string
 	// type is an OpenAPI type definition for this column.
@@ -166,7 +166,7 @@ Kind: S={
 			validation: #AdmissionCapability | *S.apiResource.validation
 			mutation: #AdmissionCapability | *S.apiResource.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
-			additionalPrinterColumns?: [...AdditionalPrinterColumns]
+			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
 	}
 	machineName: strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
