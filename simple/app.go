@@ -146,13 +146,13 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 	}
 	for _, kind := range config.ManagedKinds {
-		err := a.ManageKind(kind)
+		err := a.manageKind(kind)
 		if err != nil {
 			return nil, err
 		}
 	}
 	for _, kind := range config.UnmanagedKinds {
-		err := a.WatchKind(kind)
+		err := a.watchKind(kind)
 		if err != nil {
 			return nil, err
 		}
@@ -215,11 +215,11 @@ func (a *App) AddRunnable(runner app.Runnable) {
 	a.runner.AddRunnable(runner)
 }
 
-// ManageKind introduces a new kind to manage.
-func (a *App) ManageKind(kind AppManagedKind) error {
+// manageKind introduces a new kind to manage.
+func (a *App) manageKind(kind AppManagedKind) error {
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		return a.WatchKind(AppUnmanagedKind{
+		return a.watchKind(AppUnmanagedKind{
 			Kind:             kind.Kind,
 			Reconciler:       kind.Reconciler,
 			Watcher:          kind.Watcher,
@@ -229,7 +229,10 @@ func (a *App) ManageKind(kind AppManagedKind) error {
 	return nil
 }
 
-func (a *App) WatchKind(kind AppUnmanagedKind) error {
+func (a *App) watchKind(kind AppUnmanagedKind) error {
+	if kind.Reconciler != nil && kind.Watcher != nil {
+		return fmt.Errorf("please provide either Watcher or Reconciler, not both")
+	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		client, err := a.clientGenerator.ClientFor(kind.Kind)
 		if err != nil {
