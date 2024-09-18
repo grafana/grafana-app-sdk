@@ -188,8 +188,8 @@ jobs:
         run: |
           mkdir -p test-project && cd test-project
           grafana-app-sdk project init "test-project"
-          echo "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)" >> go.mod
-          echo "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)" >> go.mod
+          printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
+          printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind2.cue kinds/customkind2.cue
           grafana-app-sdk generate --nomanifest
