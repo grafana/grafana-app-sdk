@@ -3,6 +3,7 @@ module github.com/grafana/grafana-app-sdk
 go 1.23.0
 
 retract (
+	v0.20.0 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
 	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 )
@@ -17,7 +18,7 @@ require (
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/matryer/moq v0.5.0
-	github.com/prometheus/client_golang v1.20.3
+	github.com/prometheus/client_golang v1.20.4
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0

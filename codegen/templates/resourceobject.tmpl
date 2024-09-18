@@ -66,12 +66,13 @@ func ({{.ObjectShortName}} *{{.TypeName}}) SetSubresource(name string, value any
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetStaticMetadata() resource.StaticMetadata {
+    gvk := {{.ObjectShortName}}.GroupVersionKind()
     return resource.StaticMetadata{
         Name:      {{.ObjectShortName}}.ObjectMeta.Name,
     	Namespace: {{.ObjectShortName}}.ObjectMeta.Namespace,
-    	Group:     {{.ObjectShortName}}.GroupVersionKind().Group,
-    	Version:   {{.ObjectShortName}}.GroupVersionKind().Version,
-    	Kind:      {{.ObjectShortName}}.GroupVersionKind().Kind,
+    	Group:     gvk.Group,
+    	Version:   gvk.Version,
+    	Kind:      gvk.Kind,
     }
 }
 
