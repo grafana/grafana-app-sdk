@@ -186,12 +186,14 @@ jobs:
             }
       - name: Bootstrap project
         run: |
-          cd codegen-tests
+          mkdir -p test-project && cd test-project
+          grafana-app-sdk project init "test-project"
+          echo "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)" >> go.mod
+          echo "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)" >> go.mod
+          cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
+          cp ../grafana-app-sdk/codegen/cuekind/testing/customkind2.cue kinds/customkind2.cue
           grafana-app-sdk generate --nomanifest
-          grafana-app-sdk project component add frontend backend operator --plugin-id=codegen-tests
+          grafana-app-sdk project component add frontend backend operator --plugin-id=test-project
           go mod tidy
-          export commit="${GITHUB_SHA}"
-          go get "github.com/grafana/grafana-app-sdk@${commit}"
-          go get "github.com/grafana/grafana-app-sdk/plugin@${commit}"
           go build cmd/operator/*.go
           go build plugin/pkg/*.go
