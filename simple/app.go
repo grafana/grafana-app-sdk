@@ -3,6 +3,7 @@ package simple
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -99,11 +100,17 @@ type AppManagedKind struct {
 	// Mutator is an optional MutatingAdmissionController for the Kind. It will be run only for mutation
 	// of this specific version.
 	Mutator resource.MutatingAdmissionController
-	// SubresourceRoutes are an optional map of subresource paths to a route handler.
+	// CustomRoutes are an optional map of subresource paths to a route handler.
 	// If supported by the runner, calls to these subresources on this particular version will call this handler.
-	SubresourceRoutes map[string]func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
+	CustomRoutes []AppCustomRouteHandler
 	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
 	ReconcileOptions BasicReconcileOptions
+}
+
+type AppCustomRouteHandler struct {
+	Path    string
+	Methods []string
+	Handler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
 }
 
 // AppUnmanagedKind is a Kind which an App does not manage, but still may want to watch or reconcile as part of app functionality
@@ -216,6 +223,22 @@ func (a *App) AddRunnable(runner app.Runnable) {
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
+	// If there are custom routes, validate them
+	if len(kind.CustomRoutes) > 0 {
+		pathMethods := make(map[string]struct{})
+		for _, route := range kind.CustomRoutes {
+			if len(route.Methods) == 0 {
+				return fmt.Errorf("custom route cannot have no Methods")
+			}
+			for _, method := range route.Methods {
+				pm := fmt.Sprintf("%s:%s", strings.ToUpper(method), route.Path)
+				if _, ok := pathMethods[pm]; ok {
+					return fmt.Errorf("custom route '%s' already has a handler for method '%s'", route.Path, method)
+				}
+				pathMethods[pm] = struct{}{}
+			}
+		}
+	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		return a.watchKind(AppUnmanagedKind{
 			Kind:             kind.Kind,
@@ -352,11 +375,16 @@ func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCust
 		// TODO: still return the not found, or just return NotImplemented?
 		return nil, app.ErrCustomRouteNotFound
 	}
-	handler, ok := k.SubresourceRoutes[req.SubresourcePath]
-	if !ok {
-		return nil, app.ErrCustomRouteNotFound
+	for _, handler := range k.CustomRoutes {
+		if handler.Path == req.SubresourcePath {
+			for _, method := range handler.Methods {
+				if strings.EqualFold(method, req.Method) {
+					return handler.Handler(ctx, req)
+				}
+			}
+		}
 	}
-	return handler(ctx, req)
+	return nil, app.ErrCustomRouteNotFound
 }
 
 func (a *App) getFinalizer(sch resource.Schema) string {
