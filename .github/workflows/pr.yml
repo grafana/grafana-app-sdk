@@ -190,7 +190,7 @@ jobs:
           grafana-app-sdk generate --nomanifest
           grafana-app-sdk project component add frontend backend operator --plugin-id=codegen-tests
           go mod tidy
-          export commit=$(git rev-parse --short "$GITHUB_SHA")
+          export commit="${GITHUB_SHA}"
           go get "github.com/grafana/grafana-app-sdk@${commit}"
           go get "github.com/grafana/grafana-app-sdk/plugin@${commit}"
           go build cmd/operator/*.go
