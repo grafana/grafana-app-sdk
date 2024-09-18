@@ -17,7 +17,7 @@ import (
 
 func TestApp_Convert(t *testing.T) {
 	t.Run("no converter", func(t *testing.T) {
-		a := createTestApp(t)
+		a := createTestApp(t, AppConfig{})
 		ret, err := a.Convert(context.TODO(), app.ConversionRequest{
 			SourceGVK: schema.GroupVersionKind{
 				Group:   "foo",
@@ -36,7 +36,6 @@ func TestApp_Convert(t *testing.T) {
 	})
 
 	t.Run("conversion error", func(t *testing.T) {
-		a := createTestApp(t)
 		expectedErr := errors.New("conversion error")
 		req := app.ConversionRequest{
 			SourceGVK: schema.GroupVersionKind{
@@ -51,20 +50,21 @@ func TestApp_Convert(t *testing.T) {
 			},
 			Raw: app.RawObject{},
 		}
-		a.RegisterKindConverter(schema.GroupKind{
-			Group: req.SourceGVK.Group,
-			Kind:  req.SourceGVK.Kind,
-		}, &testConverter{
-			func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-				return nil, expectedErr
-			},
+		a := createTestApp(t, AppConfig{
+			Converters: map[schema.GroupKind]Converter{{
+				Group: req.SourceGVK.Group,
+				Kind:  req.SourceGVK.Kind,
+			}: &testConverter{
+				func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
+					return nil, expectedErr
+				},
+			}},
 		})
 		_, err := a.Convert(context.TODO(), req)
 		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("conversion success", func(t *testing.T) {
-		a := createTestApp(t)
 		converted := []byte(`{"foo":"bar"}`)
 		req := app.ConversionRequest{
 			SourceGVK: schema.GroupVersionKind{
@@ -79,13 +79,15 @@ func TestApp_Convert(t *testing.T) {
 			},
 			Raw: app.RawObject{},
 		}
-		a.RegisterKindConverter(schema.GroupKind{
-			Group: req.SourceGVK.Group,
-			Kind:  req.SourceGVK.Kind,
-		}, &testConverter{
-			func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-				return converted, nil
-			},
+		a := createTestApp(t, AppConfig{
+			Converters: map[schema.GroupKind]Converter{{
+				Group: req.SourceGVK.Group,
+				Kind:  req.SourceGVK.Kind,
+			}: &testConverter{
+				func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
+					return converted, nil
+				},
+			}},
 		})
 		ret, err := a.Convert(context.TODO(), req)
 		assert.Nil(t, err)
@@ -104,7 +106,7 @@ func TestApp_CallSubresource(t *testing.T) {
 	}
 
 	t.Run("no kind", func(t *testing.T) {
-		a := createTestApp(t)
+		a := createTestApp(t, AppConfig{})
 		writer := httptest.NewRecorder()
 		err := a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
 			ResourceIdentifier: id,
@@ -116,18 +118,18 @@ func TestApp_CallSubresource(t *testing.T) {
 	})
 
 	t.Run("no subresource route", func(t *testing.T) {
-		a := createTestApp(t)
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
-			SubresourceRoutes: map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error{
-				"baz": func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
-					return errors.New("error")
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				SubresourceRoutes: map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error{
+					"baz": func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
+						return errors.New("error")
+					},
 				},
-			},
+			}},
 		})
-		require.Nil(t, err)
 		writer := httptest.NewRecorder()
-		err = a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
+		err := a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
 			ResourceIdentifier: id,
 			SubresourcePath:    "foo",
 			Method:             http.MethodPost,
@@ -137,24 +139,24 @@ func TestApp_CallSubresource(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		a := createTestApp(t)
 		expectedErr := errors.New("error")
 		expectedStatus := http.StatusConflict
 		expectedBody := []byte("foo")
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
-			SubresourceRoutes: map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error{
-				"baz": func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
-					writer.WriteHeader(expectedStatus)
-					_, err := writer.Write(expectedBody)
-					assert.Nil(t, err)
-					return expectedErr
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				SubresourceRoutes: map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error{
+					"baz": func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
+						writer.WriteHeader(expectedStatus)
+						_, err := writer.Write(expectedBody)
+						assert.Nil(t, err)
+						return expectedErr
+					},
 				},
-			},
+			}},
 		})
-		require.Nil(t, err)
 		writer := httptest.NewRecorder()
-		err = a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
+		err := a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
 			ResourceIdentifier: id,
 			SubresourcePath:    "baz",
 			Method:             http.MethodPost,
@@ -166,11 +168,12 @@ func TestApp_CallSubresource(t *testing.T) {
 }
 
 func TestApp_ManagedKinds(t *testing.T) {
-	a := createTestApp(t)
 	kinds := []resource.Kind{testKind()}
+	managed := make([]AppManagedKind, 0)
 	for _, k := range kinds {
-		assert.Nil(t, a.ManageKind(AppManagedKind{Kind: k}))
+		managed = append(managed, AppManagedKind{Kind: k})
 	}
+	a := createTestApp(t, AppConfig{ManagedKinds: managed})
 	assert.ElementsMatch(t, kinds, a.ManagedKinds())
 }
 
@@ -189,43 +192,42 @@ func TestApp_Mutate(t *testing.T) {
 		},
 	}
 	t.Run("missing kind", func(t *testing.T) {
-		a := createTestApp(t)
+		a := createTestApp(t, AppConfig{})
 		ret, err := a.Mutate(context.TODO(), req)
 		assert.Nil(t, ret)
 		assert.Equal(t, app.ErrNotImplemented, err)
 	})
 
 	t.Run("no mutator", func(t *testing.T) {
-		a := createTestApp(t)
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+			}},
 		})
-		assert.Nil(t, err)
 		ret, err := a.Mutate(context.TODO(), req)
 		assert.Nil(t, ret)
 		assert.Equal(t, app.ErrNotImplemented, err)
 	})
 
 	t.Run("mutator error", func(t *testing.T) {
-		a := createTestApp(t)
 		expectedErr := errors.New("error")
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
-			Mutator: &resource.SimpleMutatingAdmissionController{
-				MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
-					assert.Equal(t, req, request)
-					return nil, expectedErr
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Mutator: &resource.SimpleMutatingAdmissionController{
+					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						assert.Equal(t, req, request)
+						return nil, expectedErr
+					},
 				},
-			},
+			}},
 		})
-		assert.Nil(t, err)
 		ret, err := a.Mutate(context.TODO(), req)
 		assert.Nil(t, ret)
 		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("mutator success", func(t *testing.T) {
-		a := createTestApp(t)
 		expectedResp := &resource.MutatingResponse{
 			UpdatedObject: &resource.UntypedObject{
 				Spec: map[string]any{
@@ -233,16 +235,17 @@ func TestApp_Mutate(t *testing.T) {
 				},
 			},
 		}
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
-			Mutator: &resource.SimpleMutatingAdmissionController{
-				MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
-					assert.Equal(t, req, request)
-					return expectedResp, nil
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Mutator: &resource.SimpleMutatingAdmissionController{
+					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						assert.Equal(t, req, request)
+						return expectedResp, nil
+					},
 				},
-			},
+			}},
 		})
-		assert.Nil(t, err)
 		ret, err := a.Mutate(context.TODO(), req)
 		assert.Nil(t, err)
 		assert.Equal(t, expectedResp, ret)
@@ -264,51 +267,51 @@ func TestApp_Validate(t *testing.T) {
 		},
 	}
 	t.Run("missing kind", func(t *testing.T) {
-		a := createTestApp(t)
+		a := createTestApp(t, AppConfig{})
 		err := a.Validate(context.TODO(), req)
 		assert.Equal(t, app.ErrNotImplemented, err)
 	})
 
 	t.Run("no validator", func(t *testing.T) {
-		a := createTestApp(t)
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+			}},
 		})
-		assert.Nil(t, err)
-		err = a.Validate(context.TODO(), req)
+		err := a.Validate(context.TODO(), req)
 		assert.Equal(t, app.ErrNotImplemented, err)
 	})
 
 	t.Run("validator error", func(t *testing.T) {
-		a := createTestApp(t)
 		expectedErr := errors.New("error")
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
-			Validator: &resource.SimpleValidatingAdmissionController{
-				ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
-					assert.Equal(t, req, request)
-					return expectedErr
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Validator: &resource.SimpleValidatingAdmissionController{
+					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+						assert.Equal(t, req, request)
+						return expectedErr
+					},
 				},
-			},
+			}},
 		})
-		assert.Nil(t, err)
-		err = a.Validate(context.TODO(), req)
+		err := a.Validate(context.TODO(), req)
 		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("validator success", func(t *testing.T) {
-		a := createTestApp(t)
-		err := a.ManageKind(AppManagedKind{
-			Kind: kind,
-			Validator: &resource.SimpleValidatingAdmissionController{
-				ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
-					assert.Equal(t, req, request)
-					return nil
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Validator: &resource.SimpleValidatingAdmissionController{
+					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+						assert.Equal(t, req, request)
+						return nil
+					},
 				},
-			},
+			}},
 		})
-		assert.Nil(t, err)
-		err = a.Validate(context.TODO(), req)
+		err := a.Validate(context.TODO(), req)
 		assert.Nil(t, err)
 	})
 }
@@ -317,8 +320,8 @@ func TestApp_Runner(t *testing.T) {
 	// TODO
 }
 
-func createTestApp(t *testing.T) *App {
-	a, err := NewApp(AppConfig{})
+func createTestApp(t *testing.T, cfg AppConfig) *App {
+	a, err := NewApp(cfg)
 	require.Nil(t, err)
 	return a
 }

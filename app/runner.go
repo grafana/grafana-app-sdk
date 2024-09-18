@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 var RunnableCollectorDefaultErrorHandler = func(ctx context.Context, err error) bool {

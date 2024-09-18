@@ -188,7 +188,7 @@ func TestMultiRunner_PrometheusCollectors(t *testing.T) {
 	assert.ElementsMatch(t, collectors, runner.PrometheusCollectors())
 }
 
-func TestSingleRunner_Run(t *testing.T) {
+func TestSingletonRunner_Run(t *testing.T) {
 	t.Run("single run, cancel", func(t *testing.T) {
 		// This should behave like a normal Runnable
 		runner := NewSingletonRunner(&testRunnable{
@@ -265,7 +265,7 @@ func TestSingleRunner_Run(t *testing.T) {
 	})
 }
 
-func TestSingleRunner_PrometheusCollectors(t *testing.T) {
+func TestSingletonRunner_PrometheusCollectors(t *testing.T) {
 	collectors := []prometheus.Collector{
 		prometheus.NewCounter(prometheus.CounterOpts{}),
 		prometheus.NewGauge(prometheus.GaugeOpts{}),

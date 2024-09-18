@@ -1,4 +1,4 @@
-package simple
+package operator
 
 import (
 	"context"
@@ -20,13 +20,13 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// StandaloneOperator runs an app as a standalone operator, capable of exposing admission (validation, mutation)
+// Runner runs an app.App as a standalone operator, capable of exposing admission (validation, mutation)
 // and conversion as webhooks, and running a main control loop with reconcilers and watchers.
 // It relies on the Kinds managed by the app.App already existing in the API server it talks to, either as CRD's
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
-// CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewStandaloneOperator.
-type StandaloneOperator struct {
-	config        OperatorAppConfig
+// CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
+type Runner struct {
+	config        RunnerConfig
 	webhookServer *webhookServerRunner
 	metricsServer *metricsServerRunner
 	startMux      sync.Mutex
@@ -34,8 +34,8 @@ type StandaloneOperator struct {
 	runningWG     sync.WaitGroup
 }
 
-// NewStandaloneOperator creates a new, properly-initialized instance of a StandaloneOperator
-func NewStandaloneOperator(cfg OperatorAppConfig) (*StandaloneOperator, error) {
+// NewRunner creates a new, properly-initialized instance of a Runner
+func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	// Validate the KubeConfig by constructing a rest.RESTClient with it
 	// TODO: this requires a GroupVersion, which gets set up based on the kind
 	// _, err := rest.RESTClientFor(&cfg.KubeConfig)
@@ -43,7 +43,7 @@ func NewStandaloneOperator(cfg OperatorAppConfig) (*StandaloneOperator, error) {
 	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
 	// }
 
-	op := StandaloneOperator{
+	op := Runner{
 		config: cfg,
 	}
 
@@ -67,14 +67,12 @@ func NewStandaloneOperator(cfg OperatorAppConfig) (*StandaloneOperator, error) {
 	return &op, nil
 }
 
-type OperatorAppConfig struct {
+type RunnerConfig struct {
 	// WebhookConfig contains configuration information for exposing k8s webhooks.
 	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
-	WebhookConfig OperatorWebhookConfig
+	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
-	MetricsConfig MetricsConfig
-	// TracingConfig contains the configuration for sending traces, if desired
-	TracingConfig TracingConfig
+	MetricsConfig RunnerMetricsConfig
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
@@ -82,7 +80,14 @@ type OperatorAppConfig struct {
 	Filesystem fs.FS
 }
 
-type OperatorWebhookConfig struct {
+// RunnerMetricsConfig contains configuration information for exposing prometheus metrics
+type RunnerMetricsConfig struct {
+	metrics.ExporterConfig
+	Enabled   bool
+	Namespace string
+}
+
+type RunnerWebhookConfig struct {
 	// Port is the port to open the webhook server on
 	Port int
 	// TLSConfig is the TLS Cert and Key to use for the HTTPS endpoints exposed for webhooks
@@ -95,10 +100,10 @@ type capabilities struct {
 	validation bool
 }
 
-// Run runs the StandaloneOperator for the app built from the provided app.AppProvider, until the provided context.Context is closed,
+// Run runs the Runner for the app built from the provided app.AppProvider, until the provided context.Context is closed,
 // or an unrecoverable error occurs. If an app.App cannot be instantiated from the app.AppProvider, an error will be returned.
 // Webserver components of Run (such as webhooks and the prometheus exporter) will remain running so long as at least one Run() call is still active.
-func (s *StandaloneOperator) Run(ctx context.Context, provider app.Provider) error {
+func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
 	}
@@ -132,13 +137,6 @@ func (s *StandaloneOperator) Run(ctx context.Context, provider app.Provider) err
 				s.runningWG.Wait()
 				s.running = false
 			}()
-			// Set up tracing, if enabled
-			if s.config.TracingConfig.Enabled {
-				err := SetTraceProvider(s.config.TracingConfig.OpenTelemetryConfig)
-				if err != nil {
-					return err
-				}
-			}
 		}
 		return nil
 	}()
@@ -210,7 +208,7 @@ func (s *StandaloneOperator) Run(ctx context.Context, provider app.Provider) err
 	return runner.Run(ctx)
 }
 
-func (s *StandaloneOperator) getManifestData(provider app.Provider) (*app.ManifestData, error) {
+func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {
 	manifest := provider.Manifest()
 	data := app.ManifestData{}
 	switch manifest.Location.Type {
@@ -319,4 +317,16 @@ func (m *metricsServerRunner) Run(ctx context.Context) error {
 
 func (m *metricsServerRunner) RegisterCollectors(metrics ...prometheus.Collector) error {
 	return m.server.RegisterCollectors(metrics...)
+}
+
+type k8sRunner interface {
+	Run(<-chan struct{}) error
+}
+
+type k8sRunnable struct {
+	runner k8sRunner
+}
+
+func (k *k8sRunnable) Run(ctx context.Context) error {
+	return k.runner.Run(ctx.Done())
 }
