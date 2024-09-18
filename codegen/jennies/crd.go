@@ -106,6 +106,21 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 		def.SelectableFields = sf
 	}
 
+	if len(kv.AdditionalPrinterColumns) > 0 {
+		apc := make([]k8s.CustomResourceDefinitionAdditionalPrinterColumn, len(kv.AdditionalPrinterColumns))
+		for i, col := range kv.AdditionalPrinterColumns {
+			apc[i] = k8s.CustomResourceDefinitionAdditionalPrinterColumn{
+				Name:        col.Name,
+				Type:        col.Type,
+				Format:      col.Format,
+				Description: col.Description,
+				Priority:    col.Priority,
+				JSONPath:    col.JSONPath,
+			}
+		}
+		def.AdditionalPrinterColumns = apc
+	}
+
 	for k := range props {
 		if k != "spec" {
 			def.Subresources[k] = struct{}{}

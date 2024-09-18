@@ -288,6 +288,36 @@ foo: {
 
 You can define further, more complex validation and admission control via your operator using admission webhooks, see [Admission Control](../admission-control.md).
 
+### Custom columns when using `kubectl`. aka `additionalPrinterColumns`
+
+The `kind` format allows for configuring the `additionalPrinterColumns` parameter on a [CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns). The format is the same as a CRD, and you add this config as part of "version", next to the `schema`:
+
+```cue
+myKind: {
+    kind: "MyKind"
+    group: "mygroup"
+    current: "v1"
+[...]
+    versions: {
+        "v1": {
+            schema: {
+                spec: {
+                    foo: string
+                }
+            }
+            additionalPrinterColumns: [
+              {
+                name: "FOO"
+                type: "string"
+                jsonPath: ".spec.foo"
+              }
+            ]
+        }
+    }
+}
+
+```
+
 ### Examples
 
 Example complex schemas used for codegen testing can be found in the [cuekind codegen testing directory](../../codegen/cuekind/testing/).
