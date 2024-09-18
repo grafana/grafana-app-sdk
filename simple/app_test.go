@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -95,7 +94,7 @@ func TestApp_Convert(t *testing.T) {
 	})
 }
 
-func TestApp_CallSubresource(t *testing.T) {
+func TestApp_CallResourceCustomRoute(t *testing.T) {
 	kind := testKind()
 	id := resource.FullIdentifier{
 		Group:     kind.Group(),
@@ -107,35 +106,33 @@ func TestApp_CallSubresource(t *testing.T) {
 
 	t.Run("no kind", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{})
-		writer := httptest.NewRecorder()
-		err := a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
+		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
 			ResourceIdentifier: id,
 			SubresourcePath:    "foo",
 			Method:             http.MethodPost,
 		})
-		assert.Equal(t, app.ErrNotImplemented, err)
-		assert.Equal(t, http.StatusNotFound, writer.Result().StatusCode)
+		assert.Nil(t, resp)
+		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
 	t.Run("no subresource route", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				SubresourceRoutes: map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error{
-					"baz": func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
-						return errors.New("error")
+				SubresourceRoutes: map[string]func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error){
+					"baz": func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+						return nil, errors.New("error")
 					},
 				},
 			}},
 		})
-		writer := httptest.NewRecorder()
-		err := a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
+		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
 			ResourceIdentifier: id,
 			SubresourcePath:    "foo",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, err)
-		assert.Equal(t, http.StatusNotFound, writer.Result().StatusCode)
+		assert.Nil(t, resp)
+		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -145,25 +142,25 @@ func TestApp_CallSubresource(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				SubresourceRoutes: map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error{
-					"baz": func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
-						writer.WriteHeader(expectedStatus)
-						_, err := writer.Write(expectedBody)
-						assert.Nil(t, err)
-						return expectedErr
+				SubresourceRoutes: map[string]func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error){
+					"baz": func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+						return &app.ResourceCustomRouteResponse{
+							StatusCode: expectedStatus,
+							Body:       expectedBody,
+						}, expectedErr
 					},
 				},
 			}},
 		})
-		writer := httptest.NewRecorder()
-		err := a.CallSubresource(context.TODO(), writer, &app.SubresourceRequest{
+		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
 			ResourceIdentifier: id,
 			SubresourcePath:    "baz",
 			Method:             http.MethodPost,
 		})
 		assert.Equal(t, expectedErr, err)
-		assert.Equal(t, expectedStatus, writer.Result().StatusCode)
-		assert.Equal(t, expectedBody, writer.Body.Bytes())
+		assert.NotNil(t, resp)
+		assert.Equal(t, expectedStatus, resp.StatusCode)
+		assert.Equal(t, expectedBody, resp.Body)
 	})
 }
 

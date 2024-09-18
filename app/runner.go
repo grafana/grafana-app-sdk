@@ -153,7 +153,7 @@ func (s *SingletonRunner) Run(ctx context.Context) error {
 	s.wg.Add(1)
 	defer s.wg.Done()
 	go func(c context.Context) {
-		<-ctx.Done()
+		<-c.Done()
 		if s.StopOnAny && s.cancel != nil {
 			s.cancel(ErrOtherRunStopped)
 		}

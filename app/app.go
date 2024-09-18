@@ -16,6 +16,8 @@ var (
 	// or the App method is not implemented for the provided Kind.
 	// Typically, the App's ManifestData should indicate this as well.
 	ErrNotImplemented = errors.New("not implemented")
+
+	ErrCustomRouteNotFound = errors.New("custom route not found")
 )
 
 // ConversionRequest is a request to convert a Kind from one version to another
@@ -33,13 +35,19 @@ type RawObject struct {
 	Encoding resource.KindEncoding `json:"-"`
 }
 
-// SubresourceRequest is a request to a custom subresource
-type SubresourceRequest struct {
+// ResourceCustomRouteRequest is a request to a custom subresource
+type ResourceCustomRouteRequest struct {
 	ResourceIdentifier resource.FullIdentifier
 	SubresourcePath    string
 	Method             string
 	Headers            http.Header
 	Body               []byte
+}
+
+type ResourceCustomRouteResponse struct {
+	Headers    http.Header
+	StatusCode int
+	Body       []byte
 }
 
 // Config is the app configuration used in a Provider for instantiating a new App.
@@ -98,10 +106,11 @@ type App interface {
 	// the converted bytes and encoding (Raw and Encoding respectively), and MAY contain the Object representation of those bytes.
 	// It returns an error if the conversion fails, or if the functionality is not supported by the app.
 	Convert(ctx context.Context, req ConversionRequest) (*RawObject, error)
-	// CallSubresource handles the subresource call, and writes the response to the http.ResponseWriter.
-	// If a non-http-error response is encountered, an error should be returned.
+	// CallResourceCustomRoute handles the call to a resource custom route, and returns a response to the request or an error.
+	// If the route doesn't exist, the implementer MAY return ErrCustomRouteNotFound to signal to the runner,
+	// or may choose to return a response with a not found status code and custom body.
 	// It returns an error if the functionality is not supported by the app.
-	CallSubresource(ctx context.Context, writer http.ResponseWriter, req *SubresourceRequest) error
+	CallResourceCustomRoute(ctx context.Context, request *ResourceCustomRouteRequest) (*ResourceCustomRouteResponse, error)
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
 	// If there are multiple versions of a Kind, each one SHOULD be returned by this method,
 	// as app runners may depend on having access to all kinds.

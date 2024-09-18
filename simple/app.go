@@ -3,13 +3,12 @@ package simple
 import (
 	"context"
 	"fmt"
-	"net/http"
 
-	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -70,14 +69,14 @@ type App struct {
 type AppConfig struct {
 	Name           string
 	KubeConfig     rest.Config
-	InformerConfig InformerConfig
+	InformerConfig AppInformerConfig
 	ManagedKinds   []AppManagedKind
 	UnmanagedKinds []AppUnmanagedKind
 	Converters     map[schema.GroupKind]Converter
 }
 
-// InformerConfig contains configuration for the App's internal operator.InformerController
-type InformerConfig struct {
+// AppInformerConfig contains configuration for the App's internal operator.InformerController
+type AppInformerConfig struct {
 	ErrorHandler       func(context.Context, error)
 	RetryPolicy        operator.RetryPolicy
 	RetryDequeuePolicy operator.RetryDequeuePolicy
@@ -102,7 +101,7 @@ type AppManagedKind struct {
 	Mutator resource.MutatingAdmissionController
 	// SubresourceRoutes are an optional map of subresource paths to a route handler.
 	// If supported by the runner, calls to these subresources on this particular version will call this handler.
-	SubresourceRoutes map[string]func(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error
+	SubresourceRoutes map[string]func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
 	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
 	ReconcileOptions BasicReconcileOptions
 }
@@ -171,13 +170,13 @@ func NewApp(config AppConfig) (*App, error) {
 // an error will be returned. If the app's current managed kinds cover more than the provided app.ManifestData
 // indicates, no error will be returned.
 // This method can be used after initializing an app to verify it matches the loaded app.ManifestData from the app runner.
-func (b *App) ValidateManifest(manifest app.ManifestData) error {
+func (a *App) ValidateManifest(manifest app.ManifestData) error {
 	for _, k := range manifest.Kinds {
-		if _, ok := b.converters[schema.GroupKind{Group: manifest.Group, Kind: k.Kind}.String()]; !ok && k.Conversion {
+		if _, ok := a.converters[schema.GroupKind{Group: manifest.Group, Kind: k.Kind}.String()]; !ok && k.Conversion {
 			return fmt.Errorf("kind %s has conversion enabled but no converter is registered", k.Kind)
 		}
 		for _, v := range k.Versions {
-			kind, ok := b.kinds[gvk(manifest.Group, v.Name, k.Kind)]
+			kind, ok := a.kinds[gvk(manifest.Group, v.Name, k.Kind)]
 			if !ok {
 				return fmt.Errorf("kind %s/%s exists in manifest but is not managed by the app", k.Kind, v.Name)
 			}
@@ -193,9 +192,9 @@ func (b *App) ValidateManifest(manifest app.ManifestData) error {
 }
 
 // ManagedKinds returns a slice of all Kinds managed by this App
-func (b *App) ManagedKinds() []resource.Kind {
+func (a *App) ManagedKinds() []resource.Kind {
 	kinds := make([]resource.Kind, 0)
-	for _, k := range b.kinds {
+	for _, k := range a.kinds {
 		kinds = append(kinds, k.Kind)
 	}
 	return kinds
@@ -204,21 +203,21 @@ func (b *App) ManagedKinds() []resource.Kind {
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
 // added via AddRunnable. The returned resource.Runnable also implements metrics.Provider, allowing the caller
 // to gather prometheus.Collector objects used by all underlying runners.
-func (b *App) Runner() app.Runnable {
-	return b.runner
+func (a *App) Runner() app.Runnable {
+	return a.runner
 }
 
 // AddRunnable adds an arbitrary resource.Runnable runner to the App, which will be encapsulated as part of Runner().Run().
 // If the provided runner also implements metrics.Provider, PrometheusCollectors() will be called when called on Runner().
-func (b *App) AddRunnable(runner app.Runnable) {
-	b.runner.AddRunnable(runner)
+func (a *App) AddRunnable(runner app.Runnable) {
+	a.runner.AddRunnable(runner)
 }
 
 // manageKind introduces a new kind to manage.
-func (b *App) manageKind(kind AppManagedKind) error {
-	b.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
+func (a *App) manageKind(kind AppManagedKind) error {
+	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		return b.watchKind(AppUnmanagedKind{
+		return a.watchKind(AppUnmanagedKind{
 			Kind:             kind.Kind,
 			Reconciler:       kind.Reconciler,
 			Watcher:          kind.Watcher,
@@ -228,12 +227,12 @@ func (b *App) manageKind(kind AppManagedKind) error {
 	return nil
 }
 
-func (b *App) watchKind(kind AppUnmanagedKind) error {
+func (a *App) watchKind(kind AppUnmanagedKind) error {
 	if kind.Reconciler != nil && kind.Watcher != nil {
 		return fmt.Errorf("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		client, err := b.clientGenerator.ClientFor(kind.Kind)
+		client, err := a.clientGenerator.ClientFor(kind.Kind)
 		if err != nil {
 			return err
 		}
@@ -245,21 +244,21 @@ func (b *App) watchKind(kind AppUnmanagedKind) error {
 		if err != nil {
 			return err
 		}
-		err = b.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
+		err = a.informerController.AddInformer(inf, kind.Kind.GroupVersionKind().String())
 		if err != nil {
 			return fmt.Errorf("could not add informer to controller: %v", err)
 		}
 		if kind.Reconciler != nil {
 			reconciler := kind.Reconciler
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedReconciler(client, b.getFinalizer(kind.Kind))
+				op, err := operator.NewOpinionatedReconciler(client, a.getFinalizer(kind.Kind))
 				if err != nil {
 					return err
 				}
 				op.Wrap(kind.Reconciler)
 				reconciler = op
 			}
-			err = b.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
+			err = a.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
 			if err != nil {
 				return fmt.Errorf("could not add reconciler to controller: %v", err)
 			}
@@ -267,7 +266,7 @@ func (b *App) watchKind(kind AppUnmanagedKind) error {
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, client, b.getFinalizer)
+				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, client, a.getFinalizer)
 				if err != nil {
 					return err
 				}
@@ -279,7 +278,7 @@ func (b *App) watchKind(kind AppUnmanagedKind) error {
 				}
 				watcher = op
 			}
-			err = b.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
+			err = a.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
 			if err != nil {
 				return fmt.Errorf("could not add watcher to controller: %v", err)
 			}
@@ -289,19 +288,19 @@ func (b *App) watchKind(kind AppUnmanagedKind) error {
 }
 
 // RegisterKindConverter adds a converter for a GroupKind, which will then be processed on Convert calls
-func (b *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Converter) {
-	b.converters[groupKind.String()] = converter
+func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Converter) {
+	a.converters[groupKind.String()] = converter
 }
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
-func (b *App) PrometheusCollectors() []prometheus.Collector {
+func (a *App) PrometheusCollectors() []prometheus.Collector {
 	// TODO: other collectors?
-	return b.runner.PrometheusCollectors()
+	return a.runner.PrometheusCollectors()
 }
 
 // Validate implements app.App and handles Validating Admission Requests
-func (b *App) Validate(ctx context.Context, req *resource.AdmissionRequest) error {
-	k, ok := b.kinds[gvk(req.Group, req.Version, req.Kind)]
+func (a *App) Validate(ctx context.Context, req *resource.AdmissionRequest) error {
+	k, ok := a.kinds[gvk(req.Group, req.Version, req.Kind)]
 	if !ok {
 		// TODO: Default validator instead of ErrNotImplemented?
 		return app.ErrNotImplemented
@@ -313,8 +312,8 @@ func (b *App) Validate(ctx context.Context, req *resource.AdmissionRequest) erro
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
-func (b *App) Mutate(ctx context.Context, req *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
-	k, ok := b.kinds[gvk(req.Group, req.Version, req.Kind)]
+func (a *App) Mutate(ctx context.Context, req *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+	k, ok := a.kinds[gvk(req.Group, req.Version, req.Kind)]
 	if !ok {
 		// TODO: Default mutator instead of ErrNotImplemented?
 		return nil, app.ErrNotImplemented
@@ -326,8 +325,8 @@ func (b *App) Mutate(ctx context.Context, req *resource.AdmissionRequest) (*reso
 }
 
 // Convert implements app.App and handles resource conversion requests
-func (b *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
-	converter, ok := b.converters[req.SourceGVK.GroupKind().String()]
+func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
 		return nil, app.ErrNotImplemented
@@ -346,28 +345,26 @@ func (b *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 	}, err
 }
 
-// CallSubresource implements app.App and handles subresource requests
-func (b *App) CallSubresource(ctx context.Context, writer http.ResponseWriter, req *app.SubresourceRequest) error {
-	k, ok := b.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
+// CallResourceCustomRoute implements app.App and handles custom resource route requests
+func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+	k, ok := a.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
 	if !ok {
-		// TODO: still write the 404, or just return NotImplemented?
-		writer.WriteHeader(http.StatusNotFound)
-		return app.ErrNotImplemented
+		// TODO: still return the not found, or just return NotImplemented?
+		return nil, app.ErrCustomRouteNotFound
 	}
 	handler, ok := k.SubresourceRoutes[req.SubresourcePath]
 	if !ok {
-		writer.WriteHeader(http.StatusNotFound)
-		return nil
+		return nil, app.ErrCustomRouteNotFound
 	}
-	return handler(ctx, writer, req)
+	return handler(ctx, req)
 }
 
-func (b *App) getFinalizer(sch resource.Schema) string {
-	if b.cfg.InformerConfig.FinalizerSupplier != nil {
-		return b.cfg.InformerConfig.FinalizerSupplier(sch)
+func (a *App) getFinalizer(sch resource.Schema) string {
+	if a.cfg.InformerConfig.FinalizerSupplier != nil {
+		return a.cfg.InformerConfig.FinalizerSupplier(sch)
 	}
-	if b.cfg.Name != "" {
-		return fmt.Sprintf("%s-%s-finalizer", b.cfg.Name, sch.Plural())
+	if a.cfg.Name != "" {
+		return fmt.Sprintf("%s-%s-finalizer", a.cfg.Name, sch.Plural())
 	}
 	return fmt.Sprintf("%s-finalizer", sch.Plural())
 }

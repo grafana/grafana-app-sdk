@@ -315,8 +315,8 @@ func (m *metricsServerRunner) Run(ctx context.Context) error {
 	return m.runner.Run(ctx)
 }
 
-func (m *metricsServerRunner) RegisterCollectors(metrics ...prometheus.Collector) error {
-	return m.server.RegisterCollectors(metrics...)
+func (m *metricsServerRunner) RegisterCollectors(collectors ...prometheus.Collector) error {
+	return m.server.RegisterCollectors(collectors...)
 }
 
 type k8sRunner interface {
