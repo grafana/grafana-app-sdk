@@ -54,6 +54,42 @@ var (
 	_ app.App = &App{}
 )
 
+// KindMutator is an interface which describes an object which can mutate a kind, used in AppManagedKind
+type KindMutator interface {
+	Mutate(context.Context, *app.AdmissionRequest) (*app.MutatingResponse, error)
+}
+
+// KindValidator is an interface which describes an object which can validate a kind, used in AppManagedKind
+type KindValidator interface {
+	Validate(context.Context, *app.AdmissionRequest) error
+}
+
+// Mutator is a simple implementation of KindMutator, which calls MutateFunc when Mutate is called
+type Mutator struct {
+	MutateFunc func(context.Context, *app.AdmissionRequest) (*app.MutatingResponse, error)
+}
+
+// Mutate calls MutateFunc and returns the result, if MutateFunc is non-nil (otherwise it returns nil, nil)
+func (m *Mutator) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.MutatingResponse, error) {
+	if m.MutateFunc != nil {
+		return m.MutateFunc(ctx, req)
+	}
+	return nil, nil
+}
+
+// Validator is a simple implementation of KindValidator, which calls ValidateFunc when Validate is called
+type Validator struct {
+	ValidateFunc func(context.Context, *app.AdmissionRequest) error
+}
+
+// Validate calls ValidateFunc and returns the result, if ValidateFunc is non-nil (otherwise it returns nil)
+func (v *Validator) Validate(ctx context.Context, req *app.AdmissionRequest) error {
+	if v.ValidateFunc != nil {
+		return v.ValidateFunc(ctx, req)
+	}
+	return nil
+}
+
 // App is a simple, opinionated implementation of app.App.
 // It must be created with NewApp to be valid.
 type App struct {
@@ -96,10 +132,10 @@ type AppManagedKind struct {
 	Watcher operator.ResourceWatcher
 	// Validator is an optional ValidatingAdmissionController for the Kind. It will be run only for validation
 	// of this specific version.
-	Validator resource.ValidatingAdmissionController
+	Validator KindValidator
 	// Mutator is an optional MutatingAdmissionController for the Kind. It will be run only for mutation
 	// of this specific version.
-	Mutator resource.MutatingAdmissionController
+	Mutator KindMutator
 	// CustomRoutes are an optional map of subresource paths to a route handler.
 	// If supported by the runner, calls to these subresources on this particular version will call this handler.
 	CustomRoutes []AppCustomRouteHandler
@@ -322,7 +358,7 @@ func (a *App) PrometheusCollectors() []prometheus.Collector {
 }
 
 // Validate implements app.App and handles Validating Admission Requests
-func (a *App) Validate(ctx context.Context, req *resource.AdmissionRequest) error {
+func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	k, ok := a.kinds[gvk(req.Group, req.Version, req.Kind)]
 	if !ok {
 		// TODO: Default validator instead of ErrNotImplemented?
@@ -335,7 +371,7 @@ func (a *App) Validate(ctx context.Context, req *resource.AdmissionRequest) erro
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
-func (a *App) Mutate(ctx context.Context, req *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.MutatingResponse, error) {
 	k, ok := a.kinds[gvk(req.Group, req.Version, req.Kind)]
 	if !ok {
 		// TODO: Default mutator instead of ErrNotImplemented?

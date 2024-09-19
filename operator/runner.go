@@ -103,6 +103,8 @@ type capabilities struct {
 // Run runs the Runner for the app built from the provided app.AppProvider, until the provided context.Context is closed,
 // or an unrecoverable error occurs. If an app.App cannot be instantiated from the app.AppProvider, an error will be returned.
 // Webserver components of Run (such as webhooks and the prometheus exporter) will remain running so long as at least one Run() call is still active.
+//
+//nolint:funlen
 func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
@@ -175,10 +177,19 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 				continue
 			}
 			if c.validation {
-				s.webhookServer.AddValidatingAdmissionController(a, kind)
+				s.webhookServer.AddValidatingAdmissionController(&resource.SimpleValidatingAdmissionController{
+					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+						return a.Validate(ctx, s.translateAdmissionRequest(request))
+					},
+				}, kind)
 			}
 			if c.mutation {
-				s.webhookServer.AddMutatingAdmissionController(a, kind)
+				s.webhookServer.AddMutatingAdmissionController(&resource.SimpleMutatingAdmissionController{
+					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+						resp, err := a.Mutate(ctx, s.translateAdmissionRequest(request))
+						return s.translateMutatingResponse(resp), err
+					},
+				}, kind)
 			}
 			if c.conversion {
 				s.webhookServer.AddConverter(toWebhookConverter(a), metav1.GroupKind{
@@ -238,6 +249,24 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 		return nil, fmt.Errorf("apiserver location not supported yet")
 	}
 	return &data, nil
+}
+
+func (*Runner) translateAdmissionRequest(request *resource.AdmissionRequest) *app.AdmissionRequest {
+	if request == nil {
+		return nil
+	}
+	// app.AdmissionRequest is of type resource.AdmissionRequest
+	req := app.AdmissionRequest(*request)
+	return &req
+}
+
+func (*Runner) translateMutatingResponse(response *app.MutatingResponse) *resource.MutatingResponse {
+	if response == nil {
+		return nil
+	}
+	// app.MutatingResponse is of type resource.MutatingResponse
+	resp := resource.MutatingResponse(*response)
+	return &resp
 }
 
 func toWebhookConverter(a app.App) k8s.Converter {

@@ -243,7 +243,7 @@ func TestApp_ManagedKinds(t *testing.T) {
 
 func TestApp_Mutate(t *testing.T) {
 	kind := testKind()
-	req := &resource.AdmissionRequest{
+	req := &app.AdmissionRequest{
 		Action:   resource.AdmissionActionCreate,
 		Group:    kind.Group(),
 		Version:  kind.Version(),
@@ -278,8 +278,8 @@ func TestApp_Mutate(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				Mutator: &resource.SimpleMutatingAdmissionController{
-					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+				Mutator: &Mutator{
+					MutateFunc: func(ctx context.Context, request *app.AdmissionRequest) (*app.MutatingResponse, error) {
 						assert.Equal(t, req, request)
 						return nil, expectedErr
 					},
@@ -292,7 +292,7 @@ func TestApp_Mutate(t *testing.T) {
 	})
 
 	t.Run("mutator success", func(t *testing.T) {
-		expectedResp := &resource.MutatingResponse{
+		expectedResp := &app.MutatingResponse{
 			UpdatedObject: &resource.UntypedObject{
 				Spec: map[string]any{
 					"foo": "bar2",
@@ -302,8 +302,8 @@ func TestApp_Mutate(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				Mutator: &resource.SimpleMutatingAdmissionController{
-					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+				Mutator: &Mutator{
+					MutateFunc: func(ctx context.Context, request *app.AdmissionRequest) (*app.MutatingResponse, error) {
 						assert.Equal(t, req, request)
 						return expectedResp, nil
 					},
@@ -318,7 +318,7 @@ func TestApp_Mutate(t *testing.T) {
 
 func TestApp_Validate(t *testing.T) {
 	kind := testKind()
-	req := &resource.AdmissionRequest{
+	req := &app.AdmissionRequest{
 		Action:   resource.AdmissionActionCreate,
 		Group:    kind.Group(),
 		Version:  kind.Version(),
@@ -351,8 +351,8 @@ func TestApp_Validate(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				Validator: &resource.SimpleValidatingAdmissionController{
-					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+				Validator: &Validator{
+					ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
 						assert.Equal(t, req, request)
 						return expectedErr
 					},
@@ -367,8 +367,8 @@ func TestApp_Validate(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				Validator: &resource.SimpleValidatingAdmissionController{
-					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+				Validator: &Validator{
+					ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
 						assert.Equal(t, req, request)
 						return nil
 					},

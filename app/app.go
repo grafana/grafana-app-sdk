@@ -99,9 +99,9 @@ type MutatingResponse resource.MutatingResponse
 // should be capable of being run by an app wrapper.
 type App interface {
 	// Validate validates the incoming request, and returns an error if validation fails
-	Validate(ctx context.Context, request *resource.AdmissionRequest) error
+	Validate(ctx context.Context, request *AdmissionRequest) error
 	// Mutate runs mutation on the incoming request, responding with a MutatingResponse on success, or an error on failure
-	Mutate(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error)
+	Mutate(ctx context.Context, request *AdmissionRequest) (*MutatingResponse, error)
 	// Convert converts the object based on the ConversionRequest, returning a RawObject which MUST contain
 	// the converted bytes and encoding (Raw and Encoding respectively), and MAY contain the Object representation of those bytes.
 	// It returns an error if the conversion fails, or if the functionality is not supported by the app.
