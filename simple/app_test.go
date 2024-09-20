@@ -115,58 +115,99 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
-	t.Run("no methods", func(t *testing.T) {
+	t.Run("no method", func(t *testing.T) {
 		a, err := NewApp(AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				CustomRoutes: []AppCustomRouteHandler{{
-					Path: "baz",
-					Handler: func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Path: "baz",
+					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
 						return nil, errors.New("error")
 					},
-				}},
+				},
 			}},
 		})
 		assert.Nil(t, a)
 		require.NotNil(t, err)
-		assert.Equal(t, "custom route cannot have no Methods", err.Error())
+		assert.Equal(t, "custom route cannot have an empty method", err.Error())
 	})
 
-	t.Run("duplicate routes", func(t *testing.T) {
+	t.Run("no path", func(t *testing.T) {
 		a, err := NewApp(AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				CustomRoutes: []AppCustomRouteHandler{{
-					Path:    "baz",
-					Methods: []string{http.MethodGet, http.MethodPost},
-					Handler: func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodGet,
+					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
 						return nil, errors.New("error")
 					},
-				}, {
-					Path:    "baz",
-					Methods: []string{http.MethodDelete, http.MethodPost},
-					Handler: func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
-					},
-				}},
+				},
 			}},
 		})
 		assert.Nil(t, a)
 		require.NotNil(t, err)
-		assert.Equal(t, "custom route 'baz' already has a handler for method 'POST'", err.Error())
+		assert.Equal(t, "custom route cannot have an empty path", err.Error())
 	})
+
+	t.Run("no handler", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodGet,
+						Path:   "baz",
+					}: nil,
+				},
+			}},
+		})
+		assert.Nil(t, a)
+		require.NotNil(t, err)
+		assert.Equal(t, "custom route cannot have a nil handler", err.Error())
+	})
+
+	// TODO: can't error on duplicate entries in map, and compiler doesn't prevent it
+	/*
+		t.Run("duplicate routes", func(t *testing.T) {
+			a, err := NewApp(AppConfig{
+				ManagedKinds: []AppManagedKind{{
+					Kind: kind,
+					CustomRoutes: AppCustomRouteHandlers{
+						AppCustomRoute{
+							Method: AppCustomRouteMethodGet,
+							Path:   "baz",
+						}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+							return nil, nil
+						},
+						AppCustomRoute{
+							Method: AppCustomRouteMethodGet,
+							Path:   "baz",
+						}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+							return nil, nil
+						},
+					},
+				}},
+			})
+			assert.Nil(t, a)
+			require.NotNil(t, err)
+			assert.Equal(t, "custom route 'POST baz' already exists", err.Error())
+		})
+	*/
 
 	t.Run("no subresource route", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				CustomRoutes: []AppCustomRouteHandler{{
-					Path:    "baz",
-					Methods: []string{http.MethodGet},
-					Handler: func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodGet,
+						Path:   "baz",
+					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
 						return nil, errors.New("error")
 					},
-				}},
+				},
 			}},
 		})
 		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
@@ -182,13 +223,14 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				CustomRoutes: []AppCustomRouteHandler{{
-					Path:    "baz",
-					Methods: []string{http.MethodGet},
-					Handler: func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodGet,
+						Path:   "baz",
+					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
 						return nil, errors.New("error")
 					},
-				}},
+				},
 			}},
 		})
 		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
@@ -207,16 +249,17 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 		a := createTestApp(t, AppConfig{
 			ManagedKinds: []AppManagedKind{{
 				Kind: kind,
-				CustomRoutes: []AppCustomRouteHandler{{
-					Path:    "baz",
-					Methods: []string{http.MethodPost},
-					Handler: func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodPost,
+						Path:   "baz",
+					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
 						return &app.ResourceCustomRouteResponse{
 							StatusCode: expectedStatus,
 							Body:       expectedBody,
 						}, expectedErr
 					},
-				}},
+				},
 			}},
 		})
 		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{

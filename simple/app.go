@@ -100,6 +100,7 @@ type App struct {
 	internalKinds      map[string]resource.Kind
 	cfg                AppConfig
 	converters         map[string]Converter
+	customRoutes       map[string]AppCustomRouteHandler
 }
 
 // AppConfig is the configuration used by App
@@ -138,15 +139,9 @@ type AppManagedKind struct {
 	Mutator KindMutator
 	// CustomRoutes are an optional map of subresource paths to a route handler.
 	// If supported by the runner, calls to these subresources on this particular version will call this handler.
-	CustomRoutes []AppCustomRouteHandler
+	CustomRoutes AppCustomRouteHandlers
 	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
 	ReconcileOptions BasicReconcileOptions
-}
-
-type AppCustomRouteHandler struct {
-	Path    string
-	Methods []string
-	Handler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
 }
 
 // AppUnmanagedKind is a Kind which an App does not manage, but still may want to watch or reconcile as part of app functionality
@@ -173,6 +168,24 @@ type BasicReconcileOptions struct {
 	UsePlain bool
 }
 
+type AppCustomRouteMethod string
+
+const (
+	AppCustomRouteMethodGet    AppCustomRouteMethod = "GET"
+	AppCustomRouteMethodPut    AppCustomRouteMethod = "PUT"
+	AppCustomRouteMethodPost   AppCustomRouteMethod = "POST"
+	AppCustomRouteMethodDelete AppCustomRouteMethod = "DELETE"
+)
+
+type AppCustomRoute struct {
+	Method AppCustomRouteMethod
+	Path   string
+}
+
+type AppCustomRouteHandler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
+
+type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
+
 // NewApp creates a new instance of App, managing the kinds provided in AppConfig.ManagedKinds.
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
@@ -184,6 +197,7 @@ func NewApp(config AppConfig) (*App, error) {
 		kinds:              make(map[string]AppManagedKind),
 		internalKinds:      make(map[string]resource.Kind),
 		converters:         make(map[string]Converter),
+		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
 	}
 	for _, kind := range config.ManagedKinds {
@@ -260,20 +274,21 @@ func (a *App) AddRunnable(runner app.Runnable) {
 func (a *App) manageKind(kind AppManagedKind) error {
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
-	if len(kind.CustomRoutes) > 0 {
-		pathMethods := make(map[string]struct{})
-		for _, route := range kind.CustomRoutes {
-			if len(route.Methods) == 0 {
-				return fmt.Errorf("custom route cannot have no Methods")
-			}
-			for _, method := range route.Methods {
-				pm := fmt.Sprintf("%s:%s", strings.ToUpper(method), route.Path)
-				if _, ok := pathMethods[pm]; ok {
-					return fmt.Errorf("custom route '%s' already has a handler for method '%s'", route.Path, method)
-				}
-				pathMethods[pm] = struct{}{}
-			}
+	for route, handler := range kind.CustomRoutes {
+		if route.Method == "" {
+			return fmt.Errorf("custom route cannot have an empty method")
 		}
+		if route.Path == "" {
+			return fmt.Errorf("custom route cannot have an empty path")
+		}
+		if handler == nil {
+			return fmt.Errorf("custom route cannot have a nil handler")
+		}
+		key := a.customRouteHandlerKey(kind.Kind, string(route.Method), route.Path)
+		if _, ok := a.customRoutes[key]; ok {
+			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
+		}
+		a.customRoutes[key] = handler
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		return a.watchKind(AppUnmanagedKind{
@@ -411,14 +426,8 @@ func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCust
 		// TODO: still return the not found, or just return NotImplemented?
 		return nil, app.ErrCustomRouteNotFound
 	}
-	for _, handler := range k.CustomRoutes {
-		if handler.Path == req.SubresourcePath {
-			for _, method := range handler.Methods {
-				if strings.EqualFold(method, req.Method) {
-					return handler.Handler(ctx, req)
-				}
-			}
-		}
+	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind, req.Method, req.SubresourcePath)]; ok {
+		return handler(ctx, req)
 	}
 	return nil, app.ErrCustomRouteNotFound
 }
@@ -431,6 +440,10 @@ func (a *App) getFinalizer(sch resource.Schema) string {
 		return fmt.Sprintf("%s-%s-finalizer", a.cfg.Name, sch.Plural())
 	}
 	return fmt.Sprintf("%s-finalizer", sch.Plural())
+}
+
+func (*App) customRouteHandlerKey(kind resource.Kind, method string, path string) string {
+	return fmt.Sprintf("%s/%s/%s/%s/%s", kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
 }
 
 type syncWatcher interface {
