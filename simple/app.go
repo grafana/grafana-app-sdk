@@ -3,6 +3,7 @@ package simple
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -171,10 +172,15 @@ type BasicReconcileOptions struct {
 type AppCustomRouteMethod string
 
 const (
-	AppCustomRouteMethodGet    AppCustomRouteMethod = "GET"
-	AppCustomRouteMethodPut    AppCustomRouteMethod = "PUT"
-	AppCustomRouteMethodPost   AppCustomRouteMethod = "POST"
-	AppCustomRouteMethodDelete AppCustomRouteMethod = "DELETE"
+	AppCustomRouteMethodConnect AppCustomRouteMethod = http.MethodConnect
+	AppCustomRouteMethodDelete  AppCustomRouteMethod = http.MethodDelete
+	AppCustomRouteMethodGet     AppCustomRouteMethod = http.MethodGet
+	AppCustomRouteMethodHead    AppCustomRouteMethod = http.MethodHead
+	AppCustomRouteMethodOptions AppCustomRouteMethod = http.MethodOptions
+	AppCustomRouteMethodPatch   AppCustomRouteMethod = http.MethodPatch
+	AppCustomRouteMethodPost    AppCustomRouteMethod = http.MethodPost
+	AppCustomRouteMethodPut     AppCustomRouteMethod = http.MethodPut
+	AppCustomRouteMethodTrace   AppCustomRouteMethod = http.MethodTrace
 )
 
 type AppCustomRoute struct {
