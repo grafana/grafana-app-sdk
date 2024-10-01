@@ -118,7 +118,7 @@ func main() {
 	op := operator.New()
 
 	// Informers also implement Controller, so we can use them as a controller directly if there's no need for an intermediary.
-	op.AddController(informer)
+	op.AddRunnable(informer)
 
 	// Create the stop channel
 	stopCh := make(chan struct{}, 1)

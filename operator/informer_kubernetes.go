@@ -12,6 +12,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+var _ Informer = &KubernetesBasedInformer{}
+
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
 // and works most optimally with a client that has a Watch response that implements KubernetesCompatibleWatch.
 type KubernetesBasedInformer struct {
@@ -62,8 +64,8 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 }
 
 // Run starts the informer and blocks until stopCh receives a message
-func (k *KubernetesBasedInformer) Run(stopCh <-chan struct{}) error {
-	k.SharedIndexInformer.Run(stopCh)
+func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
+	k.SharedIndexInformer.Run(ctx.Done())
 	return nil
 }
 

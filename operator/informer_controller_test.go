@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -626,6 +627,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		inf := &testInformer{}
 		c := NewInformerController(InformerControllerConfig{})
 		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			fmt.Println(attempt)
 			if attempt > 1 {
 				return false, 0
 			}
@@ -1096,9 +1098,9 @@ func (i *mockInformer) AddEventHandler(handler ResourceWatcher) error {
 	}
 	return nil
 }
-func (i *mockInformer) Run(stopCh <-chan struct{}) error {
+func (i *mockInformer) Run(ctx context.Context) error {
 	if i.RunFunc != nil {
-		return i.RunFunc(stopCh)
+		return i.RunFunc(ctx.Done())
 	}
 	return nil
 }
@@ -1113,8 +1115,8 @@ func (ti *testInformer) AddEventHandler(handler ResourceWatcher) error {
 	return nil
 }
 
-func (ti *testInformer) Run(stopCh <-chan struct{}) error {
-	<-stopCh
+func (ti *testInformer) Run(ctx context.Context) error {
+	<-ctx.Done()
 	if ti.onStop != nil {
 		ti.onStop()
 	}

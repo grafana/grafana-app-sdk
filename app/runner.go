@@ -196,3 +196,126 @@ func (s *SingletonRunner) PrometheusCollectors() []prometheus.Collector {
 	}
 	return nil
 }
+
+type dynamicMultiRunnerTuple struct {
+	runner     Runnable
+	cancelFunc context.CancelFunc
+}
+
+// DynamicMultiRunner is a MultiRunner that allows for adding and removing Runnable instances after Run is called.
+// Only one concurrent Run call is allowed at a time.
+type DynamicMultiRunner struct {
+	// ErrorHandler is called if one of the Runners returns an error. If the function call returns true,
+	// the context will be canceled and all other Runners will also be prompted to exit.
+	// If ErrorHandler is nil, RunnableCollectorDefaultErrorHandler is used.
+	ErrorHandler func(context.Context, error) bool
+	// ExitWait is how long to wait for Runners to exit after ErrorHandler returns true or the context is canceled
+	// before stopping execution and returning a timeout error instead of exiting gracefully.
+	// If ExitWait is nil, Run execution will always block until all Runners have exited.
+	ExitWait *time.Duration
+	runners  []*dynamicMultiRunnerTuple
+	running  bool
+	runMux   sync.Mutex
+	runCtx   context.Context
+	errs     chan error
+	wg       *sync.WaitGroup
+}
+
+func NewDynamicMultiRunner() *DynamicMultiRunner {
+	return &DynamicMultiRunner{
+		ErrorHandler: RunnableCollectorDefaultErrorHandler,
+		runners:      make([]*dynamicMultiRunnerTuple, 0),
+	}
+}
+
+func (d *DynamicMultiRunner) Run(ctx context.Context) error {
+	d.runMux.Lock()
+	if d.running {
+		d.runMux.Unlock()
+		return fmt.Errorf("already running")
+	}
+	d.running = true
+	d.errs = make(chan error)
+	defer close(d.errs)
+	d.wg = &sync.WaitGroup{}
+	var cancel context.CancelFunc
+	d.runCtx, cancel = context.WithCancel(ctx)
+
+	for idx := range d.runners {
+		d.runTuple(d.runners[idx])
+	}
+	d.runMux.Unlock()
+
+	for {
+		select {
+		case err := <-d.errs:
+			handler := d.ErrorHandler
+			if handler == nil {
+				handler = RunnableCollectorDefaultErrorHandler
+			}
+			if handler(d.runCtx, err) {
+				cancel()
+				if d.ExitWait != nil {
+					if waitOrTimeout(d.wg, *d.ExitWait) {
+						return fmt.Errorf("exit wait time exceeded waiting for Runners to complete: %w", err)
+					}
+				} else {
+					d.wg.Wait() // Wait for all the runners to stop
+				}
+				return err
+			}
+		case <-ctx.Done():
+			cancel()
+			if d.ExitWait != nil {
+				if waitOrTimeout(d.wg, *d.ExitWait) {
+					return fmt.Errorf("exit wait time exceeded waiting for Runners to complete")
+				}
+			} else {
+				d.wg.Wait() // Wait for all the runners to stop
+			}
+			return nil
+		}
+	}
+}
+
+func (d *DynamicMultiRunner) AddRunnable(runnable Runnable) {
+	d.runMux.Lock()
+	defer d.runMux.Unlock()
+	tpl := &dynamicMultiRunnerTuple{
+		runner: runnable,
+	}
+	if d.running {
+		d.runTuple(tpl)
+	}
+	d.runners = append(d.runners, tpl)
+}
+
+func (d *DynamicMultiRunner) RemoveRunnable(runnable Runnable) {
+	d.runMux.Lock()
+	defer d.runMux.Unlock()
+	for i, tpl := range d.runners {
+		if tpl.runner == runnable {
+			if d.running && tpl.cancelFunc != nil {
+				tpl.cancelFunc()
+			}
+			if len(d.runners) > i+1 {
+				d.runners = append(d.runners[:i], d.runners[i+1:]...)
+			} else {
+				d.runners = d.runners[:i]
+			}
+		}
+	}
+}
+
+func (d *DynamicMultiRunner) runTuple(tpl *dynamicMultiRunnerTuple) {
+	d.wg.Add(1)
+	ctx, cancel := context.WithCancel(d.runCtx)
+	tpl.cancelFunc = cancel
+	go func() {
+		err := tpl.runner.Run(ctx)
+		d.wg.Done()
+		if err != nil {
+			d.errs <- err
+		}
+	}()
+}

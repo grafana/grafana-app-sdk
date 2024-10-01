@@ -1,8 +1,11 @@
 package operator
 
 import (
+	"context"
+
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
@@ -39,6 +42,15 @@ func (o *Operator) AddController(c Controller) {
 		o.controllers = make([]Controller, 0)
 	}
 	o.controllers = append(o.controllers, c)
+}
+
+// AddRunnable adds a Runnable to the list of controllers in the operator.
+// If called after `Run`, it will not be added to the currently-running controllers.
+func (o *Operator) AddRunnable(r app.Runnable) {
+	if o.controllers == nil {
+		o.controllers = make([]Controller, 0)
+	}
+	o.controllers = append(o.controllers, &runnableController{runnable: r})
 }
 
 // PrometheusCollectors returns the prometheus metric collectors for all controllers which implement metrics.Provider
@@ -81,4 +93,18 @@ func (o *Operator) Run(stopCh <-chan struct{}) error {
 
 	// If we encountered an error, return it (if we didn't, this will be nil)
 	return err
+}
+
+type runnableController struct {
+	runnable app.Runnable
+}
+
+func (r *runnableController) Run(stopCh <-chan struct{}) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		<-stopCh
+		cancel()
+	}()
+	return r.runnable.Run(ctx)
 }

@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -39,7 +40,7 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
 	AddEventHandler(handler ResourceWatcher) error
-	Run(stopCh <-chan struct{}) error
+	Run(ctx context.Context) error
 }
 
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
@@ -107,6 +108,7 @@ type InformerController struct {
 	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
 	retryTickerInterval time.Duration
+	runner              *app.DynamicMultiRunner
 	totalEvents         *prometheus.CounterVec
 	reconcileLatency    *prometheus.HistogramVec
 	reconcilerLatency   *prometheus.HistogramVec
@@ -145,6 +147,7 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 		watchers:            NewListMap[ResourceWatcher](),
 		reconcilers:         NewListMap[Reconciler](),
 		toRetry:             NewListMap[retryInfo](),
+		runner:              app.NewDynamicMultiRunner(),
 		retryTickerInterval: time.Second,
 		reconcileLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.MetricsConfig.Namespace,
@@ -221,9 +224,16 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 	if err != nil {
 		return err
 	}
-
+	c.runner.AddRunnable(informer)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
+}
+
+func (c *InformerController) RemoveInformer(informer Informer, resourceKind string) {
+	c.runner.RemoveRunnable(informer)
+	c.informers.RemoveItem(resourceKind, func(i Informer) bool {
+		return i == informer
+	})
 }
 
 // AddWatcher adds an observer to an informer with a matching `resourceKind`.
@@ -284,15 +294,14 @@ func (c *InformerController) RemoveAllReconcilersForResource(resourceKind string
 //
 //nolint:errcheck
 func (c *InformerController) Run(stopCh <-chan struct{}) error {
-	c.informers.RangeAll(func(_ string, _ int, inf Informer) {
-		go inf.Run(stopCh)
-	})
-
-	go c.retryTicker(stopCh)
-
-	<-stopCh
-
-	return nil
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.retryTicker(ctx.Done())
+	go func() {
+		<-stopCh
+		cancel()
+	}()
+	return c.runner.Run(ctx)
 }
 
 // PrometheusCollectors returns the prometheus metric collectors used by this informer, as well as collectors used by
