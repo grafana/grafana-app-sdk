@@ -364,6 +364,9 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
+	if format == FormatThema {
+		fmt.Println(themaWarning)
+	}
 
 	return nil
 }
@@ -489,6 +492,10 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	if format == FormatThema {
+		fmt.Println(themaWarning)
 	}
 
 	return nil

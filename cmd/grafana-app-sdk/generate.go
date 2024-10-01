@@ -55,7 +55,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.SilenceUsage = true
 }
 
-//nolint:funlen
+//nolint:funlen,revive
 func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	cuePath, err := cmd.Flags().GetString("cuepath")
 	if err != nil {
@@ -116,6 +116,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	var files codejen.Files
 	switch format {
 	case FormatThema:
+		fmt.Println(themaWarning)
 		files, err = generateKindsThema(os.DirFS(cuePath), kindGenConfig{
 			GoGenBasePath: goGenPath,
 			TSGenBasePath: tsGenPath,
@@ -148,6 +149,11 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	if format == FormatThema {
+		// Print the warning at the end of the output as well
+		fmt.Println(themaWarning)
 	}
 
 	// Jennies that need to be run post-file-write
