@@ -34,7 +34,7 @@ var appManifestData = app.ManifestData{
 								app.AdmissionOperationUpdate,
 							},
 						},
-						Validation: &app.MutationCapability{
+						Mutation: &app.MutationCapability{
 							Operations: []app.AdmissionOperation{
 								app.AdmissionOperationCreate,
 								app.AdmissionOperationUpdate,

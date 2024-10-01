@@ -21,7 +21,7 @@ var appManifestData = app.ManifestData{
                         {{ range .Admission.Validation.Operations }}app.{{ $.ToAdmissionOperationName . }},
                         {{ end }} }, {{ end }}
                     }, {{ end }}
-                    {{ if .Admission.Mutation }} Validation: &app.MutationCapability{
+                    {{ if .Admission.Mutation }} Mutation: &app.MutationCapability{
                         {{ if .Admission.Mutation.Operations }} Operations: []app.AdmissionOperation{
                         {{ range .Admission.Mutation.Operations }}app.{{ $.ToAdmissionOperationName . }},
                         {{ end }} }, {{ end }}
