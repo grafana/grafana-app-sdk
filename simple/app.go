@@ -316,10 +316,12 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if err != nil {
 			return err
 		}
-		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.ListWatchOptions{
-			Namespace:      kind.ReconcileOptions.Namespace,
-			LabelFilters:   kind.ReconcileOptions.LabelFilters,
-			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.KubernetesBasedIformerOptions{
+			ListWatchOptions: operator.ListWatchOptions{
+				Namespace:      kind.ReconcileOptions.Namespace,
+				LabelFilters:   kind.ReconcileOptions.LabelFilters,
+				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+			},
 		})
 		if err != nil {
 			return err
