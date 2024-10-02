@@ -143,7 +143,7 @@ jobs:
           printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind2.cue kinds/customkind2.cue
-          grafana-app-sdk generate --nomanifest
+          grafana-app-sdk generate
           grafana-app-sdk project component add frontend backend operator --plugin-id=test-project
           go mod tidy
           go build cmd/operator/*.go
