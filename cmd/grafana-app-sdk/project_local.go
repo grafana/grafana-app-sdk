@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
@@ -184,6 +185,11 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	err = writeFile(filepath.Join(localGenPath, "k3d-config.json"), k3dConfig)
+	if err != nil {
+		return err
+	}
+
+	err = updateLocalConfigFromManifest(config, format, cuePath)
 	if err != nil {
 		return err
 	}
@@ -704,4 +710,51 @@ func generateCerts(dnsName string) (*certBundle, error) {
 		key:  certPrivKeyPEM.Bytes(),
 		ca:   caPEM.Bytes(),
 	}, nil
+}
+
+func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string) error {
+	type manifest struct {
+		Kind string           `json:"kind"`
+		Spec app.ManifestData `json:"spec"`
+	}
+	if format == FormatCUE {
+		parser, err := cuekind.NewParser()
+		if err != nil {
+			return err
+		}
+		generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+		if err != nil {
+			return err
+		}
+		fs, err := generator.FilteredGenerate(cuekind.ManifestGenerator(json.Marshal, "json", "myapp"), func(kind codegen.Kind) bool {
+			return kind.Properties().APIResource != nil
+		})
+		if err != nil {
+			return err
+		}
+		for _, f := range fs {
+			md := manifest{}
+			err = json.Unmarshal(f.Data, &md)
+			if err != nil {
+				return err
+			}
+			if md.Kind != "AppManifest" {
+				continue
+			}
+			for _, k := range md.Spec.Kinds {
+				if k.Conversion {
+					config.Webhooks.Converting = true
+				}
+				for _, v := range k.Versions {
+					if v.Admission != nil && v.Admission.SupportsAnyValidation() {
+						config.Webhooks.Validating = true
+					}
+					if v.Admission != nil && v.Admission.SupportsAnyMutation() {
+						config.Webhooks.Mutating = true
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

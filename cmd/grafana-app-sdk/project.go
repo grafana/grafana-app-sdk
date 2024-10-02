@@ -519,6 +519,11 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 		if err != nil {
 			return err
 		}
+		appFiles, err := cast.Generate(cuekind.AppGenerator(repo, "pkg/generated", groupKinds), selectors...)
+		if err != nil {
+			return err
+		}
+		files = append(files, appFiles...)
 	case *codegen.Generator[kindsys.Custom]:
 		files, err = cast.Generate(themagen.OperatorGenerator(repo, "pkg/generated"), selectors...)
 		if err != nil {

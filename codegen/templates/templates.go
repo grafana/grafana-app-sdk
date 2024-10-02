@@ -14,7 +14,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
-//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl
+//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl
 var templates embed.FS
 
 var (
@@ -31,7 +31,9 @@ var (
 	templateBackendPluginModelsHandler, _   = template.ParseFS(templates, "plugin/handler_models.tmpl")
 	templateBackendMain, _                  = template.ParseFS(templates, "plugin/main.tmpl")
 
-	templateWatcher, _            = template.ParseFS(templates, "operator/watcher.tmpl")
+	templateWatcher, _ = template.ParseFS(templates, "app/watcher.tmpl")
+	templateApp, _     = template.ParseFS(templates, "app/app.tmpl")
+
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
@@ -395,6 +397,62 @@ func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperat
 
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 	return templateManifestGoFile.Execute(out, metadata)
+}
+
+type AppMetadata struct {
+	PackageName     string
+	ProjectName     string
+	Repo            string
+	CodegenPath     string
+	WatcherPackage  string
+	KindsAreGrouped bool
+	Resources       []AppMetadataKind
+}
+
+type AppMetadataKind struct {
+	codegen.KindProperties
+	Versions []string
+}
+
+type extendedAppMetadata struct {
+	AppMetadata
+	GVToKindAll     map[schema.GroupVersion][]codegen.KindProperties
+	GVToKindCurrent map[schema.GroupVersion][]codegen.KindProperties
+}
+
+func (AppMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
+}
+
+func (AppMetadata) ToPackageNameVariable(input string) string {
+	return strings.ReplaceAll(ToPackageName(input), "_", "")
+}
+
+func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
+	md := extendedAppMetadata{
+		AppMetadata:     metadata,
+		GVToKindAll:     make(map[schema.GroupVersion][]codegen.KindProperties),
+		GVToKindCurrent: make(map[schema.GroupVersion][]codegen.KindProperties),
+	}
+	for _, k := range md.Resources {
+		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
+		l, ok := md.GVToKindCurrent[gv]
+		if !ok {
+			l = make([]codegen.KindProperties, 0)
+		}
+		l = append(l, k.KindProperties)
+		md.GVToKindCurrent[gv] = l
+		for _, v := range k.Versions {
+			gv := schema.GroupVersion{Group: k.Group, Version: v}
+			l, ok := md.GVToKindAll[gv]
+			if !ok {
+				l = make([]codegen.KindProperties, 0)
+			}
+			l = append(l, k.KindProperties)
+			md.GVToKindAll[gv] = l
+		}
+	}
+	return templateApp.Execute(out, md)
 }
 
 // ToPackageName sanitizes an input into a deterministic allowed go package name.

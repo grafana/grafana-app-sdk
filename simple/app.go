@@ -243,11 +243,18 @@ func (a *App) ValidateManifest(manifest app.ManifestData) error {
 			if !ok {
 				return fmt.Errorf("kind %s/%s exists in manifest but is not managed by the app", k.Kind, v.Name)
 			}
-			if v.Admission.SupportsAnyValidation() && kind.Validator == nil {
+			if v.Admission != nil && v.Admission.SupportsAnyValidation() && kind.Validator == nil {
 				return fmt.Errorf("kind %s/%s supports validation but has no validator", k.Kind, v.Name)
 			}
-			if v.Admission.SupportsAnyMutation() && kind.Mutator == nil {
+			if v.Admission != nil && v.Admission.SupportsAnyMutation() && kind.Mutator == nil {
 				return fmt.Errorf("kind %s/%s supports mutation but has no mutator", k.Kind, v.Name)
+			}
+			// Check for the inverse
+			if kind.Validator != nil && (v.Admission == nil || !v.Admission.SupportsAnyValidation()) {
+				return fmt.Errorf("kind %s/%s does not support validation, but has a validator", k.Kind, v.Name)
+			}
+			if kind.Mutator != nil && (v.Admission == nil || !v.Admission.SupportsAnyMutation()) {
+				return fmt.Errorf("kind %s/%s does not support mutation, but has a mutator", k.Kind, v.Name)
 			}
 		}
 	}

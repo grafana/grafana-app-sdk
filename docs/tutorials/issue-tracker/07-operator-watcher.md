@@ -195,7 +195,9 @@ There we go! Now we'll be exposing the metric through the operator's `/metrics` 
 make build/operator && make local/push_operator
 ```
 Then restart the operator in your tilt console, and hop on over to [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) to find the metric. [this link](http://grafana.k3d.localhost:9999/explore?orgId=1&left=%7B%22datasource%22:%22grafana-prom-cortex%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22issue_tracker_project_issue_watcher_issues%22,%22range%22:true,%22instant%22:true,%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22grafana-prom-cortex%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-15m%22,%22to%22:%22now%22%7D%7D) will bring you right to the explore page for the metric, but feel free to play around with it yourself to get used to it, or build out a dashboard.
+
 ![Example Grafana Dashboard with Issue Metrics](./images/grafana-watcher-dashboard.png)
+
 There's an example dashboard using the issue metrics [here](./issue-dashboard.json), which you can import via the grafana UI.
 
 ## Using the `status` Subresource

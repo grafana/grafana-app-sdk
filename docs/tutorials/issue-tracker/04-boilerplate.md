@@ -94,7 +94,7 @@ $ grafana-app-sdk project component add frontend backend operator --plugin-id="i
  * Writing file cmd/operator/config.go
  * Writing file cmd/operator/kubeconfig.go
  * Writing file cmd/operator/main.go
- * Writing file cmd/operator/telemetry.go
+ * Writing file pkg/app/app.go
  * Writing file pkg/watchers/watcher_issue.go
  * Writing file cmd/operator/Dockerfile
 ```
@@ -104,24 +104,26 @@ $ tree -I "generated|definitions|kinds|local" .
 .
 ├── Makefile
 ├── cmd
-│   └── operator
-│       ├── Dockerfile
-│       ├── config.go
-│       ├── kubeconfig.go
-│       ├── main.go
-│       └── telemetry.go
+│   └── operator
+│       ├── Dockerfile
+│       ├── config.go
+│       ├── kubeconfig.go
+│       └── main.go
 ├── go.mod
 ├── go.sum
 ├── pkg
-│   ├── plugin
-│   │   ├── handler_issue.go
-│   │   ├── plugin.go
-│   │   └── secure
-│   │       ├── data.go
-│   │       ├── middleware.go
-│   │       └── retriever.go
-│   └── watchers
-│       └── watcher_issue.go
+│   ├── app
+│   │   └── app.go
+│   ├── plugin
+│   │   ├── handler_issue.go
+│   │   ├── plugin.go
+│   │   └── secure
+│   │       ├── data.go
+│   │       ├── middleware.go
+│   │       └── retriever.go
+│   └── watchers
+│       ├── watcher_foo.go
+│       └── watcher_issue.go
 └── plugin
     ├── CHANGELOG.md
     ├── LICENSE
@@ -131,26 +133,26 @@ $ tree -I "generated|definitions|kinds|local" .
     ├── jest.config.js
     ├── package.json
     ├── pkg
-    │   └── main.go
+    │   └── main.go
     ├── src
-    │   ├── App.tsx
-    │   ├── components
-    │   │   └── Routes
-    │   │       ├── Routes.tsx
-    │   │       └── index.tsx
-    │   ├── constants.ts
-    │   ├── module.ts
-    │   ├── pages
-    │   │   ├── index.tsx
-    │   │   └── main.tsx
-    │   ├── plugin.json
-    │   ├── types.ts
-    │   └── utils
-    │       ├── utils.plugin.ts
-    │       └── utils.routing.ts
+    │   ├── App.tsx
+    │   ├── components
+    │   │   └── Routes
+    │   │       ├── Routes.tsx
+    │   │       └── index.tsx
+    │   ├── constants.ts
+    │   ├── module.ts
+    │   ├── pages
+    │   │   ├── index.tsx
+    │   │   └── main.tsx
+    │   ├── plugin.json
+    │   ├── types.ts
+    │   └── utils
+    │       ├── utils.plugin.ts
+    │       └── utils.routing.ts
     └── tsconfig.json
 
-14 directories, 34 files
+15 directories, 35 files
 ```
 
 Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
@@ -408,13 +410,20 @@ export const Routes = () => {
 
 ## Go Code & Dockerfile from operator component
 
+### `pkg/app`
+
+This is the code for the app itself. The app (business logic) and the way it is run (an operator) are treated as separate concepts by the grafana-app-sdk to allow you to run the same app multiple ways based on your needs.
+`pkg/app/app.go` contains two exported methods: `Provider` and `New`. `New` creates a new grafana-app-sdk `app.App`-implementing instance (in our case, we use `simple.App` for this), 
+and `Provider` returns a new `app.Provider` which packs in your manifest, app-specific config, and the ability to call `New`. 
+`app.Provider` is what is used by runners such as the operator runner we created with `component add operator`.
+
 ### `cmd/operator`
 
-Here the most important boilerplate is our `main.go` and our `Dockerfile`. The `Dockerfile` builds the go files in `cmd/operator` and then creates an alpine docker image that runs the built binary. `main.go` is the entrypoint for our binary, and does a few things:
-1. Loads the kube config, assuming that it's running in the cluster that it will work with
-2. Creates a `operator.OpinionatedWatcher` to wrap the generated watcher in `pkg/watchers`. The `OpinionatedWatcher` adds logic for understanding state between operator restarts, and dropping events which don't change the resource's spec.
-3. Creates an informer that listens for events for the Issue resource kind. Both the informer and watcher are added to an InformerController, which forwards the informer's events to the watcher, and handles watcher failures with retries.
-4. Adds the controller to an operator, and starts it, listening for OS signals to halt the operator on a SIGTERM or SIGINT
+Here is where the `main` code to run the operator lives, and the docker file to package it as an image for deployment. 
+`cmd/operator/main.go` has a straightforward `main` function that:
+1. Loads the kube config, assuming that it's running in the cluster that it will work with.
+2. Creates the operator runner
+3. Runs the operator runner using the `Provider` we generated in the `app` package, stopping on SIGTERM or SIGINT
 
 ### `pkg/watchers`
 
