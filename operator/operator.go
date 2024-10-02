@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
-// Label and field selectors for filtering resources in ListWatch requests and Informers.
+// ListWatchOptions are namespace, label selectors, and field selectors for filtering resources in ListWatch requests and Informers.
 type ListWatchOptions struct {
 	Namespace      string
 	LabelFilters   []string

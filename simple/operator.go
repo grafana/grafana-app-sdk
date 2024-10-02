@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,7 +26,8 @@ type OperatorConfig struct {
 	ErrorHandler func(ctx context.Context, err error)
 	// FinalizerGenerator consumes a schema and returns a finalizer name to use for opinionated logic.
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
-	FinalizerGenerator func(kind resource.Schema) string
+	FinalizerGenerator          func(kind resource.Schema) string
+	InformerCacheResyncInterval time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -111,13 +113,14 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	}
 
 	op := &Operator{
-		Name:               cfg.Name,
-		ErrorHandler:       cfg.ErrorHandler,
-		FinalizerGenerator: cfg.FinalizerGenerator,
-		clientGen:          cg,
-		controller:         controller,
-		admission:          ws,
-		metricsExporter:    me,
+		Name:                cfg.Name,
+		ErrorHandler:        cfg.ErrorHandler,
+		FinalizerGenerator:  cfg.FinalizerGenerator,
+		clientGen:           cg,
+		controller:          controller,
+		admission:           ws,
+		metricsExporter:     me,
+		cacheResyncInterval: cfg.InformerCacheResyncInterval,
 	}
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
@@ -134,11 +137,12 @@ type Operator struct {
 	ErrorHandler func(ctx context.Context, err error)
 	// FinalizerGenerator consumes a schema and returns a finalizer name to use for opinionated logic.
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
-	FinalizerGenerator func(schema resource.Schema) string
-	clientGen          resource.ClientGenerator
-	controller         *operator.InformerController
-	admission          *k8s.WebhookServer
-	metricsExporter    *metrics.Exporter
+	FinalizerGenerator  func(schema resource.Schema) string
+	clientGen           resource.ClientGenerator
+	controller          *operator.InformerController
+	admission           *k8s.WebhookServer
+	metricsExporter     *metrics.Exporter
+	cacheResyncInterval time.Duration
 }
 
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
@@ -186,7 +190,10 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors})
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
+		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
+		CacheResyncInterval: o.cacheResyncInterval,
+	})
 	if err != nil {
 		return err
 	}
@@ -220,7 +227,10 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors})
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
+		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
+		CacheResyncInterval: o.cacheResyncInterval,
+	})
 	if err != nil {
 		return err
 	}
