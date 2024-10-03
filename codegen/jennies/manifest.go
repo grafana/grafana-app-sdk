@@ -180,7 +180,10 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 			if err != nil {
 				return nil, err
 			}
-			mver.Schema = crd.Schema
+			mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
+			if err != nil {
+				return nil, fmt.Errorf("version schema error: %w", err)
+			}
 			mkind.Versions = append(mkind.Versions, mver)
 		}
 		manifest.Kinds = append(manifest.Kinds, mkind)

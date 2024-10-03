@@ -12,7 +12,9 @@ import (
 )
 
 var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}
-    sch{{$k.Kind}}{{.Name}}JSON = `{{$.ToJSONString .Schema}}`{{end}}{{end}}
+    rawSchema{{$k.Kind}}{{.Name}} = []byte(`{{$.ToJSONString .Schema}}`)
+    versionSchema{{$k.Kind}}{{.Name}} app.VersionSchema
+    _ = json.Unmarshal(rawSchema{{$k.Kind}}{{.Name}}, &versionSchema{{$k.Kind}}{{.Name}}){{end}}{{end}}
 )
 
 var appManifestData = app.ManifestData{
@@ -38,7 +40,7 @@ var appManifestData = app.ManifestData{
                         {{ end }} }, {{ end }}
                     }, {{ end }}
                 }, {{ end }}
-                Schema: jsonToMap(sch{{$k.Kind}}{{.Name}}JSON),
+                Schema: &versionSchema{{$k.Kind}}{{.Name}},
             },
             {{ end }} },
         },
