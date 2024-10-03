@@ -12,9 +12,9 @@ import (
 )
 
 var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}
-    rawSchema{{$k.Kind}}{{.Name}} = []byte(`{{$.ToJSONString .Schema}}`)
-    versionSchema{{$k.Kind}}{{.Name}} app.VersionSchema
-    _ = json.Unmarshal(rawSchema{{$k.Kind}}{{.Name}}, &versionSchema{{$k.Kind}}{{.Name}}){{end}}{{end}}
+    rawSchema{{$k.Kind}}{{$.ToPackageName .Name}} = []byte(`{{$.ToJSONString .Schema}}`)
+    versionSchema{{$k.Kind}}{{$.ToPackageName .Name}} app.VersionSchema
+    _ = json.Unmarshal(rawSchema{{$k.Kind}}{{$.ToPackageName .Name}}, &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}}){{end}}{{end}}
 )
 
 var appManifestData = app.ManifestData{
@@ -40,7 +40,7 @@ var appManifestData = app.ManifestData{
                         {{ end }} }, {{ end }}
                     }, {{ end }}
                 }, {{ end }}
-                Schema: &versionSchema{{$k.Kind}}{{.Name}},
+                Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},
             },
             {{ end }} },
         },

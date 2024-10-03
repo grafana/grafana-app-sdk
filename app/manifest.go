@@ -187,18 +187,25 @@ func (v *VersionSchema) MarshalYAML() (interface{}, error) {
 	return yaml.Marshal(v.raw)
 }
 
-// fixRaw turns a full OpenAPI document map[string]any in raw into a CRD-like set of schemas
+// fixRaw turns a full OpenAPI document map[string]any in raw into a set of schemas (if required)
 func (v *VersionSchema) fixRaw() error {
 	if _, ok := v.raw["openapi"]; !ok {
-		// Not openAPI document, check if it's CRD-Like
-		if _, ok := v.raw["openAPIV3Schema"]; ok {
-			// CRD-Like, we're all good
-			fmt.Println("CRD-Like")
+		// Not openAPI document, check if it's CRD-Like schema
+		if _, ok := v.raw["openAPIV3Schema"]; !ok {
+			// ok, no adjustments (that we know of) necessary
 			return nil
 		}
-		fmt.Println("Not CRD-Like")
+		oapi, ok := v.raw["openAPIV3Schema"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("'openAPIV3Schema' must be an object")
+		}
+		props, ok := oapi["properties"]
+		if !ok {
+			return fmt.Errorf("'openAPIV3Schema' must contain properties")
+		}
+		castProps, ok := props.(map[string]any)
 		m := make(map[string]any)
-		for key, value := range v.raw {
+		for key, value := range castProps {
 			m[key] = value
 		}
 		v.raw = m
@@ -223,22 +230,17 @@ func (v *VersionSchema) fixRaw() error {
 	return nil
 }
 
-// AsMap returns the schema as a map[string]any which is the contents of the openAPIV3Schema key in a CRD schema
+// AsMap returns the schema as a map[string]any where each key is a top-level resource (ex. 'spec', 'status')
 func (v *VersionSchema) AsMap() map[string]any {
-	if c, ok := v.raw["openAPIV3Schema"]; ok {
-		if cast, ok := c.(map[string]any); ok {
-			return cast
-		}
-	}
 	return v.raw
 }
 
-// AsOpenAPI3 returns an openapi3.Components instance which contains the schema as the provided schemaName key
-func (v *VersionSchema) AsOpenAPI3(schemaName string) (*openapi3.Components, error) {
+// AsOpenAPI3 returns an openapi3.Components instance which contains the schema elements
+func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 	full := map[string]any{
 		"openapi": "3.0.0",
 		"components": map[string]any{
-			"schemas": map[string]any{schemaName: v.AsMap()},
+			"schemas": v.AsMap(),
 		},
 	}
 	yml, err := yaml.Marshal(full)
@@ -254,6 +256,6 @@ func (v *VersionSchema) AsOpenAPI3(schemaName string) (*openapi3.Components, err
 }
 
 func (v *VersionSchema) AsKubeOpenAPI(kindName string, ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-	// TODO
+	// TODO convert AsOpenAPI to kube-openapi?
 	return nil
 }

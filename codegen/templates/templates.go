@@ -399,6 +399,10 @@ func (ManifestGoFileMetadata) ToJSONString(input any) string {
 	return string(j)
 }
 
+func (ManifestGoFileMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
+}
+
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 	return templateManifestGoFile.Execute(out, metadata)
 }
