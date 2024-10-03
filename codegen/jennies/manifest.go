@@ -176,6 +176,11 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 					Operations: operations,
 				}
 			}
+			crd, err := KindVersionToCRDSpecVersion(version, mkind.Kind, true)
+			if err != nil {
+				return nil, err
+			}
+			mver.Schema = crd.Schema
 			mkind.Versions = append(mkind.Versions, mver)
 		}
 		manifest.Kinds = append(manifest.Kinds, mkind)
