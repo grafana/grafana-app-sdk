@@ -184,6 +184,7 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 			if err != nil {
 				return nil, fmt.Errorf("version schema error: %w", err)
 			}
+			mver.SelectableFields = version.SelectableFields
 			mkind.Versions = append(mkind.Versions, mver)
 		}
 		manifest.Kinds = append(manifest.Kinds, mkind)

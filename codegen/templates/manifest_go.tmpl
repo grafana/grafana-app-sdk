@@ -40,7 +40,10 @@ var appManifestData = app.ManifestData{
                         {{ end }} }, {{ end }}
                     }, {{ end }}
                 }, {{ end }}
-                Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},
+                Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},{{ if .SelectableFields }}
+                SelectableFields: []string{ {{ range .SelectableFields }}
+                    "{{.}}",{{ end }}
+                },{{end}}
             },
             {{ end }} },
         },

@@ -96,7 +96,9 @@ type ManifestKindVersion struct {
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
 	// Schema is the schema of this version, as an OpenAPI document.
 	// This is currently an `any` type as implementation is incomplete.
-	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"` // TODO: actual schema
+	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
+	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind
