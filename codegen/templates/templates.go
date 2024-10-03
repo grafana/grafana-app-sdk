@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
@@ -34,6 +35,8 @@ var (
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
+
+	templateManifestGoFile, _ = template.ParseFS(templates, "manifest_go.tmpl")
 )
 
 var (
@@ -108,13 +111,38 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
-	Package    string
-	Group      string
-	Version    string
-	Kind       string
-	Plural     string
-	Scope      string
-	FuncPrefix string
+	Package          string
+	Group            string
+	Version          string
+	Kind             string
+	Plural           string
+	Scope            string
+	SelectableFields []SchemaMetadataSeletableField
+	FuncPrefix       string
+}
+
+type SchemaMetadataSeletableField struct {
+	Field    string
+	Optional bool
+}
+
+func (SchemaMetadata) ToObjectPath(s string) string {
+	parts := make([]string, 0)
+	if len(s) > 0 && s[0] == '.' {
+		s = s[1:]
+	}
+	for i, part := range strings.Split(s, ".") {
+		if i == 0 && part == "metadata" {
+			part = "ObjectMeta"
+		}
+		if len(part) > 0 {
+			part = strings.ToUpper(part[:1]) + part[1:]
+		} else {
+			part = strings.ToUpper(part)
+		}
+		parts = append(parts, part)
+	}
+	return strings.Join(parts, ".")
 }
 
 // WriteSchema executes the Resource Schema template, and writes out the generated go code to out
@@ -343,6 +371,32 @@ func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
 
 func WriteOperatorConfig(out io.Writer) error {
 	return templateOperatorConfig.Execute(out, nil)
+}
+
+type ManifestGoFileMetadata struct {
+	Package      string
+	ManifestData app.ManifestData
+}
+
+func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
+	switch strings.ToUpper(string(input)) {
+	case string(app.AdmissionOperationCreate):
+		return "AdmissionOperationCreate"
+	case string(app.AdmissionOperationUpdate):
+		return "AdmissionOperationUpdate"
+	case string(app.AdmissionOperationDelete):
+		return "AdmissionOperationDelete"
+	case string(app.AdmissionOperationConnect):
+		return "AdmissionOperationConnect"
+	case string(app.AdmissionOperationAny):
+		return "AdmissionOperationAny"
+	default:
+		return fmt.Sprintf("AdmissionOperation(\"%s\")", input)
+	}
+}
+
+func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
+	return templateManifestGoFile.Execute(out, metadata)
 }
 
 // ToPackageName sanitizes an input into a deterministic allowed go package name.

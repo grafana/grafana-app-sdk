@@ -48,19 +48,19 @@ type CustomCacheInformer struct {
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
 func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) (*CustomCacheInformer, error) {
-	return NewMemcachedInformerWithLabelFilters(kind, client, namespace, nil, addrs...)
+	return NewMemcachedInformerWithFilters(kind, client, ListWatchOptions{Namespace: namespace}, addrs...)
 }
 
-// NewMemcachedInformerWithLabelFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
+// NewMemcachedInformerWithFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
 // This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformerWithLabelFilters(kind resource.Kind, client ListWatchClient, namespace string, labelFilters []string, addrs ...string) (*CustomCacheInformer, error) {
+func NewMemcachedInformerWithFilters(kind resource.Kind, client ListWatchClient, filterOptions ListWatchOptions, addrs ...string) (*CustomCacheInformer, error) {
 	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
 		Addrs: addrs,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, namespace, labelFilters...), kind), nil
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, filterOptions), kind), nil
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
@@ -118,6 +118,7 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	var wg wait.Group
 	defer wg.Wait()              // Wait for Processor to stop
 	defer close(processorStopCh) // Tell Processor to stop
+	c.processor.startedCh = make(chan struct{}, 1)
 	wg.StartWithChannel(processorStopCh, c.processor.run)
 
 	defer func() {
@@ -125,6 +126,8 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 		defer c.startedLock.Unlock()
 		c.started = false
 	}()
+	// Wait for the processor to complete startup before running the controller (otherwise events may be dropped by distribution)
+	<-c.processor.startedCh
 	c.controller.Run(stopCh)
 	return nil
 }
@@ -190,7 +193,7 @@ func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
 
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
 // The List and Watch requests will always use the provided namespace and labelFilters.
-func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace string, labelFilters ...string) cache.ListerWatcher {
+func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions ListWatchOptions) cache.ListerWatcher {
 	return &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			ctx, span := GetTracer().Start(context.Background(), "informer-list")
@@ -199,11 +202,12 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace str
 				attribute.String("kind.name", sch.Kind()),
 				attribute.String("kind.group", sch.Group()),
 				attribute.String("kind.version", sch.Version()),
-				attribute.String("namespace", namespace),
+				attribute.String("namespace", filterOptions.Namespace),
 			)
 			resp := resource.UntypedList{}
-			err := client.ListInto(ctx, namespace, resource.ListOptions{
-				LabelFilters:    labelFilters,
+			err := client.ListInto(ctx, filterOptions.Namespace, resource.ListOptions{
+				LabelFilters:    filterOptions.LabelFilters,
+				FieldSelectors:  filterOptions.FieldSelectors,
 				Continue:        options.Continue,
 				Limit:           int(options.Limit),
 				ResourceVersion: options.ResourceVersion,
@@ -220,12 +224,13 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace str
 				attribute.String("kind.name", sch.Kind()),
 				attribute.String("kind.group", sch.Group()),
 				attribute.String("kind.version", sch.Version()),
-				attribute.String("namespace", namespace),
+				attribute.String("namespace", filterOptions.Namespace),
 			)
 			opts := resource.WatchOptions{
 				ResourceVersion:      options.ResourceVersion,
 				ResourceVersionMatch: string(options.ResourceVersionMatch),
-				LabelFilters:         labelFilters,
+				LabelFilters:         filterOptions.LabelFilters,
+				FieldSelectors:       filterOptions.FieldSelectors,
 			}
 			// TODO: can't defer the cancel call for the context, because it should only be canceled if the
 			// _caller_ of WatchFunc finishes with the WatchResponse before the timeout elapses...
@@ -234,7 +239,7 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, namespace str
 				timeout := time.Duration(*options.TimeoutSeconds) * time.Second
 				ctx, cancel = context.WithTimeout(ctx, timeout)
 			}*/
-			watchResp, err := client.Watch(ctx, namespace, opts)
+			watchResp, err := client.Watch(ctx, filterOptions.Namespace, opts)
 			if err != nil {
 				return nil, err
 			}

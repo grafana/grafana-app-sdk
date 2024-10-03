@@ -175,17 +175,19 @@ func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) 
 // To list a single page of results, use ListPage.
 func (t *TypedStore[T]) List(ctx context.Context, options StoreListOptions) (*TypedList[T], error) {
 	resp, err := t.ListPage(ctx, options.Namespace, ListOptions{
-		Limit:        options.PerPage,
-		LabelFilters: options.Filters,
+		Limit:          options.PerPage,
+		LabelFilters:   options.Filters,
+		FieldSelectors: options.FieldSelectors,
 	})
 	if err != nil {
 		return nil, err
 	}
 	for resp.Continue != "" {
 		page, err := t.ListPage(ctx, options.Namespace, ListOptions{
-			Continue:     resp.Continue,
-			Limit:        options.PerPage,
-			LabelFilters: options.Filters,
+			Continue:       resp.Continue,
+			Limit:          options.PerPage,
+			LabelFilters:   options.Filters,
+			FieldSelectors: options.FieldSelectors,
 		})
 		if err != nil {
 			return nil, err

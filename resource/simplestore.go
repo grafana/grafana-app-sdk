@@ -80,11 +80,19 @@ func NewSimpleStore[SpecType any](kind Kind, generator ClientGenerator) (*Simple
 }
 
 // List returns a list of all resources of the Schema type in the provided namespace,
+// without labels or field selectors.
+func (s *SimpleStore[T]) List(ctx context.Context, namespace string) (
+	[]TypedObject[T, MapSubresourceCatalog], error) {
+	return s.ListWithFiltersAndSelectors(ctx, namespace, nil, nil)
+}
+
+// List returns a list of all resources of the Schema type in the provided namespace,
 // optionally matching the provided filters.
-func (s *SimpleStore[T]) List(ctx context.Context, namespace string, filters ...string) (
+func (s *SimpleStore[T]) ListWithFiltersAndSelectors(ctx context.Context, namespace string, filters []string, fieldSelectors []string) (
 	[]TypedObject[T, MapSubresourceCatalog], error) {
 	listObj, err := s.client.List(ctx, namespace, ListOptions{
-		LabelFilters: filters,
+		LabelFilters:   filters,
+		FieldSelectors: fieldSelectors,
 	})
 	if err != nil {
 		return nil, err

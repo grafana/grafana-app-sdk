@@ -1,0 +1,7 @@
+apiVersion: apps.grafana.com/v1
+kind: AppManifest
+metadata:
+    name: test-app-custom-kind-2
+spec:
+    appName: test-app-custom-kind-2
+    group: test-app-custom-kind-2.ext.grafana.com

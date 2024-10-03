@@ -474,6 +474,25 @@ func TestTypedStore_List(t *testing.T) {
 			assert.Equal(t, list.Items[i].Status, ret.Items[i].Status)
 		}
 	})
+	t.Run("success, with field selectors", func(t *testing.T) {
+		selectors := []string{"a", "b"}
+		client.ListIntoFunc = func(c context.Context, namespace string, options ListOptions, into ListObject) error {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, ns, namespace)
+			assert.Equal(t, selectors, options.FieldSelectors)
+			into.SetItems(list.GetItems())
+			return nil
+		}
+		ret, err := store.List(ctx, StoreListOptions{Namespace: ns, FieldSelectors: selectors})
+		assert.Nil(t, err)
+		assert.Equal(t, len(list.GetItems()), len(ret.Items))
+		for i := 0; i < len(ret.Items); i++ {
+			assert.Equal(t, list.Items[i].Spec, ret.Items[i].Spec)
+			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret.Items[i].GetStaticMetadata())
+			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret.Items[i].GetCommonMetadata())
+			assert.Equal(t, list.Items[i].Status, ret.Items[i].Status)
+		}
+	})
 }
 
 func getTypedStoreTestSetup() (*TypedStore[*TypedSpecStatusObject[string, string]], *mockClient) {

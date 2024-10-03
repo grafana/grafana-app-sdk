@@ -6,7 +6,10 @@ testKind: {
 	kind: "TestKind"
 	plural: "testkinds"
 	group: "test"
-	apiResource: {}
+	apiResource: {
+		validation: operations: ["create","update"]
+		conversion: true
+	}
 	current: "v1"
 	codegen: frontend: false
 	versions: {
@@ -26,6 +29,14 @@ testKind: {
 					timeField: string & time.Time
 				}
 			}
+			mutation: operations: ["create","update"]
+			additionalPrinterColumns: [
+                {
+                    jsonPath: ".spec.stringField"
+                    name: "STRING FIELD"
+                    type: "string"
+                }
+            ]
 		}
 	}
 }

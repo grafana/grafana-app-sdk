@@ -6,6 +6,13 @@ import (
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
+// ListWatchOptions are namespace, label selectors, and field selectors for filtering resources in ListWatch requests and Informers.
+type ListWatchOptions struct {
+	Namespace      string
+	LabelFilters   []string
+	FieldSelectors []string
+}
+
 // Controller is an interface that describes a controller which can be run as part of an operator
 type Controller interface {
 	Run(<-chan struct{}) error

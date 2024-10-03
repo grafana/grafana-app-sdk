@@ -356,6 +356,9 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	if len(options.LabelFilters) > 0 {
 		req = req.Param("labelSelector", strings.Join(options.LabelFilters, ","))
 	}
+	if len(options.FieldSelectors) > 0 {
+		req = req.Param("fieldSelector", strings.Join(options.FieldSelectors, ","))
+	}
 	if options.Limit > 0 {
 		req = req.Param("limit", strconv.Itoa(options.Limit))
 	}
@@ -398,6 +401,9 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	}
 	if len(options.LabelFilters) > 0 {
 		req = req.Param("labelSelector", strings.Join(options.LabelFilters, ","))
+	}
+	if len(options.FieldSelectors) > 0 {
+		req = req.Param("fieldSelector", strings.Join(options.FieldSelectors, ","))
 	}
 	if options.ResourceVersion != "" {
 		req = req.Param("resourceVersion", options.ResourceVersion)
@@ -556,6 +562,8 @@ type k8sErrBody struct {
 // but the response body often has more details about the nature of the failure (for example, missing a required field).
 // Ths method will parse the response body for a better error message if available, and return a *ServerResponseError
 // if the status code is a non-success (>= 300).
+//
+//nolint:govet
 func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
 	if err != nil {
 		statusErr := &k8serrors.StatusError{}

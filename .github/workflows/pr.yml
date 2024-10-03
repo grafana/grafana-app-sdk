@@ -9,15 +9,18 @@ jobs:
   check:
     name: Go Workspace Check
     runs-on: ubuntu-latest
+    # Exlude dependabot from this check--it can't run make update-workspace, 
+    # We'll just force the next PR author to do it instead for now
+    if: ${{ github.actor != 'dependabot[bot]' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set go version
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: 'go.mod'
 
       - name: Update workspace
         run: make update-workspace
@@ -40,45 +43,15 @@ jobs:
         fetch-depth: 0
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: "1.21"
+        go-version-file: 'go.mod'
     # make lint
     - name: Lint
       uses: golangci/golangci-lint-action@v3
       with:
-        version: v1.55.2
+        version: v1.60.3
+        only-new-issues: true
         args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   test:
-    runs-on: ubuntu-latest
-    steps:
-    # git checkout
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-    # go env
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: "1.21"
-    # make test
-    - name: Test
-      # find all go.mod files and run go test against directories containing go.mod files
-      run: go test -v $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    # git checkout
-    - name: Checkout code
-      uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-    # go env
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: "1.21"
-    # make build
-    - name: Build
-      run: go build -v cmd/grafana-app-sdk/*.go
+    uses: ./.github/workflows/test.yml

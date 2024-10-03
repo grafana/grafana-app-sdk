@@ -20,32 +20,38 @@ type KubernetesBasedInformer struct {
 	schema              resource.Kind
 }
 
-var EmptyLabelFilters []string
+type KubernetesBasedIformerOptions struct {
+	ListWatchOptions ListWatchOptions
+	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
+	// This is distinct from a full resync, as no information is fetched from the API server.
+	// An empty value will disable cache resyncs.
+	CacheResyncInterval time.Duration
+}
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests.
 func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
 	*KubernetesBasedInformer, error) {
-	return NewKubernetesBasedInformerWithFilters(sch, client, namespace, EmptyLabelFilters)
+	return NewKubernetesBasedInformerWithFilters(sch, client, KubernetesBasedIformerOptions{
+		ListWatchOptions: ListWatchOptions{Namespace: namespace},
+	})
 }
 
 // NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, namespace string, labelFilters []string) (
+func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, options KubernetesBasedIformerOptions) (
 	*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
 	}
 
 	return &KubernetesBasedInformer{
-		schema: sch,
-		ErrorHandler: func(ctx context.Context, err error) {
-			// Do nothing
-		},
+		schema:       sch,
+		ErrorHandler: DefaultErrorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
-			NewListerWatcher(client, sch, namespace, labelFilters...),
+			NewListerWatcher(client, sch, options.ListWatchOptions),
 			nil,
-			time.Second*30,
+			options.CacheResyncInterval,
 			cache.Indexers{
 				cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 			}),

@@ -374,7 +374,26 @@ func TestSimpleStore_List(t *testing.T) {
 			assert.Equal(t, filters, options.LabelFilters)
 			return list, nil
 		}
-		ret, err := store.List(ctx, ns, filters...)
+		ret, err := store.ListWithFiltersAndSelectors(ctx, ns, filters, nil)
+		assert.Nil(t, err)
+		assert.Equal(t, len(list.Items), len(ret))
+		for i := 0; i < len(ret); i++ {
+			assert.Equal(t, list.Items[i].Spec, ret[i].Spec)
+			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret[i].GetStaticMetadata())
+			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret[i].GetCommonMetadata())
+			assert.Equal(t, list.Items[i].Subresources, ret[i].Subresources)
+		}
+	})
+
+	t.Run("success, with field selectors", func(t *testing.T) {
+		selectors := []string{"a", "b"}
+		client.ListFunc = func(c context.Context, namespace string, options ListOptions) (ListObject, error) {
+			assert.Equal(t, ctx, c)
+			assert.Equal(t, ns, namespace)
+			assert.Equal(t, selectors, options.FieldSelectors)
+			return list, nil
+		}
+		ret, err := store.ListWithFiltersAndSelectors(ctx, ns, nil, selectors)
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.Items), len(ret))
 		for i := 0; i < len(ret); i++ {

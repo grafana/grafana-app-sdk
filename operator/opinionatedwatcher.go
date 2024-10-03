@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -107,6 +108,9 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		return fmt.Errorf("object cannot be nil")
 	}
 
+	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
+	logger.Debug("Handling add")
+
 	finalizers := o.getFinalizers(object)
 
 	// If we're pending deletion, check on the finalizers to see if it's waiting on us.
@@ -117,16 +121,20 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 
 		// Check if we're the finalizer it's waiting for. If we're not, we can drop this whole event.
 		if !slices.Contains(finalizers, o.finalizer) {
+			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", object.GetDeletionTimestamp())
 			return nil
 		}
 
 		// Otherwise, we need to run our delete handler, then remove the finalizer
+		logger.Debug("Update has a DeletionTimestamp, calling Delete", "deletionTimestamp", object.GetDeletionTimestamp())
 		err := o.deleteFunc(ctx, object)
 		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
 
 		// The remove finalizer code is shared by both our add and update handlers, as this logic can be hit from either
+		logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
 		err = o.removeFinalizer(ctx, object, finalizers)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
@@ -139,7 +147,14 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	// If it is, we've already done the add logic on a previous run of the operator,
 	// and this event is due to the list call on startup. In that case, we call our sync handler
 	if slices.Contains(finalizers, o.finalizer) {
-		return o.syncFunc(ctx, object)
+		span.AddEvent("object has watcher finalizer")
+		logger.Debug("Object has our finalizer, calling Sync", "finalizers", finalizers)
+		err := o.syncFunc(ctx, object)
+		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher sync error: %s", err.Error()))
+			return err
+		}
+		return nil
 	}
 
 	// If this isn't a delete or an add we've seen before, then it's a new resource we need to handle appropriately.
@@ -151,6 +166,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	}
 
 	// Add the finalizer
+	logger.Debug("Successful Add call, adding finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
 	err = o.addFinalizer(ctx, object, finalizers)
 	if err != nil {
 		return fmt.Errorf("error adding finalizer: %w", err)
@@ -174,6 +190,9 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		return fmt.Errorf("new cannot be nil")
 	}
 
+	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", new.GroupVersionKind().Kind, "namespace", new.GetNamespace(), "name", new.GetName())
+	logger.Debug("Handling update")
+
 	// Only fire off Update if the generation has changed (so skip subresource updates)
 	if new.GetGeneration() > 0 && old.GetGeneration() == new.GetGeneration() {
 		return nil
@@ -185,13 +204,17 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 	if !slices.Contains(newFinalizers, o.finalizer) && new.GetDeletionTimestamp() == nil {
 		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
 		// Either way, we need to try calling AddFunc
+		logger.Debug("Missing finalizer, calling Add")
 		err := o.addFunc(ctx, new)
 		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
 			return err
 		}
 		// Add the finalizer (which also updates `new` inline)
+		logger.Debug("Successful call to Add, add the finalizer to the object", "finalizer", o.finalizer)
 		err = o.addFinalizer(ctx, new, newFinalizers)
 		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
 			return fmt.Errorf("error adding finalizer: %w", err)
 		}
 	}
@@ -202,21 +225,30 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		// If our finalizer is in the list, treat this as a delete.
 		// Otherwise, drop the event and don't handle it as an update.
 		if !slices.Contains(newFinalizers, o.finalizer) {
+			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", new.GetDeletionTimestamp())
 			return nil
 		}
 
 		// Call the delete handler, then remove the finalizer on success
+		logger.Debug("Update has a DeletionTimestamp, calling Delete", "deletionTimestamp", new.GetDeletionTimestamp())
 		err := o.deleteFunc(ctx, new)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
 
-		return o.removeFinalizer(ctx, new, newFinalizers)
+		logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", newFinalizers)
+		err = o.removeFinalizer(ctx, new, newFinalizers)
+		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher remove finalizer error: %s", err.Error()))
+			return err
+		}
+		return nil
 	}
 
 	// Check if this was us adding our finalizer. If it was, we can ignore it.
 	if !slices.Contains(oldFinalizers, o.finalizer) && slices.Contains(newFinalizers, o.finalizer) {
+		logger.Debug("Finalizer add update, ignoring")
 		return nil
 	}
 

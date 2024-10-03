@@ -18,7 +18,7 @@ var replArgRegex = regexp.MustCompile(`\{([^\}^\:]+):?([^\}^\:]*)\}`)
 // that is used for handling requests when a handler can't be found for a given route.
 // This can be overridden in the Router.
 var DefaultNotFoundHandler HandlerFunc = func(
-	ctx context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender,
+	_ context.Context, req *backend.CallResourceRequest, sender backend.CallResourceResponseSender,
 ) {
 	_ = sender.Send(&backend.CallResourceResponse{
 		Status: http.StatusNotFound,
