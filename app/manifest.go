@@ -181,7 +181,7 @@ func (v *VersionSchema) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.raw)
 }
 
-func (v *VersionSchema) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (v *VersionSchema) UnmarshalYAML(unmarshal func(any) error) error {
 	v.raw = make(map[string]any)
 	err := unmarshal(&v.raw)
 	if err != nil {
@@ -190,8 +190,9 @@ func (v *VersionSchema) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return v.fixRaw()
 }
 
-func (v *VersionSchema) MarshalYAML() (interface{}, error) {
-	return yaml.Marshal(v.raw)
+func (v *VersionSchema) MarshalYAML() (any, error) {
+	// MarshalYAML needs to return an object to the marshaler, not bytes like MarshalJSON
+	return v.raw, nil
 }
 
 // fixRaw turns a full OpenAPI document map[string]any in raw into a set of schemas (if required)
@@ -211,6 +212,9 @@ func (v *VersionSchema) fixRaw() error {
 			return fmt.Errorf("'openAPIV3Schema' must contain properties")
 		}
 		castProps, ok := props.(map[string]any)
+		if !ok {
+			return fmt.Errorf("'openAPIV3Schema' properties must be an object")
+		}
 		m := make(map[string]any)
 		for key, value := range castProps {
 			m[key] = value
@@ -262,7 +266,7 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 	return oT.Components, nil
 }
 
-//func (v *VersionSchema) AsKubeOpenAPI(kindName string, ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+// func (v *VersionSchema) AsKubeOpenAPI(kindName string, ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 // TODO convert AsOpenAPI to kube-openapi?
 //	return nil
-//}
+// }
