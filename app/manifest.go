@@ -6,7 +6,6 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"gopkg.in/yaml.v3"
-	"k8s.io/kube-openapi/pkg/common"
 )
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
@@ -159,6 +158,12 @@ func VersionSchemaFromMap(openAPISchema map[string]any) (*VersionSchema, error) 
 	return vs, err
 }
 
+// VersionSchema represents the schema of a KindVersion in a Manifest.
+// It allows retrieval of the schema in a variety of ways, and can be unmarshaled from a CRD's version schema,
+// an OpenAPI document for a kind, or from just the schemas component of an openAPI document.
+// It marshals to the schemas component of an openAPI document.
+// A Manifest VersionSchema does not contain a metadata object, as that is consistent between every app platform kind.
+// This is modeled after kubernetes' behavior for describing a CRD schema.
 type VersionSchema struct {
 	raw map[string]any
 }
@@ -257,7 +262,7 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 	return oT.Components, nil
 }
 
-func (v *VersionSchema) AsKubeOpenAPI(kindName string, ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-	// TODO convert AsOpenAPI to kube-openapi?
-	return nil
-}
+//func (v *VersionSchema) AsKubeOpenAPI(kindName string, ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+// TODO convert AsOpenAPI to kube-openapi?
+//	return nil
+//}
