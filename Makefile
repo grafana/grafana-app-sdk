@@ -74,3 +74,7 @@ endif
 update-workspace:
 	@echo "updating workspace"
 	go mod download
+
+.PHONY: regenerate-codegen-test-files
+regenerate-codegen-test-files:
+	sh ./scripts/regenerate_golden_test_files.sh
