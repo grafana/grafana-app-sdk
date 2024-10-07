@@ -49,6 +49,8 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
 	generateCmd.Flags().Bool("nomanifest", false, "Whether to disable generating the app manifest")
 	generateCmd.Flags().Lookup("nomanifest").NoOptDefVal = "true"
+	generateCmd.Flags().Bool("simplecopy", false, "Governs whether the generated go resource.Object implementations use a generated deep copy method, or the reflection-based resource.CopyObject. Set this to true if you are having problems with the generated deep copy code.")
+	generateCmd.Flags().Lookup("simplecopy").NoOptDefVal = "true"
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -112,6 +114,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	simpleCopy, err := cmd.Flags().GetBool("simplecopy")
+	if err != nil {
+		return err
+	}
 
 	var files codejen.Files
 	switch format {
@@ -136,6 +142,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			CRDPath:          crdPath,
 			GroupKinds:       grouping == kindGroupingGroup,
 			GenerateManifest: !noManifest,
+			GenericCopy:      simpleCopy,
 		}, selectors...)
 		if err != nil {
 			return err
@@ -190,6 +197,7 @@ type kindGenConfig struct {
 	CRDPath          string
 	GroupKinds       bool
 	GenerateManifest bool
+	GenericCopy      bool
 }
 
 //nolint:goconst
@@ -317,7 +325,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, cfg.GroupKinds, cfg.GenericCopy), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {

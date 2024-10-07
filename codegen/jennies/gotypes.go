@@ -192,7 +192,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 			if i > 0 {
 				path = cue.MakePath(path.Selectors()[i:]...)
 			}
-			return cfg.NamePrefix + strings.Trim(path.String(), "?#")
+			return cfg.NamePrefix + exportField(strings.Trim(path.String(), "?#"))
 		},
 	}
 

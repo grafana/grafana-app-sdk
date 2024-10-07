@@ -81,15 +81,17 @@ type ResourceObjectTemplateMetadata struct {
 	SpecTypeName         string
 	ObjectTypeName       string
 	ObjectShortName      string
+	CopyCode             string
 	Subresources         []SubresourceMetadata
 	CustomMetadataFields []ObjectMetadataField
 }
 
 // SubresourceMetadata is subresource information used in templates
 type SubresourceMetadata struct {
-	TypeName string
-	JSONName string
-	Comment  string
+	TypeName  string
+	FieldName string
+	JSONName  string
+	Comment   string
 }
 
 // WriteResourceObject executes the Resource Object template, and writes out the generated go code to out

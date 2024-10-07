@@ -47,7 +47,7 @@ type Status struct {
 	OperatorStates map[string]StatusOperatorState `json:"operatorStates,omitempty"`
 }
 
-// StatusOperatorState defines model for status.#OperatorState.
+// StatusOperatorState defines model for Status.#OperatorState.
 // +k8s:openapi-gen=true
 type StatusOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format

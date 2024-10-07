@@ -19,7 +19,7 @@ type CustomKind struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Spec              CustomKindSpec   `json:"spec"`
-	CustomKindStatus  CustomKindStatus `json:"status"`
+	Status            CustomKindStatus `json:"status"`
 }
 
 func (o *CustomKind) GetSpec() any {
@@ -37,14 +37,14 @@ func (o *CustomKind) SetSpec(spec any) error {
 
 func (o *CustomKind) GetSubresources() map[string]any {
 	return map[string]any{
-		"status": o.CustomKindStatus,
+		"status": o.Status,
 	}
 }
 
 func (o *CustomKind) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
-		return o.CustomKindStatus, true
+		return o.Status, true
 	default:
 		return nil, false
 	}
@@ -57,7 +57,7 @@ func (o *CustomKind) SetSubresource(name string, value any) error {
 		if !ok {
 			return fmt.Errorf("cannot set status type %#v, not of type CustomKindStatus", value)
 		}
-		o.CustomKindStatus = cast
+		o.Status = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)
@@ -244,7 +244,65 @@ func (o *CustomKind) SetUpdatedBy(updatedBy string) {
 }
 
 func (o *CustomKind) Copy() resource.Object {
-	return resource.CopyObject(o)
+	cpy := &CustomKind{}
+
+	// Copy metadata
+	o.ObjectMeta.DeepCopyInto(&cpy.ObjectMeta)
+
+	// Copy Spec
+	cpy.Spec.BoolField = o.Spec.BoolField
+	cpy.Spec.Enum = o.Spec.Enum
+	cpy.Spec.Field1 = o.Spec.Field1
+	cpy.Spec.FloatField = o.Spec.FloatField
+	cpy.Spec.I32 = o.Spec.I32
+	cpy.Spec.I64 = o.Spec.I64
+	cpy.Spec.Inner.InnerField1 = o.Spec.Inner.InnerField1
+	if o.Spec.Inner.InnerField2 != nil {
+		cpy.Spec.Inner.InnerField2 = make([]string, len(o.Spec.Inner.InnerField2))
+		copy(cpy.Spec.Inner.InnerField2, o.Spec.Inner.InnerField2)
+	}
+	if o.Spec.Inner.InnerField3 != nil {
+		cpy.Spec.Inner.InnerField3 = make([]CustomKindInnerObject2, len(o.Spec.Inner.InnerField3))
+		copy(cpy.Spec.Inner.InnerField3, o.Spec.Inner.InnerField3)
+	}
+	cpy.Spec.Map = make(map[string]CustomKindType2)
+	for key, val := range o.Spec.Map {
+		cpyVal := CustomKindType2{}
+		cpyVal.Details = make(map[string]any)
+		for key, val := range val.Details {
+			cpyVal.Details[key] = val
+		}
+		cpyVal.Group = val.Group
+
+		cpy.Spec.Map[key] = cpyVal
+	}
+	cpy.Spec.Timestamp = o.Spec.Timestamp
+	o.Spec.Union = cpy.Spec.Union
+
+	// Copy Status
+	cpy.Status.AdditionalFields = make(map[string]any)
+	for key, val := range o.Status.AdditionalFields {
+		cpy.Status.AdditionalFields[key] = val
+	}
+	cpy.Status.OperatorStates = make(map[string]CustomKindStatusOperatorState)
+	for key, val := range o.Status.OperatorStates {
+		cpyVal := CustomKindStatusOperatorState{}
+		if val.DescriptiveState != nil {
+			descriptiveStateCopy := *val.DescriptiveState
+			cpyVal.DescriptiveState = &descriptiveStateCopy
+		}
+		cpyVal.Details = make(map[string]any)
+		for key, val := range val.Details {
+			cpyVal.Details[key] = val
+		}
+		cpyVal.LastEvaluation = val.LastEvaluation
+		cpyVal.State = val.State
+
+		cpy.Status.OperatorStates[key] = cpyVal
+	}
+	cpy.Status.StatusField1 = o.Status.StatusField1
+
+	return cpy
 }
 
 func (o *CustomKind) DeepCopyObject() runtime.Object {

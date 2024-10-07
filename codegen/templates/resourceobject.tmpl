@@ -20,7 +20,7 @@ type {{.TypeName}} struct {
     metav1.ObjectMeta `json:"metadata"`
     Spec       {{.SpecTypeName}} `json:"spec"`{{ range .Subresources }}{{ if ne .Comment "" }}
         // {{.Comment }}{{end}}
-        {{ .TypeName }} {{.TypeName}} `json:"{{.JSONName}}"`{{ end }}
+        {{ .FieldName }} {{.TypeName}} `json:"{{.JSONName}}"`{{ end }}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
@@ -38,14 +38,14 @@ func ({{.ObjectShortName}} *{{.TypeName}}) SetSpec(spec any) error {
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresources() map[string]any {
     return map[string]any{ {{ range .Subresources }}
-        "{{.JSONName}}": {{$root.ObjectShortName}}.{{.TypeName}},
+        "{{.JSONName}}": {{$root.ObjectShortName}}.{{.FieldName}},
     {{ end }} }
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresource(name string) (any,bool) {
     switch name { {{ range .Subresources }}
     case"{{ .JSONName }}":
-        return {{$root.ObjectShortName}}.{{.TypeName}}, true
+        return {{$root.ObjectShortName}}.{{.FieldName}}, true
     {{ end }}default:
         return nil, false
     }
@@ -58,7 +58,7 @@ func ({{.ObjectShortName}} *{{.TypeName}}) SetSubresource(name string, value any
         if !ok {
             return fmt.Errorf("cannot set {{.JSONName}} type %#v, not of type {{.TypeName}}", value)
         }
-        {{$root.ObjectShortName}}.{{.TypeName}} = cast
+        {{$root.ObjectShortName}}.{{.FieldName}} = cast
         return nil
     {{ end }}default:
         return fmt.Errorf("subresource '%s' does not exist", name)
@@ -184,7 +184,7 @@ func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Set{{.FieldName}}({{.JSONNa
 {{end}}
 
 func ({{.ObjectShortName}} *{{.TypeName}}) Copy() resource.Object {
-    return resource.CopyObject({{.ObjectShortName}})
+    {{ if eq .CopyCode "" }}return resource.CopyObject({{.ObjectShortName}}){{ else }}{{ .CopyCode }}{{ end }}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyObject() runtime.Object {

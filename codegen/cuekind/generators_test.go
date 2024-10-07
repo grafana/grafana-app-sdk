@@ -58,7 +58,7 @@ func TestResourceGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("unversioned", func(t *testing.T) {
-		files, err := ResourceGenerator(false, false).Generate(kinds...)
+		files, err := ResourceGenerator(false, false, true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 6 -> object, spec, metadata, status, schema, codec
@@ -68,7 +68,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by kind", func(t *testing.T) {
-		files, err := ResourceGenerator(true, false).Generate(kinds...)
+		files, err := ResourceGenerator(true, false, false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 12 (6 -> object, spec, metadata, status, schema, codec) * 2 versions
@@ -78,7 +78,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group", func(t *testing.T) {
-		files, err := ResourceGenerator(true, true).Generate(kinds...)
+		files, err := ResourceGenerator(true, true, false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 12 (6 -> object, spec, metadata, status, schema, codec) * 2 versions
@@ -88,7 +88,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group, multiple kinds", func(t *testing.T) {
-		files, err := ResourceGenerator(true, true).Generate(sameGroupKinds...)
+		files, err := ResourceGenerator(true, true, false).Generate(sameGroupKinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 18)

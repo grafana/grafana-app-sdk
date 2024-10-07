@@ -7,11 +7,11 @@ const (
 	CustomKindOperatorStateStateSuccess    CustomKindOperatorStateState = "success"
 )
 
-// Defines values for CustomKindstatusOperatorStateState.
+// Defines values for CustomKindStatusOperatorStateState.
 const (
-	CustomKindstatusOperatorStateStateFailed     CustomKindstatusOperatorStateState = "failed"
-	CustomKindstatusOperatorStateStateInProgress CustomKindstatusOperatorStateState = "in_progress"
-	CustomKindstatusOperatorStateStateSuccess    CustomKindstatusOperatorStateState = "success"
+	CustomKindStatusOperatorStateStateFailed     CustomKindStatusOperatorStateState = "failed"
+	CustomKindStatusOperatorStateStateInProgress CustomKindStatusOperatorStateState = "in_progress"
+	CustomKindStatusOperatorStateStateSuccess    CustomKindStatusOperatorStateState = "success"
 )
 
 // CustomKindOperatorState defines model for CustomKindOperatorState.
@@ -44,12 +44,12 @@ type CustomKindStatus struct {
 
 	// operatorStates is a map of operator ID to operator state evaluations.
 	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
-	OperatorStates map[string]CustomKindstatusOperatorState `json:"operatorStates,omitempty"`
+	OperatorStates map[string]CustomKindStatusOperatorState `json:"operatorStates,omitempty"`
 }
 
-// CustomKindstatusOperatorState defines model for CustomKindstatus.#OperatorState.
+// CustomKindStatusOperatorState defines model for CustomKindStatus.#OperatorState.
 // +k8s:openapi-gen=true
-type CustomKindstatusOperatorState struct {
+type CustomKindStatusOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
 
@@ -61,10 +61,10 @@ type CustomKindstatusOperatorState struct {
 
 	// state describes the state of the lastEvaluation.
 	// It is limited to three possible states for machine evaluation.
-	State CustomKindstatusOperatorStateState `json:"state"`
+	State CustomKindStatusOperatorStateState `json:"state"`
 }
 
-// CustomKindstatusOperatorStateState state describes the state of the lastEvaluation.
+// CustomKindStatusOperatorStateState state describes the state of the lastEvaluation.
 // It is limited to three possible states for machine evaluation.
 // +k8s:openapi-gen=true
-type CustomKindstatusOperatorStateState string
+type CustomKindStatusOperatorStateState string
