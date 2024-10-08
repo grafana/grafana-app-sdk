@@ -399,6 +399,11 @@ func (ManifestGoFileMetadata) ToJSONString(input any) string {
 	return string(j)
 }
 
+func (ManifestGoFileMetadata) ToJSONBacktickString(input any) string {
+	j, _ := json.Marshal(input)
+	return "`" + strings.ReplaceAll(string(j), "`", "` + \"`\" + `") + "`"
+}
+
 func (ManifestGoFileMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
 }
