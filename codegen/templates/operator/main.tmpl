@@ -5,7 +5,6 @@ import (
     "log/slog"
     "os"
     "os/signal"
-    "syscall"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -66,16 +65,8 @@ func main() {
     }
 
     // Context and cancel for the operator's Run method
-    ctx, cancel := context.WithCancel(context.Background())
+    ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
     defer cancel()
-
-    // Signal channel, cancel the context if we receive a SIGINT or SIGTERM
-    sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-    go func() {
-        <- sigCh
-        cancel()
-    }()
 
     // Run
 	logging.DefaultLogger.Info("Starting operator")
