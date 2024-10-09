@@ -176,6 +176,15 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 					Operations: operations,
 				}
 			}
+			crd, err := KindVersionToCRDSpecVersion(version, mkind.Kind, true)
+			if err != nil {
+				return nil, err
+			}
+			mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
+			if err != nil {
+				return nil, fmt.Errorf("version schema error: %w", err)
+			}
+			mver.SelectableFields = version.SelectableFields
 			mkind.Versions = append(mkind.Versions, mver)
 		}
 		manifest.Kinds = append(manifest.Kinds, mkind)

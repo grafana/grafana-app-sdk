@@ -2,6 +2,7 @@ package templates
 
 import (
 	"embed"
+	"encoding/json"
 	"fmt"
 	"io"
 	"regexp"
@@ -393,6 +394,20 @@ func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperat
 	default:
 		return fmt.Sprintf("AdmissionOperation(\"%s\")", input)
 	}
+}
+
+func (ManifestGoFileMetadata) ToJSONString(input any) string {
+	j, _ := json.Marshal(input)
+	return string(j)
+}
+
+func (ManifestGoFileMetadata) ToJSONBacktickString(input any) string {
+	j, _ := json.Marshal(input)
+	return "`" + strings.ReplaceAll(string(j), "`", "` + \"`\" + `") + "`"
+}
+
+func (ManifestGoFileMetadata) ToPackageName(input string) string {
+	return ToPackageName(input)
 }
 
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
