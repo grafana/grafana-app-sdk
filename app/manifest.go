@@ -1,5 +1,13 @@
 package app
 
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/getkin/kin-openapi/openapi3"
+	"gopkg.in/yaml.v3"
+)
+
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
 func NewEmbeddedManifest(manifestData ManifestData) Manifest {
 	return Manifest{
@@ -87,7 +95,9 @@ type ManifestKindVersion struct {
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
 	// Schema is the schema of this version, as an OpenAPI document.
 	// This is currently an `any` type as implementation is incomplete.
-	Schema any `json:"schema,omitempty" yaml:"schema,omitempty"` // TODO: actual schema
+	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
+	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind
@@ -139,3 +149,124 @@ const (
 	AdmissionOperationDelete  AdmissionOperation = "DELETE"
 	AdmissionOperationConnect AdmissionOperation = "CONNECT"
 )
+
+func VersionSchemaFromMap(openAPISchema map[string]any) (*VersionSchema, error) {
+	vs := &VersionSchema{
+		raw: openAPISchema,
+	}
+	err := vs.fixRaw()
+	return vs, err
+}
+
+// VersionSchema represents the schema of a KindVersion in a Manifest.
+// It allows retrieval of the schema in a variety of ways, and can be unmarshaled from a CRD's version schema,
+// an OpenAPI document for a kind, or from just the schemas component of an openAPI document.
+// It marshals to the schemas component of an openAPI document.
+// A Manifest VersionSchema does not contain a metadata object, as that is consistent between every app platform kind.
+// This is modeled after kubernetes' behavior for describing a CRD schema.
+type VersionSchema struct {
+	raw map[string]any
+}
+
+func (v *VersionSchema) UnmarshalJSON(data []byte) error {
+	v.raw = make(map[string]any)
+	err := json.Unmarshal(data, &v.raw)
+	if err != nil {
+		return err
+	}
+	return v.fixRaw()
+}
+
+func (v *VersionSchema) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.raw)
+}
+
+func (v *VersionSchema) UnmarshalYAML(unmarshal func(any) error) error {
+	v.raw = make(map[string]any)
+	err := unmarshal(&v.raw)
+	if err != nil {
+		return err
+	}
+	return v.fixRaw()
+}
+
+func (v *VersionSchema) MarshalYAML() (any, error) {
+	// MarshalYAML needs to return an object to the marshaler, not bytes like MarshalJSON
+	return v.raw, nil
+}
+
+// fixRaw turns a full OpenAPI document map[string]any in raw into a set of schemas (if required)
+func (v *VersionSchema) fixRaw() error {
+	if _, ok := v.raw["openapi"]; !ok {
+		// Not openAPI document, check if it's CRD-Like schema
+		if _, ok := v.raw["openAPIV3Schema"]; !ok {
+			// ok, no adjustments (that we know of) necessary
+			return nil
+		}
+		oapi, ok := v.raw["openAPIV3Schema"].(map[string]any)
+		if !ok {
+			return fmt.Errorf("'openAPIV3Schema' must be an object")
+		}
+		props, ok := oapi["properties"]
+		if !ok {
+			return fmt.Errorf("'openAPIV3Schema' must contain properties")
+		}
+		castProps, ok := props.(map[string]any)
+		if !ok {
+			return fmt.Errorf("'openAPIV3Schema' properties must be an object")
+		}
+		m := make(map[string]any)
+		for key, value := range castProps {
+			m[key] = value
+		}
+		v.raw = m
+		return nil
+	}
+	if c, ok := v.raw["components"]; ok {
+		cast, ok := c.(map[string]any)
+		if !ok {
+			return fmt.Errorf("'components' in an OpenAPI document must be an object")
+		}
+		s, ok := cast["schemas"]
+		if !ok {
+			v.raw = make(map[string]any)
+			return nil
+		}
+		schemas, ok := s.(map[string]any)
+		if !ok {
+			return fmt.Errorf("'components.schemas' in an OpenAPI document must be an object")
+		}
+		v.raw["schemas"] = schemas
+	}
+	return nil
+}
+
+// AsMap returns the schema as a map[string]any where each key is a top-level resource (ex. 'spec', 'status')
+func (v *VersionSchema) AsMap() map[string]any {
+	return v.raw
+}
+
+// AsOpenAPI3 returns an openapi3.Components instance which contains the schema elements
+func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
+	full := map[string]any{
+		"openapi": "3.0.0",
+		"components": map[string]any{
+			"schemas": v.AsMap(),
+		},
+	}
+	yml, err := yaml.Marshal(full)
+	if err != nil {
+		return nil, err
+	}
+	loader := openapi3.NewLoader()
+	oT, err := loader.LoadFromData(yml)
+	if err != nil {
+		return nil, err
+	}
+	return oT.Components, nil
+}
+
+// func (v *VersionSchema) AsKubeOpenAPI(kindName string, ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+// TODO convert AsOpenAPI to kube-openapi?
+//	return nil
+// }
