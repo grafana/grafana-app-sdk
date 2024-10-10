@@ -1,6 +1,8 @@
 package cuekind
 
 import (
+	"strings"
+
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -122,10 +124,27 @@ func TypeScriptResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind
 func OperatorGenerator(projectRepo, codegenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(
-		jennies.WatcherJenny(projectRepo, codegenPath, versioned, !groupKinds),
 		&jennies.OperatorKubeConfigJenny{},
 		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned, !groupKinds),
 		&jennies.OperatorConfigJenny{},
+	)
+	return g
+}
+
+func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+	parts := strings.Split(projectRepo, "/")
+	if len(parts) == 0 {
+		parts = []string{""}
+	}
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(
+		jennies.WatcherJenny(projectRepo, codegenPath, true, !groupKinds),
+		&jennies.AppGenerator{
+			GroupByKind: !groupKinds,
+			ProjectRepo: projectRepo,
+			ProjectName: parts[len(parts)-1],
+			CodegenPath: codegenPath,
+		},
 	)
 	return g
 }

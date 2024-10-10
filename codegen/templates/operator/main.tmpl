@@ -5,16 +5,13 @@ import (
     "log/slog"
     "os"
     "os/signal"
-    "syscall"
 
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/operator"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
-    {{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
-	{{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{.MachineName}} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName .MachineName }}{{ if $.ResourcesAreVersioned }}/{{ $.ToPackageName .Current}}{{end}}"{{ end }}
-    {{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
+    "{{$.Repo}}/pkg/app"
 )
 
 func main() {
@@ -37,59 +34,43 @@ func main() {
 		panic(err)
     }
 
-    runner, err := simple.NewOperator(simple.OperatorConfig{
-		Name:       "{{.ProjectName}}-operator",
-		KubeConfig: kubeConfig.RestConfig,
-		Metrics: simple.MetricsConfig{
-			Enabled: true,
-		},
-		Tracing: simple.TracingConfig{
-			Enabled: true,
-			OpenTelemetryConfig: simple.OpenTelemetryConfig{
-				Host:        cfg.OTelConfig.Host,
-				Port:        cfg.OTelConfig.Port,
-				ConnType:    simple.OTelConnType(cfg.OTelConfig.ConnType),
-				ServiceName: cfg.OTelConfig.ServiceName,
-			},
-		},
-		ErrorHandler: func(ctx context.Context, err error) {
-            // FIXME: add your own error handling here
-			logging.FromContext(ctx).Error(err.Error())
-		},
-	})
+    // Set up tracing
+    if cfg.OTelConfig.Host != "" {
+        simple.SetTraceProvider(simple.OpenTelemetryConfig{
+            Host:        cfg.OTelConfig.Host,
+            Port:        cfg.OTelConfig.Port,
+            ConnType:    simple.OTelConnType(cfg.OTelConfig.ConnType),
+            ServiceName: cfg.OTelConfig.ServiceName,
+        })
+    }
+
+    // Create the operator config and the runner
+    operatorConfig := operator.RunnerConfig{
+        KubeConfig: kubeConfig.RestConfig,
+        WebhookConfig: operator.RunnerWebhookConfig{
+            Port: cfg.WebhookServer.Port,
+            TLSConfig: k8s.TLSConfig{
+                CertPath: cfg.WebhookServer.TLSCertPath,
+                KeyPath:  cfg.WebhookServer.TLSKeyPath,
+            },
+        },
+        MetricsConfig: operator.RunnerMetricsConfig{
+            Enabled: true,
+        },
+    }
+    runner, err := operator.NewRunner(operatorConfig)
     if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Error creating operator")
+        logging.DefaultLogger.With("error", err).Error("Unable to create operator runner")
         panic(err)
     }
 
-    // Wrap our resource watchers in OpinionatedWatchers, then add them to the controllera
-    {{ $p := .WatcherPackage }}{{ range $key, $val := .GVToKind }}{{ range $val }}{{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
-    if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Unable to create {{.Kind}}Watcher")
-        panic(err)
-    }
-    err = runner.WatchKind({{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}.Kind(){{end}}, {{.MachineName}}Watcher, operator.ListWatchOptions{
-        Namespace: resource.NamespaceAll,
-    })
-    if err != nil {
-        logging.DefaultLogger.With("error", err).Error("Error adding {{.Kind}} watcher to controller")
-        panic(err)
-    }
-    {{ end }}{{ end }}
-
-    stopCh := make(chan struct{})
-
-    // Signal channel
-    sigCh := make(chan os.Signal, 1)
-    signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-    go func() {
-        <- sigCh
-        stopCh <- struct{}{}
-    }()
+    // Context and cancel for the operator's Run method
+    ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+    defer cancel()
 
     // Run
 	logging.DefaultLogger.Info("Starting operator")
-    err = runner.Run(stopCh)
+    err = runner.Run(ctx, app.Provider(cfg))
     if err != nil {
         logging.DefaultLogger.With("error", err).Error("Operator exited with error")
 		panic(err)
