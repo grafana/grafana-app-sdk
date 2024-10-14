@@ -34,3 +34,6 @@ datasourceConfigs:
 #
 # Toggle the generating of the grafana deployments, if you want to control these elsewhere
 generateGrafanaDeployment: true
+
+# which grafana image to use
+grafanaImage: grafana/grafana-enterprise:11.2.2
