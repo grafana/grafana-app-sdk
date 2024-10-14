@@ -48,7 +48,7 @@ type localEnvConfig struct {
 	OperatorImage             string                `json:"operatorImage" yaml:"operatorImage"`
 	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
 	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
-	GrafanaImage              string               	`json:"grafanaImage" yaml:"grafanaImage"`
+	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
 }
 
 type dataSourceConfig struct {
@@ -235,7 +235,7 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 	// Read config (try YAML first, then JSON)
 	config := localEnvConfig{
 		GenerateGrafanaDeployment: true,
-		GrafanaImage: "grafana/grafana-enterprise:11.2.2",
+		GrafanaImage:              "grafana/grafana-enterprise:11.2.2",
 	}
 	if _, err := os.Stat(filepath.Join(localPath, "config.yaml")); err == nil {
 		cfgBytes, err := os.ReadFile(filepath.Join(localPath, "config.yaml"))
@@ -360,7 +360,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
-		GrafanaImage: 						config.GrafanaImage,
+		GrafanaImage:              config.GrafanaImage,
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
