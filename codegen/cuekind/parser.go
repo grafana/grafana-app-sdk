@@ -29,6 +29,11 @@ type Parser struct {
 	schemaDef *cue.Value
 }
 
+func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.AppManifest, error) {
+	// TODO
+	return nil, nil
+}
+
 // Parse parses all CUE files in `files`, and reads all top-level selectors (or only `selectors` if provided)
 // as kinds as defined by [def.cue]. It then returns a list of kinds parsed.
 //

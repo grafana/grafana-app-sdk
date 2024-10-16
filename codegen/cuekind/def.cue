@@ -182,3 +182,18 @@ Kind: S={
 		backend: bool | *true
 	}
 }
+
+#AccessKind: {
+	group: string
+	resource: string
+	actions: [...string]
+}
+
+Manifest: S={
+	appName: string
+	group: string
+	kinds: [...Kind]
+	permissions: {
+		accessKinds: [...#AccessKind]
+	}
+}

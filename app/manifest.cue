@@ -63,10 +63,21 @@ manifest: versions: v1alpha1: {
 			conversion: bool
 			versions: [...#ManifestKindVersion]
 		}
+		#KindPermission: {
+			group: string
+			resource: string
+			actions: [...string]
+		}
 		spec: {
 			appName: string
 			group: string
 			kinds: [...#ManifestKind]
+			// Permissions contains additional permissions needed for an app's backend component to operate.
+			// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
+			permissions: {
+				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
+				accessKinds: [...#KindPermission]
+			}
 		}
 	}
 }
