@@ -5,7 +5,10 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"path/filepath"
+	"strings"
 
+	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -16,6 +19,12 @@ import (
 type SchemaGenerator struct {
 	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
 	OnlyUseCurrentVersion bool
+
+	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
+	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
+	// When GroupByKind is false, the Kind() and Schema() functions are prefixed with the kind name,
+	// i.e. FooKind() and FooSchema() for kind.Name()="Foo"
+	GroupByKind bool
 }
 
 func (*SchemaGenerator) JennyName() string {
@@ -32,16 +41,27 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			meta.APIResource.Scope, resource.ClusterScope, resource.NamespacedScope)
 	}
 
+	prefix := ""
+	if !s.GroupByKind {
+		prefix = exportField(kind.Name())
+	}
+
 	files := make(codejen.Files, 0)
 	if s.OnlyUseCurrentVersion {
+		sf, err := s.getSelectableFields(kind.Version(meta.Current))
+		if err != nil {
+			return nil, err
+		}
 		b := bytes.Buffer{}
-		err := templates.WriteSchema(templates.SchemaMetadata{
-			Package: meta.MachineName,
-			Group:   meta.APIResource.Group,
-			Version: meta.Current,
-			Kind:    meta.Kind,
-			Plural:  meta.PluralMachineName,
-			Scope:   meta.APIResource.Scope,
+		err = templates.WriteSchema(templates.SchemaMetadata{
+			Package:          meta.MachineName,
+			Group:            meta.APIResource.Group,
+			Version:          meta.Current,
+			Kind:             meta.Kind,
+			Plural:           meta.PluralMachineName,
+			Scope:            meta.APIResource.Scope,
+			SelectableFields: sf,
+			FuncPrefix:       prefix,
 		}, &b)
 		if err != nil {
 			return nil, err
@@ -57,14 +77,20 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		})
 	} else {
 		for _, ver := range kind.Versions() {
+			sf, err := s.getSelectableFields(&ver)
+			if err != nil {
+				return nil, err
+			}
 			b := bytes.Buffer{}
-			err := templates.WriteSchema(templates.SchemaMetadata{
-				Package: ToPackageName(ver.Version),
-				Group:   meta.APIResource.Group,
-				Version: ver.Version,
-				Kind:    meta.Kind,
-				Plural:  meta.PluralMachineName,
-				Scope:   meta.APIResource.Scope,
+			err = templates.WriteSchema(templates.SchemaMetadata{
+				Package:          ToPackageName(ver.Version),
+				Group:            meta.APIResource.Group,
+				Version:          ver.Version,
+				Kind:             meta.Kind,
+				Plural:           meta.PluralMachineName,
+				Scope:            meta.APIResource.Scope,
+				SelectableFields: sf,
+				FuncPrefix:       prefix,
 			}, &b)
 			if err != nil {
 				return nil, err
@@ -75,11 +101,52 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			}
 			files = append(files, codejen.File{
 				Data:         formatted,
-				RelativePath: fmt.Sprintf("%s/%s/%s_schema_gen.go", meta.MachineName, ToPackageName(ver.Version), meta.MachineName),
+				RelativePath: filepath.Join(GetGeneratedPath(s.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_schema_gen.go", meta.MachineName)),
 				From:         []codejen.NamedJenny{s},
 			})
 		}
 	}
 
 	return files, nil
+}
+
+func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templates.SchemaMetadataSeletableField, error) {
+	fields := make([]templates.SchemaMetadataSeletableField, 0)
+	if len(ver.SelectableFields) == 0 {
+		return fields, nil
+	}
+	// Check each field in the CUE (TODO: make this OpenAPI instead?) to check if the field is optional
+	for _, s := range ver.SelectableFields {
+		fieldPath := s
+		if len(s) > 1 && s[0] == '.' {
+			fieldPath = s[1:]
+		}
+		parts := strings.Split(fieldPath, ".")
+		if len(parts) <= 1 {
+			return nil, fmt.Errorf("invalid selectable field path: %s", s)
+		}
+		field := parts[len(parts)-1]
+		parts = parts[:len(parts)-1]
+		path := make([]cue.Selector, 0)
+		for _, p := range parts {
+			path = append(path, cue.Str(p))
+		}
+		if val := ver.Schema.LookupPath(cue.MakePath(path...).Optional()); val.Err() == nil {
+			// Simplest way to check if it's an optional field is to try to look it up as non-optional, then try optional
+			if lookup := val.LookupPath(cue.MakePath(cue.Str(field))); lookup.Exists() {
+				fields = append(fields, templates.SchemaMetadataSeletableField{
+					Field:    s,
+					Optional: false,
+				})
+			} else if optional := val.LookupPath(cue.MakePath(cue.Str(field).Optional())); optional.Exists() {
+				fields = append(fields, templates.SchemaMetadataSeletableField{
+					Field:    s,
+					Optional: true,
+				})
+			} else {
+				return nil, fmt.Errorf("invalid selectable field path: %s", fieldPath)
+			}
+		}
+	}
+	return fields, nil
 }

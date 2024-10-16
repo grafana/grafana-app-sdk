@@ -28,8 +28,23 @@ type Schema interface {
 	Plural() string
 	// ZeroValue returns the "zero-value", "default", or "empty" version of an Object of this Schema
 	ZeroValue() Object
+	// ZeroListValue returns a ListObject implementation which represents an empty (or appropriately "zero-value")
+	// version of the Schema's List.
+	ZeroListValue() ListObject
 	// Scope returns the scope of the schema object
 	Scope() SchemaScope
+	// SelectableFields returns a list of fully-qualified field selectors which can be used for querying
+	SelectableFields() []SelectableField
+}
+
+// SelectableField is a struct which represents the FieldSelector string and function to retrieve the value of that
+// FieldSelector from an Object. SelectableFields may be generic for all Object implementations,
+// or specific to one or a set.
+type SelectableField struct {
+	FieldSelector string
+	// FieldValueFunc is a function which returns the value of the FieldSelector in the provided Object,
+	// or an error if the Object is not of the correct underlying type, or the value cannot be retrieved for any reason
+	FieldValueFunc func(Object) (string, error)
 }
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
@@ -43,12 +58,14 @@ type SchemaGroup interface {
 // though the easiest way to define a schema is via codegen.
 // TODO: codegen info
 type SimpleSchema struct {
-	group   string
-	version string
-	kind    string
-	plural  string
-	scope   SchemaScope
-	zero    Object
+	group            string
+	version          string
+	kind             string
+	plural           string
+	scope            SchemaScope
+	selectableFields []SelectableField
+	zero             Object
+	zeroList         ListObject
 }
 
 // Group returns the SimpleSchema's Group
@@ -82,6 +99,18 @@ func (s *SimpleSchema) ZeroValue() Object {
 	return s.zero.Copy()
 }
 
+// ZeroListValue returns a copy the SimpleSchema's zero-valued ListObject instance
+// It can be used directly, as the returned interface is a copy.
+func (s *SimpleSchema) ZeroListValue() ListObject {
+	return s.zeroList.Copy()
+}
+
+// SelectableFields returns the list of field selectors that can be used for querying this schema
+// TODO: should this be in the kind instead of the schema?
+func (s *SimpleSchema) SelectableFields() []SelectableField {
+	return s.selectableFields
+}
+
 // SimpleSchemaGroup collects schemas with the same group and version
 // Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 type SimpleSchemaGroup struct {
@@ -97,8 +126,8 @@ func (g *SimpleSchemaGroup) Schemas() []Schema {
 
 // AddSchema creates a new SimpleSchema with the SimpleSchemaGroup's group and version,
 // adds it to the SimpleSchemaGroup, and returns the created SimpleSchema
-func (g *SimpleSchemaGroup) AddSchema(zeroVal Object, opts ...SimpleSchemaOption) *SimpleSchema {
-	s := NewSimpleSchema(g.group, g.version, zeroVal, opts...)
+func (g *SimpleSchemaGroup) AddSchema(zeroVal Object, zeroList ListObject, opts ...SimpleSchemaOption) *SimpleSchema {
+	s := NewSimpleSchema(g.group, g.version, zeroVal, zeroList, opts...)
 	g.schemas = append(g.schemas, s)
 	return s
 }
@@ -129,12 +158,20 @@ func WithScope(scope SchemaScope) func(schema *SimpleSchema) {
 	}
 }
 
+// WithSelectableFields returns a SimpleSchemaOption that sets the SimpleSchema's SelectableFields to the provided selectableFields
+func WithSelectableFields(selectableFields []SelectableField) func(schema *SimpleSchema) {
+	return func(s *SimpleSchema) {
+		s.selectableFields = selectableFields
+	}
+}
+
 // NewSimpleSchema returns a new SimpleSchema
-func NewSimpleSchema(group, version string, zeroVal Object, opts ...SimpleSchemaOption) *SimpleSchema {
+func NewSimpleSchema(group, version string, zeroVal Object, zeroList ListObject, opts ...SimpleSchemaOption) *SimpleSchema {
 	s := SimpleSchema{
-		group:   group,
-		version: version,
-		zero:    zeroVal,
+		group:    group,
+		version:  version,
+		zero:     zeroVal,
+		zeroList: zeroList,
 	}
 	for _, opt := range opts {
 		opt(&s)

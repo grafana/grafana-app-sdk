@@ -13,11 +13,11 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/tracing"
 
-	{{ if .Version }}{{.MachineName}} "{{.Repo}}/{{.APICodegenPath}}/resource/{{.MachineName}}/{{.Version}}"{{else}}"{{.Repo}}/{{.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
+	{{ if .Version }}{{.MachineName}} "{{.Repo}}/{{.APICodegenPath}}{{ if not .KindsAreGrouped }}/resource{{end}}/{{.KindPackage}}"{{else}}"{{.Repo}}/{{.APICodegenPath}}/resource/{{.MachineName}}"{{end}}
 )
 
 type {{.Kind}}Service interface {
-	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
+	List(ctx context.Context, opts resource.StoreListOptions) (*resource.TypedList[*{{.MachineName}}.{{.Kind}}], error)
 	Get(ctx context.Context, id resource.Identifier) (*{{.MachineName}}.{{.Kind}}, error)
 	Add(ctx context.Context, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
 	Update(ctx context.Context, id resource.Identifier, obj *{{.MachineName}}.{{.Kind}}) (*{{.MachineName}}.{{.Kind}}, error)
@@ -37,7 +37,7 @@ func (p *Plugin) handle{{.Kind}}List(ctx context.Context, req router.JSONRequest
 	    log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting {{.Kind}}Service: " + err.Error(), "error", err)
 	    return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
 	}
-	return svc.List(ctx, p.namespace, filters...)
+	return svc.List(ctx, resource.StoreListOptions{ Namespace: p.namespace, PerPage: 500, Filters: filters })
 }
 
 func (p *Plugin) handle{{.Kind}}Get(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {

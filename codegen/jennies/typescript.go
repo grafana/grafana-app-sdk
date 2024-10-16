@@ -51,7 +51,7 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 				return nil, err
 			}
 			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.ts", kind.Properties().MachineName, ToPackageName(ver.Version), kind.Properties().MachineName),
+				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.ts", kind.Properties().MachineName, ver.Version, kind.Properties().MachineName),
 				Data:         b,
 				From:         []codejen.NamedJenny{t},
 			})

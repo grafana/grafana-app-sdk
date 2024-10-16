@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
@@ -47,6 +48,7 @@ type localEnvConfig struct {
 	OperatorImage             string                `json:"operatorImage" yaml:"operatorImage"`
 	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
 	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
+	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
 }
 
 type dataSourceConfig struct {
@@ -188,6 +190,11 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	err = updateLocalConfigFromManifest(config, format, cuePath)
+	if err != nil {
+		return err
+	}
+
 	// Generate the k8s YAML bundle
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
@@ -236,6 +243,7 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 	// Read config (try YAML first, then JSON)
 	config := localEnvConfig{
 		GenerateGrafanaDeployment: true,
+		GrafanaImage:              "grafana/grafana-enterprise:11.2.2",
 	}
 	if _, err := os.Stat(filepath.Join(localPath, "config.yaml")); err == nil {
 		cfgBytes, err := os.ReadFile(filepath.Join(localPath, "config.yaml"))
@@ -308,6 +316,7 @@ type yamlGenProperties struct {
 	OperatorImage             string
 	WebhookProperties         yamlGenPropsWebhooks
 	GenerateGrafanaDeployment bool
+	GrafanaImage              string
 }
 
 type yamlGenPropsCRD struct {
@@ -364,6 +373,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
+		GrafanaImage:              config.GrafanaImage,
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
@@ -426,7 +436,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 					"conversionReviewVersions": []string{"v1"},
 					"clientConfig": map[string]any{
 						"service": map[string]any{
-							"name":      "convtest-app-operator",
+							"name":      props.PluginID + "-operator",
 							"namespace": "default",
 							"path":      "/convert",
 						},
@@ -741,4 +751,51 @@ func generateCerts(dnsName string) (*certBundle, error) {
 		key:  certPrivKeyPEM.Bytes(),
 		ca:   caPEM.Bytes(),
 	}, nil
+}
+
+func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string) error {
+	type manifest struct {
+		Kind string           `json:"kind"`
+		Spec app.ManifestData `json:"spec"`
+	}
+	if format == FormatCUE {
+		parser, err := cuekind.NewParser()
+		if err != nil {
+			return err
+		}
+		generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+		if err != nil {
+			return err
+		}
+		fs, err := generator.FilteredGenerate(cuekind.ManifestGenerator(json.Marshal, "json", "myapp"), func(kind codegen.Kind) bool {
+			return kind.Properties().APIResource != nil
+		})
+		if err != nil {
+			return err
+		}
+		for _, f := range fs {
+			md := manifest{}
+			err = json.Unmarshal(f.Data, &md)
+			if err != nil {
+				return err
+			}
+			if md.Kind != "AppManifest" {
+				continue
+			}
+			for _, k := range md.Spec.Kinds {
+				if k.Conversion {
+					config.Webhooks.Converting = true
+				}
+				for _, v := range k.Versions {
+					if v.Admission != nil && v.Admission.SupportsAnyValidation() {
+						config.Webhooks.Validating = true
+					}
+					if v.Admission != nil && v.Admission.SupportsAnyMutation() {
+						config.Webhooks.Mutating = true
+					}
+				}
+			}
+		}
+	}
+	return nil
 }

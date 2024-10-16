@@ -1,6 +1,8 @@
 package cuekind
 
 import (
+	"strings"
+
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -20,21 +22,30 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // or just generate code for the current version.
 // If `versioned` is true, the paths to the generated files will include the version, and
 // the package name will be the version, rather than the kind.
-func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+// If `groupKinds` is true, kinds within the same group will exist in the same package.
+// When combined with `versioned`, each version package will contain all kinds in the group
+// which have a schema for that version.
+func ResourceGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
-			GenerateOnlyCurrent: !versioned,
-			Depth:               1,
+			GenerateOnlyCurrent:  !versioned,
+			Depth:                1,
+			AddKubernetesCodegen: true,
+			GroupByKind:          !groupKinds,
 		},
 		&jennies.ResourceObjectGenerator{
-			OnlyUseCurrentVersion: !versioned,
+			OnlyUseCurrentVersion:       !versioned,
+			SubresourceTypesArePrefixed: groupKinds,
+			GroupByKind:                 !groupKinds,
 		},
 		&jennies.SchemaGenerator{
 			OnlyUseCurrentVersion: !versioned,
+			GroupByKind:           !groupKinds,
 		},
 		&jennies.CodecGenerator{
 			OnlyUseCurrentVersion: !versioned,
+			GroupByKind:           !groupKinds,
 		},
 	)
 	return g
@@ -45,23 +56,24 @@ func ResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 // or just generate code for the current version.
 // If `versioned` is true, the paths to the generated files will include the version, and
 // the package name will be the version, rather than the kind.
-func ModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+func ModelsGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
 			GenerateOnlyCurrent: !versioned,
+			GroupByKind:         !groupKinds,
 		},
 	)
 	return g
 }
 
 // BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
+func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
 
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
-		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, versioned),
+		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, versioned, !groupKinds),
 		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
@@ -75,7 +87,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
 		jennies.RouterCodeGenerator(projectRepo),
-		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, versioned),
+		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, versioned, !groupKinds),
 	)
 	return g
 }
@@ -109,14 +121,61 @@ func TypeScriptResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind
 
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
-func OperatorGenerator(projectRepo, codegenPath string, versioned bool) *codejen.JennyList[codegen.Kind] {
+func OperatorGenerator(projectRepo, codegenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(
-		jennies.WatcherJenny(projectRepo, codegenPath, versioned),
 		&jennies.OperatorKubeConfigJenny{},
-		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned),
+		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned, !groupKinds),
 		&jennies.OperatorConfigJenny{},
 	)
+	return g
+}
+
+func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+	parts := strings.Split(projectRepo, "/")
+	if len(parts) == 0 {
+		parts = []string{""}
+	}
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(
+		jennies.WatcherJenny(projectRepo, codegenPath, true, !groupKinds),
+		&jennies.AppGenerator{
+			GroupByKind: !groupKinds,
+			ProjectRepo: projectRepo,
+			ProjectName: parts[len(parts)-1],
+			CodegenPath: codegenPath,
+		},
+	)
+	return g
+}
+
+func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(&jennies.OpenAPI{
+		GenerateOnlyCurrent: !versioned,
+		GoModName:           projectRepo,
+		GoGenPath:           goGenPath,
+		GroupByKind:         !groupKinds,
+	})
+	return g
+}
+
+func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, appName string) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(&jennies.ManifestGenerator{
+		AppName:       appName,
+		Encoder:       encoder,
+		FileExtension: extension,
+	})
+	return g
+}
+
+func ManifestGoGenerator(pkg string, appName string) *codejen.JennyList[codegen.Kind] {
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(&jennies.ManifestGoGenerator{
+		Package: pkg,
+		AppName: appName,
+	})
 	return g
 }
 

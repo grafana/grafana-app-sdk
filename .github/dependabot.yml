@@ -19,4 +19,11 @@ updates:
       - "*"
   labels:
   - "type/dependabot"
-
+- package-ecosystem: gomod
+  directory: "/plugin/"
+  schedule:
+    interval: daily
+  groups:
+    all:
+      patterns:
+      - "*"

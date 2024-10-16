@@ -20,8 +20,10 @@ import (
 )
 
 const (
-	targetResource = "resource"
-	targetModel    = "model"
+	targetResource    = "resource"
+	targetModel       = "model"
+	kindGroupingGroup = "group"
+	kindGroupingKind  = "kind"
 )
 
 var generateCmd = &cobra.Command{
@@ -29,6 +31,7 @@ var generateCmd = &cobra.Command{
 	RunE: generateCmdFunc,
 }
 
+//nolint:goconst
 func setupGenerateCmd() {
 	generateCmd.PersistentFlags().StringP("gogenpath", "g", "pkg/generated/",
 		"Path to directory where generated go code will reside")
@@ -37,16 +40,24 @@ func setupGenerateCmd() {
 	generateCmd.Flags().String("type", "kubernetes", `Storage layer type. 
 Currently only allowed value is 'kubernetes', which will generate Custom Resource Definition files for each selector.`)
 	generateCmd.Flags().String("crdencoding", "json", `Encoding for Custom Resource Definition 
-files. Allowed values are 'json' and 'yaml'. Only applicable if type=kubernetes.`)
+files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD generation.`)
 	generateCmd.Flags().String("crdpath", "definitions", `Path where Custom Resource 
 Definitions will be created. Only applicable if type=kubernetes`)
+	generateCmd.Flags().String("kindgrouping", kindGroupingKind, `Kind go package grouping.
+Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
+	generateCmd.Flags().Bool("postprocess", false, "Whether to run post-processing on the generated files after they are written to disk. Post-processing includes code generation based on +k8s comments on types. Post-processing will fail if the dependencies required by the generated code are absent from go.mod.")
+	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
+	generateCmd.Flags().Bool("nomanifest", false, "Whether to disable generating the app manifest")
+	generateCmd.Flags().Lookup("nomanifest").NoOptDefVal = "true"
+	generateCmd.Flags().Bool("notypeinpath", false, "Whether to remove the 'resource' or 'models' in the generated go path (this does nothing for --kindgrouping=group)")
+	generateCmd.Flags().Lookup("notypeinpath").NoOptDefVal = "true"
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
 	generateCmd.SilenceUsage = true
 }
 
-//nolint:funlen
+//nolint:funlen,revive
 func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	cuePath, err := cmd.Flags().GetString("cuepath")
 	if err != nil {
@@ -88,26 +99,51 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	grouping, err := cmd.Flags().GetString("kindgrouping")
+	if err != nil {
+		return err
+	}
+	if grouping != kindGroupingGroup && grouping != kindGroupingKind {
+		return fmt.Errorf("--kindgrouping must be one of 'group'|'kind'")
+	}
+	postProcess, err := cmd.Flags().GetBool("postprocess")
+	if err != nil {
+		return err
+	}
+	noManifest, err := cmd.Flags().GetBool("nomanifest")
+	if err != nil {
+		return err
+	}
+	noTypeInPath, err := cmd.Flags().GetBool("notypeinpath")
+	if err != nil {
+		return err
+	}
+
 	var files codejen.Files
 	switch format {
 	case FormatThema:
+		fmt.Println(themaWarning)
 		files, err = generateKindsThema(os.DirFS(cuePath), kindGenConfig{
-			GoGenBasePath: goGenPath,
-			TSGenBasePath: tsGenPath,
-			StorageType:   storageType,
-			CRDEncoding:   encType,
-			CRDPath:       crdPath,
+			GoGenBasePath:      goGenPath,
+			TSGenBasePath:      tsGenPath,
+			StorageType:        storageType,
+			CRDEncoding:        encType,
+			CRDPath:            crdPath,
+			PrefixPathWithType: !noTypeInPath,
 		}, selectors...)
 		if err != nil {
 			return err
 		}
 	case FormatCUE:
 		files, err = generateKindsCue(os.DirFS(cuePath), kindGenConfig{
-			GoGenBasePath: goGenPath,
-			TSGenBasePath: tsGenPath,
-			StorageType:   storageType,
-			CRDEncoding:   encType,
-			CRDPath:       crdPath,
+			GoGenBasePath:      goGenPath,
+			TSGenBasePath:      tsGenPath,
+			StorageType:        storageType,
+			CRDEncoding:        encType,
+			CRDPath:            crdPath,
+			GroupKinds:         grouping == kindGroupingGroup,
+			GenerateManifest:   !noManifest,
+			PrefixPathWithType: !noTypeInPath,
 		}, selectors...)
 		if err != nil {
 			return err
@@ -123,17 +159,49 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
+	if format == FormatThema {
+		// Print the warning at the end of the output as well
+		fmt.Println(themaWarning)
+	}
+
+	// Jennies that need to be run post-file-write
+	if postProcess {
+		if format == FormatCUE {
+			files, err = postGenerateFilesCue(os.DirFS(cuePath), kindGenConfig{
+				GoGenBasePath: goGenPath,
+				TSGenBasePath: tsGenPath,
+				StorageType:   storageType,
+				CRDEncoding:   encType,
+				CRDPath:       crdPath,
+				GroupKinds:    grouping == kindGroupingGroup,
+			}, selectors...)
+			if err != nil {
+				return err
+			}
+			for _, f := range files {
+				err = writeFile(f.RelativePath, f.Data)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
 type kindGenConfig struct {
-	GoGenBasePath string
-	TSGenBasePath string
-	StorageType   string
-	CRDEncoding   string
-	CRDPath       string
+	GoGenBasePath      string
+	TSGenBasePath      string
+	StorageType        string
+	CRDEncoding        string
+	CRDPath            string
+	GroupKinds         bool
+	GenerateManifest   bool
+	PrefixPathWithType bool
 }
 
+//nolint:goconst
 func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
 	parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), modFS)
 	if err != nil {
@@ -145,14 +213,22 @@ func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (co
 
 	// Let's start by generating all back-end code
 	// resource-target back-end code
-	files, err := generateBackendResourcesThema(parser, filepath.Join(cfg.GoGenBasePath, targetResource), selectors)
+	resourcePath := cfg.GoGenBasePath
+	if cfg.PrefixPathWithType {
+		resourcePath = filepath.Join(resourcePath, targetResource)
+	}
+	files, err := generateBackendResourcesThema(parser, resourcePath, selectors)
 	if err != nil {
 		return nil, err
 	}
 	allFiles = append(allFiles, files...)
 
 	// models-target back-end code
-	files, err = generateBackendModelsThema(parser, filepath.Join(cfg.GoGenBasePath, targetModel+"s"), selectors)
+	modelPath := cfg.GoGenBasePath
+	if cfg.PrefixPathWithType {
+		modelPath = filepath.Join(resourcePath, targetModel+"s")
+	}
+	files, err = generateBackendModelsThema(parser, modelPath, selectors)
 	if err != nil {
 		return nil, err
 	}
@@ -166,15 +242,17 @@ func generateKindsThema(modFS fs.FS, cfg kindGenConfig, selectors ...string) (co
 	allFiles = append(allFiles, files...)
 
 	// Schema definition generation (CRD-only currently)
-	switch cfg.StorageType {
-	case "kubernetes":
-		files, err = generateCRDsThema(parser, cfg.CRDPath, cfg.CRDEncoding, selectors)
-		if err != nil {
-			return nil, err
+	if cfg.CRDEncoding != "none" {
+		switch cfg.StorageType {
+		case "kubernetes":
+			files, err = generateCRDsThema(parser, cfg.CRDPath, cfg.CRDEncoding, selectors)
+			if err != nil {
+				return nil, err
+			}
+			allFiles = append(allFiles, files...)
+		default:
+			return nil, fmt.Errorf("unknown storage type '%s'", cfg.StorageType)
 		}
-		allFiles = append(allFiles, files...)
-	default:
-		return nil, fmt.Errorf("unknown storage type '%s'", cfg.StorageType)
 	}
 	return allFiles, nil
 }
@@ -224,6 +302,7 @@ func generateFrontendModelsThema(parser *themagen.CustomKindParser, genPath stri
 	return files, nil
 }
 
+//nolint:goconst
 func generateCRDsThema(parser *themagen.CustomKindParser, genPath string, encoding string, selectors []string) (codejen.Files, error) {
 	var ms themagen.Generator
 	if encoding == "yaml" {
@@ -244,6 +323,7 @@ func generateCRDsThema(parser *themagen.CustomKindParser, genPath string, encodi
 	return files, nil
 }
 
+//nolint:funlen,goconst
 func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
 	parser, err := cuekind.NewParser()
 	if err != nil {
@@ -254,24 +334,32 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true), func(kind codegen.Kind) bool {
+	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource != nil
 	}, selectors...)
 	if err != nil {
 		return nil, err
 	}
+	relativePath := cfg.GoGenBasePath
+	if !cfg.GroupKinds && cfg.PrefixPathWithType {
+		relativePath = filepath.Join(relativePath, targetResource)
+	}
 	for i, f := range resourceFiles {
-		resourceFiles[i].RelativePath = filepath.Join(filepath.Join(cfg.GoGenBasePath, targetResource), f.RelativePath)
+		resourceFiles[i].RelativePath = filepath.Join(relativePath, f.RelativePath)
 	}
 	// Model
-	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true), func(kind codegen.Kind) bool {
+	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
 		return kind.Properties().APIResource == nil
 	}, selectors...)
 	if err != nil {
 		return nil, err
 	}
 	for i, f := range modelFiles {
-		modelFiles[i].RelativePath = filepath.Join(filepath.Join(cfg.GoGenBasePath, targetModel+"s"), f.RelativePath)
+		prefix := cfg.GoGenBasePath
+		if cfg.PrefixPathWithType {
+			prefix = filepath.Join(prefix, targetModel+"s")
+		}
+		modelFiles[i].RelativePath = filepath.Join(prefix, f.RelativePath)
 	}
 	// TypeScript
 	tsModelFiles, err := generator.FilteredGenerate(cuekind.TypeScriptModelsGenerator(true), func(kind codegen.Kind) bool {
@@ -293,18 +381,54 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		tsResourceFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
 	}
 	// CRD
-	encFunc := json.Marshal
-	if cfg.CRDEncoding == "yaml" {
-		encFunc = yaml.Marshal
+	var crdFiles codejen.Files
+	if cfg.CRDEncoding != "none" {
+		encFunc := json.Marshal
+		if cfg.CRDEncoding == "yaml" {
+			encFunc = yaml.Marshal
+		}
+		crdFiles, err = generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
+			return kind.Properties().APIResource != nil
+		}, selectors...)
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range crdFiles {
+			crdFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+		}
 	}
-	crdFiles, err := generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource != nil
-	}, selectors...)
-	if err != nil {
-		return nil, err
-	}
-	for i, f := range crdFiles {
-		crdFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+
+	// Manifest
+	var manifestFiles codejen.Files
+	var goManifestFiles codejen.Files
+	if cfg.GenerateManifest {
+		if cfg.CRDEncoding != "none" {
+			encFunc := func(v any) ([]byte, error) {
+				return json.MarshalIndent(v, "", "    ")
+			}
+			if cfg.CRDEncoding == "yaml" {
+				encFunc = yaml.Marshal
+			}
+			manifestFiles, err = generator.FilteredGenerate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""), func(kind codegen.Kind) bool {
+				return kind.Properties().APIResource != nil
+			}, selectors...)
+			if err != nil {
+				return nil, err
+			}
+			for i, f := range manifestFiles {
+				manifestFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
+			}
+		}
+
+		goManifestFiles, err = generator.FilteredGenerate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""), func(kind codegen.Kind) bool {
+			return kind.Properties().APIResource != nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range goManifestFiles {
+			goManifestFiles[i].RelativePath = filepath.Join(cfg.GoGenBasePath, f.RelativePath)
+		}
 	}
 
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
@@ -312,5 +436,30 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	allFiles = append(allFiles, tsModelFiles...)
 	allFiles = append(allFiles, tsResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
+	allFiles = append(allFiles, manifestFiles...)
+	allFiles = append(allFiles, goManifestFiles...)
 	return allFiles, nil
+}
+
+func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
+	// Get the repo from the go.mod file
+	repo, err := getGoModule(filepath.Join("", "go.mod"))
+	if err != nil {
+		return nil, err
+	}
+	parser, err := cuekind.NewParser()
+	if err != nil {
+		return nil, err
+	}
+	generator, err := codegen.NewGenerator[codegen.Kind](parser, modFS)
+	if err != nil {
+		return nil, err
+	}
+	relativePath := cfg.GoGenBasePath
+	if !cfg.GroupKinds {
+		relativePath = filepath.Join(relativePath, targetResource)
+	}
+	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, relativePath, true, cfg.GroupKinds), func(kind codegen.Kind) bool {
+		return kind.Properties().APIResource != nil
+	}, selectors...)
 }

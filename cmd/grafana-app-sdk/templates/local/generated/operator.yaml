@@ -141,7 +141,7 @@ webhooks:
         path: "/validate"
       caBundle: {{.WebhookProperties.Base64CA}}
     rules:{{range .CRDs}}
-    - operations: ["CREATE","UPDATE","DELETE"]
+    - operations: ["CREATE","UPDATE"]
       apiGroups: ["{{.Group}}"]
       apiVersions: {{range .Versions}}
         - {{.}}{{end}}

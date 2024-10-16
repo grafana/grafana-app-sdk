@@ -1,0 +1,54 @@
+package {{.PackageName}}
+
+import (
+    "context"
+    "fmt"
+
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/simple"
+
+	generated "{{.Repo}}/{{.CodegenPath}}"
+	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKindAll }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
+    {{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{$k:=.}}{{range .Versions}}{{ $.ToPackageName $k.MachineName}}{{ $.ToPackageName .}} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName $k.MachineName }}/{{ $.ToPackageName .}}"
+	{{end}}{{end}}{{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
+)
+
+func Provider(appCfg app.SpecificConfig) app.Provider {
+	return simple.NewAppProvider(generated.LocalManifest(), appCfg, New)
+}
+
+func New(cfg app.Config) (app.App, error) {
+    {{ $p := .WatcherPackage }}{{ range $key, $val := .GVToKindCurrent }}{{ range $val }}{{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
+    if err != nil {
+        return nil, fmt.Errorf("unable to create {{.Kind}}Watcher: %w", err)
+    }
+    {{ end }}{{ end }}
+
+	config := simple.AppConfig{
+		Name:           "{{.ProjectName}}",
+		KubeConfig:     cfg.KubeConfig,
+		InformerConfig: simple.AppInformerConfig{
+		    ErrorHandler: func(ctx context.Context, err error) {
+                // FIXME: add your own error handling here
+                logging.FromContext(ctx).With("error",err).Error("Informer processing error")
+            },
+		},
+		ManagedKinds: []simple.AppManagedKind{ {{ range $key, $val := .GVToKindAll }}{{ range $val }}
+		    {
+		        Kind: {{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}{{ $.ToPackageName $key.Version}}.Kind(){{end}}, {{ if eq $key.Version .Current }}
+		        Watcher: {{.MachineName}}Watcher, {{ end }}
+		    },{{ end }}{{ end }}
+		},
+	}
+
+    // Create the App
+	a, err := simple.NewApp(config)
+	if err != nil {
+	    return nil, err
+	}
+
+	// Validate the capabilities against the provided manifest to make sure there isn't a mismatch
+	err = a.ValidateManifest(cfg.ManifestData)
+	return a, err
+}

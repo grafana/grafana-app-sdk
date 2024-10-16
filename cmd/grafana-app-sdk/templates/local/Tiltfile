@@ -6,6 +6,11 @@ version_settings(constraint='>=0.22.2')
 def name(c):
   return c['metadata']['name']
 
+def namespace(c):
+  if 'namespace' in c['metadata']:
+    return c['metadata']['namespace']
+  return ''
+
 def decode(yaml):
   resources = decode_yaml_stream(yaml)
 
@@ -33,7 +38,7 @@ def get_label(o, lbl):
 
 def find_overlapping(o, yamls):
   for elem in yamls:
-    if name(o) == name(elem) and o['kind'] == elem['kind'] and o['metadata']['namespace'] == elem['metadata']['namespace']:
+    if name(o) == name(elem) and o['kind'] == elem['kind'] and namespace(o) == namespace(elem):
       return elem
   return None
 

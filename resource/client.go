@@ -45,6 +45,8 @@ type ListOptions struct {
 	ResourceVersion string
 	// LabelFilters are a set of label filter strings to use when listing
 	LabelFilters []string
+	// FieldSelectors are a set of field selector strings to use when listing
+	FieldSelectors []string
 	// Limit limits the number of returned results from the List call, when >0.
 	// The returned ListMetadata SHOULD include the remaining item count, and the page to use for the next call.
 	Limit int
@@ -98,6 +100,8 @@ type WatchOptions struct {
 	EventBufferSize int
 	// LabelFilters are a set of label filter strings applied to watched resources
 	LabelFilters []string
+	// FieldSelectors are a set of field selector strings applied to watched resources
+	FieldSelectors []string
 }
 
 // WatchResponse is an interface describing the response to a Client.Watch call

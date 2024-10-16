@@ -202,7 +202,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 		controller = tpl.controller
 	} else if w.DefaultValidatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, &resource.TypedList[*resource.TypedSpecObject[any]]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
 		schema.Codecs = map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()}
 		controller = w.DefaultValidatingController
 	}
@@ -279,7 +279,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 		controller = tpl.controller
 	} else if w.DefaultMutatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, &resource.TypedList[*resource.TypedSpecObject[any]]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
 		schema.Codecs = map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()}
 		controller = w.DefaultMutatingController
 	}
@@ -445,6 +445,7 @@ func gk(group, kind string) string {
 	return fmt.Sprintf("%s.%s", kind, group)
 }
 
+//nolint:gosec
 func addAdmissionError(resp *admission.AdmissionResponse, err error) {
 	if err == nil || resp == nil {
 		return

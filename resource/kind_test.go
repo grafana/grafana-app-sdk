@@ -9,7 +9,38 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
+
+func TestKind_GroupVersionKind(t *testing.T) {
+	// nil Schema
+	k := Kind{}
+	gvk := k.GroupVersionKind()
+	assert.Equal(t, schema.GroupVersionKind{}, gvk)
+	// Values
+	k.Schema = NewSimpleSchema("group", "version", &UntypedObject{}, &UntypedList{}, WithKind("kind"))
+	gvk = k.GroupVersionKind()
+	assert.Equal(t, schema.GroupVersionKind{
+		Group:   k.Schema.Group(),
+		Version: k.Schema.Version(),
+		Kind:    k.Schema.Kind(),
+	}, gvk)
+}
+
+func TestKind_GroupVersionResource(t *testing.T) {
+	// nil Schema
+	k := Kind{}
+	gvr := k.GroupVersionResource()
+	assert.Equal(t, schema.GroupVersionResource{}, gvr)
+	// Values
+	k.Schema = NewSimpleSchema("group", "version", &UntypedObject{}, &UntypedList{}, WithPlural("plural"))
+	gvr = k.GroupVersionResource()
+	assert.Equal(t, schema.GroupVersionResource{
+		Group:    k.Schema.Group(),
+		Version:  k.Schema.Version(),
+		Resource: k.Schema.Plural(),
+	}, gvr)
+}
 
 func TestJSONCodec_Read(t *testing.T) {
 	emptyJSONErr := json.NewDecoder(&bytes.Buffer{}).Decode(&struct{}{})

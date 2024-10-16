@@ -9,10 +9,23 @@ GOWORK		:= go.work
 GOWORKSUM 	:= go.work.sum
 VENDOR  	:= vendor
 COVOUT  	:= coverage.out
+GOVERSION   := $(shell awk '/^go / {print $$2}' go.mod)
+GOBINARY    := $(shell which go)
 
 BIN_DIR := target
 
-all: deps lint test build
+.PHONY: check-go-version
+check-go-version:
+	@if [ -z "$(GOBINARY)" ]; then \
+		echo "Error: No Go binary found. It's a no-go!"; \
+		exit 1; \
+	fi; \
+	if [ "$$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//')" != "$(GOVERSION)" ]; then \
+		echo "Error: Go version $(GOVERSION) is required, but version $$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//') is installed."; \
+		exit 1; \
+	fi
+
+all: check-go-version deps lint test build
 
 deps: $(GOSUM) $(GOWORKSUM)
 $(GOSUM): $(SOURCES) $(GOMOD)
@@ -21,7 +34,7 @@ $(GOSUM): $(SOURCES) $(GOMOD)
 $(GOWORKSUM): $(GOWORK) $(GOMOD)
 	go work sync
 
-LINTER_VERSION := 1.55.2
+LINTER_VERSION := 1.60.3
 LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint
@@ -46,7 +59,7 @@ clean:
 	@rm -rf $(VENDOR)
 
 .PHONY: build
-build:
+build: update-workspace
 	@go build -ldflags="-X 'main.version=dev-$(BRANCH)' -X 'main.source=$(HOST)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(shell date -u "+%FT%TZ")'" -o "$(BIN_DIR)/grafana-app-sdk" cmd/grafana-app-sdk/*.go
 
 .PHONY: install
@@ -56,3 +69,12 @@ ifndef GOPATH
 	exit 1
 endif
 	@cp "$(BIN_DIR)/grafana-app-sdk" "${GOPATH}/bin/grafana-app-sdk"
+
+.PHONY: update-workspace
+update-workspace:
+	@echo "updating workspace"
+	go mod download
+
+.PHONY: regenerate-codegen-test-files
+regenerate-codegen-test-files:
+	sh ./scripts/regenerate_golden_test_files.sh

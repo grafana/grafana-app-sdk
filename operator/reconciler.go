@@ -123,6 +123,9 @@ func NewOpinionatedReconciler(client PatchClient, finalizer string) (*Opinionate
 	if finalizer == "" {
 		return nil, fmt.Errorf("finalizer cannot be empty")
 	}
+	if len(finalizer) > 63 {
+		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
+	}
 	return &OpinionatedReconciler{
 		finalizer: finalizer,
 		client:    client,

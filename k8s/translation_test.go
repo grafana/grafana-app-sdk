@@ -429,3 +429,42 @@ func (tro *TestResourceObject) Copy() resource.Object {
 func (tro *TestResourceObject) DeepCopyObject() runtime.Object {
 	return tro.Copy()
 }
+
+type TestResourceObjectList struct {
+	metav1.TypeMeta
+	metav1.ListMeta
+	Items []TestResourceObject
+}
+
+func (o *TestResourceObjectList) DeepCopyObject() runtime.Object {
+	return o.Copy()
+}
+
+func (o *TestResourceObjectList) Copy() resource.ListObject {
+	cpy := &TestResourceObjectList{
+		TypeMeta: o.TypeMeta,
+		Items:    make([]TestResourceObject, len(o.Items)),
+	}
+	o.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	for i := 0; i < len(o.Items); i++ {
+		if item, ok := o.Items[i].Copy().(*TestResourceObject); ok {
+			cpy.Items[i] = *item
+		}
+	}
+	return cpy
+}
+
+func (o *TestResourceObjectList) GetItems() []resource.Object {
+	items := make([]resource.Object, len(o.Items))
+	for i := 0; i < len(o.Items); i++ {
+		items[i] = &o.Items[i]
+	}
+	return items
+}
+
+func (o *TestResourceObjectList) SetItems(items []resource.Object) {
+	o.Items = make([]TestResourceObject, len(items))
+	for i := 0; i < len(items); i++ {
+		o.Items[i] = *items[i].(*TestResourceObject)
+	}
+}

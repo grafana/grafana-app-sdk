@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
@@ -33,7 +34,7 @@ func main() {
 	kubeConfig.APIPath = "/apis" // Don't know why this isn't set correctly by default, but it isn't
 
 	// Create a schema to use
-	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, resource.WithKind("BasicCustomResource"))
+	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, &resource.TypedList[*resource.TypedSpecObject[BasicModel]]{}, resource.WithKind("BasicCustomResource"))
 	kind := resource.Kind{
 		Schema: schema,
 		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
@@ -88,7 +89,7 @@ func main() {
 		},
 	}
 
-	err = simpleOperator.WatchKind(kind, watcher, simple.ListWatchOptions{
+	err = simpleOperator.WatchKind(kind, watcher, operator.ListWatchOptions{
 		Namespace: "default",
 	})
 	if err != nil {

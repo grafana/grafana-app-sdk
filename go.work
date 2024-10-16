@@ -1,9 +1,6 @@
-go 1.22.2
+go 1.23.0
 
 use (
 	.
 	./plugin
 )
-
-// Required for compatibility with grafana/grafana-plugin-sdk-go & grafana/thema
-replace github.com/getkin/kin-openapi => github.com/getkin/kin-openapi v0.120.0
