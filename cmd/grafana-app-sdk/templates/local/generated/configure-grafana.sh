@@ -15,10 +15,25 @@ fi
 HOST=${KUBEAPI[0]}
 PORT=${KUBEAPI[1]}
 
+# Create a service account token to use in our requests (anonymous auth isn't allowed for apiservices)
+sa=$(curl "http://${GRAFANA_HOST}/api/serviceaccounts/" \
+  --request POST \
+  --header "Content-Type: application/json" \
+  --header "Accept: application/json" \
+  --data '{"name":"Aggregation User","role":"Admin"}' | jq .id)
+echo "SA: ${sa}"
+token=$(curl "http://${GRAFANA_HOST}/api/serviceaccounts/${sa}/tokens" \
+  --request POST \
+  --header "Content-Type: application/json" \
+  --header "Accept: application/json" \
+  --data '{"name":"sa-1-aggregation-user-e2a6a474-bdcd-4bac-8449-0deb7274484a"}'| jq -r '.key')
+echo "TOKEN: ${token}"
+
 {{ range .CRDs }}{{$crd:=.}}{{range .Versions}}curl \
   "http://${GRAFANA_HOST}/apis/apiregistration.k8s.io/v1/apiservices?fieldManager=kubectl-create&fieldValidation=Strict" \
   --request POST \
   --header "Content-Type: application/json" \
+  --header "Authorization: Bearer ${token}" \
   --data @- << EOF
 {
   "apiVersion": "apiregistration.k8s.io/v1",
@@ -46,6 +61,7 @@ curl \
   "http://${GRAFANA_HOST}/apis/service.grafana.app/v0alpha1/namespaces/default/externalnames?fieldManager=kubectl-create&fieldValidation=Strict" \
   --request POST \
   --header "Content-Type: application/json" \
+  --header "Authorization: Bearer ${token}" \
   --data @- << EOF
 {
   "apiVersion": "service.grafana.app/v0alpha1",
