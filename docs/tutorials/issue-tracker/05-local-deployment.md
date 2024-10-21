@@ -174,7 +174,7 @@ Failed to start grafana. error: app provisioning error: plugin not installed: "i
 app provisioning error: plugin not installed: "issue-tracker-project-app"
 ```
 
-So this is just something we didn't do before we started our environment. While we built the plugin, we want to also deploy it to our local cluster. The local cluster can only read from `local/mounted-files`, so we need it there. Simple enough fix, we run
+So this is just something we didn't do before we started our environment. While we built the plugin, we want to also deploy it to our local cluster. The local cluster can only read from `local/mounted-files`, so we need it there. Simple enough fix: in another terminal session, we run
 ```shell
 $ make local/deploy_plugin 
 tilt disable grafana
@@ -224,7 +224,6 @@ Since our plugin is automatically installed, we can go to [grafana.k3d.localhost
 Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
 ```shell
 $ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
-```
 {
     "kind": "IssueList",
     "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
