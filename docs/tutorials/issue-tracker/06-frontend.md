@@ -101,6 +101,9 @@ $ make local/deploy_plugin
 And just like that, we can refresh or go to [http://grafana.k3d.localhost:9999/a/issue-tracker-project-app], and see our brand-new plugin UI. 
 If we create a new issue, we can see that it shows up in the list, or via a `kubectl get issues`.
 
+> [!NOTE]
+> If you do not see the changes in the plugin UI, try clearing your browser cache.
+
 Now all that's left is to think a bit about our operator.
 
 ### Prev: [Local Deployment](05-local-deployment.md)

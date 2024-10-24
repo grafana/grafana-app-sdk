@@ -2,11 +2,11 @@
 
 Since this is a fresh project, we can take advantage of the CLI's tooling to set up boilerplate code for us which we can then extend on. Note that this is not strictly necessary for writing an application (whereas running the CUE codegen is something you'll likely want for every project), but it makes initial project bootstrapping simpler, and will help us move along here faster. If you decide in future projects you want to handle your routing, storage, or front-end framework differently, you can eschew some or all of the things laid out in this section.
 
-## The `project add` Command
+## The `project component add` Command
 
-Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
+Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project component add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
 ```shell
-$ grafana-app-sdk project add
+$ grafana-app-sdk project component add
 Usage: grafana-app-sdk project component add [options] <components>
 	where <components> are one or more of:
 		backend

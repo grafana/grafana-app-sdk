@@ -52,7 +52,7 @@ type KindValidator interface {
 ```
 Basically, it consumes an admission request and produces a validation error if validation fails, or returns nil on success. 
 The `simple` package has a ready-to-go implementation for this: `simple.Validator`, which calls `ValidateFunc` when `Validate` is called. 
-That's what we're using here, but you can always define your own type to implement `KindValidator`, too. 
+We use the `simple.Validator` struct here to validate, but you can use any type that implements `simple.KindValidator`. 
 
 Just like with `runner.WatchKind`, `runner.ValidateKind` takes the kind, and then the object to apply to it. In this case, to validate a kind, we need a `ValidatingAdmissionController`. This is a simple one-method interface, which we could define a type for ourselves, but we can also use `resource.SimpleValidatingAdmissionController` as a default implementation. In `SimpleValidatingAdmissionController`, `ValidateFunc` is called by the `Validate` function, so we just need to define our validation function in `ValidateFunc`.
 
