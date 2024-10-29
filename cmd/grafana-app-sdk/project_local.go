@@ -357,7 +357,7 @@ type crdYAML struct {
 
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
-//nolint:funlen,errcheck,revive
+//nolint:funlen,errcheck,revive,gocyclo
 func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, yamlGenProperties, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
@@ -490,6 +490,9 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		return nil, props, err
 	}
 	err = tmplAggregatorAccess.Execute(&output, props)
+	if err != nil {
+		return nil, props, err
+	}
 	output.Write([]byte("\n---\n"))
 
 	// Datasources
