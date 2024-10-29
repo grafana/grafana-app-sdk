@@ -626,6 +626,8 @@ func parsePluginJSONValue(v any) (string, error) {
 		return strconv.FormatFloat(float64(cast), 'E', -1, 32), nil
 	case float64:
 		return strconv.FormatFloat(cast, 'E', -1, 64), nil
+	case bool:
+		return strconv.FormatBool(cast), nil
 	default:
 		return "", fmt.Errorf("unknown type")
 	}
