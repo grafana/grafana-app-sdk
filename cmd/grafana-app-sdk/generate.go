@@ -299,7 +299,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 
 func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
 	// Get the repo from the go.mod file
-	repo, err := getGoModule(filepath.Join("", "go.mod"))
+	repo, err := getGoModule(cfg.GoGenBasePath)
 	if err != nil {
 		return nil, err
 	}
