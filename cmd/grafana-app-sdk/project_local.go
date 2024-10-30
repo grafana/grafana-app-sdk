@@ -22,16 +22,13 @@ import (
 	"text/template"
 	"time"
 
-	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/codejen"
-	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
-	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
 //go:embed templates/local/* templates/local/scripts/* templates/local/generated/datasources/*
@@ -208,12 +205,6 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 				return nil, err
 			}
 			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"))
-		case FormatThema:
-			parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
-			if err != nil {
-				return nil, err
-			}
-			return generateCRDsThema(parser, "", "yaml", []string{})
 		default:
 			return nil, fmt.Errorf("unknown kind format '%s'", format)
 		}

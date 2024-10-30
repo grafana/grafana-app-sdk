@@ -21,10 +21,6 @@ import (
 // Because k8s.io/gengo doesn't allow you to use in-memory files (as the Overlay in the config is not accessible),
 // this jenny must be run _after_ the go type has been written to disk.
 type OpenAPI struct {
-	// GenerateOnlyCurrent should be set to true if you only want to generate code for the kind.Properties().Current version.
-	// This will affect the package and path(s) of the generated file(s).
-	GenerateOnlyCurrent bool
-
 	GoModName string
 	GoGenPath string
 
@@ -40,9 +36,6 @@ func (*OpenAPI) JennyName() string {
 
 func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 	fs := codejen.NewFS()
-	if o.GenerateOnlyCurrent {
-		return nil, nil
-	}
 
 	// Group kinds by package name
 	if o.GroupByKind {

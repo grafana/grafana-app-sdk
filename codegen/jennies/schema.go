@@ -17,9 +17,6 @@ import (
 )
 
 type SchemaGenerator struct {
-	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
-	OnlyUseCurrentVersion bool
-
 	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
 	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
 	// When GroupByKind is false, the Kind() and Schema() functions are prefixed with the kind name,
@@ -47,16 +44,16 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	}
 
 	files := make(codejen.Files, 0)
-	if s.OnlyUseCurrentVersion {
-		sf, err := s.getSelectableFields(kind.Version(meta.Current))
+	for _, ver := range kind.Versions() {
+		sf, err := s.getSelectableFields(&ver)
 		if err != nil {
 			return nil, err
 		}
 		b := bytes.Buffer{}
 		err = templates.WriteSchema(templates.SchemaMetadata{
-			Package:          meta.MachineName,
+			Package:          ToPackageName(ver.Version),
 			Group:            meta.APIResource.Group,
-			Version:          meta.Current,
+			Version:          ver.Version,
 			Kind:             meta.Kind,
 			Plural:           meta.PluralMachineName,
 			Scope:            meta.APIResource.Scope,
@@ -72,39 +69,9 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: fmt.Sprintf("%s/%s_schema_gen.go", meta.MachineName, meta.MachineName),
+			RelativePath: filepath.Join(GetGeneratedPath(s.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_schema_gen.go", meta.MachineName)),
 			From:         []codejen.NamedJenny{s},
 		})
-	} else {
-		for _, ver := range kind.Versions() {
-			sf, err := s.getSelectableFields(&ver)
-			if err != nil {
-				return nil, err
-			}
-			b := bytes.Buffer{}
-			err = templates.WriteSchema(templates.SchemaMetadata{
-				Package:          ToPackageName(ver.Version),
-				Group:            meta.APIResource.Group,
-				Version:          ver.Version,
-				Kind:             meta.Kind,
-				Plural:           meta.PluralMachineName,
-				Scope:            meta.APIResource.Scope,
-				SelectableFields: sf,
-				FuncPrefix:       prefix,
-			}, &b)
-			if err != nil {
-				return nil, err
-			}
-			formatted, err := format.Source(b.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				Data:         formatted,
-				RelativePath: filepath.Join(GetGeneratedPath(s.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_schema_gen.go", meta.MachineName)),
-				From:         []codejen.NamedJenny{s},
-			})
-		}
 	}
 
 	return files, nil
