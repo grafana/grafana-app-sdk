@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
-	"regexp"
+	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -106,24 +108,29 @@ func promptYN(prompt string, defaultAnswer bool) bool {
 	}
 }
 
-// getGoModule returns the go module name by reading the go.mod file supplied
+type gomod struct {
+	Module struct {
+		Path string `json:"Path"`
+	} `json:"Module"`
+}
+
+// getGoModule returns the go module name by running `go mod edit --json` in the directory of the go.mod file
 // Linter doesn't like "Potential file inclusion via variable", which is actually desired here
 //
 //nolint:errcheck,gosec
 func getGoModule(goModPath string) (string, error) {
-	file, err := os.Open(goModPath)
+	dir := filepath.Dir(goModPath)
+
+	cmd := exec.Command("go", "mod", "edit", "-json")
+	cmd.Dir = dir
+	out, err := cmd.Output()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("unable to run go mod edit --json: %w", err)
 	}
-	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	r := regexp.MustCompile(`module (.+)`)
-
-	for scanner.Scan() {
-		if matches := r.FindStringSubmatch(scanner.Text()); len(matches) > 1 {
-			return matches[1], nil
-		}
+	var mod gomod
+	if err := json.Unmarshal(out, &mod); err == nil {
+		return mod.Module.Path, nil
 	}
 
 	return "", fmt.Errorf("unable to locate module in go.mod file")
