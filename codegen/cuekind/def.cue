@@ -40,29 +40,6 @@ Schema: {
 	}
 	spec: _
 	status: {
-		#OperatorState: {
-			// lastEvaluation is the ResourceVersion last evaluated
-			lastEvaluation: string
-			// state describes the state of the lastEvaluation.
-			// It is limited to three possible states for machine evaluation.
-			state: "success" | "in_progress" | "failed"
-			// descriptiveState is an optional more descriptive state field which has no requirements on format
-			descriptiveState?: string
-			// details contains any extra information that is operator-specific
-			details?: {
-				[string]: _
-			}
-		}
-		// operatorStates is a map of operator ID to operator state evaluations.
-		// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
-		operatorStates?: {
-			[string]: #OperatorState
-		}
-		// additionalFields is reserved for future use
-		additionalFields?: {
-			[string]: _
-		}
-	} & {
 		[string]: _
 	}
 
@@ -191,9 +168,42 @@ Kind: S={
 
 Manifest: S={
 	appName: string
-	group: string
-	kinds: [...Kind]
+	group: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	kinds: [...{
+		group: S.group
+	} & Kind]
 	permissions: {
 		accessKinds: [...#AccessKind]
 	}
+
+	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
+	// if present, this value is used for the full group instead.
+	// groupOverride must have at least two parts (i.e. 'foo.bar'), but can be longer.
+	// The length of fullGroup + kind name (for each kind) cannot exceed 62 characters
+	groupOverride?: =~"^([a-z][a-z0-9-.]{0,48}[a-z0-9])\\.([a-z][a-z0-9-]{0,48}[a-z0-9])$"
+
+	// _computedGroups is a list of groups computed from information in the plugin trait.
+	// The first element is always the "most correct" one to use.
+	// This field could be inlined into `group`, but is separate for clarity.
+	_computedGroups: [
+		if S.apiResource.groupOverride != _|_ {
+			strings.ToLower(S.apiResource.groupOverride),
+		},
+		strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.app"
+	]
+
+	// fullGroup is used as the CRD group name in the GVK.
+	// It is computed from information in the plugin trait, using plugin.id unless groupName is specified.
+	// The length of the computed group + the length of the name (plus 1) cannot exceed 63 characters for a valid CRD.
+	// This length restriction is checked via _computedGroupKind
+	fullGroup: _computedGroups[0] & =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
+
+	_computedGroupKinds: [
+		for x in S.kinds {
+			let computed = S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
+			if computed =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$" {
+				computed
+			}
+		}
+	]
 }
