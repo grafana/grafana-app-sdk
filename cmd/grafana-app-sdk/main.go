@@ -7,8 +7,7 @@ import (
 )
 
 const (
-	FormatCUE   = "cue"
-	FormatThema = "thema"
+	FormatCUE = "cue"
 )
 
 var rootCmd = &cobra.Command{
@@ -17,13 +16,6 @@ var rootCmd = &cobra.Command{
 	Long:  "A tool for working with grafana apps, used for generating code from CUE kinds, creating project boilerplate, and running local deployments",
 }
 
-const themaWarning = `
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!! WARNING: --format=thema is deprecated and will be removed in a future release.          !!!
-!!! Please use the (default) CUE format instead. For more details, see                      !!!
-!!! https://github.com/grafana/grafana-app-sdk/blob/main/docs/custom-kinds/writing-kinds.md !!!
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`
-
 func main() {
 	rootCmd.PersistentFlags().StringP("cuepath", "c", "kinds", "Path to directory with cue.mod")
 	rootCmd.PersistentFlags().StringSliceP("selectors", "s", []string{}, "selectors")
@@ -31,12 +23,10 @@ func main() {
 
 	setupVersionCmd()
 	setupGenerateCmd()
-	setupValidateCmd()
 	setupProjectCmd()
 
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(generateCmd)
-	rootCmd.AddCommand(validateCmd)
 	rootCmd.AddCommand(projectCmd)
 
 	err := rootCmd.Execute()
