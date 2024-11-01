@@ -36,4 +36,4 @@ datasourceConfigs:
 generateGrafanaDeployment: true
 
 # which grafana image to use
-grafanaImage: grafana/grafana-enterprise:11.2.2
+grafanaImage: grafana/grafana-enterprise:main
