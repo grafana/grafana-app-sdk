@@ -22,16 +22,13 @@ import (
 	"text/template"
 	"time"
 
-	"cuelang.org/go/cue/cuecontext"
 	"github.com/grafana/codejen"
-	"github.com/grafana/thema"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
-	themagen "github.com/grafana/grafana-app-sdk/codegen/thema"
 )
 
 //go:embed templates/local/* templates/local/scripts/* templates/local/generated/datasources/*
@@ -208,22 +205,24 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 				return nil, err
 			}
 			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"))
-		case FormatThema:
-			parser, err := themagen.NewCustomKindParser(thema.NewRuntime(cuecontext.New()), os.DirFS(cuePath))
-			if err != nil {
-				return nil, err
-			}
-			return generateCRDsThema(parser, "", "yaml", []string{})
 		default:
 			return nil, fmt.Errorf("unknown kind format '%s'", format)
 		}
 	}
 
-	k8sYAML, err := generateKubernetesYAML(parseFunc, pluginID, *config)
+	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, *config)
 	if err != nil {
 		return err
 	}
 	err = writeFile(filepath.Join(localGenPath, "dev-bundle.yaml"), k8sYAML)
+	if err != nil {
+		return err
+	}
+	aggregateScript, err := generateAggregationScript(*config, genProps)
+	if err != nil {
+		return err
+	}
+	err = writeExecutableFile(filepath.Join(localGenPath, "aggregate-apiserver.sh"), aggregateScript)
 	if err != nil {
 		return err
 	}
@@ -292,6 +291,11 @@ func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error
 	return buf.Bytes(), err
 }
 
+type scriptGenProperties struct {
+	Port int
+	CRDs []yamlGenPropsCRD
+}
+
 type yamlGenProperties struct {
 	PluginID                  string
 	PluginIDKube              string
@@ -344,8 +348,8 @@ type crdYAML struct {
 
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
-//nolint:funlen,errcheck,revive
-func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, error) {
+//nolint:funlen,errcheck,revive,gocyclo
+func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, yamlGenProperties, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
 		PluginID:       pluginID,
@@ -393,7 +397,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		// Generate cert bundle
 		bundle, err := generateCerts(fmt.Sprintf("%s-operator.default.svc", props.PluginID))
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
 		props.WebhookProperties.Base64Cert = base64.StdEncoding.EncodeToString(bundle.cert)
 		props.WebhookProperties.Base64Key = base64.StdEncoding.EncodeToString(bundle.key)
@@ -403,7 +407,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 	// Generate CRD YAML files, add the CRD metadata to the props
 	crdFiles, err := crdGenFunc()
 	if err != nil {
-		return nil, err
+		return nil, props, err
 	}
 	for _, f := range crdFiles {
 		// If converting webhooks are enabled, upate the yaml
@@ -411,11 +415,11 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		if props.WebhookProperties.Converting != "" {
 			rawCRD := make(map[string]any)
 			if err := yaml.Unmarshal(f.Data, &rawCRD); err != nil {
-				return nil, err
+				return nil, props, err
 			}
 			spec, ok := rawCRD["spec"].(map[string]any)
 			if !ok {
-				return nil, fmt.Errorf("could not parse CRD")
+				return nil, props, fmt.Errorf("could not parse CRD")
 			}
 			spec["conversion"] = map[string]any{
 				"strategy": "Webhook",
@@ -434,7 +438,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			rawCRD["spec"] = spec
 			f.Data, err = yaml.Marshal(rawCRD)
 			if err != nil {
-				return nil, fmt.Errorf("unable to re-marshal CRD YAML after added conversion strategy: %w", err)
+				return nil, props, fmt.Errorf("unable to re-marshal CRD YAML after added conversion strategy: %w", err)
 			}
 		}
 
@@ -442,7 +446,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		yml := crdYAML{}
 		err = yaml.Unmarshal(f.Data, &yml)
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
 		versions := make([]string, 0)
 		for _, v := range yml.Spec.Versions {
@@ -461,22 +465,33 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 	// RBAC for CRDs
 	tmplRoles, err := template.ParseFS(localEnvFiles, "templates/local/generated/crd_roles.yaml")
 	if err != nil {
-		return nil, err
+		return nil, props, err
 	}
 	for _, c := range props.CRDs {
 		err = tmplRoles.Execute(&output, c)
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
 		output.Write([]byte("\n---\n"))
 	}
+
+	// RBAC for aggregator
+	tmplAggregatorAccess, err := template.ParseFS(localEnvFiles, "templates/local/generated/aggregator-access.yaml")
+	if err != nil {
+		return nil, props, err
+	}
+	err = tmplAggregatorAccess.Execute(&output, props)
+	if err != nil {
+		return nil, props, err
+	}
+	output.Write([]byte("\n---\n"))
 
 	// Datasources
 	addedDeps := make(map[string]struct{})
 	for i, ds := range config.Datasources {
 		err := localGenerateDatasourceYAML(ds, i == 0, &props, addedDeps, &output)
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
 		output.WriteString("\n---\n")
 	}
@@ -492,14 +507,30 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		output.WriteString("---\n")
 		tmplOperator, err := template.ParseFS(localEnvFiles, "templates/local/generated/operator.yaml")
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
 		err = tmplOperator.Execute(&output, props)
 		if err != nil {
-			return nil, err
+			return nil, props, err
 		}
 	}
-	return output.Bytes(), err
+	return output.Bytes(), props, err
+}
+
+func generateAggregationScript(config localEnvConfig, genProps yamlGenProperties) ([]byte, error) {
+	tmpl, err := template.ParseFS(localEnvFiles, "templates/local/generated/configure-grafana.sh")
+	if err != nil {
+		return nil, err
+	}
+	output := bytes.Buffer{}
+	err = tmpl.Execute(&output, scriptGenProperties{
+		Port: config.Port,
+		CRDs: genProps.CRDs,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return output.Bytes(), nil
 }
 
 //nolint:revive
@@ -589,6 +620,8 @@ func parsePluginJSONValue(v any) (string, error) {
 		return strconv.FormatFloat(float64(cast), 'E', -1, 32), nil
 	case float64:
 		return strconv.FormatFloat(cast, 'E', -1, 64), nil
+	case bool:
+		return strconv.FormatBool(cast), nil
 	default:
 		return "", fmt.Errorf("unknown type")
 	}

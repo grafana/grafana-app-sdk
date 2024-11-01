@@ -48,7 +48,8 @@ metadata:
   labels:
     name: grafana
 data:
-  grafana.ini: | 
+  grafana.ini: |
+    app_mode = development
     [analytics]
     reporting_enabled = false
     [tracing.opentelemetry.otlp]
@@ -70,6 +71,11 @@ data:
     enabled = true
     [users]
     default_theme = dark
+    [feature_toggles]
+    grafanaAPIServerEnsureKubectlAccess = true
+    ; disable the experimental APIs flag to disable bundling of the example service locally
+    grafanaAPIServerWithExperimentalAPIs = false
+    kubernetesAggregator = true
 ---
 apiVersion: v1
 kind: Service

@@ -48,9 +48,6 @@ var (
 )
 
 type ResourceObjectGenerator struct {
-	// This flag exists for compatibility with thema codegen, which only generates code for the current/latest version of the kind
-	OnlyUseCurrentVersion bool
-
 	// SubresourceTypesArePrefixed should be set to true if the subresource go types (such as spec or status)
 	// are prefixed with the exported Kind name. Generally, if you generated go types with Depth: 1 and PrefixWithKindName: true,
 	// then you should set this value to true as well.
@@ -69,34 +66,18 @@ func (*ResourceObjectGenerator) JennyName() string {
 
 func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	if r.OnlyUseCurrentVersion {
-		ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
-		}
-		b, err := r.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName))
+	allVersions := kind.Versions()
+	for i := 0; i < len(allVersions); i++ {
+		ver := allVersions[i]
+		b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
 		if err != nil {
 			return nil, err
 		}
 		files = append(files, codejen.File{
-			RelativePath: fmt.Sprintf("%s/%s_object_gen.go", kind.Properties().MachineName, kind.Properties().MachineName),
+			RelativePath: filepath.Join(GetGeneratedPath(r.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.Properties().MachineName))),
 			Data:         b,
 			From:         []codejen.NamedJenny{r},
 		})
-	} else {
-		allVersions := kind.Versions()
-		for i := 0; i < len(allVersions); i++ {
-			ver := allVersions[i]
-			b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				RelativePath: filepath.Join(GetGeneratedPath(r.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.Properties().MachineName))),
-				Data:         b,
-				From:         []codejen.NamedJenny{r},
-			})
-		}
 	}
 	return files, nil
 }

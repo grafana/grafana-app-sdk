@@ -20,42 +20,33 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // ResourceGenerator returns a collection of jennies which generate backend resource code from kinds.
 // The `versioned` parameter governs whether to generate all versions where codegen.backend == true,
 // or just generate code for the current version.
-// If `versioned` is true, the paths to the generated files will include the version, and
-// the package name will be the version, rather than the kind.
 // If `groupKinds` is true, kinds within the same group will exist in the same package.
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
-func ResourceGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
-			GenerateOnlyCurrent:  !versioned,
 			Depth:                1,
 			AddKubernetesCodegen: true,
 			GroupByKind:          !groupKinds,
 		},
 		&jennies.ResourceObjectGenerator{
-			OnlyUseCurrentVersion:       !versioned,
 			SubresourceTypesArePrefixed: groupKinds,
 			GroupByKind:                 !groupKinds,
 		},
 		&jennies.SchemaGenerator{
-			OnlyUseCurrentVersion: !versioned,
-			GroupByKind:           !groupKinds,
+			GroupByKind: !groupKinds,
 		},
 		&jennies.CodecGenerator{
-			OnlyUseCurrentVersion: !versioned,
-			GroupByKind:           !groupKinds,
+			GroupByKind: !groupKinds,
 		},
 	)
 	return g
 }
 
 // ModelsGenerator returns a Generator which will produce Go and CUE files for API contract models.
-// The `versioned` parameter governs whether to generate all versions where codegen.backend == true,
-// or just generate code for the current version.
-// If `versioned` is true, the paths to the generated files will include the version, and
-// the package name will be the version, rather than the kind.
+// Deprecated: model generation will be removed in a future release, in favor of only API resources
 func ModelsGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
@@ -68,12 +59,12 @@ func ModelsGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen
 }
 
 // BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
 
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
-		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, versioned, !groupKinds),
+		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, !groupKinds),
 		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
@@ -87,15 +78,13 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, versioned bool
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
 		jennies.RouterCodeGenerator(projectRepo),
-		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, versioned, !groupKinds),
+		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, !groupKinds),
 	)
 	return g
 }
 
 // TypeScriptModelsGenerator returns a Generator which generates TypeScript model code.
-// The `versioned` parameter governs whether to generate all versions where codegen.frontend == true,
-// or just generate code for the current version.
-// If `versioned` is true, the paths to the generated files will include the version.
+// Deprecated: model generation will be removed in a future release, in favor of only API resources
 func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(&jennies.TypeScriptTypes{
@@ -105,27 +94,21 @@ func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] 
 }
 
 // TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
-// The `versioned` parameter governs whether to generate all versions where codegen.frontend == true,
-// or just generate code for the current version.
-// If `versioned` is true, the paths to the generated files will include the version.
-func TypeScriptResourceGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
+func TypeScriptResourceGenerator() *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(&jennies.TypeScriptTypes{
-		GenerateOnlyCurrent: !versioned,
-		Depth:               1,
-	}, &jennies.TypeScriptResourceTypes{
-		GenerateOnlyCurrent: !versioned,
-	})
+		Depth: 1,
+	}, &jennies.TypeScriptResourceTypes{})
 	return g
 }
 
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
-func OperatorGenerator(projectRepo, codegenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(
 		&jennies.OperatorKubeConfigJenny{},
-		jennies.OperatorMainJenny(projectRepo, codegenPath, versioned, !groupKinds),
+		jennies.OperatorMainJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.OperatorConfigJenny{},
 	)
 	return g
@@ -138,7 +121,7 @@ func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.Jen
 	}
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(
-		jennies.WatcherJenny(projectRepo, codegenPath, true, !groupKinds),
+		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.AppGenerator{
 			GroupByKind: !groupKinds,
 			ProjectRepo: projectRepo,
@@ -149,13 +132,12 @@ func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.Jen
 	return g
 }
 
-func PostResourceGenerationGenerator(projectRepo, goGenPath string, versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(&jennies.OpenAPI{
-		GenerateOnlyCurrent: !versioned,
-		GoModName:           projectRepo,
-		GoGenPath:           goGenPath,
-		GroupByKind:         !groupKinds,
+		GoModName:   projectRepo,
+		GoGenPath:   goGenPath,
+		GroupByKind: !groupKinds,
 	})
 	return g
 }

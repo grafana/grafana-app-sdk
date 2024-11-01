@@ -12,20 +12,18 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
-func WatcherJenny(projectRepo, codegenPath string, generatedKindsAreVersioned bool, groupByKind bool) codejen.OneToOne[codegen.Kind] {
+func WatcherJenny(projectRepo, codegenPath string, groupByKind bool) codejen.OneToOne[codegen.Kind] {
 	return &watcherJenny{
-		projectRepo:                projectRepo,
-		codegenPath:                codegenPath,
-		generatedKindsAreVersioned: generatedKindsAreVersioned,
-		groupByKind:                groupByKind,
+		projectRepo: projectRepo,
+		codegenPath: codegenPath,
+		groupByKind: groupByKind,
 	}
 }
 
 type watcherJenny struct {
-	projectRepo                string
-	codegenPath                string
-	generatedKindsAreVersioned bool
-	groupByKind                bool
+	projectRepo string
+	codegenPath string
+	groupByKind bool
 }
 
 func (*watcherJenny) JennyName() string {
@@ -38,9 +36,6 @@ func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
 	}
 
 	ver := kind.Properties().Current
-	if !w.generatedKindsAreVersioned {
-		ver = ""
-	}
 	props := kind.Properties()
 	b := bytes.Buffer{}
 	err := templates.WriteWatcher(templates.WatcherMetadata{
@@ -103,26 +98,24 @@ func (o *OperatorConfigJenny) Generate(_ ...codegen.Kind) (*codejen.File, error)
 	return codejen.NewFile("cmd/operator/config.go", formatted, o), nil
 }
 
-func OperatorMainJenny(projectRepo, codegenPath string, generatedKindsAreVersioned bool, groupByKind bool) codejen.ManyToOne[codegen.Kind] {
+func OperatorMainJenny(projectRepo, codegenPath string, groupByKind bool) codejen.ManyToOne[codegen.Kind] {
 	parts := strings.Split(projectRepo, "/")
 	if len(parts) == 0 {
 		parts = []string{""}
 	}
 	return &operatorMainJenny{
-		projectRepo:                projectRepo,
-		projectName:                parts[len(parts)-1],
-		codegenPath:                codegenPath,
-		generatedKindsAreVersioned: generatedKindsAreVersioned,
-		groupByKind:                groupByKind,
+		projectRepo: projectRepo,
+		projectName: parts[len(parts)-1],
+		codegenPath: codegenPath,
+		groupByKind: groupByKind,
 	}
 }
 
 type operatorMainJenny struct {
-	projectRepo                string
-	projectName                string
-	codegenPath                string
-	generatedKindsAreVersioned bool
-	groupByKind                bool
+	projectRepo string
+	projectName string
+	codegenPath string
+	groupByKind bool
 }
 
 func (*operatorMainJenny) JennyName() string {
@@ -131,14 +124,13 @@ func (*operatorMainJenny) JennyName() string {
 
 func (o *operatorMainJenny) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.OperatorMainMetadata{
-		Repo:                  o.projectRepo,
-		ProjectName:           o.projectName,
-		CodegenPath:           o.codegenPath,
-		PackageName:           "main",
-		WatcherPackage:        "watchers",
-		Resources:             make([]codegen.KindProperties, 0),
-		ResourcesAreVersioned: o.generatedKindsAreVersioned,
-		KindsAreGrouped:       !o.groupByKind,
+		Repo:            o.projectRepo,
+		ProjectName:     o.projectName,
+		CodegenPath:     o.codegenPath,
+		PackageName:     "main",
+		WatcherPackage:  "watchers",
+		Resources:       make([]codegen.KindProperties, 0),
+		KindsAreGrouped: !o.groupByKind,
 	}
 
 	for _, kind := range kinds {

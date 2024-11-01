@@ -74,3 +74,6 @@ services = [('%s' % name(r)) for r in yaml_objects if r['kind'] == 'Service']
 webhooks = [r for r in yaml_objects if (r['kind'] == 'ValidatingWebhookConfiguration' or r['kind'] == 'MutatingWebhookConfiguration')]
 if len(webhooks) > 0:
   k8s_resource(new_name='Webhooks', objects=[('%s' % name(r)) for r in webhooks], resource_deps=services)
+
+# Aggregate API server CRD's to the grafana deployment
+local_resource('API Aggregation', cmd='sh ./generated/aggregate-apiserver.sh in_cluster', resource_deps=['grafana'])

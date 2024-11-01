@@ -10,30 +10,27 @@ import (
 )
 
 // BackendPluginMainGenerator returns a many-to-one jenny which generates the `main.go` file needed to run the backend plugin.
-func BackendPluginMainGenerator(projectRepo, apiCodegenPath string, generatedKindsAreVersioned bool, groupByKind bool) codejen.ManyToOne[codegen.Kind] {
+func BackendPluginMainGenerator(projectRepo, apiCodegenPath string, groupByKind bool) codejen.ManyToOne[codegen.Kind] {
 	return &backendPluginMainGenerator{
-		projectRepo:                projectRepo,
-		apiCodegenPath:             apiCodegenPath,
-		generatedKindsAreVersioned: generatedKindsAreVersioned,
-		groupByKind:                groupByKind,
+		projectRepo:    projectRepo,
+		apiCodegenPath: apiCodegenPath,
+		groupByKind:    groupByKind,
 	}
 }
 
 type backendPluginMainGenerator struct {
-	projectRepo                string
-	apiCodegenPath             string
-	generatedKindsAreVersioned bool
-	groupByKind                bool
+	projectRepo    string
+	apiCodegenPath string
+	groupByKind    bool
 }
 
 func (m *backendPluginMainGenerator) Generate(decls ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.BackendPluginRouterTemplateMetadata{
-		Repo:                  m.projectRepo,
-		APICodegenPath:        m.apiCodegenPath,
-		PluginID:              "REPLACEME",
-		Resources:             make([]codegen.KindProperties, 0),
-		ResourcesAreVersioned: m.generatedKindsAreVersioned,
-		KindsAreGrouped:       !m.groupByKind,
+		Repo:            m.projectRepo,
+		APICodegenPath:  m.apiCodegenPath,
+		PluginID:        "REPLACEME",
+		Resources:       make([]codegen.KindProperties, 0),
+		KindsAreGrouped: !m.groupByKind,
 	}
 
 	for _, decl := range decls {

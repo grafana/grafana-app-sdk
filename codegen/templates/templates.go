@@ -216,12 +216,11 @@ func WriteWrappedType(metadata WrappedTypeMetadata, out io.Writer) error {
 
 // BackendPluginRouterTemplateMetadata is the metadata required by the Backend Plugin Router template
 type BackendPluginRouterTemplateMetadata struct {
-	Repo                  string
-	APICodegenPath        string
-	Resources             []codegen.KindProperties
-	PluginID              string
-	ResourcesAreVersioned bool
-	KindsAreGrouped       bool
+	Repo            string
+	APICodegenPath  string
+	Resources       []codegen.KindProperties
+	PluginID        string
+	KindsAreGrouped bool
 }
 
 type extendedBackendPluginRouterTemplateMetadata struct {
@@ -330,14 +329,13 @@ func WriteOperatorKubeConfig(out io.Writer) error {
 }
 
 type OperatorMainMetadata struct {
-	PackageName           string
-	ProjectName           string
-	Repo                  string
-	CodegenPath           string
-	WatcherPackage        string
-	ResourcesAreVersioned bool
-	KindsAreGrouped       bool
-	Resources             []codegen.KindProperties
+	PackageName     string
+	ProjectName     string
+	Repo            string
+	CodegenPath     string
+	WatcherPackage  string
+	KindsAreGrouped bool
+	Resources       []codegen.KindProperties
 }
 
 type extendedOperatorMainMetadata struct {
