@@ -63,7 +63,10 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.Ap
 		return nil, fmt.Errorf("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
-	val := root.LookupPath(cue.MakePath(cue.Str("manifest")))
+	var val cue.Value = root
+	if manifestSelector != "" {
+		val = root.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
+	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
 	kindDef, schemaDef, manifestDef, err := p.getKindDefinition()

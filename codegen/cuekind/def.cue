@@ -169,12 +169,6 @@ Kind: S={
 Manifest: S={
 	appName: string
 	group: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
-	kinds: [...{
-		group: S.group
-	} & Kind]
-	permissions: {
-		accessKinds: [...#AccessKind]
-	}
 
 	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
 	// if present, this value is used for the full group instead.
@@ -186,8 +180,8 @@ Manifest: S={
 	// The first element is always the "most correct" one to use.
 	// This field could be inlined into `group`, but is separate for clarity.
 	_computedGroups: [
-		if S.apiResource.groupOverride != _|_ {
-			strings.ToLower(S.apiResource.groupOverride),
+		if S.groupOverride != _|_ {
+			strings.ToLower(S.groupOverride),
 		},
 		strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.app"
 	]
@@ -197,6 +191,16 @@ Manifest: S={
 	// The length of the computed group + the length of the name (plus 1) cannot exceed 63 characters for a valid CRD.
 	// This length restriction is checked via _computedGroupKind
 	fullGroup: _computedGroups[0] & =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
+
+	kinds: [...{
+		group: S.group
+		if S.groupOverride != _|_ {
+			apiResource: groupOverride: fullGroup
+		}
+	} & Kind]
+	permissions: {
+		accessKinds: [...#AccessKind]
+	}
 
 	_computedGroupKinds: [
 		for x in S.kinds {
