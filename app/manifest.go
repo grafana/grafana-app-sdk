@@ -72,6 +72,9 @@ type ManifestData struct {
 	Group string `json:"group" yaml:"group"`
 	// Kinds is a list of all Kinds maintained by this App
 	Kinds []ManifestKind `json:"kinds,omitempty" yaml:"kinds,omitempty"`
+	// Permissions is the extra permissions for non-owned kinds this app needs to operate its backend.
+	// It may be nil if no extra permissions are required.
+	Permissions *Permissions `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 }
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions
@@ -149,6 +152,18 @@ const (
 	AdmissionOperationDelete  AdmissionOperation = "DELETE"
 	AdmissionOperationConnect AdmissionOperation = "CONNECT"
 )
+
+type Permissions struct {
+	AccessKinds []KindPermission `json:"accessKinds,omitempty" yaml:"accessKinds,omitempty"`
+}
+
+type KindPermissionAction string
+
+type KindPermission struct {
+	Group    string                 `json:"group" yaml:"group"`
+	Resource string                 `json:"resource" yaml:"resource"`
+	Actions  []KindPermissionAction `json:"actions,omitempty" yaml:"actions,omitempty"`
+}
 
 func VersionSchemaFromMap(openAPISchema map[string]any) (*VersionSchema, error) {
 	vs := &VersionSchema{

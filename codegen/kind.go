@@ -26,21 +26,13 @@ type KindProperties struct {
 	PluralName string `json:"pluralName"`
 	// Current is the version string of the version considered to be "current".
 	// This does not have to be the latest, but determines preference when generating code.
-	Current string `json:"current"`
-	// APIResource is an optional field which, if present, indicates that the Kind is expressible as a kubernetes API resource,
-	// and contains attributes which allow identification as such.
-	APIResource *APIResourceProperties `json:"apiResource"`
-	// Codegen contains code-generation directives for the codegen pipeline
-	Codegen KindCodegenProperties `json:"codegen"`
-}
-
-// APIResourceProperties contains information about a Kind expressible as a kubernetes API resource
-type APIResourceProperties struct {
-	Group      string                  `json:"group"`
+	Current    string                  `json:"current"`
 	Scope      string                  `json:"scope"`
 	Validation KindAdmissionCapability `json:"validation"`
 	Mutation   KindAdmissionCapability `json:"mutation"`
 	Conversion bool                    `json:"conversion"`
+	// Codegen contains code-generation directives for the codegen pipeline
+	Codegen KindCodegenProperties `json:"codegen"`
 }
 
 type KindAdmissionCapabilityOperation string

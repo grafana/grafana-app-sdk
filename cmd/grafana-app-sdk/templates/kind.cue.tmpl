@@ -4,23 +4,11 @@ package {{ .Package }}
 {{.FieldName}}: {
 	// Name is the human-readable name which is used for generated type names.
 	kind: "{{.Name}}"
-	// Group affects the grouping of this kind, especially with respect to API server expression.
-	// This is typically the same as the plugin ID, though there are length restrictions when the crd trait is present,
-	// so it may vary if the plugin ID is too long.
-	group: "{{.PluginID}}"
-	// crd is a trait that governs both whether this kind is expressible as a resource in an API server
-	// (the `resource.Object` interface), and attributes of that expression.
-	// if crd is not present, the kind system and code generation do not impose API server format restricitons,
-	// and do not add common API server information.
-	{{ if eq .Target "model"}}// apiResource: {} // not present as this kind was generated as a "model" target
-	{{ else }}apiResource: {
-		// [OPTIONAL]
-		// Scope determines the scope of the kind in the API server. It currently allows two values:
-		// * Namespaced - resources for this kind are created inside namespaces
-		// * Cluster - resource for this kind are always cluster-wide (this can be thought of as a "global" namespace)
-		// If not present, this defaults to "Namespaced"
-		scope: "Namespaced"
-	}{{ end }}
+	// Scope determines the scope of the kind in the API server. It currently allows two values:
+    // * Namespaced - resources for this kind are created inside namespaces
+    // * Cluster - resource for this kind are always cluster-wide (this can be thought of as a "global" namespace)
+    // If not present, this defaults to "Namespaced"
+    scope: "Namespaced"
 	// [OPTIONAL]
 	// Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
 	// If not present, default values within the codegen trait are used.

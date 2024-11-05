@@ -185,14 +185,19 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	if err != nil {
 		return nil, err
 	}
-	generator, err := codegen.NewGenerator[codegen.Kind](parser, modFS)
+	parser.ManifestSelector = "manifest"
+	// Slightly hacky multiple generators as an intermediary while we move to a better system.
+	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
+	generatorForKinds, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true), modFS)
+	if err != nil {
+		return nil, err
+	}
+	generatorForManifest, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(), modFS)
 	if err != nil {
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generator.FilteredGenerate(cuekind.ResourceGenerator(cfg.GroupKinds), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource != nil
-	}, selectors...)
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds))
 	if err != nil {
 		return nil, err
 	}
@@ -203,32 +208,8 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	for i, f := range resourceFiles {
 		resourceFiles[i].RelativePath = filepath.Join(relativePath, f.RelativePath)
 	}
-	// Model
-	modelFiles, err := generator.FilteredGenerate(cuekind.ModelsGenerator(true, cfg.GroupKinds), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource == nil
-	}, selectors...)
-	if err != nil {
-		return nil, err
-	}
-	for i, f := range modelFiles {
-		prefix := cfg.GoGenBasePath
-		if cfg.PrefixPathWithType {
-			prefix = filepath.Join(prefix, targetModel+"s")
-		}
-		modelFiles[i].RelativePath = filepath.Join(prefix, f.RelativePath)
-	}
-	// TypeScript
-	tsModelFiles, err := generator.FilteredGenerate(cuekind.TypeScriptModelsGenerator(true), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource == nil
-	}, selectors...)
-	if err != nil {
-		return nil, err
-	}
-	for i, f := range tsModelFiles {
-		tsModelFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
-	}
-	tsResourceFiles, err := generator.FilteredGenerate(cuekind.TypeScriptResourceGenerator(), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource != nil
+	tsResourceFiles, err := generatorForKinds.FilteredGenerate(cuekind.TypeScriptResourceGenerator(), func(kind codegen.Kind) bool {
+		return true
 	}, selectors...)
 	if err != nil {
 		return nil, err
@@ -243,8 +224,8 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		if cfg.CRDEncoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generator.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
-			return kind.Properties().APIResource != nil
+		crdFiles, err = generatorForKinds.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
+			return true
 		}, selectors...)
 		if err != nil {
 			return nil, err
@@ -265,9 +246,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			if cfg.CRDEncoding == "yaml" {
 				encFunc = yaml.Marshal
 			}
-			manifestFiles, err = generator.FilteredGenerate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""), func(kind codegen.Kind) bool {
-				return kind.Properties().APIResource != nil
-			}, selectors...)
+			manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""))
 			if err != nil {
 				return nil, err
 			}
@@ -276,9 +255,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			}
 		}
 
-		goManifestFiles, err = generator.FilteredGenerate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""), func(kind codegen.Kind) bool {
-			return kind.Properties().APIResource != nil
-		})
+		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""))
 		if err != nil {
 			return nil, err
 		}
@@ -288,8 +265,6 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
-	allFiles = append(allFiles, modelFiles...)
-	allFiles = append(allFiles, tsModelFiles...)
 	allFiles = append(allFiles, tsResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
 	allFiles = append(allFiles, manifestFiles...)
@@ -307,7 +282,7 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	if err != nil {
 		return nil, err
 	}
-	generator, err := codegen.NewGenerator[codegen.Kind](parser, modFS)
+	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true), modFS)
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +291,6 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 		relativePath = filepath.Join(relativePath, targetResource)
 	}
 	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds), func(kind codegen.Kind) bool {
-		return kind.Properties().APIResource != nil
+		return true
 	}, selectors...)
 }

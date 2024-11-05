@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -140,6 +141,25 @@ func projectInit(cmd *cobra.Command, args []string) error {
 	} else {
 		err = writeFile(cueModPath, cueModContents)
 	}
+	if err != nil {
+		return err
+	}
+
+	// Init app manifest
+	mtmpl, err := template.ParseFS(templates, "templates/manifest.cue.tmpl")
+	if err != nil {
+		return err
+	}
+	mbuf := bytes.Buffer{}
+	appName := strings.Split(name, "/")[len(strings.Split(name, "/"))-1]
+	err = mtmpl.Execute(&mbuf, map[string]any{
+		"AppName": appName,
+		"Group":   appName,
+	})
+	if err != nil {
+		return err
+	}
+	err = writeFileWithOverwriteConfirm(filepath.Join(path, "kinds", "manifest.cue"), mbuf.Bytes())
 	if err != nil {
 		return err
 	}
@@ -291,26 +311,14 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("type must be one of 'resource' | 'model'")
 	}
 
-	pluginID, err := cmd.Flags().GetString("plugin-id")
+	file, err := os.DirFS(cuePath).Open("manifest.cue")
 	if err != nil {
 		return err
 	}
-	if pluginID == "" {
-		// Try to load the plugin ID from plugin/src/plugin.json
-		pluginJSONPath := filepath.Join(path, "plugin", "src", "plugin.json")
-		if _, err := os.Stat(pluginJSONPath); err != nil {
-			return fmt.Errorf("--plugin-id is required if plugin/src/plugin.json is not present")
-		}
-		contents, err := os.ReadFile(pluginJSONPath)
-		if err != nil {
-			return fmt.Errorf("could not read plugin/src/plugin.json: %w", err)
-		}
-		spj := simplePluginJSON{}
-		err = json.Unmarshal(contents, &spj)
-		if err != nil {
-			return fmt.Errorf("could not parse plugin.json: %w", err)
-		}
-		pluginID = spj.ID
+	defer file.Close()
+	manifestBytes, err := io.ReadAll(file)
+	if err != nil {
+		return err
 	}
 
 	for _, kindName := range args {
@@ -322,6 +330,13 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		pkg := "kinds"
 		if len(cuePath) > 0 {
 			pkg = filepath.Base(cuePath)
+		}
+
+		fieldName := strings.ToLower(kindName[0:1]) + kindName[1:]
+
+		manifestBytes, err = addKindToManifestBytesCUE(manifestBytes, fieldName)
+		if err != nil {
+			return err
 		}
 
 		var templatePath string
@@ -339,11 +354,10 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 
 		buf := &bytes.Buffer{}
 		err = kindTmpl.Execute(buf, map[string]string{
-			"FieldName": strings.ToLower(kindName[0:1]) + kindName[1:],
+			"FieldName": fieldName,
 			"Name":      kindName,
 			"Target":    target,
 			"Package":   pkg,
-			"PluginID":  pluginID,
 		})
 		if err != nil {
 			return err
@@ -358,8 +372,7 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-
-	return nil
+	return writeFile(filepath.Join(path, cuePath, "manifest.cue"), manifestBytes)
 }
 
 //nolint:revive,funlen,gocyclo
@@ -431,7 +444,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}
@@ -739,4 +752,25 @@ func writeStaticFiles(fs mergedFS, readDir, writeDir string, promptForOverwrite 
 		}
 	}
 	return nil
+}
+
+// cueFmtState wraps a bytes.Buffer with the extra methods required to implement fmt.State.
+// it will return false when queried about any flags.
+type cueFmtState struct {
+	bytes.Buffer
+}
+
+// Width returns the value of the width option and whether it has been set. It will always return 0, false.
+func (*cueFmtState) Width() (wid int, ok bool) {
+	return 0, false
+}
+
+// Precision returns the value of the precision option and whether it has been set. It will always return 0, false.
+func (*cueFmtState) Precision() (prec int, ok bool) {
+	return 0, false
+}
+
+// Flag returns whether the specified flag has been set. It will always return false.
+func (*cueFmtState) Flag(flag int) bool {
+	return flag == '#' || flag == '+'
 }

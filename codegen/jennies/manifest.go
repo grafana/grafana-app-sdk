@@ -29,22 +29,22 @@ func (*ManifestGenerator) JennyName() string {
 
 // Generate creates one or more codec go files for the provided Kind
 // nolint:dupl
-func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
-	manifest, err := buildManifest(kinds)
+func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	manifestData, err := buildManifestData(appManifest)
 	if err != nil {
 		return nil, err
 	}
 
 	if m.AppName != "" {
-		manifest.AppName = m.AppName
+		manifestData.AppName = m.AppName
 	}
-	if manifest.Group == "" {
-		if len(manifest.Kinds) > 0 {
+	if manifestData.Group == "" {
+		if len(manifestData.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifest.Group = fmt.Sprintf("%s.ext.grafana.com", manifest.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
 	}
 
 	// Make into kubernetes format
@@ -52,9 +52,9 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 	output["apiVersion"] = "apps.grafana.com/v1"
 	output["kind"] = "AppManifest"
 	output["metadata"] = map[string]string{
-		"name": manifest.AppName,
+		"name": manifestData.AppName,
 	}
-	output["spec"] = manifest
+	output["spec"] = manifestData
 
 	files := make(codejen.Files, 0)
 	out, err := m.Encoder(output)
@@ -62,7 +62,7 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 		return nil, err
 	}
 	files = append(files, codejen.File{
-		RelativePath: fmt.Sprintf("%s-manifest.%s", manifest.AppName, m.FileExtension),
+		RelativePath: fmt.Sprintf("%s-manifest.%s", manifestData.AppName, m.FileExtension),
 		Data:         out,
 		From:         []codejen.NamedJenny{m},
 	})
@@ -79,28 +79,28 @@ func (*ManifestGoGenerator) JennyName() string {
 	return "ManifestGoGenerator"
 }
 
-func (g *ManifestGoGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
-	manifest, err := buildManifest(kinds)
+func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	manifestData, err := buildManifestData(appManifest)
 	if err != nil {
 		return nil, err
 	}
 
 	if g.AppName != "" {
-		manifest.AppName = g.AppName
+		manifestData.AppName = g.AppName
 	}
-	if manifest.Group == "" {
-		if len(manifest.Kinds) > 0 {
+	if manifestData.Group == "" {
+		if len(manifestData.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifest.Group = fmt.Sprintf("%s.ext.grafana.com", manifest.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
 	}
 
 	buf := bytes.Buffer{}
 	err = templates.WriteManifestGoFile(templates.ManifestGoFileMetadata{
 		Package:      g.Package,
-		ManifestData: *manifest,
+		ManifestData: *manifestData,
 	}, &buf)
 	if err != nil {
 		return nil, err
@@ -120,32 +120,33 @@ func (g *ManifestGoGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
+func buildManifestData(m codegen.AppManifest) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		Kinds: make([]app.ManifestKind, 0),
 	}
 
-	for _, kind := range kinds {
-		if kind.Properties().APIResource == nil {
-			continue
-		}
+	manifest.AppName = m.Name()
+	manifest.Group = m.Properties().Group
+
+	for _, kind := range m.Kinds() {
+		// TODO
 		if manifest.AppName == "" {
 			manifest.AppName = kind.Properties().Group
 		}
 		if manifest.Group == "" {
-			manifest.Group = kind.Properties().APIResource.Group
+			manifest.Group = kind.Properties().Group
 		}
-		if kind.Properties().APIResource.Group == "" {
+		if kind.Properties().Group == "" {
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
-		if kind.Properties().APIResource.Group != manifest.Group {
+		if kind.Properties().Group != manifest.Group {
 			return nil, fmt.Errorf("all kinds must have the same group %q", manifest.Group)
 		}
 
 		mkind := app.ManifestKind{
 			Kind:       kind.Name(),
-			Scope:      kind.Properties().APIResource.Scope,
-			Conversion: kind.Properties().APIResource.Conversion,
+			Scope:      kind.Properties().Scope,
+			Conversion: kind.Properties().Conversion,
 			Versions:   make([]app.ManifestKindVersion, 0),
 		}
 

@@ -142,8 +142,8 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, appName string) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, appName string) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGenerator{
 		AppName:       appName,
 		Encoder:       encoder,
@@ -152,8 +152,8 @@ func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, 
 	return g
 }
 
-func ManifestGoGenerator(pkg string, appName string) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func ManifestGoGenerator(pkg string, appName string) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
 		Package: pkg,
 		AppName: appName,
@@ -166,4 +166,11 @@ func namerFunc(k codegen.Kind) string {
 		return "nil"
 	}
 	return k.Properties().Kind
+}
+
+func namerFuncManifest(m codegen.AppManifest) string {
+	if m == nil {
+		return "nil"
+	}
+	return m.Name()
 }

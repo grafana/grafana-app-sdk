@@ -25,12 +25,51 @@ func NewParser() (*Parser, error) {
 }
 
 type Parser struct {
+	ManifestSelector string
+
 	kindDef     *cue.Value
 	schemaDef   *cue.Value
 	manifestDef *cue.Value
 }
 
-func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.AppManifest, error) {
+type parser[T any] struct {
+	parseFunc func(fs.FS, ...string) ([]T, error)
+}
+
+func (p *parser[T]) Parse(fs fs.FS, args ...string) ([]T, error) {
+	return p.parseFunc(fs, args...)
+}
+
+func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
+	return &parser[codegen.AppManifest]{
+		parseFunc: func(f fs.FS, s ...string) ([]codegen.AppManifest, error) {
+			m, err := p.ParseManifest(f)
+			if err != nil {
+				return nil, err
+			}
+			return []codegen.AppManifest{m}, nil
+		},
+	}
+}
+
+func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
+	return &parser[codegen.Kind]{
+		parseFunc: func(f fs.FS, s ...string) ([]codegen.Kind, error) {
+			if useManifest {
+				m, err := p.ParseManifest(f)
+				if err != nil {
+					return nil, err
+				}
+				return m.Kinds(), nil
+			}
+			return p.ParseKinds(f, s...)
+		},
+	}
+}
+
+// ParseManifest parses ManifestSelector (or the root object if no selector is provided) as a CUE app manifest,
+// returning the parsed codegen.AppManifest object or an error.
+func (p *Parser) ParseManifest(files fs.FS) (codegen.AppManifest, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -63,9 +102,12 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.Ap
 		return nil, fmt.Errorf("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
+	if root.Err() != nil {
+		return nil, root.Err()
+	}
 	var val cue.Value = root
-	if manifestSelector != "" {
-		val = root.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
+	if p.ManifestSelector != "" {
+		val = root.LookupPath(cue.MakePath(cue.Str(p.ManifestSelector)))
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
@@ -105,20 +147,11 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.Ap
 	return manifest, nil
 }
 
-func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
-	m, err := p.ParseManifest(files, "")
-	if err != nil {
-		return nil, err
-	}
-	fmt.Println("Manifest: ", m)
-	return m.Kinds(), nil
-}
-
 // Parse parses all CUE files in `files`, and reads all top-level selectors (or only `selectors` if provided)
 // as kinds as defined by [def.cue]. It then returns a list of kinds parsed.
 //
 //nolint:funlen
-func (p *Parser) Parse2(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
+func (p *Parser) ParseKinds(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -180,61 +213,19 @@ func (p *Parser) Parse2(files fs.FS, selectors ...string) ([]codegen.Kind, error
 	// then put together the kind struct from that
 	kinds := make([]codegen.Kind, 0)
 	for _, val := range vals {
-		// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
-		// This gives us default values for all fields that weren't filled out,
-		// and will create errors for required fields that may be missing.
-		val = val.Unify(kindDef)
-		if val.Err() != nil {
-			return nil, val.Err()
-		}
-
-		// Decode the unified value into our collection of properties.
-		props := codegen.KindProperties{}
-		err = val.Decode(&props)
+		someKind, err := p.parseKind(val, kindDef, schemaDef)
 		if err != nil {
 			return nil, err
 		}
-
-		// We can't simply decode the version map, because we need to extract some values as types,
-		// but leave the schema value as a cue.Value. So we tell cue to decode it into a map,
-		// then still need to iterate through the map and adjust values
-		someKind := &codegen.AnyKind{
-			Props:       props,
-			AllVersions: make([]codegen.KindVersion, 0),
-		}
-		goVers := make(map[string]codegen.KindVersion)
-		vers := val.LookupPath(cue.MakePath(cue.Str("versions")))
-		if vers.Err() != nil {
-			return nil, vers.Err()
-		}
-		err = vers.Decode(&goVers)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range goVers {
-			v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
-			if v.Schema.Err() != nil {
-				return nil, v.Schema.Err()
-			}
-			if props.APIResource != nil {
-				// Normally, we would use a conditional unify in the def.cue file of kindDef,
-				// but there is a bug where the conditional evaluation creates a nil vertex somewhere
-				// when loading with the CLI, so this is a faster fix (TODO: long-term fix)
-				v.Schema = v.Schema.Unify(schemaDef)
-				if v.Schema.Err() != nil {
-					return nil, v.Schema.Err()
-				}
-			}
-			someKind.AllVersions = append(someKind.AllVersions, v)
-		}
-		// Now we need to sort AllVersions, as map key order is random
-		slices.SortFunc(someKind.AllVersions, sortVersions)
 		kinds = append(kinds, someKind)
 	}
 	return kinds, nil
 }
 
 func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
+	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
+	// This gives us default values for all fields that weren't filled out,
+	// and will create errors for required fields that may be missing.
 	val = val.Unify(kindDef)
 	if val.Err() != nil {
 		return nil, val.Err()
@@ -268,14 +259,12 @@ func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen
 		if v.Schema.Err() != nil {
 			return nil, v.Schema.Err()
 		}
-		if props.APIResource != nil {
-			// Normally, we would use a conditional unify in the def.cue file of kindDef,
-			// but there is a bug where the conditional evaluation creates a nil vertex somewhere
-			// when loading with the CLI, so this is a faster fix (TODO: long-term fix)
-			v.Schema = v.Schema.Unify(schemaDef)
-			if v.Schema.Err() != nil {
-				return nil, v.Schema.Err()
-			}
+		// Normally, we would use a conditional unify in the def.cue file of kindDef,
+		// but there is a bug where the conditional evaluation creates a nil vertex somewhere
+		// when loading with the CLI, so this is a faster fix (TODO: long-term fix)
+		v.Schema = v.Schema.Unify(schemaDef)
+		if v.Schema.Err() != nil {
+			return nil, v.Schema.Err()
 		}
 		someKind.AllVersions = append(someKind.AllVersions, v)
 	}
