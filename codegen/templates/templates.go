@@ -32,8 +32,10 @@ var (
 	templateBackendPluginModelsHandler, _   = template.ParseFS(templates, "plugin/handler_models.tmpl")
 	templateBackendMain, _                  = template.ParseFS(templates, "plugin/main.tmpl")
 
-	templateWatcher, _ = template.ParseFS(templates, "app/watcher.tmpl")
-	templateApp, _     = template.ParseFS(templates, "app/app.tmpl")
+	TemplateWatcher, _           = template.ParseFS(templates, "app/watcher.tmpl")
+	TemplateApp, _               = template.ParseFS(templates, "app/app.tmpl")
+	TemplateGrafanaAppWatcher, _ = template.ParseFS(templates, "app/grafana-app-watcher.tmpl")
+	TemplateGrafanaApp, _        = template.ParseFS(templates, "app/grafana-app.tmpl")
 
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
@@ -320,8 +322,8 @@ func (WatcherMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
 }
 
-func WriteWatcher(metadata WatcherMetadata, out io.Writer) error {
-	return templateWatcher.Execute(out, metadata)
+func WriteWatcher(metadata WatcherMetadata, out io.Writer, tmpl *template.Template) error {
+	return tmpl.Execute(out, metadata)
 }
 
 func WriteOperatorKubeConfig(out io.Writer) error {
@@ -417,6 +419,7 @@ type AppMetadata struct {
 	ProjectName     string
 	Repo            string
 	CodegenPath     string
+	APIsPath        string // only used by grafanaApp component
 	WatcherPackage  string
 	KindsAreGrouped bool
 	Resources       []AppMetadataKind
@@ -441,7 +444,7 @@ func (AppMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
-func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
+func WriteAppGoFile(metadata AppMetadata, out io.Writer, tmpl *template.Template) error {
 	md := extendedAppMetadata{
 		AppMetadata:     metadata,
 		GVToKindAll:     make(map[schema.GroupVersion][]codegen.KindProperties),
@@ -465,7 +468,7 @@ func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
 			md.GVToKindAll[gv] = l
 		}
 	}
-	return templateApp.Execute(out, md)
+	return tmpl.Execute(out, md)
 }
 
 // ToPackageName sanitizes an input into a deterministic allowed go package name.

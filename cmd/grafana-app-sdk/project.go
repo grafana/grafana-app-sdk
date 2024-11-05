@@ -369,7 +369,8 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	where <components> are one or more of:
 		backend
 		frontend
-		operator`)
+		operator
+		grafanaApp`)
 		os.Exit(1)
 	}
 
@@ -470,6 +471,17 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 				fmt.Printf("%s\n", err.Error())
 				os.Exit(1)
 			}
+		case "grafanaApp":
+			switch format {
+			case FormatCUE:
+				err = addComponentGrafanaApp(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingKind)
+			default:
+				return fmt.Errorf("unknown kind format '%s'", format)
+			}
+			if err != nil {
+				fmt.Printf("%s\n", err.Error())
+				os.Exit(1)
+			}
 		default:
 			return fmt.Errorf("unknown component %s", component)
 		}
@@ -483,6 +495,45 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 
 type anyGenerator interface {
 	*codegen.Generator[codegen.Kind]
+}
+
+func addComponentGrafanaApp[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool) error {
+	// Get the repo from the go.mod file
+	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
+	if err != nil {
+		return err
+	}
+
+	var files codejen.Files
+	switch cast := any(generator).(type) {
+	case *codegen.Generator[codegen.Kind]:
+		appFiles, err := cast.Generate(cuekind.GrafanaAppGenerator(repo, "apps", "playlist/pkg/apis", groupKinds), selectors...)
+		if err != nil {
+			return err
+		}
+		files = append(files, appFiles...)
+	default:
+		return fmt.Errorf("unknown generator type: %T", cast)
+	}
+	if err = checkAndMakePath("pkg"); err != nil {
+		return err
+	}
+	for _, f := range files {
+		err = writeFile(filepath.Join(projectRootPath, f.RelativePath), f.Data)
+		if err != nil {
+			return err
+		}
+	}
+
+	dockerfile, err := templates.ReadFile("templates/operator_Dockerfile.tmpl")
+	if err != nil {
+		return err
+	}
+	err = writeFile(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool) error {

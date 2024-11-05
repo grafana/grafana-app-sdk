@@ -132,6 +132,25 @@ func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.Jen
 	return g
 }
 
+func GrafanaAppGenerator(projectRepo, codegenPath, apisPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+	parts := strings.Split(projectRepo, "/")
+	if len(parts) == 0 {
+		parts = []string{""}
+	}
+	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g.Append(
+		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
+		&jennies.GrafanaAppGenerator{
+			GroupByKind: !groupKinds,
+			ProjectRepo: projectRepo,
+			ProjectName: parts[len(parts)-1],
+			CodegenPath: codegenPath,
+			APIsPath:    apisPath,
+		},
+	)
+	return g
+}
+
 func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
 	g.Append(&jennies.OpenAPI{
