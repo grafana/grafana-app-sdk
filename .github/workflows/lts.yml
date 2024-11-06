@@ -1,9 +1,9 @@
-name: Build Main
+name: Build LTS
 
 on:
   push:
     branches:
-      - "lts/*"
+      - "lts/v0.24"
 
 jobs:
   test:
