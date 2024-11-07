@@ -185,7 +185,6 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	if err != nil {
 		return nil, err
 	}
-	parser.ManifestSelector = "manifest"
 	// Slightly hacky multiple generators as an intermediary while we move to a better system.
 	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
 	generatorForKinds, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true), modFS)
@@ -197,7 +196,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds))
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds), selectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +245,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			if cfg.CRDEncoding == "yaml" {
 				encFunc = yaml.Marshal
 			}
-			manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""))
+			manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""), selectors...)
 			if err != nil {
 				return nil, err
 			}
@@ -255,7 +254,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			}
 		}
 
-		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""))
+		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""), selectors...)
 		if err != nil {
 			return nil, err
 		}

@@ -159,7 +159,7 @@ Manifest: S={
 		if S.groupOverride != _|_ {
 			strings.ToLower(S.groupOverride),
 		},
-		strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.app"
+		strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.com" // TODO: change to ext.grafana.app?
 	]
 
 	// fullGroup is used as the CRD group name in the GVK.

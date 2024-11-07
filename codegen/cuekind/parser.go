@@ -17,6 +17,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
+const DefaultManifestSelector = "manifest"
+
 //go:embed def.cue cue.mod/module.cue
 var overlayFS embed.FS
 
@@ -25,8 +27,6 @@ func NewParser() (*Parser, error) {
 }
 
 type Parser struct {
-	ManifestSelector string
-
 	kindDef     *cue.Value
 	schemaDef   *cue.Value
 	manifestDef *cue.Value
@@ -43,11 +43,18 @@ func (p *parser[T]) Parse(fs fs.FS, args ...string) ([]T, error) {
 func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 	return &parser[codegen.AppManifest]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.AppManifest, error) {
-			m, err := p.ParseManifest(f)
-			if err != nil {
-				return nil, err
+			if len(s) == 0 {
+				s = []string{"manifest"}
 			}
-			return []codegen.AppManifest{m}, nil
+			manifests := make([]codegen.AppManifest, 0, len(s))
+			for _, selector := range s {
+				m, err := p.ParseManifest(f, selector)
+				if err != nil {
+					return nil, err
+				}
+				manifests = append(manifests, m)
+			}
+			return manifests, nil
 		},
 	}
 }
@@ -56,11 +63,18 @@ func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.Kind, error) {
 			if useManifest {
-				m, err := p.ParseManifest(f)
-				if err != nil {
-					return nil, err
+				if len(s) == 0 {
+					s = []string{"manifest"}
 				}
-				return m.Kinds(), nil
+				kinds := make([]codegen.Kind, 0)
+				for _, selector := range s {
+					m, err := p.ParseManifest(f, selector)
+					if err != nil {
+						return nil, err
+					}
+					kinds = append(kinds, m.Kinds()...)
+				}
+				return kinds, nil
 			}
 			return p.ParseKinds(f, s...)
 		},
@@ -69,7 +83,7 @@ func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
 
 // ParseManifest parses ManifestSelector (or the root object if no selector is provided) as a CUE app manifest,
 // returning the parsed codegen.AppManifest object or an error.
-func (p *Parser) ParseManifest(files fs.FS) (codegen.AppManifest, error) {
+func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.AppManifest, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -106,8 +120,8 @@ func (p *Parser) ParseManifest(files fs.FS) (codegen.AppManifest, error) {
 		return nil, root.Err()
 	}
 	var val cue.Value = root
-	if p.ManifestSelector != "" {
-		val = root.LookupPath(cue.MakePath(cue.Str(p.ManifestSelector)))
+	if manifestSelector != "" {
+		val = root.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())

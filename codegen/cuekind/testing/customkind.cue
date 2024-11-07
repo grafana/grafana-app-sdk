@@ -2,11 +2,15 @@ package testing
 
 import "time"
 
-customKind: {
+customManifest: {
+	appName: "custom"
 	group: "custom"
+	kinds: [customKind]
+}
+
+customKind: {
 	kind: "CustomKind"
 	current: "v1-0"
-	apiResource: {}
 	versions: {
 		"v0-0": {
 			schema: {

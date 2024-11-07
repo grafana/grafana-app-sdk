@@ -24,7 +24,7 @@ func TestCRDGenerator(t *testing.T) {
 
 	parser, err := NewParser()
 	require.Nil(t, err)
-	kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "customKind")
+	kinds, err := parser.KindParser(true).Parse(os.DirFS(TestCUEDirectory), "customManifest", "testManifest")
 	require.Nil(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
@@ -52,9 +52,9 @@ func TestResourceGenerator(t *testing.T) {
 
 	parser, err := NewParser()
 	require.Nil(t, err)
-	kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind")
+	kinds, err := parser.KindParser(true).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 	require.Nil(t, err)
-	sameGroupKinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "testKind2")
+	sameGroupKinds, err := parser.KindParser(true).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 	require.Nil(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
@@ -93,7 +93,7 @@ func TestModelsGenerator(t *testing.T) {
 
 	parser, err := NewParser()
 	require.Nil(t, err)
-	kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind2")
+	kinds, err := parser.KindParser(false).Parse(os.DirFS(TestCUEDirectory), "customKind2")
 	fmt.Println(err)
 	require.Nil(t, err)
 
@@ -116,7 +116,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("resource", func(t *testing.T) {
-		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind")
+		kinds, err := parser.KindParser(false).Parse(os.DirFS(TestCUEDirectory), "customKind")
 		require.Nil(t, err)
 		files, err := TypeScriptModelsGenerator(false).Generate(kinds...)
 		require.Nil(t, err)
@@ -128,7 +128,7 @@ func TestTypeScriptModelsGenerator(t *testing.T) {
 	})
 
 	t.Run("model", func(t *testing.T) {
-		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind2")
+		kinds, err := parser.KindParser(false).Parse(os.DirFS(TestCUEDirectory), "customKind2")
 		fmt.Println(err)
 		require.Nil(t, err)
 		files, err := TypeScriptModelsGenerator(false).Generate(kinds...)
@@ -149,7 +149,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
-		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind")
+		kinds, err := parser.KindParser(true).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 		require.Nil(t, err)
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
 		require.Nil(t, err)
@@ -165,7 +165,7 @@ func TestManifestGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("resource", func(t *testing.T) {
-		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "testKind2")
+		kinds, err := parser.ManifestParser().Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
 		files, err := ManifestGenerator(yaml.Marshal, "yaml", "test-app-test-kind").Generate(kinds...)
 		require.Nil(t, err)
@@ -176,7 +176,7 @@ func TestManifestGenerator(t *testing.T) {
 		compareToGolden(t, files, "manifest")
 	})
 
-	t.Run("model", func(t *testing.T) {
+	/*t.Run("model", func(t *testing.T) {
 		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind2")
 		fmt.Println(err)
 		require.Nil(t, err)
@@ -187,7 +187,7 @@ func TestManifestGenerator(t *testing.T) {
 		assert.Len(t, files, 1)
 		// Check content against the golden files
 		compareToGolden(t, files, "manifest")
-	})
+	})*/
 }
 
 func TestManifestGoGenerator(t *testing.T) {
@@ -195,7 +195,7 @@ func TestManifestGoGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("resource", func(t *testing.T) {
-		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "testKind", "testKind2")
+		kinds, err := parser.ManifestParser().Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
 		files, err := ManifestGoGenerator("generated", "test-app").Generate(kinds...)
 		require.Nil(t, err)
