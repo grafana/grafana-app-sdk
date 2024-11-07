@@ -3,7 +3,7 @@ name: Build LTS
 on:
   push:
     branches:
-      - "lts/v0.24"
+      - "lts/*"
 
 jobs:
   test:
