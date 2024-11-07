@@ -1,0 +1,10 @@
+name: Build LTS
+
+on:
+  push:
+    branches:
+      - "lts/*"
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml

@@ -9,7 +9,7 @@ retract (
 )
 
 require (
-	cuelang.org/go v0.10.1
+	cuelang.org/go v0.5.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/dave/dst v0.27.3
 	github.com/getkin/kin-openapi v0.128.0
