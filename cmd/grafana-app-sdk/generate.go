@@ -207,9 +207,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	for i, f := range resourceFiles {
 		resourceFiles[i].RelativePath = filepath.Join(relativePath, f.RelativePath)
 	}
-	tsResourceFiles, err := generatorForKinds.FilteredGenerate(cuekind.TypeScriptResourceGenerator(), func(kind codegen.Kind) bool {
-		return true
-	}, selectors...)
+	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), selectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -223,9 +221,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		if cfg.CRDEncoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.FilteredGenerate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), func(kind codegen.Kind) bool {
-			return true
-		}, selectors...)
+		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CRDEncoding), selectors...)
 		if err != nil {
 			return nil, err
 		}
@@ -289,7 +285,5 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	if !cfg.GroupKinds {
 		relativePath = filepath.Join(relativePath, targetResource)
 	}
-	return generator.FilteredGenerate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds), func(kind codegen.Kind) bool {
-		return true
-	}, selectors...)
+	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds), selectors...)
 }

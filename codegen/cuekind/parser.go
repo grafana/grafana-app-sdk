@@ -36,8 +36,8 @@ type parser[T any] struct {
 	parseFunc func(fs.FS, ...string) ([]T, error)
 }
 
-func (p *parser[T]) Parse(fs fs.FS, args ...string) ([]T, error) {
-	return p.parseFunc(fs, args...)
+func (p *parser[T]) Parse(f fs.FS, args ...string) ([]T, error) {
+	return p.parseFunc(f, args...)
 }
 
 func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
@@ -59,6 +59,11 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 	}
 }
 
+// KindParser returns a Parser that returns a list of codegen.Kind.
+// If useManifest is true, it will load kinds from a manifest provided by the selector(s) in Parse (or DefaultManifestSelector if no selectors are present),
+// rather than loading the selector(s) as kinds.
+//
+//nolint:revive
 func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.Kind, error) {
@@ -238,7 +243,7 @@ func (p *Parser) ParseKinds(files fs.FS, selectors ...string) ([]codegen.Kind, e
 	return kinds, nil
 }
 
-func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
+func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
 	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
 	// This gives us default values for all fields that weren't filled out,
 	// and will create errors for required fields that may be missing.

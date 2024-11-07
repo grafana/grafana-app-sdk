@@ -763,7 +763,7 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 		if err != nil {
 			return err
 		}
-		fs, err := generator.Generate(cuekind.ManifestGenerator(json.Marshal, "json", "myapp"))
+		fs, err := generator.Generate(cuekind.ManifestGenerator(json.Marshal, "json"))
 		if err != nil {
 			return err
 		}

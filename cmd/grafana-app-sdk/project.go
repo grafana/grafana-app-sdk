@@ -264,10 +264,6 @@ func projectWriteGoModule(path, moduleName string, overwrite bool) (string, erro
 	return moduleName, nil
 }
 
-type simplePluginJSON struct {
-	ID string `json:"id"`
-}
-
 //nolint:revive,funlen
 func projectAddKind(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
@@ -752,25 +748,4 @@ func writeStaticFiles(fs mergedFS, readDir, writeDir string, promptForOverwrite 
 		}
 	}
 	return nil
-}
-
-// cueFmtState wraps a bytes.Buffer with the extra methods required to implement fmt.State.
-// it will return false when queried about any flags.
-type cueFmtState struct {
-	bytes.Buffer
-}
-
-// Width returns the value of the width option and whether it has been set. It will always return 0, false.
-func (*cueFmtState) Width() (wid int, ok bool) {
-	return 0, false
-}
-
-// Precision returns the value of the precision option and whether it has been set. It will always return 0, false.
-func (*cueFmtState) Precision() (prec int, ok bool) {
-	return 0, false
-}
-
-// Flag returns whether the specified flag has been set. It will always return false.
-func (*cueFmtState) Flag(flag int) bool {
-	return flag == '#' || flag == '+'
 }
