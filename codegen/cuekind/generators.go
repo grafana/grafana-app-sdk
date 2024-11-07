@@ -45,19 +45,6 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	return g
 }
 
-// ModelsGenerator returns a Generator which will produce Go and CUE files for API contract models.
-// Deprecated: model generation will be removed in a future release, in favor of only API resources
-func ModelsGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(
-		&jennies.GoTypes{
-			GenerateOnlyCurrent: !versioned,
-			GroupByKind:         !groupKinds,
-		},
-	)
-	return g
-}
-
 // BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
 func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
@@ -80,16 +67,6 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 		jennies.RouterCodeGenerator(projectRepo),
 		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, !groupKinds),
 	)
-	return g
-}
-
-// TypeScriptModelsGenerator returns a Generator which generates TypeScript model code.
-// Deprecated: model generation will be removed in a future release, in favor of only API resources
-func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(&jennies.TypeScriptTypes{
-		GenerateOnlyCurrent: !versioned,
-	})
 	return g
 }
 
@@ -142,21 +119,19 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, appName string) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string) *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGenerator{
-		AppName:       appName,
 		Encoder:       encoder,
 		FileExtension: extension,
 	})
 	return g
 }
 
-func ManifestGoGenerator(pkg string, appName string) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGoGenerator(pkg string) *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
 		Package: pkg,
-		AppName: appName,
 	})
 	return g
 }

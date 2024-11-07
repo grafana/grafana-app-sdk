@@ -2,7 +2,6 @@ package cuekind
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -31,7 +30,7 @@ func TestCRDGenerator(t *testing.T) {
 		files, err := CRDGenerator(json.Marshal, "json").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 2)
+		assert.Len(t, files, 3)
 		// Check content against the golden files
 		compareToGolden(t, files, "crd")
 	})
@@ -40,7 +39,7 @@ func TestCRDGenerator(t *testing.T) {
 		files, err := CRDGenerator(yaml.Marshal, "yaml").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 2)
+		assert.Len(t, files, 3)
 		// Check content against the golden files
 		compareToGolden(t, files, "crd")
 	})
@@ -87,60 +86,6 @@ func TestResourceGenerator(t *testing.T) {
 	})
 }
 
-func TestModelsGenerator(t *testing.T) {
-	// Ideally, we test only that this outputs the right jennies,
-	// but right now we just test the whole pipeline from thema -> written files
-
-	parser, err := NewParser()
-	require.Nil(t, err)
-	kinds, err := parser.KindParser(false).Parse(os.DirFS(TestCUEDirectory), "customKind2")
-	fmt.Println(err)
-	require.Nil(t, err)
-
-	t.Run("unversioned", func(t *testing.T) {
-		files, err := ModelsGenerator(false, true).Generate(kinds...)
-		require.Nil(t, err)
-		// Check number of files generated
-		// 1 -> just the go type
-		assert.Len(t, files, 1)
-		// Check content against the golden files
-		compareToGolden(t, files, "go/unversioned")
-	})
-}
-
-func TestTypeScriptModelsGenerator(t *testing.T) {
-	// Ideally, we test only that this outputs the right jennies,
-	// but right now we just test the whole pipeline from thema -> written files
-
-	parser, err := NewParser()
-	require.Nil(t, err)
-
-	t.Run("resource", func(t *testing.T) {
-		kinds, err := parser.KindParser(false).Parse(os.DirFS(TestCUEDirectory), "customKind")
-		require.Nil(t, err)
-		files, err := TypeScriptModelsGenerator(false).Generate(kinds...)
-		require.Nil(t, err)
-		// Check number of files generated
-		// 5 -> object, spec, metadata, status, schema
-		assert.Len(t, files, 1)
-		// Check content against the golden files
-		compareToGolden(t, files, "typescript/unversioned")
-	})
-
-	t.Run("model", func(t *testing.T) {
-		kinds, err := parser.KindParser(false).Parse(os.DirFS(TestCUEDirectory), "customKind2")
-		fmt.Println(err)
-		require.Nil(t, err)
-		files, err := TypeScriptModelsGenerator(false).Generate(kinds...)
-		require.Nil(t, err)
-		// Check number of files generated
-		// 5 -> object, spec, metadata, status, schema
-		assert.Len(t, files, 1)
-		// Check content against the golden files
-		compareToGolden(t, files, "typescript/unversioned")
-	})
-}
-
 func TestTypeScriptResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
@@ -167,7 +112,7 @@ func TestManifestGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGenerator(yaml.Marshal, "yaml", "test-app-test-kind").Generate(kinds...)
+		files, err := ManifestGenerator(yaml.Marshal, "yaml").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
@@ -197,7 +142,7 @@ func TestManifestGoGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("generated", "test-app").Generate(kinds...)
+		files, err := ManifestGoGenerator("groupbygroup").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema

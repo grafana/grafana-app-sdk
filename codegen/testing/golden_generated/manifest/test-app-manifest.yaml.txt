@@ -1,0 +1,65 @@
+apiVersion: apps.grafana.com/v1
+kind: AppManifest
+metadata:
+    name: test-app
+spec:
+    appName: test-app
+    group: test.ext.grafana.com
+    kinds:
+        - kind: TestKind
+          scope: Namespaced
+          versions:
+            - name: v1
+              schema:
+                spec:
+                    properties:
+                        stringField:
+                            type: string
+                    required:
+                        - stringField
+                    type: object
+                status:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+            - name: v2
+              admission:
+                mutation:
+                    operations:
+                        - CREATE
+                        - UPDATE
+              schema:
+                spec:
+                    properties:
+                        intField:
+                            format: int64
+                            type: integer
+                        stringField:
+                            type: string
+                        timeField:
+                            format: date-time
+                            type: string
+                    required:
+                        - stringField
+                        - intField
+                        - timeField
+                    type: object
+                status:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+          conversion: true
+        - kind: TestKind2
+          scope: Namespaced
+          versions:
+            - name: v1
+              schema:
+                spec:
+                    properties:
+                        testField:
+                            type: string
+                    required:
+                        - testField
+                    type: object
+                status:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+          conversion: false

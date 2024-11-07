@@ -3,7 +3,7 @@ package testing
 import "time"
 
 customManifest: {
-	appName: "custom"
+	appName: "custom-app"
 	group: "custom"
 	kinds: [customKind]
 }

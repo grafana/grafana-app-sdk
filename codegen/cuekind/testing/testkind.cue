@@ -3,7 +3,7 @@ package testing
 import "time"
 
 testManifest: {
-	appName: "test"
+	appName: "test-app"
 	group: "test",
 	kinds: [testKind, testKind2]
 }

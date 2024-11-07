@@ -7,8 +7,9 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
-	AppName string
-	Group   string
+	AppName   string `json:"appName"`
+	Group     string `json:"group"`
+	FullGroup string `json:"fullGroup"`
 }
 
 type SimpleManifest struct {

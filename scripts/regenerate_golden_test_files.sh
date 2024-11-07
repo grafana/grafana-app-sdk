@@ -14,6 +14,18 @@ go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testin
   -t="${testdir}/typescript/versioned" \
   --kindgrouping=group --nomanifest \
   --selectors="customManifest,testManifest"
+go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testing" \
+  -g="${testdir}/go/groupbygroup" \
+  --crdpath="${testdir}/crd" \
+  --crdencoding=yaml \
+  -t="${testdir}/typescript/versioned" \
+  --kindgrouping=group \
+  --selectors="customManifest,testManifest"
+# Move the manifest files
+mv "${testdir}/go/groupbygroup/test_manifest.go" "${testdir}/manifest/go/testkinds/test_manifest.go.txt"
+mv "${testdir}/go/groupbygroup/custom_manifest.go" "${testdir}/manifest/go/testkinds/custom_manifest.go.txt"
+mv "${testdir}/crd/test-app-manifest.yaml" "${testdir}/manifest/test-app-manifest.yaml"
+mv "${testdir}/crd/custom-app-manifest.yaml" "${testdir}/manifest/custom-app-manifest.yaml"
 # Group by kind (only customKind)
 go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbykind" \
@@ -21,9 +33,6 @@ go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testin
   -t="${testdir}/typescript/versioned" \
   --kindgrouping=kind --nomanifest --notypeinpath \
   --selectors="customManifest"
-# Thema is deprecated, so re-generating the "unversioned" files is disabled and should be done by hand until thema is removed
-# Since the tests try to check compliance with "unversioned" for both CUE and Thema, but you can't generated unversioned
-# CUE output from the grafana-app-sdk command, we're leaving it alone until it is removed in a future release.
 
 # Rename files to append .txt
 find "${testdir}" -depth -name "*.go" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;

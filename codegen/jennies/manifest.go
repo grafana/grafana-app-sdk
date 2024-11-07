@@ -20,7 +20,6 @@ type ManifestOutputEncoder func(any) ([]byte, error)
 type ManifestGenerator struct {
 	Encoder       ManifestOutputEncoder
 	FileExtension string
-	AppName       string
 }
 
 func (*ManifestGenerator) JennyName() string {
@@ -35,9 +34,6 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 		return nil, err
 	}
 
-	if m.AppName != "" {
-		manifestData.AppName = m.AppName
-	}
 	if manifestData.Group == "" {
 		if len(manifestData.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
@@ -71,7 +67,6 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 }
 
 type ManifestGoGenerator struct {
-	AppName string
 	Package string
 }
 
@@ -85,9 +80,6 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 		return nil, err
 	}
 
-	if g.AppName != "" {
-		manifestData.AppName = g.AppName
-	}
 	if manifestData.Group == "" {
 		if len(manifestData.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
@@ -113,7 +105,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	files := make(codejen.Files, 0)
 	files = append(files, codejen.File{
 		Data:         formatted,
-		RelativePath: "manifest.go",
+		RelativePath: fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group),
 		From:         []codejen.NamedJenny{g},
 	})
 
@@ -126,7 +118,7 @@ func buildManifestData(m codegen.AppManifest) (*app.ManifestData, error) {
 	}
 
 	manifest.AppName = m.Name()
-	manifest.Group = m.Properties().Group
+	manifest.Group = m.Properties().FullGroup
 
 	for _, kind := range m.Kinds() {
 		// TODO

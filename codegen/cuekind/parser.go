@@ -142,7 +142,9 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.Ap
 		return nil, err
 	}
 
-	manifest := &codegen.SimpleManifest{}
+	manifest := &codegen.SimpleManifest{
+		Props: manifestProps,
+	}
 
 	manifest.AllKinds = make([]codegen.Kind, 0)
 	kindsVal := val.LookupPath(cue.MakePath(cue.Str("kinds")))

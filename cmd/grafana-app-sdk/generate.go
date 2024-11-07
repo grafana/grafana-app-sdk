@@ -245,7 +245,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			if cfg.CRDEncoding == "yaml" {
 				encFunc = yaml.Marshal
 			}
-			manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, ""), selectors...)
+			manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding), selectors...)
 			if err != nil {
 				return nil, err
 			}
@@ -254,7 +254,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			}
 		}
 
-		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), ""), selectors...)
+		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath)), selectors...)
 		if err != nil {
 			return nil, err
 		}

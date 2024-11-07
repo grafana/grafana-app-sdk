@@ -1,0 +1,142 @@
+apiVersion: apps.grafana.com/v1
+kind: AppManifest
+metadata:
+    name: custom-app
+spec:
+    appName: custom-app
+    group: custom.ext.grafana.com
+    kinds:
+        - kind: CustomKind
+          scope: Namespaced
+          versions:
+            - name: v0-0
+              schema:
+                spec:
+                    properties:
+                        deprecatedField:
+                            type: string
+                        field1:
+                            type: string
+                    required:
+                        - field1
+                        - deprecatedField
+                    type: object
+                status:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+            - name: v1-0
+              schema:
+                spec:
+                    properties:
+                        boolField:
+                            default: false
+                            type: boolean
+                        enum:
+                            default: default
+                            enum:
+                                - default
+                                - val2
+                                - val3
+                                - val4
+                                - val1
+                            type: string
+                        field1:
+                            type: string
+                        floatField:
+                            format: double
+                            type: number
+                        i32:
+                            maximum: 123456
+                            minimum: -2147483648
+                            type: integer
+                        i64:
+                            maximum: 9223372036854775807
+                            minimum: 123456
+                            type: integer
+                        inner:
+                            properties:
+                                innerField1:
+                                    type: string
+                                innerField2:
+                                    items:
+                                        type: string
+                                    type: array
+                                innerField3:
+                                    items:
+                                        properties:
+                                            details:
+                                                additionalProperties: {}
+                                                type: object
+                                            name:
+                                                type: string
+                                        required:
+                                            - name
+                                            - details
+                                        type: object
+                                    type: array
+                            required:
+                                - innerField1
+                                - innerField2
+                                - innerField3
+                            type: object
+                        map:
+                            additionalProperties:
+                                properties:
+                                    details:
+                                        type: object
+                                        x-kubernetes-preserve-unknown-fields: true
+                                    group:
+                                        type: string
+                                required:
+                                    - group
+                                    - details
+                                type: object
+                            type: object
+                        timestamp:
+                            format: date-time
+                            type: string
+                        union:
+                            oneOf:
+                                - allOf:
+                                    - required:
+                                        - group
+                                    - not:
+                                        anyOf:
+                                            - required:
+                                                - group
+                                                - details
+                                - required:
+                                    - group
+                                    - details
+                            properties:
+                                details:
+                                    type: object
+                                    x-kubernetes-preserve-unknown-fields: true
+                                group:
+                                    type: string
+                                options:
+                                    items:
+                                        type: string
+                                    type: array
+                            type: object
+                    required:
+                        - field1
+                        - inner
+                        - union
+                        - map
+                        - timestamp
+                        - enum
+                        - i32
+                        - i64
+                        - boolField
+                        - floatField
+                    type: object
+                status:
+                    properties:
+                        statusField1:
+                            type: string
+                    required:
+                        - statusField1
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+          conversion: false
