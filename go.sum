@@ -1,6 +1,8 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 cuelabs.dev/go/oci/ociregistry v0.0.0-20240807094312-a32ad29eed79 h1:EceZITBGET3qHneD5xowSTY/YHbNybvMWGh62K2fG/M=
 cuelabs.dev/go/oci/ociregistry v0.0.0-20240807094312-a32ad29eed79/go.mod h1:5A4xfTzHTXfeVJBU6RAUf+QrlfTCW+017q/QiW+sMLg=
+cuelang.org/go v0.5.0 h1:D6N0UgTGJCOxFKU8RU+qYvavKNsVc/+ZobmifStVJzU=
+cuelang.org/go v0.5.0/go.mod h1:okjJBHFQFer+a41sAe2SaGm1glWS8oEb6CmJvn5Zdws=
 cuelang.org/go v0.10.1 h1:vDRRsd/5CICzisZ/13kBmXt3M+9eDl/pI06rrHyhlgA=
 cuelang.org/go v0.10.1/go.mod h1:HzlaqqqInHNiqE6slTP6+UtxT9hN6DAzgJgdbNxXvX8=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
