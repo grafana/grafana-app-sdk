@@ -76,6 +76,9 @@ Schema: {
 Kind: S={
 	kind: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
 	group: =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
+	// manifestGroup is a group shortname used for package naming in codegen
+	// TODO: remove this when all jenny pipelines use the manifest, or keep around for convenience?
+	manifestGroup: string
 	current: string
 	// scope determines whether resources of this kind exist globally ("Cluster") or
 	// within Kubernetes namespaces.
@@ -141,6 +144,7 @@ Manifest: S={
 	group: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
 	kinds: [...{
 		group: S.fullGroup
+		manifestGroup: S.group
 	} & Kind]
 	permissions: {
 		accessKinds: [...#AccessKind]

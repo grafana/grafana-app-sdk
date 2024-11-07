@@ -13,14 +13,14 @@ go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testin
   --crdpath="${testdir}/crd" \
   -t="${testdir}/typescript/versioned" \
   --kindgrouping=group --nomanifest \
-  --selectors="customKind,testKind,testKind2"
+  --selectors="customManifest,testManifest"
 # Group by kind (only customKind)
 go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbykind" \
   --crdpath="${testdir}/crd" \
   -t="${testdir}/typescript/versioned" \
   --kindgrouping=kind --nomanifest --notypeinpath \
-  --selectors="customKind"
+  --selectors="customManifest"
 # Thema is deprecated, so re-generating the "unversioned" files is disabled and should be done by hand until thema is removed
 # Since the tests try to check compliance with "unversioned" for both CUE and Thema, but you can't generated unversioned
 # CUE output from the grafana-app-sdk command, we're leaving it alone until it is removed in a future release.

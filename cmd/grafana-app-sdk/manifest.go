@@ -9,17 +9,7 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
-
-func loadManifestCUE(modFS fs.FS, selector string) (codegen.AppManifest, error) {
-	parser, err := cuekind.NewParser()
-	if err != nil {
-		return nil, err
-	}
-	return parser.ParseManifest(modFS)
-}
 
 func addKindToManifestBytesCUE(manifestBytes []byte, kindFieldName string) ([]byte, error) {
 	contents := string(manifestBytes)

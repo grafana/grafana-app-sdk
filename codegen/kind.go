@@ -18,6 +18,8 @@ type KindProperties struct {
 	Kind string `json:"kind"`
 	// Group is the group the Kind is a part of
 	Group string `json:"group"`
+	// ManifestGroup is the group shortname used by the AppManifest this Kind belongs to
+	ManifestGroup string `json:"manifestGroup"`
 	// MachineName is the machine version of the Kind, which follows the regex: /^[a-z]+[a-z0-9]*$/
 	MachineName string `json:"machineName"`
 	// PluralMachineName is the plural of the MachineName
