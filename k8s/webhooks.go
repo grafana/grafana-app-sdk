@@ -110,7 +110,11 @@ func (w *WebhookServer) AddValidatingAdmissionController(controller resource.Val
 	if w.validatingControllers == nil {
 		w.validatingControllers = make(map[string]validatingAdmissionControllerTuple)
 	}
-	w.validatingControllers[gk(kind.Group(), kind.Kind())] = validatingAdmissionControllerTuple{
+	w.validatingControllers[gvk(&metav1.GroupVersionKind{
+		Group:   kind.Group(),
+		Version: kind.Version(),
+		Kind:    kind.Kind(),
+	})] = validatingAdmissionControllerTuple{
 		schema:     kind,
 		controller: controller,
 	}
@@ -123,7 +127,11 @@ func (w *WebhookServer) AddMutatingAdmissionController(controller resource.Mutat
 	if w.mutatingControllers == nil {
 		w.mutatingControllers = make(map[string]mutatingAdmissionControllerTuple)
 	}
-	w.mutatingControllers[gk(kind.Group(), kind.Kind())] = mutatingAdmissionControllerTuple{
+	w.mutatingControllers[gvk(&metav1.GroupVersionKind{
+		Group:   kind.Group(),
+		Version: kind.Version(),
+		Kind:    kind.Kind(),
+	})] = mutatingAdmissionControllerTuple{
 		schema:     kind,
 		controller: controller,
 	}
@@ -197,7 +205,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	// Look up the schema and controller
 	var schema resource.Kind
 	var controller resource.ValidatingAdmissionController
-	if tpl, ok := w.validatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
+	if tpl, ok := w.validatingControllers[gvk(admRev.Request.RequestKind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
 	} else if w.DefaultValidatingController != nil {
@@ -274,7 +282,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// Look up the schema and controller
 	var schema resource.Kind
 	var controller resource.MutatingAdmissionController
-	if tpl, ok := w.mutatingControllers[gk(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)]; ok {
+	if tpl, ok := w.mutatingControllers[gvk(admRev.Request.RequestKind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
 	} else if w.DefaultMutatingController != nil {
@@ -443,6 +451,10 @@ type mutatingAdmissionControllerTuple struct {
 
 func gk(group, kind string) string {
 	return fmt.Sprintf("%s.%s", kind, group)
+}
+
+func gvk(kind *metav1.GroupVersionKind) string {
+	return kind.String()
 }
 
 //nolint:gosec
