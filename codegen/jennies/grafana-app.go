@@ -3,6 +3,7 @@ package jennies
 import (
 	"bytes"
 	"go/format"
+	"path"
 
 	"github.com/grafana/codejen"
 
@@ -10,26 +11,24 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
-type AppGenerator struct {
-	GroupByKind bool
+type GrafanaAppGenerator struct {
 	ProjectRepo string
 	ProjectName string
-	CodegenPath string
+	APIsPath    string
 }
 
-func (*AppGenerator) JennyName() string {
-	return "App"
+func (*GrafanaAppGenerator) JennyName() string {
+	return "GrafanaApp"
 }
 
-func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
+func (a *GrafanaAppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.AppMetadata{
-		Repo:            a.ProjectRepo,
-		ProjectName:     a.ProjectName,
-		CodegenPath:     a.CodegenPath,
-		PackageName:     "app",
-		WatcherPackage:  "watchers",
-		Resources:       make([]templates.AppMetadataKind, 0),
-		KindsAreGrouped: !a.GroupByKind,
+		Repo:           a.ProjectRepo,
+		ProjectName:    a.ProjectName,
+		APIsPath:       a.APIsPath,
+		PackageName:    "app",
+		WatcherPackage: "watchers",
+		Resources:      make([]templates.AppMetadataKind, 0),
 	}
 
 	for _, kind := range kinds {
@@ -47,7 +46,7 @@ func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	}
 
 	b := bytes.Buffer{}
-	err := templates.WriteAppGoFile(tmd, &b, templates.TemplateApp)
+	err := templates.WriteAppGoFile(tmd, &b, templates.TemplateGrafanaApp)
 	if err != nil {
 		return nil, err
 	}
@@ -55,5 +54,6 @@ func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return codejen.NewFile("pkg/app/app.go", formatted, a), nil
+	// TODO: do inside codegen_path/package_name (apps/playlist)
+	return codejen.NewFile(path.Join(tmd.CodegenPath, "pkg/app/app.go"), formatted, a), nil
 }
