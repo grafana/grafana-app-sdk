@@ -2,28 +2,65 @@ package {{.PackageName}}
 
 import (
     "context"
+    "errors"
     "fmt"
+    "reflect"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
-	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/klog/v2"
 
-	generated "{{.Repo}}/{{.CodegenPath}}"
-	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKindAll }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{$.APIsPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
-    {{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{$k:=.}}{{range .Versions}}{{ $.ToPackageName $k.MachineName}}{{ $.ToPackageName .}} "{{$.Repo}}/{{$.CodegenPath}}/{{$.APIsPath}}/resource/{{ $.ToPackageName $k.MachineName }}/{{ $.ToPackageName .}}"
-	{{end}}{{end}}{{end}}{{end}}
+	{{ range $key, $val := .GVToKindAll }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.APIsPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
+	{{end}}
+	{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
 )
 
+type {{.ProjectName | .ToUpper}}Config struct {
+	EnableWatchers bool
+}
+
 func New(cfg app.Config) (app.App, error) {
-    // FIXME: you likely want to use cfg.SpecificConfig to make Watcher initialization conditional
-    {{ $p := .WatcherPackage }}{{ range $key, $val := .GVToKindCurrent }}{{ range $val }}{{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
-    if err != nil {
-        return nil, fmt.Errorf("unable to create {{.Kind}}Watcher: %w", err)
+    {{.ProjectName}}Config, ok := cfg.SpecificConfig.(*{{.ProjectName | .ToUpper}}Config)
+    if !ok {
+        return nil, errors.New("could not load project's specific config, type assertion failed: type of SpecificConfig=" + reflect.TypeOf(cfg.SpecificConfig).Name())
     }
-    {{ end }}{{ end }}
+
+    managedKinds := make([]simple.AppManagedKind, 0)
+    {{ $pn := .ProjectName }}
+    {{ $wp := .WatcherPackage }}
+
+    {{ range $key, $val := .GVToKindCurrent }}{{ range $val }}
+    {
+        managedKind := simple.AppManagedKind{
+            Kind: {{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(),
+            Mutator: &simple.Mutator{
+                MutateFunc: func(ctx context.Context, req *app.AdmissionRequest) (*app.MutatingResponse, error) {
+                   // modify req.Object if needed
+                   return &app.MutatingResponse{
+                           UpdatedObject: req.Object,
+                   }, nil
+               },
+            },
+            Validator: &simple.Validator{
+               ValidateFunc: func(ctx context.Context, req *app.AdmissionRequest) error {
+                   // do something here if needed
+                   return nil
+               },
+            },
+        }
+        managedKinds = append(managedKinds, managedKind)
+        if {{$pn}}Config.EnableWatchers {
+            {{ $p := $wp }}{{.MachineName}}Watcher, err := {{if ne $p ""}}{{$p}}.{{end}}New{{.Kind}}Watcher()
+            if err != nil {
+                return nil, fmt.Errorf("unable to create {{.Kind}}Watcher: %w", err)
+            }{{ if eq $key.Version .Current }}
+            managedKind.Watcher = {{.MachineName}}Watcher{{ end }}
+        }
+        {{ end }}{{ end }}
+    }
 
 	config := simple.AppConfig{
 		Name:           "{{.ProjectName}}",
@@ -31,15 +68,10 @@ func New(cfg app.Config) (app.App, error) {
 		InformerConfig: simple.AppInformerConfig{
 		    ErrorHandler: func(ctx context.Context, err error) {
                 // FIXME: add your own error handling here
-                logging.FromContext(ctx).With("error",err).Error("Informer processing error")
+                klog.ErrorS(err, "Informer processing error")
             },
 		},
-		ManagedKinds: []simple.AppManagedKind{ {{ range $key, $val := .GVToKindAll }}{{ range $val }}
-		    {
-		        Kind: {{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}{{ $.ToPackageName $key.Version}}.Kind(){{end}}, {{ if eq $key.Version .Current }}
-		        Watcher: {{.MachineName}}Watcher, {{ end }}
-		    },{{ end }}{{ end }}
-		},
+		ManagedKinds: managedKinds,
 	}
 
     // Create the App
@@ -50,5 +82,20 @@ func New(cfg app.Config) (app.App, error) {
 
 	// Validate the capabilities against the provided manifest to make sure there isn't a mismatch
 	err = a.ValidateManifest(cfg.ManifestData)
-	return a, err
+	 if err != nil {
+        return nil, err
+    }
+	return a, nil
+}
+
+func GetKinds() map[schema.GroupVersion]resource.Kind {
+    {{ range $key, $val := .GVToKindAll }}{{ range $val }}
+    gv := schema.GroupVersion{
+        Group:   {{ $.ToPackageNameVariable ($key.String) }}.{{.Kind}}Kind().Group(),
+        Version: {{ $.ToPackageNameVariable ($key.String) }}.{{.Kind}}Kind().Version(),
+    }
+    return map[schema.GroupVersion]resource.Kind{
+        gv: {{ $.ToPackageNameVariable ($key.String) }}.{{.Kind}}Kind(),
+    }
+    {{end}}{{ end }}
 }

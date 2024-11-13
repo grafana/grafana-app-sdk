@@ -12,10 +12,8 @@ import (
 )
 
 type GrafanaAppGenerator struct {
-	GroupByKind bool
 	ProjectRepo string
 	ProjectName string
-	CodegenPath string
 	APIsPath    string
 }
 
@@ -25,14 +23,12 @@ func (*GrafanaAppGenerator) JennyName() string {
 
 func (a *GrafanaAppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.AppMetadata{
-		Repo:            a.ProjectRepo,
-		ProjectName:     a.ProjectName,
-		CodegenPath:     a.CodegenPath,
-		APIsPath:        a.APIsPath,
-		PackageName:     "app",
-		WatcherPackage:  "watchers",
-		Resources:       make([]templates.AppMetadataKind, 0),
-		KindsAreGrouped: !a.GroupByKind,
+		Repo:           a.ProjectRepo,
+		ProjectName:    a.ProjectName,
+		APIsPath:       a.APIsPath,
+		PackageName:    "app",
+		WatcherPackage: "watchers",
+		Resources:      make([]templates.AppMetadataKind, 0),
 	}
 
 	for _, kind := range kinds {
@@ -59,5 +55,5 @@ func (a *GrafanaAppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, er
 		return nil, err
 	}
 	// TODO: do inside codegen_path/package_name (apps/playlist)
-	return codejen.NewFile(path.Join(tmd.CodegenPath, tmd.ProjectName, "pkg/app/app.go"), formatted, a), nil
+	return codejen.NewFile(path.Join(tmd.CodegenPath, "pkg/app/app.go"), formatted, a), nil
 }

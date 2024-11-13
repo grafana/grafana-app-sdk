@@ -141,10 +141,8 @@ func GrafanaAppGenerator(projectRepo, codegenPath, apisPath string, groupKinds b
 	g.Append(
 		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.GrafanaAppGenerator{
-			GroupByKind: !groupKinds,
 			ProjectRepo: projectRepo,
 			ProjectName: parts[len(parts)-1],
-			CodegenPath: codegenPath,
 			APIsPath:    apisPath,
 		},
 	)

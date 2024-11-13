@@ -9,6 +9,9 @@ import (
 	"strings"
 	"text/template"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -434,6 +437,11 @@ type extendedAppMetadata struct {
 	AppMetadata
 	GVToKindAll     map[schema.GroupVersion][]codegen.KindProperties
 	GVToKindCurrent map[schema.GroupVersion][]codegen.KindProperties
+}
+
+func (AppMetadata) ToUpper(input string) string {
+	caser := cases.Title(language.English)
+	return caser.String(input)
 }
 
 func (AppMetadata) ToPackageName(input string) string {

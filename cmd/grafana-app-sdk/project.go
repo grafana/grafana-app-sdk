@@ -507,7 +507,7 @@ func addComponentGrafanaApp[G anyGenerator](projectRootPath string, generator G,
 	var files codejen.Files
 	switch cast := any(generator).(type) {
 	case *codegen.Generator[codegen.Kind]:
-		appFiles, err := cast.Generate(cuekind.GrafanaAppGenerator(repo, "apps", "playlist/pkg/apis", groupKinds), selectors...)
+		appFiles, err := cast.Generate(cuekind.GrafanaAppGenerator(repo, ".", "pkg/apis", groupKinds), selectors...)
 		if err != nil {
 			return err
 		}
