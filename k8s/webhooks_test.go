@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func TestNewWebhookServer(t *testing.T) {
@@ -80,13 +81,13 @@ func TestNewWebhookServer(t *testing.T) {
 		assert.Equal(t, defVal, srv.DefaultValidatingController)
 		assert.Equal(t, defMut, srv.DefaultMutatingController)
 		assert.Equal(t, map[string]validatingAdmissionControllerTuple{
-			gk(testSchema.Group(), testSchema.Kind()): {
+			gvk(&metav1.GroupVersionKind{Group: testSchema.Group(), Version: testSchema.Version(), Kind: testSchema.Kind()}): {
 				schema:     testKind,
 				controller: schVal,
 			},
 		}, srv.validatingControllers)
 		assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
-			gk(testSchema.Group(), testSchema.Kind()): {
+			gvk(&metav1.GroupVersionKind{Group: testSchema.Group(), Version: testSchema.Version(), Kind: testSchema.Kind()}): {
 				schema:     testKind,
 				controller: schMut,
 			},
@@ -119,11 +120,11 @@ func TestWebhookServer_AddMutatingAdmissionController(t *testing.T) {
 	srv.AddMutatingAdmissionController(c1, sch1)
 	srv.AddMutatingAdmissionController(c2, sch2)
 	assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c1,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -131,11 +132,11 @@ func TestWebhookServer_AddMutatingAdmissionController(t *testing.T) {
 	// Overwrite
 	srv.AddMutatingAdmissionController(c3, sch1)
 	assert.Equal(t, map[string]mutatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c3,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -167,11 +168,11 @@ func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
 	srv.AddValidatingAdmissionController(c1, sch1)
 	srv.AddValidatingAdmissionController(c2, sch2)
 	assert.Equal(t, map[string]validatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c1,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
@@ -179,11 +180,11 @@ func TestWebhookServer_AddValidatingAdmissionController(t *testing.T) {
 	// Overwrite
 	srv.AddValidatingAdmissionController(c3, sch1)
 	assert.Equal(t, map[string]validatingAdmissionControllerTuple{
-		gk("foo", "bar"): {
+		gvk(&metav1.GroupVersionKind{Group: "foo", Version: "v1", Kind: "bar"}): {
 			schema:     sch1,
 			controller: c3,
 		},
-		gk("bar", "foo"): {
+		gvk(&metav1.GroupVersionKind{Group: "bar", Version: "v1", Kind: "foo"}): {
 			schema:     sch2,
 			controller: c2,
 		},
