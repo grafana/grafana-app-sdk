@@ -52,6 +52,22 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 		},
 	}
 
+	if kind.Properties().APIResource.Conversion {
+		resource.Spec.Conversion = &k8s.CustomResourceDefinitionSpecConversion{
+			Strategy: "webhook",
+			Webhook: &k8s.CustomResourceDefinitionSpecConversionWebhook{
+				ConversionReviewVersions: []string{"v1"},
+				ClientConfig: k8s.CustomResourceDefinitionClientConfig{
+					Service: k8s.CustomResourceDefinitionClientConfigService{
+						Path:      kind.Properties().APIResource.ConversionWebhookProps.Path,
+						Name:      kind.Properties().APIResource.ConversionWebhookProps.ServiceName,
+						Namespace: kind.Properties().APIResource.ConversionWebhookProps.ServiceNamespace,
+					},
+				},
+			},
+		}
+	}
+
 	for _, ver := range kind.Versions() {
 		v, err := KindVersionToCRDSpecVersion(ver, kind.Properties().Kind, ver.Version == kind.Properties().Current)
 		if err != nil {

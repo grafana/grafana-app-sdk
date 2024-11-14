@@ -142,6 +142,13 @@ Kind: S={
 		}
 		// conversion determines whether there is code-based conversion for this kind. Used for generating the manifest.
 		conversion: bool | *false
+		// conversionWebhookProps is a temporary way of specifying the service webhook information
+		// which will be migrated away from once manifests are used in the codegen pipeline
+		conversionWebhookProps: {
+			serviceName: string | *""
+			serviceNamespace: string | *""
+			path: string | *"/convert"
+		}
 	}
 	// isCRD is true if the `crd` trait is present in the kind.
 	isAPIResource: apiResource != _|_
