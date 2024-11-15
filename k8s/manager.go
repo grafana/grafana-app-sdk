@@ -346,8 +346,9 @@ type CustomResourceDefinitionClientConfig struct {
 }
 
 type CustomResourceDefinitionClientConfigService struct {
-	Name      string `json:"name" yaml:"name"`
-	Namespace string `json:"namespace" yaml:"namespace"`
+	URL       string `json:"url,omitempty" yaml:"url,omitempty"`
+	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
 	Path      string `json:"path" yaml:"path"`
 }
 

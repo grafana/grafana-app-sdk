@@ -145,8 +145,7 @@ Kind: S={
 		// conversionWebhookProps is a temporary way of specifying the service webhook information
 		// which will be migrated away from once manifests are used in the codegen pipeline
 		conversionWebhookProps: {
-			serviceName: string | *""
-			serviceNamespace: string | *""
+			url: string | *""
 			path: string | *"/convert"
 		}
 	}

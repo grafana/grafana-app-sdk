@@ -59,9 +59,8 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 				ConversionReviewVersions: []string{"v1"},
 				ClientConfig: k8s.CustomResourceDefinitionClientConfig{
 					Service: k8s.CustomResourceDefinitionClientConfigService{
-						Path:      kind.Properties().APIResource.ConversionWebhookProps.Path,
-						Name:      kind.Properties().APIResource.ConversionWebhookProps.ServiceName,
-						Namespace: kind.Properties().APIResource.ConversionWebhookProps.ServiceNamespace,
+						Path: kind.Properties().APIResource.ConversionWebhookProps.Path,
+						URL:  kind.Properties().APIResource.ConversionWebhookProps.URL,
 					},
 				},
 			},

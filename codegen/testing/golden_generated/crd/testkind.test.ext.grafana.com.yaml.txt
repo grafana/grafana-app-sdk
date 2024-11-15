@@ -139,7 +139,6 @@ spec:
                 - v1
             clientConfig:
                 service:
-                    name: foo-operator
-                    namespace: foo-namespace
+                    url: http://foo.bar
                     path: /convert
     scope: Namespaced

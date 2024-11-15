@@ -45,9 +45,8 @@ type APIResourceProperties struct {
 }
 
 type ConversionWebhookProperties struct {
-	ServiceName      string `json:"serviceName"`
-	ServiceNamespace string `json:"serviceNamespace"`
-	Path             string `json:"path"`
+	URL  string `json:"url"`
+	Path string `json:"path"`
 }
 
 type KindAdmissionCapabilityOperation string
