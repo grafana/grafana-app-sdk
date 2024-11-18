@@ -20,6 +20,7 @@ type KubernetesBasedInformer struct {
 	ErrorHandler        func(context.Context, error)
 	SharedIndexInformer cache.SharedIndexInformer
 	schema              resource.Kind
+	runContext          context.Context
 }
 
 type KubernetesBasedInformerOptions struct {
@@ -68,13 +69,22 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
-	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler))
+	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler, func() context.Context {
+		if k.runContext != nil {
+			return k.runContext
+		}
+		return context.Background()
+	}))
 
 	return err
 }
 
 // Run starts the informer and blocks until stopCh receives a message
 func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
+	k.runContext = ctx
+	defer func() {
+		k.runContext = nil
+	}()
 	k.SharedIndexInformer.Run(ctx.Done())
 	return nil
 }
