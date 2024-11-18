@@ -120,19 +120,6 @@ func TestManifestGenerator(t *testing.T) {
 		// Check content against the golden files
 		compareToGolden(t, files, "manifest")
 	})
-
-	/*t.Run("model", func(t *testing.T) {
-		kinds, err := parser.Parse(os.DirFS(TestCUEDirectory), "customKind2")
-		fmt.Println(err)
-		require.Nil(t, err)
-		files, err := ManifestGenerator(yaml.Marshal, "yaml", "test-app-custom-kind-2").Generate(kinds...)
-		require.Nil(t, err)
-		// Check number of files generated
-		// 5 -> object, spec, metadata, status, schema
-		assert.Len(t, files, 1)
-		// Check content against the golden files
-		compareToGolden(t, files, "manifest")
-	})*/
 }
 
 func TestManifestGoGenerator(t *testing.T) {
