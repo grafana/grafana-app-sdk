@@ -205,6 +205,8 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 				return nil, err
 			}
 			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"))
+		case FormatNone:
+			return codejen.Files{}, nil
 		default:
 			return nil, fmt.Errorf("unknown kind format '%s'", format)
 		}
