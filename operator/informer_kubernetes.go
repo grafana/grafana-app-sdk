@@ -12,6 +12,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+var _ Informer = &KubernetesBasedInformer{}
+
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
 // and works most optimally with a client that has a Watch response that implements KubernetesCompatibleWatch.
 type KubernetesBasedInformer struct {
@@ -20,7 +22,7 @@ type KubernetesBasedInformer struct {
 	schema              resource.Kind
 }
 
-type KubernetesBasedIformerOptions struct {
+type KubernetesBasedInformerOptions struct {
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
@@ -32,14 +34,14 @@ type KubernetesBasedIformerOptions struct {
 // using the ListWatchClient provided to do its List and Watch requests.
 func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
 	*KubernetesBasedInformer, error) {
-	return NewKubernetesBasedInformerWithFilters(sch, client, KubernetesBasedIformerOptions{
+	return NewKubernetesBasedInformerWithFilters(sch, client, KubernetesBasedInformerOptions{
 		ListWatchOptions: ListWatchOptions{Namespace: namespace},
 	})
 }
 
 // NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, options KubernetesBasedIformerOptions) (
+func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, options KubernetesBasedInformerOptions) (
 	*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
@@ -72,8 +74,8 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 }
 
 // Run starts the informer and blocks until stopCh receives a message
-func (k *KubernetesBasedInformer) Run(stopCh <-chan struct{}) error {
-	k.SharedIndexInformer.Run(stopCh)
+func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
+	k.SharedIndexInformer.Run(ctx.Done())
 	return nil
 }
 

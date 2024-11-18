@@ -98,7 +98,7 @@ func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
 // Run runs the informer until stopCh is closed or receives a message.
 // While running, events from the ListerWatcher will be propagated to all registered ResourceWatcher handlers,
 // and current state of all resources will be stored in the custom cache.Store.
-func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
+func (c *CustomCacheInformer) Run(ctx context.Context) error {
 	defer utilruntime.HandleCrash()
 
 	if c.HasStarted() {
@@ -128,7 +128,7 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	}()
 	// Wait for the processor to complete startup before running the controller (otherwise events may be dropped by distribution)
 	<-c.processor.startedCh
-	c.controller.Run(stopCh)
+	c.controller.Run(ctx.Done())
 	return nil
 }
 

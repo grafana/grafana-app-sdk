@@ -30,13 +30,13 @@ func TestCustomCacheInformer_Run(t *testing.T) {
 				return nil, fmt.Errorf("I AM ERROR")
 			},
 		}, untypedKind)
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		stopped := false
 		go func() {
-			inf.Run(stopCh)
+			inf.Run(ctx)
 			stopped = true
 		}()
-		close(stopCh)
+		cancel()
 		time.Sleep(time.Second)
 		assert.True(t, stopped, "informer did not stop when stopCh was closed")
 	})
@@ -92,9 +92,9 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 		})
 	}
 
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go inf.Run(stopCh)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go inf.Run(ctx)
 
 	// Add
 	wg.Add(numHandlers)
@@ -155,9 +155,9 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 			},
 		})
 	}
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go inf.Run(stopCh)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go inf.Run(ctx)
 	for i := 0; i < numEvents; i++ {
 		etype := watch.Added
 		switch i % 3 {
@@ -215,9 +215,9 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 			return nil
 		},
 	})
-	stopCh := make(chan struct{})
-	go inf.Run(stopCh)
-	defer close(stopCh)
+	ctx, cancel := context.WithCancel(context.Background())
+	go inf.Run(ctx)
+	defer cancel()
 
 	obj := &resource.UntypedObject{
 		ObjectMeta: metav1.ObjectMeta{
