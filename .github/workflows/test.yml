@@ -63,6 +63,7 @@ jobs:
         run: |
           mkdir -p codegen-tests && cd codegen-tests
           grafana-app-sdk project init "codegen-tests"
+          rm -rf kinds/manifest.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/*.cue kinds/
           mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
           find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
