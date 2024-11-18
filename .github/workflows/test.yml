@@ -70,8 +70,8 @@ jobs:
       - name: Generate code
         run: |
           cd codegen-tests
-          grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --crdencoding=json --nomanifest customManifest testManifest
-          grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --crdencoding=yaml --nomanifest customManifest testManifest
+          grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --crdencoding=json --nomanifest --selectors=customManifest,testManifest
+          grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --crdencoding=yaml --nomanifest --selectors=customManifest,testManifest
           diff pkg/gen1/resource/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
           difflines=$(wc -l diff.txt | awk '{ print $1 }')
