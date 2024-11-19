@@ -2,14 +2,14 @@ package jennies
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"path"
 	"strings"
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
-	"github.com/grafana/cuetsy"
-
+	"github.com/grafana/cog"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
@@ -120,11 +120,6 @@ func (TypeScriptTypes) JennyName() string {
 }
 
 func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
-	cfg := cuetsy.Config{
-		ImportMapper: cuetsy.IgnoreImportMapper,
-		Export:       true,
-	}
-
 	if j.GenerateOnlyCurrent {
 		ver := kind.Version(kind.Properties().Current)
 		if ver == nil {
@@ -134,7 +129,7 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			return nil, nil
 		}
 
-		return j.generateFiles(ver, kind.Name(), "", strings.ToLower(kind.Properties().MachineName)+"_", cfg)
+		return j.generateFiles(ver, kind.Name(), "", strings.ToLower(kind.Properties().MachineName)+"_")
 	}
 
 	files := make(codejen.Files, 0)
@@ -146,7 +141,7 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			continue
 		}
 
-		generated, err := j.generateFiles(&v, kind.Name(), fmt.Sprintf("%s/%s", kind.Properties().MachineName, v.Version), "", cfg)
+		generated, err := j.generateFiles(&v, kind.Name(), fmt.Sprintf("%s/%s", kind.Properties().MachineName, v.Version), "")
 		if err != nil {
 			return nil, err
 		}
@@ -155,12 +150,12 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	return files, nil
 }
 
-func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathPrefix, prefix string, cfg cuetsy.Config) (codejen.Files, error) {
+func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathPrefix, prefix string) (codejen.Files, error) {
 	if j.Depth > 0 {
-		return j.generateFilesAtDepth(version.Schema, version, 0, pathPrefix, prefix, cfg)
+		return j.generateFilesAtDepth(version.Schema, version, 0, pathPrefix, prefix)
 	}
 
-	tsBytes, err := generateTypescriptBytes(version.Schema, exportField(sanitizeLabelString(name)), cfg)
+	tsBytes, err := generateTypescriptBytes(version.Schema, exportField(sanitizeLabelString(name)))
 	if err != nil {
 		return nil, err
 	}
@@ -171,13 +166,13 @@ func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathP
 	}}, nil
 }
 
-func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, pathPrefix string, prefix string, cfg cuetsy.Config) (codejen.Files, error) {
+func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, pathPrefix string, prefix string) (codejen.Files, error) {
 	if currDepth == j.Depth {
 		fieldName := make([]string, 0)
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
-		tsBytes, err := generateTypescriptBytes(v, exportField(strings.Join(fieldName, "")), cfg)
+		tsBytes, err := generateTypescriptBytes(v, exportField(strings.Join(fieldName, "")))
 		if err != nil {
 			return nil, err
 		}
@@ -195,7 +190,7 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := j.generateFilesAtDepth(it.Value(), kv, currDepth+1, pathPrefix, prefix, cfg)
+		f, err := j.generateFilesAtDepth(it.Value(), kv, currDepth+1, pathPrefix, prefix)
 		if err != nil {
 			return nil, err
 		}
@@ -204,21 +199,18 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 	return files, nil
 }
 
-func generateTypescriptBytes(v cue.Value, name string, cfg cuetsy.Config) ([]byte, error) {
-	tf, err := cuetsy.GenerateAST(v, cfg)
+func generateTypescriptBytes(v cue.Value, name string) ([]byte, error) {
+	files, err := cog.TypesFromSchema().
+		CUEValue("", v, cog.ForceEnvelope(name)).
+		Typescript(cog.TypescriptConfig{}).
+		Run(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	as := cuetsy.TypeInterface
-	top, err := cuetsy.GenerateSingleAST(name, v.Eval(), as)
-	if err != nil {
-		return nil, fmt.Errorf("generating TS for schema root failed: %w", err)
+
+	if len(files) != 1 {
+		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
 	}
-	tf.Nodes = append(tf.Nodes, top.T)
-	if top.D != nil {
-		tf.Nodes = append(tf.Nodes, top.D)
-	}
-	// post-process fix on the generated TS
-	fixed := strings.ReplaceAll(tf.String(), "Array<string>", "string[]")
-	return []byte(fixed), nil
+
+	return files[0].Data, nil
 }
