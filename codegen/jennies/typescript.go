@@ -10,6 +10,7 @@ import (
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )

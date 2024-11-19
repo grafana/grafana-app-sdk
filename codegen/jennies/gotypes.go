@@ -9,6 +9,7 @@ import (
 	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
@@ -160,7 +161,7 @@ type CUEGoConfig struct {
 }
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
-	nameFunc := func(value cue.Value, definitionPath cue.Path) string {
+	nameFunc := func(_ cue.Value, definitionPath cue.Path) string {
 		i := 0
 		for ; i < len(definitionPath.Selectors()) && i < len(v.Path().Selectors()); i++ {
 			if maxNamingDepth > 0 && i >= maxNamingDepth {
