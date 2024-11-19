@@ -1,7 +1,13 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v1
 
-// TestKindSpec defines model for TestKindSpec.
 // +k8s:openapi-gen=true
 type TestKindSpec struct {
 	StringField string `json:"stringField"`
+}
+
+// NewTestKindSpec creates a new TestKindSpec object.
+func NewTestKindSpec() *TestKindSpec {
+	return &TestKindSpec{}
 }
