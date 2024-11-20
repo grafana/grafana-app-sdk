@@ -23,9 +23,6 @@ import (
 //go:embed templates/*.tmpl
 var templates embed.FS
 
-//go:embed templates/frontend-static/* templates/frontend-static/.config/*
-var frontEndStaticFiles embed.FS
-
 var projectCmd = &cobra.Command{
 	Use: "project",
 }
@@ -485,6 +482,7 @@ type anyGenerator interface {
 	*codegen.Generator[codegen.Kind]
 }
 
+//nolint:revive
 func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool, confirmOverwrite bool) error {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
@@ -613,10 +611,9 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 	return nil
 }
 
-//
 // Frontend plugin
 //
-
+//nolint:revive
 func addComponentFrontend(projectRootPath string, pluginID string) error {
 	// Check plugin ID
 	if pluginID == "" {
@@ -630,7 +627,9 @@ func addComponentFrontend(projectRootPath string, pluginID string) error {
 	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}
 	cmd := exec.Command("yarn", args...)
 	buf := bytes.Buffer{}
+	ebuf := bytes.Buffer{}
 	cmd.Stdout = &buf
+	cmd.Stderr = &ebuf
 	err := cmd.Start()
 	if err != nil {
 		return err
@@ -640,6 +639,7 @@ func addComponentFrontend(projectRootPath string, pluginID string) error {
 	if err != nil {
 		// Only print command output on error
 		fmt.Println(buf.String())
+		fmt.Println(ebuf.String())
 		return err
 	}
 
@@ -711,26 +711,6 @@ func writePluginJSON(fullPath, id, name, author, slug string) error {
 	return writeFile(fullPath, b.Bytes())
 }
 
-func writePackageJSON(fullPath, name, author string) error {
-	tmp, err := template.ParseFS(templates, "templates/package.json.tmpl")
-	if err != nil {
-		return err
-	}
-	data := struct {
-		PluginName   string
-		PluginAuthor string
-	}{
-		PluginName:   name,
-		PluginAuthor: author,
-	}
-	b := bytes.Buffer{}
-	err = tmp.Execute(&b, data)
-	if err != nil {
-		return err
-	}
-	return writeFile(fullPath, b.Bytes())
-}
-
 func writePluginConstants(fullPath, pluginID string) error {
 	tmp, err := template.ParseFS(templates, "templates/constants.ts.tmpl")
 	if err != nil {
@@ -747,44 +727,4 @@ func writePluginConstants(fullPath, pluginID string) error {
 		return err
 	}
 	return writeFile(fullPath, b.Bytes())
-}
-
-func writeStaticFrontendFiles(pluginPath string, promptForOverwrite bool) error {
-	return writeStaticFiles(frontEndStaticFiles, "templates/frontend-static", pluginPath, promptForOverwrite)
-}
-
-type mergedFS interface {
-	fs.ReadDirFS
-	fs.ReadFileFS
-}
-
-//nolint:revive
-func writeStaticFiles(fs mergedFS, readDir, writeDir string, promptForOverwrite bool) error {
-	files, err := fs.ReadDir(readDir)
-	if err != nil {
-		return err
-	}
-	for _, f := range files {
-		if f.IsDir() {
-			err = writeStaticFiles(fs, filepath.Join(readDir, f.Name()), filepath.Join(writeDir, f.Name()),
-				promptForOverwrite)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		b, err := fs.ReadFile(filepath.Join(readDir, f.Name()))
-		if err != nil {
-			return err
-		}
-		if promptForOverwrite {
-			err = writeFileWithOverwriteConfirm(filepath.Join(writeDir, f.Name()), b)
-		} else {
-			err = writeFile(filepath.Join(writeDir, f.Name()), b)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
