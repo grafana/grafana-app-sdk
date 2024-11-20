@@ -454,7 +454,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 				os.Exit(1)
 			}
 		case "frontend":
-			err = addComponentFrontend(path, pluginID, !overwrite)
+			err = addComponentFrontend(path, pluginID)
 			if err != nil {
 				fmt.Printf("%s\n", err.Error())
 				os.Exit(1)
@@ -462,7 +462,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingGroup)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -485,11 +485,15 @@ type anyGenerator interface {
 	*codegen.Generator[codegen.Kind]
 }
 
-func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool) error {
+func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool, confirmOverwrite bool) error {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
 	if err != nil {
 		return err
+	}
+	var writeFileFunc = writeFile
+	if confirmOverwrite {
+		writeFileFunc = writeFileWithOverwriteConfirm
 	}
 
 	var files codejen.Files
@@ -511,7 +515,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 		return err
 	}
 	for _, f := range files {
-		err = writeFile(filepath.Join(projectRootPath, f.RelativePath), f.Data)
+		err = writeFileFunc(filepath.Join(projectRootPath, f.RelativePath), f.Data)
 		if err != nil {
 			return err
 		}
@@ -521,7 +525,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	if err != nil {
 		return err
 	}
-	err = writeFile(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
+	err = writeFileFunc(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
 	if err != nil {
 		return err
 	}
@@ -613,13 +617,29 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 // Frontend plugin
 //
 
-func addComponentFrontend(projectRootPath string, pluginID string, promptForOverwrite bool) error {
+func addComponentFrontend(projectRootPath string, pluginID string) error {
 	// Check plugin ID
 	if pluginID == "" {
 		return fmt.Errorf("plugin-id is required")
 	}
 
-	err := writeStaticFrontendFiles(filepath.Join(projectRootPath, "plugin"), promptForOverwrite)
+	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}
+	cmd := exec.Command("yarn", args...)
+	buf := bytes.Buffer{}
+	cmd.Stdout = &buf
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	fmt.Println("Creating plugin frontend using `\033[0;32myarn create @grafana/plugin\033[0m` (this may take a moment)...")
+	err = cmd.Wait()
+	if err != nil {
+		// Only print command output on error
+		fmt.Println(buf.String())
+		return err
+	}
+
+	err = moveFiles("./tmp-tmp-app/", filepath.Join(projectRootPath, "plugin"))
 	if err != nil {
 		return err
 	}
@@ -632,11 +652,29 @@ func addComponentFrontend(projectRootPath string, pluginID string, promptForOver
 	if err != nil {
 		return err
 	}
-	err = writePackageJSON(filepath.Join(projectRootPath, "plugin/package.json"), "NAME", "AUTHOR")
-	if err != nil {
-		return err
-	}
-	return nil
+	return os.Remove("./tmp-tmp-app")
+}
+
+func moveFiles(srcDir, destDir string) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Just move directories wholesale by renaming
+		if d.IsDir() {
+			if path == srcDir {
+				return nil
+			}
+			err = os.Rename(path, filepath.Join(destDir, d.Name()))
+			if err != nil {
+				return err
+			}
+			return fs.SkipDir
+		}
+
+		return os.Rename(path, filepath.Join(destDir, d.Name()))
+	})
 }
 
 func writePluginJSON(fullPath, id, name, author, slug string) error {
