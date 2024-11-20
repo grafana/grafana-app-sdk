@@ -623,6 +623,10 @@ func addComponentFrontend(projectRootPath string, pluginID string) error {
 		return fmt.Errorf("plugin-id is required")
 	}
 
+	if !isCommandInstalled("yarn") {
+		return fmt.Errorf("yarn must be installed to add the frontend component")
+	}
+
 	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}
 	cmd := exec.Command("yarn", args...)
 	buf := bytes.Buffer{}
@@ -675,6 +679,12 @@ func moveFiles(srcDir, destDir string) error {
 
 		return os.Rename(path, filepath.Join(destDir, d.Name()))
 	})
+}
+
+func isCommandInstalled(command string) bool {
+	cmd := exec.Command("which", command)
+	err := cmd.Run()
+	return err == nil
 }
 
 func writePluginJSON(fullPath, id, name, author, slug string) error {
