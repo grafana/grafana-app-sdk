@@ -670,6 +670,17 @@ func moveFiles(srcDir, destDir string) error {
 			if path == srcDir {
 				return nil
 			}
+			dst := filepath.Join(destDir, d.Name())
+			if _, serr := os.Stat(dst); serr == nil {
+				err := moveFiles(path, dst)
+				if err != nil {
+					return err
+				}
+				if err = os.Remove(path); err != nil {
+					return err
+				}
+				return fs.SkipDir
+			}
 			err = os.Rename(path, filepath.Join(destDir, d.Name()))
 			if err != nil {
 				return err
