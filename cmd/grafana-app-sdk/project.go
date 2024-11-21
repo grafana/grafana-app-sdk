@@ -643,6 +643,24 @@ func addComponentFrontend(projectRootPath string, pluginID string) error {
 		return err
 	}
 
+	// Remove a few directories that get created which we don't actually want
+	err = os.RemoveAll("./tmp-tmp-app/.github")
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll("./tmp-tmp-app/pkg")
+	if err != nil {
+		return err
+	}
+	err = os.Remove("./tmp-tmp-app/go.mod")
+	if err != nil {
+		return err
+	}
+	err = os.Remove("./tmp-tmp-app/go.sum")
+	if err != nil {
+		return err
+	}
+	// Move the remaining contents into /plugin
 	err = moveFiles("./tmp-tmp-app/", filepath.Join(projectRootPath, "plugin"))
 	if err != nil {
 		return err
