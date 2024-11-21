@@ -104,8 +104,12 @@ datasourceConfigs:
 #    uid: "my-cortex-datasource"
 #    url: "http://cortex.default.svc.cluster.local:9009/api/prom"
 #
-# Toggle the generating of the grafana deployments, if you want to control these elsewhere
-generateGrafanaDeployment: true
+grafana:
+  # Toggle the generating of the grafana deployments, if you want to control these elsewhere
+  generateDeployment: true
+  # which grafana image to use
+  image: grafana/grafana-enterprise:main
+
 ```
 Most of these fields are broken down in the comments, but let's quickly touch on a few things:
 * `port`: this defaults to 9999, and is the port you use on your localhost to get to containers running in the cluster which expose a web interface (such as grafana). If you already have a process that runs on 9999 on your localhost, make sure to change this.

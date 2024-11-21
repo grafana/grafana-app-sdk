@@ -38,7 +38,7 @@ data:
           {{ $key }}: {{ $value }}{{end}}
         secureJsonData:{{ range $key, $value := .SecureJSONData }}
           {{ $key }}: {{ $value }}{{end}}
-{{ if .GenerateGrafanaDeployment }}
+{{ if .Grafana.GenerateDeployment }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -117,7 +117,7 @@ spec:
             - name: GF_INSTALL_PLUGINS
             - name: GF_PATHS_CONFIG
               value: /etc/grafana-config/grafana.ini
-          image: {{.GrafanaImage}}
+          image: {{.Grafana.Image}}
           imagePullPolicy: IfNotPresent
           name: grafana
           ports:
@@ -137,6 +137,9 @@ spec:
               readOnly: true
             - mountPath: /etc/grafana/provisioning/datasources
               name: grafana-datasources
+            {{if .Grafana.PersistDatabase}}- mountPath: /var/lib/grafana
+              name: grafana-pv
+{{end}}
       serviceAccount: grafana
       volumes:
         - configMap:
@@ -151,6 +154,11 @@ spec:
         - configMap:
             name: grafana-datasources
           name: grafana-datasources
+{{if .Grafana.PersistDatabase}}
+        - name: grafana-pv
+          persistentVolumeClaim:
+            claimName: grafana-pvc
+{{end}} 
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -189,4 +197,18 @@ data:
           uid: {{.UID}}
           url: {{.URL}}
           version: 1{{end}}
+{{if .Grafana.PersistDatabase}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 512Mi
+
+{{end}}
 {{end}}

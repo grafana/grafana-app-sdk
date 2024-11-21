@@ -36,16 +36,21 @@ var localEnvFiles embed.FS
 
 // localEnvConfig is the configuration object used for the generation of local dev env resources
 type localEnvConfig struct {
-	Port                      int                   `json:"port" yaml:"port"`
-	KubePort                  int                   `json:"kubePort" yaml:"kubePort"`
-	Datasources               []string              `json:"datasources" yaml:"datasources"`
-	DatasourceConfigs         []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
-	PluginJSON                map[string]any        `json:"pluginJson" yaml:"pluginJson"`
-	PluginSecureJSON          map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
-	OperatorImage             string                `json:"operatorImage" yaml:"operatorImage"`
-	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
-	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
-	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
+	Port              int                   `json:"port" yaml:"port"`
+	KubePort          int                   `json:"kubePort" yaml:"kubePort"`
+	Datasources       []string              `json:"datasources" yaml:"datasources"`
+	DatasourceConfigs []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
+	PluginJSON        map[string]any        `json:"pluginJson" yaml:"pluginJson"`
+	PluginSecureJSON  map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
+	OperatorImage     string                `json:"operatorImage" yaml:"operatorImage"`
+	Webhooks          localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
+	Grafana           localGrafanaConfig    `json:"grafana" yaml:"grafana"`
+}
+
+type localGrafanaConfig struct {
+	GenerateDeployment bool   `json:"generateDeployment" yaml:"generateDeployment"`
+	PersistDatabase    bool   `json:"persistDatabase" yaml:"persistDatabase"`
+	Image              string `json:"image" yaml:"image"`
 }
 
 type dataSourceConfig struct {
@@ -235,8 +240,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 	// Read config (try YAML first, then JSON)
 	config := localEnvConfig{
-		GenerateGrafanaDeployment: true,
-		GrafanaImage:              "grafana/grafana-enterprise:11.2.2",
+		Grafana: localGrafanaConfig{
+			GenerateDeployment: true,
+			Image:              "grafana/grafana-enterprise:11.2.2",
+		},
 	}
 	if _, err := os.Stat(filepath.Join(localPath, "config.yaml")); err == nil {
 		cfgBytes, err := os.ReadFile(filepath.Join(localPath, "config.yaml"))
@@ -299,19 +306,24 @@ type scriptGenProperties struct {
 }
 
 type yamlGenProperties struct {
-	PluginID                  string
-	PluginIDKube              string
-	CRDs                      []yamlGenPropsCRD
-	Services                  []yamlGenPropsService
-	JSONData                  map[string]string
-	SecureJSONData            map[string]string
-	Datasources               []dataSourceConfig
-	OperatorImage             string
-	WebhookProperties         yamlGenPropsWebhooks
-	GenerateGrafanaDeployment bool
-	GrafanaImage              string
+	PluginID          string
+	PluginIDKube      string
+	CRDs              []yamlGenPropsCRD
+	Services          []yamlGenPropsService
+	JSONData          map[string]string
+	SecureJSONData    map[string]string
+	Datasources       []dataSourceConfig
+	OperatorImage     string
+	WebhookProperties yamlGenPropsWebhooks
+	Grafana           yamlGenPropsGrafana
+	GrafanaImage      string
 }
 
+type yamlGenPropsGrafana struct {
+	GenerateDeployment bool
+	PersistDatabase    bool
+	Image              string
+}
 type yamlGenPropsCRD struct {
 	MachineName       string
 	PluralMachineName string
@@ -365,8 +377,11 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		WebhookProperties: yamlGenPropsWebhooks{
 			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
-		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
-		GrafanaImage:              config.GrafanaImage,
+		Grafana: yamlGenPropsGrafana{
+			GenerateDeployment: config.Grafana.GenerateDeployment,
+			PersistDatabase:    config.Grafana.PersistDatabase,
+			Image:              config.Grafana.Image,
+		},
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
