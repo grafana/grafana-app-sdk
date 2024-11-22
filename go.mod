@@ -16,7 +16,7 @@ require (
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.10
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/matryer/moq v0.5.0
+	github.com/matryer/moq v0.5.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.8.1
