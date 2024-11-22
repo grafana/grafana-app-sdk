@@ -43,6 +43,21 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  name: grafana-apiserver-provisioning
+  namespace: default
+  labels:
+    name: grafana
+data:
+  apiservices.yaml: |
+    {{ range $.CRDs }}{{$crd := .}}{{range .Versions}}- group: {{$crd.Group}}
+      version: {{.}}
+      host: kubernetes.default.svc
+      port: 443
+    {{ end }}{{end}}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
   name: grafana-config
   namespace: default
   labels:
@@ -76,6 +91,8 @@ data:
     ; disable the experimental APIs flag to disable bundling of the example service locally
     grafanaAPIServerWithExperimentalAPIs = false
     kubernetesAggregator = true
+    [grafana-apiserver]
+    remote_services_file = /app-aggregator/apiservices.yaml
 ---
 apiVersion: v1
 kind: Service
@@ -137,6 +154,9 @@ spec:
               readOnly: true
             - mountPath: /etc/grafana/provisioning/datasources
               name: grafana-datasources
+            - mountPath: /app-aggregator
+              name: grafana-apiserver-provisioning
+              readOnly: true
       serviceAccount: grafana
       volumes:
         - configMap:
@@ -151,6 +171,9 @@ spec:
         - configMap:
             name: grafana-datasources
           name: grafana-datasources
+        - configMap:
+            name: grafana-apiserver-provisioning
+          name: grafana-apiserver-provisioning
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
