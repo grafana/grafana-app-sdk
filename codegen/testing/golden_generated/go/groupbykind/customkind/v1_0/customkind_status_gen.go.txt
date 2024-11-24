@@ -1,7 +1,13 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v1_0
 
-// Status defines model for Status.
 // +k8s:openapi-gen=true
 type Status struct {
 	StatusField1 string `json:"statusField1"`
+}
+
+// NewStatus creates a new Status object.
+func NewStatus() *Status {
+	return &Status{}
 }

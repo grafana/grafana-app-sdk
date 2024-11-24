@@ -1,5 +1,3 @@
-package v0_0
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
-// CustomKindStatus defines model for CustomKindStatus.
-// +k8s:openapi-gen=true
-type CustomKindStatus = map[string]interface{}
+package v0_0

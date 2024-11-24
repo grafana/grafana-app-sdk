@@ -1,5 +1,3 @@
-package v0_0
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
-// Status defines model for Status.
-// +k8s:openapi-gen=true
-type Status = map[string]interface{}
+package v0_0

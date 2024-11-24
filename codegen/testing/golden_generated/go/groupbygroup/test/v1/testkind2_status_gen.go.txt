@@ -1,5 +1,3 @@
-package v1
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
-// TestKind2Status defines model for TestKind2Status.
-// +k8s:openapi-gen=true
-type TestKind2Status = map[string]interface{}
+package v1

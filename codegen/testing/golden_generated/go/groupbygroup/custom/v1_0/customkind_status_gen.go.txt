@@ -1,7 +1,13 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v1_0
 
-// CustomKindStatus defines model for CustomKindStatus.
 // +k8s:openapi-gen=true
 type CustomKindStatus struct {
 	StatusField1 string `json:"statusField1"`
+}
+
+// NewCustomKindStatus creates a new CustomKindStatus object.
+func NewCustomKindStatus() *CustomKindStatus {
+	return &CustomKindStatus{}
 }

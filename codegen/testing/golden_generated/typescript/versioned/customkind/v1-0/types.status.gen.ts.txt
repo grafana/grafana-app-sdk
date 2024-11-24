@@ -1,3 +1,10 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 export interface Status {
-  statusField1: string;
+	statusField1: string;
 }
+
+export const defaultStatus = (): Status => ({
+	statusField1: "",
+});
+
