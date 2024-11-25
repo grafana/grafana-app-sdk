@@ -7,7 +7,7 @@ import (
 // TestKindSpec defines model for TestKindSpec.
 // +k8s:openapi-gen=true
 type TestKindSpec struct {
-	IntField    int64     `json:"intField"`
-	StringField string    `json:"stringField"`
-	TimeField   time.Time `json:"timeField"`
+	IntField    int64     `json:"intField" yaml:"intField"`
+	StringField string    `json:"stringField" yaml:"stringField"`
+	TimeField   time.Time `json:"timeField" yaml:"timeField"`
 }

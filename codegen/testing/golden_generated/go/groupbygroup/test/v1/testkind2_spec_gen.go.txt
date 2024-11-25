@@ -3,5 +3,5 @@ package v1
 // TestKind2Spec defines model for TestKind2Spec.
 // +k8s:openapi-gen=true
 type TestKind2Spec struct {
-	TestField string `json:"testField"`
+	TestField string `json:"testField" yaml:"testField"`
 }

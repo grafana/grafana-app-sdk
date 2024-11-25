@@ -2,7 +2,7 @@ package secure
 
 // Data is the go model of the plugin's secureJsonData
 type Data struct {
-	AuthHeaderContent string `json:"auth_header_content"`
+	AuthHeaderContent string `json:"auth_header_content" yaml:"auth_header_content"`
 }
 
 // ParseRaw parses secure settings from a raw string map.
