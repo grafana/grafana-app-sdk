@@ -47,7 +47,7 @@ The frontend component generates TypeScript code and configuration for a grafana
 
 ### backend
 
-The backend component generates plugin backend code in `pkg/plugin` for setting up a a set of HTTP handlers to proxy Create, Read, Update, Delete, and List requests to the API server, using a `TypedStore`, and pulling kube config information for the API server from the `secureJsonData` of the plugin. It also adds a `main.go` to `plugin/pkg`, which is the entrypoint for the back-end component of the grafana app plugin.
+The backend component generates plugin backend code in `pkg/plugin` for setting up a set of HTTP handlers to proxy Create, Read, Update, Delete, and List requests to the API server, using a `TypedStore`, and pulling kube config information for the API server from the `secureJsonData` of the plugin. It also adds a `main.go` to `plugin/pkg`, which is the entrypoint for the back-end component of the grafana app plugin.
 
 > [!NOTE]
 > `backend` component generation will eventually be deprecated in favor of the frontend component communicating directly with the API server, rather than through a back-end proxy.
@@ -75,4 +75,4 @@ This sets up your project with a go module, a `kinds` directory with a CUE modul
 
 Code generation for both kinds and project components is done as part of the [issue tracker tutorial](./tutorials/issue-tracker/README.md) ([kind code generation](./tutorials/issue-tracker/03-generate-kind-code.md), [project component generation](./tutorials/issue-tracker/04-boilerplate.md)).
 
-Automated testing of kind code generation is done using the files in [codegen/testing/cue](../codegen/testing/cue/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).
+Automated testing of kind code generation is done using the files in [codegen/cuekind/testing/](../codegen/cuekind/testing/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).

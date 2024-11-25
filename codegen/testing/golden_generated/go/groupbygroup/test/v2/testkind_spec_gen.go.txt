@@ -1,13 +1,19 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package v2
 
 import (
-	"time"
+	time "time"
 )
 
-// TestKindSpec defines model for TestKindSpec.
 // +k8s:openapi-gen=true
 type TestKindSpec struct {
-	IntField    int64     `json:"intField"`
 	StringField string    `json:"stringField"`
+	IntField    int64     `json:"intField"`
 	TimeField   time.Time `json:"timeField"`
+}
+
+// NewTestKindSpec creates a new TestKindSpec object.
+func NewTestKindSpec() *TestKindSpec {
+	return &TestKindSpec{}
 }
