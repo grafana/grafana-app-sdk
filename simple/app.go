@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -102,6 +103,7 @@ type App struct {
 	cfg                AppConfig
 	converters         map[string]Converter
 	customRoutes       map[string]AppCustomRouteHandler
+	patcher            *k8s.DynamicPatcher
 }
 
 // AppConfig is the configuration used by App
@@ -206,6 +208,11 @@ func NewApp(config AppConfig) (*App, error) {
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
 	}
+	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	a.patcher = p
 	for _, kind := range config.ManagedKinds {
 		err := a.manageKind(kind)
 		if err != nil {
@@ -340,7 +347,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if kind.Reconciler != nil {
 			reconciler := kind.Reconciler
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedReconciler(client, a.getFinalizer(kind.Kind))
+				op, err := operator.NewOpinionatedReconciler(&watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, a.getFinalizer(kind.Kind))
 				if err != nil {
 					return err
 				}
@@ -355,7 +362,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, client, a.getFinalizer)
+				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, a.getFinalizer)
 				if err != nil {
 					return err
 				}
@@ -480,4 +487,20 @@ type k8sRunnable struct {
 
 func (k *k8sRunnable) Run(ctx context.Context) error {
 	return k.runner.Run(ctx.Done())
+}
+
+var _ operator.PatchClient = &watchPatcher{}
+
+type watchPatcher struct {
+	patcher *k8s.DynamicKindPatcher
+}
+
+func (w *watchPatcher) PatchInto(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, options resource.PatchOptions, into resource.Object) error {
+	obj, err := w.patcher.Patch(ctx, identifier, req, options)
+	if err != nil {
+		return err
+	}
+	// This is only used to update the finalizers list, so we just need to update metadata
+	into.SetCommonMetadata(obj.GetCommonMetadata())
+	return nil
 }

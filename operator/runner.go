@@ -155,6 +155,12 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	for _, kind := range manifestData.Kinds {
 		for _, version := range kind.Versions {
 			if version.Admission == nil {
+				if kind.Conversion {
+					anyWebhooks = true
+					vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
+						conversion: kind.Conversion,
+					}
+				}
 				continue
 			}
 			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{

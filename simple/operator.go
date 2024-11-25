@@ -87,6 +87,11 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		}
 	}
 
+	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, time.Hour)
+	if err != nil {
+		return nil, err
+	}
+
 	informerControllerConfig := operator.DefaultInformerControllerConfig()
 	informerControllerConfig.MetricsConfig.Namespace = cfg.Metrics.Namespace
 	// TODO: other factors?
@@ -121,6 +126,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		admission:           ws,
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
+		patcher:             patcher,
 	}
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
@@ -143,6 +149,7 @@ type Operator struct {
 	admission           *k8s.WebhookServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
+	patcher             *k8s.DynamicPatcher
 }
 
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
@@ -203,7 +210,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, client, func(sch resource.Schema) string {
+	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, func(sch resource.Schema) string {
 		if o.FinalizerGenerator != nil {
 			return o.FinalizerGenerator(sch)
 		}
@@ -246,7 +253,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	} else if o.Name != "" {
 		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
 	}
-	or, err := operator.NewOpinionatedReconciler(client, finalizer)
+	or, err := operator.NewOpinionatedReconciler(&watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, finalizer)
 	if err != nil {
 		return err
 	}
