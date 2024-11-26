@@ -22,7 +22,7 @@ package kinds
 
 issue: {
 	kind: "Issue"
-        group: "issue-tracker-project"
+	group: "issue-tracker-project"
 	apiResource: {}
 	codegen: {
 		frontend: true

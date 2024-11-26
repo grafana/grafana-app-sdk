@@ -7,7 +7,8 @@ import (
 )
 
 const (
-	FormatCUE = "cue"
+	FormatCUE  = "cue"
+	FormatNone = "none"
 )
 
 var rootCmd = &cobra.Command{
