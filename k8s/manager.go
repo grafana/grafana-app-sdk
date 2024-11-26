@@ -342,11 +342,11 @@ type CustomResourceDefinitionSpecConversionWebhook struct {
 }
 
 type CustomResourceDefinitionClientConfig struct {
-	Service CustomResourceDefinitionClientConfigService `json:"service" yaml:"service"`
+	Service *CustomResourceDefinitionClientConfigService `json:"service,omitempty" yaml:"service,omitempty"`
+	URL     string                                       `json:"url,omitempty" yaml:"url,omitempty"`
 }
 
 type CustomResourceDefinitionClientConfigService struct {
-	URL       string `json:"url,omitempty" yaml:"url,omitempty"`
 	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
 	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
 	Path      string `json:"path" yaml:"path"`

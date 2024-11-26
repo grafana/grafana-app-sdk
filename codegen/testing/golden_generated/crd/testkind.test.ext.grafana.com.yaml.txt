@@ -138,7 +138,5 @@ spec:
             conversionReviewVersions:
                 - v1
             clientConfig:
-                service:
-                    url: http://foo.bar
-                    path: /convert
+                url: http://foo.bar/convert
     scope: Namespaced

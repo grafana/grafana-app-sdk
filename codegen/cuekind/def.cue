@@ -146,7 +146,6 @@ Kind: S={
 		// which will be migrated away from once manifests are used in the codegen pipeline
 		conversionWebhookProps: {
 			url: string | *""
-			path: string | *"/convert"
 		}
 	}
 	// isCRD is true if the `crd` trait is present in the kind.

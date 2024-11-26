@@ -3,6 +3,7 @@ package jennies
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -52,16 +53,17 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 		},
 	}
 
-	if kind.Properties().APIResource.Conversion {
+	if kind.Properties().APIResource.Conversion && kind.Properties().APIResource.ConversionWebhookProps.URL != "" {
+		webhookURL, err := url.Parse(kind.Properties().APIResource.ConversionWebhookProps.URL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid conversion webhook URL: %w", err)
+		}
 		resource.Spec.Conversion = &k8s.CustomResourceDefinitionSpecConversion{
 			Strategy: "webhook",
 			Webhook: &k8s.CustomResourceDefinitionSpecConversionWebhook{
 				ConversionReviewVersions: []string{"v1"},
 				ClientConfig: k8s.CustomResourceDefinitionClientConfig{
-					Service: k8s.CustomResourceDefinitionClientConfigService{
-						Path: kind.Properties().APIResource.ConversionWebhookProps.Path,
-						URL:  kind.Properties().APIResource.ConversionWebhookProps.URL,
-					},
+					URL: webhookURL.String(),
 				},
 			},
 		}
