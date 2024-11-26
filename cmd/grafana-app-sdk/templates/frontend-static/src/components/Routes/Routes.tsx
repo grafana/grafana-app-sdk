@@ -9,10 +9,10 @@ export const Routes = () => {
 
   return (
     <Switch>
-      <Route exact path={prefixRoute(ROUTES.Main)} component={MainPage} />
+      <Route path={prefixRoute(ROUTES.Main)} Component={MainPage} />
 
       {/* Default page */}
-      <Route exact path="*">
+      <Route path="*">
         <Redirect to={prefixRoute(ROUTES.Main)} />
       </Route>
     </Switch>

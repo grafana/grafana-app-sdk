@@ -211,6 +211,8 @@ func New(namespace string, service Service) (*Plugin, error) {
 	}
 
 	p.router.Use(
+		router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware")),
+		router.NewLoggingMiddleware(logging.DefaultLogger),
 		kubeconfig.LoadingMiddleware(),
 		router.MiddlewareFunc(secure.Middleware))
 
@@ -220,8 +222,8 @@ func New(namespace string, service Service) (*Plugin, error) {
 	// Issue subrouter
 	issueSubrouter := v1Subrouter.Subroute("issues/")
 	v1Subrouter.Handle("issues", p.handleIssueList, http.MethodGet)
+	v1Subrouter.HandleWithCode("issues", p.handleIssueCreate, http.StatusCreated, http.MethodPost)
 	issueSubrouter.Handle("{name}", p.handleIssueGet, http.MethodGet)
-	issueSubrouter.HandleWithCode("", p.handleIssueCreate, http.StatusCreated, http.MethodPost)
 	issueSubrouter.Handle("{name}", p.handleIssueUpdate, http.MethodPut)
 	issueSubrouter.HandleWithCode("{name}", p.handleIssueDelete, http.StatusNoContent, http.MethodDelete)
 	
@@ -245,16 +247,18 @@ The last bits in the boilerplate code here are just creating a subrouter for our
 The handler functions themselves are defined in `pkg/plugin/handler_issue.go`, though we can see that the first thing defined is our `IssueService`:
 ```go
 type IssueService interface {
-	List(ctx context.Context, namespace string, filters ...string) (*resource.TypedStoreList[*issue.Object], error)
-	Get(ctx context.Context, id resource.Identifier) (*issue.Object, error)
-	Add(ctx context.Context, obj *issue.Object) (*issue.Object, error)
-	Update(ctx context.Context, id resource.Identifier, obj *issue.Object) (*issue.Object, error)
+	List(ctx context.Context, opts resource.StoreListOptions) (*resource.TypedList[*issue.Issue], error)
+	Get(ctx context.Context, id resource.Identifier) (*issue.Issue, error)
+	Add(ctx context.Context, obj *issue.Issue) (*issue.Issue, error)
+	Update(ctx context.Context, id resource.Identifier, obj *issue.Issue) (*issue.Issue, error)
 	Delete(ctx context.Context, id resource.Identifier) error
 }
 ```
 This service is what we'll have to actually implement later when we start writing code, but it's what the handlers are going to try to use to do what they're supposed to do. To see this, let's take a look at the list handler (defined first):
 ```go
 func (p *Plugin) handleIssueList(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
+	ctx, span := tracing.DefaultTracer().Start(ctx, "issue-list")
+	defer span.End()
 	filtersRaw := req.URL.Query().Get("filters")
 	filters := make([]string, 0)
 	if len(filtersRaw) > 0 {
@@ -262,10 +266,10 @@ func (p *Plugin) handleIssueList(ctx context.Context, req router.JSONRequest) (r
 	}
 	svc, err := p.service.GetIssueService(ctx)
 	if err != nil {
-	    log.DefaultLogger.Error("Error getting IssueService: " + err.Error())
-	    return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
+		log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting IssueService: "+err.Error(), "error", err)
+		return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
 	}
-	return svc.List(ctx, p.namespace, filters...)
+	return svc.List(ctx, resource.StoreListOptions{Namespace: p.namespace, PerPage: 500, Filters: filters})
 }
 ```
 It satisfies the `router.JSONHandlerFunc` function type, so that we can use it as a handler. The first parameter, `ctx`, is somewhat self-explanatory as the go context (if you're unfamiliar with go contexts, [the godoc](https://pkg.go.dev/context) is a good place to start). The second parameter is a `router.JSONRequest`. This is a sort of plugin equivalent of the `http.Request`, though with some differences, most of which we won't cover here. The important one to know is that it doesn't have all the request data you might have in an `http.Request`, such as the hostname, or all the headers. The `url.URL` we get with `req.URL` contains a URL which begins at the entrypoint to our API, so the first part will be the first part of the path in our route (no protocol, host, or initial grafana resource API path).
@@ -281,32 +285,33 @@ In our list handler boilerplate, we can see we grab filters from the query, if p
 Let's ignore `PluginService` for now, as we'll be replacing that code later with our own, and just take a look at what `main()` does:
 ```go
 func main() {
-    svc := &PluginService{}
+	// Set the app-sdk logger to use the plugin-sdk logger
+  logger := sdkPlugin.NewLogger(log.DefaultLogger.With("pluginID", pluginID))
+	logger.Info("starting plugin", "pluginID", pluginID)
+	logging.DefaultLogger = logger
 
-    // GENERATED SIMPLE SERVICE INITIALIZER CODE
-    svc.issueServiceInitializer = kubeconfig.CachingInitializer(
-        func(cfg kubeconfig.NamespacedConfig) (plugin.IssueService, error) {
-            // This is example code which assumes the API and storage models are identical
-            // TODO: REPLACEME
-            return resource.NewTypedStore[*issue.Object](issue.Schema(), k8s.NewClientRegistry(cfg.RestConfig))
-        })
-    
+	logger.Info("starting plugin", "pluginID", pluginID)
 
-    p, err := plugin.New("default", svc) // TODO: fix namespace usage
-    if err != nil {
-        panic(err)
-    }
+    // app.Manage handles the app plugin lifecycle
+	if err := app.Manage(pluginID, newInstanceFactory(logger), app.ManageOpts{
+		TracingOpts: tracing.Opts{
+			CustomAttributes: []attribute.KeyValue{
+				attribute.String("plugin.id", pluginID),
+			},
+		},
+	}); err != nil {
+		logger.Error("failed to initialize instance", "err", err)
+		os.Exit(1)
+	}
 
-    // Start listening
-    err = p.Start()
-    if err != nil {
-        panic(err)
-    }
+	logger.Info("plugin exited normally", "pluginID", pluginID)
+	os.Exit(0)
 }
 ```
-The important thing to look at is the `kubeconfig.CachingInitializer` being used for the service initializer func. This is another SDK library which allows us to define an initializer for a service which will be called only once per unique kube config. We'll get more in-depth on what this is and why we need to do this when we begin writing our back-end code, but I want to point this out.
+<!-- REPLACE THIS -->
+<!-- The important thing to look at is the `kubeconfig.CachingInitializer` being used for the service initializer func. This is another SDK library which allows us to define an initializer for a service which will be called only once per unique kube config. We'll get more in-depth on what this is and why we need to do this when we begin writing our back-end code, but I want to point this out.
 
-Otherwise, the `main()` code is pretty simple. We create a new `plugin.Plugin` with `plugin.New`, and then start it. That's really all there is to it for our `main` package, all the meat of the back-end is going to be in `pkg`, rather than in `plugin`, this is just the "hook" as it were, into all that code.
+Otherwise, the `main()` code is pretty simple. We create a new `plugin.Plugin` with `plugin.New`, and then start it. That's really all there is to it for our `main` package, all the meat of the back-end is going to be in `pkg`, rather than in `plugin`, this is just the "hook" as it were, into all that code. -->
 
 ## Front-End Code from frontend component
 
