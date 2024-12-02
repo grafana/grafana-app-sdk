@@ -309,7 +309,9 @@ func generateCRDsThema(parser *themagen.CustomKindParser, genPath string, encodi
 		ms = themagen.CRDGenerator(yaml.Marshal, "yaml")
 	} else {
 		// Assume JSON
-		ms = themagen.CRDGenerator(json.Marshal, "json")
+		ms = themagen.CRDGenerator(func(v any) ([]byte, error) {
+			return json.MarshalIndent(v, "", "    ")
+		}, "json")
 	}
 	files, err := parser.FilteredGenerate(themagen.Filter(ms, func(c kindsys.Custom) bool {
 		return c.Def().Properties.IsCRD
@@ -383,7 +385,9 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	// CRD
 	var crdFiles codejen.Files
 	if cfg.CRDEncoding != "none" {
-		encFunc := json.Marshal
+		encFunc := func(v any) ([]byte, error) {
+			return json.MarshalIndent(v, "", "    ")
+		}
 		if cfg.CRDEncoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
