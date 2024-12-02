@@ -46,6 +46,7 @@ type localEnvConfig struct {
 	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
 	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
 	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
+	GrafanaInstallPlugins     string                `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
 }
 
 type dataSourceConfig struct {
@@ -310,6 +311,7 @@ type yamlGenProperties struct {
 	WebhookProperties         yamlGenPropsWebhooks
 	GenerateGrafanaDeployment bool
 	GrafanaImage              string
+	GrafanaInstallPlugins     string
 }
 
 type yamlGenPropsCRD struct {
@@ -367,6 +369,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		},
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 		GrafanaImage:              config.GrafanaImage,
+		GrafanaInstallPlugins:     config.GrafanaInstallPlugins,
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
