@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -9,12 +10,12 @@ import (
 )
 
 type mockController struct {
-	RunFunc func(<-chan struct{}) error
+	RunFunc func(ctx context.Context) error
 }
 
-func (m *mockController) Run(ch <-chan struct{}) error {
+func (m *mockController) Run(ctx context.Context) error {
 	if m.RunFunc != nil {
-		return m.RunFunc(ch)
+		return m.RunFunc(ctx)
 	}
 	return nil
 }
@@ -36,22 +37,23 @@ func TestOperator_Run(t *testing.T) {
 		done := make(chan struct{}, 1)
 		o := New()
 		o.AddController(&mockController{
-			RunFunc: func(i <-chan struct{}) error {
-				<-i
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				close(done)
 				return nil
 			},
 		})
 		o.AddController(&mockController{
-			RunFunc: func(<-chan struct{}) error {
+			RunFunc: func(_ context.Context) error {
 				time.Sleep(time.Second)
 				return errors.New("I AM ERROR")
 			},
 		})
 
-		stopCh := make(chan struct{}, 1)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 
-		err := o.Run(stopCh)
+		err := o.Run(ctx)
 		assert.Equal(t, errors.New("I AM ERROR"), err)
 		_, open := <-done
 		assert.False(t, open)
@@ -61,20 +63,17 @@ func TestOperator_Run(t *testing.T) {
 		done := make(chan struct{}, 1)
 		o := New()
 		o.AddController(&mockController{
-			RunFunc: func(i <-chan struct{}) error {
-				<-i
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				close(done)
 				return nil
 			},
 		})
 
-		stopCh := make(chan struct{}, 1)
-		go func() {
-			time.Sleep(time.Second)
-			close(stopCh)
-		}()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 
-		err := o.Run(stopCh)
+		err := o.Run(ctx)
 		assert.Nil(t, err)
 		_, open := <-done
 		assert.False(t, open)
