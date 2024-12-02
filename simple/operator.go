@@ -180,16 +180,16 @@ func (o *Operator) ClientGenerator() resource.ClientGenerator {
 // * Expose all configured webhooks as an HTTPS server
 //
 // * Expose a prometheus metrics endpoint if configured
-func (o *Operator) Run(stopCh <-chan struct{}) error {
+func (o *Operator) Run(ctx context.Context) error {
 	op := operator.New()
 	op.AddController(o.controller)
 	if o.admission != nil {
-		op.AddController(o.admission)
+		op.AddController(&k8sRunnable{runner: o.admission})
 	}
 	if o.metricsExporter != nil {
-		op.AddController(o.metricsExporter)
+		op.AddController(&k8sRunnable{runner: o.metricsExporter})
 	}
-	return op.Run(stopCh)
+	return op.Run(ctx)
 }
 
 // RegisterMetricsCollectors registers Prometheus collectors with the exporter used by the operator,
@@ -205,7 +205,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedInformerOptions{
 		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
@@ -242,7 +242,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
+	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedInformerOptions{
 		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
 		CacheResyncInterval: o.cacheResyncInterval,
 	})

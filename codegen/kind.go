@@ -36,11 +36,17 @@ type KindProperties struct {
 
 // APIResourceProperties contains information about a Kind expressible as a kubernetes API resource
 type APIResourceProperties struct {
-	Group      string                  `json:"group"`
-	Scope      string                  `json:"scope"`
-	Validation KindAdmissionCapability `json:"validation"`
-	Mutation   KindAdmissionCapability `json:"mutation"`
-	Conversion bool                    `json:"conversion"`
+	Group                  string                      `json:"group"`
+	Scope                  string                      `json:"scope"`
+	Validation             KindAdmissionCapability     `json:"validation"`
+	Mutation               KindAdmissionCapability     `json:"mutation"`
+	Conversion             bool                        `json:"conversion"`
+	ConversionWebhookProps ConversionWebhookProperties `json:"conversionWebhookProps"`
+}
+
+type ConversionWebhookProperties struct {
+	URL  string `json:"url"`
+	Path string `json:"path"`
 }
 
 type KindAdmissionCapabilityOperation string

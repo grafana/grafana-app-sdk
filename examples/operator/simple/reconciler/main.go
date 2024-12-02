@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -89,21 +88,14 @@ func main() {
 		panic(fmt.Errorf("unable to reconcile kind: %w", err))
 	}
 
-	// Create the stop channel
-	stopCh := make(chan struct{}, 1)
-
 	// Set up a signal handler
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	go func() {
-		<-sigChan
-		close(stopCh)
-	}()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
 
 	log.Print("\u001B[1;32mStarting Operator\u001B[0m")
 
 	// Run the controller (will block until stopCh receives a message or is closed)
-	err = simpleOperator.Run(stopCh)
+	err = simpleOperator.Run(ctx)
 	if err != nil {
 		panic(fmt.Errorf("error running operator: %w", err))
 	}

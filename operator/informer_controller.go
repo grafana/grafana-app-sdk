@@ -9,10 +9,13 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
+
+var _ Controller = &InformerController{}
 
 type ResourceAction string
 
@@ -38,8 +41,8 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
+	app.Runnable
 	AddEventHandler(handler ResourceWatcher) error
-	Run(stopCh <-chan struct{}) error
 }
 
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
@@ -283,14 +286,16 @@ func (c *InformerController) RemoveAllReconcilersForResource(resourceKind string
 // Run runs the controller, which starts all informers, until stopCh is closed
 //
 //nolint:errcheck
-func (c *InformerController) Run(stopCh <-chan struct{}) error {
+func (c *InformerController) Run(ctx context.Context) error {
+	derivedCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	c.informers.RangeAll(func(_ string, _ int, inf Informer) {
-		go inf.Run(stopCh)
+		go inf.Run(derivedCtx)
 	})
 
-	go c.retryTicker(stopCh)
+	go c.retryTicker(derivedCtx)
 
-	<-stopCh
+	<-ctx.Done()
 
 	return nil
 }
@@ -542,7 +547,7 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 // retryTicker blocks until stopCh is closed or receives a message.
 // It checks if there are function calls to be retried every second, and, if there are any, calls the function.
 // If the function returns an error, it schedules a new retry according to the RetryPolicy.
-func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
+func (c *InformerController) retryTicker(ctx context.Context) {
 	ticker := time.NewTicker(c.retryTickerInterval)
 	defer ticker.Stop()
 	for {
@@ -583,7 +588,7 @@ func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
 					c.toRetry.AddItem(key, inf)
 				}
 			}
-		case <-stopCh:
+		case <-ctx.Done():
 			return
 		}
 	}
