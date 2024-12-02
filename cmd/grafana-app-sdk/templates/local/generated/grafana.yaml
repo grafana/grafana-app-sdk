@@ -132,6 +132,7 @@ spec:
       containers:
         - env:
             - name: GF_INSTALL_PLUGINS
+              value: "{{.GrafanaInstallPlugins}}"
             - name: GF_PATHS_CONFIG
               value: /etc/grafana-config/grafana.ini
           image: {{.GrafanaImage}}
