@@ -324,10 +324,32 @@ func (crd *CustomResourceDefinition) DeepCopyObject() runtime.Object {
 
 // CustomResourceDefinitionSpec is the body or spec of a kubernetes Custom Resource Definition
 type CustomResourceDefinitionSpec struct {
-	Group    string                                `json:"group" yaml:"group"`
-	Versions []CustomResourceDefinitionSpecVersion `json:"versions" yaml:"versions"`
-	Names    CustomResourceDefinitionSpecNames     `json:"names" yaml:"names"`
-	Scope    string                                `json:"scope" yaml:"scope"`
+	Group      string                                  `json:"group" yaml:"group"`
+	Versions   []CustomResourceDefinitionSpecVersion   `json:"versions" yaml:"versions"`
+	Names      CustomResourceDefinitionSpecNames       `json:"names" yaml:"names"`
+	Conversion *CustomResourceDefinitionSpecConversion `json:"conversion,omitempty" yaml:"conversion,omitempty"`
+	Scope      string                                  `json:"scope" yaml:"scope"`
+}
+
+type CustomResourceDefinitionSpecConversion struct {
+	Strategy string                                         `json:"strategy" yaml:"strategy"`
+	Webhook  *CustomResourceDefinitionSpecConversionWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+}
+
+type CustomResourceDefinitionSpecConversionWebhook struct {
+	ConversionReviewVersions []string                             `json:"conversionReviewVersions" yaml:"conversionReviewVersions"`
+	ClientConfig             CustomResourceDefinitionClientConfig `json:"clientConfig" yaml:"clientConfig"`
+}
+
+type CustomResourceDefinitionClientConfig struct {
+	Service *CustomResourceDefinitionClientConfigService `json:"service,omitempty" yaml:"service,omitempty"`
+	URL     string                                       `json:"url,omitempty" yaml:"url,omitempty"`
+}
+
+type CustomResourceDefinitionClientConfigService struct {
+	Name      string `json:"name,omitempty" yaml:"name,omitempty"`
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	Path      string `json:"path" yaml:"path"`
 }
 
 // CustomResourceDefinitionSpecVersion is the representation of a specific version of a CRD, as part of the overall spec

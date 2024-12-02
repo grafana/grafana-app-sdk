@@ -24,9 +24,6 @@ import (
 //go:embed templates/*.tmpl
 var templates embed.FS
 
-//go:embed templates/frontend-static/* templates/frontend-static/.config/*
-var frontEndStaticFiles embed.FS
-
 var projectCmd = &cobra.Command{
 	Use: "project",
 }
@@ -463,7 +460,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 				os.Exit(1)
 			}
 		case "frontend":
-			err = addComponentFrontend(path, pluginID, !overwrite)
+			err = addComponentFrontend(path, pluginID)
 			if err != nil {
 				fmt.Printf("%s\n", err.Error())
 				os.Exit(1)
@@ -471,7 +468,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingGroup)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -494,11 +491,16 @@ type anyGenerator interface {
 	*codegen.Generator[codegen.Kind]
 }
 
-func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool) error {
+//nolint:revive
+func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool, confirmOverwrite bool) error {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
 	if err != nil {
 		return err
+	}
+	var writeFileFunc = writeFile
+	if confirmOverwrite {
+		writeFileFunc = writeFileWithOverwriteConfirm
 	}
 
 	var files codejen.Files
@@ -520,7 +522,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 		return err
 	}
 	for _, f := range files {
-		err = writeFile(filepath.Join(projectRootPath, f.RelativePath), f.Data)
+		err = writeFileFunc(filepath.Join(projectRootPath, f.RelativePath), f.Data)
 		if err != nil {
 			return err
 		}
@@ -530,7 +532,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	if err != nil {
 		return err
 	}
-	err = writeFile(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
+	err = writeFileFunc(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
 	if err != nil {
 		return err
 	}
@@ -618,17 +620,57 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 	return nil
 }
 
-//
 // Frontend plugin
 //
-
-func addComponentFrontend(projectRootPath string, pluginID string, promptForOverwrite bool) error {
+//nolint:revive
+func addComponentFrontend(projectRootPath string, pluginID string) error {
 	// Check plugin ID
 	if pluginID == "" {
 		return fmt.Errorf("plugin-id is required")
 	}
 
-	err := writeStaticFrontendFiles(filepath.Join(projectRootPath, "plugin"), promptForOverwrite)
+	if !isCommandInstalled("yarn") {
+		return fmt.Errorf("yarn must be installed to add the frontend component")
+	}
+
+	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}
+	cmd := exec.Command("yarn", args...)
+	buf := bytes.Buffer{}
+	ebuf := bytes.Buffer{}
+	cmd.Stdout = &buf
+	cmd.Stderr = &ebuf
+	err := cmd.Start()
+	if err != nil {
+		return err
+	}
+	fmt.Println("Creating plugin frontend using `\033[0;32myarn create @grafana/plugin\033[0m` (this may take a moment)...")
+	err = cmd.Wait()
+	if err != nil {
+		// Only print command output on error
+		fmt.Println(buf.String())
+		fmt.Println(ebuf.String())
+		return err
+	}
+
+	// Remove a few directories that get created which we don't actually want
+	err = os.RemoveAll("./tmp-tmp-app/.github")
+	if err != nil {
+		return err
+	}
+	err = os.RemoveAll("./tmp-tmp-app/pkg")
+	if err != nil {
+		return err
+	}
+	err = os.Remove("./tmp-tmp-app/go.mod")
+	if err != nil {
+		return err
+	}
+	err = os.Remove("./tmp-tmp-app/go.sum")
+	if err != nil {
+		return err
+	}
+	// Move the remaining contents into /plugin
+	err = moveFiles("./tmp-tmp-app/", filepath.Join(projectRootPath, "plugin"))
 	if err != nil {
 		return err
 	}
@@ -641,11 +683,46 @@ func addComponentFrontend(projectRootPath string, pluginID string, promptForOver
 	if err != nil {
 		return err
 	}
-	err = writePackageJSON(filepath.Join(projectRootPath, "plugin/package.json"), "NAME", "AUTHOR")
-	if err != nil {
-		return err
-	}
-	return nil
+	return os.Remove("./tmp-tmp-app")
+}
+
+func moveFiles(srcDir, destDir string) error {
+	return filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Just move directories wholesale by renaming
+		if d.IsDir() {
+			if path == srcDir {
+				return nil
+			}
+			dst := filepath.Join(destDir, d.Name())
+			if _, serr := os.Stat(dst); serr == nil {
+				err := moveFiles(path, dst)
+				if err != nil {
+					return err
+				}
+				if err = os.Remove(path); err != nil {
+					return err
+				}
+				return fs.SkipDir
+			}
+			err = os.Rename(path, filepath.Join(destDir, d.Name()))
+			if err != nil {
+				return err
+			}
+			return fs.SkipDir
+		}
+
+		return os.Rename(path, filepath.Join(destDir, d.Name()))
+	})
+}
+
+func isCommandInstalled(command string) bool {
+	cmd := exec.Command("which", command)
+	err := cmd.Run()
+	return err == nil
 }
 
 func writePluginJSON(fullPath, id, name, author, slug string) error {
@@ -672,26 +749,6 @@ func writePluginJSON(fullPath, id, name, author, slug string) error {
 	return writeFile(fullPath, b.Bytes())
 }
 
-func writePackageJSON(fullPath, name, author string) error {
-	tmp, err := template.ParseFS(templates, "templates/package.json.tmpl")
-	if err != nil {
-		return err
-	}
-	data := struct {
-		PluginName   string
-		PluginAuthor string
-	}{
-		PluginName:   name,
-		PluginAuthor: author,
-	}
-	b := bytes.Buffer{}
-	err = tmp.Execute(&b, data)
-	if err != nil {
-		return err
-	}
-	return writeFile(fullPath, b.Bytes())
-}
-
 func writePluginConstants(fullPath, pluginID string) error {
 	tmp, err := template.ParseFS(templates, "templates/constants.ts.tmpl")
 	if err != nil {
@@ -708,44 +765,4 @@ func writePluginConstants(fullPath, pluginID string) error {
 		return err
 	}
 	return writeFile(fullPath, b.Bytes())
-}
-
-func writeStaticFrontendFiles(pluginPath string, promptForOverwrite bool) error {
-	return writeStaticFiles(frontEndStaticFiles, "templates/frontend-static", pluginPath, promptForOverwrite)
-}
-
-type mergedFS interface {
-	fs.ReadDirFS
-	fs.ReadFileFS
-}
-
-//nolint:revive
-func writeStaticFiles(fs mergedFS, readDir, writeDir string, promptForOverwrite bool) error {
-	files, err := fs.ReadDir(readDir)
-	if err != nil {
-		return err
-	}
-	for _, f := range files {
-		if f.IsDir() {
-			err = writeStaticFiles(fs, filepath.Join(readDir, f.Name()), filepath.Join(writeDir, f.Name()),
-				promptForOverwrite)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		b, err := fs.ReadFile(filepath.Join(readDir, f.Name()))
-		if err != nil {
-			return err
-		}
-		if promptForOverwrite {
-			err = writeFileWithOverwriteConfirm(filepath.Join(writeDir, f.Name()), b)
-		} else {
-			err = writeFile(filepath.Join(writeDir, f.Name()), b)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

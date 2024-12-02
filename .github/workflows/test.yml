@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: go build -v cmd/grafana-app-sdk/*.go
   integration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # git checkout
       - name: Checkout code

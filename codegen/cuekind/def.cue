@@ -116,6 +116,11 @@ Kind: S={
 	}
 	// conversion determines whether there is code-based conversion for this kind.
 	conversion: bool | *false
+	// conversionWebhookProps is a temporary way of specifying the service webhook information
+	// which will be migrated away from once manifests are used in the codegen pipeline
+	conversionWebhookProps: {
+		url: string | *""
+	}
 	versions: {
 		[V=string]: {
 			// Version must be the key in the map, but is pulled into the value of the map for ease-of-access when dealing with the resulting value

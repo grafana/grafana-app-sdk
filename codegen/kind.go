@@ -28,13 +28,18 @@ type KindProperties struct {
 	PluralName string `json:"pluralName"`
 	// Current is the version string of the version considered to be "current".
 	// This does not have to be the latest, but determines preference when generating code.
-	Current    string                  `json:"current"`
-	Scope      string                  `json:"scope"`
-	Validation KindAdmissionCapability `json:"validation"`
-	Mutation   KindAdmissionCapability `json:"mutation"`
-	Conversion bool                    `json:"conversion"`
+	Current                string                      `json:"current"`
+	Scope                  string                      `json:"scope"`
+	Validation             KindAdmissionCapability     `json:"validation"`
+	Mutation               KindAdmissionCapability     `json:"mutation"`
+	Conversion             bool                        `json:"conversion"`
+	ConversionWebhookProps ConversionWebhookProperties `json:"conversionWebhookProps"`
 	// Codegen contains code-generation directives for the codegen pipeline
 	Codegen KindCodegenProperties `json:"codegen"`
+}
+
+type ConversionWebhookProperties struct {
+	URL string `json:"url"`
 }
 
 type KindAdmissionCapabilityOperation string
