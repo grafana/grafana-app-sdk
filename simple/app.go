@@ -114,6 +114,11 @@ type AppConfig struct {
 	ManagedKinds   []AppManagedKind
 	UnmanagedKinds []AppUnmanagedKind
 	Converters     map[schema.GroupKind]Converter
+	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
+	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
+	// for sending finalizer add/remove patches to the latest version of the kind.
+	// This defaults to 10 minutes.
+	DiscoveryRefreshInterval time.Duration
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
@@ -208,7 +213,11 @@ func NewApp(config AppConfig) (*App, error) {
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
 	}
-	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, time.Hour)
+	discoveryRefresh := config.DiscoveryRefreshInterval
+	if discoveryRefresh == 0 {
+		discoveryRefresh = time.Minute * 10
+	}
+	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}

@@ -28,6 +28,11 @@ type OperatorConfig struct {
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
 	FinalizerGenerator          func(kind resource.Schema) string
 	InformerCacheResyncInterval time.Duration
+	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
+	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
+	// for sending finalizer add/remove patches to the latest version of the kind.
+	// This defaults to 10 minutes.
+	DiscoveryRefreshInterval time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -86,8 +91,11 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 			return nil, err
 		}
 	}
-
-	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, time.Hour)
+	discoveryRefresh := cfg.DiscoveryRefreshInterval
+	if discoveryRefresh == 0 {
+		discoveryRefresh = time.Minute * 10
+	}
+	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}

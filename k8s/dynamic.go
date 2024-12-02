@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,6 +26,7 @@ type DynamicPatcher struct {
 	mux            sync.RWMutex
 	lastUpdate     time.Time
 	updateInterval time.Duration
+	group          singleflight.Group
 }
 
 // NewDynamicPatcher returns a new DynamicPatcher using the provided rest.Config for its internal client(s),
@@ -101,10 +103,16 @@ func (d *DynamicPatcher) ForceRefresh() error {
 }
 
 func (d *DynamicPatcher) getPreferred(kind schema.GroupKind) (*metav1.APIResource, error) {
-	if d.preferred == nil || (d.updateInterval >= 0 && d.lastUpdate.Before(now().Add(-d.updateInterval))) {
-		if err := d.updatePreferred(); err != nil {
-			return nil, err
+	_, err, _ := d.group.Do("check-cache-update", func() (any, error) {
+		if d.preferred == nil || (d.updateInterval >= 0 && d.lastUpdate.Before(now().Add(-d.updateInterval))) {
+			if err := d.updatePreferred(); err != nil {
+				return nil, err
+			}
 		}
+		return nil, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	d.mux.RLock()
 	defer d.mux.RUnlock()
