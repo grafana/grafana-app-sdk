@@ -30,9 +30,9 @@ var LacunaResolver func(*LineageType, []thema.Lacuna) error = nil
 // and Object has extra fields for metadata (which necessarily cannot be rendered in the Lineage/Schema,
 // but must exist for the Object). This is essentially an "intermediate step" struct.
 type LineageType struct {
-	Spec     Spec     `json:"spec"`
-	Status   Status   `json:"status"`
-	Metadata Metadata `json:"metadata"`
+	Spec     Spec     `json:"spec" yaml:"spec"`
+	Status   Status   `json:"status" yaml:"status"`
+	Metadata Metadata `json:"metadata" yaml:"metadata"`
 }
 
 func init() {

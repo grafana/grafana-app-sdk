@@ -28,7 +28,9 @@ func TestCRDGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
-		files, err := parser.Generate(CRDGenerator(json.Marshal, "json"), "customKind")
+		files, err := parser.Generate(CRDGenerator(func(v any) ([]byte, error) {
+			return json.MarshalIndent(v, "", "    ")
+		}, "json"), "customKind")
 		require.Nil(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 1)
