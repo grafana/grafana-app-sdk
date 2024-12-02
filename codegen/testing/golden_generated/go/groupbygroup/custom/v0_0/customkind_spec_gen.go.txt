@@ -3,6 +3,6 @@ package v0_0
 // CustomKindSpec defines model for CustomKindSpec.
 // +k8s:openapi-gen=true
 type CustomKindSpec struct {
-	DeprecatedField string `json:"deprecatedField"`
-	Field1          string `json:"field1"`
+	DeprecatedField string `json:"deprecatedField" yaml:"deprecatedField"`
+	Field1          string `json:"field1" yaml:"field1"`
 }

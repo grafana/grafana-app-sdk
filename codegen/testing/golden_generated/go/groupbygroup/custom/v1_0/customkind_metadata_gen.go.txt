@@ -6,29 +6,29 @@ import (
 
 // CustomKindMetadata defines model for CustomKindMetadata.
 type CustomKindMetadata struct {
-	CreatedBy           string            `json:"createdBy"`
-	CreationTimestamp   time.Time         `json:"creationTimestamp"`
-	CustomMetadataField string            `json:"customMetadataField"`
-	DeletionTimestamp   *time.Time        `json:"deletionTimestamp,omitempty"`
-	Finalizers          []string          `json:"finalizers"`
-	Generation          int64             `json:"generation"`
-	Labels              map[string]string `json:"labels"`
-	OtherMetadataField  string            `json:"otherMetadataField"`
-	ResourceVersion     string            `json:"resourceVersion"`
-	Uid                 string            `json:"uid"`
-	UpdateTimestamp     time.Time         `json:"updateTimestamp"`
-	UpdatedBy           string            `json:"updatedBy"`
+	CreatedBy           string            `json:"createdBy" yaml:"createdBy"`
+	CreationTimestamp   time.Time         `json:"creationTimestamp" yaml:"creationTimestamp"`
+	CustomMetadataField string            `json:"customMetadataField" yaml:"customMetadataField"`
+	DeletionTimestamp   *time.Time        `json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty"`
+	Finalizers          []string          `json:"finalizers" yaml:"finalizers"`
+	Generation          int64             `json:"generation" yaml:"generation"`
+	Labels              map[string]string `json:"labels" yaml:"labels"`
+	OtherMetadataField  string            `json:"otherMetadataField" yaml:"otherMetadataField"`
+	ResourceVersion     string            `json:"resourceVersion" yaml:"resourceVersion"`
+	Uid                 string            `json:"uid" yaml:"uid"`
+	UpdateTimestamp     time.Time         `json:"updateTimestamp" yaml:"updateTimestamp"`
+	UpdatedBy           string            `json:"updatedBy" yaml:"updatedBy"`
 }
 
 // _kubeObjectMetadata is metadata found in a kubernetes object's metadata field.
 // It is not exhaustive and only includes fields which may be relevant to a kind's implementation,
 // As it is also intended to be generic enough to function with any API Server.
 type CustomKindKubeObjectMetadata struct {
-	CreationTimestamp time.Time         `json:"creationTimestamp"`
-	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty"`
-	Finalizers        []string          `json:"finalizers"`
-	Generation        int64             `json:"generation"`
-	Labels            map[string]string `json:"labels"`
-	ResourceVersion   string            `json:"resourceVersion"`
-	Uid               string            `json:"uid"`
+	CreationTimestamp time.Time         `json:"creationTimestamp" yaml:"creationTimestamp"`
+	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty" yaml:"deletionTimestamp,omitempty"`
+	Finalizers        []string          `json:"finalizers" yaml:"finalizers"`
+	Generation        int64             `json:"generation" yaml:"generation"`
+	Labels            map[string]string `json:"labels" yaml:"labels"`
+	ResourceVersion   string            `json:"resourceVersion" yaml:"resourceVersion"`
+	Uid               string            `json:"uid" yaml:"uid"`
 }
