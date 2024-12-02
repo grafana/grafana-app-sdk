@@ -16,10 +16,10 @@ import (
 
 // +k8s:openapi-gen=true
 type TestKind2 struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
-	Spec              TestKind2Spec   `json:"spec"`
-	TestKind2Status   TestKind2Status `json:"status"`
+	metav1.TypeMeta   `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
+	Spec              TestKind2Spec   `json:"spec" yaml:"spec"`
+	TestKind2Status   TestKind2Status `json:"status" yaml:"status"`
 }
 
 func (o *TestKind2) GetSpec() any {
@@ -224,9 +224,9 @@ var _ resource.Object = &TestKind2{}
 
 // +k8s:openapi-gen=true
 type TestKind2List struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-	Items           []TestKind2 `json:"items"`
+	metav1.TypeMeta `json:",inline" yaml:",inline"`
+	metav1.ListMeta `json:"metadata" yaml:"metadata"`
+	Items           []TestKind2 `json:"items" yaml:"items"`
 }
 
 func (o *TestKind2List) DeepCopyObject() runtime.Object {

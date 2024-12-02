@@ -16,11 +16,11 @@ import ({{ range .CustomMetadataFields }}{{ range $imp := .GoType.AdditionalImpo
 
 // +k8s:openapi-gen=true
 type {{.TypeName}} struct {
-    metav1.TypeMeta `json:",inline"`
-    metav1.ObjectMeta `json:"metadata"`
-    Spec       {{.SpecTypeName}} `json:"spec"`{{ range .Subresources }}{{ if ne .Comment "" }}
+    metav1.TypeMeta `json:",inline" yaml:",inline"`
+    metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
+    Spec       {{.SpecTypeName}} `json:"spec" yaml:"spec"`{{ range .Subresources }}{{ if ne .Comment "" }}
         // {{.Comment }}{{end}}
-        {{ .TypeName }} {{.TypeName}} `json:"{{.JSONName}}"`{{ end }}
+        {{ .TypeName }} {{.TypeName}} `json:"{{.JSONName}}" yaml:"{{.JSONName}}"`{{ end }}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
@@ -196,9 +196,9 @@ var _ resource.Object = &{{.TypeName}}{}
 
 // +k8s:openapi-gen=true
 type {{.TypeName}}List struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-	Items           []{{.TypeName}} `json:"items"`
+	metav1.TypeMeta `json:",inline" yaml:",inline"`
+	metav1.ListMeta `json:"metadata" yaml:"metadata"`
+	Items           []{{.TypeName}} `json:"items" yaml:"items"`
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyObject() runtime.Object {
