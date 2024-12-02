@@ -132,4 +132,11 @@ spec:
     names:
         kind: TestKind
         plural: testkinds
+    conversion:
+        strategy: webhook
+        webhook:
+            conversionReviewVersions:
+                - v1
+            clientConfig:
+                url: http://foo.bar/convert
     scope: Namespaced

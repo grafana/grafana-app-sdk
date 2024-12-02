@@ -9,6 +9,7 @@ testKind: {
 	apiResource: {
 		validation: operations: ["create","update"]
 		conversion: true
+		conversionWebhookProps: url: "http://foo.bar/convert"
 	}
 	current: "v1"
 	codegen: frontend: false
