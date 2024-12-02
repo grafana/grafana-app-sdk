@@ -221,9 +221,7 @@ func NewApp(config AppConfig) (*App, error) {
 	for gk, converter := range config.Converters {
 		a.RegisterKindConverter(gk, converter)
 	}
-	a.runner.AddRunnable(&k8sRunnable{
-		runner: a.informerController,
-	})
+	a.runner.AddRunnable(a.informerController)
 	return a, nil
 }
 
@@ -323,7 +321,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if err != nil {
 			return err
 		}
-		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.KubernetesBasedIformerOptions{
+		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.KubernetesBasedInformerOptions{
 			ListWatchOptions: operator.ListWatchOptions{
 				Namespace:      kind.ReconcileOptions.Namespace,
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,
