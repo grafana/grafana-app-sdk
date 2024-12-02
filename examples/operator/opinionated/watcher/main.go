@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/k8s"
@@ -120,21 +119,14 @@ func main() {
 	// Informers also implement Controller, so we can use them as a controller directly if there's no need for an intermediary.
 	op.AddController(informer)
 
-	// Create the stop channel
-	stopCh := make(chan struct{}, 1)
-
 	// Set up a signal handler
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	go func() {
-		<-sigChan
-		close(stopCh)
-	}()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
 
 	log.Printf("%sStarting Operator%s", green, nc)
 
 	// Run the controller (will block until stopCh receives a message or is closed)
-	op.Run(stopCh)
+	op.Run(ctx)
 }
 
 type OpinionatedModel struct {

@@ -345,16 +345,16 @@ func TestInformerController_Run(t *testing.T) {
 		wg := sync.WaitGroup{}
 		c := NewInformerController(InformerControllerConfig{})
 		inf1 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				wg.Done()
 				return nil
 			},
 		}
 		c.AddInformer(inf1, "foo")
 		inf2 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				wg.Done()
 				return nil
 			},
@@ -362,15 +362,12 @@ func TestInformerController_Run(t *testing.T) {
 		c.AddInformer(inf2, "bar")
 		wg.Add(3)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
-		}()
-		go func() {
-			time.Sleep(time.Second * 3)
-			close(stopCh)
 		}()
 		wg.Wait()
 	})
@@ -379,16 +376,16 @@ func TestInformerController_Run(t *testing.T) {
 		wg := sync.WaitGroup{}
 		c := NewInformerController(InformerControllerConfig{})
 		inf1 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				wg.Done()
 				return nil
 			},
 		}
 		c.AddInformer(inf1, "foo")
 		inf2 := &mockInformer{
-			RunFunc: func(stopCh <-chan struct{}) error {
-				<-stopCh
+			RunFunc: func(ctx context.Context) error {
+				<-ctx.Done()
 				wg.Done()
 				return nil
 			},
@@ -396,15 +393,12 @@ func TestInformerController_Run(t *testing.T) {
 		c.AddInformer(inf2, "bar")
 		wg.Add(3)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*3)
+		defer cancel()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
-		}()
-		go func() {
-			time.Sleep(time.Second * 3)
-			close(stopCh)
 		}()
 		wg.Wait()
 	})
@@ -432,10 +426,10 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
-		close(stopCh)
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 1, reconcileCalls)
 	})
@@ -471,11 +465,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 2, addCalls)
 		assert.Equal(t, 1, reconcileCalls)
 	})
@@ -520,11 +514,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -570,11 +564,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 2, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -610,11 +604,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 1, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -651,11 +645,11 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		stopCh := make(chan struct{})
-		go c.Run(stopCh)
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		wg.Wait()
-		close(stopCh)
+		cancel()
 		assert.Equal(t, 2, addCalls)
 		assert.Equal(t, 2, reconcileCalls)
 	})
@@ -692,9 +686,9 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	}, "foo")
 	wg.Add(2)
 
-	stopCh := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
 	go func() {
-		err := c.Run(stopCh)
+		err := c.Run(ctx)
 		assert.Nil(t, err)
 		wg.Done()
 	}()
@@ -706,7 +700,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	go func() {
 		// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
 		time.Sleep(time.Second * 10)
-		close(stopCh)
+		cancel()
 	}()
 	wg.Wait()
 	// We should have four total attempts for each call, initial + three retries
@@ -747,9 +741,9 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		}, "foo")
 		wg.Add(2)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
 		}()
@@ -761,7 +755,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		go func() {
 			// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
 			time.Sleep(time.Second)
-			close(stopCh)
+			cancel()
 		}()
 		wg.Wait()
 		// We should have four total attempts, though we may be off-by-one because timing is hard,
@@ -809,9 +803,9 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		}, "foo")
 		wg.Add(2)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
 		}()
@@ -822,7 +816,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		go func() {
 			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 			time.Sleep(time.Millisecond * 500)
-			close(stopCh)
+			cancel()
 		}()
 		wg.Wait()
 		// We should have only two attempts for each
@@ -859,9 +853,9 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		}, "foo")
 		wg.Add(2)
 
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 			wg.Done()
 		}()
@@ -869,7 +863,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		go func() {
 			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 			time.Sleep(time.Millisecond * 500)
-			close(stopCh)
+			cancel()
 		}()
 		wg.Wait()
 		// We should have only two attempts for each
@@ -906,9 +900,10 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				return nil
 			},
 		}, "foo")
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 		}()
 
@@ -966,9 +961,10 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				return updateError
 			},
 		}, "foo")
-		stopCh := make(chan struct{})
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
 		go func() {
-			err := c.Run(stopCh)
+			err := c.Run(ctx)
 			assert.Nil(t, err)
 		}()
 
@@ -1087,7 +1083,7 @@ func TestOpinionatedRetryDequeuePolicy(t *testing.T) {
 
 type mockInformer struct {
 	AddEventHandlerFunc func(handler ResourceWatcher)
-	RunFunc             func(stopCh <-chan struct{}) error
+	RunFunc             func(ctx context.Context) error
 }
 
 func (i *mockInformer) AddEventHandler(handler ResourceWatcher) error {
@@ -1096,9 +1092,9 @@ func (i *mockInformer) AddEventHandler(handler ResourceWatcher) error {
 	}
 	return nil
 }
-func (i *mockInformer) Run(stopCh <-chan struct{}) error {
+func (i *mockInformer) Run(ctx context.Context) error {
 	if i.RunFunc != nil {
-		return i.RunFunc(stopCh)
+		return i.RunFunc(ctx)
 	}
 	return nil
 }
@@ -1113,8 +1109,8 @@ func (ti *testInformer) AddEventHandler(handler ResourceWatcher) error {
 	return nil
 }
 
-func (ti *testInformer) Run(stopCh <-chan struct{}) error {
-	<-stopCh
+func (ti *testInformer) Run(ctx context.Context) error {
+	<-ctx.Done()
 	if ti.onStop != nil {
 		ti.onStop()
 	}
