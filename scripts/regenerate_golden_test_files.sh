@@ -22,8 +22,8 @@ go run ./cmd/grafana-app-sdk/*.go generate -c="${rootdir}/codegen/cuekind/testin
   --kindgrouping=group \
   --selectors="customManifest,testManifest"
 # Move the manifest files
-mv "${testdir}/go/groupbygroup/test_manifest.go" "${testdir}/manifest/go/testkinds/test_manifest.go.txt"
-mv "${testdir}/go/groupbygroup/custom_manifest.go" "${testdir}/manifest/go/testkinds/custom_manifest.go.txt"
+mv "${testdir}/go/groupbygroup/testapp_manifest.go" "${testdir}/manifest/go/testkinds/testapp_manifest.go.txt"
+mv "${testdir}/go/groupbygroup/customapp_manifest.go" "${testdir}/manifest/go/testkinds/customapp_manifest.go.txt"
 mv "${testdir}/crd/test-app-manifest.yaml" "${testdir}/manifest/test-app-manifest.yaml"
 mv "${testdir}/crd/custom-app-manifest.yaml" "${testdir}/manifest/custom-app-manifest.yaml"
 # Group by kind (only customKind)

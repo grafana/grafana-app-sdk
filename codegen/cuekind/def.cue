@@ -168,13 +168,13 @@ Kind: S={
 }
 
 Manifest: S={
-	appName: string
-	group: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	group: strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	kinds: [...{
 		group: S.fullGroup
 		manifestGroup: S.group
 	} & Kind]
-	permissions: {
+	extraPermissions: {
 		accessKinds: [...#AccessKind]
 	}
 

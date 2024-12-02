@@ -4,7 +4,7 @@ metadata:
     name: custom-app
 spec:
     appName: custom-app
-    group: custom.ext.grafana.com
+    group: customapp.ext.grafana.com
     kinds:
         - kind: CustomKind
           scope: Namespaced

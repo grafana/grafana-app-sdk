@@ -4,7 +4,6 @@ import "time"
 
 customManifest: {
 	appName: "custom-app"
-	group: "custom"
 	kinds: [customKind]
 }
 

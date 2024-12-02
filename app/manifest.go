@@ -74,7 +74,7 @@ type ManifestData struct {
 	Kinds []ManifestKind `json:"kinds,omitempty" yaml:"kinds,omitempty"`
 	// Permissions is the extra permissions for non-owned kinds this app needs to operate its backend.
 	// It may be nil if no extra permissions are required.
-	Permissions *Permissions `json:"permissions,omitempty" yaml:"permissions,omitempty"`
+	ExtraPermissions *Permissions `json:"extraPermissions,omitempty" yaml:"extraPermissions,omitempty"`
 }
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions

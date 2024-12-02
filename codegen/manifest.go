@@ -7,9 +7,20 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
-	AppName   string `json:"appName"`
-	Group     string `json:"group"`
-	FullGroup string `json:"fullGroup"`
+	AppName          string                                `json:"appName"`
+	Group            string                                `json:"group"`
+	FullGroup        string                                `json:"fullGroup"`
+	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
+}
+
+type AppManifestPropertiesExtraPermissions struct {
+	AccessKinds []AppManifestKindPermission `json:"accessKinds,omitempty"`
+}
+
+type AppManifestKindPermission struct {
+	Group    string   `json:"group"`
+	Resource string   `json:"resource"`
+	Actions  []string `json:"actions"`
 }
 
 type SimpleManifest struct {

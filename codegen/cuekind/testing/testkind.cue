@@ -4,7 +4,6 @@ import "time"
 
 testManifest: {
 	appName: "test-app"
-	group: "test",
 	kinds: [testKind, testKind2]
 }
 
