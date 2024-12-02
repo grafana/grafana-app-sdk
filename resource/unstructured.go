@@ -33,7 +33,7 @@ func (u *UnstructuredWrapper) SetSpec(a any) error {
 func (u *UnstructuredWrapper) GetSubresources() map[string]any {
 	subresources := make(map[string]any)
 	for k, v := range u.Object {
-		if k == "metadata" || k == "apiVersion" || k == "kind" {
+		if k == "metadata" || k == "apiVersion" || k == "kind" || k == "spec" {
 			continue
 		}
 		subresources[k] = v
