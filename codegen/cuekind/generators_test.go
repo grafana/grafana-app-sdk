@@ -18,6 +18,10 @@ const (
 	ReferenceOutputDirectory = "../testing/golden_generated"
 )
 
+var jsonEncoder = func(v any) ([]byte, error) {
+	return json.MarshalIndent(v, "", "    ")
+}
+
 func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
@@ -28,7 +32,7 @@ func TestCRDGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
-		files, err := CRDGenerator(json.Marshal, "json").Generate(kinds...)
+		files, err := CRDGenerator(jsonEncoder, "json").Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 2)
