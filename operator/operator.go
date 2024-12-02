@@ -1,8 +1,11 @@
 package operator
 
 import (
+	"context"
+
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
@@ -15,7 +18,7 @@ type ListWatchOptions struct {
 
 // Controller is an interface that describes a controller which can be run as part of an operator
 type Controller interface {
-	Run(<-chan struct{}) error
+	app.Runnable
 }
 
 // Operator is the highest-level construct of the `operator` package,
@@ -52,17 +55,18 @@ func (o *Operator) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
-// Run runs the operator until an unrecoverable error occurs or the stopCh is closed/receives a message.
-func (o *Operator) Run(stopCh <-chan struct{}) error {
+// Run runs the operator until an unrecoverable error occurs or the context is canceled.
+func (o *Operator) Run(ctx context.Context) error {
 	// TODO: operator should deal with scaling logic if possible.
 
 	errs := make(chan error)
-	controllerStopChannel := make(chan struct{})
+	derivedCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// Start all controllers
 	for _, controller := range o.controllers {
 		go func(c Controller) {
-			err := c.Run(controllerStopChannel)
+			err := c.Run(derivedCtx)
 			if err != nil {
 				errs <- err
 			}
@@ -73,11 +77,8 @@ func (o *Operator) Run(stopCh <-chan struct{}) error {
 	var err error
 	select {
 	case err = <-errs:
-	case <-stopCh:
+	case <-ctx.Done():
 	}
-
-	// Stop all controllers
-	close(controllerStopChannel)
 
 	// If we encountered an error, return it (if we didn't, this will be nil)
 	return err

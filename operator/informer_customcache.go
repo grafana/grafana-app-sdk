@@ -43,6 +43,7 @@ type CustomCacheInformer struct {
 	objectType        resource.Object
 	processor         *informerProcessor
 	objectTransformer func(any) (resource.Object, error)
+	runContext        context.Context
 }
 
 // NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
@@ -91,19 +92,28 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 
 // AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
-	c.processor.addListener(newInformerProcessorListener(toResourceEventHandlerFuncs(handler, c.objectTransformer, c.errorHandler), processorBufferSize))
+	c.processor.addListener(newInformerProcessorListener(toResourceEventHandlerFuncs(handler, c.objectTransformer, c.errorHandler, func() context.Context {
+		if c.runContext != nil {
+			return c.runContext
+		}
+		return context.Background()
+	}), processorBufferSize))
 	return nil
 }
 
 // Run runs the informer until stopCh is closed or receives a message.
 // While running, events from the ListerWatcher will be propagated to all registered ResourceWatcher handlers,
 // and current state of all resources will be stored in the custom cache.Store.
-func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
+func (c *CustomCacheInformer) Run(ctx context.Context) error {
 	defer utilruntime.HandleCrash()
 
 	if c.HasStarted() {
 		return fmt.Errorf("informer is already started")
 	}
+	c.runContext = ctx
+	defer func() {
+		c.runContext = nil
+	}()
 
 	func() {
 		c.startedLock.Lock()
@@ -128,7 +138,7 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	}()
 	// Wait for the processor to complete startup before running the controller (otherwise events may be dropped by distribution)
 	<-c.processor.startedCh
-	c.controller.Run(stopCh)
+	c.controller.Run(ctx.Done())
 	return nil
 }
 
@@ -257,10 +267,10 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 	}
 }
 
-func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) (resource.Object, error), errorHandler func(context.Context, error)) *cache.ResourceEventHandlerFuncs {
+func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) (resource.Object, error), errorHandler func(context.Context, error), contextProvider func() context.Context) *cache.ResourceEventHandlerFuncs {
 	return &cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-add")
+			ctx, span := GetTracer().Start(contextProvider(), "informer-event-add")
 			defer span.End()
 			cast, err := transformer(obj)
 			if err != nil {
@@ -283,7 +293,7 @@ func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) 
 			}
 		},
 		UpdateFunc: func(oldObj, newObj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-update")
+			ctx, span := GetTracer().Start(contextProvider(), "informer-event-update")
 			defer span.End()
 			cOld, err := transformer(oldObj)
 			if err != nil {
@@ -313,7 +323,7 @@ func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) 
 			}
 		},
 		DeleteFunc: func(obj any) {
-			ctx, span := GetTracer().Start(context.Background(), "informer-event-delete")
+			ctx, span := GetTracer().Start(contextProvider(), "informer-event-delete")
 			defer span.End()
 			cast, err := transformer(obj)
 			if err != nil {
