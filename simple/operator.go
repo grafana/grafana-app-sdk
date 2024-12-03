@@ -28,6 +28,11 @@ type OperatorConfig struct {
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
 	FinalizerGenerator          func(kind resource.Schema) string
 	InformerCacheResyncInterval time.Duration
+	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
+	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
+	// for sending finalizer add/remove patches to the latest version of the kind.
+	// This defaults to 10 minutes.
+	DiscoveryRefreshInterval time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -86,6 +91,14 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 			return nil, err
 		}
 	}
+	discoveryRefresh := cfg.DiscoveryRefreshInterval
+	if discoveryRefresh == 0 {
+		discoveryRefresh = time.Minute * 10
+	}
+	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, discoveryRefresh)
+	if err != nil {
+		return nil, err
+	}
 
 	informerControllerConfig := operator.DefaultInformerControllerConfig()
 	informerControllerConfig.MetricsConfig.Namespace = cfg.Metrics.Namespace
@@ -121,6 +134,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		admission:           ws,
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
+		patcher:             patcher,
 	}
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
@@ -143,6 +157,7 @@ type Operator struct {
 	admission           *k8s.WebhookServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
+	patcher             *k8s.DynamicPatcher
 }
 
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
@@ -203,7 +218,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, client, func(sch resource.Schema) string {
+	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, func(sch resource.Schema) string {
 		if o.FinalizerGenerator != nil {
 			return o.FinalizerGenerator(sch)
 		}
@@ -246,7 +261,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	} else if o.Name != "" {
 		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
 	}
-	or, err := operator.NewOpinionatedReconciler(client, finalizer)
+	or, err := operator.NewOpinionatedReconciler(&watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, finalizer)
 	if err != nil {
 		return err
 	}
