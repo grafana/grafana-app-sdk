@@ -132,7 +132,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 
 	// Init CUE
 	cueModPath := filepath.Join(path, "kinds/cue.mod", "module.cue")
-	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\n", name))
+	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", name))
 	if _, err = os.Stat(cueModPath); err == nil && !overwrite {
 		if promptYN(fmt.Sprintf("CUE module already exists at '%s', overwrite?", cueModPath), true) {
 			err = writeFile(cueModPath, cueModContents)
