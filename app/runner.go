@@ -227,6 +227,7 @@ type DynamicMultiRunner struct {
 	wg       *sync.WaitGroup
 }
 
+// NewDynamicMultiRunner creates a new properly-initialized DynamicMultiRunner.
 func NewDynamicMultiRunner() *DynamicMultiRunner {
 	return &DynamicMultiRunner{
 		ErrorHandler: RunnableCollectorDefaultErrorHandler,
@@ -234,6 +235,7 @@ func NewDynamicMultiRunner() *DynamicMultiRunner {
 	}
 }
 
+// Run runs all the current runners, and will dynamically run any runners added with AddRunnable.
 func (d *DynamicMultiRunner) Run(ctx context.Context) error {
 	d.runMux.Lock()
 	if d.running {
@@ -293,6 +295,8 @@ func (d *DynamicMultiRunner) setTimedOut(val bool) {
 	}
 }
 
+// AddRunnable adds the provided Runnable to the list of runners which gets run by Run.
+// If the DynamicMultiRunner is already running, the Runnable will be started immediately.
 func (d *DynamicMultiRunner) AddRunnable(runnable Runnable) {
 	d.runMux.Lock()
 	defer d.runMux.Unlock()
@@ -305,6 +309,8 @@ func (d *DynamicMultiRunner) AddRunnable(runnable Runnable) {
 	d.runners = append(d.runners, tpl)
 }
 
+// RemoveRunnable removes the provided Runnable from the list of runners, provided that it exists in the current list.
+// If the DynamicMultiRunner is already running, the context provided to the Runnable's Run method will be canceled.
 func (d *DynamicMultiRunner) RemoveRunnable(runnable Runnable) {
 	d.runMux.Lock()
 	defer d.runMux.Unlock()
