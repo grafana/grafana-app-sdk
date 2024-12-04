@@ -34,9 +34,9 @@ func (*CodecGenerator) JennyName() string {
 func (c *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	meta := kind.Properties()
 
-	if meta.APIResource.Scope != string(resource.NamespacedScope) && meta.APIResource.Scope != string(resource.ClusterScope) {
+	if meta.Scope != string(resource.NamespacedScope) && meta.Scope != string(resource.ClusterScope) {
 		return nil, fmt.Errorf("scope '%s' is invalid, must be one of: '%s', '%s'",
-			meta.APIResource.Scope, resource.ClusterScope, resource.NamespacedScope)
+			meta.Scope, resource.ClusterScope, resource.NamespacedScope)
 	}
 
 	prefix := ""
@@ -49,11 +49,11 @@ func (c *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		b := bytes.Buffer{}
 		err := templates.WriteCodec(templates.SchemaMetadata{
 			Package:    meta.MachineName,
-			Group:      meta.APIResource.Group,
+			Group:      meta.Group,
 			Version:    meta.Current,
 			Kind:       meta.Kind,
 			Plural:     meta.PluralMachineName,
-			Scope:      meta.APIResource.Scope,
+			Scope:      meta.Scope,
 			FuncPrefix: prefix,
 		}, &b)
 		if err != nil {
@@ -73,11 +73,11 @@ func (c *CodecGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 			b := bytes.Buffer{}
 			err := templates.WriteCodec(templates.SchemaMetadata{
 				Package:    ToPackageName(ver.Version),
-				Group:      meta.APIResource.Group,
+				Group:      meta.Group,
 				Version:    ver.Version,
 				Kind:       meta.Kind,
 				Plural:     meta.PluralMachineName,
-				Scope:      meta.APIResource.Scope,
+				Scope:      meta.Scope,
 				FuncPrefix: prefix,
 			}, &b)
 			if err != nil {
