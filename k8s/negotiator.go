@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -161,27 +162,60 @@ type CodecDecoder struct {
 //nolint:gocritic,revive
 func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (
 	runtime.Object, *schema.GroupVersionKind, error) {
+	if defaults != nil {
+		logging.DefaultLogger.Debug("decoding object", "group", defaults.Group, "version", defaults.Version, "kind", defaults.Kind, "payload", string(data))
+	} else {
+		logging.DefaultLogger.Debug("decoding object with nil defaults", "payload", string(data))
+	}
 	if into != nil {
+		logging.DefaultLogger.Debug("using provided into object", "gvk", into.GetObjectKind().GroupVersionKind().String())
 		if cast, ok := into.(resource.Object); ok {
+			logging.DefaultLogger.Debug("decoding into resource.Object")
 			err := c.Codec.Read(bytes.NewReader(data), cast)
 			return cast, defaults, err
 		}
 		if cast, ok := into.(*metav1.WatchEvent); ok {
+			logging.DefaultLogger.Debug("decoding into *metav1.WatchEvent")
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
 		}
 		if cast, ok := into.(*metav1.List); ok {
+			logging.DefaultLogger.Debug("decoding into *metav1.List")
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
 		}
 		// We shouldn't encounter this
 		// TODO: make better or return error?
+		logging.DefaultLogger.Debug("generic decode")
 		err := c.Decoder(data, into)
 		return into, defaults, err
 	}
 
+	logging.DefaultLogger.Debug("into is nil, checking defaults")
+	if defaults != nil {
+		if defaults.Kind == "Status" && defaults.Version == "v1" {
+			logging.DefaultLogger.Debug("defaults is a v1/Status object, decoding into that")
+			obj := &metav1.Status{}
+			err := c.Decoder(data, obj)
+			return obj, defaults, err
+		}
+	}
+	logging.DefaultLogger.Debug("nothing found in defaults, doing a partial unmarshal to check GVK")
+	tm := metav1.TypeMeta{}
+	err := c.Decoder(data, &tm)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error decoding object TypeMeta: %w", err)
+	}
+	logging.DefaultLogger.Debug("decoded TypeMeta", "gvk", tm.GroupVersionKind().String())
+	if tm.GroupVersionKind().Version == "v1" && tm.GroupVersionKind().Kind == "Status" {
+		logging.DefaultLogger.Debug("TypeMeta is a v1/Status object, decoding into that")
+		obj := &metav1.Status{}
+		err := c.Decoder(data, obj)
+		return obj, defaults, err
+	}
+	logging.DefaultLogger.Debug("decoding into a new empty object instance", "gvk", c.SampleObject.GetObjectKind().GroupVersionKind().String())
 	obj := c.SampleObject.Copy()
-	err := c.Codec.Read(bytes.NewReader(data), obj)
+	err = c.Codec.Read(bytes.NewReader(data), obj)
 	return obj, defaults, err
 }
 
