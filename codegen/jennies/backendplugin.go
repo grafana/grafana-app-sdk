@@ -2,6 +2,7 @@ package jennies
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/grafana/codejen"
 
@@ -36,7 +37,7 @@ func (m *backendPluginMainGenerator) Generate(decls ...codegen.Kind) (*codejen.F
 	for _, decl := range decls {
 		tmd.Resources = append(tmd.Resources, decl.Properties())
 		if decl.Properties().Group != "" {
-			tmd.PluginID = decl.Properties().Group
+			tmd.PluginID = strings.Split(decl.Properties().Group, ".")[0]
 		}
 	}
 

@@ -104,6 +104,7 @@ type App struct {
 	converters         map[string]Converter
 	customRoutes       map[string]AppCustomRouteHandler
 	patcher            *k8s.DynamicPatcher
+	collectors         []prometheus.Collector
 }
 
 // AppConfig is the configuration used by App
@@ -212,6 +213,7 @@ func NewApp(config AppConfig) (*App, error) {
 		converters:         make(map[string]Converter),
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
+		collectors:         make([]prometheus.Collector, 0),
 	}
 	discoveryRefresh := config.DiscoveryRefreshInterval
 	if discoveryRefresh == 0 {
@@ -397,8 +399,17 @@ func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Co
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
 func (a *App) PrometheusCollectors() []prometheus.Collector {
-	// TODO: other collectors?
-	return a.runner.PrometheusCollectors()
+	collectors := make([]prometheus.Collector, 0)
+	collectors = append(collectors, a.collectors...)
+	collectors = append(collectors, a.runner.PrometheusCollectors()...)
+	return collectors
+}
+
+// RegisterMetricsCollectors registers additional prometheus collectors for the app, in addition to those provided
+// by any Runnables the app will run as part of Runner(). These additional prometheus collectors are exposed
+// as a part of the list returned by PrometheusCollectors().
+func (a *App) RegisterMetricsCollectors(collectors ...prometheus.Collector) {
+	a.collectors = append(a.collectors, collectors...)
 }
 
 // Validate implements app.App and handles Validating Admission Requests

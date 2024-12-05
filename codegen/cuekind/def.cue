@@ -139,8 +139,8 @@ Kind: S={
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
 			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
 			selectableFields: [...string]
-			validation: #AdmissionCapability | *S.apiResource.validation
-			mutation: #AdmissionCapability | *S.apiResource.mutation
+			validation: #AdmissionCapability | *S.validation
+			mutation: #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
