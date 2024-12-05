@@ -19,20 +19,12 @@ go install github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk@latest
 If you're unfamiliar with `go install`, it's similar to `go get`, but will compile a binary for the `main` package in what it pulls, and put that in `$GOPATH/bin`. If you don't have `$GOPATH/bin` in your path, you will want to add it, otherwise the CLI commands won't work for you. You can check if the CLI was installed successfully with:
 You can then check if the install was successful by running.
 
-> [!NOTE]  
-> There is currently a [known issue with running go install](https://github.com/grafana/grafana-app-sdk/issues/189) for many versions. 
-> You can install locally with
-> ```shell
-> git clone git@github.com:grafana/grafana-app-sdk.git && cd grafana-app-sdk/cmd/grafana-app-sdk && go install 
-> ```
-> But be advised this will install the latest `main` commit. To install a specific version, use `git checkout <version>` before running `go install`.
->
-> Alternatively, you can install by running `make build` in the repository root, and copying `target/grafana-app-sdk` into your `PATH`.
-
-If you're not comfortable using `go install`, the [github releases page](https://github.com/grafana/grafana-app-sdk/releases) for the project includes a binary for each architecture per release. You can download the binary and add it to your `PATH` to use the SDK CLI the same way as if you used `go install`.
 ```shell
 grafana-app-sdk --help
 ```
+
+> [!NOTE]
+> If you're not comfortable using `go install`, the [github releases page](https://github.com/grafana/grafana-app-sdk/releases) for the project includes a binary for each architecture per release. You can download the binary and add it to your `PATH` to use the SDK CLI the same way as if you used `go install`.
 
 Now that we have the CLI installed, let's initialize our project. In this tutorial, we're going to use `github.com/grafana/issue-tracker-project` as our go module name, but you can use whatever name you like--it won't affect anything except some imports on code that we work on later.
 ```shell
@@ -44,6 +36,7 @@ $ grafana-app-sdk project init "github.com/grafana/issue-tracker-project"
  * Writing file go.mod
  * Writing file go.sum
  * Writing file kinds/cue.mod/module.cue
+ * Writing file kinds/manifest.cue
  * Writing file Makefile
  * Writing file local/config.yaml
  * Writing file local/scripts/cluster.sh
@@ -56,6 +49,10 @@ $ tree .
 │   └── operator
 ├── go.mod
 ├── go.sum
+├── kinds
+│   ├── cue.mod
+│   │   └── module.cue
+│   └── manifest.cue
 ├── local
 │   ├── Tiltfile
 │   ├── additional
@@ -66,12 +63,9 @@ $ tree .
 │       ├── cluster.sh
 │       └── push_image.sh
 ├── pkg
-├── plugin
-└── kinds
-    └── cue.mod
-        └── module.cue
+└── plugin
 
-12 directories, 8 files
+12 directories, 9 files
 ```
 
 As we can see from the command output, and the `tree` command, the `project init` command created a go module in the current directory, a Makefile, and several other directories. 
