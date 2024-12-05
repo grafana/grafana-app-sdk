@@ -7,18 +7,36 @@ By default, the operator is run as a separate container alongside your grafana d
 The operator is a logical pattern which runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
 * One or more informers, which subscribe to events for a particular resource kind and namespace
 * One or more watchers, which consume events for particular kinds
-In our case, the boilerplate code uses the `simple.Operator` operator type, which handles dealing with tying together informers and watchers (or reconcilers) in an `InformerController` for us in `cmd/operator/main.go`:
+
+In our case, the boilerplate code uses the opinionated `simple.App` App type, which handles dealing with tying together informers and watchers (or reconcilers) as Managed Kinds for us in `pkg/app/app.go`:
 ```golang
 issueWatcher, err := watchers.NewIssueWatcher()
-if err != nil {
-	logging.DefaultLogger.With("error", err).Error("Unable to create IssueWatcher")
-	panic(err)
-}
-err = runner.WatchKind(issue.Kind(), issueWatcher, simple.ListWatchOptions{
-	Namespace: resource.NamespaceAll,
-})
+	if err != nil {
+		return nil, fmt.Errorf("unable to create IssueWatcher: %w", err)
+	}
+
+	config := simple.AppConfig{
+		Name:       "issue-tracker-project",
+		KubeConfig: cfg.KubeConfig,
+		InformerConfig: simple.AppInformerConfig{
+			ErrorHandler: func(ctx context.Context, err error) {
+				logging.FromContext(ctx).With("error", err).Error("Informer processing error")
+			},
+		},
+		ManagedKinds: []simple.AppManagedKind{
+			{
+				Kind:    issuev1.Kind(),
+				Watcher: issueWatcher,
+			},
+		},
+	}
+
+	a, err := simple.NewApp(config)
+	if err != nil {
+		return nil, err
+	}
 ```
-This code creates a watcher for receiving events, and then has the `simple.Operator` attach it to its own internal controller, and create an informer for it that uses the filtering provided in `simple.ListWatchOptions`. As a nice addition to this, `simpple.Operator.WatchKind` also wraps our `IssueWatcher` in an `operator.OpinionatedWatcher`, which handles making sure the operator is always in-the-know on events via finalizers (so, for example, a `delete` event is blocked from completing until it gets processed by our operator).
+This code creates a watcher for receiving events, and then has the `simple.App` watch for changes on the Kind by configuring it as a Managed Kind. As a nice addition to this, the `simple.App` instance also wraps our `IssueWatcher` in an `operator.OpinionatedWatcher`, which handles making sure the operator is always in-the-know on events via finalizers (so, for example, a `delete` event is blocked from completing until it gets processed by our operator).
 
 The other thing we're doing here is calling `watchers.NewIssueWatcher()`. The `watchers` package was added by our `project add operator` command, so let's take a look at what's there:
 ```go
@@ -41,7 +59,7 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	}
 
 	// TODO
-	fmt.Println("Added ", object.StaticMetadata().Identifier())
+	logging.FromContext(ctx).Debug("Added resource", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 ```
@@ -49,7 +67,7 @@ Each method does a check to see if the provided `resource.Object` is of type `*i
 
 So what else can we do in our watcher?
 
-Well, right now, we could integrate with some third-party service, maybe you want to sync the issues created in you plugin with GitHub, or some internal issue-tracking tool. You may have some other task which should be performed when an issue is added, or updated, or deleted, which you should do in the operator. As more of grafana begins to use a kubernetes-like storage system, you could even create a resource of another kind in response to an add event, which some other operator would pick up and do something with. Why not do these things in the plugin backend?
+Well, right now, we could integrate with some third-party service, maybe you want to sync the issues created in your plugin with GitHub, or some internal issue-tracking tool. You may have some other task which should be performed when an issue is added, or updated, or deleted, which you should do in the operator. As more of grafana begins to use a kubernetes-like storage system, you could even create a resource of another kind in response to an add event, which some other operator would pick up and do something with. Why not do these things in the plugin backend?
 
 Well, as we saw before, your plugin API isn't the only way to interact with Issues. You can create, update, or delete them via `kubectl`. But even if you restrict `kubectl` access, but perhaps another plugin operator may want to create an Issue in response to one of _their_ events. If they did that via directly interfacing with the storage layer, you wouldn't notice that it happened. The operator ensures that no matter _how_ the mutation in the storage layer occurred (API, kubectl, other access), you are informed and can take action.
 
@@ -57,6 +75,8 @@ Well, as we saw before, your plugin API isn't the only way to interact with Issu
 
 Let's add some simple behavior to our issue watcher to export metrics on issue counts by status. To do this, we'll want to export an additional metric from our operator, which we'll have to track in our watcher. Let's update our watcher code to add a `prometheus.GaugeVec` that we can use to track issue counts by status as a gauge (a gauge represents numbers which can increase or decrease, as opposed to a counter, which will only increase):
 ```go
+// pkg/watchers/watcher_issue.go
+
 import (
 	// ...Existing imports omitted for brevity
 	"github.com/prometheus/client_golang/prometheus"
@@ -172,23 +192,18 @@ func (s *IssueWatcher) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{s.statsGauge}
 }
 ```
-Easy! Now all we need to do is register it with our operator so it can expose it. The `simple.Operator` provides a method we can call in our `main` function, which we can add right after the part that creates and adds the watcher with `runner.WatchKind` (`runner` is the variable name for our `simple.Operator`):
+Easy! Now we need to do is register the Collector.
 ```go
-// Wrap our resource watchers in OpinionatedWatchers, then add them to the controller
-issueWatcher, err := watchers.NewIssueWatcher()
-if err != nil {
-	logging.DefaultLogger.With("error", err).Error("Unable to create IssueWatcher")
-	panic(err)
-}
-err = runner.WatchKind(issue.Kind(), issueWatcher, simple.ListWatchOptions{
-	Namespace: resource.NamespaceAll,
-})
-if err != nil {
-	logging.DefaultLogger.With("error", err).Error("Error adding Issue watcher to controller")
-	panic(err)
-}
-// Register prometheus collectors from the watcher
-runner.RegisterMetricsCollectors(issueWatcher.PrometheusCollectors()...)
+// pkg/app/app.go
+
+func New(cfg app.Config) (app.App, error) {
+	issueWatcher, err := watchers.NewIssueWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create IssueWatcher: %w", err)
+	}
+
+	prometheus.MustRegister(issueWatcher.PrometheusCollectors()...)
+	...
 ```
 There we go! Now we'll be exposing the metric through the operator's `/metrics` prometheus scrape endpoint. Our local deployment already scrapes our operator, so if we re-build and re-deploy our operator, we'll start picking up that new metric in our local grafana.
 ```shell
@@ -275,13 +290,13 @@ if _, err := s.issueStore.UpdateSubresource(ctx, object.GetStaticMetadata().Iden
 ```
 Now that our watcher methods are performing an action that can result in an error, we want to return said error if it occurs, so that the action can be retried. We want to do this _before_ our gauge code, because if we return an error and retry, we don't want to increase the gauge again. We also want this timestamp to reflect the last time we updated the gauge.
 
-We can't re-build our operator yet, because now our `NewIssueWatcher` function requires an argument: a `resource.ClientGenerator`. A `ClientGenerator` is an object which can return `resource.Client` implementations for a provided kind. We can generate one from scratch for `k8s.Client` with `k8s.NewClientRegistry`, but `simple.NewOperator` actually already does this for us, and we can access the `ClientGenerator` it created with the `ClientGenerator()` method. So our line in `main.go` just needs to go from this:
+We can't re-build our operator yet, because now our `NewIssueWatcher` function requires an argument: a `resource.ClientGenerator`. A `ClientGenerator` is an object which can return `resource.Client` implementations for a provided kind. We can generate one from scratch for `k8s.Client` with `k8s.NewClientRegistry`, and we can get the required `rest.Config` from the provided `app.Config`. So our line in `main.go` needs to go from this:
 ```go
 issueWatcher, err := watchers.NewIssueWatcher()
 ```
 to this:
 ```go
-issueWatcher, err := watchers.NewIssueWatcher(runner.ClientGenerator())
+	issueWatcher, err := watchers.NewIssueWatcher(k8s.NewClientRegistry(cfg.KubeConfig, k8s.ClientConfig{}))
 ```
 Now, because we altered the schema of our kind, we'll need to re-deploy our local environment after re-building and pushing our operator:
 ```shell
