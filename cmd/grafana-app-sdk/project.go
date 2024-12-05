@@ -131,8 +131,14 @@ func projectInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Init CUE
+	cueModName := name
+	// Check that the module's first path section is a domain. If it isn't, turn it into one
+	if cueModSegments := strings.Split(cueModName, "/"); !strings.Contains(cueModSegments[0], ".") {
+		cueModSegments[0] = cueModSegments[0] + ".grafana.app"
+		cueModName = strings.Join(cueModSegments, "/")
+	}
 	cueModPath := filepath.Join(path, "kinds/cue.mod", "module.cue")
-	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", name))
+	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName))
 	if _, err = os.Stat(cueModPath); err == nil && !overwrite {
 		if promptYN(fmt.Sprintf("CUE module already exists at '%s', overwrite?", cueModPath), true) {
 			err = writeFile(cueModPath, cueModContents)
