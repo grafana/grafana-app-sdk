@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 

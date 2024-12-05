@@ -10,6 +10,11 @@ spec:
           scope: Namespaced
           versions:
             - name: v1
+              admission:
+                validation:
+                    operations:
+                        - CREATE
+                        - UPDATE
               schema:
                 spec:
                     properties:
@@ -58,6 +63,10 @@ spec:
                     x-kubernetes-preserve-unknown-fields: true
             - name: v2
               admission:
+                validation:
+                    operations:
+                        - CREATE
+                        - UPDATE
                 mutation:
                     operations:
                         - CREATE
