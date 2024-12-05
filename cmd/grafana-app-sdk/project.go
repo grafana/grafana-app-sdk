@@ -132,7 +132,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 	cueModName := name
 	// Check that the module's first path section is a domain. If it isn't, turn it into one
 	if cueModSegments := strings.Split(cueModName, "/"); !strings.Contains(cueModSegments[0], ".") {
-		cueModSegments[0] = cueModSegments[0] + ".grafana.app"
+		cueModSegments[0] += ".grafana.app"
 		cueModName = strings.Join(cueModSegments, "/")
 	}
 	cueModPath := filepath.Join(path, "kinds/cue.mod", "module.cue")
