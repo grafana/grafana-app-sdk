@@ -33,9 +33,6 @@ func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	}
 
 	for _, kind := range kinds {
-		if kind.Properties().APIResource == nil {
-			continue
-		}
 		vers := make([]string, len(kind.Versions()))
 		for i, ver := range kind.Versions() {
 			vers[i] = ver.Version

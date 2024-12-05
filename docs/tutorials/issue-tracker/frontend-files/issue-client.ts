@@ -1,7 +1,6 @@
 import { Issue } from '../generated/issue/v1/issue_object_gen';
 import { BackendSrvRequest, getBackendSrv, FetchResponse } from '@grafana/runtime';
 import { lastValueFrom } from 'rxjs';
-import { PLUGIN_API_URL } from '../constants';
 
 export interface ListResponse<T> {
     items: T[];
@@ -11,11 +10,13 @@ export class IssueClient {
     apiEndpoint: string
 
     constructor() {
-        this.apiEndpoint = PLUGIN_API_URL + '/issues';
+        this.apiEndpoint = '/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues';
     }
 
     async create(title: string, description: string): Promise<FetchResponse<Issue>> {
         let issue = {
+            kind: 'Issue',
+            apiVersion: 'issuetrackerproject.ext.grafana.com/v1',
             spec: {
                 title: title,
                 description: description,
@@ -27,7 +28,9 @@ export class IssueClient {
             }
         }
         const options: BackendSrvRequest = {
-            headers: {},
+            headers: {
+                'content-type':'application/json',
+            },
             method: 'POST',
             url: this.apiEndpoint,
             data: JSON.stringify(issue),
@@ -71,7 +74,9 @@ export class IssueClient {
 
     async update(name: string, updated: Issue): Promise<FetchResponse<Issue>> {
         const options: BackendSrvRequest = {
-            headers: {},
+            headers: {
+                'content-type':'application/json',
+            },
             method: 'PUT',
             url: this.apiEndpoint + '/' + name,
             data: JSON.stringify(updated),

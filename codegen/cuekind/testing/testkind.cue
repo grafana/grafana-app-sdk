@@ -2,14 +2,17 @@ package testing
 
 import "time"
 
+testManifest: {
+	appName: "test-app"
+	kinds: [testKind, testKind2]
+}
+
 testKind: {
 	kind: "TestKind"
 	plural: "testkinds"
-	group: "test"
-	apiResource: {
-		validation: operations: ["create","update"]
-		conversion: true
-	}
+	validation: operations: ["create","update"]
+	conversion: true
+	conversionWebhookProps: url: "http://foo.bar/convert"
 	current: "v1"
 	codegen: frontend: false
 	versions: {

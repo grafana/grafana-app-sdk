@@ -31,7 +31,7 @@ func (*watcherJenny) JennyName() string {
 }
 
 func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
-	if kind.Properties().APIResource == nil || !kind.Version(kind.Properties().Current).Codegen.Backend {
+	if !kind.Version(kind.Properties().Current).Codegen.Backend {
 		return nil, nil
 	}
 
@@ -134,9 +134,6 @@ func (o *operatorMainJenny) Generate(kinds ...codegen.Kind) (*codejen.File, erro
 	}
 
 	for _, kind := range kinds {
-		if kind.Properties().APIResource == nil {
-			continue
-		}
 		tmd.Resources = append(tmd.Resources, kind.Properties())
 	}
 

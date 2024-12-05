@@ -18,6 +18,8 @@ type KindProperties struct {
 	Kind string `json:"kind"`
 	// Group is the group the Kind is a part of
 	Group string `json:"group"`
+	// ManifestGroup is the group shortname used by the AppManifest this Kind belongs to
+	ManifestGroup string `json:"manifestGroup"`
 	// MachineName is the machine version of the Kind, which follows the regex: /^[a-z]+[a-z0-9]*$/
 	MachineName string `json:"machineName"`
 	// PluralMachineName is the plural of the MachineName
@@ -26,21 +28,18 @@ type KindProperties struct {
 	PluralName string `json:"pluralName"`
 	// Current is the version string of the version considered to be "current".
 	// This does not have to be the latest, but determines preference when generating code.
-	Current string `json:"current"`
-	// APIResource is an optional field which, if present, indicates that the Kind is expressible as a kubernetes API resource,
-	// and contains attributes which allow identification as such.
-	APIResource *APIResourceProperties `json:"apiResource"`
+	Current                string                      `json:"current"`
+	Scope                  string                      `json:"scope"`
+	Validation             KindAdmissionCapability     `json:"validation"`
+	Mutation               KindAdmissionCapability     `json:"mutation"`
+	Conversion             bool                        `json:"conversion"`
+	ConversionWebhookProps ConversionWebhookProperties `json:"conversionWebhookProps"`
 	// Codegen contains code-generation directives for the codegen pipeline
 	Codegen KindCodegenProperties `json:"codegen"`
 }
 
-// APIResourceProperties contains information about a Kind expressible as a kubernetes API resource
-type APIResourceProperties struct {
-	Group      string                  `json:"group"`
-	Scope      string                  `json:"scope"`
-	Validation KindAdmissionCapability `json:"validation"`
-	Mutation   KindAdmissionCapability `json:"mutation"`
-	Conversion bool                    `json:"conversion"`
+type ConversionWebhookProperties struct {
+	URL string `json:"url"`
 }
 
 type KindAdmissionCapabilityOperation string

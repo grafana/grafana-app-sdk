@@ -21,7 +21,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKind }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.APICodegenPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
-	{{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{.MachineName}} "{{$.Repo}}/{{$.APICodegenPath}}/resource/{{ $.ToPackageName .MachineName }}/{{ $.ToPackageName .Current}}"{{ end }}
+	{{ end }}{{ else }}{{ range .Resources }}{{.MachineName}} "{{$.Repo}}/{{$.APICodegenPath}}/resource/{{ $.ToPackageName .MachineName }}/{{ $.ToPackageName .Current}}"
     {{end}}{{end}}"{{.Repo}}/pkg/plugin"
 )
 
@@ -94,15 +94,13 @@ func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
         // Create our PluginService, then assign values to the individual Kind service(s)
         svc := PluginService{}
 
-		// Create stores for each Kind{{ range $key, $val := .GVToKind }}{{ range $val }}{{if eq .APIResource nil }}
-		// FIXME: create service for model-type resource {{ .Kind }}
-		// svc.{{ .MachineName }}Service = FIXME{{ else }}
+		// Create stores for each Kind{{ range $key, $val := .GVToKind }}{{ range $val }}
         {{ .MachineName }}Store, err := resource.NewTypedStore[*{{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}{{else}}{{ $.ToPackageName .MachineName }}{{end}}.{{ .Kind }}]({{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}.Kind(){{end}}, clientGenerator)
         if err != nil {
             logger.Error("failed to create {{ .Kind }} store", "err", err)
             return nil, fmt.Errorf("failed to create {{ .Kind }} store: %w", err)
         }
-        svc.{{ .MachineName }}Service = {{ .MachineName }}Store{{ end }}{{ end }}{{ end }}
+        svc.{{ .MachineName }}Service = {{ .MachineName }}Store{{ end }}{{ end }}
 
         // Create the plugin, which allows for CallResource requests to it as an instancemgmt.Instance
         p, err := plugin.New(kcfg.Namespace, &svc)
