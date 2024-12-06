@@ -110,6 +110,7 @@ type InformerController struct {
 	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
 	retryTickerInterval time.Duration
+	runner              *app.DynamicMultiRunner
 	totalEvents         *prometheus.CounterVec
 	reconcileLatency    *prometheus.HistogramVec
 	reconcilerLatency   *prometheus.HistogramVec
@@ -149,6 +150,7 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 		reconcilers:         NewListMap[Reconciler](),
 		toRetry:             NewListMap[retryInfo](),
 		retryTickerInterval: time.Second,
+		runner:              app.NewDynamicMultiRunner(),
 		reconcileLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.MetricsConfig.Namespace,
 			Subsystem:                       "informer",
@@ -225,8 +227,17 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return err
 	}
 
+	c.runner.AddRunnable(informer)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
+}
+
+// RemoveInformer removes the provided informer, stopping it if it is currently running.
+func (c *InformerController) RemoveInformer(informer Informer, resourceKind string) {
+	c.runner.RemoveRunnable(informer)
+	c.informers.RemoveItem(resourceKind, func(i Informer) bool {
+		return i == informer
+	})
 }
 
 // AddWatcher adds an observer to an informer with a matching `resourceKind`.
@@ -287,17 +298,12 @@ func (c *InformerController) RemoveAllReconcilersForResource(resourceKind string
 //
 //nolint:errcheck
 func (c *InformerController) Run(ctx context.Context) error {
+	// Using derivedCtx ensures that if c.runner exits prematurely due to an error, c.retryTicker will also stop
 	derivedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	c.informers.RangeAll(func(_ string, _ int, inf Informer) {
-		go inf.Run(derivedCtx)
-	})
 
 	go c.retryTicker(derivedCtx)
-
-	<-ctx.Done()
-
-	return nil
+	return c.runner.Run(ctx)
 }
 
 // PrometheusCollectors returns the prometheus metric collectors used by this informer, as well as collectors used by
