@@ -201,7 +201,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(cuePath))
 			if err != nil {
 				return nil, err
 			}
@@ -764,13 +764,11 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 		if err != nil {
 			return err
 		}
-		generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(), os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}
-		fs, err := generator.FilteredGenerate(cuekind.ManifestGenerator(json.Marshal, "json", "myapp"), func(kind codegen.Kind) bool {
-			return kind.Properties().APIResource != nil
-		})
+		fs, err := generator.Generate(cuekind.ManifestGenerator(json.Marshal, "json"))
 		if err != nil {
 			return err
 		}

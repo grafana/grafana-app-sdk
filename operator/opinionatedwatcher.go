@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -44,6 +46,7 @@ type OpinionatedWatcher struct {
 	finalizer  string
 	schema     resource.Schema
 	client     PatchClient
+	collectors []prometheus.Collector
 }
 
 // FinalizerSupplier represents a function that creates string finalizer from provider schema.
@@ -72,9 +75,10 @@ func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient,
 		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
 	}
 	return &OpinionatedWatcher{
-		client:    client,
-		schema:    sch,
-		finalizer: finalizer,
+		client:     client,
+		schema:     sch,
+		finalizer:  finalizer,
+		collectors: make([]prometheus.Collector, 0),
 	}, nil
 }
 
@@ -91,6 +95,10 @@ func (o *OpinionatedWatcher) Wrap(watcher ResourceWatcher, syncToAdd bool) { // 
 	o.DeleteFunc = watcher.Delete
 	if syncToAdd {
 		o.SyncFunc = watcher.Add
+	}
+
+	if cast, ok := watcher.(metrics.Provider); ok {
+		o.collectors = append(o.collectors, cast.PrometheusCollectors()...)
 	}
 }
 
@@ -265,6 +273,10 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 func (*OpinionatedWatcher) Delete(context.Context, resource.Object) error {
 	// Do nothing here, because we add finalizers, so we actually call delete code on updates/add-sync
 	return nil
+}
+
+func (o *OpinionatedWatcher) PrometheusCollectors() []prometheus.Collector {
+	return o.collectors
 }
 
 // addFunc is a wrapper for AddFunc which makes a nil check to avoid panics

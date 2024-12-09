@@ -21,7 +21,7 @@ make deps
 ```
 This will `go get` all the go modules we use, and then vendor them in the `vendor` directory.
 
-Now we can run our biuld successfully:
+Now we can run our build successfully:
 ```shell
 make build
 ```
@@ -224,112 +224,87 @@ Since our plugin is automatically installed, we can go to [grafana.k3d.localhost
 Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
 ```shell
 $ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
-```
 {
-    "kind": "IssueList",
-    "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-    "metadata": {
-        "resourceVersion": "1079"
-    },
-    "items": []
+  "kind": "IssueList",
+  "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+  "metadata": {
+    "resourceVersion": "1159"
+  },
+  "items": []
 }
 ```
 
-Just to demonstrate our API surface, we can try creating a new issue from the API:
+Our kinds are also available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
+Let's also list our issues that way:
 ```shell
-$ curl -X POST -H "contant-type:application/json" -d '{"metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues
-{"kind":"Issue","apiVersion":"issue-tracker-project.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default","uid":"027d84d6-4b0d-4154-8343-83a9280089d1","resourceVersion":"1104","generation":1,"creationTimestamp":"2024-02-21T17:05:32Z","labels":{"grafana-app-sdk-resource-version":"v1"},"managedFields":[{"manager":"gpx_issue-tracker-project-app_linux_arm64","operation":"Update","apiVersion":"issue-tracker-project.ext.grafana.com/v1","time":"2024-02-21T17:05:32Z","fieldsType":"FieldsV1","fieldsV1":{"f:metadata":{"f:labels":{".":{},"f:grafana-app-sdk-resource-version":{}}},"f:spec":{".":{},"f:description":{},"f:status":{},"f:title":{}}}}]},"spec":{"description":"A test issue","status":"open","title":"Test"},"status":{}}
-$ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
+curl http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
 {
+  "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+  "items": [],
   "kind": "IssueList",
-  "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
   "metadata": {
-    "resourceVersion": "1109"
-  },
-  "items": [
-    {
-      "kind": "Issue",
-      "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-      "metadata": {
-        "name": "test-issue",
-        "namespace": "default",
-        "uid": "027d84d6-4b0d-4154-8343-83a9280089d1",
-        "resourceVersion": "1105",
-        "generation": 1,
-        "creationTimestamp": "2024-02-21T17:05:32Z",
-        "labels": {
-          "grafana-app-sdk-resource-version": "v1"
-        },
-        "finalizers": [
-          "issue-tracker-project-operator-issues-finalizer"
-        ],
-        "managedFields": [
-          {
-            "manager": "gpx_issue-tracker-project-app_linux_arm64",
-            "operation": "Update",
-            "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-            "time": "2024-02-21T17:05:32Z",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:labels": {
-                  ".": {},
-                  "f:grafana-app-sdk-resource-version": {}
-                }
-              },
-              "f:spec": {
-                ".": {},
-                "f:description": {},
-                "f:status": {},
-                "f:title": {}
-              }
-            }
-          },
-          {
-            "manager": "operator",
-            "operation": "Update",
-            "apiVersion": "issue-tracker-project.ext.grafana.com/v1",
-            "time": "2024-02-21T17:05:32Z",
-            "fieldsType": "FieldsV1",
-            "fieldsV1": {
-              "f:metadata": {
-                "f:finalizers": {
-                  ".": {},
-                  "v:\"issue-tracker-project-operator-issues-finalizer\"": {}
-                }
-              }
-            }
-          }
-        ]
-      },
-      "spec": {
-        "description": "A test issue",
-        "status": "open",
-        "title": "Test"
-      },
-      "status": {}
-    }
-  ]
+    "continue": "",
+    "resourceVersion": "1159"
+  }
 }
 ```
+We can see the output is nearly identical, as the plugin backend is just a proxy to the API server. From this point, we could use the plugin backend or API server API, 
+but seeing as the plugin backend will eventually be phased out of the default path, let's use the API server here, and create an Issue:
+```shell
+$ curl -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+{
+  "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+  "kind": "Issue",
+  "metadata": {
+    "creationTimestamp": "2024-12-04T23:44:22Z",
+    "generation": 1,
+    "managedFields": [
+      {
+        "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+        "fieldsType": "FieldsV1",
+        "fieldsV1": {
+          "f:spec": {
+            ".": {},
+            "f:description": {},
+            "f:status": {},
+            "f:title": {}
+          }
+        },
+        "manager": "curl",
+        "operation": "Update",
+        "time": "2024-12-04T23:44:22Z"
+      }
+    ],
+    "name": "test-issue",
+    "namespace": "default",
+    "resourceVersion": "1408",
+    "uid": "c3c7c651-324f-41f0-8ddd-85daa25195d8"
+  },
+  "spec": {
+    "description": "A test issue",
+    "status": "open",
+    "title": "Test"
+  }
+}
+```
+Now if we list issues again, we'll see the issue we just made in the output.
 
 You can see that this includes metadata which we didn't define in our CUE, but was implicitly added (kubernetes metadata). 
 
 For fun, we can also interact with our resources through kubectl:
 ```shell
 $ kubectl get issue test-issue -o yaml
+apiVersion: issuetrackerproject.ext.grafana.com/v1
 kind: Issue
 metadata:
-  creationTimestamp: "2024-02-21T17:05:32Z"
+  creationTimestamp: "2024-12-04T23:44:22Z"
   finalizers:
-  - issue-tracker-project-operator-issues-finalizer
+  - issue-tracker-project-issues-finalizer
   generation: 1
-  labels:
-    grafana-app-sdk-resource-version: v1
   name: test-issue
   namespace: default
-  resourceVersion: "1105"
-  uid: 027d84d6-4b0d-4154-8343-83a9280089d1
+  resourceVersion: "1409"
+  uid: c3c7c651-324f-41f0-8ddd-85daa25195d8
 spec:
   description: A test issue
   status: open
@@ -343,18 +318,19 @@ with the option to extend them for custom metadata.
 
 We can also see that the operator is monitoring adds/updates/deletes to our issues if we take a look at its logs, either through the Tilt console, or via kubectl:
 ```
-Added  {default test-issue}
+{"time":"2024-12-04T23:44:22.388481222Z","level":"DEBUG","msg":"Added resource","name":"test-issue","traceID":"cfffb1cf88e0370ad48a185b3a321881"}
 ```
 
 If we delete the issue, we'll also see that delete show up in our operator:
 ```shell
-$ curl -X DELETE http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues/test-issue
+kubectl delete issue test-issue
 ```
 Now the operator logs show:
 ```
-Added  {default test-issue}
-Deleted  {default test-issue}
+{"time":"2024-12-04T23:44:22.388481222Z","level":"DEBUG","msg":"Added resource","name":"test-issue","traceID":"cfffb1cf88e0370ad48a185b3a321881"}
+{"time":"2024-12-04T23:46:47.696342678Z","level":"DEBUG","msg":"Deleted resource","name":"test-issue","traceID":"cf4bfc9b933da55ef6cea6187689f814"}
 ```
+(plus some other logging)
 
 Alright! We have a local test environment that we can keep up and running if we like for the rest of the tutorial, or we can stop it. To take down the deployed resources from the cluster, you can use `make local/down`. To delete the cluster entirely, you can use `make local/clean`. For the rest of this tutorial, we're going to assume the local environment is still up and running. Now, it's time to actually write some code, [starting with fleshing out our plugin's front-end](06-frontend.md).
 

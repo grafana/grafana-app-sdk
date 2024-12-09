@@ -7,20 +7,34 @@ By default, the operator is run as a separate container alongside your grafana d
 The operator is a logical pattern which runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
 * One or more informers, which subscribe to events for a particular resource kind and namespace
 * One or more watchers, which consume events for particular kinds
-In our case, the boilerplate code uses the `simple.Operator` operator type, which handles dealing with tying together informers and watchers (or reconcilers) in an `InformerController` for us in `cmd/operator/main.go`:
-```golang
-issueWatcher, err := watchers.NewIssueWatcher()
-if err != nil {
-	logging.DefaultLogger.With("error", err).Error("Unable to create IssueWatcher")
-	panic(err)
-}
-err = runner.WatchKind(issue.Kind(), issueWatcher, simple.ListWatchOptions{
-	Namespace: resource.NamespaceAll,
-})
-```
-This code creates a watcher for receiving events, and then has the `simple.Operator` attach it to its own internal controller, and create an informer for it that uses the filtering provided in `simple.ListWatchOptions`. As a nice addition to this, `simpple.Operator.WatchKind` also wraps our `IssueWatcher` in an `operator.OpinionatedWatcher`, which handles making sure the operator is always in-the-know on events via finalizers (so, for example, a `delete` event is blocked from completing until it gets processed by our operator).
 
-The other thing we're doing here is calling `watchers.NewIssueWatcher()`. The `watchers` package was added by our `project add operator` command, so let's take a look at what's there:
+Your app can be run as a standalone operator by making use of the `operator.Runner`. This takes the functionality exposed by your app, and runs it as a standard kubernetes operator, 
+including exposing webhooks for the kubernetes API server to hook into. Other means of running the app (runners) will be introduced at a later date.
+
+In our case, the boilerplate code uses the `simple.App` to build our app, and the `operator.Runner` as the runner. 
+Since the runner only exposes behavior from the app in an expected way for the runner type, the watcher for our `Issue` type is where we build the App, 
+in `pkg/app/app.go`:
+```golang
+func New(cfg app.Config) (app.App, error) {
+    issueWatcher, err := watchers.NewIssueWatcher()
+	if err != nil {
+		return nil, fmt.Errorf("unable to create IssueWatcher: %w", err)
+    }
+
+    config := simple.AppConfig{
+        // Trimmed
+        ManagedKinds: []simple.AppManagedKind{
+        {
+            Kind:    issuev1.Kind(),
+            Watcher: issueWatcher,
+        },
+    },
+}
+```
+This code creates a watcher for receiving events, and then has the `simple.App` attach it to its own internal controller for the kind. 
+If we wanted to introduce filtering (for example, only watch  a specific namespace, or label value), we could add `ReconcileOptions` to the `AppManagedKind`.
+
+Since the way we make our Issue watcher is by calling `watchers.NewIssueWatcher()`, let's take a look at the `watchers` package (which was added by our `project add operator` command), and open `pkg/watchers/watcher_issue.go`:
 ```go
 var _ operator.ResourceWatcher = &IssueWatcher{}
 
@@ -41,11 +55,11 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	}
 
 	// TODO
-	fmt.Println("Added ", object.StaticMetadata().Identifier())
+	logging.FromContext(ctx).Debug("Added resource", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 ```
-Each method does a check to see if the provided `resource.Object` is of type `*issue.Issue` (it always should be, provided we gave the informer a client with the correct `resource.Schema`). We then just print a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
+Each method does a check to see if the provided `resource.Object` is of type `*issue.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
 
 So what else can we do in our watcher?
 
@@ -172,25 +186,9 @@ func (s *IssueWatcher) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{s.statsGauge}
 }
 ```
-Easy! Now all we need to do is register it with our operator so it can expose it. The `simple.Operator` provides a method we can call in our `main` function, which we can add right after the part that creates and adds the watcher with `runner.WatchKind` (`runner` is the variable name for our `simple.Operator`):
-```go
-// Wrap our resource watchers in OpinionatedWatchers, then add them to the controller
-issueWatcher, err := watchers.NewIssueWatcher()
-if err != nil {
-	logging.DefaultLogger.With("error", err).Error("Unable to create IssueWatcher")
-	panic(err)
-}
-err = runner.WatchKind(issue.Kind(), issueWatcher, simple.ListWatchOptions{
-	Namespace: resource.NamespaceAll,
-})
-if err != nil {
-	logging.DefaultLogger.With("error", err).Error("Error adding Issue watcher to controller")
-	panic(err)
-}
-// Register prometheus collectors from the watcher
-runner.RegisterMetricsCollectors(issueWatcher.PrometheusCollectors()...)
-```
-There we go! Now we'll be exposing the metric through the operator's `/metrics` prometheus scrape endpoint. Our local deployment already scrapes our operator, so if we re-build and re-deploy our operator, we'll start picking up that new metric in our local grafana.
+Easy! Now, since we implemented that interface, the metrics will be automatically picked up by the app. 
+The operator runner then exposes the app's metrics via a `/metrics` endpoint, which the local setup automatically scrapes. 
+So if we re-build and re-deploy our operator, we'll start picking up that new metric in our local grafana.
 ```shell
 make build/operator && make local/push_operator
 ```
@@ -275,13 +273,13 @@ if _, err := s.issueStore.UpdateSubresource(ctx, object.GetStaticMetadata().Iden
 ```
 Now that our watcher methods are performing an action that can result in an error, we want to return said error if it occurs, so that the action can be retried. We want to do this _before_ our gauge code, because if we return an error and retry, we don't want to increase the gauge again. We also want this timestamp to reflect the last time we updated the gauge.
 
-We can't re-build our operator yet, because now our `NewIssueWatcher` function requires an argument: a `resource.ClientGenerator`. A `ClientGenerator` is an object which can return `resource.Client` implementations for a provided kind. We can generate one from scratch for `k8s.Client` with `k8s.NewClientRegistry`, but `simple.NewOperator` actually already does this for us, and we can access the `ClientGenerator` it created with the `ClientGenerator()` method. So our line in `main.go` just needs to go from this:
+We can't re-build our operator yet, because now our `NewIssueWatcher` function requires an argument: a `resource.ClientGenerator`. A `ClientGenerator` is an object which can return `resource.Client` implementations for a provided kind. We can generate one from scratch for `k8s.Client` with `k8s.NewClientRegistry`, using a kubernetes config, such as the one provided by the app config:
 ```go
 issueWatcher, err := watchers.NewIssueWatcher()
 ```
 to this:
 ```go
-issueWatcher, err := watchers.NewIssueWatcher(runner.ClientGenerator())
+issueWatcher, err := watchers.NewIssueWatcher(k8s.NewClientRegistry(cfg.KubeConfig, k8s.DefaultClientConfig()))
 ```
 Now, because we altered the schema of our kind, we'll need to re-deploy our local environment after re-building and pushing our operator:
 ```shell
@@ -292,35 +290,33 @@ make local/down && make local/up
 ```
 Now, if you make a new issue, you'll see the `status.processedTimestamp` get updated.
 ```shell
-echo '{"kind":"Issue","apiVersion":"issue-tracker-project.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Foo","description":"bar","status":"open"}}' | kubectl create -f -
+echo '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Foo","description":"bar","status":"open"}}' | kubectl create -f -
 ```
 ```
 % kubectl get issue test-issue -oyaml
-apiVersion: issue-tracker-project.ext.grafana.com/v1
+apiVersion: issuetrackerproject.ext.grafana.com/v1
 kind: Issue
 metadata:
-  creationTimestamp: "2024-04-29T16:43:32Z"
+  creationTimestamp: "2024-12-05T00:52:46Z"
   finalizers:
-  - issue-tracker-project-operator-issues-finalizer
+  - issue-tracker-project-issues-finalizer
   generation: 1
-  labels:
-    status: open
   name: test-issue
   namespace: default
-  resourceVersion: "4109"
-  uid: d92f5b1c-5e9e-4779-9087-a13a56ea4982
+  resourceVersion: "3041"
+  uid: 8e47278a-da1e-48c6-af5d-2a6c68642cf8
 spec:
   description: bar
   status: open
   title: Foo
 status:
-  processedTimestamp: "2024-04-29T16:43:32.1227568Z"
+  processedTimestamp: "2024-12-05T00:52:46.299978927Z"
 ```
 Now whenever the watcher processes an Add, Update, or Sync, it'll update the `processedTimestamp`.
 
 Tracking data in the `status` subresource is an operator best practice. For other considerations when writing an operator, check out [Considerations When Writing an Operator](../../writing-an-operator.md#considerations-when-writing-an-operator).
 
-Now that we have a watcher that does something, let's look at adding some other capabilities to our operator: [API admission control](08-adding-admission-control.md).
+Now that we have a watcher that does something, let's look at adding some other capabilities to our app: [API admission control](08-adding-admission-control.md).
 
 ### Prev: [Writing Our Front-End](06-frontend.md)
 ### Next: [Adding Admission Control](08-adding-admission-control.md)

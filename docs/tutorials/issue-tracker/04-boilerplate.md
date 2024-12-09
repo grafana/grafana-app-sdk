@@ -46,43 +46,12 @@ Let's give our plugin an ID (I'm going to use `issue-tracker-project`, but you c
 ```shell
 grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
 ```
-Just like with any other command that writes files, the output is a list of all written files:
+Just like with any other command that writes files, the output is a list of all written files, though the front-end files are created with `yarn` and are not listed.
 ```shell
 $ grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
- * Writing file plugin/.config/.eslintrc
- * Writing file plugin/.config/.prettierrc.js
- * Writing file plugin/.config/Dockerfile
- * Writing file plugin/.config/README.md
- * Writing file plugin/.config/jest/mocks/react-inlinesvg.tsx
- * Writing file plugin/.config/jest/utils.js
- * Writing file plugin/.config/jest-setup.js
- * Writing file plugin/.config/jest.config.js
- * Writing file plugin/.config/tsconfig.json
- * Writing file plugin/.config/types/custom.d.ts
- * Writing file plugin/.config/webpack/constants.ts
- * Writing file plugin/.config/webpack/utils.ts
- * Writing file plugin/.config/webpack/webpack.config.ts
- * Writing file plugin/.eslintrc
- * Writing file plugin/.nvmrc
- * Writing file plugin/.prettierrc.js
- * Writing file plugin/CHANGELOG.md
- * Writing file plugin/LICENSE
- * Writing file plugin/README.md
- * Writing file plugin/jest-setup.js
- * Writing file plugin/jest.config.js
- * Writing file plugin/src/App.tsx
- * Writing file plugin/src/components/Routes/Routes.tsx
- * Writing file plugin/src/components/Routes/index.tsx
- * Writing file plugin/src/module.ts
- * Writing file plugin/src/pages/index.tsx
- * Writing file plugin/src/pages/main.tsx
- * Writing file plugin/src/types.ts
- * Writing file plugin/src/utils/utils.plugin.ts
- * Writing file plugin/src/utils/utils.routing.ts
- * Writing file plugin/tsconfig.json
+Creating plugin frontend using `yarn create @grafana/plugin` (this may take a moment)...
  * Writing file plugin/src/plugin.json
  * Writing file plugin/src/constants.ts
- * Writing file plugin/package.json
  * Writing file plugin/pkg/main.go
  * Writing file pkg/plugin/handler_issue.go
  * Writing file pkg/plugin/plugin.go
@@ -98,64 +67,79 @@ $ grafana-app-sdk project component add frontend backend operator --plugin-id="i
  * Writing file pkg/watchers/watcher_issue.go
  * Writing file cmd/operator/Dockerfile
 ```
-Wow, that's a lot more files written out than in our Kind codegen. Let's take a look at the tree to get a better picture of everything:
+Let's take a look at the tree to get a better picture of everything:
 ```shell
 $ tree -I "generated|definitions|kinds|local" .
 .
 ├── Makefile
 ├── cmd
-│   └── operator
-│       ├── Dockerfile
-│       ├── config.go
-│       ├── kubeconfig.go
-│       └── main.go
+│   └── operator
+│       ├── Dockerfile
+│       ├── config.go
+│       ├── kubeconfig.go
+│       └── main.go
 ├── go.mod
 ├── go.sum
 ├── pkg
-│   ├── app
-│   │   └── app.go
-│   ├── plugin
-│   │   ├── handler_issue.go
-│   │   ├── plugin.go
-│   │   └── secure
-│   │       ├── data.go
-│   │       ├── middleware.go
-│   │       └── retriever.go
-│   └── watchers
-│       ├── watcher_foo.go
-│       └── watcher_issue.go
+│   ├── app
+│   │   └── app.go
+│   ├── plugin
+│   │   ├── handler_issue.go
+│   │   ├── plugin.go
+│   │   └── secure
+│   │       ├── data.go
+│   │       ├── middleware.go
+│   │       └── retriever.go
+│   └── watchers
+│       └── watcher_issue.go
 └── plugin
     ├── CHANGELOG.md
     ├── LICENSE
     ├── Magefile.go
     ├── README.md
+    ├── docker-compose.yaml
     ├── jest-setup.js
     ├── jest.config.js
     ├── package.json
     ├── pkg
-    │   └── main.go
+    │   └── main.go
+    ├── playwright.config.ts
+    ├── provisioning
+    │   └── plugins
+    │       ├── README.md
+    │       └── apps.yaml
     ├── src
-    │   ├── App.tsx
-    │   ├── components
-    │   │   └── Routes
-    │   │       ├── Routes.tsx
-    │   │       └── index.tsx
-    │   ├── constants.ts
-    │   ├── module.ts
-    │   ├── pages
-    │   │   ├── index.tsx
-    │   │   └── main.tsx
-    │   ├── plugin.json
-    │   ├── types.ts
-    │   └── utils
-    │       ├── utils.plugin.ts
-    │       └── utils.routing.ts
+    │   ├── README.md
+    │   ├── components
+    │   │   ├── App
+    │   │   │   ├── App.test.tsx
+    │   │   │   └── App.tsx
+    │   │   ├── AppConfig
+    │   │   │   ├── AppConfig.test.tsx
+    │   │   │   └── AppConfig.tsx
+    │   │   └── testIds.ts
+    │   ├── constants.ts
+    │   ├── img
+    │   │   └── logo.svg
+    │   ├── module.tsx
+    │   ├── pages
+    │   │   ├── PageFour.tsx
+    │   │   ├── PageOne.tsx
+    │   │   ├── PageThree.tsx
+    │   │   └── PageTwo.tsx
+    │   ├── plugin.json
+    │   └── utils
+    │       └── utils.routing.ts
+    ├── tests
+    │   ├── appConfig.spec.ts
+    │   ├── appNavigation.spec.ts
+    │   └── fixtures.ts
     └── tsconfig.json
 
-15 directories, 35 files
+20 directories, 45 files
 ```
 
-Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
+Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/app`, `pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
 
 If we had split up our `project add` into `project add backend`, we'd only get our generated go files in `pkg/plugin`, `project add frontend` would only give us the non-`plugin/pkg` plugin files, and `project add operator` would give us the `pkg/watchers` and `cmd/operator` files. As we can see, none of these `project add` components have overlapping code, which is deliberate. If you prefer to not use boilerplate for a given component, you can simply not add it and not worry that another component will depend on boilerplate from it.
 
@@ -318,37 +302,53 @@ plugin
 ├── LICENSE
 ├── Magefile.go
 ├── README.md
+├── docker-compose.yaml
 ├── jest-setup.js
 ├── jest.config.js
 ├── package.json
 ├── pkg
 │   └── main.go
+├── playwright.config.ts
+├── provisioning
+│   └── plugins
+│       ├── README.md
+│       └── apps.yaml
 ├── src
-│   ├── App.tsx
+│   ├── README.md
 │   ├── components
-│   │   └── Routes
-│   │       ├── Routes.tsx
-│   │       └── index.tsx
+│   │   ├── App
+│   │   │   ├── App.test.tsx
+│   │   │   └── App.tsx
+│   │   ├── AppConfig
+│   │   │   ├── AppConfig.test.tsx
+│   │   │   └── AppConfig.tsx
+│   │   └── testIds.ts
 │   ├── constants.ts
 │   ├── generated
 │   │   └── issue
 │   │       └── v1
-│   │           └── issue_object_gen.ts
-│   │           └── types.metadata.gen.ts
-│   │           └── types.spec.gen.ts
+│   │           ├── issue_object_gen.ts
+│   │           ├── types.metadata.gen.ts
+│   │           ├── types.spec.gen.ts
 │   │           └── types.status.gen.ts
-│   ├── module.ts
+│   ├── img
+│   │   └── logo.svg
+│   ├── module.tsx
 │   ├── pages
-│   │   ├── index.tsx
-│   │   └── main.tsx
+│   │   ├── PageFour.tsx
+│   │   ├── PageOne.tsx
+│   │   ├── PageThree.tsx
+│   │   └── PageTwo.tsx
 │   ├── plugin.json
-│   ├── types.ts
 │   └── utils
-│       ├── utils.plugin.ts
 │       └── utils.routing.ts
+├── tests
+│   ├── appConfig.spec.ts
+│   ├── appNavigation.spec.ts
+│   └── fixtures.ts
 └── tsconfig.json
 
-10 directories, 21 files
+15 directories, 35 files
 ```
 We can also safely _ignore_ a lot of this generation. If you create a grafana plugin, there's a certain amount of metadata that needs to be created, and, likewise, when you create a react app (which front-end plugins are), there's some other data that needs to exist. So basically everything in the root `plugin` directory is something we can ignore for the moment, as it's just things telling either grafana how to handle this app, or react how to compile it. But, as a quick breakdown, here's what each file does that we're going to ignore:
 
@@ -365,44 +365,33 @@ That leaves us with just our varying TypeScript files.
 
 ### Pages
 
-`pages/` contains the acual front-end pages to be displayed for the app. `main.tsx` is your main plugin page, which by default just contains a simple statement declaring it your main landing page:
+`pages/` contains the actual front-end pages to be displayed for the app. `PageOne.tsx` is your main plugin page, which by default just contains a simple statement declaring it your main landing page:
 
 ```TypeScript
-export const MainPage = () => {
-  useStyles2(getStyles);
+function PageOne() {
+    const s = useStyles2(getStyles);
 
-  return (
-      <div>
-        <h1>Main Landing Page</h1>
-        <div>This is your main landing page</div>
-      </div>
-  );
-};
+    return (
+        <PluginPage>
+            <div data-testid={testIds.pageOne.container}>
+            This is page one.
+    <div className={s.marginTop}>
+    <LinkButton data-testid={testIds.pageOne.navigateToFour} href={prefixRoute(ROUTES.Four)}>
+    Full-width page example
+    </LinkButton>
+    </div>
+    </div>
+    </PluginPage>
+);
+}
 ```
+There are other pages generated here as examples from the output of `yarn create @grafana/plugin`. The routing for these pages is in `components/App/App.tsx`.
 
 `MainPage` is used by the router when displaying pages--you can add more by creating other exported functions and registering them in the router.
 
-### Router
+### Components
 
-`components/Routes/Router.tsx` contains the router for your app frontend. By default only the `MainPage` is routed, and matches any path:
-```TypeScript
-export const Routes = () => {
-  useNavigation();
-
-  return (
-    <Switch>
-      <Route exact path={prefixRoute(ROUTES.Main)} component={MainPage} />
-
-      {/* Default page */}
-      <Route exact path="*">
-        <Redirect to={prefixRoute(ROUTES.Main)} />
-      </Route>
-    </Switch>
-  );
-};
-```
-
-`ROUTES.Main` is a constant pulled from `constants.ts`. `useNavigation` and `prefixRoute` are pulled from `utils`.
+`components` contains your front-end App declaration and AppConfig.
 
 ### Types
 

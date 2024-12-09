@@ -3,7 +3,7 @@
 // DO NOT EDIT
 //
 
-package generated
+package groupbygroup
 
 import (
 	"encoding/json"
@@ -25,7 +25,7 @@ var (
 
 var appManifestData = app.ManifestData{
 	AppName: "test-app",
-	Group:   "test.ext.grafana.com",
+	Group:   "testapp.ext.grafana.com",
 	Kinds: []app.ManifestKind{
 		{
 			Kind:       "TestKind",

@@ -1,10 +1,10 @@
 apiVersion: apps.grafana.com/v1
 kind: AppManifest
 metadata:
-    name: test-app-test-kind
+    name: test-app
 spec:
-    appName: test-app-test-kind
-    group: test.ext.grafana.com
+    appName: test-app
+    group: testapp.ext.grafana.com
     kinds:
         - kind: TestKind
           scope: Namespaced
