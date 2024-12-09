@@ -757,8 +757,11 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			return true, time.Millisecond * 500
 		}
 		c.AddInformer(inf, "foo")
+		addCh := make(chan int, 5)
+		defer close(addCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCh <- addAttempt
 				addAttempt++
 				return addError
 			},
@@ -776,20 +779,22 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			wg.Done()
 		}()
 		inf.FireAdd(context.Background(), emptyObject)
-		// Wait for what should be four retries
-		time.Sleep(time.Millisecond * 2300)
+		// Wait for three add attempts (initial and two retries), then fire an update
+		for i := range 3 {
+			t.Log("waiting for add ", i)
+			<-addCh
+		}
 		// Fire an update, which should halt the add retries
 		inf.FireUpdate(context.Background(), nil, emptyObject)
-		go func() {
-			// 3 retries takes 7 seconds, 4 takes 15. Use 10 for some leeway
-			time.Sleep(time.Second)
-			cancel()
-		}()
+		// We _may_ get one more add retry, if it was already happening when the update was processed. But we shouldn't get any more than that
+		// Wait a second before stopping in case another retry _does_ come through
+		time.Sleep(time.Second * 1)
+		cancel()
 		wg.Wait()
 		// We should have four total attempts, though we may be off-by-one because timing is hard,
 		// so we actually check that 3 <= attempts <= 5
 		assert.LessOrEqual(t, 3, addAttempt)
-		assert.GreaterOrEqual(t, 5, addAttempt)
+		assert.GreaterOrEqual(t, 4, addAttempt)
 		assert.Equal(t, 1, updateAttempt)
 	})
 
@@ -813,8 +818,13 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			return true, time.Millisecond * 50
 		}
 		c.AddInformer(inf, "foo")
+		addCh := make(chan int, 3)
+		defer close(addCh)
+		updateCh := make(chan int, 3)
+		defer close(updateCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCh <- addAttempt
 				addAttempt++
 				if addAttempt >= 2 {
 					return nil
@@ -822,6 +832,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 				return addError
 			},
 			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				updateCh <- updateAttempt
 				updateAttempt++
 				if updateAttempt >= 2 {
 					return nil
@@ -838,14 +849,17 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			wg.Done()
 		}()
 		inf.FireAdd(context.Background(), emptyObject)
+		// Wait for two adds
+		<-addCh
+		<-addCh
 		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 		time.Sleep(time.Millisecond * 500)
 		inf.FireUpdate(context.Background(), nil, emptyObject)
-		go func() {
-			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
-			time.Sleep(time.Millisecond * 500)
-			cancel()
-		}()
+		// Wait for two updates
+		<-updateCh
+		<-updateCh
+		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
+		cancel()
 		wg.Wait()
 		// We should have only two attempts for each
 		assert.Equal(t, 2, addAttempt)
@@ -870,12 +884,12 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			return attempt < 3, time.Millisecond * 50
 		}
 		c.AddInformer(inf, "foo")
+		addCh := make(chan int, 3)
+		defer close(addCh)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCh <- addAttempt
 				addAttempt++
-				if addAttempt >= 2 {
-					return nil
-				}
 				return addError
 			},
 		}, "foo")
@@ -888,14 +902,16 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			wg.Done()
 		}()
 		inf.FireAdd(context.Background(), emptyObject)
-		go func() {
-			// Wait for half a second, this should be enough time for many retries if the halt doesn't work
-			time.Sleep(time.Millisecond * 500)
-			cancel()
-		}()
+		// We should see three attempts, then be done
+		for range 3 {
+			<-addCh
+		}
+		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
+		time.Sleep(time.Millisecond * 500)
+		cancel()
 		wg.Wait()
-		// We should have only two attempts for each
-		assert.Equal(t, 2, addAttempt)
+		// We should have four total attempts, 1 initial and 3 retries
+		assert.Equal(t, 4, addAttempt)
 	})
 }
 
