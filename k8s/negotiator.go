@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -163,25 +164,56 @@ func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, in
 	runtime.Object, *schema.GroupVersionKind, error) {
 	if into != nil {
 		if cast, ok := into.(resource.Object); ok {
+			logging.DefaultLogger.Debug("decoding object into provided resource.Object", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Codec.Read(bytes.NewReader(data), cast)
 			return cast, defaults, err
 		}
 		if cast, ok := into.(*metav1.WatchEvent); ok {
+			logging.DefaultLogger.Debug("decoding object into provided *v1.WatchEvent", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
 		}
 		if cast, ok := into.(*metav1.List); ok {
+			logging.DefaultLogger.Debug("decoding object into provided *v1.List", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
 		}
-		// We shouldn't encounter this
-		// TODO: make better or return error?
+		if cast, ok := into.(*metav1.Status); ok {
+			logging.DefaultLogger.Debug("decoding object into provided *v1.Status", "gvk", into.GetObjectKind().GroupVersionKind().String())
+			err := c.Decoder(data, cast)
+			return cast, defaults, err
+		}
+
+		// TODO: This is the same process (just without casting) as WatchEvent, List, and Status (they all use the default Decoder). Should we still keep them separate?
+		logging.DefaultLogger.Debug("decoding object into provided unregistered resource using default Decoder", "gvk", into.GetObjectKind().GroupVersionKind().String())
 		err := c.Decoder(data, into)
 		return into, defaults, err
 	}
 
+	if defaults != nil {
+		if defaults.Kind == "Status" && defaults.Version == "v1" {
+			logging.DefaultLogger.Debug("decoding object into *v1.Status resource based on defaults", "gvk", defaults.String())
+			obj := &metav1.Status{}
+			err := c.Decoder(data, obj)
+			return obj, defaults, err
+		}
+		logging.DefaultLogger.Debug("defaults present", "gvk", defaults.String())
+	}
+
+	tm := metav1.TypeMeta{}
+	err := c.Decoder(data, &tm)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error decoding object TypeMeta: %w", err)
+	}
+	if tm.GroupVersionKind().Version == "v1" && tm.GroupVersionKind().Kind == "Status" {
+		logging.DefaultLogger.Debug("decoding object into *v1.Status resource based on decoded TypeMeta", "gvk", tm.GroupVersionKind().String())
+		obj := &metav1.Status{}
+		err := c.Decoder(data, obj)
+		return obj, defaults, err
+	}
+	logging.DefaultLogger.Debug("decoding into a new empty object instance from kind", "sourceGVK", tm.GroupVersionKind().String(), "targetGVK", c.SampleObject.GetObjectKind().GroupVersionKind().String())
 	obj := c.SampleObject.Copy()
-	err := c.Codec.Read(bytes.NewReader(data), obj)
+	err = c.Codec.Read(bytes.NewReader(data), obj)
 	return obj, defaults, err
 }
 
