@@ -48,7 +48,7 @@ type Informer interface {
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
 type ResourceWatcher interface {
 	Add(context.Context, resource.Object) error
-	Update(ctx context.Context, old, new resource.Object) error
+	Update(ctx context.Context, src, tgt resource.Object) error
 	Delete(context.Context, resource.Object) error
 }
 
