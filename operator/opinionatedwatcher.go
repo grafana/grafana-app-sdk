@@ -40,7 +40,7 @@ type PatchClient interface {
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
 	AddFunc    func(ctx context.Context, object resource.Object) error
-	UpdateFunc func(ctx context.Context, old resource.Object, new resource.Object) error
+	UpdateFunc func(ctx context.Context, src resource.Object, tgt resource.Object) error
 	DeleteFunc func(ctx context.Context, object resource.Object) error
 	SyncFunc   func(ctx context.Context, object resource.Object) error
 	finalizer  string
@@ -187,40 +187,40 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
-func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
+func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-update")
 	defer span.End()
 	// TODO: If old is nil, it _might_ be ok?
-	if old == nil {
+	if src == nil {
 		return fmt.Errorf("old cannot be nil")
 	}
-	if new == nil {
+	if tgt == nil {
 		return fmt.Errorf("new cannot be nil")
 	}
 
-	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", new.GroupVersionKind().Kind, "namespace", new.GetNamespace(), "name", new.GetName())
+	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if new.GetGeneration() > 0 && old.GetGeneration() == new.GetGeneration() {
+	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
 		return nil
 	}
 
 	// TODO: finalizers part of object metadata?
-	oldFinalizers := o.getFinalizers(old)
-	newFinalizers := o.getFinalizers(new)
-	if !slices.Contains(newFinalizers, o.finalizer) && new.GetDeletionTimestamp() == nil {
+	oldFinalizers := o.getFinalizers(src)
+	newFinalizers := o.getFinalizers(tgt)
+	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
 		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
 		// Either way, we need to try calling AddFunc
 		logger.Debug("Missing finalizer, calling Add")
-		err := o.addFunc(ctx, new)
+		err := o.addFunc(ctx, tgt)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
 			return err
 		}
 		// Add the finalizer (which also updates `new` inline)
 		logger.Debug("Successful call to Add, add the finalizer to the object", "finalizer", o.finalizer)
-		err = o.addFinalizer(ctx, new, newFinalizers)
+		err = o.addFinalizer(ctx, tgt, newFinalizers)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
 			return fmt.Errorf("error adding finalizer: %w", err)
@@ -229,24 +229,24 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 
 	// Check if the deletion timestamp is non-nil.
 	// This denotes that the resource was deletes, but has one or more finalizers blocking it from actually deleting.
-	if new.GetDeletionTimestamp() != nil {
+	if tgt.GetDeletionTimestamp() != nil {
 		// If our finalizer is in the list, treat this as a delete.
 		// Otherwise, drop the event and don't handle it as an update.
 		if !slices.Contains(newFinalizers, o.finalizer) {
-			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", new.GetDeletionTimestamp())
+			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", tgt.GetDeletionTimestamp())
 			return nil
 		}
 
 		// Call the delete handler, then remove the finalizer on success
-		logger.Debug("Update has a DeletionTimestamp, calling Delete", "deletionTimestamp", new.GetDeletionTimestamp())
-		err := o.deleteFunc(ctx, new)
+		logger.Debug("Update has a DeletionTimestamp, calling Delete", "deletionTimestamp", tgt.GetDeletionTimestamp())
+		err := o.deleteFunc(ctx, tgt)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
 
 		logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", newFinalizers)
-		err = o.removeFinalizer(ctx, new, newFinalizers)
+		err = o.removeFinalizer(ctx, tgt, newFinalizers)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher remove finalizer error: %s", err.Error()))
 			return err
@@ -260,7 +260,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		return nil
 	}
 
-	err := o.updateFunc(ctx, old, new)
+	err := o.updateFunc(ctx, src, tgt)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
 		return err
@@ -289,9 +289,9 @@ func (o *OpinionatedWatcher) addFunc(ctx context.Context, object resource.Object
 }
 
 // updateFunc is a wrapper for UpdateFunc which makes a nil check to avoid panics
-func (o *OpinionatedWatcher) updateFunc(ctx context.Context, old, new resource.Object) error {
+func (o *OpinionatedWatcher) updateFunc(ctx context.Context, src, tgt resource.Object) error {
 	if o.UpdateFunc != nil {
-		return o.UpdateFunc(ctx, old, new)
+		return o.UpdateFunc(ctx, src, tgt)
 	}
 	// TODO: log?
 	return nil

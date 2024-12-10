@@ -73,12 +73,12 @@ func (*TypeScriptResourceTypes) generateObjectFile(kind codegen.Kind, version *c
 		return nil, err
 	}
 	for it.Next() {
-		if it.Label() == "spec" || it.Label() == "metadata" {
+		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
 			continue
 		}
 		metadata.Subresources = append(metadata.Subresources, templates.SubresourceMetadata{
-			TypeName: exportField(it.Label()),
-			JSONName: it.Label(),
+			TypeName: exportField(it.Selector().String()),
+			JSONName: it.Selector().String(),
 		})
 	}
 

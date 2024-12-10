@@ -1,8 +1,49 @@
 run:
   tests: false
-  skip-dirs:
+
+issues:
+  # Exclude specific dirs
+  exclude-dirs:
     - test/
     - internal/deepmap/
+  # Excluding specific linters per-path
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - gomnd
+        - gocognit
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - dogsled
+    - dupl
+    - errcheck
+    - copyloopvar
+    - funlen
+    - gochecknoinits
+    - gocognit
+    - goconst
+    - gocritic
+    - gocyclo
+    - gofmt
+    - goimports
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
 
 linters-settings:
   funlen:
@@ -55,56 +96,16 @@ linters-settings:
         disabled: true
   gocognit:
     min-complexity: 50
-  gomnd:
-    settings:
-      mnd:
-        # the list of enabled checks, see https://github.com/tommy-muehle/go-mnd/#checks for description.
-        checks:
-        - argument
-        - case
-        - condition
-        - operation
-        - return
-        ignored-numbers: 0,1
+  mnd:
+    # the list of enabled checks, see https://github.com/tommy-muehle/go-mnd/#checks for description.
+    checks:
+    - argument
+    - case
+    - condition
+    - operation
+    - return
+    ignored-numbers:
+    - '0'
+    - '1'
   misspell:
     locale: US
-
-linters:
-  disable-all: true
-  enable:
-    - bodyclose
-    - dogsled
-    - dupl
-    - errcheck
-    - exportloopref
-    - funlen
-    - gochecknoinits
-    - gocognit
-    - goconst
-    - gocritic
-    - gocyclo
-    - gofmt
-    - goimports
-    - goprintffuncname
-    - gosec
-    - gosimple
-    - govet
-    - ineffassign
-    - misspell
-    - nakedret
-    - prealloc
-    - revive
-    - staticcheck
-    - typecheck
-    - unconvert
-    - unparam
-    - unused
-    - whitespace
-
-issues:
-  # Excluding configuration per-path, per-linter, per-text and per-source
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gomnd
-        - gocognit
