@@ -113,6 +113,7 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 	for encoding, codec := range k.Kind.Codecs {
 		serializer := &CodecDecoder{
 			SampleObject: k.Kind.ZeroValue(),
+			SampleList:   k.Kind.ZeroListValue(),
 			Codec:        codec,
 		}
 		info := runtime.SerializerInfo{
@@ -153,8 +154,14 @@ func (*KindNegotiatedSerializer) DecoderToVersion(d runtime.Decoder, _ runtime.G
 // CodecDecoder implements runtime.Serializer and works with Untyped* objects to implement runtime.Object
 type CodecDecoder struct {
 	SampleObject resource.Object
+	SampleList   resource.ListObject
 	Codec        resource.Codec
 	Decoder      func([]byte, any) error
+}
+
+type indicator struct {
+	metav1.TypeMeta `json:",inline"`
+	Items           []any `json:"items,omitempty"`
 }
 
 // Decode decodes the provided data into UntypedWatchObject or UntypedObjectWrapper
@@ -166,6 +173,12 @@ func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, in
 		if cast, ok := into.(resource.Object); ok {
 			logging.DefaultLogger.Debug("decoding object into provided resource.Object", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Codec.Read(bytes.NewReader(data), cast)
+			return cast, defaults, err
+		}
+		if cast, ok := into.(resource.ListObject); ok {
+			logging.DefaultLogger.Debug("decoding object into provided resource.ListObject", "gvk", into.GetObjectKind().GroupVersionKind().String())
+			// TODO: use codec for each element in the list?
+			err := c.Decoder(data, cast)
 			return cast, defaults, err
 		}
 		if cast, ok := into.(*metav1.WatchEvent); ok {
@@ -200,7 +213,7 @@ func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, in
 		logging.DefaultLogger.Debug("defaults present", "gvk", defaults.String())
 	}
 
-	tm := metav1.TypeMeta{}
+	tm := indicator{}
 	err := c.Decoder(data, &tm)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error decoding object TypeMeta: %w", err)
@@ -211,8 +224,30 @@ func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, in
 		err := c.Decoder(data, obj)
 		return obj, defaults, err
 	}
-	logging.DefaultLogger.Debug("decoding into a new empty object instance from kind", "sourceGVK", tm.GroupVersionKind().String(), "targetGVK", c.SampleObject.GetObjectKind().GroupVersionKind().String())
-	obj := c.SampleObject.Copy()
+	// Check if this is a List
+	if tm.Items != nil {
+		logging.DefaultLogger.Debug("decoding into a new empty list instance from kind", "gvk", tm.GroupVersionKind().String())
+		var obj resource.ListObject
+		if c.SampleList != nil {
+			obj = c.SampleList.Copy()
+		} else {
+			logging.DefaultLogger.Warn("no SampleObject set in CodecDecoder, using *resource.TypedList[*resource.UntypedObject]")
+			obj = &resource.TypedList[*resource.UntypedObject]{}
+		}
+		// TODO: use codec for each element in the list?
+		err = c.Decoder(data, &obj)
+		return obj, defaults, err
+	}
+
+	// Default to the data being the kind this CodecDecoder is for
+	logging.DefaultLogger.Debug("decoding into a new empty object instance from kind", "gvk", tm.GroupVersionKind().String())
+	var obj resource.Object
+	if c.SampleObject != nil {
+		obj = c.SampleObject.Copy()
+	} else {
+		logging.DefaultLogger.Warn("no SampleObject set in CodecDecoder, using *resource.UntypedObject")
+		obj = &resource.UntypedObject{}
+	}
 	err = c.Codec.Read(bytes.NewReader(data), obj)
 	return obj, defaults, err
 }
