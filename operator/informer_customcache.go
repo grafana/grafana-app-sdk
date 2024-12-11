@@ -46,25 +46,26 @@ type CustomCacheInformer struct {
 	runContext        context.Context
 }
 
-// NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
-// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, namespace string, addrs ...string) (*CustomCacheInformer, error) {
-	return NewMemcachedInformerWithFilters(kind, client, ListWatchOptions{Namespace: namespace}, addrs...)
+type MemcachedInformerOptions struct {
+	Addrs            []string
+	ListWatchOptions ListWatchOptions
 }
 
-// NewMemcachedInformerWithFilters creates a new CustomCacheInformer which uses memcached as its custom cache.
-// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store.
-func NewMemcachedInformerWithFilters(kind resource.Kind, client ListWatchClient, filterOptions ListWatchOptions, addrs ...string) (*CustomCacheInformer, error) {
+// NewMemcachedInformer creates a new CustomCacheInformer which uses memcached as its custom cache.
+// This is analogous to calling NewCustomCacheInformer with a MemcachedStore as the store, using the default memcached options.
+// To set additional memcached options, use NewCustomCacheInformer and NewMemcachedStore.
+func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, opts MemcachedInformerOptions) (*CustomCacheInformer, error) {
 	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
-		Addrs: addrs,
+		Addrs: opts.Addrs,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, filterOptions), kind), nil
+	return NewCustomCacheInformer(c, NewListerWatcher(client, kind, opts.ListWatchOptions), kind), nil
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
+// To use ListWatchOptions, use NewListerWatcher to get a cache.ListerWatcher.
 func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind resource.Kind) *CustomCacheInformer {
 	return &CustomCacheInformer{
 		store:         store,
