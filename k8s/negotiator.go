@@ -161,7 +161,15 @@ type CodecDecoder struct {
 
 type indicator struct {
 	metav1.TypeMeta `json:",inline"`
-	Items           []any `json:"items,omitempty"`
+	Items           *noAlloc `json:"items,omitempty"`
+}
+
+// noAlloc is used to avoid allocating any memory when unmarshaling, it can be used as a signal field
+type noAlloc struct {
+}
+
+func (*noAlloc) UnmarshalJSON([]byte) error {
+	return nil
 }
 
 // Decode decodes the provided data into UntypedWatchObject or UntypedObjectWrapper
