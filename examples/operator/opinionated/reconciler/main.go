@@ -99,7 +99,7 @@ func main() {
 	informerController := operator.NewInformerController(operator.DefaultInformerControllerConfig())
 
 	// Create an informer for the schema to watch all namespaces.
-	informer, err := operator.NewKubernetesBasedInformer(kind, client, "")
+	informer, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{})
 	if err != nil {
 		panic(fmt.Errorf("unable to create controller: %w", err))
 	}

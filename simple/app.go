@@ -339,7 +339,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if err != nil {
 			return err
 		}
-		inf, err := operator.NewKubernetesBasedInformerWithFilters(kind.Kind, client, operator.KubernetesBasedInformerOptions{
+		inf, err := operator.NewKubernetesBasedInformer(kind.Kind, client, operator.KubernetesBasedInformerOptions{
 			ListWatchOptions: operator.ListWatchOptions{
 				Namespace:      kind.ReconcileOptions.Namespace,
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,

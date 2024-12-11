@@ -24,6 +24,7 @@ type KubernetesBasedInformer struct {
 }
 
 type KubernetesBasedInformerOptions struct {
+	// ListWatchOptions are the options for filtering the watch based on namespace and other compatible filters.
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
@@ -31,18 +32,9 @@ type KubernetesBasedInformerOptions struct {
 	CacheResyncInterval time.Duration
 }
 
-// NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided schema and namespace,
-// using the ListWatchClient provided to do its List and Watch requests.
-func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, namespace string) (
-	*KubernetesBasedInformer, error) {
-	return NewKubernetesBasedInformerWithFilters(sch, client, KubernetesBasedInformerOptions{
-		ListWatchOptions: ListWatchOptions{Namespace: namespace},
-	})
-}
-
-// NewKubernetesBasedInformerWithFilters creates a new KubernetesBasedInformer for the provided schema and namespace,
+// NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, options KubernetesBasedInformerOptions) (
+func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, options KubernetesBasedInformerOptions) (
 	*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")

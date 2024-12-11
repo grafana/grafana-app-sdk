@@ -131,6 +131,16 @@ type retryInfo struct {
 // InformerControllerConfig contains configuration options for an InformerController
 type InformerControllerConfig struct {
 	MetricsConfig metrics.Config
+	// ErrorHandler is a user-specified error handling function. This is typically for logging/metrics use,
+	// as retry logic is covered by the RetryPolicy. If left nil, DefaultErrorHandler will be used.
+	ErrorHandler func(context.Context, error)
+	// RetryPolicy is a user-specified retry logic function which will be used when ResourceWatcher function calls fail.
+	// If left nil, DefaultRetryPolicy will be used.
+	RetryPolicy RetryPolicy
+	// RetryDequeuePolicy is a user-specified retry dequeue logic function which will be used for new informer actions
+	// when one or more retries for the object are still pending. If not present, existing retries are always dequeued.
+	// If left nil, no RetryDequeuePolicy will be used, and retries will only be dequeued when RetryPolicy returns false.
+	RetryDequeuePolicy RetryDequeuePolicy
 }
 
 // DefaultInformerControllerConfig returns an InformerControllerConfig with default values
@@ -142,7 +152,7 @@ func DefaultInformerControllerConfig() InformerControllerConfig {
 
 // NewInformerController creates a new controller
 func NewInformerController(cfg InformerControllerConfig) *InformerController {
-	return &InformerController{
+	inf := &InformerController{
 		RetryPolicy:         DefaultRetryPolicy,
 		ErrorHandler:        DefaultErrorHandler,
 		informers:           NewListMap[Informer](),
@@ -198,6 +208,16 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 			Help:      "Current number of events which have active reconcile processes",
 		}, []string{"event_type", "kind"}),
 	}
+	if cfg.ErrorHandler != nil {
+		inf.ErrorHandler = cfg.ErrorHandler
+	}
+	if cfg.RetryPolicy != nil {
+		inf.RetryPolicy = cfg.RetryPolicy
+	}
+	if cfg.RetryDequeuePolicy != nil {
+		inf.RetryDequeuePolicy = cfg.RetryDequeuePolicy
+	}
+	return inf
 }
 
 // AddInformer adds an informer for a specific resourceKind.

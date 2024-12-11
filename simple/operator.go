@@ -205,7 +205,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedInformerOptions{
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
 		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
@@ -242,7 +242,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedInformerOptions{
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
 		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
