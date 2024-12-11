@@ -170,28 +170,25 @@ type indicator struct {
 func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (
 	runtime.Object, *schema.GroupVersionKind, error) {
 	if into != nil {
-		if cast, ok := into.(resource.Object); ok {
+		switch cast := into.(type) {
+		case resource.Object:
 			logging.DefaultLogger.Debug("decoding object into provided resource.Object", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Codec.Read(bytes.NewReader(data), cast)
 			return cast, defaults, err
-		}
-		if cast, ok := into.(resource.ListObject); ok {
+		case resource.ListObject:
 			logging.DefaultLogger.Debug("decoding object into provided resource.ListObject", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			// TODO: use codec for each element in the list?
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
-		}
-		if cast, ok := into.(*metav1.WatchEvent); ok {
+		case *metav1.WatchEvent:
 			logging.DefaultLogger.Debug("decoding object into provided *v1.WatchEvent", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
-		}
-		if cast, ok := into.(*metav1.List); ok {
+		case *metav1.List:
 			logging.DefaultLogger.Debug("decoding object into provided *v1.List", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
-		}
-		if cast, ok := into.(*metav1.Status); ok {
+		case *metav1.Status:
 			logging.DefaultLogger.Debug("decoding object into provided *v1.Status", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
