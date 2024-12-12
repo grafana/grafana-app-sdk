@@ -177,3 +177,11 @@ spec:
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
           conversion: false
+    extraPermissions:
+        accessKinds:
+            - group: foo.bar
+              resource: foos
+              actions:
+                - get
+                - list
+                - watch
