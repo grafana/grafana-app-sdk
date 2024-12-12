@@ -5,6 +5,13 @@ import "time"
 testManifest: {
 	appName: "test-app"
 	kinds: [testKind, testKind2]
+	extraPermissions: {
+		accessKinds: [{
+			group: "foo.bar"
+			resource: "foos"
+			actions: ["get","list","watch"]
+		}]
+	}
 }
 
 testKind: {

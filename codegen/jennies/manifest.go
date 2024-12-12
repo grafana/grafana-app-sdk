@@ -183,6 +183,20 @@ func buildManifestData(m codegen.AppManifest) (*app.ManifestData, error) {
 		manifest.Kinds = append(manifest.Kinds, mkind)
 	}
 
+	if len(m.Properties().ExtraPermissions.AccessKinds) > 0 {
+		perms := make([]app.KindPermission, len(m.Properties().ExtraPermissions.AccessKinds))
+		for i, p := range m.Properties().ExtraPermissions.AccessKinds {
+			perms[i] = app.KindPermission{
+				Group:    p.Group,
+				Resource: p.Resource,
+				Actions:  toKindPermissionActions(p.Actions),
+			}
+		}
+		manifest.ExtraPermissions = &app.Permissions{
+			AccessKinds: perms,
+		}
+	}
+
 	return &manifest, nil
 }
 
@@ -207,4 +221,12 @@ func sanitizeAdmissionOperations(operations []codegen.KindAdmissionCapabilityOpe
 		sanitized = append(sanitized, translated)
 	}
 	return sanitized, nil
+}
+
+func toKindPermissionActions(actions []string) []app.KindPermissionAction {
+	a := make([]app.KindPermissionAction, len(actions))
+	for i, action := range actions {
+		a[i] = app.KindPermissionAction(strings.ToLower(action))
+	}
+	return a
 }
