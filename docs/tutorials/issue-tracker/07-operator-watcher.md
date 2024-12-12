@@ -65,7 +65,7 @@ So what else can we do in our watcher?
 
 Well, right now, we could integrate with some third-party service, maybe you want to sync the issues created in you plugin with GitHub, or some internal issue-tracking tool. You may have some other task which should be performed when an issue is added, or updated, or deleted, which you should do in the operator. As more of grafana begins to use a kubernetes-like storage system, you could even create a resource of another kind in response to an add event, which some other operator would pick up and do something with. Why not do these things in the plugin backend?
 
-Well, as we saw before, your plugin API isn't the only way to interact with Issues. You can create, update, or delete them via `kubectl`. But even if you restrict `kubectl` access, but perhaps another plugin operator may want to create an Issue in response to one of _their_ events. If they did that via directly interfacing with the storage layer, you wouldn't notice that it happened. The operator ensures that no matter _how_ the mutation in the storage layer occurred (API, kubectl, other access), you are informed and can take action.
+Well, as we saw before, your plugin API isn't the only way to interact with Issues. You can create, update, or delete them via `kubectl`. But even if you restrict `kubectl` access, perhaps another plugin operator may want to create an Issue in response to one of _their_ events. If they did that via directly interfacing with the storage layer, you wouldn't notice that it happened. The operator ensures that no matter _how_ the mutation in the storage layer occurred (API, kubectl, other access), you are informed and can take action.
 
 ## Adding Behavior to Our Watcher
 
@@ -217,7 +217,7 @@ After updating our CUE, we need to re-run the codegen
 make generate
 ```
 
-Now we can have our watcher update the new status field in all of its handling methods. But how do we do this? The easiest way is to use a [Store](../../resource-stores.md), to be able to make changes to the object like interacting with a Key-Value store (we could also use a `resource.Client` and issue a PATCH request, but that's a bit more complex and is left as an exercise to the reader if they'd like to take that approach).
+Now we can have our watcher update the new status field in all of its handling methods. But how do we do this? The easiest way is to use a [Store](../../resource-stores.md), to be able to make changes to the object like interacting with a Key-Value store (we could also use a `resource.Client` and issue a PATCH request, but that's a bit more complex and is left as an exercise if you'd like to take that approach).
 
 ### Using TypedStore
 
@@ -245,7 +245,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 	}, nil
 }
 ```
-What is `resource.TypedStore`? It's a type which will let us interact with our `issue.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The cability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
+What is `resource.TypedStore`? It's a type which will let us interact with our `issue.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
 
 > [!IMPORTANT]
 > Note that updating the resource inside a watcher or reconciler event will trigger _another_ event based on the update. Updating a subresource (such as `status`) will not update the resource's `Generation` value, so if you use the opinionated logic (which `simple.Operator` wraps your watchers and reconcilers in) these events won't propagate to your watchers/reconcilers. If you don't use the opinionated logic, you'll need to be aware of and handle these subresource updates properly in your business logic.
