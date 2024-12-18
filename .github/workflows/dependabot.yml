@@ -1,7 +1,9 @@
 name: "Update Go Workspace for Dependabot PRs"
 on:
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - 'lts/**'
     paths:
       - .github/workflows/dependabot.yml
       - go.mod
