@@ -15,6 +15,7 @@ on:
       - '**.go'
 permissions:
   contents: write
+  id-token: write
 jobs:
   update:
     runs-on: "ubuntu-latest"
