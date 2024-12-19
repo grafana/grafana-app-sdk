@@ -32,7 +32,7 @@ require (
 	golang.org/x/text v0.21.0
 	golang.org/x/tools v0.28.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
-	google.golang.org/grpc v1.69.0
+	google.golang.org/grpc v1.69.2
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.0
 	k8s.io/apiextensions-apiserver v0.32.0
