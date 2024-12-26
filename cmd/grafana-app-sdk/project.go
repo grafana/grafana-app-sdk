@@ -509,7 +509,6 @@ type anyGenerator interface {
 	*codegen.Generator[codegen.Kind]
 }
 
-<<<<<<< HEAD
 //nolint:revive
 func addComponentOperator[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool, confirmOverwrite bool) error {
 	// Get the repo from the go.mod file
@@ -552,6 +551,47 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 		return err
 	}
 	err = writeFileFunc(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+//
+// Grafana App
+//
+
+func addComponentGrafanaApp[G anyGenerator](projectRootPath string, generator G, selectors []string, groupKinds bool) error {
+	// Get the repo from the go.mod file
+	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
+	if err != nil {
+		return err
+	}
+	var files codejen.Files
+	switch cast := any(generator).(type) {
+	case *codegen.Generator[codegen.Kind]:
+		appFiles, err := cast.Generate(cuekind.GrafanaAppGenerator(repo, ".", "pkg/apis", groupKinds), selectors...)
+		if err != nil {
+			return err
+		}
+		files = append(files, appFiles...)
+	default:
+		return fmt.Errorf("unknown generator type: %T", cast)
+	}
+	if err = checkAndMakePath("pkg"); err != nil {
+		return err
+	}
+	for _, f := range files {
+		err = writeFile(filepath.Join(projectRootPath, f.RelativePath), f.Data)
+		if err != nil {
+			return err
+		}
+	}
+	dockerfile, err := templates.ReadFile("templates/operator_Dockerfile.tmpl")
+	if err != nil {
+		return err
+	}
+	err = writeFile(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
 	if err != nil {
 		return err
 	}
