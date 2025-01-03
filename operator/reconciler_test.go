@@ -60,7 +60,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		ctx := context.Background()
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
@@ -83,7 +82,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		}
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req, request)
 				return result, nil
 			},
@@ -117,7 +115,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		resErr := errors.New("I AM ERROR")
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req, request)
 				return result, resErr
 			},
@@ -140,7 +137,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		patchErr := errors.New("I AM ERROR")
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
@@ -163,7 +159,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		}
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req, request)
 				return result, nil
 			},
@@ -172,7 +167,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		assert.Equal(t, patchErr, err)
 		assert.True(t, patchCalled)
 		assert.Equal(t, "bar", res.State["foo"])
-		assert.Equal(t, patchErr, res.State[opinionatedReconcilerPatchStateKey])
+		assert.Equal(t, patchErr, res.State[opinionatedReconcilerPatchAddStateKey])
 	})
 
 	t.Run("retried add from client error", func(t *testing.T) {
@@ -181,13 +176,12 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			Action: ReconcileActionCreated,
 			Object: &resource.TypedSpecObject[int]{},
 			State: map[string]any{
-				opinionatedReconcilerPatchStateKey: errors.New("I AM ERROR"),
+				opinionatedReconcilerPatchAddStateKey: errors.New("I AM ERROR"),
 			},
 		}
 		ctx := context.Background()
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
@@ -240,7 +234,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		resErr := errors.New("I AM ERROR")
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, ReconcileActionResynced, request.Action)
 				assert.Equal(t, req.Object, request.Object)
 				assert.Equal(t, req.State, request.State)
@@ -279,7 +272,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		resErr := errors.New("I AM ERROR")
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req, request)
 				return result, resErr
 			},
@@ -301,7 +293,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		ctx := context.Background()
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
@@ -345,7 +336,6 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		ctx := context.Background()
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-				assert.Equal(t, ctx, c)
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
@@ -359,16 +349,135 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			},
 		}, finalizer)
 		require.Nil(t, err)
+		expRes := ReconcileResult{
+			State: map[string]any{
+				"bar": "foo",
+			},
+		}
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Fail(t, "Reconcile shouldn't be called")
+				// Request should have the Deleted action instead of Updated, but otherwise be the same
+				assert.Equal(t, ReconcileActionDeleted, request.Action)
+				assert.Equal(t, req.Object, request.Object)
+				assert.Equal(t, req.State, request.State)
+				return expRes, nil
+			},
+		}
+		res, err := op.Reconcile(ctx, req)
+		assert.Equal(t, expRes, res)
+		assert.Nil(t, err)
+		assert.True(t, patchCalled)
+	})
+
+	t.Run("update with non-nil deletionTimestamp, reconcile error", func(t *testing.T) {
+		deleted := metav1.NewTime(time.Now())
+		req := ReconcileRequest{
+			Action: ReconcileActionUpdated,
+			Object: &resource.TypedSpecObject[int]{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers:        []string{finalizer},
+					DeletionTimestamp: &deleted,
+				},
+			},
+			State: map[string]any{
+				"foo": "bar",
+			},
+		}
+		ctx := context.Background()
+		op, err := NewOpinionatedReconciler(&mockPatchClient{
+			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+				// No patch to remove finalizer if reconcile fails
+				require.Fail(t, "patch should not be called")
+				return nil
+			},
+		}, finalizer)
+		require.Nil(t, err)
+		reconcileErr := errors.New("I AM ERROR")
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				return ReconcileResult{}, reconcileErr
+			},
+		}
+		res, err := op.Reconcile(ctx, req)
+		assert.Equal(t, ReconcileResult{}, res)
+		assert.Equal(t, reconcileErr, err)
+	})
+
+	t.Run("update with non-nil deletionTimestamp, patch error", func(t *testing.T) {
+		deleted := metav1.NewTime(time.Now())
+		req := ReconcileRequest{
+			Action: ReconcileActionUpdated,
+			Object: &resource.TypedSpecObject[int]{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers:        []string{finalizer},
+					DeletionTimestamp: &deleted,
+				},
+			},
+			State: map[string]any{
+				"foo": "bar",
+			},
+		}
+		patchErr := errors.New("I AM ERROR")
+		ctx := context.Background()
+		op, err := NewOpinionatedReconciler(&mockPatchClient{
+			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
+				assert.Equal(t, resource.PatchRequest{
+					Operations: []resource.PatchOperation{{
+						Path:      "/metadata/finalizers/0",
+						Operation: resource.PatchOpRemove,
+						Value:     nil,
+					}},
+				}, request)
+				return patchErr
+			},
+		}, finalizer)
+		require.Nil(t, err)
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				return ReconcileResult{}, nil
+			},
+		}
+		res, err := op.Reconcile(ctx, req)
+		assert.Equal(t, ReconcileResult{
+			State: map[string]any{
+				opinionatedReconcilerPatchRemoveStateKey: patchErr,
+			},
+		}, res)
+		assert.Equal(t, patchErr, err)
+	})
+
+	t.Run("update with non-nil deletionTimestamp, missing finalizer", func(t *testing.T) {
+		deleted := metav1.NewTime(time.Now())
+		req := ReconcileRequest{
+			Action: ReconcileActionUpdated,
+			Object: &resource.TypedSpecObject[int]{
+				ObjectMeta: metav1.ObjectMeta{
+					Finalizers:        []string{finalizer + "no"},
+					DeletionTimestamp: &deleted,
+				},
+			},
+			State: map[string]any{
+				"foo": "bar",
+			},
+		}
+		ctx := context.Background()
+		op, err := NewOpinionatedReconciler(&mockPatchClient{
+			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+				require.Fail(t, "patch should not be called")
+				return nil
+			},
+		}, finalizer)
+		require.Nil(t, err)
+		op.Reconciler = &SimpleReconciler{
+			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				require.Fail(t, "reconcile should not be called")
 				return ReconcileResult{}, nil
 			},
 		}
 		res, err := op.Reconcile(ctx, req)
 		assert.Equal(t, ReconcileResult{}, res)
 		assert.Nil(t, err)
-		assert.True(t, patchCalled)
 	})
 
 	t.Run("normal delete", func(t *testing.T) {
@@ -382,26 +491,20 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 		ctx := context.Background()
 		op, err := NewOpinionatedReconciler(&mockPatchClient{
 			PatchIntoFunc: func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-				assert.Fail(t, "patch should not be called")
+				require.Fail(t, "patch should not be called")
 				return nil
 			},
 		}, finalizer)
 		require.Nil(t, err)
-		after := time.Second
-		result := ReconcileResult{
-			RequeueAfter: &after,
-		}
-		resErr := errors.New("I AM ERROR")
 		op.Reconciler = &SimpleReconciler{
 			ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				assert.Equal(t, ctx, c)
-				assert.Equal(t, req, request)
-				return result, resErr
+				require.Fail(t, "reconcile should not be called")
+				return ReconcileResult{}, nil
 			},
 		}
 		res, err := op.Reconcile(ctx, req)
-		assert.Equal(t, result, res)
-		assert.Equal(t, resErr, err)
+		assert.Equal(t, ReconcileResult{}, res)
+		assert.Nil(t, err)
 	})
 }
 
@@ -418,7 +521,6 @@ func TestOpinionatedReconciler_Wrap(t *testing.T) {
 	ctx := context.Background()
 	myRec := &SimpleReconciler{
 		ReconcileFunc: func(c context.Context, request ReconcileRequest) (ReconcileResult, error) {
-			assert.Equal(t, ctx, c)
 			assert.Equal(t, rreq, request)
 			return rr, nil
 		},
