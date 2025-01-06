@@ -60,7 +60,7 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator(false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 14 (6 -> object, spec, metadata, status, schema, codec, constants) * 2 versions
+		// 14 (7 -> object, spec, metadata, status, schema, codec, constants) * 2 versions
 		assert.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbykind")
@@ -70,7 +70,7 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator(true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 14 (6 -> object, spec, metadata, status, schema, codec, constants) * 2 versions
+		// 14 (7 -> object, spec, metadata, status, schema, codec, constants) * 2 versions
 		assert.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")

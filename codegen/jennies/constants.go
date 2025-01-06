@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/grafana/codejen"
+
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
@@ -17,7 +18,7 @@ type Constants struct {
 	GroupByKind bool
 }
 
-func (c *Constants) JennyName() string {
+func (*Constants) JennyName() string {
 	return "ConstantsGenerator"
 }
 
