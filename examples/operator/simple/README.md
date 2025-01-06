@@ -2,8 +2,9 @@
 
 This example code is a one-file example of a kubernetes custom resource operator with a Watcher or a Reconciler, using the SDK `simple` package.
 
-Such example is to demonstrate the usage of such package, which is a wrap around the "opinionated" logic defined in [operator.OpinionatedWatcher](../../../operator/opinionatedwatcher.go#L38) and [operator.OpinionatedReconciler](../../../operator/reconciler.go#L135), meant to simplify its usage. 
-Worth mentioning that, as per such wrap, this example operator behavior will remain similar to the one in the ["opinionated" example](../opinionated/README.md).
+This example uses an app created using the `simple` package with an operator runner provided by the `operator` package. 
+By default, the simple App uses the "opinionated" logic defined in [operator.OpinionatedWatcher](../../../operator/opinionatedwatcher.go#L38) and [operator.OpinionatedReconciler](../../../operator/reconciler.go#L135), 
+but this can be turned off with configuration, which is noted in the `FIXME` comment in the file(s).
 
 ## To Run
 
