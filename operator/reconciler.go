@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -141,7 +144,10 @@ type OpinionatedReconciler struct {
 	client     PatchClient
 }
 
-const opinionatedReconcilerPatchStateKey = "grafana-app-sdk-opinionated-reconciler-create-patch-status"
+const (
+	opinionatedReconcilerPatchAddStateKey    = "grafana-app-sdk-opinionated-reconciler-create-patch-status"
+	opinionatedReconcilerPatchRemoveStateKey = "grafana-app-sdk-opinionated-reconciler-delete-patch-status"
+)
 
 // Reconcile consumes a ReconcileRequest and passes it off to the underlying ReconcileFunc, using the following criteria to modify or drop the request if needed:
 //   - If the action is a Create, and the OpinionatedReconciler's finalizer is in the finalizer list, update the action to a Resync
@@ -149,23 +155,36 @@ const opinionatedReconcilerPatchStateKey = "grafana-app-sdk-opinionated-reconcil
 //   - If the action is an Update, and the DeletionTimestamp is non-nil, remove the OpinionatedReconciler's finalizer, and do not delegate (the subsequent Delete will be delegated)
 //   - If the action is an Update, and the OpinionatedReconciler's finalizer is missing (and DeletionTimestamp is nil), add the finalizer, and do not delegate (the subsequent update action will delegate)
 func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+	ctx, span := GetTracer().Start(ctx, "OpinionatedReconciler-reconcile")
+	defer span.End()
+	logger := logging.FromContext(ctx).With("action", ResourceActionFromReconcileAction(request.Action), "component", "OpinionatedReconciler", "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
+	logger.Debug("Reconcile request received")
+
 	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
 	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
+		logger.Debug("Object already has the correct finalizer, converting to a Resync event and propagating", "finalizer", o.finalizer)
 		request.Action = ReconcileActionResynced
 		return o.wrappedReconcile(ctx, request)
 	}
 	if request.Action == ReconcileActionCreated {
 		resp := ReconcileResult{}
-		if request.State == nil || request.State[opinionatedReconcilerPatchStateKey] == nil {
+		if request.State == nil || request.State[opinionatedReconcilerPatchAddStateKey] == nil {
 			// Delegate
 			var err error
 			resp, err = o.wrappedReconcile(ctx, request)
 			if err != nil || resp.RequeueAfter != nil {
+				if resp.RequeueAfter != nil {
+					span.SetAttributes(attribute.String("reconcile.requeafter", resp.RequeueAfter.String()))
+				}
+				if err != nil {
+					span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
+				}
 				return resp, err
 			}
 		}
 
 		// Attach the finalizer on success
+		logger.Debug("Downstream reconcile succeeded, adding finalizer", "finalizer", o.finalizer)
 		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 			Operations: []resource.PatchOperation{{
 				Operation: resource.PatchOpAdd,
@@ -174,24 +193,64 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 			}},
 		}, resource.PatchOptions{}, request.Object)
 		if patchErr != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
 			if resp.State == nil {
 				resp.State = make(map[string]any)
 			}
-			resp.State[opinionatedReconcilerPatchStateKey] = patchErr
+			resp.State[opinionatedReconcilerPatchAddStateKey] = patchErr
 		}
 		return resp, patchErr
 	}
-	if request.Action == ReconcileActionUpdated && request.Object.GetDeletionTimestamp() != nil && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
+	// Ignore deleted actions, as we send them on updates where we need to remove our finalizer
+	// This needs to be checked before the "is deletionTimestamp non-nil and still has our finalizer",
+	// because after we remove the finalizer, a delete event comes through that still has the final finalizer to be removed from the list
+	if request.Action == ReconcileActionDeleted {
+		logger.Debug("Not propagating delete event, as this is handled when deletionTimestamp is set to a non-nil value")
+		return ReconcileResult{}, nil
+	}
+	if request.Object.GetDeletionTimestamp() != nil && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
+		res := ReconcileResult{}
+		if request.State == nil || request.State[opinionatedReconcilerPatchRemoveStateKey] == nil {
+			logger.Debug("Update added a deletionTimestamp, propagate this event as a delete", "deletionTimestamp", request.Object.GetDeletionTimestamp())
+			// Propagate as a delete, if the delete succeeds, remove the finalizer
+			request.Action = ReconcileActionDeleted
+			var err error
+			res, err = o.wrappedReconcile(ctx, request)
+			if err != nil || res.RequeueAfter != nil {
+				if res.RequeueAfter != nil {
+					span.SetAttributes(attribute.String("reconcile.requeafter", res.RequeueAfter.String()))
+				}
+				if err != nil {
+					span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
+				}
+				return res, err
+			}
+		} else {
+			logger.Debug("Retry of an update which added a deletionTimestamp, downstream reconciler already successfully processed delete, need to retry removing the finalizer", "patchError", request.State[opinionatedReconcilerPatchRemoveStateKey])
+		}
+		logger.Debug("Removing finalizer from object", "finalizer", o.finalizer)
 		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 			Operations: []resource.PatchOperation{{
 				Operation: resource.PatchOpRemove,
 				Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(request.Object.GetFinalizers(), o.finalizer)),
 			}},
 		}, resource.PatchOptions{}, request.Object)
-		return ReconcileResult{}, patchErr
+		if patchErr != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
+			if res.State == nil {
+				res.State = make(map[string]any)
+			}
+			res.State[opinionatedReconcilerPatchRemoveStateKey] = patchErr
+		}
+		return res, patchErr
+	}
+	if request.Object.GetDeletionTimestamp() != nil {
+		logger.Debug("Object has a deletionTimestamp but does not contain our finalizer, ignoring event as object delete has already been processed", "finalizer", o.finalizer, "deletionTimestamp", request.Object.GetDeletionTimestamp())
+		return ReconcileResult{}, nil
 	}
 	if request.Action == ReconcileActionUpdated && !slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		// Add the finalizer, don't delegate, let the reconcile action for adding the finalizer propagate down to avoid confusing extra reconciliations
+		logger.Debug("Missing finalizer in object, adding (this will trigger a new reconcile event)", "finalizer", o.finalizer)
 		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 			Operations: []resource.PatchOperation{{
 				Operation: resource.PatchOpAdd,
