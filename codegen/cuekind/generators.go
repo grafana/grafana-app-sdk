@@ -41,6 +41,9 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 		&jennies.CodecGenerator{
 			GroupByKind: !groupKinds,
 		},
+		&jennies.Constants{
+			GroupByKind: !groupKinds,
+		},
 	)
 	return g
 }
