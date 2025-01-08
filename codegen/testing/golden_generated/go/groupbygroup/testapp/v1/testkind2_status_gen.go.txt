@@ -38,7 +38,7 @@ func NewTestKind2Status() *TestKind2Status {
 type TestKind2StatusOperatorStateState string
 
 const (
-	StatusOperatorStateStateSuccess    TestKind2StatusOperatorStateState = "success"
-	StatusOperatorStateStateInProgress TestKind2StatusOperatorStateState = "in_progress"
-	StatusOperatorStateStateFailed     TestKind2StatusOperatorStateState = "failed"
+	TestKind2StatusOperatorStateStateSuccess    TestKind2StatusOperatorStateState = "success"
+	TestKind2StatusOperatorStateStateInProgress TestKind2StatusOperatorStateState = "in_progress"
+	TestKind2StatusOperatorStateStateFailed     TestKind2StatusOperatorStateState = "failed"
 )

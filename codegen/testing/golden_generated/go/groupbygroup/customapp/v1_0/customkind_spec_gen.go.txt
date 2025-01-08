@@ -80,9 +80,9 @@ func NewCustomKindSpec() *CustomKindSpec {
 type CustomKindSpecEnum string
 
 const (
-	SpecEnumVal1    CustomKindSpecEnum = "val1"
-	SpecEnumVal2    CustomKindSpecEnum = "val2"
-	SpecEnumVal3    CustomKindSpecEnum = "val3"
-	SpecEnumVal4    CustomKindSpecEnum = "val4"
-	SpecEnumDefault CustomKindSpecEnum = "default"
+	CustomKindSpecEnumVal1    CustomKindSpecEnum = "val1"
+	CustomKindSpecEnumVal2    CustomKindSpecEnum = "val2"
+	CustomKindSpecEnumVal3    CustomKindSpecEnum = "val3"
+	CustomKindSpecEnumVal4    CustomKindSpecEnum = "val4"
+	CustomKindSpecEnumDefault CustomKindSpecEnum = "default"
 )

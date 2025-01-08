@@ -39,7 +39,7 @@ func NewCustomKindStatus() *CustomKindStatus {
 type CustomKindStatusOperatorStateState string
 
 const (
-	StatusOperatorStateStateSuccess    CustomKindStatusOperatorStateState = "success"
-	StatusOperatorStateStateInProgress CustomKindStatusOperatorStateState = "in_progress"
-	StatusOperatorStateStateFailed     CustomKindStatusOperatorStateState = "failed"
+	CustomKindStatusOperatorStateStateSuccess    CustomKindStatusOperatorStateState = "success"
+	CustomKindStatusOperatorStateStateInProgress CustomKindStatusOperatorStateState = "in_progress"
+	CustomKindStatusOperatorStateStateFailed     CustomKindStatusOperatorStateState = "failed"
 )
