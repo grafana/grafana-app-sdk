@@ -14,41 +14,33 @@ Usage: grafana-app-sdk project component add [options] <components>
 		operator
 ```
 
-Since we're building out everything we can as part of this tutorial, let's go ahead and add all three project components.
-```shell
-grafana-app-sdk project component add frontend backend operator
-```
-But this gives us an error:
-```shell
-$ grafana-app-sdk project component add frontend backend operator
-plugin-id is required
-```
-
-Oops, looks like we need some extra information for this command. We need a `--plugin-id` flag, because it's going to be generating a grafana plugin, which requires that we have a unique ID. We can also view the full list of all flags we can pass to this command with:
+We can also get information on what flags this (or any other) command takes with `--help`:
 ```shell
 $ grafana-app-sdk project component add --help
 Usage:
   grafana-app-sdk project component add [flags]
 
 Flags:
-  -h, --help               help for add
-      --plugin-id string   Plugin ID
+      --grouping string   Kind go package grouping.
+                          Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command (default "kind")
+  -h, --help              help for add
 
 Global Flags:
-  -c, --cuepath string      Path to directory with cue.mod (default "kinds")
-      --overwrite           Overwrite existing files instead of prompting
-  -p, --path string         Path to project directory
-  -s, --selectors strings   selectors
+  -f, --format string   Format in which kinds are written for this project (currently allowed values are 'cue') (default "cue")
+      --overwrite       Overwrite existing files instead of prompting
+  -p, --path string     Path to project directory
+  -s, --source string   Path to directory with your codegen source files (such as a CUE module) (default "kinds")
 ```
-We can leave all the global flags empty, like we have for other commands, but it's good to know how we can find information about the CLI commands. 
 
-Let's give our plugin an ID (I'm going to use `issue-tracker-project`, but you can use anything you want as long as it won't conflict with another plugin), and run the command again:
+We can leave all these flags empty, as we're fine with the defaults, but it's good to know how we can find information about the CLI commands.
+
+Since we're building out everything we can as part of this tutorial, let's go ahead and add all three project components.
 ```shell
-grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
+grafana-app-sdk project component add frontend backend operator
 ```
 Just like with any other command that writes files, the output is a list of all written files, though the front-end files are created with `yarn` and are not listed.
 ```shell
-$ grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
+$ grafana-app-sdk project component add frontend backend operator
 Creating plugin frontend using `yarn create @grafana/plugin` (this may take a moment)...
  * Writing file plugin/src/plugin.json
  * Writing file plugin/src/constants.ts

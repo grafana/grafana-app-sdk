@@ -135,7 +135,7 @@ func TestManifestGoGenerator(t *testing.T) {
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "manifest/go/testkinds")
+		compareToGolden(t, files, "manifest/go")
 	})
 }
 

@@ -75,11 +75,8 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
-	projectAddComponentCmd.Flags().String("plugin-id", "", "Plugin ID")
-	projectAddComponentCmd.Flags().String("kindgrouping", kindGroupingKind, `Kind go package grouping.
+	projectAddComponentCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
-	projectAddKindCmd.Flags().String("type", "resource", "Kind codegen type. 'resource' or 'model'")
-	projectAddKindCmd.Flags().String("plugin-id", "", "Plugin ID")
 
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
@@ -92,8 +89,6 @@ Allowed values are 'group' and 'kind'. This should match the flag used in the 'g
 	projectLocalCmd.AddCommand(projectLocalInitCmd)
 	projectLocalCmd.AddCommand(projectLocalGenerateCmd)
 }
-
-var validNameRegex = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9\_\-]+[A-Za-z0-9]$`)
 
 //nolint:revive,lll,funlen
 func projectInit(cmd *cobra.Command, args []string) error {
@@ -283,8 +278,8 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Cue path (optional)
-	cuePath, err := cmd.Flags().GetString("cuepath")
+	// Source files path (optional)
+	sourcePath, err := cmd.Flags().GetString(sourceFlag)
 	if err != nil {
 		return err
 	}
@@ -296,21 +291,12 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 	}
 
 	// Kind format
-	format, err := cmd.Flags().GetString("format")
+	format, err := cmd.Flags().GetString(formatFlag)
 	if err != nil {
 		return err
 	}
 
-	// Target
-	target, err := cmd.Flags().GetString("type")
-	if err != nil {
-		return err
-	}
-	if target != "resource" && target != "model" {
-		return fmt.Errorf("type must be one of 'resource' | 'model'")
-	}
-
-	file, err := os.DirFS(cuePath).Open("manifest.cue")
+	file, err := os.DirFS(sourcePath).Open("manifest.cue")
 	if err != nil {
 		return err
 	}
@@ -327,8 +313,8 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		}
 
 		pkg := "kinds"
-		if len(cuePath) > 0 {
-			pkg = filepath.Base(cuePath)
+		if len(sourcePath) > 0 {
+			pkg = filepath.Base(sourcePath)
 		}
 
 		fieldName := strings.ToLower(kindName[0:1]) + kindName[1:]
@@ -355,13 +341,13 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		err = kindTmpl.Execute(buf, map[string]string{
 			"FieldName": fieldName,
 			"Name":      kindName,
-			"Target":    target,
+			"Target":    "resource",
 			"Package":   pkg,
 		})
 		if err != nil {
 			return err
 		}
-		kindPath := filepath.Join(path, cuePath, fmt.Sprintf("%s.cue", strings.ToLower(kindName)))
+		kindPath := filepath.Join(path, sourcePath, fmt.Sprintf("%s.cue", strings.ToLower(kindName)))
 		if !overwrite {
 			err = writeFileWithOverwriteConfirm(kindPath, buf.Bytes())
 		} else {
@@ -371,7 +357,7 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 			return err
 		}
 	}
-	return writeFile(filepath.Join(path, cuePath, "manifest.cue"), manifestBytes)
+	return writeFile(filepath.Join(path, sourcePath, "manifest.cue"), manifestBytes)
 }
 
 //nolint:revive,funlen,gocyclo
@@ -386,8 +372,8 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	}
 
 	// Flag arguments
-	// Cue path (optional)
-	cuePath, err := cmd.Flags().GetString("cuepath")
+	// Source file path (optional)
+	sourcePath, err := cmd.Flags().GetString(sourceFlag)
 	if err != nil {
 		return err
 	}
@@ -398,8 +384,8 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Selectors (optional)
-	selectors, err := cmd.Flags().GetStringSlice("selectors")
+	// Selector (optional)
+	selector, err := cmd.Flags().GetString(selectorFlag)
 	if err != nil {
 		return err
 	}
@@ -411,45 +397,45 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	}
 
 	// Kind format
-	format, err := cmd.Flags().GetString("format")
+	format, err := cmd.Flags().GetString(formatFlag)
 	if err != nil {
 		return err
 	}
 
-	// Plugin ID (optional depending on component)
-	pluginID, err := cmd.Flags().GetString("plugin-id")
-	if err != nil {
-		return err
-	}
-	if len(pluginID) > 0 && !validNameRegex.MatchString(pluginID) {
-		fmt.Printf("plugin-id '%s' is not valid. Name must begin and end with an alphanumeric character, "+
-			"and only contain alphanumeric characters and _ or -", pluginID)
-		os.Exit(1)
-	}
-
-	kindGrouping, err := cmd.Flags().GetString("kindgrouping")
+	kindGrouping, err := cmd.Flags().GetString("grouping")
 	if err != nil {
 		return err
 	}
 	if kindGrouping != kindGroupingGroup && kindGrouping != kindGroupingKind {
-		return fmt.Errorf("--kindgrouping must be one of 'group'|'kind'")
+		return fmt.Errorf("--grouping must be one of 'group'|'kind'")
 	}
 
 	// Create the generator (used for generating non-static code)
 	var generator any
+	var manifestParser codegen.Parser[codegen.AppManifest]
 	switch format {
 	case FormatCUE:
 		parser, err := cuekind.NewParser()
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(cuePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
+		manifestParser = parser.ManifestParser()
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
+
+	manifests, err := manifestParser.Parse(os.DirFS(sourcePath), selector)
+	if err != nil {
+		return fmt.Errorf("error parsing manifest '%s': %v", sourcePath, err)
+	}
+	if len(manifests) == 0 {
+		return fmt.Errorf("no manifest found in '%s'", sourcePath)
+	}
+	manifest := manifests[0]
 
 	// Allow for multiple components to be added at once
 	for _, component := range args {
@@ -457,7 +443,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), selectors, pluginID, kindGrouping == kindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, manifest.Properties().Group, kindGrouping == kindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -466,7 +452,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 				os.Exit(1)
 			}
 		case "frontend":
-			err = addComponentFrontend(path, pluginID)
+			err = addComponentFrontend(path, manifest.Properties().Group)
 			if err != nil {
 				fmt.Printf("%s\n", err.Error())
 				os.Exit(1)
@@ -474,7 +460,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), selectors, kindGrouping == kindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, kindGrouping == kindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -555,7 +541,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, pluginID string, groupKinds bool) error {
 	// Check plugin ID
 	if pluginID == "" {
-		return fmt.Errorf("plugin-id is required")
+		return fmt.Errorf("manifest group")
 	}
 
 	// Get the repo from the go.mod file
@@ -632,7 +618,7 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 func addComponentFrontend(projectRootPath string, pluginID string) error {
 	// Check plugin ID
 	if pluginID == "" {
-		return fmt.Errorf("plugin-id is required")
+		return fmt.Errorf("manifest group is required")
 	}
 
 	if !isCommandInstalled("yarn") {

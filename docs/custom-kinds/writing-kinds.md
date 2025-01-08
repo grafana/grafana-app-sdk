@@ -120,13 +120,13 @@ grafana-app-sdk generate
 (if you saved your CUE file to a directory different than `./kinds`, add `-c <CUE directory>`)
 
 Generated code by default ends up in three different places (these directories can be customized with CLI flags, use `grafana-app-sdk generate --help` to display them):
-* `pkg/generated/resource/foo/v1`
+* `pkg/generated/foo/v1`
 * `plugin/src/generated/foo/v1`
 * `definitions/`
 
-### `pkg/generated/resource`
+### `pkg/generated`
 
-All generated go code ends up in `pkg/generated/resource/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
+All generated go code ends up in `pkg/generated/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
 * `foo_codec_gen.go` contains information for the kind to use to encode/decode the go type
 * `foo_metadata_gen.go` is a file that exists for legacy support, and will be eventually removed from codegen
 * `foo_object_gen.go` is a file that contains the `Foo` type, which implements `resource.Object`. For more information on `resource.Object`, see [Using Kinds](./using-kinds.md) or [Resource Objects](../resource-objects.md)

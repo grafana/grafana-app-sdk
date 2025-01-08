@@ -56,7 +56,11 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 			err := r.Run(propagatedContext)
 			wg.Done()
 			if err != nil && !timedOut {
-				errs <- err
+				select {
+				case errs <- err:
+				default:
+					logging.DefaultLogger.Warn("MultiRunner runner error encountered, but MultiRunner already completed", "error", err)
+				}
 			}
 		}(runner)
 	}
