@@ -204,20 +204,18 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	var manifestFiles codejen.Files
 	var goManifestFiles codejen.Files
 	if cfg.CRDEncoding != "none" {
-		if cfg.CRDEncoding != "none" {
-			encFunc := func(v any) ([]byte, error) {
-				return json.MarshalIndent(v, "", "    ")
-			}
-			if cfg.CRDEncoding == "yaml" {
-				encFunc = yaml.Marshal
-			}
-			manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding), selectors...)
-			if err != nil {
-				return nil, err
-			}
-			for i, f := range manifestFiles {
-				manifestFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
-			}
+		encFunc := func(v any) ([]byte, error) {
+			return json.MarshalIndent(v, "", "    ")
+		}
+		if cfg.CRDEncoding == "yaml" {
+			encFunc = yaml.Marshal
+		}
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding), selectors...)
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range manifestFiles {
+			manifestFiles[i].RelativePath = filepath.Join(cfg.CRDPath, f.RelativePath)
 		}
 
 		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath)), selectors...)

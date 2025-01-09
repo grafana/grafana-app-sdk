@@ -538,9 +538,9 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 // Linter doesn't like "Potential file inclusion via variable", which is actually desired here
 //
 //nolint:gosec
-func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, pluginID string, groupKinds bool) error {
+func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, manifestGroup string, groupKinds bool) error {
 	// Check plugin ID
-	if pluginID == "" {
+	if manifestGroup == "" {
 		return fmt.Errorf("manifest group is required")
 	}
 
@@ -572,14 +572,14 @@ func addComponentBackend[G anyGenerator](projectRootPath string, generator G, se
 		if err != nil {
 			return err
 		}
-		m["executable"] = fmt.Sprintf("gpx_%s-app", pluginID)
+		m["executable"] = fmt.Sprintf("gpx_%s-app", manifestGroup)
 		m["backend"] = true
 		b, _ = json.MarshalIndent(m, "", "  ")
 		err = writeFile(pluginJSONPath, b)
 	} else {
 		// New plugin.json
 		err = writePluginJSON(pluginJSONPath,
-			fmt.Sprintf("%s-app", pluginID), "NAME", "AUTHOR", pluginID)
+			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
 	}
 	return err
 }
@@ -615,9 +615,9 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 // Frontend plugin
 //
 //nolint:revive
-func addComponentFrontend(projectRootPath string, pluginID string) error {
+func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 	// Check plugin ID
-	if pluginID == "" {
+	if manifestGroup == "" {
 		return fmt.Errorf("manifest group is required")
 	}
 
@@ -667,11 +667,11 @@ func addComponentFrontend(projectRootPath string, pluginID string) error {
 		return err
 	}
 	err = writePluginJSON(filepath.Join(projectRootPath, "plugin/src/plugin.json"),
-		fmt.Sprintf("%s-app", pluginID), "NAME", "AUTHOR", pluginID)
+		fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
 	if err != nil {
 		return err
 	}
-	err = writePluginConstants(filepath.Join(projectRootPath, "plugin/src/constants.ts"), pluginID)
+	err = writePluginConstants(filepath.Join(projectRootPath, "plugin/src/constants.ts"), manifestGroup)
 	if err != nil {
 		return err
 	}
