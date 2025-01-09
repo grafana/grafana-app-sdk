@@ -8,7 +8,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
-	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/apimachinery/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )

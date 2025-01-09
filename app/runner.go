@@ -9,7 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/apimachinery/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 

@@ -6,7 +6,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/apimachinery/logging"
 )
 
 // NewLogger returns a new PluginLogger that wraps the provided log.Logger

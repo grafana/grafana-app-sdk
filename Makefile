@@ -18,7 +18,7 @@ all: check-go-version deps lint test build
 
 deps: $(GOSUM) $(GOWORKSUM)
 $(GOSUM): $(SOURCES) $(GOMOD)
-	$(foreach mod, $(dir $(GOMOD)), cd $(mod) && go mod tidy -v;)
+	$(foreach mod, $(dir $(GOMOD)), pushd . && cd $(mod) && go mod tidy -v; popd;)
 
 $(GOWORKSUM): $(GOWORK) $(GOMOD)
 	go work sync
@@ -69,10 +69,14 @@ endif
 .PHONY: update-workspace
 update-workspace:
 	@echo "updating workspace"
-	@$(foreach mod, $(dir $(GOMOD)), cd $(mod) && go mod tidy -v;)
+	@$(foreach mod, $(dir $(GOMOD)), pushd . && cd $(mod) && go mod tidy -v; popd;)
 	go work sync
 	go mod download
 
 .PHONY: regenerate-codegen-test-files
 regenerate-codegen-test-files:
 	sh ./scripts/regenerate_golden_test_files.sh
+
+.PHONY: apimachinery-codegen
+apimachinery-codegen:
+	./apimachinery/update-codegen.sh
