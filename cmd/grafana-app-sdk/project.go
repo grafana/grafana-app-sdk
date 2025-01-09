@@ -541,7 +541,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, pluginID string, groupKinds bool) error {
 	// Check plugin ID
 	if pluginID == "" {
-		return fmt.Errorf("manifest group")
+		return fmt.Errorf("manifest group is required")
 	}
 
 	// Get the repo from the go.mod file
