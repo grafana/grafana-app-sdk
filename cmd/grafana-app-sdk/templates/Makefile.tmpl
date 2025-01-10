@@ -58,7 +58,7 @@ compile/operator:
 
 .PHONY: generate
 generate:
-	@grafana-app-sdk generate -c kinds
+	@grafana-app-sdk generate --source kinds --format cue
 
 .PHONY: local/up
 local/up: local/generate

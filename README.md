@@ -60,15 +60,15 @@ For more details on application design, see [application design documentation](d
 
 Full CLI usage is covered in [CLI docs page](docs/cli.md), but for a brief overview of the commands:
 
-| Command | Description |
-|---------|-------------|
-| `version` | Prints the version (use `-v` for a verbose print) |
-| `generate` | Generates code from your CUE kinds (defaults to CUE in `schemas`, use `-c`/`--cuepath` to speficy a different CUE path) |
-| `project init <module name>` | Creates a project template, including directory structure, go module, CUE module, and Makefile |
-| `project kind add <kind name>` | Add a boilerplate kind in CUE with descriptive comments for all fields |
+| Command | Description                                                                                                           |
+|---------|-----------------------------------------------------------------------------------------------------------------------|
+| `version` | Prints the version (use `-v` for a verbose print)                                                                     |
+| `generate` | Generates code from your CUE kinds (defaults to CUE in `kinds`, use `-s`/`--source` to speficy a different CUE path)  |
+| `project init <module name>` | Creates a project template, including directory structure, go module, CUE module, and Makefile                        |
+| `project kind add <kind name>` | Add a boilerplate kind in CUE with descriptive comments for all fields                                                |
 | `project component add <component>` | Add boilerplate code for a component to your project. `<component>` options are `frontend`, `backend`, and `operator` |
-| `project local init` | Initialize the `./local` directory for a local development environment (done automatically by `project init`) |
-| `project local generate` | Generate a YAML bundle for local deployment, based on your CUE kinds and `./local/config.yaml` |
+| `project local init` | Initialize the `./local` directory for a local development environment (done automatically by `project init`)         |
+| `project local generate` | Generate a YAML bundle for local deployment, based on your CUE kinds and `./local/config.yaml`                        |
 
 ## Examples
 

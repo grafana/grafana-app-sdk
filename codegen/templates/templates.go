@@ -237,6 +237,10 @@ func (BackendPluginRouterTemplateMetadata) ToPackageNameVariable(input string) s
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
+func (BackendPluginRouterTemplateMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
 // WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out
 func WriteBackendPluginRouter(metadata BackendPluginRouterTemplateMetadata, out io.Writer) error {
 	return templateBackendPluginRouter.Execute(out, metadata)
@@ -352,6 +356,10 @@ func (OperatorMainMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
+func (OperatorMainMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
 	md := extendedOperatorMainMetadata{
 		OperatorMainMetadata: metadata,
@@ -440,6 +448,10 @@ func (AppMetadata) ToPackageName(input string) string {
 
 func (AppMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
+}
+
+func (AppMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
 }
 
 func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
