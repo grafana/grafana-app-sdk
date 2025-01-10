@@ -45,6 +45,10 @@ echo "Making a '${RELEASE}' release with tag '${TAG}'..."
 git tag -s "${TAG}" -m "Release ${TAG}"
 git push origin "${TAG}"
 
+echo "Creating logging submodule release"
+git tag -s "logging/${TAG}" -m "Logging submodule release ${TAG}"
+git push origin "logging/${TAG}"
+
 echo "Updating the plugin module to use the new release for the main module"
 git checkout -b "plugin-release/${TAG}"
 cd $(git rev-parse --show-toplevel)/plugin

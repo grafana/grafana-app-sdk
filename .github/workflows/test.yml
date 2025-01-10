@@ -147,6 +147,7 @@ jobs:
           grafana-app-sdk project init "test-project"
           rm -rf kinds/manifest.cue
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
+          printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
           grafana-app-sdk generate --manifest=customManifest
