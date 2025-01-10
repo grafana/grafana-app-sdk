@@ -36,10 +36,10 @@ var (
 	templateBackendPluginModelsHandler, _   = template.ParseFS(templates, "plugin/handler_models.tmpl")
 	templateBackendMain, _                  = template.ParseFS(templates, "plugin/main.tmpl")
 
-	TemplateWatcher, _           = template.ParseFS(templates, "app/watcher.tmpl")
-	TemplateApp, _               = template.ParseFS(templates, "app/app.tmpl")
-	TemplateGrafanaAppWatcher, _ = template.ParseFS(templates, "app/grafana-app-watcher.tmpl")
-	TemplateGrafanaApp, _        = template.ParseFS(templates, "app/grafana-app.tmpl")
+	TemplateWatcher, _              = template.ParseFS(templates, "app/watcher.tmpl")
+	TemplateApp, _                  = template.ParseFS(templates, "app/app.tmpl")
+	TemplateGrafanaAppReconciler, _ = template.ParseFS(templates, "app/grafana-app-reconciler.tmpl")
+	TemplateGrafanaApp, _           = template.ParseFS(templates, "app/grafana-app.tmpl")
 
 	templateOperatorKubeconfig, _ = template.ParseFS(templates, "operator/kubeconfig.tmpl")
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
@@ -419,14 +419,15 @@ func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 }
 
 type AppMetadata struct {
-	PackageName     string
-	ProjectName     string
-	Repo            string
-	CodegenPath     string
-	APIsPath        string // only used by grafanaApp component
-	WatcherPackage  string
-	KindsAreGrouped bool
-	Resources       []AppMetadataKind
+	PackageName       string
+	ProjectName       string
+	Repo              string
+	CodegenPath       string
+	APIsPath          string // only used by grafanaApp component
+	ReconcilerPackage string
+	WatcherPackage    string
+	KindsAreGrouped   bool
+	Resources         []AppMetadataKind
 }
 
 type AppMetadataKind struct {

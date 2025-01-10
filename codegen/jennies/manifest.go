@@ -146,6 +146,7 @@ func buildManifestData(m codegen.AppManifest) (*app.ManifestData, error) {
 			mver := app.ManifestKindVersion{
 				Name: version.Version,
 			}
+
 			if len(version.Mutation.Operations) > 0 {
 				operations, err := sanitizeAdmissionOperations(version.Mutation.Operations)
 				if err != nil {
