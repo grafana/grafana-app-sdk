@@ -14,7 +14,7 @@ require (
 	github.com/getkin/kin-openapi v0.128.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
 	github.com/grafana/cog v0.0.10
-	github.com/grafana/grafana-app-sdk/logging v0.0.0-00010101000000-000000000000
+	github.com/grafana/grafana-app-sdk/logging v0.29.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.20.5
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
@@ -110,5 +110,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/grafana/grafana-app-sdk/logging => ./logging
