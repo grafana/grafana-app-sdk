@@ -46,7 +46,7 @@ func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
 		Version:         ver,
 		KindPackage:     GetGeneratedPath(w.groupByKind, kind, ver),
 		KindsAreGrouped: !w.groupByKind,
-	}, &b)
+	}, &b, templates.TemplateWatcher)
 	if err != nil {
 		return nil, err
 	}

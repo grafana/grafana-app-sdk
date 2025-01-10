@@ -44,7 +44,7 @@ func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	}
 
 	b := bytes.Buffer{}
-	err := templates.WriteAppGoFile(tmd, &b)
+	err := templates.WriteAppGoFile(tmd, &b, templates.TemplateApp)
 	if err != nil {
 		return nil, err
 	}
