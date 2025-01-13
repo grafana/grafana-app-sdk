@@ -13,7 +13,7 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/getkin/kin-openapi v0.128.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
-	github.com/grafana/cog v0.0.12
+	github.com/grafana/cog v0.0.13
 	github.com/grafana/grafana-app-sdk/logging v0.29.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.20.5
@@ -27,7 +27,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.33.0
 	golang.org/x/sync v0.10.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
-	google.golang.org/grpc v1.69.2
+	google.golang.org/grpc v1.69.4
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.0
 	k8s.io/apiextensions-apiserver v0.32.0
