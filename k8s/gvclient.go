@@ -320,13 +320,22 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 	return nil
 }
 
-func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Identifier, plural string) error {
+func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Identifier, plural string, options resource.DeleteOptions) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-delete")
 	defer span.End()
 	sc := 0
 	request := g.client.Delete().Resource(plural).Name(identifier.Name)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
+	}
+	if options.Preconditions.ResourceVersion != "" {
+		request = request.Param("preconditions.resourceVersion", options.Preconditions.ResourceVersion)
+	}
+	if options.Preconditions.UID != "" {
+		request = request.Param("preconditions.uid", options.Preconditions.UID)
+	}
+	if options.PropagationPolicy != "" {
+		request = request.Param("propagationPolicy", string(options.PropagationPolicy))
 	}
 	start := time.Now()
 	err := request.Do(ctx).StatusCode(&sc).Error()

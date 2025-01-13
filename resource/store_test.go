@@ -756,7 +756,7 @@ func TestStore_Delete(t *testing.T) {
 
 	t.Run("client error", func(t *testing.T) {
 		cerr := fmt.Errorf("JE SUIS ERROR")
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			return cerr
 		}
 		generator.ClientForFunc = func(kind Kind) (Client, error) {
@@ -771,7 +771,7 @@ func TestStore_Delete(t *testing.T) {
 			Namespace: "foo",
 			Name:      "bar",
 		}
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return nil
@@ -808,7 +808,7 @@ func TestStore_ForceDelete(t *testing.T) {
 
 	t.Run("client error", func(t *testing.T) {
 		cerr := fmt.Errorf("JE SUIS ERROR")
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			return cerr
 		}
 		generator.ClientForFunc = func(kind Kind) (Client, error) {
@@ -820,7 +820,7 @@ func TestStore_ForceDelete(t *testing.T) {
 
 	t.Run("success with 404", func(t *testing.T) {
 		cerr := &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			return cerr
 		}
 		generator.ClientForFunc = func(kind Kind) (Client, error) {
@@ -835,7 +835,7 @@ func TestStore_ForceDelete(t *testing.T) {
 			Namespace: "foo",
 			Name:      "bar",
 		}
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return nil
@@ -955,7 +955,7 @@ type mockClient struct {
 	UpdateIntoFunc func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error
 	PatchFunc      func(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions) (Object, error)
 	PatchIntoFunc  func(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions, into Object) error
-	DeleteFunc     func(ctx context.Context, identifier Identifier) error
+	DeleteFunc     func(ctx context.Context, identifier Identifier, options DeleteOptions) error
 	ListFunc       func(ctx context.Context, namespace string, options ListOptions) (ListObject, error)
 	ListIntoFunc   func(ctx context.Context, namespace string, options ListOptions, into ListObject) error
 	WatchFunc      func(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error)
@@ -1009,9 +1009,9 @@ func (c *mockClient) PatchInto(ctx context.Context, identifier Identifier, patch
 	}
 	return nil
 }
-func (c *mockClient) Delete(ctx context.Context, identifier Identifier) error {
+func (c *mockClient) Delete(ctx context.Context, identifier Identifier, options DeleteOptions) error {
 	if c.DeleteFunc != nil {
-		return c.DeleteFunc(ctx, identifier)
+		return c.DeleteFunc(ctx, identifier, options)
 	}
 	return nil
 }

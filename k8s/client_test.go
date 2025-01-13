@@ -511,7 +511,7 @@ func TestClient_Delete(t *testing.T) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
 
-		err := client.Delete(ctx, id)
+		err := client.Delete(ctx, id, resource.DeleteOptions{})
 		require.NotNil(t, err)
 		cast, ok := err.(*ServerResponseError)
 		require.True(t, ok)
@@ -526,7 +526,41 @@ func TestClient_Delete(t *testing.T) {
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
 		}
 
-		err := client.Delete(ctx, id)
+		err := client.Delete(ctx, id, resource.DeleteOptions{})
+		assert.Nil(t, err)
+	})
+
+	t.Run("propagationPolicy", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			writer.Write(responseBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
+			assert.Equal(t, string(resource.DeleteOptionsPropagationPolicyForeground), r.URL.Query().Get("propagationPolicy"))
+		}
+
+		err := client.Delete(ctx, id, resource.DeleteOptions{
+			PropagationPolicy: resource.DeleteOptionsPropagationPolicyForeground,
+		})
+		assert.Nil(t, err)
+	})
+
+	t.Run("preconditions", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodDelete, r.Method)
+			writer.Write(responseBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, testSchema.Plural(), id.Name), r.URL.Path)
+			assert.Equal(t, "123", r.URL.Query().Get("preconditions.resourceVersion"))
+			assert.Equal(t, "abc", r.URL.Query().Get("preconditions.uid"))
+		}
+
+		err := client.Delete(ctx, id, resource.DeleteOptions{
+			Preconditions: resource.DeleteOptionsPreconditions{
+				ResourceVersion: "123",
+				UID:             "abc",
+			},
+		})
 		assert.Nil(t, err)
 	})
 }
