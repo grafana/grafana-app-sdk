@@ -155,12 +155,12 @@ func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identi
 
 // Delete deletes a resource with the provided identifier
 func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error {
-	return t.client.Delete(ctx, identifier)
+	return t.client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 // ForceDelete deletes a resource with the provided identifier, ignores 404 errors
 func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
-	err := t.client.Delete(ctx, identifier)
+	err := t.client.Delete(ctx, identifier, DeleteOptions{})
 
 	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
 		return nil

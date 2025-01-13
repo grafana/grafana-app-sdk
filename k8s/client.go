@@ -13,6 +13,10 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+var (
+	_ resource.Client = &Client{}
+)
+
 // Client is a kubernetes-specific implementation of resource.Client, using custom resource definitions.
 // A Client is specific to the Schema it was created with.
 // New Clients should only be created via the ClientRegistry.ClientFor method.
@@ -209,8 +213,8 @@ func (c *Client) PatchInto(ctx context.Context, identifier resource.Identifier, 
 }
 
 // Delete deletes the specified resource
-func (c *Client) Delete(ctx context.Context, identifier resource.Identifier) error {
-	return c.client.delete(ctx, identifier, c.schema.Plural())
+func (c *Client) Delete(ctx context.Context, identifier resource.Identifier, options resource.DeleteOptions) error {
+	return c.client.delete(ctx, identifier, c.schema.Plural(), options)
 }
 
 // Watch makes a watch request for the namespace, and returns a WatchResponse which wraps a kubernetes

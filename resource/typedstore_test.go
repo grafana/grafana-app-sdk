@@ -329,7 +329,7 @@ func TestTypedStore_Delete(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return cerr
@@ -339,7 +339,7 @@ func TestTypedStore_Delete(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return nil
@@ -359,7 +359,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 
 	t.Run("error", func(t *testing.T) {
 		cerr := fmt.Errorf("I AM ERROR")
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return cerr
@@ -369,7 +369,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 	})
 
 	t.Run("success", func(t *testing.T) {
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return nil
@@ -379,7 +379,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 	})
 
 	t.Run("success with 404", func(t *testing.T) {
-		client.DeleteFunc = func(c context.Context, identifier Identifier) error {
+		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
 			return &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}

@@ -88,6 +88,29 @@ type PatchOptions struct {
 	// TODO: nothing at-present
 }
 
+type DeleteOptionsPropagationPolicy string
+
+const (
+	DeleteOptionsPropagationPolicyOrphan     DeleteOptionsPropagationPolicy = "Orphan"
+	DeleteOptionsPropagationPolicyBackground DeleteOptionsPropagationPolicy = "Background"
+	DeleteOptionsPropagationPolicyForeground DeleteOptionsPropagationPolicy = "Foreground"
+	DeleteOptionsPropagationPolicyDefault    DeleteOptionsPropagationPolicy = ""
+)
+
+// DeleteOptions are the options passed to a Client.Delete call
+type DeleteOptions struct {
+	// Preconditions describes any conditions that must be true for the delete request to be processed
+	Preconditions     DeleteOptionsPreconditions
+	PropagationPolicy DeleteOptionsPropagationPolicy
+}
+
+type DeleteOptionsPreconditions struct {
+	// ResourceVersion, if supplied, requires that the existing ResourceVersion in the API server must match for the delete request to be processed
+	ResourceVersion string
+	// UID, if supplied, requires that the existing UID in the API server must match for the delete request to be processed
+	UID string
+}
+
 // WatchOptions are the options passed to a Client.Watch call
 type WatchOptions struct {
 	// ResourceVersion is the resource version to target with the call
@@ -152,7 +175,7 @@ type Client interface {
 	PatchInto(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions, into Object) error
 
 	// Delete deletes an exiting resource
-	Delete(ctx context.Context, identifier Identifier) error
+	Delete(ctx context.Context, identifier Identifier, options DeleteOptions) error
 
 	// List lists objects based on the options criteria.
 	// For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
@@ -186,12 +209,12 @@ type SchemalessClient interface {
 	Patch(ctx context.Context, identifier FullIdentifier, path PatchRequest, options PatchOptions, into Object) error
 
 	// Delete deletes a resource identified by identifier
-	Delete(ctx context.Context, identifier FullIdentifier) error
+	Delete(ctx context.Context, identifier FullIdentifier, options DeleteOptions) error
 
 	// List lists all resources that satisfy identifier, ignoring `Name`. The response is marshaled into `into`.
 	// `exampleListItem` must be provided for proper type unmarshaling, and should be the same kind of object
 	// that would be passed to a Get call for `into`
-	List(ctx context.Context, identifier FullIdentifier, into ListObject, exampleListItem Object) error
+	List(ctx context.Context, identifier FullIdentifier, options ListOptions, into ListObject, exampleListItem Object) error
 
 	// Watch watches all resources that satisfy the identifier, ignoring `Name`.
 	// The WatchResponse's WatchEvent Objects are created by unmarshaling into an object created by calling

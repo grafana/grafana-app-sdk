@@ -192,7 +192,7 @@ func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Ident
 
 // Delete deletes a resource with the given identifier.
 func (s *SimpleStore[T]) Delete(ctx context.Context, identifier Identifier) error {
-	return s.client.Delete(ctx, identifier)
+	return s.client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 type MapSubresourceCatalog map[string]any

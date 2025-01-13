@@ -47,7 +47,11 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 	propagatedContext, cancel := context.WithCancel(ctx)
 	defer cancel()
 	errs := make(chan error, len(m.Runners))
-	defer close(errs)
+	errsClosed := false
+	defer func() {
+		errsClosed = true
+		close(errs)
+	}()
 	wg := &sync.WaitGroup{}
 	timedOut := false
 	for _, runner := range m.Runners {
@@ -56,11 +60,11 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 			err := r.Run(propagatedContext)
 			wg.Done()
 			if err != nil && !timedOut {
-				select {
-				case errs <- err:
-				default:
+				if errsClosed {
 					logging.DefaultLogger.Warn("MultiRunner runner error encountered, but MultiRunner already completed", "error", err)
+					return
 				}
+				errs <- err
 			}
 		}(runner)
 	}
