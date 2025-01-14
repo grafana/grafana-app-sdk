@@ -65,7 +65,11 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 				if !v.Codegen.Backend {
 					continue
 				}
-				gvs[schema.GroupVersion{Group: k.Properties().Group, Version: v.Version}] = struct{}{}
+				grp := k.Properties().ManifestGroup
+				if grp == "" {
+					grp = k.Properties().Group
+				}
+				gvs[schema.GroupVersion{Group: grp, Version: v.Version}] = struct{}{}
 			}
 		}
 		for gv := range gvs {
