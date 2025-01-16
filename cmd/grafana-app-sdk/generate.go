@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -249,9 +250,26 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	if err != nil {
 		return nil, err
 	}
-	relativePath := cfg.GoGenBasePath
-	if !cfg.GroupKinds {
-		relativePath = filepath.Join(relativePath, targetResource)
+	// Patch for kubernetes openAPI generation, which errors on some cases where map[string]any is used instead of map[string]interface{}
+	// Update all the generated spec/status files on-disk to switch from map[string]any to map[string]interface{}
+	// We don't use the modFS here because we can't write files to an fs.FS, only read them
+	err = filepath.Walk(cfg.GoGenBasePath, func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
+		}
+		if (len(info.Name()) < 15 || info.Name()[len(info.Name())-12:] != "_spec_gen.go") && (len(info.Name()) < 15 || info.Name()[len(info.Name())-14:] != "_status_gen.go") {
+			return nil
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Updating ", path)
+		updated := bytes.ReplaceAll(contents, []byte(`map[string]any`), []byte(`map[string]interface{}`))
+		return writeFile(path, updated)
+	})
+	if err != nil {
+		return nil, err
 	}
-	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds), selectors...)
+	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, cfg.GoGenBasePath, cfg.GroupKinds), selectors...)
 }
