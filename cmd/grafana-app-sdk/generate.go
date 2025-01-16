@@ -236,6 +236,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	return allFiles, nil
 }
 
+//nolint:revive
 func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (codejen.Files, error) {
 	// Get the repo from the go.mod file
 	repo, err := getGoModule(cfg.GoGenBasePath)
@@ -253,7 +254,7 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	// Patch for kubernetes openAPI generation, which errors on some cases where map[string]any is used instead of map[string]interface{}
 	// Update all the generated spec/status files on-disk to switch from map[string]any to map[string]interface{}
 	// We don't use the modFS here because we can't write files to an fs.FS, only read them
-	err = filepath.Walk(cfg.GoGenBasePath, func(path string, info os.FileInfo, err error) error {
+	err = filepath.Walk(cfg.GoGenBasePath, func(path string, info os.FileInfo, _ error) error {
 		if info.IsDir() {
 			return nil
 		}
