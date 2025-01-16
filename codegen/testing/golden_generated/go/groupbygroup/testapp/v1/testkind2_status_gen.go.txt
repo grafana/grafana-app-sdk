@@ -12,7 +12,7 @@ type TestKind2statusOperatorState struct {
 	// descriptiveState is an optional more descriptive state field which has no requirements on format
 	DescriptiveState *string `json:"descriptiveState,omitempty"`
 	// details contains any extra information that is operator-specific
-	Details map[string]any `json:"details,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
 }
 
 // NewTestKind2statusOperatorState creates a new TestKind2statusOperatorState object.
@@ -26,7 +26,7 @@ type TestKind2Status struct {
 	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
 	OperatorStates map[string]TestKind2statusOperatorState `json:"operatorStates,omitempty"`
 	// additionalFields is reserved for future use
-	AdditionalFields map[string]any `json:"additionalFields,omitempty"`
+	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
 }
 
 // NewTestKind2Status creates a new TestKind2Status object.
