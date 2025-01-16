@@ -8,8 +8,8 @@ import (
 
 // +k8s:openapi-gen=true
 type CustomKindInnerObject2 struct {
-	Name    string         `json:"name"`
-	Details map[string]any `json:"details"`
+	Name    string                 `json:"name"`
+	Details map[string]interface{} `json:"details"`
 }
 
 // NewCustomKindInnerObject2 creates a new CustomKindInnerObject2 object.
@@ -42,8 +42,8 @@ func NewCustomKindType1() *CustomKindType1 {
 
 // +k8s:openapi-gen=true
 type CustomKindType2 struct {
-	Group   string         `json:"group"`
-	Details map[string]any `json:"details"`
+	Group   string                 `json:"group"`
+	Details map[string]interface{} `json:"details"`
 }
 
 // NewCustomKindType2 creates a new CustomKindType2 object.
@@ -52,7 +52,7 @@ func NewCustomKindType2() *CustomKindType2 {
 }
 
 // +k8s:openapi-gen=true
-type CustomKindUnionType any
+type CustomKindUnionType interface{}
 
 // +k8s:openapi-gen=true
 type CustomKindSpec struct {

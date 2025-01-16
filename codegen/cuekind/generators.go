@@ -30,6 +30,7 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 			Depth:                1,
 			AddKubernetesCodegen: true,
 			GroupByKind:          !groupKinds,
+			AnyAsInterface:       true, // This is for compatibility with kube openAPI generator, which has issues with map[string]any
 		},
 		&jennies.ResourceObjectGenerator{
 			SubresourceTypesArePrefixed: groupKinds,
