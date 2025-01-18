@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var ErrMissingResourceVersion = fmt.Errorf("object is missing a ResourceVersion")
+
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
 // to be of ObjectType. It is a thin convenience layer over using a raw ClientGenerator.ClientFor()-created
 // Client for a Schema and doing type conversions in-code.
@@ -91,7 +93,13 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 	md := obj.GetCommonMetadata()
 	md.UpdateTimestamp = time.Now().UTC()
 	obj.SetCommonMetadata(md)
-	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{})
+	if obj.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
+	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{
+		ResourceVersion: obj.GetResourceVersion(),
+	})
 	if err != nil {
 		var n T
 		return n, err
