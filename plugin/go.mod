@@ -10,7 +10,7 @@ retract (
 require (
 	github.com/grafana/grafana-app-sdk v0.30.0
 	github.com/grafana/grafana-app-sdk/logging v0.30.0
-	github.com/grafana/grafana-plugin-sdk-go v0.262.0
+	github.com/grafana/grafana-plugin-sdk-go v0.263.0
 	github.com/prometheus/client_golang v1.20.5
 	github.com/stretchr/testify v1.10.0
 	go.opentelemetry.io/otel v1.33.0
