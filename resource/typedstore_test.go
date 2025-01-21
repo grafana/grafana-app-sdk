@@ -161,13 +161,25 @@ func TestTypedStore_Update(t *testing.T) {
 		assert.Equal(t, cerr, err)
 	})
 
+	t.Run("no ResourceVersion", func(t *testing.T) {
+		client.UpdateFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
+			assert.Fail(t, "client update should not be called")
+			return nil, nil
+		}
+		obj := updateObj.Copy().(*TypedSpecStatusObject[string, string])
+		obj.SetResourceVersion("")
+		ret, err := store.Update(ctx, id, obj)
+		assert.Nil(t, ret)
+		assert.Equal(t, ErrMissingResourceVersion, err)
+	})
+
 	t.Run("success, no metadata options", func(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, updateObj.Name, identifier.Name)
 			assert.Equal(t, updateObj.Namespace, identifier.Namespace)
 			assert.Equal(t, updateObj, obj)
-			assert.Equal(t, "", options.ResourceVersion)
+			assert.Equal(t, updateObj.ResourceVersion, options.ResourceVersion)
 			assert.Equal(t, "", options.Subresource)
 			return retObj, nil
 		}
