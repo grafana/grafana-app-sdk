@@ -215,6 +215,9 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 	}
+	if config.InformerConfig.ErrorHandler != nil {
+		a.informerController.ErrorHandler = config.InformerConfig.ErrorHandler
+	}
 	discoveryRefresh := config.DiscoveryRefreshInterval
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
