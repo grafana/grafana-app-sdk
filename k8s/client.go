@@ -44,6 +44,11 @@ type ClientConfig struct {
 	// NegotiatedSerializerProvider is a function which provides a runtime.NegotiatedSerializer for the underlying
 	// kubernetes rest.RESTClient, if defined.
 	NegotiatedSerializerProvider func(kind resource.Kind) runtime.NegotiatedSerializer
+
+	// KubeConfigProvider can be used to provide an altered or alternative rest.Config based on kind.
+	// It is passed the Kind and existing rest.Config, and should return a valid rest.Config
+	// (returning the same rest.Config as the input is valid)
+	KubeConfigProvider func(kind resource.Kind, kubeConfig rest.Config) rest.Config
 }
 
 // DefaultClientConfig returns a ClientConfig using defaults that assume you have used the SDK codegen tooling
