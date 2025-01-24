@@ -561,6 +561,10 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 		})
 	} else if err != nil {
 		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
+		if c.ErrorHandler != nil {
+			// Call the ErrorHandler function as well if it's set
+			c.ErrorHandler(ctx, err)
+		}
 		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
 			ctx, span := GetTracer().Start(ctx, "controller-retry")
 			defer span.End()
