@@ -1,7 +1,7 @@
 # Writing a Reconciler (or Watcher)
 
 A Reconciler is a logical pattern which takes the state of a set of objects in the API server, and propagates changes to other components based on that state. 
-This logic is asnchronous, and works by having a function which is called when a change occurs in the set of resources the reconciler is watching, 
+This logic is asynchronous, and works by having a function which is called when a change occurs in the set of resources the reconciler is watching, 
 which provides the current state of the object, and the type of change that occurred (Create, Update, Delete). 
 For more information, see the [Asynchronous Business Logic section in Platform Concepts](application-design/platform-concepts.md#asynchronous-business-logic).
 
