@@ -353,20 +353,20 @@ That leaves us with just our varying TypeScript files.
 
 ```TypeScript
 function PageOne() {
-    const s = useStyles2(getStyles);
+  const s = useStyles2(getStyles);
 
-    return (
-        <PluginPage>
-            <div data-testid={testIds.pageOne.container}>
-            This is page one.
-    <div className={s.marginTop}>
-    <LinkButton data-testid={testIds.pageOne.navigateToFour} href={prefixRoute(ROUTES.Four)}>
-    Full-width page example
-    </LinkButton>
-    </div>
-    </div>
+  return (
+    <PluginPage>
+      <div data-testid={testIds.pageOne.container}>
+        This is page one.
+        <div className={s.marginTop}>
+          <LinkButton data-testid={testIds.pageOne.navigateToFour} href={prefixRoute(ROUTES.Four)}>
+            Full-width page example
+          </LinkButton>
+        </div>
+      </div>
     </PluginPage>
-);
+  );
 }
 ```
 There are other pages generated here as examples from the output of `yarn create @grafana/plugin`. The routing for these pages is in `components/App/App.tsx`.
