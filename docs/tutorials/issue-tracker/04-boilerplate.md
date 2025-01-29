@@ -2,7 +2,7 @@
 
 Since this is a fresh project, we can take advantage of the CLI's tooling to set up boilerplate code for us which we can then extend on. Note that this is not strictly necessary for writing an application (whereas running the CUE codegen is something you'll likely want for every project), but it makes initial project bootstrapping simpler, and will help us move along here faster. If you decide in future projects you want to handle your routing, storage, or front-end framework differently, you can eschew some or all of the things laid out in this section.
 
-## The `project add` Command
+## The `project component add` Command
 
 Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project component add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
 ```shell
@@ -134,7 +134,7 @@ $ tree -I "generated|definitions|kinds|local" .
 
 Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/app`, `pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
 
-If we had split up our `project add` into `project add backend`, we'd only get our generated go files in `pkg/plugin`, `project add frontend` would only give us the non-`plugin/pkg` plugin files, and `project add operator` would give us the `pkg/watchers` and `cmd/operator` files. As we can see, none of these `project add` components have overlapping code, which is deliberate. If you prefer to not use boilerplate for a given component, you can simply not add it and not worry that another component will depend on boilerplate from it.
+If we had split up our `project component add` into `project component add backend`, we'd only get our generated go files in `pkg/plugin`, `project component add frontend` would only give us the non-`plugin/pkg` plugin files, and `project component add operator` would give us the `pkg/watchers` and `cmd/operator` files. As we can see, none of these `project component add` components have overlapping code, which is deliberate. If you prefer to not use boilerplate for a given component, you can simply not add it and not worry that another component will depend on boilerplate from it.
 
 So, what are these new bits of code doing?
 
@@ -144,7 +144,7 @@ So, what are these new bits of code doing?
 
 ### `pkg/plugin`
 
-The `project add` didn't actually generate too many files for our back-end boilerplate, just a couple of go files in `pkg/plugin` and then some code in `pkg/plugin/secure`:
+The `project component add` didn't actually generate too many files for our back-end boilerplate, just a couple of go files in `pkg/plugin` and then some code in `pkg/plugin/secure`:
 ```shell
 $ tree pkg/plugin
 pkg/plugin
@@ -409,7 +409,7 @@ Here is where the `main` code to run the operator lives, and the docker file to 
 
 ### `pkg/watchers`
 
-Here we only have one file, created for our Issue kind. If we had more kinds, we'd have more files here, as the `project add operator` command generates a boilerplate watcher for each kind in CUE with a `target: "resource"`. This file defines a simple watcher object which implements `operator.ResourceWatcher`, with an additional `Sync` function which is used in conjunction with a `resource.OpinionatedWatcher`. All this boilerplate watcher does is check that it can cast the provided resource(s) into the `issue.Object` type, and then print a line to the console with the event type and details.
+Here we only have one file, created for our Issue kind. If we had more kinds, we'd have more files here, as the `project component add operator` command generates a boilerplate watcher for each kind in CUE with a `target: "resource"`. This file defines a simple watcher object which implements `operator.ResourceWatcher`, with an additional `Sync` function which is used in conjunction with a `resource.OpinionatedWatcher`. All this boilerplate watcher does is check that it can cast the provided resource(s) into the `issue.Object` type, and then print a line to the console with the event type and details.
 
 Next, now that we have minimal functioning code, we can try, [deploying our project locally](05-local-deployment.md)
 
