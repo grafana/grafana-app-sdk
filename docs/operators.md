@@ -6,11 +6,12 @@ When changes occur, it may take some action based on those changes.
 
 ## In the SDK
 
-The SDK offers a simple way to create the operator pattern with the `operator` package. 
-While a lot of code in this package has a rather explicit kubernetes reliance (ingesting a kube config or client), 
-this will eventually be removed in favor of an abstraction that will produce the appropriate client(s) to talk to the underlying storage layer. 
+The operator patterns are implemented in the SDK's `operator` package. 
+However, they are easiest to use as part of `simple.App`, 
+which wraps the more complex logic of an operator and requires only that you write your reconciler(s) or watcher(s), 
+which react to change events in the resources your app cares about.
 
-An operator consists, broadly, of collections of runnable controllers, one type of which is defined in the SDK, 
+Within the `operator` package, an operator consists, broadly, of collections of runnable controllers, one type of which is defined in the SDK, 
 but a user can easily extend this by having a new controller which implements the `operator.Controller` interface.
 
 The controller offered by the SDK is the `operator.InformerController`, which is a controller that is composed of three sets of objects:
@@ -38,12 +39,6 @@ Resources get added/updated/deleted by the API, and then your operator can pick 
 This means moving complex business logic out of the API calls into a more asynchronous pattern, 
 where a call to the API will kick off a workflow, rather than start the workflow, wait for completion, then return.
 
-While the SDK is geared toward this type of design, you can still put all of your business logic in your API endpoints 
-if you either need to have calls be completely synchronous, or the business logic is very simple.
-
-The SDK codegen utility offers the ability to create a simple CRUDL backend plugin API 
-and an operator template given only one or more Schemas defined in CUE (see [CLI documentation](cli.md) for more info).
-
 ## A Simple Operator
 
 Let's walk through the creation of a simple operator, using a Reconciler:
@@ -54,7 +49,11 @@ package main
 import (
 	"context"
 	"fmt"
-	
+	"os"
+	"os/signal"
+
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/simple"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -63,48 +62,51 @@ import (
 func main() {
 	// Obtain kube config (not real code)
 	kubeConfig := getKubeConfig()
+	// Get the app manifest (function from generated code)
+	manifest := generated.LocalManifest()
+
+	// Create the operator runner
+	runner, err := operator.NewRunner(operator.RunnerConfig{
+		KubeConfig: kubeConfig,
+		MetricsConfig: operator.RunnerMetricsConfig{
+			Enabled: true,
+        },
+    })
 	
-	// Create a new operator
-	op, err := simple.NewOperator(simple.OperatorConfig{
-		Name:       "issue-operator",
-		KubeConfig: kubeConfig.RestConfig,
-		Metrics: simple.MetricsConfig{
-			Enabled: true,
-		},
-		Tracing: simple.TracingConfig{
-			Enabled: true,
-			OpenTelemetryConfig: simple.OpenTelemetryConfig{
-				Host:        cfg.OTelConfig.Host,
-				Port:        cfg.OTelConfig.Port,
-				ConnType:    simple.OTelConnType(cfg.OTelConfig.ConnType),
-				ServiceName: cfg.OTelConfig.ServiceName,
-			},
-		},
-		ErrorHandler: func(ctx context.Context, err error) {
-			logging.FromContext(ctx).Error(err.Error())
-		},
+	// Set up tracing
+	simple.SetTraceProvider(simple.OpenTelemetryConfig{
+		Host:        cfg.OTelConfig.Host,
+		Port:        cfg.OTelConfig.Port,
+		ConnType:    simple.OTelConnType(cfg.OTelConfig.ConnType),
+		ServiceName: cfg.OTelConfig.ServiceName,
 	})
 
 	// Create a reconciler which prints some lines when the resource changes
 	reconciler := simple.Reconciler{
 		ReconcileFunc: func(ctx context.Context, req operator.ReconcileRequest) (operator.ReconcileResult, error) {
 			fmt.Printf("Hey, resource state changed! action: %s")
-			
+
 			return operator.ReconcileResult{}, nil
-    	},
-    }
-
-	// Let the operator use given reconciler for the 'MyResource' kind
-	op.ReconcileKind(MyResource.Schema(), reconciler, simple.ListWatchOptions{
-		Namespace: "default",
+		},
+	}
+	
+	// Create the AppProvider && NewApp function
+	provider := simple.NewAppProvider(manifest, nil, func(cfg app.Config) (app.App, error) {
+        return simple.NewApp(simple.AppConfig{
+			KubeConfig: cfg.KubeConfig,
+			ManagedKinds: []simple.AppManagedKind{{
+				Kind: mymind.Kind(),
+				Reconciler: &reconciler,
+            }},
+        })
 	})
-
-	stopCh := make(chan struct{}, 1) // Close this channel to stop the operator
-	op.Run(stopCh)
+	
+	// Run the app as an operator using our operator runner
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
+	runner.Run(ctx, provider)
 }
 ```
 
-Note that this is not the only way to run an operator. In fact, operators, being just a call to `Run()` on the operator object, 
-can be run as part of a back-end plugin alongside your API instead of as standalone applications.
-
-For more details, see [Writing an Operator](writing-an-operator.md), which goes into more details on writing an operator using the `simple` or `operator` package(s). There are also the [Operator Examples](../examples/operator), which contain two examples, a [basic operator](../examples/operator/basic/README.md) and an [opinionated one](../examples/operator/opinionated/README.md).
+For more details, see [Writing an App](writing-an-app.md), which goes into more details on writing an app, or [Writing a Reconciler](writing-a-reconciler.md) for details on how to write a reconciler. 
+There are also the [Operator Examples](../examples/operator), which contain two examples, a [reconciler-based operator](../examples/operator/reconciler) and a [watcher-based one](../examples/operator/watcher).
