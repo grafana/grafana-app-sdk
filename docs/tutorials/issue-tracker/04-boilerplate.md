@@ -208,14 +208,19 @@ func New(namespace string, service Service) (*Plugin, error) {
 ```
 We can see that this router isn't a standard go http router. Requests that come to the back-end of our plugin are sent through grafana's Resource API, which then passes along a subset of that data to the plugin with gRPC. The `router.JSONRouter` abstracts away that implementation detail (and there are other router flavors in the `router` package), and gives us a router where we can define normal HTTP routes, with handlers that will consume a `router.JSONRequest` (which pulls together all the data we get from the forwarded grafana request), and return either some object which can (and will) be marshaled into JSON, or an error (which will be marshaled into an error response).
 
-There are also two pieces of middleware in use:
+There are also several pieces of middleware in use:
 ```go
 p.router.Use(
+	router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware")),
+	router.NewLoggingMiddleware(logging.DefaultLogger),
 	kubeconfig.LoadingMiddleware(),
 	router.MiddlewareFunc(secure.Middleware))
 ```
-`kubeconfig.LoadingMiddleware()` is middleware managed by the grafana-app-sdk which will pull kube config details from the secureJSONData and place it into the context. We'll see the other side, where we use that kube config, later on.
-`router.MiddlewareFunc(secure.Middleware)` is that secureJSONData middleware we just talked about in our boilerplate `pkg/plugin/secure` package.
+
+* `router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware"))` is a middleware that adds a tracing span for every request. The span lasts during the duration of the request's handle time and includes HTTP request and response attributes.
+* `router.NewLoggingMiddleware(logging.DefaultLogger)` is a middleware that logs an INFO level message for each request.
+* `kubeconfig.LoadingMiddleware()` is middleware managed by the grafana-app-sdk which will pull kube config details from the secureJSONData and place it into the context. We'll see the other side, where we use that kube config, later on.
+* `router.MiddlewareFunc(secure.Middleware)` is that secureJSONData middleware we just talked about in our boilerplate `pkg/plugin/secure` package.
 
 The last bits in the boilerplate code here are just creating a subrouter for our `issue` Kind and adding routes and handlers for all standard Create/Read/Update/Delete/List endpoints.
 
