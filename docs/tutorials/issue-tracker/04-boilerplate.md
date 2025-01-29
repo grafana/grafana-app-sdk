@@ -263,35 +263,18 @@ In our list handler boilerplate, we can see we grab filters from the query, if p
 
 `plugin/pkg` is where the `main` package lives for our plugin, it's what will be compiled for the back-end. This is also where the boilerplate has the most gaps that need to be filled to make things functional, but let's take a look at what's given to us first.
 
-Let's ignore `PluginService` for now, as we'll be replacing that code later with our own, and just take a look at what `main()` does:
+Let's ignore `PluginService` for now, as we'll be replacing that code later with our own. `main` function contains mostly boilerplate code, but most importantly it calls `app.Manage` to handle the plugin lifecycle.
 ```go
-func main() {
-    svc := &PluginService{}
-
-    // GENERATED SIMPLE SERVICE INITIALIZER CODE
-    svc.issueServiceInitializer = kubeconfig.CachingInitializer(
-        func(cfg kubeconfig.NamespacedConfig) (plugin.IssueService, error) {
-            // This is example code which assumes the API and storage models are identical
-            // TODO: REPLACEME
-            return resource.NewTypedStore[*issue.Object](issue.Schema(), k8s.NewClientRegistry(cfg.RestConfig))
-        })
-    
-
-    p, err := plugin.New("default", svc) // TODO: fix namespace usage
-    if err != nil {
-        panic(err)
-    }
-
-    // Start listening
-    err = p.Start()
-    if err != nil {
-        panic(err)
-    }
-}
+app.Manage(pluginID, newInstanceFactory(logger), app.ManageOpts{
+	TracingOpts: tracing.Opts{
+		CustomAttributes: []attribute.KeyValue{
+			attribute.String("plugin.id", pluginID),
+		},
+	},
+})
 ```
-The important thing to look at is the `kubeconfig.CachingInitializer` being used for the service initializer func. This is another SDK library which allows us to define an initializer for a service which will be called only once per unique kube config. We'll get more in-depth on what this is and why we need to do this when we begin writing our back-end code, but I want to point this out.
 
-Otherwise, the `main()` code is pretty simple. We create a new `plugin.Plugin` with `plugin.New`, and then start it. That's really all there is to it for our `main` package, all the meat of the back-end is going to be in `pkg`, rather than in `plugin`, this is just the "hook" as it were, into all that code.
+`app.Manage` works on the result of `newInstanceFactory`, which loads the supplied configuration, creates store for storing our issues, and then creates a plugin instance using `plugin.New`, which is then returned. 
 
 ## Front-End Code from frontend component
 
