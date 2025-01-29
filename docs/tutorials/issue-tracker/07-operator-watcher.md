@@ -314,7 +314,7 @@ status:
 ```
 Now whenever the watcher processes an Add, Update, or Sync, it'll update the `processedTimestamp`.
 
-Tracking data in the `status` subresource is an operator best practice. For other considerations when writing an operator, check out [Considerations When Writing an Operator](../../writing-an-operator.md#considerations-when-writing-an-operator).
+Tracking data in the `status` subresource is an operator best practice. For other considerations when writing an operator, check out [Considerations When Writing a Reconciler](../../writing-a-reconciler.md#considerations-when-writing-a-reconciler).
 
 Now that we have a watcher that does something, let's look at adding some other capabilities to our app: [API admission control](08-adding-admission-control.md).
 
