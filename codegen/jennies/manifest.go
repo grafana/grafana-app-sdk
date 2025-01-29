@@ -45,7 +45,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = "apps.grafana.com/v1"
+	output["apiVersion"] = "apps.grafana.com/v1alpha1"
 	output["kind"] = "AppManifest"
 	output["metadata"] = map[string]string{
 		"name": manifestData.AppName,
