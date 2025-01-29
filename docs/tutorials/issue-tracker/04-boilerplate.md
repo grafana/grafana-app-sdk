@@ -4,9 +4,9 @@ Since this is a fresh project, we can take advantage of the CLI's tooling to set
 
 ## The `project add` Command
 
-Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
+Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project component add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
 ```shell
-$ grafana-app-sdk project add
+$ grafana-app-sdk project component add
 Usage: grafana-app-sdk project component add [options] <components>
 	where <components> are one or more of:
 		backend
@@ -26,10 +26,11 @@ Flags:
   -h, --help              help for add
 
 Global Flags:
-  -f, --format string   Format in which kinds are written for this project (currently allowed values are 'cue') (default "cue")
-      --overwrite       Overwrite existing files instead of prompting
-  -p, --path string     Path to project directory
-  -s, --source string   Path to directory with your codegen source files (such as a CUE module) (default "kinds")
+  -f, --format string     Format in which kinds are written for this project (currently allowed values are 'cue') (default "cue")
+      --manifest string   Path selector to use for the manifest (default "manifest")
+      --overwrite         Overwrite existing files instead of prompting
+  -p, --path string       Path to project directory
+  -s, --source string     Path to directory with your codegen source files (such as a CUE module) (default "kinds")
 ```
 
 We can leave all these flags empty, as we're fine with the defaults, but it's good to know how we can find information about the CLI commands.
