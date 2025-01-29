@@ -237,18 +237,21 @@ type IssueService interface {
 This service is what we'll have to actually implement later when we start writing code, but it's what the handlers are going to try to use to do what they're supposed to do. To see this, let's take a look at the list handler (defined first):
 ```go
 func (p *Plugin) handleIssueList(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
-	filtersRaw := req.URL.Query().Get("filters")
-	filters := make([]string, 0)
+    ctx, span := tracing.DefaultTracer().Start(ctx, "issue-list")
+    defer span.End()
+    filtersRaw := req.URL.Query().Get("filters")
+    filters := make([]string, 0)
 	if len(filtersRaw) > 0 {
 		filters = strings.Split(filtersRaw, ",")
 	}
 	svc, err := p.service.GetIssueService(ctx)
 	if err != nil {
-	    log.DefaultLogger.Error("Error getting IssueService: " + err.Error())
-	    return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
+		log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting IssueService: "+err.Error(), "error", err)
+		return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
 	}
-	return svc.List(ctx, p.namespace, filters...)
+	return svc.List(ctx, resource.StoreListOptions{Namespace: p.namespace, PerPage: 500, Filters: filters})
 }
+
 ```
 It satisfies the `router.JSONHandlerFunc` function type, so that we can use it as a handler. The first parameter, `ctx`, is somewhat self-explanatory as the go context (if you're unfamiliar with go contexts, [the godoc](https://pkg.go.dev/context) is a good place to start). The second parameter is a `router.JSONRequest`. This is a sort of plugin equivalent of the `http.Request`, though with some differences, most of which we won't cover here. The important one to know is that it doesn't have all the request data you might have in an `http.Request`, such as the hostname, or all the headers. The `url.URL` we get with `req.URL` contains a URL which begins at the entrypoint to our API, so the first part will be the first part of the path in our route (no protocol, host, or initial grafana resource API path).
 
