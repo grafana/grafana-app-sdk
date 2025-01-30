@@ -93,7 +93,7 @@ make local/down && make build/operator && make local/push_operator && make local
 ```
 Now, if we attempt to make an issue with an empty Title (or one only consisting of spaces), we get an error:
 ```
-admission webhook "issue-tracker-project-app-operator.default.svc" denied the request: spec.title must not be empty or consist only of whitespace characters
+admission webhook "issuetrackerproject-app-operator.default.svc" denied the request: spec.title must not be empty or consist only of whitespace characters
 ```
 But, if we add any non-whitespace characters, we see that we can still successfully make the `issue`.
 

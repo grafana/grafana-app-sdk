@@ -98,7 +98,7 @@ After that completes, we can redploy to our active local environment with
 ```bash
 $ make local/deploy_plugin
 ```
-And just like that, we can refresh or go to [http://grafana.k3d.localhost:9999/a/issue-tracker-project-app], and see our brand-new plugin UI. 
+And just like that, we can refresh or go to [http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/], and see our brand-new plugin UI. 
 If we create a new issue, we can see that it shows up in the list, or via a `kubectl get issues`.
 
 Now all that's left is to think a bit about our operator.
