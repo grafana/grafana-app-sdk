@@ -35,12 +35,12 @@ Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.LinuxAR
 Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.LinuxARM64-fm
 Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Linux-fm
 Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.DarwinARM64-fm
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_darwin_amd64" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821582,\"version\":\"1.0.0\"}' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_linux_arm" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821582,\"version\":\"1.0.0\"}'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_windows_amd64.exe" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821581,\"version\":\"1.0.0\"}'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_linux_arm64" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821581,\"version\":\"1.0.0\"}' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_darwin_arm64" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821582,\"version\":\"1.0.0\"}'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issue-tracker-project-app_linux_amd64" "-ldflags" "-w -s -extldflags \"-static\" -X 'main.version=1.0.0' -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1680111821581,\"version\":\"1.0.0\"}'" "./pkg"
+exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_darwin_amd64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397066,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
+exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_windows_amd64.exe" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397067,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
+exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_linux_arm64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397069,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
+exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_darwin_arm64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397069,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
+exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_linux_arm" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397068,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
+exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_linux_amd64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397067,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
 yarn install v1.22.19
 info No lockfile found.
 [1/5] 🔍  Validating package.json...
@@ -169,9 +169,7 @@ Now, if I hit `space` and launch the tilt console, I can see the status of my lo
 
 If we click on the `grafana` tile to see what the error is, it shows us the logs from the container, which end with:
 ```
-logger=provisioning t=2023-03-29T18:16:41.17+0000 lvl=eror msg="Failed to provision plugins" error="app provisioning error: plugin not installed: \"issue-tracker-project-app\""
-Failed to start grafana. error: app provisioning error: plugin not installed: "issue-tracker-project-app"
-app provisioning error: plugin not installed: "issue-tracker-project-app"
+logger=provisioning t=2025-01-30T16:53:00.36954668Z level=error msg="Failed to provision plugins" error="app provisioning error: plugin not installed: \"issuetrackerproject-app\""
 ```
 
 So this is just something we didn't do before we started our environment. While we built the plugin, we want to also deploy it to our local cluster. The local cluster can only read from `local/mounted-files`, so we need it there. Simple enough fix, we run
@@ -190,7 +188,7 @@ TODO: should this be part of the `make local/up` command?
 OK, now grafana is all green on the dashboard, so let's take a look at the operator. 
 If we click on the `issue-tracker-project` tile to learn more about the error, it shows us the event:
 ```
-[event: pod issue-tracker-project-app-operator-c66c79cdc-65vvc] Failed to pull image "localhost/issue-tracker-project:latest": rpc error: code = NotFound desc = failed to pull and unpack image "localhost/issue-tracker-project:latest": failed to resolve reference "localhost/issue-tracker-project:latest": localhost/issue-tracker-project:latest: not found
+[event: pod issuetrackerproject-app-operator-c66c79cdc-65vvc] Failed to pull image "localhost/issue-tracker-project:latest": rpc error: code = NotFound desc = failed to pull and unpack image "localhost/issue-tracker-project:latest": failed to resolve reference "localhost/issue-tracker-project:latest": localhost/issue-tracker-project:latest: not found
 ```
 
 k3d doesn't use the docker registry on your localhost, so we have to deploy it to the cluster. Luckily, that's very simple:
@@ -219,11 +217,11 @@ Though not recommended, you can deploy without using tilt, if you desire. Not us
 ### Interacting With Our Local Deployment
 
 Our grafana is now available at [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999). 
-Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issue-tracker-project-app](http://grafana.k3d.localhost:9999/a/issue-tracker-project-app) and see the simple landing page that got generated for us, and we can interact with our backend APIs at [grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues](http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues).
+Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, and we can interact with our backend APIs at [grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues](http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues).
 
 Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
 ```shell
-$ curl http://grafana.k3d.localhost:9999/api/plugins/issue-tracker-project-app/resources/v1/issues | jq .
+$ curl http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues | jq .
 {
   "kind": "IssueList",
   "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
