@@ -7,6 +7,18 @@ import (
 )
 
 // +k8s:openapi-gen=true
+type CustomKindInnerObject1 struct {
+	InnerField1 string                   `json:"innerField1"`
+	InnerField2 []string                 `json:"innerField2"`
+	InnerField3 []CustomKindInnerObject2 `json:"innerField3"`
+}
+
+// NewCustomKindInnerObject1 creates a new CustomKindInnerObject1 object.
+func NewCustomKindInnerObject1() *CustomKindInnerObject1 {
+	return &CustomKindInnerObject1{}
+}
+
+// +k8s:openapi-gen=true
 type CustomKindInnerObject2 struct {
 	Name    string                 `json:"name"`
 	Details map[string]interface{} `json:"details"`
@@ -18,16 +30,7 @@ func NewCustomKindInnerObject2() *CustomKindInnerObject2 {
 }
 
 // +k8s:openapi-gen=true
-type CustomKindInnerObject1 struct {
-	InnerField1 string                   `json:"innerField1"`
-	InnerField2 []string                 `json:"innerField2"`
-	InnerField3 []CustomKindInnerObject2 `json:"innerField3"`
-}
-
-// NewCustomKindInnerObject1 creates a new CustomKindInnerObject1 object.
-func NewCustomKindInnerObject1() *CustomKindInnerObject1 {
-	return &CustomKindInnerObject1{}
-}
+type CustomKindUnionType interface{}
 
 // +k8s:openapi-gen=true
 type CustomKindType1 struct {
@@ -50,9 +53,6 @@ type CustomKindType2 struct {
 func NewCustomKindType2() *CustomKindType2 {
 	return &CustomKindType2{}
 }
-
-// +k8s:openapi-gen=true
-type CustomKindUnionType interface{}
 
 // +k8s:openapi-gen=true
 type CustomKindSpec struct {
