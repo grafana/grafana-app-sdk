@@ -6,7 +6,6 @@ import "github.com/prometheus/client_golang/prometheus"
 type ExporterConfig struct {
 	Registerer prometheus.Registerer
 	Gatherer   prometheus.Gatherer
-	Port       int
 }
 
 // Config is the general set of configuration options for creating prometheus Collectors
