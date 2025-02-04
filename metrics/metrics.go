@@ -1,10 +1,8 @@
 package metrics
 
 import (
-	"context"
-	"fmt"
+	"errors"
 	"net/http"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -19,21 +17,22 @@ var (
 
 // NewExporter returns a new Exporter using the provided config.
 // Empty values in the config apply default prometheus values.
-func NewExporter(cfg ExporterConfig) *Exporter {
+func NewExporter(mux *http.ServeMux, cfg ExporterConfig) (*Exporter, error) {
+	if mux == nil {
+		return nil, errors.New("mux cannot be nil")
+	}
+
 	if cfg.Registerer == nil {
 		cfg.Registerer = prometheus.DefaultRegisterer
 	}
 	if cfg.Gatherer == nil {
 		cfg.Gatherer = prometheus.DefaultGatherer
 	}
-	if cfg.Port <= 0 {
-		cfg.Port = 9090
-	}
 	return &Exporter{
 		Registerer: cfg.Registerer,
 		Gatherer:   cfg.Gatherer,
-		Port:       cfg.Port,
-	}
+		Mux:        mux,
+	}, nil
 }
 
 // Provider is an interface which describes any object which can provide the prometheus Collectors is uses for registration
@@ -45,7 +44,7 @@ type Provider interface {
 type Exporter struct {
 	Registerer prometheus.Registerer
 	Gatherer   prometheus.Gatherer
-	Port       int
+	Mux        *http.ServeMux
 }
 
 // RegisterCollectors registers the provided collectors with the Exporter's Registerer.
@@ -60,30 +59,8 @@ func (e *Exporter) RegisterCollectors(metrics ...prometheus.Collector) error {
 	return nil
 }
 
-// Run creates an HTTP server which exposes a /metrics endpoint on the configured port (if <=0, uses the default 9090)
-func (e *Exporter) Run(stopCh <-chan struct{}) error {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
+func (e *Exporter) RegisterMetricsHandler() {
+	e.Mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
 		e.Registerer, promhttp.HandlerFor(e.Gatherer, promhttp.HandlerOpts{}),
 	))
-	server := &http.Server{
-		Addr:              fmt.Sprintf(":%d", e.Port),
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- server.ListenAndServe()
-	}()
-	go func() {
-		for range stopCh {
-			// do nothing until closeCh is closed or receives a message
-			break
-		}
-		ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second)
-		defer cancelFunc()
-		errCh <- server.Shutdown(ctx)
-	}()
-	err := <-errCh
-	return err
 }
