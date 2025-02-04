@@ -130,16 +130,19 @@ Kind: S={
 			served: bool | *true
 			// codegen contains properties specific to generating code using tooling
 			codegen: {
-				// frontend indicates whether front-end TypeScript code should be generated for this kind's schema
-				frontend: bool | *S.codegen.frontend
-				// backend indicates whether back-end Go code should be generated for this kind's schema
-				backend: bool | *S.codegen.backend
-				tsConfig: {
-					importsMap: {
-						[string]: string
-					} | *S.codegen.tsConfig.importsMap
-					enumsAsUnionTypes: bool | *S.codegen.tsConfig.enumsAsUnionTypes
-				} | *S.codegen.tsConfig
+				ts: {
+					enabled: bool | *S.codegen.ts.enabled
+					config: {
+						importsMap: {
+							[string]: string
+						} | *S.codegen.ts.config.importsMap
+						enumsAsUnionTypes: bool | *S.codegen.ts.config.enumsAsUnionTypes
+					} | *S.codegen.ts.config
+				}
+				go: {
+					enabled: bool | *S.codegen.go.enabled
+					config: {} | *S.codegen.go.config
+				}
 			}
 			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
@@ -158,33 +161,40 @@ Kind: S={
 	// the defaults for the `codegen` field in all entries in `versions`. 
 	// Valus set in `versions[x]: codegen` will overwrite the value set here.
 	codegen: {
-		// frontend indicates whether front-end TypeScript code should be generated for this kind's schema
-		frontend: bool | *true
-		// backend indicates whether back-end Go code should be generated for this kind's schema
-		backend: bool | *true
-		// tsConfig is code generation configuration specific to TypeScript.
-		// Currently, these config options are passed directly to grafana/cog when generating TypeScript
-		tsConfig: {
-			// importsMap associates package names to their import path.
-			importsMap: {
-				[string]: string
+		// ts is the section for TypeScript codegen
+		ts: {
+			// enabled indicates whether front-end TypeScript code should be generated for this kind's schema
+			enabled: bool | *true
+			// config is code generation configuration specific to TypeScript.
+			// Currently, these config options are passed directly to grafana/cog when generating TypeScript
+			config: {
+				// importsMap associates package names to their import path.
+				importsMap: {
+					[string]: string
+				}
+				// enumsAsUnionTypes generates enums as a union of values instead of using
+				// an actual `enum` declaration.
+				// If EnumsAsUnionTypes is false, an enum will be generated as:
+				// “`ts
+				// enum Direction {
+				//   Up = "up",
+				//   Down = "down",
+				//   Left = "left",
+				//   Right = "right",
+				// }
+				// “`
+				// If EnumsAsUnionTypes is true, the same enum will be generated as:
+				// “`ts
+				// type Direction = "up" | "down" | "left" | "right";
+				// “`
+				enumsAsUnionTypes: bool | *false
 			}
-			// enumsAsUnionTypes generates enums as a union of values instead of using
-			// an actual `enum` declaration.
-			// If EnumsAsUnionTypes is false, an enum will be generated as:
-			// “`ts
-			// enum Direction {
-			//   Up = "up",
-			//   Down = "down",
-			//   Left = "left",
-			//   Right = "right",
-			// }
-			// “`
-			// If EnumsAsUnionTypes is true, the same enum will be generated as:
-			// “`ts
-			// type Direction = "up" | "down" | "left" | "right";
-			// “`
-			enumsAsUnionTypes: bool | *false
+		}
+		// go is the section for go codegen
+		go: {
+			// enabled indicates whether back-end Go code should be generated for this kind's schema
+			enabled: bool | *true
+			config: {}
 		}
 	}
 

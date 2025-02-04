@@ -66,7 +66,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	versions := kind.Versions()
 	for i := 0; i < len(versions); i++ {
 		ver := versions[i]
-		if !ver.Codegen.Backend {
+		if !ver.Codegen.Go.Enabled {
 			continue
 		}
 

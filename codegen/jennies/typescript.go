@@ -28,7 +28,7 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 		if ver == nil {
 			return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
 		}
-		if !ver.Codegen.Frontend {
+		if !ver.Codegen.TS.Enabled {
 			return nil, nil
 		}
 		b, err := t.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName)+"_")
@@ -44,7 +44,7 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 		allVersions := kind.Versions()
 		for i := 0; i < len(allVersions); i++ {
 			ver := allVersions[i]
-			if !ver.Codegen.Frontend {
+			if !ver.Codegen.TS.Enabled {
 				continue
 			}
 			b, err := t.generateObjectFile(kind, &ver, "")
@@ -126,7 +126,7 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		if !ver.Codegen.Frontend {
+		if !ver.Codegen.TS.Enabled {
 			return nil, nil
 		}
 
@@ -138,7 +138,7 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	allVersions := kind.Versions()
 	for i := 0; i < len(allVersions); i++ {
 		v := allVersions[i]
-		if !v.Codegen.Frontend {
+		if !v.Codegen.TS.Enabled {
 			continue
 		}
 
@@ -157,8 +157,8 @@ func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathP
 	}
 
 	tsBytes, err := generateTypescriptBytes(version.Schema, exportField(sanitizeLabelString(name)), cog.TypescriptConfig{
-		ImportsMap:        version.Codegen.TSConfig.ImportsMap,
-		EnumsAsUnionTypes: version.Codegen.TSConfig.EnumsAsUnionTypes,
+		ImportsMap:        version.Codegen.TS.Config.ImportsMap,
+		EnumsAsUnionTypes: version.Codegen.TS.Config.EnumsAsUnionTypes,
 	})
 	if err != nil {
 		return nil, err
@@ -177,8 +177,8 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 			fieldName = append(fieldName, s.String())
 		}
 		tsBytes, err := generateTypescriptBytes(v, exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
-			ImportsMap:        kv.Codegen.TSConfig.ImportsMap,
-			EnumsAsUnionTypes: kv.Codegen.TSConfig.EnumsAsUnionTypes,
+			ImportsMap:        kv.Codegen.TS.Config.ImportsMap,
+			EnumsAsUnionTypes: kv.Codegen.TS.Config.EnumsAsUnionTypes,
 		})
 		if err != nil {
 			return nil, err

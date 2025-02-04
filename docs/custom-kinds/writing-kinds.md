@@ -152,13 +152,17 @@ Additional `types.x.gen.ts` files will be generated for each subresource in your
 The `definitions` directory holds a JSON (or YAML, depending on CLI flags) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md). 
 This directory also holds a generated JSON (or YAML) **manifest** for your app. This is a file which will be used in the future to register your app with the grafana API server, without needing to work with CRD's and RBAC.
 
-### Toggling Frontend/Backend Codegen
+### Toggling TypeScript/Go Codegen
 
 You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind. The `codegen` field by default looks like:
 ```cue
 codegen: {
-    frontend: true
-    backend: true
+    ts: {
+    	enabled: true
+    }
+    go: {
+    	enabled: true
+    }
 }
 ```
 And can be overwritten at either the kind level, or the version level (version level will take precedence over the kind level declaration). For example, if we wanted to turn off front-end code from being generated for our kind, but keep it on for version `v2`, we could write a kind like this:
@@ -167,7 +171,7 @@ myKind: {
     kind: "MyKind"
     current: "v2"
     codegen: {
-        frontend: false // Turn off front-end codegen for this kind
+        ts: enabled: false // Turn off front-end codegen for this kind
     }
     versions: {
         "v1": {
@@ -184,12 +188,12 @@ myKind: {
                     bar: int64
                 }
             }
-            codegen: frontend: true // Turn on front-end codegen for this version
+            codegen: ts: enabled: true // Turn on front-end codegen for this version
         }
     }
 }
 ```
-(Here we also introduce a convience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
+(Here we also introduce a convenience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
 
 ## Complex Schemas
 

@@ -58,9 +58,13 @@ type KindAdmissionCapability struct {
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
 type KindCodegenProperties struct {
-	Frontend bool                `json:"frontend"`
-	Backend  bool                `json:"backend"`
-	TSConfig KindCodegenTSConfig `json:"tsConfig"`
+	TS KindCodegenLanguageProperties[KindCodegenTSConfig] `json:"ts"`
+	Go KindCodegenLanguageProperties[struct{}]            `json:"go"`
+}
+
+type KindCodegenLanguageProperties[T any] struct {
+	Enabled bool `json:"enabled"`
+	Config  T    `json:"config"`
 }
 
 // KindCodegenTSConfig is the TypeScript configuration options for codegen,

@@ -21,7 +21,7 @@ testKind: {
 	conversion: true
 	conversionWebhookProps: url: "http://foo.bar/convert"
 	current: "v1"
-	codegen: frontend: false
+	codegen: ts: enabled: false
 	versions: {
 		"v1": {
 			schema: {

@@ -31,7 +31,7 @@ func (*watcherJenny) JennyName() string {
 }
 
 func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
-	if !kind.Version(kind.Properties().Current).Codegen.Backend {
+	if !kind.Version(kind.Properties().Current).Codegen.Go.Enabled {
 		return nil, nil
 	}
 
