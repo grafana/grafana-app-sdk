@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"sync"
 
@@ -29,6 +30,8 @@ type Runner struct {
 	config        RunnerConfig
 	webhookServer *webhookServerRunner
 	metricsServer *metricsServerRunner
+	serverRunner  *app.SingletonRunner
+	server        *operatorServer
 	startMux      sync.Mutex
 	running       bool
 	runningWG     sync.WaitGroup
@@ -43,9 +46,21 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
 	// }
 
+	if cfg.Port <= 0 {
+		cfg.Port = 9090
+	}
+
 	op := Runner{
 		config: cfg,
+		server: &operatorServer{
+			Port: cfg.Port,
+			mux:  http.NewServeMux(),
+		},
 	}
+
+	op.serverRunner = app.NewSingletonRunner(&k8sRunnable{
+		runner: op.server,
+	}, false)
 
 	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
 		ws, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -61,23 +76,36 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		op.webhookServer = newWebhookServerRunner(ws)
 	}
 	if cfg.MetricsConfig.Enabled {
-		exporter := metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
+		exporter, err := metrics.NewExporter(op.server.mux, cfg.MetricsConfig.ExporterConfig)
+		if err != nil {
+			return nil, err
+		}
 		op.metricsServer = newMetricsServerRunner(exporter)
 	}
+
 	return &op, nil
 }
 
 type RunnerConfig struct {
+	// Server port for metrics and health endpoints
+	Port int
 	// WebhookConfig contains configuration information for exposing k8s webhooks.
 	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
 	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
+	// Health checks for liveness and readiness
+	HealthChecks RunnerHealthChecks
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
 	// if empty, it defaults to os.DirFS(".")
 	Filesystem fs.FS
+}
+
+type RunnerHealthChecks struct {
+	LivenessHandler  func(http.ResponseWriter) error
+	ReadinessHandler func(http.ResponseWriter) error
 }
 
 // RunnerMetricsConfig contains configuration information for exposing prometheus metrics
@@ -219,7 +247,40 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 		if err != nil {
 			return err
 		}
-		runner.AddRunnable(s.metricsServer)
+	}
+
+	// Health
+	livenessHandler := s.config.HealthChecks.LivenessHandler
+	if livenessHandler == nil {
+		// provide a default implementation that always returns alive
+		livenessHandler = func(w http.ResponseWriter) error {
+			_, err := w.Write([]byte("ok"))
+			return err
+		}
+	}
+	if err := s.server.RegisterLivenessHandler(livenessHandler); err != nil {
+		return err
+	}
+
+	// Add Metrics+Health cumulative server runnable
+	runner.AddRunnable(s.serverRunner)
+
+	readinessHandler := s.config.HealthChecks.ReadinessHandler
+	if readinessHandler == nil {
+		// provide a default implementation that always returns alive
+		readinessHandler = func(w http.ResponseWriter) error {
+			if s.running {
+				w.WriteHeader(200)
+				_, err := w.Write([]byte("ok"))
+				return err
+			}
+			w.WriteHeader(500)
+			_, err := w.Write([]byte("error: not running"))
+			return err
+		}
+	}
+	if err := s.server.RegisterReadinessHandler(readinessHandler); err != nil {
+		return err
 	}
 
 	return runner.Run(ctx)
@@ -336,19 +397,11 @@ func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind me
 func newMetricsServerRunner(exporter *metrics.Exporter) *metricsServerRunner {
 	return &metricsServerRunner{
 		server: exporter,
-		runner: app.NewSingletonRunner(&k8sRunnable{
-			runner: exporter,
-		}, false),
 	}
 }
 
 type metricsServerRunner struct {
-	runner *app.SingletonRunner
 	server *metrics.Exporter
-}
-
-func (m *metricsServerRunner) Run(ctx context.Context) error {
-	return m.runner.Run(ctx)
 }
 
 func (m *metricsServerRunner) RegisterCollectors(collectors ...prometheus.Collector) error {
