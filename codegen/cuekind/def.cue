@@ -134,6 +134,12 @@ Kind: S={
 				frontend: bool | *S.codegen.frontend
 				// backend indicates whether back-end Go code should be generated for this kind's schema
 				backend: bool | *S.codegen.backend
+				tsConfig: {
+					importsMap: {
+						[string]: string
+					} | *S.codegen.tsConfig.importsMap
+					enumsAsUnionTypes: bool | *S.codegen.tsConfig.enumsAsUnionTypes
+				} | *S.codegen.tsConfig
 			}
 			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
@@ -156,6 +162,30 @@ Kind: S={
 		frontend: bool | *true
 		// backend indicates whether back-end Go code should be generated for this kind's schema
 		backend: bool | *true
+		// tsConfig is code generation configuration specific to TypeScript.
+		// Currently, these config options are passed directly to grafana/cog when generating TypeScript
+		tsConfig: {
+			// importsMap associates package names to their import path.
+			importsMap: {
+				[string]: string
+			}
+			// enumsAsUnionTypes generates enums as a union of values instead of using
+			// an actual `enum` declaration.
+			// If EnumsAsUnionTypes is false, an enum will be generated as:
+			// “`ts
+			// enum Direction {
+			//   Up = "up",
+			//   Down = "down",
+			//   Left = "left",
+			//   Right = "right",
+			// }
+			// “`
+			// If EnumsAsUnionTypes is true, the same enum will be generated as:
+			// “`ts
+			// type Direction = "up" | "down" | "left" | "right";
+			// “`
+			enumsAsUnionTypes: bool | *false
+		}
 	}
 
 	_computedGroupKind: S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"

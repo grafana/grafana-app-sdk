@@ -58,8 +58,16 @@ type KindAdmissionCapability struct {
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
 type KindCodegenProperties struct {
-	Frontend bool `json:"frontend"`
-	Backend  bool `json:"backend"`
+	Frontend bool                `json:"frontend"`
+	Backend  bool                `json:"backend"`
+	TSConfig KindCodegenTSConfig `json:"tsConfig"`
+}
+
+// KindCodegenTSConfig is the TypeScript configuration options for codegen,
+// modeled after the cog TS codegen options.
+type KindCodegenTSConfig struct {
+	ImportsMap        map[string]string `json:"importsMap"`
+	EnumsAsUnionTypes bool              `json:"enumsAsUnionTypes"`
 }
 
 type AdditionalPrinterColumn struct {
