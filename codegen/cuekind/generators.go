@@ -123,19 +123,21 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, includeSchemas bool) *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGenerator{
-		Encoder:       encoder,
-		FileExtension: extension,
+		Encoder:        encoder,
+		FileExtension:  extension,
+		IncludeSchemas: includeSchemas,
 	})
 	return g
 }
 
-func ManifestGoGenerator(pkg string) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGoGenerator(pkg string, includeSchemas bool) *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
-		Package: pkg,
+		Package:        pkg,
+		IncludeSchemas: includeSchemas,
 	})
 	return g
 }

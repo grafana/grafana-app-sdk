@@ -7,6 +7,18 @@ import (
 )
 
 // +k8s:openapi-gen=true
+type InnerObject1 struct {
+	InnerField1 string         `json:"innerField1"`
+	InnerField2 []string       `json:"innerField2"`
+	InnerField3 []InnerObject2 `json:"innerField3"`
+}
+
+// NewInnerObject1 creates a new InnerObject1 object.
+func NewInnerObject1() *InnerObject1 {
+	return &InnerObject1{}
+}
+
+// +k8s:openapi-gen=true
 type InnerObject2 struct {
 	Name    string                 `json:"name"`
 	Details map[string]interface{} `json:"details"`
@@ -18,16 +30,7 @@ func NewInnerObject2() *InnerObject2 {
 }
 
 // +k8s:openapi-gen=true
-type InnerObject1 struct {
-	InnerField1 string         `json:"innerField1"`
-	InnerField2 []string       `json:"innerField2"`
-	InnerField3 []InnerObject2 `json:"innerField3"`
-}
-
-// NewInnerObject1 creates a new InnerObject1 object.
-func NewInnerObject1() *InnerObject1 {
-	return &InnerObject1{}
-}
+type UnionType interface{}
 
 // +k8s:openapi-gen=true
 type Type1 struct {
@@ -50,9 +53,6 @@ type Type2 struct {
 func NewType2() *Type2 {
 	return &Type2{}
 }
-
-// +k8s:openapi-gen=true
-type UnionType interface{}
 
 // +k8s:openapi-gen=true
 type Spec struct {
