@@ -2,7 +2,7 @@
 
 There are two kinds of versions for a kind: a fixed version, such as `v1`, and a mutable, alpha or beta version, such as `v1alpha1`. When publishing a kind, be aware that you should never change the definition of a fixed version, as clients will rely on that kind version being constant when working with the API. For more details on kubernetes version conventions, see [Custom Resource Definitions Versions](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/).
 
-## Operators & Multiple Versions
+## Reconcilers & Multiple Versions
 
 No matter how many versions you have, you should only have one watcher/reconciler per kind, as resource events are not local to a version. When you create an informer, you are specifying a specific version you want to consume _all_ events for the kind as, and your converter hook will be called to convert the object in each event into the requested version (if necessary). Typically, this means that you want your watcher/reconciler to consume the latest version, as it will usually contain the most information.
 
@@ -31,11 +31,52 @@ However, now that you have two versions, you'll need to be able to support both 
 By default, the API server will convert between these versions by simply taking the JSON schema from one and pushing it into the other (depending on what is stored), 
 but often that is not a good enough conversion, and you'll need to define how to convert between versions yourself.
 
-To do this, you'll need to add a Conversion Webhook to your operator. If you're using the `simple.Operator` type, this can be done either in the initial config with the `simple.OperatorConfig.Webhooks.Converters` field, or via the `ConvertKind` method on `simple.Operator`. If you are not using `simple.Operator`, you'll need to create a `k8s.WebhookServer` controller to add to your operator with `k8s.NewWebhookServer` (you may already have this if you're using [Admission Control](./admission-control.md), as Conversion webhooks are exposed on the same server as Validation and Mutation webhooks). All of these different methods require two things: a `k8s.Converter`-implementing type, and TLS information. Let's go over each, then give some examples.
+To do this, you'll need to add **Conversion** capability to your app. This must be done both in your app's manifest (where you'll indicate that conversion is supported for the kind), 
+and in your app code (where the logic to handle the conversion actually lives). 
 
-### Converter
+## Manifest
 
-`k8s.Converter` is defined as:
+To add conversion to your manifest, you just need to specify in the kind that you support custom conversion logic with the `conversion` boolean, like so: 
+```cue
+{
+	// Existing kind information
+	conversion: true
+}
+```
+If you run your app as a standalone operator (currently the only runner in the grafana-app-sdk, `operator.Runner`), 
+conversion gets exposed as a webhook. In the future, this will be handled by registering the app manifest, but for now, 
+since CRDs are generated and applied separately, you'll need to specify the URL of the webhook to put into the CRD's 
+conversion information when it's generated:
+```cue
+{
+	// Existing kind information
+	conversion: true
+	conversionWebhookProps: url: "https://myapp.svc.cluster.local:6443/convert"
+}
+```
+(by default, the operator runner will expose the conversion webhook on the `/convert` endpoint. 
+You can specify the port of the webhook server in `operator.RunnerConfig.WebhookConfig.Port`).
+
+## Conversion Code
+
+For the conversion code, your app needs to have code that runs as part of the call to the app's `Convert` function. 
+If you're implementing `app.App` yourself, you would add your conversion handling there
+(keep in mind that the function is called for _any_ kinds your app supports when the `/convert` endpoint is hit for them, 
+so you'll need to make sure you handle each one). 
+If you're using `simple.App`, to expose conversion behavior for a kind, you need to add it to the config:
+```go
+app, err := simple.NewApp(simple.AppConfig{
+	Converters: map[schema.GroupKind]simple.Converter{
+		schema.GroupKind{Group: v1.Kind().Group, Kind: v1.Kind().Kind}: &MyKindConverter{},
+	}
+})
+```
+> [!NOTE]  
+> This structure for registering converters (and the `simple.Converter` interface itself) is still in flux and likely to change to a more ergonomic one in the future. 
+> See [this issue](https://github.com/grafana/grafana-app-sdk/issues/617) for tracking.
+
+The `Converters` map takes a `schema.GroupKind` as its key, which uniquely identifies a kind, and the interface `simple.Converter` as the value. 
+So, to implement conversion, let's take a look at `simple.Converter`. Right now, this just aliases to `k8s.Converter`, which is defined as:
 ```go
 // Converter describes a type which can convert a kubernetes kind from one API version to another.
 // Typically there is one converter per-kind, but a single converter can also handle multiple kinds.
@@ -47,11 +88,15 @@ type Converter interface {
 	Convert(obj RawKind, targetAPIVersion string) ([]byte, error)
 }
 ```
-`k8s.RawKind` contains the raw (JSON) bytes of an object, and kind information (Group, Version, Kind). To implement `k8s.Converter` we need a function which can accept any version of our kind and return any version of our kind. When we register `k8s.Converter`s with the `WebhookServer`, we can generally assume that the input 
+
+`k8s.RawKind` contains the raw (JSON) bytes of an object, and kind information (Group, Version, Kind). To implement `k8s.Converter` we need a function which can accept any version of our kind and return any version of our kind. When we register our converter in `simple.App`, we can generally assume that the input 
 `RawKind` will be of the Group and Kind we specify, and the output will also be of the Group and Kind we specify, so it's safe to error on anything unexpected. Let's put together a very simple converter for an object with two versions defined as:
 ```cue
 myKind: {
     kind: "MyKind"
+    current: "v2"
+    conversion: true
+    conversionWebhookProps: url: "https://myapp.svc.cluster.local:6443/convert"
     versions: {
         "v1": { 
             schema: {
@@ -125,82 +170,17 @@ func (m *MyKindConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]b
 }
 ```
 
-Now, depending on the way we are creating our operator, we can register the converter webhook:
-
-#### `simple.Operator`
-
-**Using OperatorConfig**
+Now, when running our app using `operator.Runner`, we just need to ensure that we specify webhook configuration
+(if you are already exposing validation or mutation behavior, you'll have already done this, as it uses the same webhook server):
 ```go
-runner, err := simple.NewOperator(simple.OperatorConfig{
-    Name:       "my-operator",
-	KubeConfig: kubeConfig.RestConfig,
-    Webhooks:   simple.WebhookConfig{
-        Enabled:   true,
-        TLSConfig: k8s.TLSConfig{
-            CertPath: "/path/to/cert",
-            KeyPath:  "/path/to/key",
-        },
-        Converters: map[metav1.GroupKind]k8s.Converter{
-            metav1.GroupKind{Group: v1.Group(), Kind: v1.Kind()}: &MyKindConverter{},
-        },
-    },
+runner, err := operator.NewRunner(operator.RunnerConfig{
+	// Existing configuration
+	WebhookConfig: operator.RunnerWebhookConfig{
+		Port: 6443,
+		TLSConfig: k8s.TLSConfig{
+			CertPath: "/path/to/cert",
+			KeyPath: "/path/to/key",
+		},
+	},
 })
 ```
-**Using ConvertKind**
-```go
-runner, err := simple.NewOperator(simple.OperatorConfig{
-    Name:       "my-operator",
-	KubeConfig: kubeConfig.RestConfig,
-    Webhooks:   simple.WebhookConfig{ // Webhook information is still required in config
-        Enabled:   true,
-        TLSConfig: k8s.TLSConfig{
-            CertPath: "/path/to/cert",
-            KeyPath:  "/path/to/key",
-        },
-    },
-})
-
-err = runner.ConvertKind(metav1.GroupKind{Group: v1.Group(), Kind: v1.Kind()}, &MyKindConverter{})
-```
-
-#### `k8s.NewWebhookServer`
-
-**In WebhookServerConfig**
-```go
-ws, err = k8s.NewWebhookServer(k8s.WebhookServerConfig{
-    Port:      8443,
-    TLSConfig: k8s.TLSConfig{
-        CertPath: "/path/to/cert",
-        KeyPath:  "/path/to/key",
-    },
-    KindConverters: map[metav1.GroupKind]k8s.Converter{
-        metav1.GroupKind{Group: v1.Group(), Kind: v1.Kind()}: &MyKindConverter{},
-    },
-})
-
-err = runner.AddController(ws)
-```
-
-**Using AddConverter**
-```go
-ws, err = k8s.NewWebhookServer(k8s.WebhookServerConfig{
-    Port:      8443,
-    TLSConfig: k8s.TLSConfig{
-        CertPath: "/path/to/cert",
-        KeyPath:  "/path/to/key",
-    },
-})
-
-ws.AddConverter(&MyKindConverter{}, metav1.GroupKind{Group: v1.Group(), Kind: v1.Kind()})
-
-err = runner.AddController(ws)
-```
-
-### Using the Converter Webhook
-
-If you use `grafana-app-sdk project local generate`, you can set `converting: true` in the `webhooks` section of `local/config.yaml`. This will set the webhook conversion strategy in your CRD and make sure your operator service exposes your webhook port. However, this only applies for local setup. 
-
-> [!WARNING]  
-> To register your conversion webhook in production, you must currently manually update the generated CRD file!
-
-Update your generated CRD file to add the `conversion` block as described in [the kubernetes documentation](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#configure-customresourcedefinition-to-use-conversion-webhooks) before deploying the CRD to take advantage of the converter webhook you have written
