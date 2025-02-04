@@ -1,15 +1,5 @@
 // Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
-export interface InnerObject2 {
-	name: string;
-	details: Record<string, any>;
-}
-
-export const defaultInnerObject2 = (): InnerObject2 => ({
-	name: "",
-	details: {},
-});
-
 export interface InnerObject1 {
 	innerField1: string;
 	innerField2: string[];
@@ -21,6 +11,20 @@ export const defaultInnerObject1 = (): InnerObject1 => ({
 	innerField2: [],
 	innerField3: [],
 });
+
+export interface InnerObject2 {
+	name: string;
+	details: Record<string, any>;
+}
+
+export const defaultInnerObject2 = (): InnerObject2 => ({
+	name: "",
+	details: {},
+});
+
+export type UnionType = Type1 | Type2;
+
+export const defaultUnionType = (): UnionType => (defaultType1());
 
 export interface Type1 {
 	group: string;
@@ -40,10 +44,6 @@ export const defaultType2 = (): Type2 => ({
 	group: "",
 	details: {},
 });
-
-export type UnionType = Type1 | Type2;
-
-export const defaultUnionType = (): UnionType => (defaultType1());
 
 export interface Spec {
 	field1: string;
