@@ -31,7 +31,7 @@ testKind: {
 			}
 		}
 		"v2": {
-			codegen: frontend: true
+			codegen: ts: enabled: true
 			schema: {
 				spec: {
 					stringField: string
