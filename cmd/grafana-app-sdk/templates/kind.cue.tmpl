@@ -14,14 +14,22 @@ package {{ .Package }}
 	// If not present, default values within the codegen trait are used.
 	// This is the global trait, and can be overridden by specifying values in the versions themselves.
 	codegen: {
+	    // [OPTIONAL]
+	    // ts contains TypeScript code generation properties for the kind
+		ts: {
+			// [OPTIONAL]
+			// enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+			// Defaults to true if not present.
+			enabled: true
+		}
 		// [OPTIONAL]
-		// frontend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
-		// Will default to true if not present.
-		frontend: true
-		// [OPTIONAL]
-		// backend tells the CLI to generate backend-end code (Go types) for the schema.
-		// Will default to true if not present.
-		backend: true
+		// go contains go code generation properties for the kind
+		go: {
+			// [OPTIONAL]
+			// enabled indicates whether the CLI should generate back-end go code for the kind.
+			// Defaults to true if not present.
+			enabled: true
+		}
 	}
 	// [OPTIONAL]
 	// The human-readable plural form of the "name" field.
@@ -76,13 +84,21 @@ package {{ .Package }}
 	        // This setting will override `codegen` at the root level of the kind
 	        codegen: {
                 // [OPTIONAL]
-                // frontend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
-                // Will default to the kind's root-level codegen.frontend if not present.
-                frontend: true
+                // ts contains TypeScript code generation properties for the kind
+                ts: {
+                    // [OPTIONAL]
+                    // enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+                    // Defaults to the kind's root-level codegen.ts.enabled if not present.
+                    enabled: true
+                }
                 // [OPTIONAL]
-                // backend tells the CLI to generate backend-end code (Go types) for the schema.
-                // Will default to kind's root-level codegen.backend if not present.
-                backend: true
+                // go contains go code generation properties for the kind
+                go: {
+                    // [OPTIONAL]
+                    // enabled indicates whether the CLI should generate back-end go code for the kind.
+                    // Defaults to the kind's root-level codegen.go.enabled if not present.
+                    enabled: true
+                }
 	        }
 	    }
 	}

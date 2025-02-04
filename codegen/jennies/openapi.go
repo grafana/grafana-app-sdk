@@ -43,7 +43,7 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 			versions := k.Versions()
 			for i := 0; i < len(versions); i++ {
 				ver := versions[i]
-				if !ver.Codegen.Backend {
+				if !ver.Codegen.Go.Enabled {
 					continue
 				}
 
@@ -62,7 +62,7 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 		gvs := make(map[schema.GroupVersion]struct{})
 		for _, k := range kinds {
 			for _, v := range k.Versions() {
-				if !v.Codegen.Backend {
+				if !v.Codegen.Go.Enabled {
 					continue
 				}
 				grp := k.Properties().ManifestGroup

@@ -24,8 +24,8 @@ issue: {
 	kind: "Issue"
 	scope: "Namespaced"
 	codegen: {
-		frontend: true
-		backend: true
+		ts: enabled: true
+		go: enabled: true
 	}
 	current: "v1"
 	versions: {
