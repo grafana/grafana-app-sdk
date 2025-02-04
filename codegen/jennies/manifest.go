@@ -18,8 +18,9 @@ type ManifestOutputEncoder func(any) ([]byte, error)
 
 // ManifestGenerator generates a JSON/YAML App Manifest.
 type ManifestGenerator struct {
-	Encoder       ManifestOutputEncoder
-	FileExtension string
+	Encoder        ManifestOutputEncoder
+	FileExtension  string
+	IncludeSchemas bool
 }
 
 func (*ManifestGenerator) JennyName() string {
@@ -29,7 +30,7 @@ func (*ManifestGenerator) JennyName() string {
 // Generate creates one or more codec go files for the provided Kind
 // nolint:dupl
 func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	manifestData, err := buildManifestData(appManifest)
+	manifestData, err := buildManifestData(appManifest, m.IncludeSchemas)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +68,8 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 }
 
 type ManifestGoGenerator struct {
-	Package string
+	Package        string
+	IncludeSchemas bool
 }
 
 func (*ManifestGoGenerator) JennyName() string {
@@ -75,7 +77,7 @@ func (*ManifestGoGenerator) JennyName() string {
 }
 
 func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	manifestData, err := buildManifestData(appManifest)
+	manifestData, err := buildManifestData(appManifest, g.IncludeSchemas)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +114,8 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-func buildManifestData(m codegen.AppManifest) (*app.ManifestData, error) {
+//nolint:revive
+func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		Kinds: make([]app.ManifestKind, 0),
 	}
@@ -169,13 +172,16 @@ func buildManifestData(m codegen.AppManifest) (*app.ManifestData, error) {
 					Operations: operations,
 				}
 			}
-			crd, err := KindVersionToCRDSpecVersion(version, mkind.Kind, true)
-			if err != nil {
-				return nil, err
-			}
-			mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
-			if err != nil {
-				return nil, fmt.Errorf("version schema error: %w", err)
+			// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
+			if includeSchemas {
+				crd, err := KindVersionToCRDSpecVersion(version, mkind.Kind, true)
+				if err != nil {
+					return nil, err
+				}
+				mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
+				if err != nil {
+					return nil, fmt.Errorf("version schema error: %w", err)
+				}
 			}
 			mver.SelectableFields = version.SelectableFields
 			mkind.Versions = append(mkind.Versions, mver)

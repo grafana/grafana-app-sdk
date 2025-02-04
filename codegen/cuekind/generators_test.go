@@ -112,7 +112,7 @@ func TestManifestGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGenerator(yaml.Marshal, "yaml").Generate(kinds...)
+		files, err := ManifestGenerator(yaml.Marshal, "yaml", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
@@ -129,7 +129,7 @@ func TestManifestGoGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("groupbygroup").Generate(kinds...)
+		files, err := ManifestGoGenerator("groupbygroup", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
