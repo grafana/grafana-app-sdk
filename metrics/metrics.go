@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var (
@@ -59,14 +60,7 @@ func (e *Exporter) RegisterCollectors(metrics ...prometheus.Collector) error {
 }
 
 func (e *Exporter) RegisterMetricsHandler() {
-	e.Mux.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("true"))
-	}))
-
-	/*
-		promhttp.InstrumentMetricHandler(
-				e.Registerer, promhttp.HandlerFor(e.Gatherer, promhttp.HandlerOpts{}),
-			)
-	*/
+	e.Mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
+		e.Registerer, promhttp.HandlerFor(e.Gatherer, promhttp.HandlerOpts{}),
+	))
 }
