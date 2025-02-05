@@ -220,14 +220,22 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, func(sch resource.Schema) string {
-		if o.FinalizerGenerator != nil {
-			return o.FinalizerGenerator(sch)
-		}
-		if o.Name != "" {
-			return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
-		}
-		return fmt.Sprintf("%s-finalizer", kind.Plural())
+	ow, err := operator.NewOpinionatedWatcher(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+		Finalizer: func(sch resource.Schema) string {
+			if o.FinalizerGenerator != nil {
+				return o.FinalizerGenerator(sch)
+			}
+			if o.Name != "" {
+				return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
+			}
+			return fmt.Sprintf("%s-finalizer", kind.Plural())
+		},
+		InProgressFinalizer: func(_ resource.Schema) string {
+			if o.Name != "" {
+				return fmt.Sprintf("%s-%s-wip", o.Name, kind.Plural())
+			}
+			return fmt.Sprintf("%s-wip", kind.Plural())
+		},
 	})
 	if err != nil {
 		return err
