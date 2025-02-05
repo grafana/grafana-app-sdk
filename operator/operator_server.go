@@ -11,36 +11,39 @@ import (
 	"time"
 )
 
-type operatorServer struct {
-	mux  *http.ServeMux
+type OperatorServer struct {
+	Mux  *http.ServeMux
 	Port int
 }
 
-func (s *operatorServer) RegisterLivenessHandler(handler func(http.ResponseWriter) error) error {
+func (s *OperatorServer) RegisterLivenessHandler(handler func(http.ResponseWriter) error) error {
 	if handler == nil {
 		return errors.New("liveness handler cannot be nil")
 	}
-	s.mux.Handle("/livez", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	s.Mux.Handle("/livez", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_ = handler(w)
 	}))
 	return nil
 }
 
-func (s *operatorServer) RegisterReadinessHandler(handler func(http.ResponseWriter) error) error {
+func (s *OperatorServer) RegisterReadinessHandler(handler func(http.ResponseWriter) error) error {
 	if handler == nil {
 		return errors.New("readiness handler cannot be nil")
 	}
-	s.mux.Handle("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	s.Mux.Handle("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = handler(w)
 	}))
 	return nil
 }
 
-func (s *operatorServer) Run(stopCh <-chan struct{}) error {
-	// Run creates an HTTP server which exposes a /metrics endpoint on the configured port (if <=0, uses the default 9090)
+func (s *OperatorServer) Run(stopCh <-chan struct{}) error {
+	// Run creates an HTTP server which exposes
+	// 1. if enabled, a /metrics endpoint on the configured port
+	// 2. health endpoints for liveness and readiness
+	// (if port <=0, uses the default 9090)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", s.Port),
-		Handler:           s.mux,
+		Handler:           s.Mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errCh := make(chan error, 1)

@@ -3,6 +3,7 @@ package simple
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ type OperatorConfig struct {
 	KubeConfig   rest.Config
 	Webhooks     WebhookConfig
 	Metrics      MetricsConfig
+	Port         int
 	Tracing      TracingConfig
 	ErrorHandler func(ctx context.Context, err error)
 	// FinalizerGenerator consumes a schema and returns a finalizer name to use for opinionated logic.
@@ -77,6 +79,11 @@ type TracingConfig struct {
 func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	cg := k8s.NewClientRegistry(cfg.KubeConfig, k8s.ClientConfig{})
 	var ws *k8s.WebhookServer
+
+	if cfg.Port <= 0 {
+		cfg.Port = 9090
+	}
+
 	if cfg.Webhooks.Enabled {
 		var err error
 		ws, err = k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -96,6 +103,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
 	}
+
 	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, discoveryRefresh)
 	if err != nil {
 		return nil, err
@@ -106,10 +114,18 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	// TODO: other factors?
 	controller := operator.NewInformerController(informerControllerConfig)
 
+	operatorServer := &operator.OperatorServer{
+		Port: cfg.Port,
+		Mux:  http.NewServeMux(),
+	}
+
 	// Telemetry (metrics, traces)
 	var me *metrics.Exporter
 	if cfg.Metrics.Enabled {
-		me = metrics.NewExporter(cfg.Metrics.ExporterConfig)
+		me, err = metrics.NewExporter(operatorServer.Mux, cfg.Metrics.ExporterConfig)
+		if err != nil {
+			return nil, err
+		}
 		err := me.RegisterCollectors(cg.PrometheusCollectors()...)
 		if err != nil {
 			return nil, err
@@ -136,6 +152,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
 		patcher:             patcher,
+		operatorServer:      operatorServer,
 	}
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
@@ -157,6 +174,7 @@ type Operator struct {
 	clientGen           resource.ClientGenerator
 	controller          *operator.InformerController
 	admission           *k8s.WebhookServer
+	operatorServer      *operator.OperatorServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
 	patcher             *k8s.DynamicPatcher
@@ -188,9 +206,8 @@ func (o *Operator) Run(ctx context.Context) error {
 	if o.admission != nil {
 		op.AddController(&k8sRunnable{runner: o.admission})
 	}
-	if o.metricsExporter != nil {
-		op.AddController(&k8sRunnable{runner: o.metricsExporter})
-	}
+
+	op.AddController(&k8sRunnable{runner: o.operatorServer})
 	return op.Run(ctx)
 }
 
