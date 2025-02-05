@@ -26,13 +26,21 @@ issue: {
 	// Codegen is an object which provides information to the codegen tooling about what sort of code you want generated.
 	codegen: {
 		// [OPTIONAL]
-		// fronend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
-		// Will default to true if not present.
-		frontend: true
+	    // ts contains TypeScript code generation properties for the kind
+		ts: {
+			// [OPTIONAL]
+			// enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+			// Defaults to true if not present.
+			enabled: true
+		}
 		// [OPTIONAL]
-		// backend tells the CLI to generate backend-end code (Go types) for the schema.
-		// Will default to true if not present.
-		backend: true
+		// go contains go code generation properties for the kind
+		go: {
+			// [OPTIONAL]
+			// enabled indicates whether the CLI should generate back-end go code for the kind.
+			// Defaults to true if not present.
+			enabled: true
+		}
 	}
 	// versions is a map of all supported versions of this Kind, with each key being the version name.
 	versions: {

@@ -363,7 +363,7 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 //nolint:revive,funlen,gocyclo
 func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Println(`Usage: grafana-app-sdk project add component [options] <components>
+		fmt.Println(`Usage: grafana-app-sdk project component add [options] <components>
 	where <components> are one or more of:
 		backend
 		frontend

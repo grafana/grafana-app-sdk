@@ -41,6 +41,8 @@ Definitions will be created. Only applicable if type=kubernetes`)
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
 	generateCmd.Flags().Bool("postprocess", false, "Whether to run post-processing on the generated files after they are written to disk. Post-processing includes code generation based on +k8s comments on types. Post-processing will fail if the dependencies required by the generated code are absent from go.mod.")
 	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
+	generateCmd.Flags().Bool("noschemasinmanifest", false, "Whether to exclude kind schemas from the generated app manifest. This flag exists to allow for codegen with recursive types in CUE until github.com/grafana/grafana-app-sdk/issues/460 is resolved.")
+	generateCmd.Flags().Lookup("noschemasinmanifest").NoOptDefVal = "true"
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -95,16 +97,21 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	noSchemasInManifest, err := cmd.Flags().GetBool("noschemasinmanifest")
+	if err != nil {
+		return err
+	}
 
 	var files codejen.Files
 	switch format {
 	case FormatCUE:
 		files, err = generateKindsCue(os.DirFS(sourcePath), kindGenConfig{
-			GoGenBasePath: goGenPath,
-			TSGenBasePath: tsGenPath,
-			CRDEncoding:   encType,
-			CRDPath:       defPath,
-			GroupKinds:    grouping == kindGroupingGroup,
+			GoGenBasePath:          goGenPath,
+			TSGenBasePath:          tsGenPath,
+			CRDEncoding:            encType,
+			CRDPath:                defPath,
+			GroupKinds:             grouping == kindGroupingGroup,
+			ManifestIncludeSchemas: !noSchemasInManifest,
 		}, selector)
 		if err != nil {
 			return err
@@ -146,11 +153,12 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 }
 
 type kindGenConfig struct {
-	GoGenBasePath string
-	TSGenBasePath string
-	CRDEncoding   string
-	CRDPath       string
-	GroupKinds    bool
+	GoGenBasePath          string
+	TSGenBasePath          string
+	CRDEncoding            string
+	CRDPath                string
+	GroupKinds             bool
+	ManifestIncludeSchemas bool
 }
 
 //nolint:funlen,goconst
@@ -201,7 +209,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath)), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), cfg.ManifestIncludeSchemas), selectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -219,7 +227,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			encFunc = yaml.Marshal
 		}
 
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding), selectors...)
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, cfg.ManifestIncludeSchemas), selectors...)
 		if err != nil {
 			return nil, err
 		}

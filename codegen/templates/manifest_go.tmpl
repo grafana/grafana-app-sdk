@@ -11,10 +11,10 @@ import (
     "github.com/grafana/grafana-app-sdk/app"
 )
 
-var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}
+var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}{{ if .Schema }}
     rawSchema{{$k.Kind}}{{$.ToPackageName .Name}} = []byte({{$.ToJSONBacktickString .Schema}})
     versionSchema{{$k.Kind}}{{$.ToPackageName .Name}} app.VersionSchema
-    _ = json.Unmarshal(rawSchema{{$k.Kind}}{{$.ToPackageName .Name}}, &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}}){{end}}{{end}}
+    _ = json.Unmarshal(rawSchema{{$k.Kind}}{{$.ToPackageName .Name}}, &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}}){{end}}{{end}}{{end}}
 )
 
 var appManifestData = app.ManifestData{
@@ -39,8 +39,8 @@ var appManifestData = app.ManifestData{
                         {{ range .Admission.Mutation.Operations }}app.{{ $.ToAdmissionOperationName . }},
                         {{ end }} }, {{ end }}
                     }, {{ end }}
-                }, {{ end }}
-                Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},{{ if .SelectableFields }}
+                }, {{ end }}{{ if .Schema }}
+                Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
                 },{{end}}

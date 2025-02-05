@@ -1,6 +1,6 @@
 # Front-End
 
-Alright, now that we've verified that we have a working back-end of our plugin, and have a local deployment where we can browse to our UI, it's time to make the front-end work work, and look a bit nicer.
+Alright, now that we've verified that we have a working back-end of our plugin, and have a local deployment where we can browse to our UI, it's time to make the front-end work, and look a bit nicer.
 
 We're still going to keep our front-end pretty simple, so all we're going to do is have our landing page list our issues, allow a user to create a new issue, and be able to update an issue's status, or delete an issue. To allow for this, we'll need a client we can use to do all these things. 
 
@@ -98,7 +98,7 @@ After that completes, we can redploy to our active local environment with
 ```bash
 $ make local/deploy_plugin
 ```
-And just like that, we can refresh or go to [http://grafana.k3d.localhost:9999/a/issue-tracker-project-app], and see our brand-new plugin UI. 
+And just like that, we can refresh or go to [http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/], and see our brand-new plugin UI. 
 If we create a new issue, we can see that it shows up in the list, or via a `kubectl get issues`.
 
 Now all that's left is to think a bit about our operator.
