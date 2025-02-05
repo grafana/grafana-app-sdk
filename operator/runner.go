@@ -31,7 +31,7 @@ type Runner struct {
 	webhookServer *webhookServerRunner
 	metricsServer *metricsServerRunner
 	serverRunner  *app.SingletonRunner
-	server        *operatorServer
+	server        *OperatorServer
 	startMux      sync.Mutex
 	running       bool
 	runningWG     sync.WaitGroup
@@ -52,9 +52,9 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 
 	op := Runner{
 		config: cfg,
-		server: &operatorServer{
+		server: &OperatorServer{
 			Port: cfg.Port,
-			mux:  http.NewServeMux(),
+			Mux:  http.NewServeMux(),
 		},
 	}
 
@@ -76,7 +76,7 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		op.webhookServer = newWebhookServerRunner(ws)
 	}
 	if cfg.MetricsConfig.Enabled {
-		exporter, err := metrics.NewExporter(op.server.mux, cfg.MetricsConfig.ExporterConfig)
+		exporter, err := metrics.NewExporter(op.server.Mux, cfg.MetricsConfig.ExporterConfig)
 		if err != nil {
 			return nil, err
 		}
