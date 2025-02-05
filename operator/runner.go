@@ -10,7 +10,6 @@ import (
 	"os"
 	"sync"
 
-	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -27,14 +26,14 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config        RunnerConfig
-	webhookServer *webhookServerRunner
-	metricsServer *metricsServerRunner
-	serverRunner  *app.SingletonRunner
-	server        *OperatorServer
-	startMux      sync.Mutex
-	running       bool
-	runningWG     sync.WaitGroup
+	config          RunnerConfig
+	webhookServer   *webhookServerRunner
+	metricsExporter *metrics.Exporter
+	serverRunner    *app.SingletonRunner
+	server          *OperatorServer
+	startMux        sync.Mutex
+	running         bool
+	runningWG       sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -80,7 +79,7 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		if err != nil {
 			return nil, err
 		}
-		op.metricsServer = newMetricsServerRunner(exporter)
+		op.metricsExporter = exporter
 	}
 
 	return &op, nil
@@ -242,11 +241,13 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Metrics
-	if s.metricsServer != nil {
-		err = s.metricsServer.RegisterCollectors(runner.PrometheusCollectors()...)
+	if s.metricsExporter != nil {
+		err = s.metricsExporter.RegisterCollectors(runner.PrometheusCollectors()...)
 		if err != nil {
 			return err
 		}
+
+		s.metricsExporter.RegisterMetricsHandler()
 	}
 
 	// Health
@@ -392,20 +393,6 @@ func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource
 
 func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
 	s.server.AddConverter(converter, groupKind)
-}
-
-func newMetricsServerRunner(exporter *metrics.Exporter) *metricsServerRunner {
-	return &metricsServerRunner{
-		server: exporter,
-	}
-}
-
-type metricsServerRunner struct {
-	server *metrics.Exporter
-}
-
-func (m *metricsServerRunner) RegisterCollectors(collectors ...prometheus.Collector) error {
-	return m.server.RegisterCollectors(collectors...)
 }
 
 type k8sRunner interface {
