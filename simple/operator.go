@@ -134,6 +134,8 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		me.RegisterMetricsHandler()
 	}
 	if cfg.Tracing.Enabled {
 		err := SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
