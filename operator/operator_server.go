@@ -1,7 +1,7 @@
 package operator
 
 // since operator is a serverless component on its own, its associated server
-// is only used for hosting the /metrics, /livez and /readyz endpoints, whichever of these apply for a given config
+// is only used for hosting the /metrics, /livez and /readyz endpoints
 
 import (
 	"context"
