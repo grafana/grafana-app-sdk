@@ -122,12 +122,29 @@ type AppConfig struct {
 	DiscoveryRefreshInterval time.Duration
 }
 
+// InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and ListWatchOptions
+type InformerSupplier func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error)
+
+// DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer
+var DefaultInformerSupplier = func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error) {
+	client, err := clients.ClientFor(kind)
+	if err != nil {
+		return nil, err
+	}
+	return operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
+		ListWatchOptions: options,
+	})
+}
+
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
 type AppInformerConfig struct {
 	ErrorHandler       func(context.Context, error)
 	RetryPolicy        operator.RetryPolicy
 	RetryDequeuePolicy operator.RetryDequeuePolicy
 	FinalizerSupplier  operator.FinalizerSupplier
+	// InformerSupplier can be set to specify a function for creating informers for kinds.
+	// If left unset, DefaultInformerSupplier will be used.
+	InformerSupplier InformerSupplier
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -338,16 +355,14 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		return fmt.Errorf("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
-		client, err := a.clientGenerator.ClientFor(kind.Kind)
-		if err != nil {
-			return err
+		infSupplier := a.cfg.InformerConfig.InformerSupplier
+		if infSupplier == nil {
+			infSupplier = DefaultInformerSupplier
 		}
-		inf, err := operator.NewKubernetesBasedInformer(kind.Kind, client, operator.KubernetesBasedInformerOptions{
-			ListWatchOptions: operator.ListWatchOptions{
-				Namespace:      kind.ReconcileOptions.Namespace,
-				LabelFilters:   kind.ReconcileOptions.LabelFilters,
-				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-			},
+		inf, err := infSupplier(kind.Kind, a.clientGenerator, operator.ListWatchOptions{
+			Namespace:      kind.ReconcileOptions.Namespace,
+			LabelFilters:   kind.ReconcileOptions.LabelFilters,
+			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 		})
 		if err != nil {
 			return err
