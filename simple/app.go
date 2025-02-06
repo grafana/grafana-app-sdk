@@ -142,6 +142,10 @@ type AppInformerConfig struct {
 	RetryPolicy        operator.RetryPolicy
 	RetryDequeuePolicy operator.RetryDequeuePolicy
 	FinalizerSupplier  operator.FinalizerSupplier
+	// InProgressFinalizerSupplier is used to generate the "in-progress" finalizer used by opinionated adds,
+	// before the "normal" finalizer (provided by FinalizerSupplier) is applied when the add completes successfully.
+	// By default, this is "<app name>-wip"
+	InProgressFinalizerSupplier operator.FinalizerSupplier
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
 	InformerSupplier InformerSupplier
@@ -389,7 +393,10 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedWatcherWithFinalizer(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, a.getFinalizer)
+				op, err := operator.NewOpinionatedWatcher(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+					Finalizer:           a.getFinalizer,
+					InProgressFinalizer: a.getInProgressFinalizer,
+				})
 				if err != nil {
 					return err
 				}
@@ -498,6 +505,16 @@ func (a *App) getFinalizer(sch resource.Schema) string {
 		return fmt.Sprintf("%s-%s-finalizer", a.cfg.Name, sch.Plural())
 	}
 	return fmt.Sprintf("%s-finalizer", sch.Plural())
+}
+
+func (a *App) getInProgressFinalizer(sch resource.Schema) string {
+	if a.cfg.InformerConfig.InProgressFinalizerSupplier != nil {
+		return a.cfg.InformerConfig.InProgressFinalizerSupplier(sch)
+	}
+	if a.cfg.Name != "" {
+		return fmt.Sprintf("%s-wip", a.cfg.Name)
+	}
+	return fmt.Sprintf("%s-wip", sch.Plural())
 }
 
 func (*App) customRouteHandlerKey(kind resource.Kind, method string, path string) string {
