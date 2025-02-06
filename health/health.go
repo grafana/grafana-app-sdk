@@ -2,6 +2,7 @@ package health
 
 import (
 	"context"
+	"errors"
 	"net/http"
 )
 
@@ -25,12 +26,13 @@ func (c *HealthChecker) RegisterHealthCheck(fn HealthCheckFunc) {
 
 // RunHealthCheck runs all registered health checks and returns any errors combined into a single error
 func (c *HealthChecker) runHealthChecks(ctx context.Context) error {
+	var allErrors error
 	for _, fn := range c.fns {
 		if err := fn(ctx); err != nil {
-			return err
+			allErrors = errors.Join(allErrors, err)
 		}
 	}
-	return nil
+	return allErrors
 }
 
 // HTTPHandler returns an http.Handler that performs the health checks
