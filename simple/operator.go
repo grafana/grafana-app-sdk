@@ -28,6 +28,11 @@ type OperatorConfig struct {
 	// the finalizer name MUST be 63 chars or fewer, and should be unique to the operator
 	FinalizerGenerator          func(kind resource.Schema) string
 	InformerCacheResyncInterval time.Duration
+	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
+	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
+	// for sending finalizer add/remove patches to the latest version of the kind.
+	// This defaults to 10 minutes.
+	DiscoveryRefreshInterval time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -68,6 +73,7 @@ type TracingConfig struct {
 }
 
 // NewOperator creates a new Operator
+// Deprecated: please use simple.NewApp and operator.NewRunner to create a simple operator app.
 func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	cg := k8s.NewClientRegistry(cfg.KubeConfig, k8s.ClientConfig{})
 	var ws *k8s.WebhookServer
@@ -85,6 +91,14 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+	discoveryRefresh := cfg.DiscoveryRefreshInterval
+	if discoveryRefresh == 0 {
+		discoveryRefresh = time.Minute * 10
+	}
+	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, discoveryRefresh)
+	if err != nil {
+		return nil, err
 	}
 
 	informerControllerConfig := operator.DefaultInformerControllerConfig()
@@ -121,6 +135,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		admission:           ws,
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
+		patcher:             patcher,
 	}
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
@@ -130,6 +145,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 // use WatchKind to add a watcher for a specific kind (schema) and configuration (such as namespace, label filters),
 // ReconcileKind to add a reconciler for a specific kind (schema) and configuration (such as namespace, label filers),
 // and ValidateKind or MutateKind to add admission control for a kind (schema).
+// Deprecated: use simple.App in conjunction with operator.Runner instead.
 type Operator struct {
 	Name string
 	// ErrorHandler, if non-nil, is called when a recoverable error is encountered in underlying components.
@@ -143,6 +159,7 @@ type Operator struct {
 	admission           *k8s.WebhookServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
+	patcher             *k8s.DynamicPatcher
 }
 
 // SyncWatcher extends operator.ResourceWatcher with a Sync method which can be called by the operator.OpinionatedWatcher
@@ -165,16 +182,16 @@ func (o *Operator) ClientGenerator() resource.ClientGenerator {
 // * Expose all configured webhooks as an HTTPS server
 //
 // * Expose a prometheus metrics endpoint if configured
-func (o *Operator) Run(stopCh <-chan struct{}) error {
+func (o *Operator) Run(ctx context.Context) error {
 	op := operator.New()
 	op.AddController(o.controller)
 	if o.admission != nil {
-		op.AddController(o.admission)
+		op.AddController(&k8sRunnable{runner: o.admission})
 	}
 	if o.metricsExporter != nil {
-		op.AddController(o.metricsExporter)
+		op.AddController(&k8sRunnable{runner: o.metricsExporter})
 	}
-	return op.Run(stopCh)
+	return op.Run(ctx)
 }
 
 // RegisterMetricsCollectors registers Prometheus collectors with the exporter used by the operator,
@@ -190,7 +207,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
 		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
@@ -203,14 +220,22 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	ow, err := operator.NewOpinionatedWatcherWithFinalizer(kind, client, func(sch resource.Schema) string {
-		if o.FinalizerGenerator != nil {
-			return o.FinalizerGenerator(sch)
-		}
-		if o.Name != "" {
-			return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
-		}
-		return fmt.Sprintf("%s-finalizer", kind.Plural())
+	ow, err := operator.NewOpinionatedWatcher(kind, &watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+		Finalizer: func(sch resource.Schema) string {
+			if o.FinalizerGenerator != nil {
+				return o.FinalizerGenerator(sch)
+			}
+			if o.Name != "" {
+				return fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
+			}
+			return fmt.Sprintf("%s-finalizer", kind.Plural())
+		},
+		InProgressFinalizer: func(_ resource.Schema) string {
+			if o.Name != "" {
+				return fmt.Sprintf("%s-%s-wip", o.Name, kind.Plural())
+			}
+			return fmt.Sprintf("%s-wip", kind.Plural())
+		},
 	})
 	if err != nil {
 		return err
@@ -227,7 +252,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformerWithFilters(kind, client, operator.KubernetesBasedIformerOptions{
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
 		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
@@ -246,7 +271,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	} else if o.Name != "" {
 		finalizer = fmt.Sprintf("%s-%s-finalizer", o.Name, kind.Plural())
 	}
-	or, err := operator.NewOpinionatedReconciler(client, finalizer)
+	or, err := operator.NewOpinionatedReconciler(&watchPatcher{o.patcher.ForKind(kind.GroupVersionKind().GroupKind())}, finalizer)
 	if err != nil {
 		return err
 	}

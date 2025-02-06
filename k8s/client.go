@@ -13,6 +13,10 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+var (
+	_ resource.Client = &Client{}
+)
+
 // Client is a kubernetes-specific implementation of resource.Client, using custom resource definitions.
 // A Client is specific to the Schema it was created with.
 // New Clients should only be created via the ClientRegistry.ClientFor method.
@@ -40,6 +44,11 @@ type ClientConfig struct {
 	// NegotiatedSerializerProvider is a function which provides a runtime.NegotiatedSerializer for the underlying
 	// kubernetes rest.RESTClient, if defined.
 	NegotiatedSerializerProvider func(kind resource.Kind) runtime.NegotiatedSerializer
+
+	// KubeConfigProvider can be used to provide an altered or alternative rest.Config based on kind.
+	// It is passed the Kind and existing rest.Config, and should return a valid rest.Config
+	// (returning the same rest.Config as the input is valid)
+	KubeConfigProvider func(kind resource.Kind, kubeConfig rest.Config) rest.Config
 }
 
 // DefaultClientConfig returns a ClientConfig using defaults that assume you have used the SDK codegen tooling
@@ -209,8 +218,8 @@ func (c *Client) PatchInto(ctx context.Context, identifier resource.Identifier, 
 }
 
 // Delete deletes the specified resource
-func (c *Client) Delete(ctx context.Context, identifier resource.Identifier) error {
-	return c.client.delete(ctx, identifier, c.schema.Plural())
+func (c *Client) Delete(ctx context.Context, identifier resource.Identifier, options resource.DeleteOptions) error {
+	return c.client.delete(ctx, identifier, c.schema.Plural(), options)
 }
 
 // Watch makes a watch request for the namespace, and returns a WatchResponse which wraps a kubernetes

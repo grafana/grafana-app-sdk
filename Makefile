@@ -14,27 +14,23 @@ GOBINARY    := $(shell which go)
 
 BIN_DIR := target
 
+all: check-go-version deps lint test build
+
+deps: $(GOSUM) $(GOWORKSUM)
+$(GOSUM): $(SOURCES) $(GOMOD)
+	$(foreach mod, $(dir $(GOMOD)), (cd $(mod) && go mod tidy -v);)
+
+$(GOWORKSUM): $(GOWORK) $(GOMOD)
+	go work sync
+
 .PHONY: check-go-version
 check-go-version:
 	@if [ -z "$(GOBINARY)" ]; then \
 		echo "Error: No Go binary found. It's a no-go!"; \
 		exit 1; \
-	fi; \
-	if [ "$$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//')" != "$(GOVERSION)" ]; then \
-		echo "Error: Go version $(GOVERSION) is required, but version $$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//') is installed."; \
-		exit 1; \
 	fi
 
-all: check-go-version deps lint test build
-
-deps: $(GOSUM) $(GOWORKSUM)
-$(GOSUM): $(SOURCES) $(GOMOD)
-	$(foreach mod, $(dir GOMOD), cd $(mod) && go mod tidy -v;)
-
-$(GOWORKSUM): $(GOWORK) $(GOMOD)
-	go work sync
-
-LINTER_VERSION := 1.60.3
+LINTER_VERSION := 1.62.2
 LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint
@@ -73,6 +69,8 @@ endif
 .PHONY: update-workspace
 update-workspace:
 	@echo "updating workspace"
+	@$(foreach mod, $(dir $(GOMOD)), (cd $(mod) && go mod tidy -v);)
+	go work sync
 	go mod download
 
 .PHONY: regenerate-codegen-test-files

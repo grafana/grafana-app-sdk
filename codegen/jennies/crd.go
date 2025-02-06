@@ -3,6 +3,7 @@ package jennies
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -39,17 +40,33 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 		APIVersion: "apiextensions.k8s.io/v1",
 		Kind:       "CustomResourceDefinition",
 		Metadata: customResourceDefinitionMetadata{
-			Name: fmt.Sprintf("%s.%s", props.PluralMachineName, props.APIResource.Group),
+			Name: fmt.Sprintf("%s.%s", props.PluralMachineName, props.Group),
 		},
 		Spec: k8s.CustomResourceDefinitionSpec{
-			Group: props.APIResource.Group,
-			Scope: props.APIResource.Scope,
+			Group: props.Group,
+			Scope: props.Scope,
 			Names: k8s.CustomResourceDefinitionSpecNames{
 				Kind:   props.Kind,
 				Plural: props.PluralMachineName,
 			},
 			Versions: make([]k8s.CustomResourceDefinitionSpecVersion, 0),
 		},
+	}
+
+	if kind.Properties().Conversion && kind.Properties().ConversionWebhookProps.URL != "" {
+		webhookURL, err := url.Parse(kind.Properties().ConversionWebhookProps.URL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid conversion webhook URL: %w", err)
+		}
+		resource.Spec.Conversion = &k8s.CustomResourceDefinitionSpecConversion{
+			Strategy: "webhook",
+			Webhook: &k8s.CustomResourceDefinitionSpecConversionWebhook{
+				ConversionReviewVersions: []string{"v1"},
+				ClientConfig: k8s.CustomResourceDefinitionClientConfig{
+					URL: webhookURL.String(),
+				},
+			},
+		}
 	}
 
 	for _, ver := range kind.Versions() {
@@ -65,7 +82,7 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 		return nil, err
 	}
 
-	return codejen.NewFile(fmt.Sprintf("%s.%s.%s", kind.Properties().MachineName, kind.Properties().APIResource.Group, c.outputExtension), contents, c), nil
+	return codejen.NewFile(fmt.Sprintf("%s.%s.%s", kind.Properties().MachineName, kind.Properties().Group, c.outputExtension), contents, c), nil
 }
 
 func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {

@@ -41,7 +41,7 @@ jobs:
       - name: Build
         run: go build -v cmd/grafana-app-sdk/*.go
   integration-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # git checkout
       - name: Checkout code
@@ -63,15 +63,21 @@ jobs:
         run: |
           mkdir -p codegen-tests && cd codegen-tests
           grafana-app-sdk project init "codegen-tests"
+          rm -rf kinds/manifest.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/*.cue kinds/
           mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
+          mv cmp/manifest/*.txt cmp/crd/
+          cp cmp/manifest/go/*.txt cmp/go/groupbygroup/
           find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
       - name: Generate code
         run: |
           cd codegen-tests
-          grafana-app-sdk generate --kindgrouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --crdencoding=json --nomanifest
-          grafana-app-sdk generate --kindgrouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --crdencoding=yaml --nomanifest
-          diff pkg/gen1/resource/customkind cmp/go/groupbykind/customkind > diff.txt
+          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=customManifest
+          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=testManifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=customManifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=testManifest
+          sed -i 's/^package gen2/package groupbygroup/g' pkg/gen2/*.go
+          diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
           difflines=$(wc -l diff.txt | awk '{ print $1 }')
           echo "GoGroupByKindDiff=${difflines}" >> $GITHUB_ENV
@@ -102,8 +108,8 @@ jobs:
             }
             diff = '';
 
-            core.startGroup('Go --kindgrouping=kind Diff');
-            await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
+            core.startGroup('Go --grouping=kind Diff');
+            await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/customkind'], options);
             console.log(diff);
             core.endGroup();
             if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
@@ -112,12 +118,12 @@ jobs:
             }
             diff = '';
 
-            core.startGroup('Go --kindgrouping=group Diff');
-            await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/resource/customkind'], options);
+            core.startGroup('Go --grouping=group Diff');
+            await exec.exec('diff', ['codegen-tests/cmp/go/groupbygroup', 'codegen-tests/pkg/gen2'], options);
             console.log(diff);
             core.endGroup();
             if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-              core.error('Generated go with --groupbykind=kind comparison to codegen/testing/golden_generated failed, see diff for details');
+              core.error('Generated go with --groupbykind=group comparison to codegen/testing/golden_generated failed, see diff for details');
               anyFailed = true;
             }
             diff = '';
@@ -139,12 +145,13 @@ jobs:
         run: |
           mkdir -p test-project && cd test-project
           grafana-app-sdk project init "test-project"
+          rm -rf kinds/manifest.cue
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
+          printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
-          cp ../grafana-app-sdk/codegen/cuekind/testing/customkind2.cue kinds/customkind2.cue
-          grafana-app-sdk generate
-          grafana-app-sdk project component add frontend backend operator --plugin-id=test-project
+          grafana-app-sdk generate --manifest=customManifest
+          grafana-app-sdk project component add frontend backend operator --manifest=customManifest
           go mod tidy
           go build cmd/operator/*.go
           go build plugin/pkg/*.go

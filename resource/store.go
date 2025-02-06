@@ -233,7 +233,7 @@ func (s *Store) Delete(ctx context.Context, kind string, identifier Identifier) 
 		return err
 	}
 
-	return client.Delete(ctx, identifier)
+	return client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 // ForceDelete deletes a resource with the given Identifier and kind, ignores client 404 errors.
@@ -243,7 +243,7 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 		return err
 	}
 
-	err = client.Delete(ctx, identifier)
+	err = client.Delete(ctx, identifier, DeleteOptions{})
 
 	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
 		return nil

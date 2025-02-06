@@ -16,6 +16,10 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+var (
+	_ resource.SchemalessClient = &SchemalessClient{}
+)
+
 // SchemalessClient implements resource.SchemalessClient and allows for working with Schemas as kubernetes
 // Custom Resource Definitions without being tied to a particular Schema (or GroupVerson).
 // Since the largest unit a kubernetes rest.Interface can work with is a GroupVersion,
@@ -170,7 +174,7 @@ func (s *SchemalessClient) Patch(ctx context.Context, identifier resource.FullId
 }
 
 // Delete deletes a resource identified by identifier
-func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullIdentifier) error {
+func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullIdentifier, options resource.DeleteOptions) error {
 	client, err := s.getClient(identifier)
 	if err != nil {
 		return err
@@ -179,7 +183,7 @@ func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullI
 	return client.delete(ctx, resource.Identifier{
 		Namespace: identifier.Namespace,
 		Name:      identifier.Name,
-	}, s.getPlural(identifier))
+	}, s.getPlural(identifier), options)
 }
 
 // List lists all resources that satisfy identifier, ignoring `Name`. The response is marshaled into `into`

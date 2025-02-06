@@ -43,6 +43,10 @@ type GoTypes struct {
 	// When GroupByKind is false, subresource types (such as spec and status) are prefixed with the kind name,
 	// i.e. generating FooSpec instead of Spec for kind.Name() = "Foo" and Depth=1
 	GroupByKind bool
+
+	// AnyAsInterface determines whether to use `interface{}` instead of `any` in generated go code.
+	// If true, `interface{}` will be used instead of `any`.
+	AnyAsInterface bool
 }
 
 func (*GoTypes) JennyName() string {
@@ -62,7 +66,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	versions := kind.Versions()
 	for i := 0; i < len(versions); i++ {
 		ver := versions[i]
-		if !ver.Codegen.Backend {
+		if !ver.Codegen.Go.Enabled {
 			continue
 		}
 
@@ -87,7 +91,9 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 
 	codegenPipeline := cog.TypesFromSchema().
 		CUEValue(packageName, version.Schema, cog.ForceEnvelope(name)).
-		Golang(cog.GoConfig{})
+		Golang(cog.GoConfig{
+			AnyAsInterface: g.AnyAsInterface,
+		})
 
 	if g.AddKubernetesCodegen {
 		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
@@ -122,6 +128,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 			Name:                           exportField(strings.Join(fieldName, "")),
 			NamePrefix:                     namePrefix,
 			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && !(len(fieldName) == 1 && fieldName[0] == "metadata"),
+			AnyAsInterface:                 g.AnyAsInterface,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
 		if err != nil {
 			return nil, err
@@ -155,6 +162,7 @@ type CUEGoConfig struct {
 	Name        string
 
 	AddKubernetesOpenAPIGenComment bool
+	AnyAsInterface                 bool
 
 	// NamePrefix prefixes all generated types with the provided NamePrefix
 	NamePrefix string
@@ -180,7 +188,9 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 	codegenPipeline := cog.TypesFromSchema().
 		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
 		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
-		Golang(cog.GoConfig{})
+		Golang(cog.GoConfig{
+			AnyAsInterface: cfg.AnyAsInterface,
+		})
 
 	if cfg.AddKubernetesOpenAPIGenComment {
 		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))

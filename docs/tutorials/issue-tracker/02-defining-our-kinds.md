@@ -22,11 +22,10 @@ package kinds
 
 issue: {
 	kind: "Issue"
-	group: "issue-tracker-project"
-	apiResource: {}
+	scope: "Namespaced"
 	codegen: {
-		frontend: true
-		backend: true
+		ts: enabled: true
+		go: enabled: true
 	}
 	current: "v1"
 	versions: {
@@ -52,7 +51,7 @@ Now, we get to the actual definition of our `issue` model:
 ```cue
 issue: {
 	kind: "Issue"
-	apiResource: {}
+	scope: "Namespaced"
 	codegen: {
 		frontend: true
 		backend: true
@@ -63,13 +62,13 @@ issue: {
 ```
 Here we have a collection of metadata relating to our model, and then a `versions` definition, which we'll get to in a moment. Let's break down the other fields first:
 
-| Snippit                               | Meaning                                                                                                                                                                                                                                                                                                                               |
-|---------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| <nobr>`kind: "Issue"`</nobr>           | This is just the human-readable name, which will be used for naming some things in-code.                                                                                                                                                                                                                                              |
-| <nobr>`apiResource: {}`</nobr>         | This field is an indicator that the kind is expressible as an API Server resource (typically, a Custom Resource Definition). From a codegen perspective, that means that generated go code will be compatible with `resource`-package interfaces. There are fields that can be set within `apiResource`, but we're ok with its default values |
- | <nobr>`codegen.frontend: true`</nobr> | This instructs the CLI to generate front-end (TypeScript interfaces) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                                                                                                                                          |
-| <nobr>`codegen.backend: true`</nobr>  | This instructs the CLI to generate back-end (go) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                                                                                                                                                              |
-| <nobr>`currentVersion: [0,0]`</nobr>  | This is the current version of the Schema to use for codegen (will default to the latest if not present)                                                                                                                                                                                                                              |
+| Snippit                               | Meaning                                                                                                                                                                                                           |
+|---------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| <nobr>`kind: "Issue"`</nobr>          | This is just the human-readable name, which will be used for naming some things in-code.                                                                                                                          |
+| <nobr>`scope: "Namespaced"`</nobr>    | This is an optional field, which designates whether instances of the kind (resources) are created on a per-tenant basis (Namespaced) or globally (Cluster). It defaults to Namespaced if you leave the field out. |
+ | <nobr>`codegen.frontend: true`</nobr> | This instructs the CLI to generate front-end (TypeScript interfaces) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                      |
+| <nobr>`codegen.backend: true`</nobr>  | This instructs the CLI to generate back-end (go) code for our schema. This defaults to `true`, but we're specifying it here for clarity.                                                                          |
+| <nobr>`current: "v1"`</nobr>          | This is the current version of the Schema to use for codegen.                                                                                                                                                     |
 
 ok, now back to `versions`. In the CUE kind, `versions` is a map of a version name to an object containing meta-information about the version, and its `schema`. 
 The map is unordered, so there is no implicit or explicit sequential relationship between versions in your Kind definition, but consider naming conventions that portray the evolution of the kind (for example, `v1`, `v1beta`, `v2`, etc. like kubernetes' kind versions). The `current` top-level Kind attribute declares which version in this map is the current, 

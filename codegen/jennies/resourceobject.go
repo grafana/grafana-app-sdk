@@ -135,12 +135,12 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 		return nil, err
 	}
 	for it.Next() {
-		if it.Label() == "spec" || it.Label() == "metadata" {
+		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
 			continue
 		}
 		md.Subresources = append(md.Subresources, templates.SubresourceMetadata{
-			TypeName: typePrefix + exportField(it.Label()),
-			JSONName: it.Label(),
+			TypeName: typePrefix + exportField(it.Selector().String()),
+			JSONName: it.Selector().String(),
 		})
 	}
 	b := bytes.Buffer{}

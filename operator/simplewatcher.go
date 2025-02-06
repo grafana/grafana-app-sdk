@@ -23,9 +23,9 @@ func (w *SimpleWatcher) Add(ctx context.Context, object resource.Object) error {
 }
 
 // Update calls UpdateFunc, if non-nil
-func (w *SimpleWatcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
+func (w *SimpleWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
 	if w.UpdateFunc != nil {
-		return w.UpdateFunc(ctx, old, new)
+		return w.UpdateFunc(ctx, src, tgt)
 	}
 	return nil
 }

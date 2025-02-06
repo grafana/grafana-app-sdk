@@ -98,53 +98,29 @@ Schema: {
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
 	kind: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
-	group: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	group: =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
+	// manifestGroup is a group shortname used for package naming in codegen
+	// TODO: remove this when all jenny pipelines use the manifest, or keep around for convenience?
+	manifestGroup: string
 	current: string
-	// apiResource contains properties specific to converting this kind to a Kubernetes API Server Resource.
-	// apiResource is an optional trait that imposes some restrictions on `schema`, `group`, and `version`.
-	// If not present, the kind cannot be assumed to be convertable to a kubernetes API server resource.
-	apiResource?: {
-		// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.com"
-		// if present, this value is used for the CRD group instead.
-		// groupOverride must have at least two parts (i.e. 'foo.bar'), but can be longer.
-		// The length of groupOverride + kind name cannot exceed 62 characters
-		groupOverride?: =~"^([a-z][a-z0-9-.]{0,48}[a-z0-9])\\.([a-z][a-z0-9-]{0,48}[a-z0-9])$"
-
-		// _computedGroups is a list of groups computed from information in the plugin trait.
-		// The first element is always the "most correct" one to use.
-		// This field could be inlined into `group`, but is separate for clarity.
-		_computedGroups: [
-			if S.apiResource.groupOverride != _|_ {
-				strings.ToLower(S.apiResource.groupOverride),
-			},
-			strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.com"
-		]
-
-		// group is used as the CRD group name in the GVK.
-		// It is computed from information in the plugin trait, using plugin.id unless groupName is specified.
-		// The length of the computed group + the length of the name (plus 1) cannot exceed 63 characters for a valid CRD.
-		// This length restriction is checked via _computedGroupKind
-		group: _computedGroups[0] & =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
-
-		// _computedGroupKind checks the validity of the CRD kind + group
-		_computedGroupKind: S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
-
-		// scope determines whether resources of this kind exist globally ("Cluster") or
-		// within Kubernetes namespaces.
-		scope: "Cluster" | *"Namespaced"
-		// validation determines whether there is code-based validation for this kind. Used for generating the manifest.
-		validation: #AdmissionCapability | *{
-			operations: []
-		}
-		// mutation determines whether there is code-based mutation for this kind. Used for generating the manifest.
-		mutation: #AdmissionCapability | *{
-			operations: []
-		}
-		// conversion determines whether there is code-based conversion for this kind. Used for generating the manifest.
-		conversion: bool | *false
+	// scope determines whether resources of this kind exist globally ("Cluster") or
+	// within Kubernetes namespaces.
+	scope: "Cluster" | *"Namespaced"
+	// validation determines whether there is code-based validation for this kind.
+	validation: #AdmissionCapability | *{
+		operations: []
 	}
-	// isCRD is true if the `crd` trait is present in the kind.
-	isAPIResource: apiResource != _|_
+	// mutation determines whether there is code-based mutation for this kind.
+	mutation: #AdmissionCapability | *{
+		operations: []
+	}
+	// conversion determines whether there is code-based conversion for this kind.
+	conversion: bool | *false
+	// conversionWebhookProps is a temporary way of specifying the service webhook information
+	// which will be migrated away from once manifests are used in the codegen pipeline
+	conversionWebhookProps: {
+		url: string | *""
+	}
 	versions: {
 		[V=string]: {
 			// Version must be the key in the map, but is pulled into the value of the map for ease-of-access when dealing with the resulting value
@@ -154,17 +130,26 @@ Kind: S={
 			served: bool | *true
 			// codegen contains properties specific to generating code using tooling
 			codegen: {
-				// frontend indicates whether front-end TypeScript code should be generated for this kind's schema
-				frontend: bool | *S.codegen.frontend
-				// backend indicates whether back-end Go code should be generated for this kind's schema
-				backend: bool | *S.codegen.backend
+				ts: {
+					enabled: bool | *S.codegen.ts.enabled
+					config: {
+						importsMap: {
+							[string]: string
+						} | *S.codegen.ts.config.importsMap
+						enumsAsUnionTypes: bool | *S.codegen.ts.config.enumsAsUnionTypes
+					} | *S.codegen.ts.config
+				}
+				go: {
+					enabled: bool | *S.codegen.go.enabled
+					config: {} | *S.codegen.go.config
+				}
 			}
 			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
 			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
 			selectableFields: [...string]
-			validation: #AdmissionCapability | *S.apiResource.validation
-			mutation: #AdmissionCapability | *S.apiResource.mutation
+			validation: #AdmissionCapability | *S.validation
+			mutation: #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
@@ -176,9 +161,91 @@ Kind: S={
 	// the defaults for the `codegen` field in all entries in `versions`. 
 	// Valus set in `versions[x]: codegen` will overwrite the value set here.
 	codegen: {
-		// frontend indicates whether front-end TypeScript code should be generated for this kind's schema
-		frontend: bool | *true
-		// backend indicates whether back-end Go code should be generated for this kind's schema
-		backend: bool | *true
+		// ts is the section for TypeScript codegen
+		ts: {
+			// enabled indicates whether front-end TypeScript code should be generated for this kind's schema
+			enabled: bool | *true
+			// config is code generation configuration specific to TypeScript.
+			// Currently, these config options are passed directly to grafana/cog when generating TypeScript
+			config: {
+				// importsMap associates package names to their import path.
+				importsMap: {
+					[string]: string
+				}
+				// enumsAsUnionTypes generates enums as a union of values instead of using
+				// an actual `enum` declaration.
+				// If EnumsAsUnionTypes is false, an enum will be generated as:
+				// “`ts
+				// enum Direction {
+				//   Up = "up",
+				//   Down = "down",
+				//   Left = "left",
+				//   Right = "right",
+				// }
+				// “`
+				// If EnumsAsUnionTypes is true, the same enum will be generated as:
+				// “`ts
+				// type Direction = "up" | "down" | "left" | "right";
+				// “`
+				enumsAsUnionTypes: bool | *false
+			}
+		}
+		// go is the section for go codegen
+		go: {
+			// enabled indicates whether back-end Go code should be generated for this kind's schema
+			enabled: bool | *true
+			config: {}
+		}
 	}
+
+	_computedGroupKind: S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
+}
+
+#AccessKind: {
+	group: string
+	resource: string
+	actions: [...string]
+}
+
+Manifest: S={
+	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	group: strings.ToLower(strings.Replace(S.appName, "-", "", -1))
+	kinds: [...{
+		group: S.fullGroup
+		manifestGroup: S.group
+	} & Kind]
+	extraPermissions: {
+		accessKinds: [...#AccessKind]
+	}
+
+	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
+	// if present, this value is used for the full group instead.
+	// groupOverride must have at least two parts (i.e. 'foo.bar'), but can be longer.
+	// The length of fullGroup + kind name (for each kind) cannot exceed 62 characters
+	groupOverride?: =~"^([a-z][a-z0-9-.]{0,48}[a-z0-9])\\.([a-z][a-z0-9-]{0,48}[a-z0-9])$"
+
+	// _computedGroups is a list of groups computed from information in the plugin trait.
+	// The first element is always the "most correct" one to use.
+	// This field could be inlined into `group`, but is separate for clarity.
+	_computedGroups: [
+		if S.groupOverride != _|_ {
+			strings.ToLower(S.groupOverride),
+		},
+		strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.com" // TODO: change to ext.grafana.app?
+	]
+
+	// fullGroup is used as the CRD group name in the GVK.
+	// It is computed from information in the plugin trait, using plugin.id unless groupName is specified.
+	// The length of the computed group + the length of the name (plus 1) cannot exceed 63 characters for a valid CRD.
+	// This length restriction is checked via _computedGroupKind
+	fullGroup: _computedGroups[0] & =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
+
+	_computedGroupKinds: [
+		for x in S.kinds {
+			let computed = S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
+			if computed =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$" {
+				computed
+			}
+		}
+	]
 }

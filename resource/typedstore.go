@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+var ErrMissingResourceVersion = fmt.Errorf("object is missing a ResourceVersion")
+
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
 // to be of ObjectType. It is a thin convenience layer over using a raw ClientGenerator.ClientFor()-created
 // Client for a Schema and doing type conversions in-code.
@@ -91,7 +93,13 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 	md := obj.GetCommonMetadata()
 	md.UpdateTimestamp = time.Now().UTC()
 	obj.SetCommonMetadata(md)
-	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{})
+	if obj.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
+	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{
+		ResourceVersion: obj.GetResourceVersion(),
+	})
 	if err != nil {
 		var n T
 		return n, err
@@ -155,12 +163,12 @@ func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identi
 
 // Delete deletes a resource with the provided identifier
 func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error {
-	return t.client.Delete(ctx, identifier)
+	return t.client.Delete(ctx, identifier, DeleteOptions{})
 }
 
 // ForceDelete deletes a resource with the provided identifier, ignores 404 errors
 func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
-	err := t.client.Delete(ctx, identifier)
+	err := t.client.Delete(ctx, identifier, DeleteOptions{})
 
 	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
 		return nil

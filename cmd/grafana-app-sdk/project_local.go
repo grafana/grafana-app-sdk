@@ -151,11 +151,15 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	cuePath, err := cmd.Flags().GetString("cuepath")
+	sourcePath, err := cmd.Flags().GetString(sourceFlag)
 	if err != nil {
 		return err
 	}
-	format, err := cmd.Flags().GetString("format")
+	format, err := cmd.Flags().GetString(formatFlag)
+	if err != nil {
+		return err
+	}
+	selector, err := cmd.Flags().GetString(selectorFlag)
 	if err != nil {
 		return err
 	}
@@ -188,7 +192,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	err = updateLocalConfigFromManifest(config, format, cuePath)
+	err = updateLocalConfigFromManifest(config, format, sourcePath, selector)
 	if err != nil {
 		return err
 	}
@@ -201,11 +205,11 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(sourcePath))
 			if err != nil {
 				return nil, err
 			}
-			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"))
+			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), selector)
 		case FormatNone:
 			return codejen.Files{}, nil
 		default:
@@ -754,7 +758,7 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string) error {
+func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string, selectors ...string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
@@ -764,13 +768,11 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 		if err != nil {
 			return err
 		}
-		generator, err := codegen.NewGenerator[codegen.Kind](parser, os.DirFS(cuePath))
+		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(), os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}
-		fs, err := generator.FilteredGenerate(cuekind.ManifestGenerator(json.Marshal, "json", "myapp"), func(kind codegen.Kind) bool {
-			return kind.Properties().APIResource != nil
-		})
+		fs, err := generator.Generate(cuekind.ManifestGenerator(json.Marshal, "json", false), selectors...)
 		if err != nil {
 			return err
 		}

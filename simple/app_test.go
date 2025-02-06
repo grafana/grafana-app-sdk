@@ -8,6 +8,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -423,6 +424,54 @@ func TestApp_Validate(t *testing.T) {
 	})
 }
 
+func TestApp_ManageKind(t *testing.T) {
+	t.Run("error creating informer", func(t *testing.T) {
+		expected := errors.New("I AM ERROR")
+		a, err := NewApp(AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error) {
+					return nil, expected
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       testKind(),
+				Reconciler: &Reconciler{},
+			}},
+		})
+		assert.Nil(t, a)
+		assert.Equal(t, expected, err)
+	})
+	t.Run("custom InformerSupplier", func(t *testing.T) {
+		supplierCalled := false
+		kind := testKind()
+		options := operator.ListWatchOptions{
+			Namespace:      "ns",
+			FieldSelectors: []string{"f1", "f2"},
+			LabelFilters:   []string{"l1", "l2"},
+		}
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(k resource.Kind, clients resource.ClientGenerator, opts operator.ListWatchOptions) (operator.Informer, error) {
+					supplierCalled = true
+					assert.Equal(t, kind, k)
+					assert.Equal(t, options, opts)
+					return &mockInformer{}, nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:       kind,
+				Reconciler: &Reconciler{},
+				ReconcileOptions: BasicReconcileOptions{
+					Namespace:      options.Namespace,
+					LabelFilters:   options.LabelFilters,
+					FieldSelectors: options.FieldSelectors,
+				},
+			}},
+		})
+		assert.True(t, supplierCalled, "custom InformerSupplier was not called")
+	})
+}
+
 func TestApp_Runner(t *testing.T) {
 	// TODO
 }
@@ -452,4 +501,23 @@ func (c *testConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byt
 		return c.convertFunc(obj, targetAPIVersion)
 	}
 	return nil, nil
+}
+
+type mockInformer struct {
+	RunFunc             func(context.Context) error
+	AddEventHandlerFunc func(operator.ResourceWatcher) error
+}
+
+func (m mockInformer) Run(ctx context.Context) error {
+	if m.RunFunc != nil {
+		return m.RunFunc(ctx)
+	}
+	return nil
+}
+
+func (m mockInformer) AddEventHandler(handler operator.ResourceWatcher) error {
+	if m.AddEventHandlerFunc != nil {
+		return m.AddEventHandlerFunc(handler)
+	}
+	return nil
 }

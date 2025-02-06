@@ -23,5 +23,9 @@ func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) strin
 	if groupByKind {
 		return filepath.Join(ToPackageName(kind.Properties().MachineName), ToPackageName(version))
 	}
-	return filepath.Join(ToPackageName(kind.Properties().Group), ToPackageName(version))
+	grp := kind.Properties().ManifestGroup
+	if grp == "" {
+		grp = kind.Properties().Group
+	}
+	return filepath.Join(ToPackageName(grp), ToPackageName(version))
 }

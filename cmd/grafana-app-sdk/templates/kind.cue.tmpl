@@ -4,36 +4,32 @@ package {{ .Package }}
 {{.FieldName}}: {
 	// Name is the human-readable name which is used for generated type names.
 	kind: "{{.Name}}"
-	// Group affects the grouping of this kind, especially with respect to API server expression.
-	// This is typically the same as the plugin ID, though there are length restrictions when the crd trait is present,
-	// so it may vary if the plugin ID is too long.
-	group: "{{.PluginID}}"
-	// crd is a trait that governs both whether this kind is expressible as a resource in an API server
-	// (the `resource.Object` interface), and attributes of that expression.
-	// if crd is not present, the kind system and code generation do not impose API server format restricitons,
-	// and do not add common API server information.
-	{{ if eq .Target "model"}}// apiResource: {} // not present as this kind was generated as a "model" target
-	{{ else }}apiResource: {
-		// [OPTIONAL]
-		// Scope determines the scope of the kind in the API server. It currently allows two values:
-		// * Namespaced - resources for this kind are created inside namespaces
-		// * Cluster - resource for this kind are always cluster-wide (this can be thought of as a "global" namespace)
-		// If not present, this defaults to "Namespaced"
-		scope: "Namespaced"
-	}{{ end }}
+	// Scope determines the scope of the kind in the API server. It currently allows two values:
+    // * Namespaced - resources for this kind are created inside namespaces
+    // * Cluster - resource for this kind are always cluster-wide (this can be thought of as a "global" namespace)
+    // If not present, this defaults to "Namespaced"
+    scope: "Namespaced"
 	// [OPTIONAL]
 	// Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
 	// If not present, default values within the codegen trait are used.
 	// This is the global trait, and can be overridden by specifying values in the versions themselves.
 	codegen: {
+	    // [OPTIONAL]
+	    // ts contains TypeScript code generation properties for the kind
+		ts: {
+			// [OPTIONAL]
+			// enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+			// Defaults to true if not present.
+			enabled: true
+		}
 		// [OPTIONAL]
-		// frontend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
-		// Will default to true if not present.
-		frontend: true
-		// [OPTIONAL]
-		// backend tells the CLI to generate backend-end code (Go types) for the schema.
-		// Will default to true if not present.
-		backend: true
+		// go contains go code generation properties for the kind
+		go: {
+			// [OPTIONAL]
+			// enabled indicates whether the CLI should generate back-end go code for the kind.
+			// Defaults to true if not present.
+			enabled: true
+		}
 	}
 	// [OPTIONAL]
 	// The human-readable plural form of the "name" field.
@@ -88,13 +84,21 @@ package {{ .Package }}
 	        // This setting will override `codegen` at the root level of the kind
 	        codegen: {
                 // [OPTIONAL]
-                // frontend tells the CLI to generate front-end code (TypeScript interfaces) for the schema.
-                // Will default to the kind's root-level codegen.frontend if not present.
-                frontend: true
+                // ts contains TypeScript code generation properties for the kind
+                ts: {
+                    // [OPTIONAL]
+                    // enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+                    // Defaults to the kind's root-level codegen.ts.enabled if not present.
+                    enabled: true
+                }
                 // [OPTIONAL]
-                // backend tells the CLI to generate backend-end code (Go types) for the schema.
-                // Will default to kind's root-level codegen.backend if not present.
-                backend: true
+                // go contains go code generation properties for the kind
+                go: {
+                    // [OPTIONAL]
+                    // enabled indicates whether the CLI should generate back-end go code for the kind.
+                    // Defaults to the kind's root-level codegen.go.enabled if not present.
+                    enabled: true
+                }
 	        }
 	    }
 	}

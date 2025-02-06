@@ -7,15 +7,36 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"syscall"
 	"time"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 
 	"k8s.io/client-go/tools/clientcmd"
+)
+
+// Schema, Kind, and Manifest are typically generated, but can be crafted by hand as seen here.
+// For anything more complex than this simple example, it is advised that you use the CLI (grafana-app-sdk generate) to get these values
+var (
+	schema = resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, &resource.TypedList[*resource.TypedSpecObject[BasicModel]]{}, resource.WithKind("BasicCustomResource"))
+	kind   = resource.Kind{
+		Schema: schema,
+		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+	}
+	manifest = app.NewEmbeddedManifest(app.ManifestData{
+		AppName: "example-app",
+		Group:   kind.Group(),
+		Kinds: []app.ManifestKind{{
+			Kind:  kind.Kind(),
+			Scope: string(kind.Scope()),
+			Versions: []app.ManifestKindVersion{{
+				Name: kind.Version(),
+			}},
+		}},
+	})
 )
 
 func main() {
@@ -33,13 +54,6 @@ func main() {
 	}
 	kubeConfig.APIPath = "/apis" // Don't know why this isn't set correctly by default, but it isn't
 
-	// Create a schema to use
-	schema := resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, &resource.TypedList[*resource.TypedSpecObject[BasicModel]]{}, resource.WithKind("BasicCustomResource"))
-	kind := resource.Kind{
-		Schema: schema,
-		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
-	}
-
 	// Register the schema (if it doesn't already exist)
 	manager, err := k8s.NewManager(*kubeConfig)
 	if err != nil {
@@ -55,20 +69,37 @@ func main() {
 		panic(fmt.Errorf("unable to add custom resource definition: %w", err))
 	}
 
-	simpleOperator, err := simple.NewOperator(simple.OperatorConfig{
-		Name:       "simple-reconciler-operator",
+	// Create an operator runner for our app. This dictates how an app will be run (operator.NewRunner runs as a standalone operator)
+	runner, err := operator.NewRunner(operator.RunnerConfig{
 		KubeConfig: *kubeConfig,
-		Metrics: simple.MetricsConfig{
+		MetricsConfig: operator.RunnerMetricsConfig{
 			Enabled: true,
-		},
-		ErrorHandler: func(ctx context.Context, err error) {
-			log.Printf("\u001B[0;31mERROR: %s\u001B[0m", err.Error())
 		},
 	})
 	if err != nil {
-		panic(fmt.Errorf("unable to initialise operator: %w", err))
+		panic(fmt.Errorf("unable to create runner: %w", err))
 	}
 
+	// Set up a signal handler
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, os.Kill)
+	defer cancel()
+
+	log.Print("\u001B[1;32mStarting Operator\u001B[0m")
+
+	// Run the app as an operator.
+	// We provide runner.Run with an AppProvider which instantiates our app using the NewApp function we define at the bottom of this file
+	err = runner.Run(ctx, simple.NewAppProvider(manifest, nil, NewApp))
+	if err != nil {
+		panic(fmt.Errorf("error running operator: %w", err))
+	}
+}
+
+type BasicModel struct {
+	Number int    `json:"numField"`
+	String string `json:"stringField"`
+}
+
+func NewApp(config app.Config) (app.App, error) {
 	// Set up the reconciler
 	reconciler := &simple.Reconciler{
 		ReconcileFunc: func(ctx context.Context, request operator.ReconcileRequest) (operator.ReconcileResult, error) {
@@ -82,34 +113,17 @@ func main() {
 		},
 	}
 
-	err = simpleOperator.ReconcileKind(kind, reconciler, operator.ListWatchOptions{
-		Namespace: "default",
+	// Create the app with the reconciler
+	return simple.NewApp(simple.AppConfig{
+		Name:       "simple-reconciler-app",
+		KubeConfig: config.KubeConfig,
+		ManagedKinds: []simple.AppManagedKind{{
+			Kind:             kind,
+			Reconciler:       reconciler,
+			ReconcileOptions: simple.BasicReconcileOptions{
+				// FIXME: Uncomment this line to turn off the opinionated logic
+				// UsePlain: true, // UsePlain = true turns off the opinionated logic.
+			},
+		}},
 	})
-	if err != nil {
-		panic(fmt.Errorf("unable to reconcile kind: %w", err))
-	}
-
-	// Create the stop channel
-	stopCh := make(chan struct{}, 1)
-
-	// Set up a signal handler
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
-	go func() {
-		<-sigChan
-		close(stopCh)
-	}()
-
-	log.Print("\u001B[1;32mStarting Operator\u001B[0m")
-
-	// Run the controller (will block until stopCh receives a message or is closed)
-	err = simpleOperator.Run(stopCh)
-	if err != nil {
-		panic(fmt.Errorf("error running operator: %w", err))
-	}
-}
-
-type BasicModel struct {
-	Number int    `json:"numField"`
-	String string `json:"stringField"`
 }

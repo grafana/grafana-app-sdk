@@ -26,6 +26,7 @@ var (
 	templateThemaCodec, _     = template.ParseFS(templates, "themacodec.tmpl")
 	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
 	templateTSType, _         = template.ParseFS(templates, "tstype.tmpl")
+	templateConstants, _      = template.ParseFS(templates, "constants.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -236,6 +237,10 @@ func (BackendPluginRouterTemplateMetadata) ToPackageNameVariable(input string) s
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
+func (BackendPluginRouterTemplateMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
 // WriteBackendPluginRouter executes the Backend Plugin Router template, and writes out the generated go code to out
 func WriteBackendPluginRouter(metadata BackendPluginRouterTemplateMetadata, out io.Writer) error {
 	return templateBackendPluginRouter.Execute(out, metadata)
@@ -351,6 +356,10 @@ func (OperatorMainMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
+func (OperatorMainMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
 	md := extendedOperatorMainMetadata{
 		OperatorMainMetadata: metadata,
@@ -441,6 +450,10 @@ func (AppMetadata) ToPackageNameVariable(input string) string {
 	return strings.ReplaceAll(ToPackageName(input), "_", "")
 }
 
+func (AppMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
 func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
 	md := extendedAppMetadata{
 		AppMetadata:     metadata,
@@ -466,6 +479,16 @@ func WriteAppGoFile(metadata AppMetadata, out io.Writer) error {
 		}
 	}
 	return templateApp.Execute(out, md)
+}
+
+type ConstantsMetadata struct {
+	Package string
+	Group   string
+	Version string
+}
+
+func WriteConstantsFile(metadata ConstantsMetadata, out io.Writer) error {
+	return templateConstants.Execute(out, metadata)
 }
 
 // ToPackageName sanitizes an input into a deterministic allowed go package name.

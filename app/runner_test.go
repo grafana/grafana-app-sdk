@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -168,7 +169,8 @@ func TestMultiRunner_Run(t *testing.T) {
 		})
 		err := runOrTimeout(context.Background(), r, time.Second*5)
 		require.NotNil(t, err)
-		assert.Equal(t, "exit wait time exceeded waiting for Runners to complete: run error", err.Error())
+		assert.True(t, errors.Is(err, ErrRunnerExitTimeout))
+		assert.Equal(t, "exit wait time exceeded waiting for Runners to complete\nrun error", err.Error())
 		assert.True(t, errorHandled)
 	})
 }
@@ -277,6 +279,209 @@ func TestSingletonRunner_PrometheusCollectors(t *testing.T) {
 	assert.ElementsMatch(t, collectors, runner.PrometheusCollectors())
 }
 
+func TestDynamicMultiRunner_Run(t *testing.T) {
+	t.Run("add runner while running", func(t *testing.T) {
+		runner := NewDynamicMultiRunner()
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				wg.Done()
+				<-ctx.Done()
+				return nil
+			},
+		})
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wg2 := &sync.WaitGroup{}
+		wg2.Add(1)
+		go func() {
+			err := runner.Run(ctx)
+			assert.Nil(t, err)
+			wg2.Done()
+		}()
+		// Verify that the first runner is running before we add a second runner
+		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for first runnable to run")
+		// Add a second runner and make sure it also gets run
+		wg.Add(1)
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				wg.Done()
+				<-ctx.Done()
+				return nil
+			},
+		})
+		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for second runnable to run")
+		cancel()
+		require.False(t, waitOrTimeout(wg2, time.Second*5), "timed out waiting for runner to exit")
+	})
+
+	t.Run("remove runner while running", func(t *testing.T) {
+		runner := NewDynamicMultiRunner()
+		started := make(chan struct{})
+		defer close(started)
+		ended := make(chan struct{})
+		defer close(ended)
+		runner1 := &testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				started <- struct{}{}
+				<-ctx.Done()
+				ended <- struct{}{}
+				return nil
+			},
+		}
+		runner2Running := false
+		runner2 := &testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				runner2Running = true
+				<-ctx.Done()
+				runner2Running = false
+				return nil
+			},
+		}
+		runner.AddRunnable(runner1)
+		runner.AddRunnable(runner2)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			err := runner.Run(ctx)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		// Wait for runner1 to start
+		require.False(t, waitForMessageOrTimeout(started, time.Second*5), "timed out waiting for runnable to run")
+		// Remove the runner (this should also cancel runner1's context)
+		runner.RemoveRunnable(runner1)
+		require.False(t, waitForMessageOrTimeout(ended, time.Second*5), "timed out waiting for runnable to end")
+		// runner2 should still be running
+		assert.True(t, runner2Running, "runner2 stopped when runner1 was removed")
+		cancel()
+		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for runner to exit")
+	})
+
+	t.Run("handle error without stopping other runners", func(t *testing.T) {
+		runner := NewDynamicMultiRunner()
+		runner1Running := false
+		started := make(chan struct{})
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				started <- struct{}{}
+				runner1Running = true
+				<-ctx.Done()
+				runner1Running = false
+				return nil
+			},
+		})
+		errCh := make(chan error)
+		defer close(errCh)
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				return <-errCh
+			},
+		})
+		myErr := fmt.Errorf("my error")
+		runner.ErrorHandler = func(ctx context.Context, err error) bool {
+			assert.Equal(t, myErr, err)
+			return false
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			err := runner.Run(ctx)
+			assert.Nil(t, err)
+			wg.Done()
+		}()
+		// Wait for the runner to be started
+		require.False(t, waitForMessageOrTimeout(started, time.Second*5), "timed out waiting for runnable to run")
+		require.True(t, runner1Running)
+		// Return an error from runner 1
+		errCh <- myErr
+		// Wait a second to make sure the other runner doesn't exit
+		time.Sleep(time.Second)
+		assert.True(t, runner1Running)
+		cancel()
+		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for runner to exit")
+	})
+
+	t.Run("handle error and stop all other runners", func(t *testing.T) {
+		runner := NewDynamicMultiRunner()
+		started := make(chan struct{})
+		defer close(started)
+		ended := make(chan struct{})
+		defer close(ended)
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				started <- struct{}{}
+				<-ctx.Done()
+				ended <- struct{}{}
+				return nil
+			},
+		})
+		errCh := make(chan error)
+		defer close(errCh)
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				return <-errCh
+			},
+		})
+		myErr := fmt.Errorf("my error")
+		runner.ErrorHandler = func(ctx context.Context, err error) bool {
+			assert.Equal(t, myErr, err)
+			return true
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			err := runner.Run(ctx)
+			assert.Equal(t, myErr, err)
+			wg.Done()
+		}()
+		// Wait for the runner to be started
+		require.False(t, waitForMessageOrTimeout(started, time.Second*5), "timed out waiting for runnable to run")
+		// Return an error from runner 1
+		errCh <- myErr
+		// Wait for the other runner to exit (or timeout if it doesn't)
+		require.False(t, waitForMessageOrTimeout(ended, time.Second*5), "timed out waiting for runnable to exit")
+		cancel()
+		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for runner to exit")
+	})
+
+	t.Run("timeout waiting for runner to complete", func(t *testing.T) {
+		runner := NewDynamicMultiRunner()
+		runnerCtx, runnerCancel := context.WithCancel(context.Background())
+		defer runnerCancel()
+		started := make(chan struct{})
+		defer close(started)
+		runner.AddRunnable(&testRunnable{
+			RunFunc: func(ctx context.Context) error {
+				started <- struct{}{}
+				<-runnerCtx.Done() // Wait for a different context so we don't exit on ctx.Done()
+				return nil
+			},
+		})
+		timeout := time.Second
+		runner.ExitWait = &timeout
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			err := runner.Run(ctx)
+			assert.Equal(t, ErrRunnerExitTimeout, err)
+			wg.Done()
+		}()
+		require.False(t, waitForMessageOrTimeout(started, timeout), "timed out waiting for runnable to start")
+		cancel()
+		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for runner to exit")
+	})
+}
+
 type testRunnable struct {
 	RunFunc    func(ctx context.Context) error
 	Collectors []prometheus.Collector
@@ -313,4 +518,14 @@ func runOrTimeout(ctx context.Context, runnable Runnable, timeout time.Duration)
 		err = testTimeoutError
 	}
 	return err
+}
+
+func waitForMessageOrTimeout(ch <-chan struct{}, timeout time.Duration) bool {
+	timer := time.NewTimer(timeout)
+	select {
+	case <-ch:
+		return false
+	case <-timer.C:
+		return true
+	}
 }

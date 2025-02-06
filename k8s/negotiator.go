@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -112,6 +113,7 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 	for encoding, codec := range k.Kind.Codecs {
 		serializer := &CodecDecoder{
 			SampleObject: k.Kind.ZeroValue(),
+			SampleList:   k.Kind.ZeroListValue(),
 			Codec:        codec,
 		}
 		info := runtime.SerializerInfo{
@@ -152,8 +154,22 @@ func (*KindNegotiatedSerializer) DecoderToVersion(d runtime.Decoder, _ runtime.G
 // CodecDecoder implements runtime.Serializer and works with Untyped* objects to implement runtime.Object
 type CodecDecoder struct {
 	SampleObject resource.Object
+	SampleList   resource.ListObject
 	Codec        resource.Codec
 	Decoder      func([]byte, any) error
+}
+
+type indicator struct {
+	metav1.TypeMeta `json:",inline"`
+	Items           *noAlloc `json:"items,omitempty"`
+}
+
+// noAlloc is used to avoid allocating any memory when unmarshaling, it can be used as a signal field
+type noAlloc struct {
+}
+
+func (*noAlloc) UnmarshalJSON([]byte) error {
+	return nil
 }
 
 // Decode decodes the provided data into UntypedWatchObject or UntypedObjectWrapper
@@ -162,26 +178,82 @@ type CodecDecoder struct {
 func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (
 	runtime.Object, *schema.GroupVersionKind, error) {
 	if into != nil {
-		if cast, ok := into.(resource.Object); ok {
+		switch cast := into.(type) {
+		case resource.Object:
+			logging.DefaultLogger.Debug("decoding object into provided resource.Object", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Codec.Read(bytes.NewReader(data), cast)
 			return cast, defaults, err
-		}
-		if cast, ok := into.(*metav1.WatchEvent); ok {
+		case resource.ListObject:
+			logging.DefaultLogger.Debug("decoding object into provided resource.ListObject", "gvk", into.GetObjectKind().GroupVersionKind().String())
+			// TODO: use codec for each element in the list?
+			err := c.Decoder(data, cast)
+			return cast, defaults, err
+		case *metav1.WatchEvent:
+			logging.DefaultLogger.Debug("decoding object into provided *v1.WatchEvent", "gvk", into.GetObjectKind().GroupVersionKind().String())
+			err := c.Decoder(data, cast)
+			return cast, defaults, err
+		case *metav1.List:
+			logging.DefaultLogger.Debug("decoding object into provided *v1.List", "gvk", into.GetObjectKind().GroupVersionKind().String())
+			err := c.Decoder(data, cast)
+			return cast, defaults, err
+		case *metav1.Status:
+			logging.DefaultLogger.Debug("decoding object into provided *v1.Status", "gvk", into.GetObjectKind().GroupVersionKind().String())
 			err := c.Decoder(data, cast)
 			return cast, defaults, err
 		}
-		if cast, ok := into.(*metav1.List); ok {
-			err := c.Decoder(data, cast)
-			return cast, defaults, err
-		}
-		// We shouldn't encounter this
-		// TODO: make better or return error?
+
+		// TODO: This is the same process (just without casting) as WatchEvent, List, and Status (they all use the default Decoder). Should we still keep them separate?
+		logging.DefaultLogger.Debug("decoding object into provided unregistered resource using default Decoder", "gvk", into.GetObjectKind().GroupVersionKind().String())
 		err := c.Decoder(data, into)
 		return into, defaults, err
 	}
 
-	obj := c.SampleObject.Copy()
-	err := c.Codec.Read(bytes.NewReader(data), obj)
+	if defaults != nil {
+		if defaults.Kind == "Status" && defaults.Version == "v1" {
+			logging.DefaultLogger.Debug("decoding object into *v1.Status resource based on defaults", "gvk", defaults.String())
+			obj := &metav1.Status{}
+			err := c.Decoder(data, obj)
+			return obj, defaults, err
+		}
+		logging.DefaultLogger.Debug("defaults present", "gvk", defaults.String())
+	}
+
+	tm := indicator{}
+	err := c.Decoder(data, &tm)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error decoding object TypeMeta: %w", err)
+	}
+	if tm.GroupVersionKind().Version == "v1" && tm.GroupVersionKind().Kind == "Status" {
+		logging.DefaultLogger.Debug("decoding object into *v1.Status resource based on decoded TypeMeta", "gvk", tm.GroupVersionKind().String())
+		obj := &metav1.Status{}
+		err := c.Decoder(data, obj)
+		return obj, defaults, err
+	}
+	// Check if this is a List
+	if tm.Items != nil {
+		logging.DefaultLogger.Debug("decoding into a new empty list instance from kind", "gvk", tm.GroupVersionKind().String())
+		var obj resource.ListObject
+		if c.SampleList != nil {
+			obj = c.SampleList.Copy()
+		} else {
+			logging.DefaultLogger.Warn("no SampleObject set in CodecDecoder, using *resource.TypedList[*resource.UntypedObject]")
+			obj = &resource.TypedList[*resource.UntypedObject]{}
+		}
+		// TODO: use codec for each element in the list?
+		err = c.Decoder(data, &obj)
+		return obj, defaults, err
+	}
+
+	// Default to the data being the kind this CodecDecoder is for
+	logging.DefaultLogger.Debug("decoding into a new empty object instance from kind", "gvk", tm.GroupVersionKind().String())
+	var obj resource.Object
+	if c.SampleObject != nil {
+		obj = c.SampleObject.Copy()
+	} else {
+		logging.DefaultLogger.Warn("no SampleObject set in CodecDecoder, using *resource.UntypedObject")
+		obj = &resource.UntypedObject{}
+	}
+	err = c.Codec.Read(bytes.NewReader(data), obj)
 	return obj, defaults, err
 }
 

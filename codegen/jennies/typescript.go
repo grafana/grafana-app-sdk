@@ -28,7 +28,7 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 		if ver == nil {
 			return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
 		}
-		if !ver.Codegen.Frontend {
+		if !ver.Codegen.TS.Enabled {
 			return nil, nil
 		}
 		b, err := t.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName)+"_")
@@ -44,7 +44,7 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 		allVersions := kind.Versions()
 		for i := 0; i < len(allVersions); i++ {
 			ver := allVersions[i]
-			if !ver.Codegen.Frontend {
+			if !ver.Codegen.TS.Enabled {
 				continue
 			}
 			b, err := t.generateObjectFile(kind, &ver, "")
@@ -73,12 +73,12 @@ func (*TypeScriptResourceTypes) generateObjectFile(kind codegen.Kind, version *c
 		return nil, err
 	}
 	for it.Next() {
-		if it.Label() == "spec" || it.Label() == "metadata" {
+		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
 			continue
 		}
 		metadata.Subresources = append(metadata.Subresources, templates.SubresourceMetadata{
-			TypeName: exportField(it.Label()),
-			JSONName: it.Label(),
+			TypeName: exportField(it.Selector().String()),
+			JSONName: it.Selector().String(),
 		})
 	}
 
@@ -126,7 +126,7 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		if !ver.Codegen.Frontend {
+		if !ver.Codegen.TS.Enabled {
 			return nil, nil
 		}
 
@@ -138,7 +138,7 @@ func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	allVersions := kind.Versions()
 	for i := 0; i < len(allVersions); i++ {
 		v := allVersions[i]
-		if !v.Codegen.Frontend {
+		if !v.Codegen.TS.Enabled {
 			continue
 		}
 
@@ -156,7 +156,10 @@ func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathP
 		return j.generateFilesAtDepth(version.Schema, version, 0, pathPrefix, prefix)
 	}
 
-	tsBytes, err := generateTypescriptBytes(version.Schema, exportField(sanitizeLabelString(name)))
+	tsBytes, err := generateTypescriptBytes(version.Schema, exportField(sanitizeLabelString(name)), cog.TypescriptConfig{
+		ImportsMap:        version.Codegen.TS.Config.ImportsMap,
+		EnumsAsUnionTypes: version.Codegen.TS.Config.EnumsAsUnionTypes,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +176,10 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
-		tsBytes, err := generateTypescriptBytes(v, exportField(strings.Join(fieldName, "")))
+		tsBytes, err := generateTypescriptBytes(v, exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
+			ImportsMap:        kv.Codegen.TS.Config.ImportsMap,
+			EnumsAsUnionTypes: kv.Codegen.TS.Config.EnumsAsUnionTypes,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -200,10 +206,10 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 	return files, nil
 }
 
-func generateTypescriptBytes(v cue.Value, name string) ([]byte, error) {
+func generateTypescriptBytes(v cue.Value, name string, tsConfig cog.TypescriptConfig) ([]byte, error) {
 	files, err := cog.TypesFromSchema().
 		CUEValue("", v, cog.ForceEnvelope(name)).
-		Typescript(cog.TypescriptConfig{}).
+		Typescript(tsConfig).
 		Run(context.Background())
 	if err != nil {
 		return nil, err

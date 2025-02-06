@@ -109,6 +109,9 @@ func (c *ClientRegistry) getClient(sch resource.Kind) (rest.Interface, error) {
 	} else {
 		ccfg.NegotiatedSerializer = &GenericNegotiatedSerializer{}
 	}
+	if c.clientConfig.KubeConfigProvider != nil {
+		ccfg = c.clientConfig.KubeConfigProvider(sch, ccfg)
+	}
 	client, err := rest.RESTClientFor(&ccfg)
 	if err != nil {
 		return nil, err

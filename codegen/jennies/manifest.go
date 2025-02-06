@@ -18,9 +18,9 @@ type ManifestOutputEncoder func(any) ([]byte, error)
 
 // ManifestGenerator generates a JSON/YAML App Manifest.
 type ManifestGenerator struct {
-	Encoder       ManifestOutputEncoder
-	FileExtension string
-	AppName       string
+	Encoder        ManifestOutputEncoder
+	FileExtension  string
+	IncludeSchemas bool
 }
 
 func (*ManifestGenerator) JennyName() string {
@@ -29,32 +29,29 @@ func (*ManifestGenerator) JennyName() string {
 
 // Generate creates one or more codec go files for the provided Kind
 // nolint:dupl
-func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
-	manifest, err := buildManifest(kinds)
+func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	manifestData, err := buildManifestData(appManifest, m.IncludeSchemas)
 	if err != nil {
 		return nil, err
 	}
 
-	if m.AppName != "" {
-		manifest.AppName = m.AppName
-	}
-	if manifest.Group == "" {
-		if len(manifest.Kinds) > 0 {
+	if manifestData.Group == "" {
+		if len(manifestData.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifest.Group = fmt.Sprintf("%s.ext.grafana.com", manifest.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
 	}
 
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = "apps.grafana.com/v1"
+	output["apiVersion"] = "apps.grafana.com/v1alpha1"
 	output["kind"] = "AppManifest"
 	output["metadata"] = map[string]string{
-		"name": manifest.AppName,
+		"name": manifestData.AppName,
 	}
-	output["spec"] = manifest
+	output["spec"] = manifestData
 
 	files := make(codejen.Files, 0)
 	out, err := m.Encoder(output)
@@ -62,7 +59,7 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 		return nil, err
 	}
 	files = append(files, codejen.File{
-		RelativePath: fmt.Sprintf("%s-manifest.%s", manifest.AppName, m.FileExtension),
+		RelativePath: fmt.Sprintf("%s-manifest.%s", manifestData.AppName, m.FileExtension),
 		Data:         out,
 		From:         []codejen.NamedJenny{m},
 	})
@@ -71,36 +68,33 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 }
 
 type ManifestGoGenerator struct {
-	AppName string
-	Package string
+	Package        string
+	IncludeSchemas bool
 }
 
 func (*ManifestGoGenerator) JennyName() string {
 	return "ManifestGoGenerator"
 }
 
-func (g *ManifestGoGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
-	manifest, err := buildManifest(kinds)
+func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	manifestData, err := buildManifestData(appManifest, g.IncludeSchemas)
 	if err != nil {
 		return nil, err
 	}
 
-	if g.AppName != "" {
-		manifest.AppName = g.AppName
-	}
-	if manifest.Group == "" {
-		if len(manifest.Kinds) > 0 {
+	if manifestData.Group == "" {
+		if len(manifestData.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifest.Group = fmt.Sprintf("%s.ext.grafana.com", manifest.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
 	}
 
 	buf := bytes.Buffer{}
 	err = templates.WriteManifestGoFile(templates.ManifestGoFileMetadata{
 		Package:      g.Package,
-		ManifestData: *manifest,
+		ManifestData: *manifestData,
 	}, &buf)
 	if err != nil {
 		return nil, err
@@ -113,39 +107,41 @@ func (g *ManifestGoGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, er
 	files := make(codejen.Files, 0)
 	files = append(files, codejen.File{
 		Data:         formatted,
-		RelativePath: "manifest.go",
+		RelativePath: fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group),
 		From:         []codejen.NamedJenny{g},
 	})
 
 	return files, nil
 }
 
-func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
+//nolint:revive
+func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		Kinds: make([]app.ManifestKind, 0),
 	}
 
-	for _, kind := range kinds {
-		if kind.Properties().APIResource == nil {
-			continue
-		}
+	manifest.AppName = m.Name()
+	manifest.Group = m.Properties().FullGroup
+
+	for _, kind := range m.Kinds() {
+		// TODO
 		if manifest.AppName == "" {
 			manifest.AppName = kind.Properties().Group
 		}
 		if manifest.Group == "" {
-			manifest.Group = kind.Properties().APIResource.Group
+			manifest.Group = kind.Properties().Group
 		}
-		if kind.Properties().APIResource.Group == "" {
+		if kind.Properties().Group == "" {
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
-		if kind.Properties().APIResource.Group != manifest.Group {
+		if kind.Properties().Group != manifest.Group {
 			return nil, fmt.Errorf("all kinds must have the same group %q", manifest.Group)
 		}
 
 		mkind := app.ManifestKind{
 			Kind:       kind.Name(),
-			Scope:      kind.Properties().APIResource.Scope,
-			Conversion: kind.Properties().APIResource.Conversion,
+			Scope:      kind.Properties().Scope,
+			Conversion: kind.Properties().Conversion,
 			Versions:   make([]app.ManifestKindVersion, 0),
 		}
 
@@ -176,18 +172,35 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 					Operations: operations,
 				}
 			}
-			crd, err := KindVersionToCRDSpecVersion(version, mkind.Kind, true)
-			if err != nil {
-				return nil, err
-			}
-			mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
-			if err != nil {
-				return nil, fmt.Errorf("version schema error: %w", err)
+			// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
+			if includeSchemas {
+				crd, err := KindVersionToCRDSpecVersion(version, mkind.Kind, true)
+				if err != nil {
+					return nil, err
+				}
+				mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
+				if err != nil {
+					return nil, fmt.Errorf("version schema error: %w", err)
+				}
 			}
 			mver.SelectableFields = version.SelectableFields
 			mkind.Versions = append(mkind.Versions, mver)
 		}
 		manifest.Kinds = append(manifest.Kinds, mkind)
+	}
+
+	if len(m.Properties().ExtraPermissions.AccessKinds) > 0 {
+		perms := make([]app.KindPermission, len(m.Properties().ExtraPermissions.AccessKinds))
+		for i, p := range m.Properties().ExtraPermissions.AccessKinds {
+			perms[i] = app.KindPermission{
+				Group:    p.Group,
+				Resource: p.Resource,
+				Actions:  toKindPermissionActions(p.Actions),
+			}
+		}
+		manifest.ExtraPermissions = &app.Permissions{
+			AccessKinds: perms,
+		}
 	}
 
 	return &manifest, nil
@@ -214,4 +227,12 @@ func sanitizeAdmissionOperations(operations []codegen.KindAdmissionCapabilityOpe
 		sanitized = append(sanitized, translated)
 	}
 	return sanitized, nil
+}
+
+func toKindPermissionActions(actions []string) []app.KindPermissionAction {
+	a := make([]app.KindPermissionAction, len(actions))
+	for i, action := range actions {
+		a[i] = app.KindPermissionAction(strings.ToLower(action))
+	}
+	return a
 }

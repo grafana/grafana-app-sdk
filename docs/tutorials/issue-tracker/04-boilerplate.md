@@ -2,11 +2,11 @@
 
 Since this is a fresh project, we can take advantage of the CLI's tooling to set up boilerplate code for us which we can then extend on. Note that this is not strictly necessary for writing an application (whereas running the CUE codegen is something you'll likely want for every project), but it makes initial project bootstrapping simpler, and will help us move along here faster. If you decide in future projects you want to handle your routing, storage, or front-end framework differently, you can eschew some or all of the things laid out in this section.
 
-## The `project add` Command
+## The `project component add` Command
 
-Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
+Earlier, we used the CLI's `project` command with `project init`, initializing our project with some very basic stuff. Now, we can again use the `project` command, this time to add boilerplate components to our app. These are added using the `project component add` command, with the name of one or more components you wish to add to the project. To see the list of possible components, you can run it sans arguments, like so:
 ```shell
-$ grafana-app-sdk project add
+$ grafana-app-sdk project component add
 Usage: grafana-app-sdk project component add [options] <components>
 	where <components> are one or more of:
 		backend
@@ -14,75 +14,37 @@ Usage: grafana-app-sdk project component add [options] <components>
 		operator
 ```
 
-Since we're building out everything we can as part of this tutorial, let's go ahead and add all three project components.
-```shell
-grafana-app-sdk project component add frontend backend operator
-```
-But this gives us an error:
-```shell
-$ grafana-app-sdk project component add frontend backend operator
-plugin-id is required
-```
-
-Oops, looks like we need some extra information for this command. We need a `--plugin-id` flag, because it's going to be generating a grafana plugin, which requires that we have a unique ID. We can also view the full list of all flags we can pass to this command with:
+We can also get information on what flags this (or any other) command takes with `--help`:
 ```shell
 $ grafana-app-sdk project component add --help
 Usage:
   grafana-app-sdk project component add [flags]
 
 Flags:
-  -h, --help               help for add
-      --plugin-id string   Plugin ID
+      --grouping string   Kind go package grouping.
+                          Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command (default "kind")
+  -h, --help              help for add
 
 Global Flags:
-  -c, --cuepath string      Path to directory with cue.mod (default "kinds")
-      --overwrite           Overwrite existing files instead of prompting
-  -p, --path string         Path to project directory
-  -s, --selectors strings   selectors
+  -f, --format string     Format in which kinds are written for this project (currently allowed values are 'cue') (default "cue")
+      --manifest string   Path selector to use for the manifest (default "manifest")
+      --overwrite         Overwrite existing files instead of prompting
+  -p, --path string       Path to project directory
+  -s, --source string     Path to directory with your codegen source files (such as a CUE module) (default "kinds")
 ```
-We can leave all the global flags empty, like we have for other commands, but it's good to know how we can find information about the CLI commands. 
 
-Let's give our plugin an ID (I'm going to use `issue-tracker-project`, but you can use anything you want as long as it won't conflict with another plugin), and run the command again:
+We can leave all these flags empty, as we're fine with the defaults, but it's good to know how we can find information about the CLI commands.
+
+Since we're building out everything we can as part of this tutorial, let's go ahead and add all three project components.
 ```shell
-grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
+grafana-app-sdk project component add frontend backend operator
 ```
-Just like with any other command that writes files, the output is a list of all written files:
+Just like with any other command that writes files, the output is a list of all written files, though the front-end files are created with `yarn` and are not listed.
 ```shell
-$ grafana-app-sdk project component add frontend backend operator --plugin-id="issue-tracker-project"
- * Writing file plugin/.config/.eslintrc
- * Writing file plugin/.config/.prettierrc.js
- * Writing file plugin/.config/Dockerfile
- * Writing file plugin/.config/README.md
- * Writing file plugin/.config/jest/mocks/react-inlinesvg.tsx
- * Writing file plugin/.config/jest/utils.js
- * Writing file plugin/.config/jest-setup.js
- * Writing file plugin/.config/jest.config.js
- * Writing file plugin/.config/tsconfig.json
- * Writing file plugin/.config/types/custom.d.ts
- * Writing file plugin/.config/webpack/constants.ts
- * Writing file plugin/.config/webpack/utils.ts
- * Writing file plugin/.config/webpack/webpack.config.ts
- * Writing file plugin/.eslintrc
- * Writing file plugin/.nvmrc
- * Writing file plugin/.prettierrc.js
- * Writing file plugin/CHANGELOG.md
- * Writing file plugin/LICENSE
- * Writing file plugin/README.md
- * Writing file plugin/jest-setup.js
- * Writing file plugin/jest.config.js
- * Writing file plugin/src/App.tsx
- * Writing file plugin/src/components/Routes/Routes.tsx
- * Writing file plugin/src/components/Routes/index.tsx
- * Writing file plugin/src/module.ts
- * Writing file plugin/src/pages/index.tsx
- * Writing file plugin/src/pages/main.tsx
- * Writing file plugin/src/types.ts
- * Writing file plugin/src/utils/utils.plugin.ts
- * Writing file plugin/src/utils/utils.routing.ts
- * Writing file plugin/tsconfig.json
+$ grafana-app-sdk project component add frontend backend operator
+Creating plugin frontend using `yarn create @grafana/plugin` (this may take a moment)...
  * Writing file plugin/src/plugin.json
  * Writing file plugin/src/constants.ts
- * Writing file plugin/package.json
  * Writing file plugin/pkg/main.go
  * Writing file pkg/plugin/handler_issue.go
  * Writing file pkg/plugin/plugin.go
@@ -98,66 +60,81 @@ $ grafana-app-sdk project component add frontend backend operator --plugin-id="i
  * Writing file pkg/watchers/watcher_issue.go
  * Writing file cmd/operator/Dockerfile
 ```
-Wow, that's a lot more files written out than in our Kind codegen. Let's take a look at the tree to get a better picture of everything:
+Let's take a look at the tree to get a better picture of everything:
 ```shell
 $ tree -I "generated|definitions|kinds|local" .
 .
 ├── Makefile
 ├── cmd
-│   └── operator
-│       ├── Dockerfile
-│       ├── config.go
-│       ├── kubeconfig.go
-│       └── main.go
+│   └── operator
+│       ├── Dockerfile
+│       ├── config.go
+│       ├── kubeconfig.go
+│       └── main.go
 ├── go.mod
 ├── go.sum
 ├── pkg
-│   ├── app
-│   │   └── app.go
-│   ├── plugin
-│   │   ├── handler_issue.go
-│   │   ├── plugin.go
-│   │   └── secure
-│   │       ├── data.go
-│   │       ├── middleware.go
-│   │       └── retriever.go
-│   └── watchers
-│       ├── watcher_foo.go
-│       └── watcher_issue.go
+│   ├── app
+│   │   └── app.go
+│   ├── plugin
+│   │   ├── handler_issue.go
+│   │   ├── plugin.go
+│   │   └── secure
+│   │       ├── data.go
+│   │       ├── middleware.go
+│   │       └── retriever.go
+│   └── watchers
+│       └── watcher_issue.go
 └── plugin
     ├── CHANGELOG.md
     ├── LICENSE
     ├── Magefile.go
     ├── README.md
+    ├── docker-compose.yaml
     ├── jest-setup.js
     ├── jest.config.js
     ├── package.json
     ├── pkg
-    │   └── main.go
+    │   └── main.go
+    ├── playwright.config.ts
+    ├── provisioning
+    │   └── plugins
+    │       ├── README.md
+    │       └── apps.yaml
     ├── src
-    │   ├── App.tsx
-    │   ├── components
-    │   │   └── Routes
-    │   │       ├── Routes.tsx
-    │   │       └── index.tsx
-    │   ├── constants.ts
-    │   ├── module.ts
-    │   ├── pages
-    │   │   ├── index.tsx
-    │   │   └── main.tsx
-    │   ├── plugin.json
-    │   ├── types.ts
-    │   └── utils
-    │       ├── utils.plugin.ts
-    │       └── utils.routing.ts
+    │   ├── README.md
+    │   ├── components
+    │   │   ├── App
+    │   │   │   ├── App.test.tsx
+    │   │   │   └── App.tsx
+    │   │   ├── AppConfig
+    │   │   │   ├── AppConfig.test.tsx
+    │   │   │   └── AppConfig.tsx
+    │   │   └── testIds.ts
+    │   ├── constants.ts
+    │   ├── img
+    │   │   └── logo.svg
+    │   ├── module.tsx
+    │   ├── pages
+    │   │   ├── PageFour.tsx
+    │   │   ├── PageOne.tsx
+    │   │   ├── PageThree.tsx
+    │   │   └── PageTwo.tsx
+    │   ├── plugin.json
+    │   └── utils
+    │       └── utils.routing.ts
+    ├── tests
+    │   ├── appConfig.spec.ts
+    │   ├── appNavigation.spec.ts
+    │   └── fixtures.ts
     └── tsconfig.json
 
-15 directories, 35 files
+20 directories, 45 files
 ```
 
-Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
+Excluding our previously-generated files, we can see that we have a few new go packages (`pkg/app`, `pkg/watchers`, `pkg/plugin`, and `pkg/plugin/secure`), some go files and a Dockerfile in `cmd/operator`, and a bunch of new stuff in the `plugin` directory.
 
-If we had split up our `project add` into `project add backend`, we'd only get our generated go files in `pkg/plugin`, `project add frontend` would only give us the non-`plugin/pkg` plugin files, and `project add operator` would give us the `pkg/watchers` and `cmd/operator` files. As we can see, none of these `project add` components have overlapping code, which is deliberate. If you prefer to not use boilerplate for a given component, you can simply not add it and not worry that another component will depend on boilerplate from it.
+If we had split up our `project component add` into `project component add backend`, we'd only get our generated go files in `pkg/plugin`, `project component add frontend` would only give us the non-`plugin/pkg` plugin files, and `project component add operator` would give us the `pkg/watchers` and `cmd/operator` files. As we can see, none of these `project component add` components have overlapping code, which is deliberate. If you prefer to not use boilerplate for a given component, you can simply not add it and not worry that another component will depend on boilerplate from it.
 
 So, what are these new bits of code doing?
 
@@ -167,7 +144,7 @@ So, what are these new bits of code doing?
 
 ### `pkg/plugin`
 
-The `project add` didn't actually generate too many files for our back-end boilerplate, just a couple of go files in `pkg/plugin` and then some code in `pkg/plugin/secure`:
+The `project component add` didn't actually generate too many files for our back-end boilerplate, just a couple of go files in `pkg/plugin` and then some code in `pkg/plugin/secure`:
 ```shell
 $ tree pkg/plugin
 pkg/plugin
@@ -231,14 +208,19 @@ func New(namespace string, service Service) (*Plugin, error) {
 ```
 We can see that this router isn't a standard go http router. Requests that come to the back-end of our plugin are sent through grafana's Resource API, which then passes along a subset of that data to the plugin with gRPC. The `router.JSONRouter` abstracts away that implementation detail (and there are other router flavors in the `router` package), and gives us a router where we can define normal HTTP routes, with handlers that will consume a `router.JSONRequest` (which pulls together all the data we get from the forwarded grafana request), and return either some object which can (and will) be marshaled into JSON, or an error (which will be marshaled into an error response).
 
-There are also two pieces of middleware in use:
+There are also several pieces of middleware in use:
 ```go
 p.router.Use(
+	router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware")),
+	router.NewLoggingMiddleware(logging.DefaultLogger),
 	kubeconfig.LoadingMiddleware(),
 	router.MiddlewareFunc(secure.Middleware))
 ```
-`kubeconfig.LoadingMiddleware()` is middleware managed by the grafana-app-sdk which will pull kube config details from the secureJSONData and place it into the context. We'll see the other side, where we use that kube config, later on.
-`router.MiddlewareFunc(secure.Middleware)` is that secureJSONData middleware we just talked about in our boilerplate `pkg/plugin/secure` package.
+
+* `router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware"))` is a middleware that adds a tracing span for every request. The span lasts during the duration of the request's handle time and includes HTTP request and response attributes.
+* `router.NewLoggingMiddleware(logging.DefaultLogger)` is a middleware that logs an INFO level message for each request.
+* `kubeconfig.LoadingMiddleware()` is middleware managed by the grafana-app-sdk which will pull kube config details from the secureJSONData and place it into the context. We'll see the other side, where we use that kube config, later on.
+* `router.MiddlewareFunc(secure.Middleware)` is that secureJSONData middleware we just talked about in our boilerplate `pkg/plugin/secure` package.
 
 The last bits in the boilerplate code here are just creating a subrouter for our `issue` Kind and adding routes and handlers for all standard Create/Read/Update/Delete/List endpoints.
 
@@ -255,18 +237,21 @@ type IssueService interface {
 This service is what we'll have to actually implement later when we start writing code, but it's what the handlers are going to try to use to do what they're supposed to do. To see this, let's take a look at the list handler (defined first):
 ```go
 func (p *Plugin) handleIssueList(ctx context.Context, req router.JSONRequest) (router.JSONResponse, error) {
-	filtersRaw := req.URL.Query().Get("filters")
-	filters := make([]string, 0)
+    ctx, span := tracing.DefaultTracer().Start(ctx, "issue-list")
+    defer span.End()
+    filtersRaw := req.URL.Query().Get("filters")
+    filters := make([]string, 0)
 	if len(filtersRaw) > 0 {
 		filters = strings.Split(filtersRaw, ",")
 	}
 	svc, err := p.service.GetIssueService(ctx)
 	if err != nil {
-	    log.DefaultLogger.Error("Error getting IssueService: " + err.Error())
-	    return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
+		log.DefaultLogger.With("traceID", span.SpanContext().TraceID()).Error("Error getting IssueService: "+err.Error(), "error", err)
+		return nil, plugin.NewError(http.StatusInternalServerError, err.Error())
 	}
-	return svc.List(ctx, p.namespace, filters...)
+	return svc.List(ctx, resource.StoreListOptions{Namespace: p.namespace, PerPage: 500, Filters: filters})
 }
+
 ```
 It satisfies the `router.JSONHandlerFunc` function type, so that we can use it as a handler. The first parameter, `ctx`, is somewhat self-explanatory as the go context (if you're unfamiliar with go contexts, [the godoc](https://pkg.go.dev/context) is a good place to start). The second parameter is a `router.JSONRequest`. This is a sort of plugin equivalent of the `http.Request`, though with some differences, most of which we won't cover here. The important one to know is that it doesn't have all the request data you might have in an `http.Request`, such as the hostname, or all the headers. The `url.URL` we get with `req.URL` contains a URL which begins at the entrypoint to our API, so the first part will be the first part of the path in our route (no protocol, host, or initial grafana resource API path).
 
@@ -278,35 +263,18 @@ In our list handler boilerplate, we can see we grab filters from the query, if p
 
 `plugin/pkg` is where the `main` package lives for our plugin, it's what will be compiled for the back-end. This is also where the boilerplate has the most gaps that need to be filled to make things functional, but let's take a look at what's given to us first.
 
-Let's ignore `PluginService` for now, as we'll be replacing that code later with our own, and just take a look at what `main()` does:
+Let's ignore `PluginService` for now, as we'll be replacing that code later with our own. `main` function contains mostly boilerplate code, but most importantly it calls `app.Manage` to handle the plugin lifecycle.
 ```go
-func main() {
-    svc := &PluginService{}
-
-    // GENERATED SIMPLE SERVICE INITIALIZER CODE
-    svc.issueServiceInitializer = kubeconfig.CachingInitializer(
-        func(cfg kubeconfig.NamespacedConfig) (plugin.IssueService, error) {
-            // This is example code which assumes the API and storage models are identical
-            // TODO: REPLACEME
-            return resource.NewTypedStore[*issue.Object](issue.Schema(), k8s.NewClientRegistry(cfg.RestConfig))
-        })
-    
-
-    p, err := plugin.New("default", svc) // TODO: fix namespace usage
-    if err != nil {
-        panic(err)
-    }
-
-    // Start listening
-    err = p.Start()
-    if err != nil {
-        panic(err)
-    }
-}
+app.Manage(pluginID, newInstanceFactory(logger), app.ManageOpts{
+	TracingOpts: tracing.Opts{
+		CustomAttributes: []attribute.KeyValue{
+			attribute.String("plugin.id", pluginID),
+		},
+	},
+})
 ```
-The important thing to look at is the `kubeconfig.CachingInitializer` being used for the service initializer func. This is another SDK library which allows us to define an initializer for a service which will be called only once per unique kube config. We'll get more in-depth on what this is and why we need to do this when we begin writing our back-end code, but I want to point this out.
 
-Otherwise, the `main()` code is pretty simple. We create a new `plugin.Plugin` with `plugin.New`, and then start it. That's really all there is to it for our `main` package, all the meat of the back-end is going to be in `pkg`, rather than in `plugin`, this is just the "hook" as it were, into all that code.
+`app.Manage` works on the result of `newInstanceFactory`, which loads the supplied configuration, creates store for storing our issues, and then creates a plugin instance using `plugin.New`, which is then returned. 
 
 ## Front-End Code from frontend component
 
@@ -318,37 +286,53 @@ plugin
 ├── LICENSE
 ├── Magefile.go
 ├── README.md
+├── docker-compose.yaml
 ├── jest-setup.js
 ├── jest.config.js
 ├── package.json
 ├── pkg
 │   └── main.go
+├── playwright.config.ts
+├── provisioning
+│   └── plugins
+│       ├── README.md
+│       └── apps.yaml
 ├── src
-│   ├── App.tsx
+│   ├── README.md
 │   ├── components
-│   │   └── Routes
-│   │       ├── Routes.tsx
-│   │       └── index.tsx
+│   │   ├── App
+│   │   │   ├── App.test.tsx
+│   │   │   └── App.tsx
+│   │   ├── AppConfig
+│   │   │   ├── AppConfig.test.tsx
+│   │   │   └── AppConfig.tsx
+│   │   └── testIds.ts
 │   ├── constants.ts
 │   ├── generated
 │   │   └── issue
 │   │       └── v1
-│   │           └── issue_object_gen.ts
-│   │           └── types.metadata.gen.ts
-│   │           └── types.spec.gen.ts
+│   │           ├── issue_object_gen.ts
+│   │           ├── types.metadata.gen.ts
+│   │           ├── types.spec.gen.ts
 │   │           └── types.status.gen.ts
-│   ├── module.ts
+│   ├── img
+│   │   └── logo.svg
+│   ├── module.tsx
 │   ├── pages
-│   │   ├── index.tsx
-│   │   └── main.tsx
+│   │   ├── PageFour.tsx
+│   │   ├── PageOne.tsx
+│   │   ├── PageThree.tsx
+│   │   └── PageTwo.tsx
 │   ├── plugin.json
-│   ├── types.ts
 │   └── utils
-│       ├── utils.plugin.ts
 │       └── utils.routing.ts
+├── tests
+│   ├── appConfig.spec.ts
+│   ├── appNavigation.spec.ts
+│   └── fixtures.ts
 └── tsconfig.json
 
-10 directories, 21 files
+15 directories, 35 files
 ```
 We can also safely _ignore_ a lot of this generation. If you create a grafana plugin, there's a certain amount of metadata that needs to be created, and, likewise, when you create a react app (which front-end plugins are), there's some other data that needs to exist. So basically everything in the root `plugin` directory is something we can ignore for the moment, as it's just things telling either grafana how to handle this app, or react how to compile it. But, as a quick breakdown, here's what each file does that we're going to ignore:
 
@@ -365,44 +349,33 @@ That leaves us with just our varying TypeScript files.
 
 ### Pages
 
-`pages/` contains the acual front-end pages to be displayed for the app. `main.tsx` is your main plugin page, which by default just contains a simple statement declaring it your main landing page:
+`pages/` contains the actual front-end pages to be displayed for the app. `PageOne.tsx` is your main plugin page, which by default just contains a simple statement declaring it your main landing page:
 
 ```TypeScript
-export const MainPage = () => {
-  useStyles2(getStyles);
+function PageOne() {
+  const s = useStyles2(getStyles);
 
   return (
-      <div>
-        <h1>Main Landing Page</h1>
-        <div>This is your main landing page</div>
+    <PluginPage>
+      <div data-testid={testIds.pageOne.container}>
+        This is page one.
+        <div className={s.marginTop}>
+          <LinkButton data-testid={testIds.pageOne.navigateToFour} href={prefixRoute(ROUTES.Four)}>
+            Full-width page example
+          </LinkButton>
+        </div>
       </div>
+    </PluginPage>
   );
-};
+}
 ```
+There are other pages generated here as examples from the output of `yarn create @grafana/plugin`. The routing for these pages is in `components/App/App.tsx`.
 
 `MainPage` is used by the router when displaying pages--you can add more by creating other exported functions and registering them in the router.
 
-### Router
+### Components
 
-`components/Routes/Router.tsx` contains the router for your app frontend. By default only the `MainPage` is routed, and matches any path:
-```TypeScript
-export const Routes = () => {
-  useNavigation();
-
-  return (
-    <Switch>
-      <Route exact path={prefixRoute(ROUTES.Main)} component={MainPage} />
-
-      {/* Default page */}
-      <Route exact path="*">
-        <Redirect to={prefixRoute(ROUTES.Main)} />
-      </Route>
-    </Switch>
-  );
-};
-```
-
-`ROUTES.Main` is a constant pulled from `constants.ts`. `useNavigation` and `prefixRoute` are pulled from `utils`.
+`components` contains your front-end App declaration and AppConfig.
 
 ### Types
 
@@ -427,7 +400,7 @@ Here is where the `main` code to run the operator lives, and the docker file to 
 
 ### `pkg/watchers`
 
-Here we only have one file, created for our Issue kind. If we had more kinds, we'd have more files here, as the `project add operator` command generates a boilerplate watcher for each kind in CUE with a `target: "resource"`. This file defines a simple watcher object which implements `operator.ResourceWatcher`, with an additional `Sync` function which is used in conjunction with a `resource.OpinionatedWatcher`. All this boilerplate watcher does is check that it can cast the provided resource(s) into the `issue.Object` type, and then print a line to the console with the event type and details.
+Here we only have one file, created for our Issue kind. If we had more kinds, we'd have more files here, as the `project component add operator` command generates a boilerplate watcher for each kind in CUE with a `target: "resource"`. This file defines a simple watcher object which implements `operator.ResourceWatcher`, with an additional `Sync` function which is used in conjunction with a `resource.OpinionatedWatcher`. All this boilerplate watcher does is check that it can cast the provided resource(s) into the `issue.Object` type, and then print a line to the console with the event type and details.
 
 Next, now that we have minimal functioning code, we can try, [deploying our project locally](05-local-deployment.md)
 

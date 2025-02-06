@@ -9,9 +9,9 @@ import (
 	"github.com/grafana/grafana-app-sdk/simple"
 
 	generated "{{.Repo}}/{{.CodegenPath}}"
-	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKindAll }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.ToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
-    {{ end }}{{ else }}{{ range .Resources }}{{if ne .APIResource nil }}{{$k:=.}}{{range .Versions}}{{ $.ToPackageName $k.MachineName}}{{ $.ToPackageName .}} "{{$.Repo}}/{{$.CodegenPath}}/resource/{{ $.ToPackageName $k.MachineName }}/{{ $.ToPackageName .}}"
-	{{end}}{{end}}{{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
+	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKindAll }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.GroupToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
+    {{ end }}{{ else }}{{ range .Resources }}{{$k:=.}}{{range .Versions}}{{ $.ToPackageName $k.MachineName}}{{ $.ToPackageName .}} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.ToPackageName $k.MachineName }}/{{ $.ToPackageName .}}"
+	{{end}}{{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
 )
 
 func Provider(appCfg app.SpecificConfig) app.Provider {

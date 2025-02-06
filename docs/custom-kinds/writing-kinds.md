@@ -10,18 +10,14 @@ Defining a kind can be thought of as being split into two parts: the kind metada
 foo: {
     // kind is the kind name. It must be capitalized by convention
     kind: "Foo"
-    // group is the group the kind belongs to, typically the name of the app. 
-    // When generating the CRD and resource.Kind, the group will be appended with '.ext.grafana.com'
-    group: "myapp"
-    // apiResource tells the codegen that this is an API resource. 
-    // Optionally, one can specify additional options in this object.
-    // For non-API resource kinds, see later section.
-    apiResource: {}
+    // Collection of all versions for the kind, as a map of version string => version details
+    versions: {}
 }
 ```
 
 > [!NOTE]  
-> When using `grafana-app-sdk project kind add`, `group` is automatically set to the plugin ID.
+> For a kind to be expressed by your app and work with the codegen, it must be a part of your app's [**Manifest**](../app-manifest.md).
+> When using `grafana-app-sdk project kind add`, the newly-created kind is automatically added to your manifest.
 
 ## Schemas
 
@@ -68,8 +64,6 @@ With all that, let's complete our simple kind:
 ```cue
 foo: {
     kind: "Foo"
-    group: "myapp"
-    apiResource: {}
     currentVersion: "v1"
     versions: {
         "v1": {
@@ -92,8 +86,6 @@ package kinds
 
 foo: {
     kind: "Foo"
-    group: "myapp"
-    apiResource: {}
     currentVersion: "v1"
     versions: {
         "v1": {
@@ -110,20 +102,31 @@ foo: {
 
 ## Generating Code
 
-We now have a valid kind! If you save this as a CUE file (`.cue`) in your project (the default directory for parsing kinds is `./kinds`), you can now generate code and a CRD file for your kind. To do so, make sure you have the `grafana-app-sdk` CLI installed (you can download a binary for your distribution on the [releases](https://github.com/grafana/grafana-app-sdk/releases) page, build the binary from the repo with `make build`, or use `go install` with the cloned repo (there is a known issue with `replace` in the `go.mod` that prevents `go install` working from a remote source)). Now you can run
+We now have a valid kind! If you save this as a CUE file (`.cue`) in your project (the default directory for parsing kinds is `./kinds`), you can now generate code and a CRD file for your kind.
+To do so, make sure you have the `grafana-app-sdk` CLI installed (you can download a binary for your distribution on the [releases](https://github.com/grafana/grafana-app-sdk/releases) page, build the binary from the repo with `make build`, or use `go install` with the cloned repo (there is a known issue with `replace` in the `go.mod` that prevents `go install` working from a remote source)). 
+Make sure your kind is added to your [**manifest**](../app-manifest.md). If you set up your project with `grafana-app-sdk project init`, you'll already have a `kind/manifest.cue` file, but if you don't, a simple manifest looks like this:
+```cue
+package kinds // Or the package you're using for your CUE
+
+manifest: {
+	appName: "my-app"
+	kinds: [foo] // This points to the kind `foo` we defined in our file
+}
+```
+Now you can run
 ```shell
 grafana-app-sdk generate
 ```
 (if you saved your CUE file to a directory different than `./kinds`, add `-c <CUE directory>`)
 
 Generated code by default ends up in three different places (these directories can be customized with CLI flags, use `grafana-app-sdk generate --help` to display them):
-* `pkg/generated/resource/foo/v1`
+* `pkg/generated/foo/v1`
 * `plugin/src/generated/foo/v1`
 * `definitions/`
 
-### `pkg/generated/resource`
+### `pkg/generated`
 
-All generated go code ends up in `pkg/generated/resource/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
+All generated go code ends up in `pkg/generated/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
 * `foo_codec_gen.go` contains information for the kind to use to encode/decode the go type
 * `foo_metadata_gen.go` is a file that exists for legacy support, and will be eventually removed from codegen
 * `foo_object_gen.go` is a file that contains the `Foo` type, which implements `resource.Object`. For more information on `resource.Object`, see [Using Kinds](./using-kinds.md) or [Resource Objects](../resource-objects.md)
@@ -146,26 +149,29 @@ Additional `types.x.gen.ts` files will be generated for each subresource in your
 
 ### `definitions`
 
-The `definitions` directory holds a JSON (or YAML, depending on CLI flags) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md).
+The `definitions` directory holds a JSON (or YAML, depending on CLI flags) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md). 
+This directory also holds a generated JSON (or YAML) **manifest** for your app. This is a file which will be used in the future to register your app with the grafana API server, without needing to work with CRD's and RBAC.
 
-### Toggling Frontend/Backend Codegen
+### Toggling TypeScript/Go Codegen
 
 You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind. The `codegen` field by default looks like:
 ```cue
 codegen: {
-    frontend: true
-    backend: true
+    ts: {
+    	enabled: true
+    }
+    go: {
+    	enabled: true
+    }
 }
 ```
 And can be overwritten at either the kind level, or the version level (version level will take precedence over the kind level declaration). For example, if we wanted to turn off front-end code from being generated for our kind, but keep it on for version `v2`, we could write a kind like this:
 ```cue
 myKind: {
     kind: "MyKind"
-    group: "mygroup"
     current: "v2"
-    apiResource: {}
     codegen: {
-        frontend: false // Turn off front-end codegen for this kind
+        ts: enabled: false // Turn off front-end codegen for this kind
     }
     versions: {
         "v1": {
@@ -182,12 +188,12 @@ myKind: {
                     bar: int64
                 }
             }
-            codegen: frontend: true // Turn on front-end codegen for this version
+            codegen: ts: enabled: true // Turn on front-end codegen for this version
         }
     }
 }
 ```
-(Here we also introduce a convience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
+(Here we also introduce a convenience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
 
 ## Complex Schemas
 
@@ -267,8 +273,6 @@ import "time"
 
 foo: {
     kind: "Foo"
-    group: "myapp"
-    apiResource: {}
     currentVersion: "v1"
     versions: {
         "v1": {
@@ -295,7 +299,6 @@ The `kind` format allows for configuring the `additionalPrinterColumns` paramete
 ```cue
 myKind: {
     kind: "MyKind"
-    group: "mygroup"
     current: "v1"
 [...]
     versions: {
@@ -321,10 +324,6 @@ myKind: {
 ### Examples
 
 Example complex schemas used for codegen testing can be found in the [cuekind codegen testing directory](../../codegen/cuekind/testing/).
-
-## Non-API Resource Kinds
-
-If you wish to use the kind codegen tooling for non-API Server resources, you can do so, with fewer restrictions on your schema. **Non-API Resource Kinds cannot be used with an API Server or with an operator**, but can sometimes be useful as contract guarantees between front-end and back-end, as the go and TypeScript are generated from the same source. For nearly all purposes where you would write a kind, you would want to use an API Resource Kind as described in previous sections. However, to create a non-API Resource Kind, you simply need to omit the `apiResource` field in your kind. By doing so, the `schema` for each of your versions no longer has the restriciton of needing a `spec` and other subresources. The generated go code will not include anything aside from the kind (no `resource.Object` implementation, `resource.Kind`, or `Codec`).
 
 ## Recommended Reading
 

@@ -30,6 +30,7 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 			Depth:                1,
 			AddKubernetesCodegen: true,
 			GroupByKind:          !groupKinds,
+			AnyAsInterface:       true, // This is for compatibility with kube openAPI generator, which has issues with map[string]any
 		},
 		&jennies.ResourceObjectGenerator{
 			SubresourceTypesArePrefixed: groupKinds,
@@ -41,18 +42,8 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 		&jennies.CodecGenerator{
 			GroupByKind: !groupKinds,
 		},
-	)
-	return g
-}
-
-// ModelsGenerator returns a Generator which will produce Go and CUE files for API contract models.
-// Deprecated: model generation will be removed in a future release, in favor of only API resources
-func ModelsGenerator(versioned bool, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(
-		&jennies.GoTypes{
-			GenerateOnlyCurrent: !versioned,
-			GroupByKind:         !groupKinds,
+		&jennies.Constants{
+			GroupByKind: !groupKinds,
 		},
 	)
 	return g
@@ -80,16 +71,6 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 		jennies.RouterCodeGenerator(projectRepo),
 		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, !groupKinds),
 	)
-	return g
-}
-
-// TypeScriptModelsGenerator returns a Generator which generates TypeScript model code.
-// Deprecated: model generation will be removed in a future release, in favor of only API resources
-func TypeScriptModelsGenerator(versioned bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(&jennies.TypeScriptTypes{
-		GenerateOnlyCurrent: !versioned,
-	})
 	return g
 }
 
@@ -142,21 +123,21 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, appName string) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, includeSchemas bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGenerator{
-		AppName:       appName,
-		Encoder:       encoder,
-		FileExtension: extension,
+		Encoder:        encoder,
+		FileExtension:  extension,
+		IncludeSchemas: includeSchemas,
 	})
 	return g
 }
 
-func ManifestGoGenerator(pkg string, appName string) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func ManifestGoGenerator(pkg string, includeSchemas bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
-		Package: pkg,
-		AppName: appName,
+		Package:        pkg,
+		IncludeSchemas: includeSchemas,
 	})
 	return g
 }
@@ -166,4 +147,11 @@ func namerFunc(k codegen.Kind) string {
 		return "nil"
 	}
 	return k.Properties().Kind
+}
+
+func namerFuncManifest(m codegen.AppManifest) string {
+	if m == nil {
+		return "nil"
+	}
+	return m.Name()
 }

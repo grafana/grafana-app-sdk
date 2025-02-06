@@ -9,10 +9,13 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
+
+var _ Controller = &InformerController{}
 
 type ResourceAction string
 
@@ -38,14 +41,14 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
+	app.Runnable
 	AddEventHandler(handler ResourceWatcher) error
-	Run(stopCh <-chan struct{}) error
 }
 
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
 type ResourceWatcher interface {
 	Add(context.Context, resource.Object) error
-	Update(ctx context.Context, old, new resource.Object) error
+	Update(ctx context.Context, src, tgt resource.Object) error
 	Delete(context.Context, resource.Object) error
 }
 
@@ -107,6 +110,7 @@ type InformerController struct {
 	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
 	retryTickerInterval time.Duration
+	runner              *app.DynamicMultiRunner
 	totalEvents         *prometheus.CounterVec
 	reconcileLatency    *prometheus.HistogramVec
 	reconcilerLatency   *prometheus.HistogramVec
@@ -127,6 +131,16 @@ type retryInfo struct {
 // InformerControllerConfig contains configuration options for an InformerController
 type InformerControllerConfig struct {
 	MetricsConfig metrics.Config
+	// ErrorHandler is a user-specified error handling function. This is typically for logging/metrics use,
+	// as retry logic is covered by the RetryPolicy. If left nil, DefaultErrorHandler will be used.
+	ErrorHandler func(context.Context, error)
+	// RetryPolicy is a user-specified retry logic function which will be used when ResourceWatcher function calls fail.
+	// If left nil, DefaultRetryPolicy will be used.
+	RetryPolicy RetryPolicy
+	// RetryDequeuePolicy is a user-specified retry dequeue logic function which will be used for new informer actions
+	// when one or more retries for the object are still pending. If not present, existing retries are always dequeued.
+	// If left nil, no RetryDequeuePolicy will be used, and retries will only be dequeued when RetryPolicy returns false.
+	RetryDequeuePolicy RetryDequeuePolicy
 }
 
 // DefaultInformerControllerConfig returns an InformerControllerConfig with default values
@@ -138,7 +152,7 @@ func DefaultInformerControllerConfig() InformerControllerConfig {
 
 // NewInformerController creates a new controller
 func NewInformerController(cfg InformerControllerConfig) *InformerController {
-	return &InformerController{
+	inf := &InformerController{
 		RetryPolicy:         DefaultRetryPolicy,
 		ErrorHandler:        DefaultErrorHandler,
 		informers:           NewListMap[Informer](),
@@ -146,6 +160,7 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 		reconcilers:         NewListMap[Reconciler](),
 		toRetry:             NewListMap[retryInfo](),
 		retryTickerInterval: time.Second,
+		runner:              app.NewDynamicMultiRunner(),
 		reconcileLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
 			Namespace:                       cfg.MetricsConfig.Namespace,
 			Subsystem:                       "informer",
@@ -193,6 +208,16 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 			Help:      "Current number of events which have active reconcile processes",
 		}, []string{"event_type", "kind"}),
 	}
+	if cfg.ErrorHandler != nil {
+		inf.ErrorHandler = cfg.ErrorHandler
+	}
+	if cfg.RetryPolicy != nil {
+		inf.RetryPolicy = cfg.RetryPolicy
+	}
+	if cfg.RetryDequeuePolicy != nil {
+		inf.RetryDequeuePolicy = cfg.RetryDequeuePolicy
+	}
+	return inf
 }
 
 // AddInformer adds an informer for a specific resourceKind.
@@ -222,8 +247,17 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return err
 	}
 
+	c.runner.AddRunnable(informer)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
+}
+
+// RemoveInformer removes the provided informer, stopping it if it is currently running.
+func (c *InformerController) RemoveInformer(informer Informer, resourceKind string) {
+	c.runner.RemoveRunnable(informer)
+	c.informers.RemoveItem(resourceKind, func(i Informer) bool {
+		return i == informer
+	})
 }
 
 // AddWatcher adds an observer to an informer with a matching `resourceKind`.
@@ -283,16 +317,13 @@ func (c *InformerController) RemoveAllReconcilersForResource(resourceKind string
 // Run runs the controller, which starts all informers, until stopCh is closed
 //
 //nolint:errcheck
-func (c *InformerController) Run(stopCh <-chan struct{}) error {
-	c.informers.RangeAll(func(_ string, _ int, inf Informer) {
-		go inf.Run(stopCh)
-	})
+func (c *InformerController) Run(ctx context.Context) error {
+	// Using derivedCtx ensures that if c.runner exits prematurely due to an error, c.retryTicker will also stop
+	derivedCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	go c.retryTicker(stopCh)
-
-	<-stopCh
-
-	return nil
+	go c.retryTicker(derivedCtx)
+	return c.runner.Run(ctx)
 }
 
 // PrometheusCollectors returns the prometheus metric collectors used by this informer, as well as collectors used by
@@ -530,6 +561,10 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 		})
 	} else if err != nil {
 		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
+		if c.ErrorHandler != nil {
+			// Call the ErrorHandler function as well if it's set
+			c.ErrorHandler(ctx, err)
+		}
 		c.queueRetry(retryKey, err, func() (*time.Duration, error) {
 			ctx, span := GetTracer().Start(ctx, "controller-retry")
 			defer span.End()
@@ -542,7 +577,7 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 // retryTicker blocks until stopCh is closed or receives a message.
 // It checks if there are function calls to be retried every second, and, if there are any, calls the function.
 // If the function returns an error, it schedules a new retry according to the RetryPolicy.
-func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
+func (c *InformerController) retryTicker(ctx context.Context) {
 	ticker := time.NewTicker(c.retryTickerInterval)
 	defer ticker.Stop()
 	for {
@@ -583,7 +618,7 @@ func (c *InformerController) retryTicker(stopCh <-chan struct{}) {
 					c.toRetry.AddItem(key, inf)
 				}
 			}
-		case <-stopCh:
+		case <-ctx.Done():
 			return
 		}
 	}
