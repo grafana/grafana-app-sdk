@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/rest"
@@ -114,15 +115,19 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	// TODO: other factors?
 	controller := operator.NewInformerController(informerControllerConfig)
 
+	// this deprecated operator doesn't have any actual health checks, use the new operator runner
+	// in order to get a true read on the readiness of the operator
+	hc := &health.HealthChecker{}
 	operatorServer := &operator.OperatorServer{
-		Port: cfg.Port,
-		Mux:  http.NewServeMux(),
+		Port:        cfg.Port,
+		Mux:         http.NewServeMux(),
+		HealthCheck: hc,
 	}
 
 	// Telemetry (metrics, traces)
 	var me *metrics.Exporter
 	if cfg.Metrics.Enabled {
-		me, err = metrics.NewExporter(operatorServer.Mux, cfg.Metrics.ExporterConfig)
+		me = metrics.NewExporter(cfg.Metrics.ExporterConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -135,7 +140,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 			return nil, err
 		}
 
-		me.RegisterMetricsHandler()
+		operatorServer.RegisterMetricsHandler(me.HTTPHandler())
 	}
 	if cfg.Tracing.Enabled {
 		err := SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
@@ -156,6 +161,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		patcher:             patcher,
 		operatorServer:      operatorServer,
 	}
+
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
 }
@@ -209,7 +215,7 @@ func (o *Operator) Run(ctx context.Context) error {
 		op.AddController(&k8sRunnable{runner: o.admission})
 	}
 
-	op.AddController(&k8sRunnable{runner: o.operatorServer})
+	op.AddController(o.operatorServer)
 	return op.Run(ctx)
 }
 

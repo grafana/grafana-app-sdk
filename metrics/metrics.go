@@ -1,7 +1,6 @@
 package metrics
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -17,11 +16,7 @@ var (
 
 // NewExporter returns a new Exporter using the provided config.
 // Empty values in the config apply default prometheus values.
-func NewExporter(mux *http.ServeMux, cfg ExporterConfig) (*Exporter, error) {
-	if mux == nil {
-		return nil, errors.New("mux cannot be nil")
-	}
-
+func NewExporter(cfg ExporterConfig) *Exporter {
 	if cfg.Registerer == nil {
 		cfg.Registerer = prometheus.DefaultRegisterer
 	}
@@ -31,8 +26,7 @@ func NewExporter(mux *http.ServeMux, cfg ExporterConfig) (*Exporter, error) {
 	return &Exporter{
 		Registerer: cfg.Registerer,
 		Gatherer:   cfg.Gatherer,
-		Mux:        mux,
-	}, nil
+	}
 }
 
 // Provider is an interface which describes any object which can provide the prometheus Collectors is uses for registration
@@ -44,7 +38,6 @@ type Provider interface {
 type Exporter struct {
 	Registerer prometheus.Registerer
 	Gatherer   prometheus.Gatherer
-	Mux        *http.ServeMux
 }
 
 // RegisterCollectors registers the provided collectors with the Exporter's Registerer.
@@ -59,8 +52,8 @@ func (e *Exporter) RegisterCollectors(metrics ...prometheus.Collector) error {
 	return nil
 }
 
-func (e *Exporter) RegisterMetricsHandler() {
-	e.Mux.Handle("/metrics", promhttp.InstrumentMetricHandler(
+func (e *Exporter) HTTPHandler() http.Handler {
+	return promhttp.InstrumentMetricHandler(
 		e.Registerer, promhttp.HandlerFor(e.Gatherer, promhttp.HandlerOpts{}),
-	))
+	)
 }
