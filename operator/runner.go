@@ -8,8 +8,10 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"reflect"
 	"sync"
 
+	"github.com/grafana/grafana-app-sdk/health"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -30,6 +32,7 @@ type Runner struct {
 	webhookServer   *webhookServerRunner
 	metricsExporter *metrics.Exporter
 	serverRunner    *app.SingletonRunner
+	healthCheck     health.HealthCheck
 	server          *OperatorServer
 	startMux        sync.Mutex
 	running         bool
@@ -49,17 +52,22 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		cfg.Port = 9090
 	}
 
+	hc := cfg.HealthCheck
+	if isInterfaceNil(hc) {
+		hc = &health.HealthChecker{}
+	}
+
 	op := Runner{
 		config: cfg,
 		server: &OperatorServer{
-			Port: cfg.Port,
-			Mux:  http.NewServeMux(),
+			Port:        cfg.Port,
+			Mux:         http.NewServeMux(),
+			HealthCheck: hc,
 		},
+		healthCheck: hc,
 	}
 
-	op.serverRunner = app.NewSingletonRunner(&k8sRunnable{
-		runner: op.server,
-	}, false)
+	op.serverRunner = app.NewSingletonRunner(op.server, false)
 
 	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
 		ws, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -75,11 +83,7 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		op.webhookServer = newWebhookServerRunner(ws)
 	}
 	if cfg.MetricsConfig.Enabled {
-		exporter, err := metrics.NewExporter(op.server.Mux, cfg.MetricsConfig.ExporterConfig)
-		if err != nil {
-			return nil, err
-		}
-		op.metricsExporter = exporter
+		op.metricsExporter = metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
 	}
 
 	return &op, nil
@@ -94,17 +98,12 @@ type RunnerConfig struct {
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
 	// Health checks for liveness and readiness
-	HealthChecks RunnerHealthChecks
+	HealthCheck health.HealthCheck
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
 	// if empty, it defaults to os.DirFS(".")
 	Filesystem fs.FS
-}
-
-type RunnerHealthChecks struct {
-	LivenessHandler  func(http.ResponseWriter) error
-	ReadinessHandler func(http.ResponseWriter) error
 }
 
 // RunnerMetricsConfig contains configuration information for exposing prometheus metrics
@@ -247,42 +246,20 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 			return err
 		}
 
-		s.metricsExporter.RegisterMetricsHandler()
+		s.server.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
 	}
 
 	// Health
-	livenessHandler := s.config.HealthChecks.LivenessHandler
-	if livenessHandler == nil {
-		// provide a default implementation that always returns alive
-		livenessHandler = func(w http.ResponseWriter) error {
-			_, err := w.Write([]byte("ok"))
-			return err
+	s.healthCheck.RegisterHealthCheck(func(ctx context.Context) error {
+		if !s.running {
+			return errors.New("app has not started yet")
 		}
-	}
-	if err := s.server.RegisterLivenessHandler(livenessHandler); err != nil {
-		return err
-	}
+		return nil
+	})
 
-	// Add Metrics+Health cumulative server runnable
+	// Add Metrics+Health cumulative server runnable, healthcheck based on "running" should
+	// be passed down to the serverRunner
 	runner.AddRunnable(s.serverRunner)
-
-	readinessHandler := s.config.HealthChecks.ReadinessHandler
-	if readinessHandler == nil {
-		// provide a default implementation that always returns alive
-		readinessHandler = func(w http.ResponseWriter) error {
-			if s.running {
-				w.WriteHeader(200)
-				_, err := w.Write([]byte("ok"))
-				return err
-			}
-			w.WriteHeader(500)
-			_, err := w.Write([]byte("error: not running"))
-			return err
-		}
-	}
-	if err := s.server.RegisterReadinessHandler(readinessHandler); err != nil {
-		return err
-	}
 
 	return runner.Run(ctx)
 }
@@ -405,4 +382,17 @@ type k8sRunnable struct {
 
 func (k *k8sRunnable) Run(ctx context.Context) error {
 	return k.runner.Run(ctx.Done())
+}
+
+func isInterfaceNil(i interface{}) bool {
+	iv := reflect.ValueOf(i)
+	if !iv.IsValid() {
+		return true
+	}
+	switch iv.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Func, reflect.Interface:
+		return iv.IsNil()
+	default:
+		return false
+	}
 }
