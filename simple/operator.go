@@ -128,9 +128,6 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	var me *metrics.Exporter
 	if cfg.Metrics.Enabled {
 		me = metrics.NewExporter(cfg.Metrics.ExporterConfig)
-		if err != nil {
-			return nil, err
-		}
 		err := me.RegisterCollectors(cg.PrometheusCollectors()...)
 		if err != nil {
 			return nil, err
