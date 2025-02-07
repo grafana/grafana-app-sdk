@@ -1,21 +1,22 @@
 package app
 
 manifest: {
+	appName: "app-manifest"
+	groupOverride: "apps.grafana.com"
+	kinds: [appManifest]
+}
+
+appManifest: {
 	kind: "AppManifest"
-	group: "apps"
-	apiResource: {
-		groupOverride: "apps.grafana.com"
-		scope: "Cluster"
-	}
+	scope: "Cluster"
 	codegen: {
-		frontend: false
-		backend: true
+		ts: enabled: false
 	}
 	current: "v1alpha1"
 	versions: {}
 }
 
-manifest: versions: v1alpha1: {
+appManifest: versions: v1alpha1: {
 	schema: {
 		#AdditionalPrinterColumns: {
 			// name is a human readable name for the column.
@@ -48,12 +49,13 @@ manifest: versions: v1alpha1: {
 			validation?: #ValidationCapability
 			mutation?: #MutationCapability
 		}
+		#ManifestKindVersionSchema: {
+			[string]: _
+		}
 		#ManifestKindVersion: {
 			name: string
 			admission?: #AdmissionCapabilities
-			schema: {
-				[string]: _
-			}
+			schema: #ManifestKindVersionSchema
 			selectableFields: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
@@ -77,6 +79,17 @@ manifest: versions: v1alpha1: {
 			extraPermissions: {
 				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
 				accessKinds: [...#KindPermission]
+			}
+			dryRun?: bool | *false
+		}
+		status: {
+			#ApplyStatus: {
+				status: "success" | "failure"
+				details?: string
+			}
+			observedGeneration?: int
+			resources: {
+				[string]: #ApplyStatus
 			}
 		}
 	}
