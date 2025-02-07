@@ -4,6 +4,13 @@ manifest: {
 	appName: "app-manifest"
 	groupOverride: "apps.grafana.com"
 	kinds: [appManifest]
+	extraPermissions: {
+		accessKinds: [{
+			group: "apiextensions.k8s.io",
+			resource: "customresourcedefinitions",
+			actions: ["get","list","create","update","delete","watch"],
+		}]
+	}
 }
 
 appManifest: {
