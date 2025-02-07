@@ -195,7 +195,9 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	// CRD
 	var crdFiles codejen.Files
 	if cfg.CRDEncoding != "none" {
-		encFunc := json.Marshal
+		encFunc := func(v any) ([]byte, error) {
+			return json.MarshalIndent(v, "", "    ")
+		}
 		if cfg.CRDEncoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
