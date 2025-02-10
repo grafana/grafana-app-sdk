@@ -5,19 +5,31 @@ import (
 	"time"
 )
 
+// this is the runner to run the health check periodically - combined with the HealthCheck interface, it allows
+// the HTTP handler to return a cached health result refreshed on the interval it is constructed with
 type HealthCheckRunner struct {
-	HealthChecker HealthCheck
-	Interval      time.Duration
+	healthChecker HealthCheck
+	interval      time.Duration
 }
 
-// this is the runner to run the health check periodically
+func NewHealthCheckRunner(hc HealthCheck, interval time.Duration) *HealthCheckRunner {
+	return &HealthCheckRunner{
+		healthChecker: hc,
+		interval:      interval,
+	}
+}
+
 func (h *HealthCheckRunner) Run(ctx context.Context) error {
+	if err := h.healthChecker.RunHealthCheck(ctx); err != nil {
+		return err
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(h.Interval):
-			h.HealthChecker.RunHealthCheck(ctx)
+		case <-time.After(h.interval):
+			_ = h.healthChecker.RunHealthCheck(ctx)
 		}
 	}
 }
