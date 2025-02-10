@@ -66,11 +66,8 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 			Mux:         http.NewServeMux(),
 			HealthCheck: hc,
 		},
-		healthCheck: hc,
-		healthCheckRunner: &health.HealthCheckRunner{
-			HealthChecker: hc,
-			Interval:      time.Minute,
-		},
+		healthCheck:       hc,
+		healthCheckRunner: health.NewHealthCheckRunner(hc, time.Minute),
 	}
 
 	op.serverRunner = app.NewSingletonRunner(op.server, false)
