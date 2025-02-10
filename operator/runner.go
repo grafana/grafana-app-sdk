@@ -10,6 +10,7 @@ import (
 	"os"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/grafana/grafana-app-sdk/health"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,15 +29,16 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config          RunnerConfig
-	webhookServer   *webhookServerRunner
-	metricsExporter *metrics.Exporter
-	serverRunner    *app.SingletonRunner
-	healthCheck     health.HealthCheck
-	server          *OperatorServer
-	startMux        sync.Mutex
-	running         bool
-	runningWG       sync.WaitGroup
+	config            RunnerConfig
+	webhookServer     *webhookServerRunner
+	metricsExporter   *metrics.Exporter
+	serverRunner      *app.SingletonRunner
+	healthCheck       health.HealthCheck
+	healthCheckRunner *health.HealthCheckRunner
+	server            *OperatorServer
+	startMux          sync.Mutex
+	running           bool
+	runningWG         sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -65,6 +67,10 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 			HealthCheck: hc,
 		},
 		healthCheck: hc,
+		healthCheckRunner: &health.HealthCheckRunner{
+			HealthChecker: hc,
+			Interval:      time.Minute,
+		},
 	}
 
 	op.serverRunner = app.NewSingletonRunner(op.server, false)
@@ -260,6 +266,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	// Add Metrics+Health cumulative server runnable, healthcheck based on "running" should
 	// be passed down to the serverRunner
 	runner.AddRunnable(s.serverRunner)
+	runner.AddRunnable(app.NewSingletonRunner(s.healthCheckRunner, false))
 
 	return runner.Run(ctx)
 }
