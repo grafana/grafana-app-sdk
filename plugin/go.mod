@@ -1,6 +1,7 @@
 module github.com/grafana/grafana-app-sdk/plugin
 
-go 1.23.4
+go 1.23.5
+
 toolchain go1.23.6
 
 retract (
