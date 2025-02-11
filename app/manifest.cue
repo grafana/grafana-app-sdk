@@ -87,14 +87,22 @@ appManifest: versions: v1alpha1: {
 				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
 				accessKinds: [...#KindPermission]
 			}
-			dryRun?: bool | *false
+			// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
+			// Or simply validate and report errors in status.resources.crds.
+			// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
+			// Even if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.
+			dryRunKinds?: bool | *false
 		}
 		status: {
 			#ApplyStatus: {
 				status: "success" | "failure"
+				// details may contain specific information (such as error message(s)) on the reason for the status
 				details?: string
 			}
+			// ObservedGeneration is the last generation which has been applied by the controller.
 			observedGeneration?: int
+			// Resources contains the status of each resource type created or updated in the API server
+			// as a result of the AppManifest.
 			resources: {
 				[string]: #ApplyStatus
 			}

@@ -20,8 +20,9 @@
                                     "appName": {
                                         "type": "string"
                                     },
-                                    "dryRun": {
+                                    "dryRunKinds": {
                                         "default": false,
+                                        "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
                                         "type": "boolean"
                                     },
                                     "extraPermissions": {
@@ -213,6 +214,7 @@
                                         "x-kubernetes-preserve-unknown-fields": true
                                     },
                                     "observedGeneration": {
+                                        "description": "ObservedGeneration is the last generation which has been applied by the controller.",
                                         "type": "integer"
                                     },
                                     "operatorStates": {
@@ -254,6 +256,7 @@
                                         "additionalProperties": {
                                             "properties": {
                                                 "details": {
+                                                    "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                                     "type": "string"
                                                 },
                                                 "status": {
@@ -269,6 +272,7 @@
                                             ],
                                             "type": "object"
                                         },
+                                        "description": "Resources contains the status of each resource type created or updated in the API server\nas a result of the AppManifest.",
                                         "type": "object"
                                     }
                                 },

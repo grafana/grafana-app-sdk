@@ -4,8 +4,9 @@ package v1alpha1
 
 // +k8s:openapi-gen=true
 type AppManifeststatusApplyStatus struct {
-	Status  AppManifestStatusApplyStatusStatus `json:"status"`
-	Details *string                            `json:"details,omitempty"`
+	Status AppManifestStatusApplyStatusStatus `json:"status"`
+	// details may contain specific information (such as error message(s)) on the reason for the status
+	Details *string `json:"details,omitempty"`
 }
 
 // NewAppManifeststatusApplyStatus creates a new AppManifeststatusApplyStatus object.
@@ -33,11 +34,14 @@ func NewAppManifeststatusOperatorState() *AppManifeststatusOperatorState {
 
 // +k8s:openapi-gen=true
 type AppManifestStatus struct {
+	// ObservedGeneration is the last generation which has been applied by the controller.
 	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 	// operatorStates is a map of operator ID to operator state evaluations.
 	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
 	OperatorStates map[string]AppManifeststatusOperatorState `json:"operatorStates,omitempty"`
-	Resources      map[string]AppManifeststatusApplyStatus   `json:"resources"`
+	// Resources contains the status of each resource type created or updated in the API server
+	// as a result of the AppManifest.
+	Resources map[string]AppManifeststatusApplyStatus `json:"resources"`
 	// additionalFields is reserved for future use
 	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
 }
