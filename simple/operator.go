@@ -36,6 +36,7 @@ type OperatorConfig struct {
 	// for sending finalizer add/remove patches to the latest version of the kind.
 	// This defaults to 10 minutes.
 	DiscoveryRefreshInterval time.Duration
+	HealthCheckInterval      time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
