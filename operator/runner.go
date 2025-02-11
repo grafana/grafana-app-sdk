@@ -268,7 +268,6 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	return runner.Run(ctx)
 }
 
-//nolint:revive
 func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {
 	manifest := provider.Manifest()
 	data := app.ManifestData{}
