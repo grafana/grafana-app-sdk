@@ -75,6 +75,7 @@ func main() {
 		MetricsConfig: operator.RunnerMetricsConfig{
 			Enabled: true,
 		},
+		HealthCheckInterval: 2 * time.Minute,
 	})
 	if err != nil {
 		panic(fmt.Errorf("unable to create runner: %w", err))
