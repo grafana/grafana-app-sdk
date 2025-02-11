@@ -92,7 +92,6 @@ func (s *OperatorServer) Run(ctx context.Context) error {
 	return serverErr
 }
 
-// HTTPHandler returns an http.Handler that performs the health checks
 func (s *OperatorServer) cachedChecks() error {
 	s.healthCheckErrMu.RLock()
 	defer s.healthCheckErrMu.RUnlock()
