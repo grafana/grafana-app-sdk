@@ -54,10 +54,10 @@ func NewAppManifestValidationCapability() *AppManifestValidationCapability {
 type AppManifestAdmissionOperation string
 
 const (
-	AppManifestAdmissionOperationCREATE  AppManifestAdmissionOperation = "CREATE"
-	AppManifestAdmissionOperationUPDATE  AppManifestAdmissionOperation = "UPDATE"
-	AppManifestAdmissionOperationDELETE  AppManifestAdmissionOperation = "DELETE"
-	AppManifestAdmissionOperationCONNECT AppManifestAdmissionOperation = "CONNECT"
+	AppManifestAdmissionOperationCreate  AppManifestAdmissionOperation = "CREATE"
+	AppManifestAdmissionOperationUpdate  AppManifestAdmissionOperation = "UPDATE"
+	AppManifestAdmissionOperationDelete  AppManifestAdmissionOperation = "DELETE"
+	AppManifestAdmissionOperationConnect AppManifestAdmissionOperation = "CONNECT"
 	AppManifestAdmissionOperationAll     AppManifestAdmissionOperation = "*"
 )
 

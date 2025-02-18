@@ -45,7 +45,7 @@ appManifest: versions: v1alpha1: {
 			// each custom resource to produce the value for this column.
 			jsonPath: string
 		}
-		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*"
+		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
 		#ValidationCapability: {
 			operations: [...#AdmissionOperation]
 		}
