@@ -76,3 +76,8 @@ update-workspace:
 .PHONY: regenerate-codegen-test-files
 regenerate-codegen-test-files:
 	sh ./scripts/regenerate_golden_test_files.sh
+
+.PHONY: generate
+generate: build
+	@$(BIN_DIR)/grafana-app-sdk generate -s=app -g=app --grouping=group --defpath=app/definitions
+	rm app/appmanifest_manifest.go

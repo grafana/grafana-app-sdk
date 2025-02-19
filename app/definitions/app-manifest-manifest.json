@@ -1,0 +1,308 @@
+{
+    "apiVersion": "apps.grafana.com/v1alpha1",
+    "kind": "AppManifest",
+    "metadata": {
+        "name": "app-manifest"
+    },
+    "spec": {
+        "appName": "app-manifest",
+        "group": "apps.grafana.com",
+        "kinds": [
+            {
+                "kind": "AppManifest",
+                "scope": "Cluster",
+                "versions": [
+                    {
+                        "name": "v1alpha1",
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "appName": {
+                                        "type": "string"
+                                    },
+                                    "dryRunKinds": {
+                                        "default": false,
+                                        "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
+                                        "type": "boolean"
+                                    },
+                                    "extraPermissions": {
+                                        "description": "ExtraPermissions contains additional permissions needed for an app's backend component to operate.\nApps implicitly have all permissions for kinds they managed (defined in `kinds`).",
+                                        "properties": {
+                                            "accessKinds": {
+                                                "description": "accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps",
+                                                "items": {
+                                                    "properties": {
+                                                        "actions": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "group": {
+                                                            "type": "string"
+                                                        },
+                                                        "resource": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "group",
+                                                        "resource",
+                                                        "actions"
+                                                    ],
+                                                    "type": "object"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "required": [
+                                            "accessKinds"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "group": {
+                                        "type": "string"
+                                    },
+                                    "kinds": {
+                                        "items": {
+                                            "properties": {
+                                                "conversion": {
+                                                    "type": "boolean"
+                                                },
+                                                "kind": {
+                                                    "type": "string"
+                                                },
+                                                "scope": {
+                                                    "type": "string"
+                                                },
+                                                "versions": {
+                                                    "items": {
+                                                        "properties": {
+                                                            "additionalPrinterColumns": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "description": {
+                                                                            "description": "description is a human readable description of this column.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "format": {
+                                                                            "description": "format is an optional OpenAPI type definition for this column. The 'name' format is applied\nto the primary identifier column to assist in clients identifying column is the resource name.\nSee https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "jsonPath": {
+                                                                            "description": "jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against\neach custom resource to produce the value for this column.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "description": "name is a human readable name for the column.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "priority": {
+                                                                            "description": "priority is an integer defining the relative importance of this column compared to others. Lower\nnumbers are considered higher priority. Columns that may be omitted in limited space scenarios\nshould be given a priority greater than 0.",
+                                                                            "format": "int32",
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "type": {
+                                                                            "description": "type is an OpenAPI type definition for this column.\nSee https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.",
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "type",
+                                                                        "jsonPath"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "admission": {
+                                                                "properties": {
+                                                                    "mutation": {
+                                                                        "properties": {
+                                                                            "operations": {
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "CREATE",
+                                                                                        "UPDATE",
+                                                                                        "DELETE",
+                                                                                        "CONNECT",
+                                                                                        "*"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "operations"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "validation": {
+                                                                        "properties": {
+                                                                            "operations": {
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "CREATE",
+                                                                                        "UPDATE",
+                                                                                        "DELETE",
+                                                                                        "CONNECT",
+                                                                                        "*"
+                                                                                    ],
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "operations"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "schema": {
+                                                                "additionalProperties": {},
+                                                                "type": "object"
+                                                            },
+                                                            "selectableFields": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "name",
+                                                            "schema",
+                                                            "selectableFields"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                }
+                                            },
+                                            "required": [
+                                                "kind",
+                                                "scope",
+                                                "conversion",
+                                                "versions"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "appName",
+                                    "group",
+                                    "kinds",
+                                    "extraPermissions"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "observedGeneration": {
+                                        "description": "ObservedGeneration is the last generation which has been applied by the controller.",
+                                        "type": "integer"
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    },
+                                    "resources": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "details": {
+                                                    "description": "details may contain specific information (such as error message(s)) on the reason for the status",
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "enum": [
+                                                        "success",
+                                                        "failure"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "status"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Resources contains the status of each resource type created or updated in the API server\nas a result of the AppManifest.",
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "resources"
+                                ],
+                                "type": "object",
+                                "x-kubernetes-preserve-unknown-fields": true
+                            }
+                        }
+                    }
+                ],
+                "conversion": false
+            }
+        ],
+        "extraPermissions": {
+            "accessKinds": [
+                {
+                    "group": "apiextensions.k8s.io",
+                    "resource": "customresourcedefinitions",
+                    "actions": [
+                        "get",
+                        "list",
+                        "create",
+                        "update",
+                        "delete",
+                        "watch"
+                    ]
+                }
+            ]
+        }
+    }
+}
