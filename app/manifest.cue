@@ -63,7 +63,7 @@ appManifest: versions: v1alpha1: {
 			name: string
 			admission?: #AdmissionCapabilities
 			schema: #ManifestKindVersionSchema
-			selectableFields: [...string]
+			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
 		#ManifestKind: {
@@ -83,9 +83,9 @@ appManifest: versions: v1alpha1: {
 			kinds: [...#ManifestKind]
 			// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
 			// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
-			extraPermissions: {
+			extraPermissions?: {
 				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
-				accessKinds: [...#KindPermission]
+				accessKinds?: [...#KindPermission]
 			}
 			// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
 			// Or simply validate and report errors in status.resources.crds.

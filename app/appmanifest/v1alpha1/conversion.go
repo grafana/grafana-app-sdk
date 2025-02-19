@@ -57,7 +57,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		data.Kinds[idx] = k
 	}
 	// Permissions
-	if s.ExtraPermissions.AccessKinds != nil {
+	if s.ExtraPermissions != nil && s.ExtraPermissions.AccessKinds != nil {
 		data.ExtraPermissions = &app.Permissions{
 			AccessKinds: make([]app.KindPermission, len(s.ExtraPermissions.AccessKinds)),
 		}
