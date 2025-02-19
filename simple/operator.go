@@ -3,6 +3,7 @@ package simple
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -22,6 +23,7 @@ type OperatorConfig struct {
 	KubeConfig   rest.Config
 	Webhooks     WebhookConfig
 	Metrics      MetricsConfig
+	Port         int
 	Tracing      TracingConfig
 	ErrorHandler func(ctx context.Context, err error)
 	// FinalizerGenerator consumes a schema and returns a finalizer name to use for opinionated logic.
@@ -33,6 +35,7 @@ type OperatorConfig struct {
 	// for sending finalizer add/remove patches to the latest version of the kind.
 	// This defaults to 10 minutes.
 	DiscoveryRefreshInterval time.Duration
+	HealthCheckInterval      time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -77,6 +80,15 @@ type TracingConfig struct {
 func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	cg := k8s.NewClientRegistry(cfg.KubeConfig, k8s.ClientConfig{})
 	var ws *k8s.WebhookServer
+
+	if cfg.Port <= 0 {
+		cfg.Port = 9090
+	}
+
+	if cfg.HealthCheckInterval <= 0 {
+		cfg.HealthCheckInterval = 2 * time.Minute
+	}
+
 	if cfg.Webhooks.Enabled {
 		var err error
 		ws, err = k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -96,6 +108,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
 	}
+
 	patcher, err := k8s.NewDynamicPatcher(&cfg.KubeConfig, discoveryRefresh)
 	if err != nil {
 		return nil, err
@@ -105,6 +118,14 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	informerControllerConfig.MetricsConfig.Namespace = cfg.Metrics.Namespace
 	// TODO: other factors?
 	controller := operator.NewInformerController(informerControllerConfig)
+
+	// this deprecated operator doesn't have any actual health checks, use the new operator runner
+	// in order to get a true read on the readiness of the operator
+	operatorServer := &operator.OperatorServer{
+		Port:        cfg.Port,
+		Mux:         http.NewServeMux(),
+		HealthCheckInterval: cfg.HealthCheckInterval,
+	}
 
 	// Telemetry (metrics, traces)
 	var me *metrics.Exporter
@@ -118,6 +139,8 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		operatorServer.RegisterMetricsHandler(me.HTTPHandler())
 	}
 	if cfg.Tracing.Enabled {
 		err := SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
@@ -136,7 +159,9 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
 		patcher:             patcher,
+		operatorServer:      operatorServer,
 	}
+
 	op.controller.ErrorHandler = op.ErrorHandler
 	return op, nil
 }
@@ -157,6 +182,7 @@ type Operator struct {
 	clientGen           resource.ClientGenerator
 	controller          *operator.InformerController
 	admission           *k8s.WebhookServer
+	operatorServer      *operator.OperatorServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
 	patcher             *k8s.DynamicPatcher
@@ -188,9 +214,8 @@ func (o *Operator) Run(ctx context.Context) error {
 	if o.admission != nil {
 		op.AddController(&k8sRunnable{runner: o.admission})
 	}
-	if o.metricsExporter != nil {
-		op.AddController(&k8sRunnable{runner: o.metricsExporter})
-	}
+
+	op.AddController(o.operatorServer)
 	return op.Run(ctx)
 }
 
