@@ -210,17 +210,117 @@ func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) 
 	delete(schemaProps, "metadata")
 
 	// CRDs have a problem with openness and the "additionalProperties: {}", we need to _instead_ use "x-kubernetes-preserve-unknown-fields": true
-	replaceAdditionalProperties(schemaProps)
+	setKubernetesPreserveUnknownFields(schemaProps)
 
 	return schemaProps, nil
 }
 
+// setKubernetesPreserveUnknownFields replaces `"additionalProperties": {}` segments with `"x-kubernetes-preserve-unknown-fields": true`
+func setKubernetesPreserveUnknownFields(properties map[string]any) {
+	for key, val := range properties {
+		prop, ok := val.(map[string]any)
+		if !ok {
+			return
+		}
+		typ, ok := prop["type"]
+		if !ok {
+			// property has no type, not valid openAPI
+			return
+		}
+		typeString, ok := typ.(string)
+		if !ok {
+			// "type" property is not a string, not valid openAPI
+			return
+		}
+		switch strings.ToLower(typeString) {
+		case "object":
+			setKubernetesPreserveUnknownFieldsInObject(prop)
+			properties[key] = prop
+		case "array":
+			setKubernetesPreserveUnknownFieldsInArray(prop)
+			properties[key] = prop
+		}
+	}
+}
+
+func setKubernetesPreserveUnknownFieldsInObject(object map[string]any) {
+	// If the object has properties, also handle them
+	if props, ok := object["properties"]; ok {
+		if cast, ok := props.(map[string]any); ok {
+			setKubernetesPreserveUnknownFields(cast)
+			object["properties"] = cast
+		}
+	}
+	// If the object has an "additionalProperties" field, we'll need to modify the object
+	if addProps, ok := object["additionalProperties"]; ok {
+		additionalProperties, ok := addProps.(map[string]any)
+		if !ok {
+			return
+		}
+		// If additionalProperties is empty ({}), we want to delete it from `object` and replace it with "x-kubernetes-preserve-unknown-fields": true
+		if len(additionalProperties) == 0 {
+			delete(object, "additionalProperties")
+			object["x-kubernetes-preserve-unknown-fields"] = true
+		} else if innerProps, ok := additionalProperties["properties"]; ok {
+			// If "additionalProperties" contains "properties," we have to recurse and fix those properties instead
+			castInnerProps, ok := innerProps.(map[string]any)
+			if !ok {
+				return
+			}
+			setKubernetesPreserveUnknownFields(castInnerProps)
+			additionalProperties["properties"] = castInnerProps
+			object["additionalProperties"] = additionalProperties
+		}
+	}
+}
+
+func setKubernetesPreserveUnknownFieldsInArray(list map[string]any) {
+	// Get the items and check the type. If the type is "object" or "array," we have to check if it needs fixing
+	items, ok := list["items"]
+	if !ok {
+		// Not a valid array
+		return
+	}
+	castItems, ok := items.(map[string]any)
+	if !ok {
+		return
+	}
+	iType, ok := castItems["type"]
+	if !ok {
+		// No "type" in "items," not a valid array
+		return
+	}
+	itemType, ok := iType.(string)
+	if !ok {
+		// items.type must be a string
+		return
+	}
+	switch strings.ToLower(itemType) {
+	case "object":
+		setKubernetesPreserveUnknownFieldsInObject(castItems)
+		list["items"] = castItems
+	case "array":
+		setKubernetesPreserveUnknownFieldsInArray(castItems)
+		list["items"] = castItems
+	}
+}
+
+//nolint:unused
 func replaceAdditionalProperties(props map[string]any) {
 	for _, v := range props {
+		// Each element in "properties" should be a map[string]any
 		cast, ok := v.(map[string]any)
 		if !ok {
 			return
 		}
+		// If this element has an "additionalProperties" key, it will either be defined additionalProperties or an empty object
+		// {
+		//   "foo": {
+		//     "type": "object",
+		//     "additionalProperties": {}
+		//   }
+		// }
+		// ("foo" is the key, and the object is `cast` here)
 		if val, ok := cast["additionalProperties"]; ok {
 			castVal, ok := val.(map[string]any)
 			if !ok {
@@ -246,6 +346,38 @@ func replaceAdditionalProperties(props map[string]any) {
 			}
 			replaceAdditionalProperties(castInnerProps)
 			cast["properties"] = castInnerProps
+		}
+		if items, ok := cast["items"]; ok {
+			castItems, ok := items.(map[string]any)
+			if !ok {
+				return
+			}
+			if val, ok := castItems["additionalProperties"]; ok {
+				castVal, ok := val.(map[string]any)
+				if !ok {
+					return
+				}
+				if len(castVal) == 0 {
+					delete(castItems, "additionalProperties")
+					castItems["x-kubernetes-preserve-unknown-fields"] = true
+				} else if innerProps, ok := castVal["properties"]; ok {
+					castInnerProps, ok := innerProps.(map[string]any)
+					if !ok {
+						return
+					}
+					replaceAdditionalProperties(castInnerProps)
+					castVal["properties"] = castInnerProps
+					castItems["additionalProperties"] = castVal
+				}
+			} else if itemProps, ok := castItems["properties"]; ok {
+				castItemProps, ok := itemProps.(map[string]any)
+				if !ok {
+					return
+				}
+				replaceAdditionalProperties(castItemProps)
+				castItems["properties"] = castItemProps
+			}
+			cast["items"] = castItems
 		}
 	}
 }

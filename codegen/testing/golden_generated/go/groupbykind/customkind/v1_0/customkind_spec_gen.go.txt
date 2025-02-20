@@ -8,9 +8,10 @@ import (
 
 // +k8s:openapi-gen=true
 type InnerObject1 struct {
-	InnerField1 string         `json:"innerField1"`
-	InnerField2 []string       `json:"innerField2"`
-	InnerField3 []InnerObject2 `json:"innerField3"`
+	InnerField1 string                   `json:"innerField1"`
+	InnerField2 []string                 `json:"innerField2"`
+	InnerField3 []InnerObject2           `json:"innerField3"`
+	InnerField4 []map[string]interface{} `json:"innerField4"`
 }
 
 // NewInnerObject1 creates a new InnerObject1 object.

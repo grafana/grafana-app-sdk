@@ -142,8 +142,8 @@
                                                 "items": {
                                                     "properties": {
                                                         "details": {
-                                                            "additionalProperties": {},
-                                                            "type": "object"
+                                                            "type": "object",
+                                                            "x-kubernetes-preserve-unknown-fields": true
                                                         },
                                                         "name": {
                                                             "type": "string"
@@ -156,12 +156,20 @@
                                                     "type": "object"
                                                 },
                                                 "type": "array"
+                                            },
+                                            "innerField4": {
+                                                "items": {
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "type": "array"
                                             }
                                         },
                                         "required": [
                                             "innerField1",
                                             "innerField2",
-                                            "innerField3"
+                                            "innerField3",
+                                            "innerField4"
                                         ],
                                         "type": "object"
                                     },
