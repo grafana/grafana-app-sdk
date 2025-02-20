@@ -100,8 +100,8 @@ spec:
                                     items:
                                         properties:
                                             details:
-                                                additionalProperties: {}
                                                 type: object
+                                                x-kubernetes-preserve-unknown-fields: true
                                             name:
                                                 type: string
                                         required:
@@ -109,10 +109,16 @@ spec:
                                             - details
                                         type: object
                                     type: array
+                                innerField4:
+                                    items:
+                                        type: object
+                                        x-kubernetes-preserve-unknown-fields: true
+                                    type: array
                             required:
                                 - innerField1
                                 - innerField2
                                 - innerField3
+                                - innerField4
                             type: object
                         map:
                             additionalProperties:

@@ -25,6 +25,9 @@ customKind: {
                     innerField1: string
                     innerField2: [...string]
                     innerField3: [...#InnerObject2]
+                    innerField4: [...{
+                    	[string]: _
+                    }]
                 }
                 #InnerObject2: {
                     name: string

@@ -11,6 +11,7 @@ type CustomKindInnerObject1 struct {
 	InnerField1 string                   `json:"innerField1"`
 	InnerField2 []string                 `json:"innerField2"`
 	InnerField3 []CustomKindInnerObject2 `json:"innerField3"`
+	InnerField4 []map[string]interface{} `json:"innerField4"`
 }
 
 // NewCustomKindInnerObject1 creates a new CustomKindInnerObject1 object.

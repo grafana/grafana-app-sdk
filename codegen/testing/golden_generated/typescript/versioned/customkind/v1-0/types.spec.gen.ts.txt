@@ -4,12 +4,14 @@ export interface InnerObject1 {
 	innerField1: string;
 	innerField2: string[];
 	innerField3: InnerObject2[];
+	innerField4: Record<string, any>[];
 }
 
 export const defaultInnerObject1 = (): InnerObject1 => ({
 	innerField1: "",
 	innerField2: [],
 	innerField3: [],
+	innerField4: [],
 });
 
 export interface InnerObject2 {
