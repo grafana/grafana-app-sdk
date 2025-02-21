@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -15,7 +16,7 @@ const (
 )
 
 // ErrAnnotationMissing indicates that the provided annotation key is missing from the annotation map
-var ErrAnnotationMissing = fmt.Errorf("annotation is not in annotations map")
+var ErrAnnotationMissing = errors.New("annotation is not in annotations map")
 
 // WriteGrafanaAnnotation sanitizes the value of `field` and prepends the grafana annotation prefix,
 // then writes the value of the annotation to the provided annotations map, based on the underlying type.
