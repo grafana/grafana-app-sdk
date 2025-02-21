@@ -54,6 +54,9 @@
                                                 "type": "array"
                                             }
                                         },
+                                        "required": [
+                                            "accessKinds"
+                                        ],
                                         "type": "object"
                                     },
                                     "group": {

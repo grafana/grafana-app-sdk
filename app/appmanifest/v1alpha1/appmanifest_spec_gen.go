@@ -138,7 +138,7 @@ func NewAppManifestSpec() *AppManifestSpec {
 // +k8s:openapi-gen=true
 type AppManifestV1alpha1SpecExtraPermissions struct {
 	// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
-	AccessKinds []AppManifestKindPermission `json:"accessKinds,omitempty"`
+	AccessKinds []AppManifestKindPermission `json:"accessKinds"`
 }
 
 // NewAppManifestV1alpha1SpecExtraPermissions creates a new AppManifestV1alpha1SpecExtraPermissions object.

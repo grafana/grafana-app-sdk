@@ -85,7 +85,7 @@ appManifest: versions: v1alpha1: {
 			// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
 			extraPermissions?: {
 				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
-				accessKinds?: [...#KindPermission]
+				accessKinds: [...#KindPermission]
 			}
 			// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
 			// Or simply validate and report errors in status.resources.crds.
