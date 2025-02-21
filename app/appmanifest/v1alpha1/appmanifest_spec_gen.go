@@ -20,7 +20,7 @@ type AppManifestManifestKindVersion struct {
 	Name                     string                                `json:"name"`
 	Admission                *AppManifestAdmissionCapabilities     `json:"admission,omitempty"`
 	Schema                   AppManifestManifestKindVersionSchema  `json:"schema"`
-	SelectableFields         []string                              `json:"selectableFields"`
+	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
 }
 
@@ -120,7 +120,7 @@ type AppManifestSpec struct {
 	Kinds   []AppManifestManifestKind `json:"kinds"`
 	// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
 	// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
-	ExtraPermissions AppManifestV1alpha1SpecExtraPermissions `json:"extraPermissions"`
+	ExtraPermissions *AppManifestV1alpha1SpecExtraPermissions `json:"extraPermissions,omitempty"`
 	// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
 	// Or simply validate and report errors in status.resources.crds.
 	// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
@@ -131,8 +131,7 @@ type AppManifestSpec struct {
 // NewAppManifestSpec creates a new AppManifestSpec object.
 func NewAppManifestSpec() *AppManifestSpec {
 	return &AppManifestSpec{
-		ExtraPermissions: *NewAppManifestV1alpha1SpecExtraPermissions(),
-		DryRunKinds:      (func(input bool) *bool { return &input })(false),
+		DryRunKinds: (func(input bool) *bool { return &input })(false),
 	}
 }
 
