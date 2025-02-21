@@ -179,8 +179,7 @@
                                                         },
                                                         "required": [
                                                             "name",
-                                                            "schema",
-                                                            "selectableFields"
+                                                            "schema"
                                                         ],
                                                         "type": "object"
                                                     },
@@ -201,8 +200,7 @@
                                 "required": [
                                     "appName",
                                     "group",
-                                    "kinds",
-                                    "extraPermissions"
+                                    "kinds"
                                 ],
                                 "type": "object"
                             },
