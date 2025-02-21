@@ -1,21 +1,29 @@
 package app
 
 manifest: {
-	kind: "AppManifest"
-	group: "apps"
-	apiResource: {
-		groupOverride: "apps.grafana.com"
-		scope: "Cluster"
+	appName: "app-manifest"
+	groupOverride: "apps.grafana.com"
+	kinds: [appManifest]
+	extraPermissions: {
+		accessKinds: [{
+			group: "apiextensions.k8s.io",
+			resource: "customresourcedefinitions",
+			actions: ["get","list","create","update","delete","watch"],
+		}]
 	}
+}
+
+appManifest: {
+	kind: "AppManifest"
+	scope: "Cluster"
 	codegen: {
-		frontend: false
-		backend: true
+		ts: enabled: false
 	}
 	current: "v1alpha1"
 	versions: {}
 }
 
-manifest: versions: v1alpha1: {
+appManifest: versions: v1alpha1: {
 	schema: {
 		#AdditionalPrinterColumns: {
 			// name is a human readable name for the column.
@@ -37,7 +45,7 @@ manifest: versions: v1alpha1: {
 			// each custom resource to produce the value for this column.
 			jsonPath: string
 		}
-		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*"
+		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
 		#ValidationCapability: {
 			operations: [...#AdmissionOperation]
 		}
@@ -48,12 +56,13 @@ manifest: versions: v1alpha1: {
 			validation?: #ValidationCapability
 			mutation?: #MutationCapability
 		}
+		#ManifestKindVersionSchema: {
+			[string]: _
+		}
 		#ManifestKindVersion: {
 			name: string
 			admission?: #AdmissionCapabilities
-			schema: {
-				[string]: _
-			}
+			schema: #ManifestKindVersionSchema
 			selectableFields: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
@@ -77,6 +86,25 @@ manifest: versions: v1alpha1: {
 			extraPermissions: {
 				// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
 				accessKinds: [...#KindPermission]
+			}
+			// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
+			// Or simply validate and report errors in status.resources.crds.
+			// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
+			// Even if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.
+			dryRunKinds?: bool | *false
+		}
+		status: {
+			#ApplyStatus: {
+				status: "success" | "failure"
+				// details may contain specific information (such as error message(s)) on the reason for the status
+				details?: string
+			}
+			// ObservedGeneration is the last generation which has been applied by the controller.
+			observedGeneration?: int
+			// Resources contains the status of each resource type created or updated in the API server
+			// as a result of the AppManifest.
+			resources: {
+				[string]: #ApplyStatus
 			}
 		}
 	}
