@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -87,7 +88,7 @@ func (s *Store) Get(ctx context.Context, kind string, identifier Identifier) (Ob
 // If they are not, no request will be issued to the underlying client, and an error will be returned.
 func (s *Store) Add(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
 		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")

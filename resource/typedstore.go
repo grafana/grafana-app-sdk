@@ -2,13 +2,14 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
 	"time"
 )
 
-var ErrMissingResourceVersion = fmt.Errorf("object is missing a ResourceVersion")
+var ErrMissingResourceVersion = errors.New("object is missing a ResourceVersion")
 
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
 // to be of ObjectType. It is a thin convenience layer over using a raw ClientGenerator.ClientFor()-created
