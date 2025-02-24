@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -100,7 +101,7 @@ func (c *Client) Get(ctx context.Context, identifier resource.Identifier) (resou
 // and marshals it into `into`
 func (c *Client) GetInto(ctx context.Context, identifier resource.Identifier, into resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	return c.client.get(ctx, identifier, c.schema.Plural(), into, c.codec)
 }
