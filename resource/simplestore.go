@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -174,7 +175,7 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier, subresource SubresourceName,
 	obj any) (*TypedObject[T, MapSubresourceCatalog], error) {
 	if subresource == "" {
-		return nil, fmt.Errorf("subresource may not be empty")
+		return nil, errors.New("subresource may not be empty")
 	}
 	object := TypedObject[T, MapSubresourceCatalog]{
 		Subresources: MapSubresourceCatalog{

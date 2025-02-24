@@ -1,7 +1,7 @@
 package kindsys
 
 import (
-	"fmt"
+	"errors"
 
 	"cuelang.org/go/cue"
 	"github.com/grafana/thema"
@@ -25,7 +25,7 @@ type SomeDef struct {
 // [thema.BindType].
 func (def SomeDef) BindKindLineage(rt *thema.Runtime, opts ...thema.BindOption) (thema.Lineage, error) {
 	if rt == nil {
-		return nil, fmt.Errorf("nil thema.Runtime")
+		return nil, errors.New("nil thema.Runtime")
 	}
 	return thema.BindLineage(def.V.LookupPath(cue.MakePath(cue.Str("lineage"))), rt, opts...)
 }

@@ -149,6 +149,7 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 	return kinds, nil
 }
 
+//nolint:revive
 func (p *Parser) getKindDefinition() (cue.Value, cue.Value, error) {
 	if p.kindDef != nil {
 		return *p.kindDef, *p.schemaDef, nil

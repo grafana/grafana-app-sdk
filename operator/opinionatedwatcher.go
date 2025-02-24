@@ -38,7 +38,7 @@ type PatchClient interface {
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
 	AddFunc    func(ctx context.Context, object resource.Object) error
-	UpdateFunc func(ctx context.Context, old resource.Object, new resource.Object) error
+	UpdateFunc func(ctx context.Context, old resource.Object, newObj resource.Object) error
 	DeleteFunc func(ctx context.Context, object resource.Object) error
 	SyncFunc   func(ctx context.Context, object resource.Object) error
 	finalizer  string
@@ -179,6 +179,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+//
+//nolint:revive
 func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-update")
 	defer span.End()
@@ -277,9 +279,9 @@ func (o *OpinionatedWatcher) addFunc(ctx context.Context, object resource.Object
 }
 
 // updateFunc is a wrapper for UpdateFunc which makes a nil check to avoid panics
-func (o *OpinionatedWatcher) updateFunc(ctx context.Context, old, new resource.Object) error {
+func (o *OpinionatedWatcher) updateFunc(ctx context.Context, old, newObj resource.Object) error {
 	if o.UpdateFunc != nil {
-		return o.UpdateFunc(ctx, old, new)
+		return o.UpdateFunc(ctx, old, newObj)
 	}
 	// TODO: log?
 	return nil

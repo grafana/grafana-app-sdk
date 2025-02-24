@@ -3,6 +3,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -123,7 +124,7 @@ func (t *TypedSpecObject[T]) GetSpec() any {
 func (t *TypedSpecObject[T]) SetSpec(spec any) error {
 	cast, ok := spec.(T)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	t.Spec = cast
 	return nil
@@ -138,7 +139,7 @@ func (*TypedSpecObject[T]) GetSubresource(_ string) (any, bool) {
 }
 
 func (*TypedSpecObject[T]) SetSubresource(_ string, _ any) error {
-	return fmt.Errorf("TypedSpecObject does not allow subresources")
+	return errors.New("TypedSpecObject does not allow subresources")
 }
 
 func (t *TypedSpecObject[T]) DeepCopyObject() runtime.Object {
@@ -266,7 +267,7 @@ func (t *TypedSpecStatusObject[T, S]) GetSpec() any {
 func (t *TypedSpecStatusObject[T, S]) SetSpec(spec any) error {
 	cast, ok := spec.(T)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	t.Spec = cast
 	return nil
@@ -289,7 +290,7 @@ func (t *TypedSpecStatusObject[T, S]) SetSubresource(key string, val any) error 
 	}
 	cast, ok := val.(S)
 	if !ok {
-		return fmt.Errorf("status value is not of the correct type")
+		return errors.New("status value is not of the correct type")
 	}
 	t.Status = cast
 	return nil
@@ -429,7 +430,7 @@ func (t *TypedObject[Spec, Sub]) GetSpec() any {
 func (t *TypedObject[Spec, Sub]) SetSpec(spec any) error {
 	cast, ok := spec.(Spec)
 	if !ok {
-		return fmt.Errorf("provided spec not convertible to Spec type")
+		return errors.New("provided spec not convertible to Spec type")
 	}
 	t.Spec = cast
 	return nil
@@ -492,7 +493,7 @@ func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
 				}
 				field := reflect.ValueOf(&t.Subresources).Elem().Field(i)
 				if !field.CanSet() {
-					return fmt.Errorf("cannot set value")
+					return errors.New("cannot set value")
 				}
 				field.Set(reflect.ValueOf(value))
 				return nil
@@ -503,7 +504,7 @@ func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
 			ok := false
 			t.Subresources, ok = reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())).Interface().(Sub)
 			if !ok {
-				return fmt.Errorf("subresource catalog is a nil map which could not be instantiated")
+				return errors.New("subresource catalog is a nil map which could not be instantiated")
 			}
 		}
 		if !reflect.TypeOf(key).AssignableTo(typ.Key()) {

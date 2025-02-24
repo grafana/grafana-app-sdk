@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -87,13 +88,13 @@ func (s *Store) Get(ctx context.Context, kind string, identifier Identifier) (Ob
 // If they are not, no request will be issued to the underlying client, and an error will be returned.
 func (s *Store) Add(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
-		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")
+		return nil, errors.New("obj.GetNamespace() must not be empty")
 	}
 	if obj.GetName() == "" {
-		return nil, fmt.Errorf("obj.GetName() must not be empty")
+		return nil, errors.New("obj.GetName() must not be empty")
 	}
 
 	client, err := s.getClient(obj.GetStaticMetadata().Kind)
@@ -123,13 +124,13 @@ func (s *Store) SimpleAdd(ctx context.Context, kind string, identifier Identifie
 // It returns the updated Object from the storage system.
 func (s *Store) Update(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
-		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")
+		return nil, errors.New("obj.GetNamespace() must not be empty")
 	}
 	if obj.GetName() == "" {
-		return nil, fmt.Errorf("obj.GetName() must not be empty")
+		return nil, errors.New("obj.GetName() must not be empty")
 	}
 
 	md := obj.GetCommonMetadata()
@@ -157,7 +158,7 @@ func (s *Store) UpdateSubresource(
 		return nil, err
 	}
 	if subresourceName == "" {
-		return nil, fmt.Errorf("subresourceName cannot be empty")
+		return nil, errors.New("subresourceName cannot be empty")
 	}
 
 	srBytes, err := json.Marshal(obj)
@@ -184,13 +185,13 @@ func (s *Store) UpdateSubresource(
 // It returns the updated/created Object from the storage system.
 func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
-		return nil, fmt.Errorf("obj.GetStaticMetadata().Kind must not be empty")
+		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
 	}
 	if obj.GetNamespace() == "" {
-		return nil, fmt.Errorf("obj.GetNamespace() must not be empty")
+		return nil, errors.New("obj.GetNamespace() must not be empty")
 	}
 	if obj.GetName() == "" {
-		return nil, fmt.Errorf("obj.GetName() must not be empty")
+		return nil, errors.New("obj.GetName() must not be empty")
 	}
 
 	client, err := s.getClient(obj.GetStaticMetadata().Kind)

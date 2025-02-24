@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,7 +43,7 @@ func (u *UntypedObject) GetSpec() any {
 func (u *UntypedObject) SetSpec(spec any) error {
 	cast, ok := spec.(map[string]any)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	u.Spec = cast
 	return nil
