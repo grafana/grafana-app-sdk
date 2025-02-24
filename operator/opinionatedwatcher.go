@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/otel/codes"
@@ -62,10 +63,10 @@ func NewOpinionatedWatcher(sch resource.Schema, client PatchClient) (*Opinionate
 // NewOpinionatedWatcherWithFinalizer sets up a new OpinionatedWatcher with finalizer from provided supplier and returns a pointer to it.
 func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient, supplier FinalizerSupplier) (*OpinionatedWatcher, error) {
 	if sch == nil {
-		return nil, fmt.Errorf("schema cannot be nil")
+		return nil, errors.New("schema cannot be nil")
 	}
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 	finalizer := supplier(sch)
 	if len(finalizer) > 63 {
