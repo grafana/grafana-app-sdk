@@ -3,6 +3,7 @@ package jennies
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
 	"strings"
@@ -41,7 +42,7 @@ func (m *ManifestGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, erro
 	if manifest.Group == "" {
 		if len(manifest.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
-			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
+			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
 		manifest.Group = fmt.Sprintf("%s.ext.grafana.com", manifest.AppName)
@@ -91,7 +92,7 @@ func (g *ManifestGoGenerator) Generate(kinds ...codegen.Kind) (codejen.Files, er
 	if manifest.Group == "" {
 		if len(manifest.Kinds) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
-			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
+			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
 		manifest.Group = fmt.Sprintf("%s.ext.grafana.com", manifest.AppName)
@@ -136,7 +137,7 @@ func buildManifest(kinds []codegen.Kind) (*app.ManifestData, error) {
 			manifest.Group = kind.Properties().APIResource.Group
 		}
 		if kind.Properties().APIResource.Group == "" {
-			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
+			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		if kind.Properties().APIResource.Group != manifest.Group {
 			return nil, fmt.Errorf("all kinds must have the same group %q", manifest.Group)
@@ -209,7 +210,7 @@ func sanitizeAdmissionOperations(operations []codegen.KindAdmissionCapabilityOpe
 			return nil, fmt.Errorf("invalid operation %q", op)
 		}
 		if translated == app.AdmissionOperationAny && len(operations) > 1 {
-			return nil, fmt.Errorf("cannot use any ('*') operation alongside named operations")
+			return nil, errors.New("cannot use any ('*') operation alongside named operations")
 		}
 		sanitized = append(sanitized, translated)
 	}

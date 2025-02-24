@@ -2,6 +2,7 @@
 package jennies
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -182,7 +183,7 @@ func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) 
 	for k, v := range back.Components.Schemas {
 		d, ok := v.(map[string]any)
 		if !ok {
-			return nil, fmt.Errorf("error generating openapi schema - generated schema has invalid type")
+			return nil, errors.New("error generating openapi schema - generated schema has invalid type")
 		}
 		schemaProps, ok = d["properties"].(map[string]any)
 		if !ok {

@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -42,7 +43,7 @@ func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, names
 func NewKubernetesBasedInformerWithFilters(sch resource.Kind, client ListWatchClient, options KubernetesBasedIformerOptions) (
 	*KubernetesBasedInformer, error) {
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 
 	return &KubernetesBasedInformer{
@@ -95,7 +96,7 @@ func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 	// Nil check
 	if obj == nil {
-		return nil, fmt.Errorf("object cannot be nil")
+		return nil, errors.New("object cannot be nil")
 	}
 
 	// First, check if it's already a resource.Object

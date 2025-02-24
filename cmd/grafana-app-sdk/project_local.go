@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -632,7 +633,7 @@ func parsePluginJSONValue(v any) (string, error) {
 	case bool:
 		return strconv.FormatBool(cast), nil
 	default:
-		return "", fmt.Errorf("unknown type")
+		return "", errors.New("unknown type")
 	}
 }
 

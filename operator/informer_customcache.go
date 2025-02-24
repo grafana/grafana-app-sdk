@@ -3,7 +3,6 @@ package operator
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -102,7 +101,7 @@ func (c *CustomCacheInformer) Run(stopCh <-chan struct{}) error {
 	defer utilruntime.HandleCrash()
 
 	if c.HasStarted() {
-		return fmt.Errorf("informer is already started")
+		return errors.New("informer is already started")
 	}
 
 	func() {

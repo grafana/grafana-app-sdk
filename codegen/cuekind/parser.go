@@ -2,6 +2,7 @@ package cuekind
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -43,7 +44,7 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 	defer modFile.Close()
 	modFileContents, err := io.ReadAll(modFile)
 	if err != nil {
-		return nil, fmt.Errorf("error reading contents of cue.mod/module.cue")
+		return nil, errors.New("error reading contents of cue.mod/module.cue")
 	}
 	cueMod := cuecontext.New().CompileString(string(modFileContents))
 	if cueMod.Err() != nil {
@@ -63,7 +64,7 @@ func (p *Parser) Parse(files fs.FS, selectors ...string) ([]codegen.Kind, error)
 		Dir:        filepath.FromSlash(filepath.Join("/", modPath)),
 	})
 	if len(inst) == 0 {
-		return nil, fmt.Errorf("no data")
+		return nil, errors.New("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
 	vals := make([]cue.Value, 0)

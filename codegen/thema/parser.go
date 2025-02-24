@@ -2,6 +2,7 @@
 package thema
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"strings"
@@ -37,7 +38,7 @@ func (p *Parser) Parse(modFS fs.FS, selectors ...string) ([]kindsys.Custom, erro
 		return nil, root.Err()
 	}
 	if !root.Exists() {
-		return nil, fmt.Errorf("unable to load Instance")
+		return nil, errors.New("unable to load Instance")
 	}
 
 	// Get the relevant selectors
@@ -150,7 +151,7 @@ func NewCustomKindParser(rt *thema.Runtime, modFS fs.FS) (*CustomKindParser, err
 		return nil, val.Err()
 	}
 	if !val.Exists() {
-		return nil, fmt.Errorf("unable to load Instance")
+		return nil, errors.New("unable to load Instance")
 	}
 
 	return &CustomKindParser{
@@ -190,7 +191,7 @@ func (g *CustomKindParser) Validate(selectors ...string) (map[string]multierror.
 		v := g.root.LookupPath(g.getPathFromString(s))
 		if !v.Exists() {
 			errs[s] = multierror.Error{
-				Errors: []error{fmt.Errorf("selector does not exist")},
+				Errors: []error{errors.New("selector does not exist")},
 			}
 			continue
 		}
@@ -224,7 +225,7 @@ func (g *CustomKindParser) Validate(selectors ...string) (map[string]multierror.
 // returning the files created from each step. If no selectors are passed, all top-level declarations will be used.
 func (g *CustomKindParser) Generate(generator Generator, selectors ...string) (codejen.Files, error) {
 	if generator == nil {
-		return nil, fmt.Errorf("generator must be non-nil")
+		return nil, errors.New("generator must be non-nil")
 	}
 
 	return g.FilteredGenerate(Filter(generator, func(kindsys.Custom) bool {
@@ -237,7 +238,7 @@ func (g *CustomKindParser) Generate(generator Generator, selectors ...string) (c
 // returning the files created from each step. If no selectors are passed, all supported selectors will be used.
 func (g *CustomKindParser) FilteredGenerate(generator FilteredGenerator, selectors ...string) (codejen.Files, error) {
 	if generator == nil {
-		return nil, fmt.Errorf("generator must be non-nil")
+		return nil, errors.New("generator must be non-nil")
 	}
 
 	if len(selectors) == 0 {

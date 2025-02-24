@@ -106,7 +106,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	defer span.End()
 	if object == nil {
 		span.SetStatus(codes.Error, "object cannot be nil")
-		return fmt.Errorf("object cannot be nil")
+		return errors.New("object cannot be nil")
 	}
 
 	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
