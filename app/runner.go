@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
@@ -23,8 +24,9 @@ var RunnableCollectorDefaultErrorHandler = func(ctx context.Context, err error) 
 // NewMultiRunner creates a new MultiRunner with Runners as an empty slice and ErrorHandler set to RunnableCollectorDefaultErrorHandler
 func NewMultiRunner() *MultiRunner {
 	return &MultiRunner{
-		Runners:      make([]Runnable, 0),
-		ErrorHandler: RunnableCollectorDefaultErrorHandler,
+		Runners:             make([]Runnable, 0),
+		ErrorHandler:        RunnableCollectorDefaultErrorHandler,
+		HealthCheckInterval: time.Minute * 2,
 	}
 }
 
@@ -39,6 +41,9 @@ type MultiRunner struct {
 	// before stopping execution and returning a timeout error instead of exiting gracefully.
 	// If ExitWait is nil, Run execution will always block until all Runners have exited.
 	ExitWait *time.Duration
+	// HelthCheckInterval is the duration at which the runner will periodically run the registered health checks. The
+	// cached result is what's returned by the ready endpoint.
+	HealthCheckInterval time.Duration
 }
 
 // Run runs all Runners in separate goroutines, and calls ErrorHandler if any of them exits early with an error.
@@ -112,6 +117,20 @@ func (m *MultiRunner) PrometheusCollectors() []prometheus.Collector {
 		}
 	}
 	return collectors
+}
+
+// HealthChecks implements HealthChecker
+func (m *MultiRunner) HealthChecks() []health.Check {
+	// TODO: there isn't a running property on the multirunner itself, should there be?
+	checks := []health.Check{}
+
+	for _, runner := range m.Runners {
+		if cast, ok := runner.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+	}
+
+	return checks
 }
 
 // AddRunnable adds the provided Runnable to the Runners slice. If the slice is nil, it will create it.

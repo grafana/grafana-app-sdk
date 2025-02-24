@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"net/http"
 	"os"
 	"sync"
+	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/grafana/grafana-app-sdk/health"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -26,12 +28,15 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config        RunnerConfig
-	webhookServer *webhookServerRunner
-	metricsServer *metricsServerRunner
-	startMux      sync.Mutex
-	running       bool
-	runningWG     sync.WaitGroup
+	config          RunnerConfig
+	webhookServer   *webhookServerRunner
+	metricsExporter *metrics.Exporter
+	server          *OperatorServer
+	serverRunner    *app.SingletonRunner
+	healthCheck     health.Check
+	startMux        sync.Mutex
+	running         bool
+	runningWG       sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -43,9 +48,22 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
 	// }
 
-	op := Runner{
-		config: cfg,
+	if cfg.Port <= 0 {
+		cfg.Port = 9090
 	}
+
+	op := Runner{
+		config:      cfg,
+		healthCheck: cfg.HealthCheck,
+	}
+	op.server = &OperatorServer{
+		Port:                cfg.Port,
+		Mux:                 http.NewServeMux(),
+		Checks:              op.HealthChecks(),
+		HealthCheckInterval: cfg.HealthCheckInterval,
+	}
+
+	op.serverRunner = app.NewSingletonRunner(op.server, false)
 
 	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
 		ws, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -61,18 +79,24 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		op.webhookServer = newWebhookServerRunner(ws)
 	}
 	if cfg.MetricsConfig.Enabled {
-		exporter := metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
-		op.metricsServer = newMetricsServerRunner(exporter)
+		op.metricsExporter = metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
 	}
+
 	return &op, nil
 }
 
 type RunnerConfig struct {
+	// Server port for metrics and health endpoints
+	Port int
 	// WebhookConfig contains configuration information for exposing k8s webhooks.
 	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
 	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
+	// Health checks for liveness and readiness
+	HealthCheck health.Check
+	// HealthCheckInterval dictates how often checks are run periodically
+	HealthCheckInterval time.Duration
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
@@ -214,15 +238,25 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Metrics
-	if s.metricsServer != nil {
-		err = s.metricsServer.RegisterCollectors(runner.PrometheusCollectors()...)
+	if s.metricsExporter != nil {
+		err = s.metricsExporter.RegisterCollectors(runner.PrometheusCollectors()...)
 		if err != nil {
 			return err
 		}
-		runner.AddRunnable(s.metricsServer)
+
+		s.server.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
 	}
 
+	// Add Metrics+Health cumulative server runnable, healthcheck based on "running" should
+	// be passed down to the serverRunner
+	runner.AddRunnable(s.serverRunner)
+
 	return runner.Run(ctx)
+}
+
+// HealthChecks implements HealthChecker
+func (s *Runner) HealthChecks() []health.Check {
+	return []health.Check{s.healthCheck}
 }
 
 func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {
@@ -330,28 +364,6 @@ func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource
 
 func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
 	s.server.AddConverter(converter, groupKind)
-}
-
-func newMetricsServerRunner(exporter *metrics.Exporter) *metricsServerRunner {
-	return &metricsServerRunner{
-		server: exporter,
-		runner: app.NewSingletonRunner(&k8sRunnable{
-			runner: exporter,
-		}, false),
-	}
-}
-
-type metricsServerRunner struct {
-	runner *app.SingletonRunner
-	server *metrics.Exporter
-}
-
-func (m *metricsServerRunner) Run(ctx context.Context) error {
-	return m.runner.Run(ctx)
-}
-
-func (m *metricsServerRunner) RegisterCollectors(collectors ...prometheus.Collector) error {
-	return m.server.RegisterCollectors(collectors...)
 }
 
 type k8sRunner interface {
