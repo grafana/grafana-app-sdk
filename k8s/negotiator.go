@@ -3,7 +3,7 @@ package k8s
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -190,7 +190,7 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 	if cast, ok := obj.(resource.Object); ok {
 		return c.Codec.Write(w, cast)
 	}
-	return fmt.Errorf("provided object is not a resource.Object")
+	return errors.New("provided object is not a resource.Object")
 }
 
 // Identifier returns "generic-json-decoder"

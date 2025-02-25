@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -100,7 +101,7 @@ func (c *Client) Get(ctx context.Context, identifier resource.Identifier) (resou
 // and marshals it into `into`
 func (c *Client) GetInto(ctx context.Context, identifier resource.Identifier, into resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	return c.client.get(ctx, identifier, c.schema.Plural(), into, c.codec)
 }
@@ -120,10 +121,10 @@ func (c *Client) Create(ctx context.Context, identifier resource.Identifier, obj
 func (c *Client) CreateInto(ctx context.Context, identifier resource.Identifier, obj resource.Object,
 	_ resource.CreateOptions, into resource.Object) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	if c.schema.Scope() == resource.NamespacedScope && identifier.Namespace == resource.NamespaceAll {
 		return fmt.Errorf("cannot create a resource with schema scope \"%s\" in NamespaceAll (\"%s\")", resource.NamespacedScope, resource.NamespaceAll)
@@ -147,7 +148,7 @@ func (c *Client) CreateInto(ctx context.Context, identifier resource.Identifier,
 func (c *Client) Update(ctx context.Context, identifier resource.Identifier, obj resource.Object,
 	options resource.UpdateOptions) (resource.Object, error) {
 	if obj == nil {
-		return nil, fmt.Errorf("obj cannot be nil")
+		return nil, errors.New("obj cannot be nil")
 	}
 	into := c.schema.ZeroValue()
 	err := c.UpdateInto(ctx, identifier, obj, options, into)
@@ -161,10 +162,10 @@ func (c *Client) Update(ctx context.Context, identifier resource.Identifier, obj
 func (c *Client) UpdateInto(ctx context.Context, identifier resource.Identifier, obj resource.Object,
 	options resource.UpdateOptions, into resource.Object) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	obj.SetStaticMetadata(resource.StaticMetadata{
 		Namespace: identifier.Namespace,

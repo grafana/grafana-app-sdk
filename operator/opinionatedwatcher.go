@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"go.opentelemetry.io/otel/codes"
@@ -38,7 +39,7 @@ type PatchClient interface {
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
 	AddFunc    func(ctx context.Context, object resource.Object) error
-	UpdateFunc func(ctx context.Context, old resource.Object, new resource.Object) error
+	UpdateFunc func(ctx context.Context, old resource.Object, newObj resource.Object) error
 	DeleteFunc func(ctx context.Context, object resource.Object) error
 	SyncFunc   func(ctx context.Context, object resource.Object) error
 	finalizer  string
@@ -62,10 +63,10 @@ func NewOpinionatedWatcher(sch resource.Schema, client PatchClient) (*Opinionate
 // NewOpinionatedWatcherWithFinalizer sets up a new OpinionatedWatcher with finalizer from provided supplier and returns a pointer to it.
 func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient, supplier FinalizerSupplier) (*OpinionatedWatcher, error) {
 	if sch == nil {
-		return nil, fmt.Errorf("schema cannot be nil")
+		return nil, errors.New("schema cannot be nil")
 	}
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 	finalizer := supplier(sch)
 	if len(finalizer) > 63 {
@@ -105,7 +106,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	defer span.End()
 	if object == nil {
 		span.SetStatus(codes.Error, "object cannot be nil")
-		return fmt.Errorf("object cannot be nil")
+		return errors.New("object cannot be nil")
 	}
 
 	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -179,6 +180,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+//
+//nolint:revive
 func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-update")
 	defer span.End()
@@ -277,9 +280,9 @@ func (o *OpinionatedWatcher) addFunc(ctx context.Context, object resource.Object
 }
 
 // updateFunc is a wrapper for UpdateFunc which makes a nil check to avoid panics
-func (o *OpinionatedWatcher) updateFunc(ctx context.Context, old, new resource.Object) error {
+func (o *OpinionatedWatcher) updateFunc(ctx context.Context, old, newObj resource.Object) error {
 	if o.UpdateFunc != nil {
-		return o.UpdateFunc(ctx, old, new)
+		return o.UpdateFunc(ctx, old, newObj)
 	}
 	// TODO: log?
 	return nil

@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -47,12 +48,13 @@ func rawToListWithParser(raw []byte, into resource.ListObject, itemParser func([
 
 var metaV1Fields = getV1ObjectMetaFields()
 
+//nolint:revive
 func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 	// Correct for differing metadata paths in kubernetes
 	for idx, op := range patch.Operations {
 		// We don't allow a patch on the metadata object as a whole
 		if op.Path == "/metadata" {
-			return nil, fmt.Errorf("cannot patch entire metadata object")
+			return nil, errors.New("cannot patch entire metadata object")
 		}
 
 		// We only need to (possibly) correct patch operations for the metadata

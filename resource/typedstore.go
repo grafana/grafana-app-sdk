@@ -2,13 +2,14 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
 	"time"
 )
 
-var ErrMissingResourceVersion = fmt.Errorf("object is missing a ResourceVersion")
+var ErrMissingResourceVersion = errors.New("object is missing a ResourceVersion")
 
 // TypedStore is a single-Schema store where returned Objects from the underlying client are assumed
 // to be of ObjectType. It is a thin convenience layer over using a raw ClientGenerator.ClientFor()-created
@@ -60,17 +61,17 @@ func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 	if t.sch.Scope() == ClusterScope {
 		if obj.GetNamespace() != "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() must be empty for cluster-scoped objects")
+			return n, errors.New("obj.GetNamespace() must be empty for cluster-scoped objects")
 		}
 	} else {
 		if obj.GetNamespace() == "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() must not be empty")
+			return n, errors.New("obj.GetNamespace() must not be empty")
 		}
 	}
 	if obj.GetName() == "" {
 		var n T
-		return n, fmt.Errorf("obj.GetName() must not be empty")
+		return n, errors.New("obj.GetName() must not be empty")
 	}
 	ret, err := t.client.Create(ctx, Identifier{
 		Namespace: obj.GetNamespace(),

@@ -25,9 +25,9 @@ func (w *Watcher) Add(ctx context.Context, object resource.Object) error {
 }
 
 // Update calls UpdateFunc, if non-nil
-func (w *Watcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
+func (w *Watcher) Update(ctx context.Context, old resource.Object, newObj resource.Object) error {
 	if w.UpdateFunc != nil {
-		return w.UpdateFunc(ctx, old, new)
+		return w.UpdateFunc(ctx, old, newObj)
 	}
 	return nil
 }

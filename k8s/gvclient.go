@@ -578,7 +578,7 @@ func parseKubernetesError(responseBytes []byte, statusCode int, err error) error
 		parsed := k8sErrBody{}
 		// If we can parse the response body, use the error contained there instead, because it's clearer
 		if e := json.Unmarshal(responseBytes, &parsed); e == nil {
-			err = fmt.Errorf(parsed.Message)
+			err = errors.New(parsed.Message)
 			if statusCode == 0 && parsed.Code > 0 {
 				statusCode = parsed.Code
 			}

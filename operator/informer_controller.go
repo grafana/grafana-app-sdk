@@ -45,7 +45,7 @@ type Informer interface {
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
 type ResourceWatcher interface {
 	Add(context.Context, resource.Object) error
-	Update(ctx context.Context, old, new resource.Object) error
+	Update(ctx context.Context, old, newObj resource.Object) error
 	Delete(context.Context, resource.Object) error
 }
 
@@ -207,10 +207,10 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 //nolint:gocognit,funlen,dupl
 func (c *InformerController) AddInformer(informer Informer, resourceKind string) error {
 	if informer == nil {
-		return fmt.Errorf("informer cannot be nil")
+		return errors.New("informer cannot be nil")
 	}
 	if resourceKind == "" {
-		return fmt.Errorf("resourceKind cannot be empty")
+		return errors.New("resourceKind cannot be empty")
 	}
 
 	err := informer.AddEventHandler(&SimpleWatcher{
@@ -232,10 +232,10 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 // They will be run in the order they were added to the informer.
 func (c *InformerController) AddWatcher(watcher ResourceWatcher, resourceKind string) error {
 	if watcher == nil {
-		return fmt.Errorf("watcher cannot be nil")
+		return errors.New("watcher cannot be nil")
 	}
 	if resourceKind == "" {
-		return fmt.Errorf("resourceKind cannot be empty")
+		return errors.New("resourceKind cannot be empty")
 	}
 	c.watchers.AddItem(resourceKind, watcher)
 	return nil
@@ -259,10 +259,10 @@ func (c *InformerController) RemoveAllWatchersForResource(resourceKind string) {
 // they will be run in the order they were added to the informer.
 func (c *InformerController) AddReconciler(reconciler Reconciler, resourceKind string) error {
 	if reconciler == nil {
-		return fmt.Errorf("reconciler cannot be nil")
+		return errors.New("reconciler cannot be nil")
 	}
 	if resourceKind == "" {
-		return fmt.Errorf("resourceKind cannot be empty")
+		return errors.New("resourceKind cannot be empty")
 	}
 	c.reconcilers.AddItem(resourceKind, reconciler)
 	return nil

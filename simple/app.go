@@ -2,6 +2,7 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -305,13 +306,13 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
 		if route.Method == "" {
-			return fmt.Errorf("custom route cannot have an empty method")
+			return errors.New("custom route cannot have an empty method")
 		}
 		if route.Path == "" {
-			return fmt.Errorf("custom route cannot have an empty path")
+			return errors.New("custom route cannot have an empty path")
 		}
 		if handler == nil {
-			return fmt.Errorf("custom route cannot have a nil handler")
+			return errors.New("custom route cannot have a nil handler")
 		}
 		key := a.customRouteHandlerKey(kind.Kind, string(route.Method), route.Path)
 		if _, ok := a.customRoutes[key]; ok {
@@ -332,7 +333,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
 	if kind.Reconciler != nil && kind.Watcher != nil {
-		return fmt.Errorf("please provide either Watcher or Reconciler, not both")
+		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		client, err := a.clientGenerator.ClientFor(kind.Kind)

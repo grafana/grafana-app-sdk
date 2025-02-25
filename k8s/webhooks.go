@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,13 +70,13 @@ type WebhookServer struct {
 // (default controllers, schema-specific controllers) can be set post-initialization.
 func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	if config.Port < 1 || config.Port > 65536 {
-		return nil, fmt.Errorf("config.Port must be a valid port number (between 1 and 65536)")
+		return nil, errors.New("config.Port must be a valid port number (between 1 and 65536)")
 	}
 	if config.TLSConfig.CertPath == "" {
-		return nil, fmt.Errorf("config.TLSConfig.CertPath is required")
+		return nil, errors.New("config.TLSConfig.CertPath is required")
 	}
 	if config.TLSConfig.KeyPath == "" {
-		return nil, fmt.Errorf("config.TLSConfig.KeyPath is required")
+		return nil, errors.New("config.TLSConfig.KeyPath is required")
 	}
 
 	ws := WebhookServer{

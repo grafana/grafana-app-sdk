@@ -79,7 +79,7 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 			cancel()
 			if m.ExitWait != nil {
 				if waitOrTimeout(wg, *m.ExitWait) {
-					return fmt.Errorf("exit wait time exceeded waiting for Runners to complete")
+					return errors.New("exit wait time exceeded waiting for Runners to complete")
 				}
 			} else {
 				wg.Wait() // Wait for all the runners to stop

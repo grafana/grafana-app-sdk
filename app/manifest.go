@@ -2,7 +2,7 @@ package app
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"gopkg.in/yaml.v3"
@@ -205,15 +205,15 @@ func (v *VersionSchema) fixRaw() error {
 		}
 		oapi, ok := v.raw["openAPIV3Schema"].(map[string]any)
 		if !ok {
-			return fmt.Errorf("'openAPIV3Schema' must be an object")
+			return errors.New("'openAPIV3Schema' must be an object")
 		}
 		props, ok := oapi["properties"]
 		if !ok {
-			return fmt.Errorf("'openAPIV3Schema' must contain properties")
+			return errors.New("'openAPIV3Schema' must contain properties")
 		}
 		castProps, ok := props.(map[string]any)
 		if !ok {
-			return fmt.Errorf("'openAPIV3Schema' properties must be an object")
+			return errors.New("'openAPIV3Schema' properties must be an object")
 		}
 		m := make(map[string]any)
 		for key, value := range castProps {
@@ -225,7 +225,7 @@ func (v *VersionSchema) fixRaw() error {
 	if c, ok := v.raw["components"]; ok {
 		cast, ok := c.(map[string]any)
 		if !ok {
-			return fmt.Errorf("'components' in an OpenAPI document must be an object")
+			return errors.New("'components' in an OpenAPI document must be an object")
 		}
 		s, ok := cast["schemas"]
 		if !ok {
@@ -234,7 +234,7 @@ func (v *VersionSchema) fixRaw() error {
 		}
 		schemas, ok := s.(map[string]any)
 		if !ok {
-			return fmt.Errorf("'components.schemas' in an OpenAPI document must be an object")
+			return errors.New("'components.schemas' in an OpenAPI document must be an object")
 		}
 		v.raw["schemas"] = schemas
 	}

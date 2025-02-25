@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -561,7 +562,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, pluginID string, groupKinds bool) error {
 	// Check plugin ID
 	if pluginID == "" {
-		return fmt.Errorf("plugin-id is required")
+		return errors.New("plugin-id is required")
 	}
 
 	// Get the repo from the go.mod file
@@ -642,7 +643,7 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 func addComponentFrontend(projectRootPath string, pluginID string, promptForOverwrite bool) error {
 	// Check plugin ID
 	if pluginID == "" {
-		return fmt.Errorf("plugin-id is required")
+		return errors.New("plugin-id is required")
 	}
 
 	err := writeStaticFrontendFiles(filepath.Join(projectRootPath, "plugin"), promptForOverwrite)
