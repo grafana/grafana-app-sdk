@@ -402,6 +402,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
+	if err != nil {
+		return err
+	}
+
 	kindGrouping, err := cmd.Flags().GetString("grouping")
 	if err != nil {
 		return err
@@ -419,11 +424,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(sourcePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState), os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser()
+		manifestParser = parser.ManifestParser(genOperatorState)
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}

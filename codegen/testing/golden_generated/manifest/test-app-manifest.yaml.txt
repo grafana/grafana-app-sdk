@@ -60,7 +60,6 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-                    x-kubernetes-preserve-unknown-fields: true
             - name: v2
               admission:
                 validation:
@@ -124,7 +123,6 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-                    x-kubernetes-preserve-unknown-fields: true
           conversion: true
         - kind: TestKind2
           scope: Namespaced
@@ -175,7 +173,6 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-                    x-kubernetes-preserve-unknown-fields: true
           conversion: false
     extraPermissions:
         accessKinds:

@@ -10,15 +10,15 @@ import (
 // It is not exhaustive and only includes fields which may be relevant to a kind's implementation,
 // As it is also intended to be generic enough to function with any API Server.
 _kubeObjectMetadata: {
-    uid: string
-    creationTimestamp: string & time.Time
-    deletionTimestamp?: string & time.Time
-    finalizers: [...string]
-    resourceVersion: string
-	generation: int64
-    labels: {
-        [string]: string
-    }
+	uid:                string
+	creationTimestamp:  string & time.Time
+	deletionTimestamp?: string & time.Time
+	finalizers: [...string]
+	resourceVersion: string
+	generation:      int64
+	labels: {
+		[string]: string
+	}
 }
 
 Schema: {
@@ -29,8 +29,8 @@ Schema: {
 		_kubeObjectMetadata
 
 		updateTimestamp: string & time.Time
-		createdBy: string
-		updatedBy: string
+		createdBy:       string
+		updatedBy:       string
 	} & {
 		// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
 		// Can't use this as it's not yet enforced CUE:
@@ -38,8 +38,16 @@ Schema: {
 		// Have to do this gnarly regex instead
 		[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|generation|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
 	}
-	spec: _
-	status: {
+
+	spec:   _
+	status: _
+
+	// cuetsy is not happy creating spec with the MinFields constraint directly
+	_specIsNonEmpty: spec & struct.MinFields(0)
+}
+
+SchemaWithOperatorState: Schema & {
+	status: _ & {
 		#OperatorState: {
 			// lastEvaluation is the ResourceVersion last evaluated
 			lastEvaluation: string
@@ -53,6 +61,7 @@ Schema: {
 				[string]: _
 			}
 		}
+
 		// operatorStates is a map of operator ID to operator state evaluations.
 		// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
 		operatorStates?: {
@@ -62,12 +71,7 @@ Schema: {
 		additionalFields?: {
 			[string]: _
 		}
-	} & {
-		[string]: _
 	}
-
-	// cuetsy is not happy creating spec with the MinFields constraint directly
-	_specIsNonEmpty: spec & struct.MinFields(0)
 }
 
 #AdmissionCapability: {
@@ -97,12 +101,12 @@ Schema: {
 
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
-	kind: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
+	kind:  =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
 	group: =~"^([a-z][a-z0-9-.]{0,61}[a-z0-9])$"
 	// manifestGroup is a group shortname used for package naming in codegen
 	// TODO: remove this when all jenny pipelines use the manifest, or keep around for convenience?
 	manifestGroup: string
-	current: string
+	current:       string
 	// scope determines whether resources of this kind exist globally ("Cluster") or
 	// within Kubernetes namespaces.
 	scope: "Cluster" | *"Namespaced"
@@ -125,7 +129,7 @@ Kind: S={
 		[V=string]: {
 			// Version must be the key in the map, but is pulled into the value of the map for ease-of-access when dealing with the resulting value
 			version: V
-			schema: _
+			schema:  _
 			// served indicates whether this version is served by the API server
 			served: bool | *true
 			// codegen contains properties specific to generating code using tooling
@@ -149,13 +153,13 @@ Kind: S={
 			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
 			selectableFields: [...string]
 			validation: #AdmissionCapability | *S.validation
-			mutation: #AdmissionCapability | *S.mutation
+			mutation:   #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 		}
 	}
-	machineName: strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
-	pluralName: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
+	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
+	pluralName:        =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
 	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
 	// codegen contains properties specific to generating code using tooling. At the root level of the kind, it sets
 	// the defaults for the `codegen` field in all entries in `versions`. 
@@ -198,20 +202,20 @@ Kind: S={
 		}
 	}
 
-	_computedGroupKind: S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
+	_computedGroupKind: S.machineName+"."+group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
 }
 
 #AccessKind: {
-	group: string
+	group:    string
 	resource: string
 	actions: [...string]
 }
 
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
-	group: strings.ToLower(strings.Replace(S.appName, "-", "", -1))
+	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	kinds: [...{
-		group: S.fullGroup
+		group:         S.fullGroup
 		manifestGroup: S.group
 	} & Kind]
 	extraPermissions: {
@@ -229,9 +233,9 @@ Manifest: S={
 	// This field could be inlined into `group`, but is separate for clarity.
 	_computedGroups: [
 		if S.groupOverride != _|_ {
-			strings.ToLower(S.groupOverride),
+			strings.ToLower(S.groupOverride)
 		},
-		strings.ToLower(strings.Replace(S.group, "_","-",-1)) + ".ext.grafana.com" // TODO: change to ext.grafana.app?
+		strings.ToLower(strings.Replace(S.group, "_", "-", -1)) + ".ext.grafana.com", // TODO: change to ext.grafana.app?
 	]
 
 	// fullGroup is used as the CRD group name in the GVK.
@@ -242,10 +246,10 @@ Manifest: S={
 
 	_computedGroupKinds: [
 		for x in S.kinds {
-			let computed = S.machineName + "." + group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
-			if computed =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$" {
+			let computed = S.machineName+"."+group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
+			if computed =~ "^([a-z][a-z0-9-.]{0,63}[a-z0-9])$" {
 				computed
 			}
-		}
+		},
 	]
 }

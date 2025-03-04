@@ -18,8 +18,11 @@ import (
 type TestKind2 struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
-	Spec              TestKind2Spec   `json:"spec" yaml:"spec"`
-	TestKind2Status   TestKind2Status `json:"status" yaml:"status"`
+
+	// Spec is the spec of the TestKind2
+	Spec TestKind2Spec `json:"spec" yaml:"spec"`
+
+	Status TestKind2Status `json:"status" yaml:"status"`
 }
 
 func (o *TestKind2) GetSpec() any {
@@ -37,14 +40,14 @@ func (o *TestKind2) SetSpec(spec any) error {
 
 func (o *TestKind2) GetSubresources() map[string]any {
 	return map[string]any{
-		"status": o.TestKind2Status,
+		"status": o.Status,
 	}
 }
 
 func (o *TestKind2) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
-		return o.TestKind2Status, true
+		return o.Status, true
 	default:
 		return nil, false
 	}
@@ -57,7 +60,7 @@ func (o *TestKind2) SetSubresource(name string, value any) error {
 		if !ok {
 			return fmt.Errorf("cannot set status type %#v, not of type TestKind2Status", value)
 		}
-		o.TestKind2Status = cast
+		o.Status = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)

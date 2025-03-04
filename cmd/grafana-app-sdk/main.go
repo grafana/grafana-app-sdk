@@ -19,15 +19,17 @@ var rootCmd = &cobra.Command{
 
 // Persistent flags for all commands
 const (
-	sourceFlag   = "source"
-	formatFlag   = "format"
-	selectorFlag = "manifest"
+	sourceFlag           = "source"
+	formatFlag           = "format"
+	selectorFlag         = "manifest"
+	genOperatorStateFlag = "genoperatorstate"
 )
 
 func main() {
 	rootCmd.PersistentFlags().StringP(sourceFlag, "s", "kinds", "Path to directory with your codegen source files (such as a CUE module)")
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
 	rootCmd.PersistentFlags().String(selectorFlag, "manifest", "Path selector to use for the manifest")
+	rootCmd.PersistentFlags().Bool(genOperatorStateFlag, true, "Generate operator state code")
 
 	setupVersionCmd()
 	setupGenerateCmd()
