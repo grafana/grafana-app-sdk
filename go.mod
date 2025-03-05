@@ -16,7 +16,7 @@ require (
 	github.com/grafana/cog v0.0.27
 	github.com/grafana/grafana-app-sdk/logging v0.32.1
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.21.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
