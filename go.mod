@@ -16,7 +16,7 @@ require (
 	github.com/grafana/cog v0.0.27
 	github.com/grafana/grafana-app-sdk/logging v0.32.1
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/prometheus/client_golang v1.21.0
+	github.com/prometheus/client_golang v1.21.1
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
@@ -25,9 +25,9 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.34.0
 	go.opentelemetry.io/otel/sdk v1.34.0
 	go.opentelemetry.io/otel/trace v1.34.0
-	golang.org/x/sync v0.11.0
+	golang.org/x/sync v0.12.0
 	gomodules.xyz/jsonpatch/v2 v2.4.0
-	google.golang.org/grpc v1.70.0
+	google.golang.org/grpc v1.71.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.2
 	k8s.io/apiextensions-apiserver v0.32.2
