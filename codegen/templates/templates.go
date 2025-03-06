@@ -91,6 +91,7 @@ type ResourceObjectTemplateMetadata struct {
 
 // SubresourceMetadata is subresource information used in templates
 type SubresourceMetadata struct {
+	Name     string
 	TypeName string
 	JSONName string
 	Comment  string
