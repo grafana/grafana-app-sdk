@@ -94,6 +94,8 @@ linters-settings:
         disabled: true
       - name:  nested-structs
         disabled: true
+      - name: use-errors-new
+        disabled: true
   gocognit:
     min-complexity: 50
   mnd:
