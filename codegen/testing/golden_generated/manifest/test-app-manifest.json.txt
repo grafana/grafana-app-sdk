@@ -77,8 +77,7 @@
                                         "type": "object"
                                     }
                                 },
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "type": "object"
                             }
                         }
                     },
@@ -163,8 +162,7 @@
                                         "type": "object"
                                     }
                                 },
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "type": "object"
                             }
                         }
                     }
@@ -232,8 +230,7 @@
                                         "type": "object"
                                     }
                                 },
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "type": "object"
                             }
                         }
                     }

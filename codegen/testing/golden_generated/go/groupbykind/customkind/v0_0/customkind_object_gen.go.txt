@@ -18,8 +18,11 @@ import (
 type CustomKind struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
-	Spec              Spec   `json:"spec" yaml:"spec"`
-	Status            Status `json:"status" yaml:"status"`
+
+	// Spec is the spec of the CustomKind
+	Spec Spec `json:"spec" yaml:"spec"`
+
+	Status Status `json:"status" yaml:"status"`
 }
 
 func (o *CustomKind) GetSpec() any {

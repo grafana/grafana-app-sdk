@@ -163,6 +163,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
+	if err != nil {
+		return err
+	}
 	localPath := filepath.Join(path, "local")
 	localGenPath := filepath.Join(localPath, "generated")
 	absPath, err := filepath.Abs(path)
@@ -205,7 +209,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true), os.DirFS(sourcePath))
+			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState), os.DirFS(sourcePath))
 			if err != nil {
 				return nil, err
 			}
@@ -768,7 +772,7 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 		if err != nil {
 			return err
 		}
-		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(), os.DirFS(cuePath))
+		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(true), os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}

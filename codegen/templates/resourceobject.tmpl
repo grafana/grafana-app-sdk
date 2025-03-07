@@ -18,9 +18,16 @@ import ({{ range .CustomMetadataFields }}{{ range $imp := .GoType.AdditionalImpo
 type {{.TypeName}} struct {
     metav1.TypeMeta `json:",inline" yaml:",inline"`
     metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
-    Spec       {{.SpecTypeName}} `json:"spec" yaml:"spec"`{{ range .Subresources }}{{ if ne .Comment "" }}
-        // {{.Comment }}{{end}}
-        {{ .TypeName }} {{.TypeName}} `json:"{{.JSONName}}" yaml:"{{.JSONName}}"`{{ end }}
+
+    // Spec is the spec of the {{.TypeName}}
+    Spec       {{.SpecTypeName}} `json:"spec" yaml:"spec"`
+
+    {{ range .Subresources }}
+        {{ if ne .Comment "" }}
+            // {{.Comment }}
+        {{end}}
+        {{ .Name }} {{.TypeName}} `json:"{{.JSONName}}" yaml:"{{.JSONName}}"`
+    {{ end }}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
@@ -38,14 +45,14 @@ func ({{.ObjectShortName}} *{{.TypeName}}) SetSpec(spec any) error {
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresources() map[string]any {
     return map[string]any{ {{ range .Subresources }}
-        "{{.JSONName}}": {{$root.ObjectShortName}}.{{.TypeName}},
+        "{{.JSONName}}": {{$root.ObjectShortName}}.{{.Name}},
     {{ end }} }
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresource(name string) (any,bool) {
     switch name { {{ range .Subresources }}
     case"{{ .JSONName }}":
-        return {{$root.ObjectShortName}}.{{.TypeName}}, true
+        return {{$root.ObjectShortName}}.{{.Name}}, true
     {{ end }}default:
         return nil, false
     }
@@ -58,7 +65,7 @@ func ({{.ObjectShortName}} *{{.TypeName}}) SetSubresource(name string, value any
         if !ok {
             return fmt.Errorf("cannot set {{.JSONName}} type %#v, not of type {{.TypeName}}", value)
         }
-        {{$root.ObjectShortName}}.{{.TypeName}} = cast
+        {{$root.ObjectShortName}}.{{.Name}} = cast
         return nil
     {{ end }}default:
         return fmt.Errorf("subresource '%s' does not exist", name)

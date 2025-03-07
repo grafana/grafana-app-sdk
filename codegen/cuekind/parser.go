@@ -40,7 +40,7 @@ func (p *parser[T]) Parse(f fs.FS, args ...string) ([]T, error) {
 	return p.parseFunc(f, args...)
 }
 
-func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
+func (p *Parser) ManifestParser(genOperatorState bool) codegen.Parser[codegen.AppManifest] {
 	return &parser[codegen.AppManifest]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.AppManifest, error) {
 			if len(s) == 0 {
@@ -48,7 +48,7 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 			}
 			manifests := make([]codegen.AppManifest, 0, len(s))
 			for _, selector := range s {
-				m, err := p.ParseManifest(f, selector)
+				m, err := p.ParseManifest(f, selector, genOperatorState)
 				if err != nil {
 					return nil, err
 				}
@@ -64,7 +64,7 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 // rather than loading the selector(s) as kinds.
 //
 //nolint:revive
-func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
+func (p *Parser) KindParser(useManifest bool, genOperatorState bool) codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.Kind, error) {
 			if useManifest {
@@ -73,7 +73,7 @@ func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
 				}
 				kinds := make([]codegen.Kind, 0)
 				for _, selector := range s {
-					m, err := p.ParseManifest(f, selector)
+					m, err := p.ParseManifest(f, selector, genOperatorState)
 					if err != nil {
 						return nil, err
 					}
@@ -81,14 +81,14 @@ func (p *Parser) KindParser(useManifest bool) codegen.Parser[codegen.Kind] {
 				}
 				return kinds, nil
 			}
-			return p.ParseKinds(f, s...)
+			return p.ParseKinds(f, genOperatorState, s...)
 		},
 	}
 }
 
 // ParseManifest parses ManifestSelector (or the root object if no selector is provided) as a CUE app manifest,
 // returning the parsed codegen.AppManifest object or an error.
-func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.AppManifest, error) {
+func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperatorState bool) (codegen.AppManifest, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -130,7 +130,7 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.Ap
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
-	kindDef, schemaDef, manifestDef, err := p.getKindDefinition()
+	kindDef, schemaDef, manifestDef, err := p.getKindDefinition(genOperatorState)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
@@ -172,7 +172,7 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string) (codegen.Ap
 // as kinds as defined by [def.cue]. It then returns a list of kinds parsed.
 //
 //nolint:funlen
-func (p *Parser) ParseKinds(files fs.FS, selectors ...string) ([]codegen.Kind, error) {
+func (p *Parser) ParseKinds(files fs.FS, genOperatorState bool, selectors ...string) ([]codegen.Kind, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -225,7 +225,7 @@ func (p *Parser) ParseKinds(files fs.FS, selectors ...string) ([]codegen.Kind, e
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
-	kindDef, schemaDef, _, err := p.getKindDefinition()
+	kindDef, schemaDef, _, err := p.getKindDefinition(genOperatorState)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
@@ -294,7 +294,9 @@ func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen.K
 	return someKind, nil
 }
 
-func (p *Parser) getKindDefinition() (cue.Value, cue.Value, cue.Value, error) {
+// revive complains about the usage of control flag, but it's not a problem here.
+// nolint:revive
+func (p *Parser) getKindDefinition(genOperatorState bool) (cue.Value, cue.Value, cue.Value, error) {
 	if p.kindDef != nil {
 		return *p.kindDef, *p.schemaDef, *p.manifestDef, nil
 	}
@@ -318,17 +320,29 @@ func (p *Parser) getKindDefinition() (cue.Value, cue.Value, cue.Value, error) {
 	if kindDef.Err() != nil {
 		return cue.Value{}, cue.Value{}, cue.Value{}, kindDef.Err()
 	}
-	schemaDef := inst.LookupPath(cue.MakePath(cue.Str("Schema")))
-	if schemaDef.Err() != nil {
-		return cue.Value{}, cue.Value{}, cue.Value{}, schemaDef.Err()
+
+	var schemaDef cue.Value
+	if genOperatorState {
+		schemaDef = inst.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
+		if schemaDef.Err() != nil {
+			return cue.Value{}, cue.Value{}, cue.Value{}, schemaDef.Err()
+		}
+	} else {
+		schemaDef = inst.LookupPath(cue.MakePath(cue.Str("Schema")))
+		if schemaDef.Err() != nil {
+			return cue.Value{}, cue.Value{}, cue.Value{}, schemaDef.Err()
+		}
 	}
+
 	manifestDef := inst.LookupPath(cue.MakePath(cue.Str("Manifest")))
 	if manifestDef.Err() != nil {
 		return cue.Value{}, cue.Value{}, cue.Value{}, manifestDef.Err()
 	}
+
 	p.kindDef = &kindDef
 	p.schemaDef = &schemaDef
 	p.manifestDef = &manifestDef
+
 	return *p.kindDef, *p.schemaDef, *p.manifestDef, nil
 }
 

@@ -3,7 +3,7 @@
 // DO NOT EDIT
 //
 
-package groupbygroup
+package groupbykind
 
 import (
 	"encoding/json"

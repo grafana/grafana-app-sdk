@@ -55,7 +55,6 @@ spec:
                                     Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                                 type: object
                         type: object
-                        x-kubernetes-preserve-unknown-fields: true
                 required:
                     - spec
                 type: object
