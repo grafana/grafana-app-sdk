@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -518,10 +517,6 @@ func (a *App) getInProgressFinalizer(sch resource.Schema) string {
 		return fmt.Sprintf("%s-wip", a.cfg.Name)
 	}
 	return fmt.Sprintf("%s-wip", sch.Plural())
-}
-
-func (*App) customRouteHandlerKey(kind resource.Kind, method string, path string) string {
-	return fmt.Sprintf("%s/%s/%s/%s/%s", kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
 }
 
 type syncWatcher interface {
