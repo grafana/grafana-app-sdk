@@ -201,7 +201,7 @@ Kind: S={
 			config: {
 				// allowMarshalEmptyDisjunctions determines whether to allow marshaling empty disjunctions.
 				// If true, empty disjunctions will be marshaled as `null` instead of returning an error.
-				allowMarshalEmptyDisjunctions: bool | *false
+				allowMarshalEmptyDisjunctions: bool | *true
 			}
 		}
 	}
