@@ -59,7 +59,7 @@ type KindAdmissionCapability struct {
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
 type KindCodegenProperties struct {
 	TS KindCodegenLanguageProperties[KindCodegenTSConfig] `json:"ts"`
-	Go KindCodegenLanguageProperties[struct{}]            `json:"go"`
+	Go KindCodegenLanguageProperties[KindCodegenGoConfig] `json:"go"`
 }
 
 type KindCodegenLanguageProperties[T any] struct {
@@ -72,6 +72,12 @@ type KindCodegenLanguageProperties[T any] struct {
 type KindCodegenTSConfig struct {
 	ImportsMap        map[string]string `json:"importsMap"`
 	EnumsAsUnionTypes bool              `json:"enumsAsUnionTypes"`
+}
+
+// KindCodegenGoConfig is the Go configuration options for codegen,
+// modeled after the cog Go codegen options.
+type KindCodegenGoConfig struct {
+	AllowMarshalEmptyDisjunctions bool `json:"allowMarshalEmptyDisjunctions"`
 }
 
 type AdditionalPrinterColumn struct {

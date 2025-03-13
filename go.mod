@@ -8,6 +8,8 @@ retract (
 	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 )
 
+replace github.com/grafana/cog v0.0.27 => /Users/igor/code/grafana/cog
+
 require (
 	cuelang.org/go v0.11.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
