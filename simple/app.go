@@ -102,7 +102,7 @@ type App struct {
 	internalKinds      map[string]resource.Kind
 	cfg                AppConfig
 	converters         map[string]Converter
-	customRoutes       map[string]AppCustomRouteHandler
+	customRoutes       map[app.CustomRouteIdentifier]app.CustomRouteHandler
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
 }
@@ -217,7 +217,7 @@ type AppCustomRoute struct {
 	Path   string
 }
 
-type AppCustomRouteHandler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
+type AppCustomRouteHandler app.CustomRouteHandler
 
 type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 
@@ -232,7 +232,7 @@ func NewApp(config AppConfig) (*App, error) {
 		kinds:              make(map[string]AppManagedKind),
 		internalKinds:      make(map[string]resource.Kind),
 		converters:         make(map[string]Converter),
-		customRoutes:       make(map[string]AppCustomRouteHandler),
+		customRoutes:       make(map[app.CustomRouteIdentifier]app.CustomRouteHandler),
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 	}
@@ -337,11 +337,22 @@ func (a *App) manageKind(kind AppManagedKind) error {
 		if handler == nil {
 			return fmt.Errorf("custom route cannot have a nil handler")
 		}
-		key := a.customRouteHandlerKey(kind.Kind, string(route.Method), route.Path)
-		if _, ok := a.customRoutes[key]; ok {
+		identifier := app.CustomRouteIdentifier{
+			ResourceIdentifier: resource.FullIdentifier{
+				Group:   kind.Kind.Group(),
+				Version: kind.Kind.Version(),
+				Kind:    kind.Kind.Kind(),
+				Plural:  kind.Kind.Plural(),
+			},
+			SubresourcePath: route.Path,
+			Method:          string(route.Method),
+		}
+		if _, ok := a.customRoutes[identifier]; ok {
 			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
 		}
-		a.customRoutes[key] = handler
+		a.customRoutes[identifier] = func(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+			return handler(ctx, req)
+		}
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		return a.watchKind(AppUnmanagedKind{
@@ -484,17 +495,9 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 	}, err
 }
 
-// CallResourceCustomRoute implements app.App and handles custom resource route requests
-func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-	k, ok := a.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
-	if !ok {
-		// TODO: still return the not found, or just return NotImplemented?
-		return nil, app.ErrCustomRouteNotFound
-	}
-	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind, req.Method, req.SubresourcePath)]; ok {
-		return handler(ctx, req)
-	}
-	return nil, app.ErrCustomRouteNotFound
+// CustomRoutes implements app.App and returns a map of custom route identifiers to their handler functions
+func (a *App) CustomRoutes() map[app.CustomRouteIdentifier]app.CustomRouteHandler {
+	return a.customRoutes
 }
 
 func (a *App) getFinalizer(sch resource.Schema) string {
