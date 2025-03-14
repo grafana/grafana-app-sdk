@@ -94,28 +94,29 @@ func (s *SchemalessClient) Get(ctx context.Context, identifier resource.FullIden
 }
 
 // Create creates a new resource, and marshals the storage response (the created object) into the `into` field.
-func (s *SchemalessClient) Create(ctx context.Context, identifier resource.FullIdentifier, obj resource.Object,
-	_ resource.CreateOptions, into resource.Object) error {
+func (s *SchemalessClient) Create(
+	ctx context.Context, id resource.FullIdentifier, obj resource.Object, opt resource.CreateOptions, out resource.Object,
+) error {
 	if obj == nil {
 		return fmt.Errorf("obj cannot be nil")
 	}
-	if into == nil {
+	if out == nil {
 		return fmt.Errorf("into cannot be nil")
 	}
-	client, err := s.getClient(identifier)
+	client, err := s.getClient(id)
 	if err != nil {
 		return err
 	}
 
 	obj.SetStaticMetadata(resource.StaticMetadata{
-		Namespace: identifier.Namespace,
-		Name:      identifier.Name,
-		Group:     identifier.Group,
-		Version:   identifier.Version,
-		Kind:      identifier.Kind,
+		Namespace: id.Namespace,
+		Name:      id.Name,
+		Group:     id.Group,
+		Version:   id.Version,
+		Kind:      id.Kind,
 	})
 
-	return client.create(ctx, s.getPlural(identifier), obj, into, s.codec)
+	return client.create(ctx, s.getPlural(id), obj, out, opt, s.codec)
 }
 
 // Update updates an existing resource, and marshals the updated version into the `into` field

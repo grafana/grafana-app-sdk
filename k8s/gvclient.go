@@ -80,6 +80,8 @@ type metadataObject struct {
 	metav1.ObjectMeta `json:"metadata"`
 }
 
+// dryRun=All
+
 func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resource.Identifier, plural string) (
 	*metadataObject, error) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-getmetadata")
@@ -150,8 +152,14 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 	return true, nil
 }
 
-func (g *groupVersionClient) create(ctx context.Context, plural string, obj resource.Object,
-	into resource.Object, codec resource.Codec) error {
+func (g *groupVersionClient) create(
+	ctx context.Context,
+	plural string,
+	obj resource.Object,
+	into resource.Object,
+	opts resource.CreateOptions,
+	codec resource.Codec,
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-create")
 	defer span.End()
 	addLabels(obj, map[string]string{
@@ -169,6 +177,11 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 	if strings.TrimSpace(obj.GetNamespace()) != "" {
 		request = request.Namespace(obj.GetNamespace())
 	}
+
+	if opts.DryRun {
+		request = request.Param("dryRun", "All")
+	}
+
 	start := time.Now()
 	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "CREATE", plural, "spec")
@@ -193,8 +206,14 @@ func (g *groupVersionClient) create(ctx context.Context, plural string, obj reso
 	return nil
 }
 
-func (g *groupVersionClient) update(ctx context.Context, plural string, obj resource.Object,
-	into resource.Object, _ resource.UpdateOptions, codec resource.Codec) error {
+func (g *groupVersionClient) update(
+	ctx context.Context,
+	plural string,
+	obj resource.Object,
+	into resource.Object,
+	opts resource.UpdateOptions,
+	codec resource.Codec,
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-update")
 	defer span.End()
 	addLabels(obj, map[string]string{
@@ -211,6 +230,9 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 		Name(obj.GetName()).Body(buf.Bytes())
 	if strings.TrimSpace(obj.GetNamespace()) != "" {
 		req = req.Namespace(obj.GetNamespace())
+	}
+	if opts.DryRun {
+		req = req.Param("dryRun", "All")
 	}
 	sc := 0
 	start := time.Now()
@@ -237,8 +259,14 @@ func (g *groupVersionClient) update(ctx context.Context, plural string, obj reso
 	return nil
 }
 
-func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subresource string, obj resource.Object,
-	into resource.Object, _ resource.UpdateOptions, codec resource.Codec) error {
+func (g *groupVersionClient) updateSubresource(
+	ctx context.Context,
+	plural, subresource string,
+	obj resource.Object,
+	into resource.Object,
+	opts resource.UpdateOptions,
+	codec resource.Codec,
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-update-subresource")
 	defer span.End()
 	addLabels(obj, map[string]string{
@@ -256,6 +284,11 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 	if strings.TrimSpace(obj.GetNamespace()) != "" {
 		req = req.Namespace(obj.GetNamespace())
 	}
+
+	if opts.DryRun {
+		req = req.Param("dryRun", "All")
+	}
+
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
@@ -282,8 +315,15 @@ func (g *groupVersionClient) updateSubresource(ctx context.Context, plural, subr
 }
 
 //nolint:revive,unused
-func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Identifier, plural string,
-	patch resource.PatchRequest, into resource.Object, _ resource.PatchOptions, codec resource.Codec) error {
+func (g *groupVersionClient) patch(
+	ctx context.Context,
+	identifier resource.Identifier,
+	plural string,
+	patch resource.PatchRequest,
+	into resource.Object,
+	opts resource.PatchOptions,
+	codec resource.Codec,
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-patch")
 	defer span.End()
 	patchBytes, err := marshalJSONPatch(patch)
@@ -294,6 +334,9 @@ func (g *groupVersionClient) patch(ctx context.Context, identifier resource.Iden
 		Name(identifier.Name).Body(patchBytes)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		req = req.Namespace(identifier.Namespace)
+	}
+	if opts.DryRun {
+		req = req.Param("dryRun", "All")
 	}
 	sc := 0
 	start := time.Now()

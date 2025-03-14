@@ -115,41 +115,47 @@ func (c *Client) GetInto(ctx context.Context, identifier resource.Identifier, in
 }
 
 // Create creates a new resource, and returns the resulting created resource
-func (c *Client) Create(ctx context.Context, identifier resource.Identifier, obj resource.Object,
-	options resource.CreateOptions) (resource.Object, error) {
+func (c *Client) Create(
+	ctx context.Context, id resource.Identifier, obj resource.Object, opts resource.CreateOptions,
+) (resource.Object, error) {
 	into := c.schema.ZeroValue()
-	err := c.CreateInto(ctx, identifier, obj, options, into)
-	if err != nil {
+	if err := c.CreateInto(ctx, id, obj, opts, into); err != nil {
 		return nil, err
 	}
 	return into, nil
 }
 
 // CreateInto creates a new resource, and marshals the resulting created resource into `into`
-func (c *Client) CreateInto(ctx context.Context, identifier resource.Identifier, obj resource.Object,
-	_ resource.CreateOptions, into resource.Object) error {
+func (c *Client) CreateInto(
+	ctx context.Context, id resource.Identifier, obj resource.Object, opts resource.CreateOptions, into resource.Object,
+) error {
 	if obj == nil {
 		return fmt.Errorf("obj cannot be nil")
 	}
 	if into == nil {
 		return fmt.Errorf("into cannot be nil")
 	}
-	if c.schema.Scope() == resource.NamespacedScope && identifier.Namespace == resource.NamespaceAll {
-		return fmt.Errorf("cannot create a resource with schema scope \"%s\" in NamespaceAll (\"%s\")", resource.NamespacedScope, resource.NamespaceAll)
-	} else if c.schema.Scope() == resource.ClusterScope && identifier.Namespace != resource.NamespaceAll {
-		return fmt.Errorf("cannot create a resource with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\"",
-			resource.ClusterScope, identifier.Namespace, resource.NamespaceAll)
+	if c.schema.Scope() == resource.NamespacedScope && id.Namespace == resource.NamespaceAll {
+		return fmt.Errorf(
+			"cannot create a resource with schema scope \"%s\" in NamespaceAll (\"%s\")",
+			resource.NamespacedScope, resource.NamespaceAll,
+		)
+	} else if c.schema.Scope() == resource.ClusterScope && id.Namespace != resource.NamespaceAll {
+		return fmt.Errorf(
+			"cannot create a resource with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
+			resource.ClusterScope, id.Namespace, resource.NamespaceAll,
+		)
 	}
 	// Check if we need to add metadata to the object
 	obj.SetStaticMetadata(resource.StaticMetadata{
-		Namespace: identifier.Namespace,
-		Name:      identifier.Name,
+		Namespace: id.Namespace,
+		Name:      id.Name,
 		Group:     c.schema.Group(),
 		Version:   c.schema.Version(),
 		Kind:      c.schema.Kind(),
 	})
 
-	return c.client.create(ctx, c.schema.Plural(), obj, into, c.codec)
+	return c.client.create(ctx, c.schema.Plural(), obj, into, opts, c.codec)
 }
 
 // Update updates the provided resource, and returns the updated resource from kubernetes

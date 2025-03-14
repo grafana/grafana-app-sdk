@@ -25,7 +25,9 @@ type FullIdentifier struct {
 
 // CreateOptions are the options passed to a Client.Create call
 type CreateOptions struct {
-	// TODO: nothing at-present
+	// DryRun will perform a server-side dry-run of the request, if set to true.
+	// The server will return the object that would be created, but will not actually create it.
+	DryRun bool
 }
 
 // UpdateOptions are the options passed to a Client.Update call
@@ -37,6 +39,9 @@ type UpdateOptions struct {
 	// Subresource can be set to a non-empty subresource field name to update that subresource,
 	// instead of the main object
 	Subresource string
+	// DryRun will perform a server-side dry-run of the request, if set to true.
+	// The server will return the object that would be created, but will not actually create it.
+	DryRun bool
 }
 
 // ListOptions are the options passed to a Client.List call
@@ -85,7 +90,9 @@ type PatchOperation struct {
 
 // PatchOptions are the options passed to a Client.Patch call
 type PatchOptions struct {
-	// TODO: nothing at-present
+	// DryRun will perform a server-side dry-run of the request, if set to true.
+	// The server will return the result of the patch, but will not actually apply it.
+	DryRun bool
 }
 
 type DeleteOptionsPropagationPolicy string
