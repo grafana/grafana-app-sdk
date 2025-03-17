@@ -5,96 +5,96 @@
 package {{.Package}}{{$root := .}}
 
 import ({{ range .CustomMetadataFields }}{{ range $imp := .GoType.AdditionalImports }}
-    "{{$imp}}"{{ end }}{{ end }}
-    "fmt"
-    "github.com/grafana/grafana-app-sdk/resource"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-    "k8s.io/apimachinery/pkg/runtime"
-    "k8s.io/apimachinery/pkg/runtime/schema"
+	"{{$imp}}"{{ end }}{{ end }}
+	"fmt"
+	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 // +k8s:openapi-gen=true
 type {{.TypeName}} struct {
-    metav1.TypeMeta `json:",inline" yaml:",inline"`
-    metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
+	metav1.TypeMeta `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
 
-    // Spec is the spec of the {{.TypeName}}
-    Spec       {{.SpecTypeName}} `json:"spec" yaml:"spec"`
+	// Spec is the spec of the {{.TypeName}}
+	Spec	   {{.SpecTypeName}} `json:"spec" yaml:"spec"`
 
-    {{ range .Subresources }}
-        {{ if ne .Comment "" }}
-            // {{.Comment }}
-        {{end}}
-        {{ .Name }} {{.TypeName}} `json:"{{.JSONName}}" yaml:"{{.JSONName}}"`
-    {{ end }}
+	{{ range .Subresources }}
+		{{ if ne .Comment "" }}
+			// {{.Comment }}
+		{{end}}
+		{{ .Name }} {{.TypeName}} `json:"{{.JSONName}}" yaml:"{{.JSONName}}"`
+	{{ end }}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
-    return {{.ObjectShortName}}.Spec
+	return {{.ObjectShortName}}.Spec
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) SetSpec(spec any) error {
-    cast, ok := spec.({{.SpecTypeName}})
-    if !ok {
-        return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
-    }
-    {{.ObjectShortName}}.Spec = cast
-    return nil
+	cast, ok := spec.({{.SpecTypeName}})
+	if !ok {
+		return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
+	}
+	{{.ObjectShortName}}.Spec = cast
+	return nil
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresources() map[string]any {
-    return map[string]any{ {{ range .Subresources }}
-        "{{.JSONName}}": {{$root.ObjectShortName}}.{{.Name}},
-    {{ end }} }
+	return map[string]any{ {{ range .Subresources }}
+		"{{.JSONName}}": {{$root.ObjectShortName}}.{{.Name}},
+	{{ end }} }
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSubresource(name string) (any,bool) {
-    switch name { {{ range .Subresources }}
-    case"{{ .JSONName }}":
-        return {{$root.ObjectShortName}}.{{.Name}}, true
-    {{ end }}default:
-        return nil, false
-    }
+	switch name { {{ range .Subresources }}
+	case"{{ .JSONName }}":
+		return {{$root.ObjectShortName}}.{{.Name}}, true
+	{{ end }}default:
+		return nil, false
+	}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) SetSubresource(name string, value any) error {
-    switch name { {{ range .Subresources }}
-    case"{{ .JSONName }}":
-        cast, ok := value.({{.TypeName}})
-        if !ok {
-            return fmt.Errorf("cannot set {{.JSONName}} type %#v, not of type {{.TypeName}}", value)
-        }
-        {{$root.ObjectShortName}}.{{.Name}} = cast
-        return nil
-    {{ end }}default:
-        return fmt.Errorf("subresource '%s' does not exist", name)
-    }
+	switch name { {{ range .Subresources }}
+	case"{{ .JSONName }}":
+		cast, ok := value.({{.TypeName}})
+		if !ok {
+			return fmt.Errorf("cannot set {{.JSONName}} type %#v, not of type {{.TypeName}}", value)
+		}
+		{{$root.ObjectShortName}}.{{.Name}} = cast
+		return nil
+	{{ end }}default:
+		return fmt.Errorf("subresource '%s' does not exist", name)
+	}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetStaticMetadata() resource.StaticMetadata {
-    gvk := {{.ObjectShortName}}.GroupVersionKind()
-    return resource.StaticMetadata{
-        Name:      {{.ObjectShortName}}.ObjectMeta.Name,
-    	Namespace: {{.ObjectShortName}}.ObjectMeta.Namespace,
-    	Group:     gvk.Group,
-    	Version:   gvk.Version,
-    	Kind:      gvk.Kind,
-    }
+	gvk := {{.ObjectShortName}}.GroupVersionKind()
+	return resource.StaticMetadata{
+		Name:	  {{.ObjectShortName}}.ObjectMeta.Name,
+		Namespace: {{.ObjectShortName}}.ObjectMeta.Namespace,
+		Group:	 gvk.Group,
+		Version:   gvk.Version,
+		Kind:	  gvk.Kind,
+	}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) SetStaticMetadata(metadata resource.StaticMetadata) {
-    {{.ObjectShortName}}.Name = metadata.Name
-    {{.ObjectShortName}}.Namespace = metadata.Namespace
-    {{.ObjectShortName}}.SetGroupVersionKind(schema.GroupVersionKind{
-        Group:   metadata.Group,
-        Version: metadata.Version,
-        Kind:    metadata.Kind,
-    })
+	{{.ObjectShortName}}.Name = metadata.Name
+	{{.ObjectShortName}}.Namespace = metadata.Namespace
+	{{.ObjectShortName}}.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   metadata.Group,
+		Version: metadata.Version,
+		Kind:	metadata.Kind,
+	})
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) GetCommonMetadata() resource.CommonMetadata {
-    dt := {{.ObjectShortName}}.DeletionTimestamp
+	dt := {{.ObjectShortName}}.DeletionTimestamp
 	var deletionTimestamp *time.Time
 	if dt != nil {
 		deletionTimestamp = &dt.Time
@@ -102,100 +102,110 @@ func ({{.ObjectShortName}} *{{.TypeName}}) GetCommonMetadata() resource.CommonMe
 	// Legacy ExtraFields support
 	extraFields := make(map[string]any)
 	if {{.ObjectShortName}}.Annotations != nil {
-	    extraFields["annotations"] = {{.ObjectShortName}}.Annotations
+		extraFields["annotations"] = {{.ObjectShortName}}.Annotations
 	}
 	if {{.ObjectShortName}}.ManagedFields != nil {
-	    extraFields["managedFields"] = {{.ObjectShortName}}.ManagedFields
+		extraFields["managedFields"] = {{.ObjectShortName}}.ManagedFields
 	}
 	if {{.ObjectShortName}}.OwnerReferences != nil {
-	    extraFields["ownerReferences"] = {{.ObjectShortName}}.OwnerReferences
+		extraFields["ownerReferences"] = {{.ObjectShortName}}.OwnerReferences
 	}
 	return resource.CommonMetadata{
-		UID:               string({{.ObjectShortName}}.UID),
+		UID:			   string({{.ObjectShortName}}.UID),
 		ResourceVersion:   {{.ObjectShortName}}.ResourceVersion,
-		Generation:        {{.ObjectShortName}}.Generation,
-		Labels:            {{.ObjectShortName}}.Labels,
+		Generation:		{{.ObjectShortName}}.Generation,
+		Labels:			{{.ObjectShortName}}.Labels,
 		CreationTimestamp: {{.ObjectShortName}}.CreationTimestamp.Time,
 		DeletionTimestamp: deletionTimestamp,
-		Finalizers:        {{.ObjectShortName}}.Finalizers,
+		Finalizers:		{{.ObjectShortName}}.Finalizers,
 		UpdateTimestamp:   {{.ObjectShortName}}.GetUpdateTimestamp(),
-		CreatedBy:         {{.ObjectShortName}}.GetCreatedBy(),
-		UpdatedBy:         {{.ObjectShortName}}.GetUpdatedBy(),
-		ExtraFields:       extraFields,
+		CreatedBy:		 {{.ObjectShortName}}.GetCreatedBy(),
+		UpdatedBy:		 {{.ObjectShortName}}.GetUpdatedBy(),
+		ExtraFields:	   extraFields,
 	}
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) SetCommonMetadata(metadata resource.CommonMetadata) {
-    {{.ObjectShortName}}.UID = types.UID(metadata.UID)
-    {{.ObjectShortName}}.ResourceVersion = metadata.ResourceVersion
-    {{.ObjectShortName}}.Generation = metadata.Generation
-    {{.ObjectShortName}}.Labels = metadata.Labels
-    {{.ObjectShortName}}.CreationTimestamp = metav1.NewTime(metadata.CreationTimestamp)
-    if metadata.DeletionTimestamp != nil {
-        dt := metav1.NewTime(*metadata.DeletionTimestamp)
-        {{.ObjectShortName}}.DeletionTimestamp = &dt
-    } else {
-        {{.ObjectShortName}}.DeletionTimestamp = nil
-    }
-    {{.ObjectShortName}}.Finalizers = metadata.Finalizers
-    if {{.ObjectShortName}}.Annotations == nil {
-        {{.ObjectShortName}}.Annotations = make(map[string]string)
-    }
-    if !metadata.UpdateTimestamp.IsZero() {
-        {{.ObjectShortName}}.SetUpdateTimestamp(metadata.UpdateTimestamp)
-    }
-    if metadata.CreatedBy != "" {
-        {{.ObjectShortName}}.SetCreatedBy(metadata.CreatedBy)
-    }
-    if metadata.UpdatedBy != "" {
-        {{.ObjectShortName}}.SetUpdatedBy(metadata.UpdatedBy)
-    }
-    // Legacy support for setting Annotations, ManagedFields, and OwnerReferences via ExtraFields
-    if metadata.ExtraFields != nil {
-        if annotations, ok := metadata.ExtraFields["annotations"]; ok {
-            if cast, ok := annotations.(map[string]string); ok {
-                 {{.ObjectShortName}}.Annotations = cast
-            }
-        }
-        if managedFields, ok := metadata.ExtraFields["managedFields"]; ok {
-            if cast, ok := managedFields.([]metav1.ManagedFieldsEntry); ok {
-                 {{.ObjectShortName}}.ManagedFields = cast
-            }
-        }
-        if ownerReferences, ok := metadata.ExtraFields["ownerReferences"]; ok {
-            if cast, ok := ownerReferences.([]metav1.OwnerReference); ok {
-                 {{.ObjectShortName}}.OwnerReferences = cast
-            }
-        }
-    }
+	{{.ObjectShortName}}.UID = types.UID(metadata.UID)
+	{{.ObjectShortName}}.ResourceVersion = metadata.ResourceVersion
+	{{.ObjectShortName}}.Generation = metadata.Generation
+	{{.ObjectShortName}}.Labels = metadata.Labels
+	{{.ObjectShortName}}.CreationTimestamp = metav1.NewTime(metadata.CreationTimestamp)
+	if metadata.DeletionTimestamp != nil {
+		dt := metav1.NewTime(*metadata.DeletionTimestamp)
+		{{.ObjectShortName}}.DeletionTimestamp = &dt
+	} else {
+		{{.ObjectShortName}}.DeletionTimestamp = nil
+	}
+	{{.ObjectShortName}}.Finalizers = metadata.Finalizers
+	if {{.ObjectShortName}}.Annotations == nil {
+		{{.ObjectShortName}}.Annotations = make(map[string]string)
+	}
+	if !metadata.UpdateTimestamp.IsZero() {
+		{{.ObjectShortName}}.SetUpdateTimestamp(metadata.UpdateTimestamp)
+	}
+	if metadata.CreatedBy != "" {
+		{{.ObjectShortName}}.SetCreatedBy(metadata.CreatedBy)
+	}
+	if metadata.UpdatedBy != "" {
+		{{.ObjectShortName}}.SetUpdatedBy(metadata.UpdatedBy)
+	}
+	// Legacy support for setting Annotations, ManagedFields, and OwnerReferences via ExtraFields
+	if metadata.ExtraFields != nil {
+		if annotations, ok := metadata.ExtraFields["annotations"]; ok {
+			if cast, ok := annotations.(map[string]string); ok {
+				 {{.ObjectShortName}}.Annotations = cast
+			}
+		}
+		if managedFields, ok := metadata.ExtraFields["managedFields"]; ok {
+			if cast, ok := managedFields.([]metav1.ManagedFieldsEntry); ok {
+				 {{.ObjectShortName}}.ManagedFields = cast
+			}
+		}
+		if ownerReferences, ok := metadata.ExtraFields["ownerReferences"]; ok {
+			if cast, ok := ownerReferences.([]metav1.OwnerReference); ok {
+				 {{.ObjectShortName}}.OwnerReferences = cast
+			}
+		}
+	}
 }
 
 {{range .CustomMetadataFields}}func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Get{{.FieldName}}() {{.GoType.GoType}} {
-    if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
-        {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
-    }
-    {{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
-    {{ $ret := (call .GoType.GetFuncTemplate $var) }}
-    {{ $ret }}
+	if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
+		{{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
+	}
+	{{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
+	{{ $ret := (call .GoType.GetFuncTemplate $var) }}
+	{{ $ret }}
 }
 
 func ({{$root.ObjectShortName}} *{{$root.TypeName}}) Set{{.FieldName}}({{.JSONName}} {{.GoType.GoType}}) {
-    if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
-        {{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
-    }
-    {{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
-    {{ $ret := (call .GoType.SetFuncTemplate .JSONName $var) }}
-    {{ $ret }}
+	if {{$root.ObjectShortName}}.ObjectMeta.Annotations == nil {
+		{{$root.ObjectShortName}}.ObjectMeta.Annotations = make(map[string]string)
+	}
+	{{ $var := (printf "%v.ObjectMeta.Annotations[\"grafana.com/%v\"]" $root.ObjectShortName .JSONName) }}
+	{{ $ret := (call .GoType.SetFuncTemplate .JSONName $var) }}
+	{{ $ret }}
 }
 
 {{end}}
 
 func ({{.ObjectShortName}} *{{.TypeName}}) Copy() resource.Object {
-    return resource.CopyObject({{.ObjectShortName}})
+	return resource.CopyObject({{.ObjectShortName}})
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyObject() runtime.Object {
-    return {{.ObjectShortName}}.Copy()
+	return {{.ObjectShortName}}.Copy()
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
+	cpy := &{{.TypeName}}{}
+	{{.ObjectShortName}}.DeepCopyInto(cpy)
+	return cpy
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
+	resource.CopyObjectInto(dst, {{.ObjectShortName}})
 }
 
 // Interface compliance compile-time check
@@ -205,7 +215,7 @@ var _ resource.Object = &{{.TypeName}}{}
 type {{.TypeName}}List struct {
 	metav1.TypeMeta `json:",inline" yaml:",inline"`
 	metav1.ListMeta `json:"metadata" yaml:"metadata"`
-	Items           []{{.TypeName}} `json:"items" yaml:"items"`
+	Items		   []{{.TypeName}} `json:"items" yaml:"items"`
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyObject() runtime.Object {
@@ -215,11 +225,11 @@ func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyObject() runtime.Object {
 func ({{.ObjectShortName}} *{{.TypeName}}List) Copy() resource.ListObject {
 	cpy := &{{.TypeName}}List{
 		TypeMeta: {{.ObjectShortName}}.TypeMeta,
-		Items:    make([]{{.TypeName}}, len({{.ObjectShortName}}.Items)),
+		Items:	make([]{{.TypeName}}, len({{.ObjectShortName}}.Items)),
 	}
 	{{.ObjectShortName}}.ListMeta.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len({{.ObjectShortName}}.Items); i++ {
-        if item, ok := o.Items[i].Copy().(*{{.TypeName}}); ok {
+		if item, ok := o.Items[i].Copy().(*{{.TypeName}}); ok {
 			cpy.Items[i] = *item
 		}
 	}
@@ -235,11 +245,44 @@ func ({{.ObjectShortName}} *{{.TypeName}}List) GetItems() []resource.Object {
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}List) SetItems(items []resource.Object) {
-    o.Items = make([]{{.TypeName}}, len(items))
+	o.Items = make([]{{.TypeName}}, len(items))
 	for i := 0; i < len(items); i++ {
 		o.Items[i] = *items[i].(*{{.TypeName}})
 	}
 }
 
+func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopy() *{{.TypeName}}List {
+	cpy := &{{.TypeName}}List{}
+	{{.ObjectShortName}}.DeepCopyInto(cpy)
+	return cpy
+}
+
+func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyInto(dst *{{.TypeName}}List) {
+	resource.CopyObjectInto(dst, {{.ObjectShortName}})
+}
+
 // Interface compliance compile-time check
 var _ resource.ListObject = &{{.TypeName}}List{}
+
+// Copy methods for all subresource types
+func (s *{{.SpecTypeName}}) DeepCopy() *{{.SpecTypeName}} {
+	cpy := &{{.SpecTypeName}}{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (s *{{.SpecTypeName}}) DeepCopyInto(dst *{{.SpecTypeName}}) {
+	resource.CopyObjectInto(dst, s)
+}
+
+{{ range .Subresources }}
+func(s *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
+	cpy := &{{.TypeName}}{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+func(s *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
+	resource.CopyObjectInto(dst, s)
+}
+{{ end }}

@@ -1,6 +1,7 @@
 package resource
 
 import (
+	"errors"
 	"reflect"
 	"time"
 
@@ -149,16 +150,141 @@ type CommonMetadata struct {
 //	    return resource.CopyObject(c)
 //	}
 func CopyObject(in any) Object {
+	if in == nil {
+		return nil
+	}
+
 	val := reflect.ValueOf(in).Elem()
 
-	cpy := reflect.New(val.Type())
-	cpy.Elem().Set(val)
+	cpy := reflect.New(val.Type()).Interface()
+
+	err := CopyObjectInto(cpy, in)
+	if err != nil {
+		return nil
+	}
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(Object); ok {
+	if obj, ok := cpy.(Object); ok {
 		return obj
 	}
 
 	// TODO: better return than nil?
+	return nil
+}
+
+// CopyObjectInto performs a deep copy of in to out using reflection. in and out must both be pointers to a struct.
+// If a copy cannot be performed, an error is returned.
+func CopyObjectInto[T any](out T, in T) error {
+	srcVal := reflect.ValueOf(in)
+	dstVal := reflect.ValueOf(out)
+	srcType := reflect.TypeOf(in)
+	dstType := reflect.TypeOf(out)
+	if dstType.Kind() != reflect.Ptr {
+		return errors.New("out must be a pointer to a struct")
+	}
+	if srcType.Kind() == reflect.Ptr && srcVal.IsNil() {
+		return errors.New("in must not be nil")
+	}
+	if dstVal.IsNil() {
+		return errors.New("out must not be nil")
+	}
+	for dstType.Kind() == reflect.Ptr {
+		dstType = dstType.Elem()
+		dstVal = dstVal.Elem()
+	}
+	for srcType.Kind() == reflect.Ptr {
+		srcType = srcType.Elem()
+		srcVal = srcVal.Elem()
+	}
+
+	for i := 0; i < srcType.NumField(); i++ {
+		srcField := srcType.Field(i)
+		srcFieldValue := srcVal.Field(i)
+		dstFieldValue := dstVal.Field(i)
+		if dstFieldValue.CanSet() {
+			switch srcField.Type.Kind() {
+			case reflect.Ptr:
+				// If the pointer is nil, just make a new one for the copy
+				if srcFieldValue.IsNil() {
+					if !dstFieldValue.IsNil() {
+						dstFieldValue.Set(reflect.New(srcField.Type.Elem()))
+					}
+					continue
+				}
+				// find the type of the pointer, then copy that
+				typ := srcField.Type.Elem()
+				dstPtr := reflect.New(typ).Interface()
+				err := CopyObjectInto(dstPtr, srcFieldValue.Interface())
+				if err != nil {
+					return err
+				}
+				dstFieldValue.Set(reflect.ValueOf(dstPtr))
+			case reflect.Struct:
+				// Recursively copy the struct
+				dstStruct := reflect.New(dstFieldValue.Type()).Interface()
+				err := CopyObjectInto(dstStruct, srcFieldValue.Interface())
+				if err != nil {
+					return err
+				}
+				dstFieldValue.Set(reflect.ValueOf(dstStruct).Elem())
+			case reflect.Map:
+				if srcFieldValue.IsNil() {
+					if !dstFieldValue.IsNil() {
+						dstFieldValue.Set(reflect.New(srcFieldValue.Type()).Elem())
+					}
+					continue
+				}
+				dstMap := reflect.MakeMap(srcField.Type)
+				for _, key := range srcFieldValue.MapKeys() {
+					srcKeyVal := srcFieldValue.MapIndex(key)
+					dstKeyVal := reflect.New(srcKeyVal.Type()).Elem()
+					if srcKeyVal.Kind() == reflect.Ptr && srcKeyVal.Elem().Kind() == reflect.Struct {
+						// Copy using CopyObjectInto
+						if srcKeyVal.IsNil() {
+							dstKeyVal = reflect.New(srcKeyVal.Elem().Type())
+						} else {
+							// find the type of the pointer, then copy that
+							typ := srcKeyVal.Type().Elem()
+							dstPtr := reflect.New(typ).Interface()
+							err := CopyObjectInto(dstPtr, srcKeyVal.Interface())
+							if err != nil {
+								return err
+							}
+							dstKeyVal = reflect.ValueOf(dstPtr)
+						}
+					} else if srcKeyVal.Kind() == reflect.Struct {
+						// Copy using CopyObjectInto
+						dst := reflect.New(srcKeyVal.Type()).Interface()
+						if err := CopyObjectInto(dst, srcKeyVal.Interface()); err != nil {
+							return err
+						}
+						dstKeyVal = reflect.ValueOf(dst).Elem()
+					} else {
+						dstKeyVal.Set(srcKeyVal)
+					}
+					dstMap.SetMapIndex(key, dstKeyVal)
+				}
+				dstFieldValue.Set(dstMap)
+			case reflect.Slice:
+				if srcFieldValue.IsNil() {
+					if !dstFieldValue.IsNil() {
+						dstFieldValue.Set(reflect.New(srcFieldValue.Type()).Elem())
+					}
+					continue
+				}
+				// Copy slice elements
+				dstSlice := reflect.MakeSlice(srcField.Type, srcFieldValue.Len(), srcFieldValue.Cap())
+				reflect.Copy(dstSlice, srcFieldValue)
+				dstFieldValue.Set(dstSlice)
+			default:
+				// Just copy the value over
+				dstFieldValue.Set(srcFieldValue)
+			}
+		} else {
+			// Can't set field
+			continue
+		}
+	}
+
 	return nil
 }
