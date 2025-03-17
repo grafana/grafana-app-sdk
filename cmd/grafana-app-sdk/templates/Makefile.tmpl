@@ -54,7 +54,7 @@ build/operator:
 
 .PHONY: compile/operator
 compile/operator:
-	@go build cmd/operator -o target/operator
+	@go build -o "target/operator" cmd/operator/*.go
 
 .PHONY: generate
 generate:

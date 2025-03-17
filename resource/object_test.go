@@ -9,11 +9,14 @@ import (
 )
 
 type ComplexTestObject struct {
-	Slice      []ComplexTestObject
-	Map        map[string]ComplexTestObject
-	PointerMap map[string]*ComplexTestObject
-	Pointer    *ComplexTestObject
-	Child      ComplexTestObjectChild
+	Slice        []ComplexTestObject
+	Map          map[string]ComplexTestObject
+	PointerMap   map[string]*ComplexTestObject
+	Pointer      *ComplexTestObject
+	Child        ComplexTestObjectChild
+	IntPointer   *int
+	SlicePointer *[]int          // Weird, but valid, types
+	MapPointer   *map[string]int // Weird, but valid, types
 }
 
 type ComplexTestObjectChild struct {
@@ -24,6 +27,12 @@ type ComplexTestObjectChild struct {
 }
 
 func TestCopyObjectInto(t *testing.T) {
+	i := 2
+	si := []int{1, 2, 3}
+	mi := map[string]int{
+		"a": 1,
+		"b": 2,
+	}
 	var ncto *ComplexTestObject
 	tests := []struct {
 		name string
@@ -59,11 +68,22 @@ func TestCopyObjectInto(t *testing.T) {
 					Str: "foobar",
 				},
 			}},
+			Map: map[string]ComplexTestObject{
+				"foo": ComplexTestObject{},
+			},
+			PointerMap: map[string]*ComplexTestObject{},
+			Pointer:    &ComplexTestObject{},
 			Child: ComplexTestObjectChild{
+				Next: &ComplexTestObjectChild{
+					Str: "foobar",
+				},
 				Str:   "string",
 				Int32: 42,
 				Int64: 84,
 			},
+			IntPointer:   &i,
+			SlicePointer: &si,
+			MapPointer:   &mi,
 		},
 	}, {
 		name: "complex object",
@@ -96,6 +116,9 @@ func TestCopyObjectInto(t *testing.T) {
 				Str:   "string",
 				Int32: 42,
 			},
+			IntPointer:   &i,
+			SlicePointer: &si,
+			MapPointer:   &mi,
 		},
 		out: &ComplexTestObject{},
 	}}

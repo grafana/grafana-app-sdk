@@ -205,7 +205,11 @@ func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
-	resource.CopyObjectInto(dst, {{.ObjectShortName}})
+	dst.TypeMeta.APIVersion = {{.ObjectShortName}}.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = {{.ObjectShortName}}.TypeMeta.Kind
+	{{.ObjectShortName}}.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
+	{{.ObjectShortName}}.Spec.DeepCopyInto(&dst.Spec){{ range .Subresources }}
+	{{$.ObjectShortName}}.{{.Name}}.DeepCopyInto(&dst.{{.Name}}){{end}}
 }
 
 // Interface compliance compile-time check
@@ -265,23 +269,27 @@ func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyInto(dst *{{.TypeName}}Li
 var _ resource.ListObject = &{{.TypeName}}List{}
 
 // Copy methods for all subresource types
+
+// DeepCopy creates a full deep copy of Spec
 func (s *{{.SpecTypeName}}) DeepCopy() *{{.SpecTypeName}} {
 	cpy := &{{.SpecTypeName}}{}
 	s.DeepCopyInto(cpy)
 	return cpy
 }
 
+// DeepCopyInto deep copies Spec into another Spec object
 func (s *{{.SpecTypeName}}) DeepCopyInto(dst *{{.SpecTypeName}}) {
 	resource.CopyObjectInto(dst, s)
 }
 
-{{ range .Subresources }}
+{{ range .Subresources }}// DeepCopy creates a full deep copy of {{.TypeName}}
 func(s *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
 	cpy := &{{.TypeName}}{}
 	s.DeepCopyInto(cpy)
 	return cpy
 }
 
+// DeepCopyInto deep copies {{.TypeName}} into another {{.TypeName}} object
 func(s *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
 	resource.CopyObjectInto(dst, s)
 }
