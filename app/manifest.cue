@@ -56,6 +56,49 @@ appManifest: versions: v1alpha1: {
 			validation?: #ValidationCapability
 			mutation?: #MutationCapability
 		}
+		#CustomRoute: {
+			summary?: string
+			description?: string
+			operations?: {
+				get?: #CustomRouteOperation
+				put?: #CustomRouteOperation
+				post?: #CustomRouteOperation
+				delete?: #CustomRouteOperation
+				options?: #CustomRouteOperation
+				head?: #CustomRouteOperation
+				patch?: #CustomRouteOperation
+				trace?: #CustomRouteOperation
+			}
+			parameters?: [...#CustomRouteParameter]
+		}
+		#CustomRouteOperation: {
+			tags?: [...string]
+			summary?: string
+			description?: string
+			operationId?: string
+			deprecated?: bool
+			consumes?: [...string]
+			produces?: [...string]
+			parameters?: [...#CustomRouteParameter]
+			responses?:  {
+				default?: #CustomRouteResponse
+				statusCodeResponses?: [int]: #CustomRouteResponse
+			}
+		}
+		#CustomRouteParameter: {
+			description?: string
+			name?: string
+			"in"?: "body" | "query" | "path" | "header" | "formData" @cog(kind="enum",memberNames="body|query|path|header|formData")
+			required?: bool
+			schema?: [string]: _
+			allowEmptyValue?: bool
+		}
+		#CustomRouteResponse: {
+			description: string
+			schema?: [string]: _
+			examples?: [string]: _
+		}
+		#CustomRouteCapabilities: [string]: #CustomRoute
 		#ManifestKindVersionSchema: {
 			[string]: _
 		}
@@ -65,6 +108,7 @@ appManifest: versions: v1alpha1: {
 			schema: #ManifestKindVersionSchema
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			customRoutes?: #CustomRouteCapabilities
 		}
 		#ManifestKind: {
 			kind: string

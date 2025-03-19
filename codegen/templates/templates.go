@@ -404,6 +404,27 @@ func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperat
 	}
 }
 
+func (ManifestGoFileMetadata) ToStringPtr(s string) string {
+	if s == "" {
+		return "nil"
+	}
+	return fmt.Sprintf("stringPtr(%q)", s)
+}
+
+func (ManifestGoFileMetadata) ToCustomRouteOperation(op any) string {
+	if op == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("&app.CustomRouteOperation{%+v}", op)
+}
+
+func (ManifestGoFileMetadata) ToVersionSchema(schema map[string]any) string {
+	if schema == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("&app.VersionSchema{%+v}", schema)
+}
+
 func (ManifestGoFileMetadata) ToJSONString(input any) string {
 	j, _ := json.Marshal(input)
 	return string(j)
@@ -412,6 +433,10 @@ func (ManifestGoFileMetadata) ToJSONString(input any) string {
 func (ManifestGoFileMetadata) ToJSONBacktickString(input any) string {
 	j, _ := json.Marshal(input)
 	return "`" + strings.ReplaceAll(string(j), "`", "` + \"`\" + `") + "`"
+}
+
+func (ManifestGoFileMetadata) ToKindPermissionAction(input string) string {
+	return fmt.Sprintf("app.KindPermissionAction(\"%s\")", strings.ToLower(input))
 }
 
 func (ManifestGoFileMetadata) ToPackageName(input string) string {

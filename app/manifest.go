@@ -96,6 +96,9 @@ type ManifestKindVersion struct {
 	// Admission is the collection of admission capabilities for this version.
 	// If nil, no admission capabilities exist for the version.
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
+	// CustomRoutes is the collection of custom routes for this version.
+	// If nil, no custom routes exist for the version.
+	CustomRoutes map[string]CustomRoute `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
 	// Schema is the schema of this version, as an OpenAPI document.
 	// This is currently an `any` type as implementation is incomplete.
 	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
@@ -141,6 +144,65 @@ type MutationCapability struct {
 	// Operations is the list of operations that the mutation capability is used for.
 	// If this list if empty or nil, this is equivalent to the app having no mutation capability.
 	Operations []AdmissionOperation `json:"operations,omitempty" yaml:"operations,omitempty"`
+}
+
+type CustomRouteCapabilities map[string]CustomRoute
+
+type CustomRoute struct {
+	Summary     *string                `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description *string                `json:"description,omitempty" yaml:"description,omitempty"`
+	Operations  *CustomRouteOperations `json:"operations,omitempty" yaml:"operations,omitempty"`
+	Parameters  []CustomRouteParameter `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+}
+
+type CustomRouteOperations struct {
+	Get    *CustomRouteOperation `json:"get,omitempty" yaml:"get,omitempty"`
+	Post   *CustomRouteOperation `json:"post,omitempty" yaml:"post,omitempty"`
+	Put    *CustomRouteOperation `json:"put,omitempty" yaml:"put,omitempty"`
+	Delete *CustomRouteOperation `json:"delete,omitempty" yaml:"delete,omitempty"`
+	Patch  *CustomRouteOperation `json:"patch,omitempty" yaml:"patch,omitempty"`
+}
+
+type CustomRouteOperation struct {
+	Tags        []string                       `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Summary     *string                        `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Description *string                        `json:"description,omitempty" yaml:"description,omitempty"`
+	OperationID *string                        `json:"operationId,omitempty" yaml:"operationId,omitempty"`
+	Deprecated  *bool                          `json:"deprecated,omitempty" yaml:"deprecated,omitempty"`
+	Consumes    []string                       `json:"consumes,omitempty" yaml:"consumes,omitempty"`
+	Produces    []string                       `json:"produces,omitempty" yaml:"produces,omitempty"`
+	Parameters  []CustomRouteParameter         `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+	Responses   *CustomRouteOperationResponses `json:"responses,omitempty" yaml:"responses,omitempty"`
+}
+
+type CustomRouteParameter struct {
+	Name        string                       `json:"name" yaml:"name"`
+	Description string                       `json:"description" yaml:"description"`
+	Schema      *VersionSchema               `json:"schema" yaml:"schema"`
+	In          CustomRouteParameterLocation `json:"in" yaml:"in"`
+	Required    bool                         `json:"required" yaml:"required"`
+	AllowEmpty  bool                         `json:"allowEmpty" yaml:"allowEmpty"`
+}
+
+type CustomRouteParameterLocation string
+
+const (
+	CustomRouteParameterInBody     CustomRouteParameterLocation = "body"
+	CustomRouteParameterInQuery    CustomRouteParameterLocation = "query"
+	CustomRouteParameterInPath     CustomRouteParameterLocation = "path"
+	CustomRouteParameterInHeader   CustomRouteParameterLocation = "header"
+	CustomRouteParameterInFormData CustomRouteParameterLocation = "formData"
+)
+
+type CustomRouteResponse struct {
+	Description string         `json:"description" yaml:"description"`
+	Schema      *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
+	Examples    *VersionSchema `json:"examples,omitempty" yaml:"examples,omitempty"`
+}
+
+type CustomRouteOperationResponses struct {
+	Default             *CustomRouteResponse        `json:"default,omitempty" yaml:"default,omitempty"`
+	StatusCodeResponses map[int]CustomRouteResponse `json:"statusCodeResponses,omitempty" yaml:"statusCodeResponses,omitempty"`
 }
 
 type AdmissionOperation string

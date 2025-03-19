@@ -18,8 +18,11 @@ import (
 type AppManifest struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
-	Spec              AppManifestSpec   `json:"spec" yaml:"spec"`
-	AppManifestStatus AppManifestStatus `json:"status" yaml:"status"`
+
+	// Spec is the spec of the AppManifest
+	Spec AppManifestSpec `json:"spec" yaml:"spec"`
+
+	Status AppManifestStatus `json:"status" yaml:"status"`
 }
 
 func (o *AppManifest) GetSpec() any {
@@ -37,14 +40,14 @@ func (o *AppManifest) SetSpec(spec any) error {
 
 func (o *AppManifest) GetSubresources() map[string]any {
 	return map[string]any{
-		"status": o.AppManifestStatus,
+		"status": o.Status,
 	}
 }
 
 func (o *AppManifest) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
-		return o.AppManifestStatus, true
+		return o.Status, true
 	default:
 		return nil, false
 	}
@@ -57,7 +60,7 @@ func (o *AppManifest) SetSubresource(name string, value any) error {
 		if !ok {
 			return fmt.Errorf("cannot set status type %#v, not of type AppManifestStatus", value)
 		}
-		o.AppManifestStatus = cast
+		o.Status = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)
