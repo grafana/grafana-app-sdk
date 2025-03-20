@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"sync"
-	"time"
 
 	"github.com/grafana/grafana-app-sdk/health"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,16 +27,15 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config            RunnerConfig
-	webhookServer     *webhookServerRunner
-	metricsExporter   *metrics.Exporter
-	serverRunner      *app.SingletonRunner
-	healthCheck       health.HealthCheck
-	healthCheckRunner *health.HealthCheckRunner
-	server            *OperatorServer
-	startMux          sync.Mutex
-	running           bool
-	runningWG         sync.WaitGroup
+	config          RunnerConfig
+	webhookServer   *webhookServerRunner
+	metricsExporter *metrics.Exporter
+	serverRunner    *app.SingletonRunner
+	healthCheck     health.Check
+	server          *OperatorServer
+	startMux        sync.Mutex
+	running         bool
+	runningWG       sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -53,20 +51,14 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		cfg.Port = 9090
 	}
 
-	hc := cfg.HealthCheck
-	if isInterfaceNil(hc) {
-		hc = &health.HealthChecker{}
-	}
-
 	op := Runner{
 		config: cfg,
 		server: &OperatorServer{
-			Port:        cfg.Port,
-			Mux:         http.NewServeMux(),
-			HealthCheck: hc,
+			Port:   cfg.Port,
+			Mux:    http.NewServeMux(),
+			Checks: []health.Check{cfg.HealthCheck},
 		},
-		healthCheck:       hc,
-		healthCheckRunner: health.NewHealthCheckRunner(hc, time.Minute),
+		healthCheck: cfg.HealthCheck,
 	}
 
 	op.serverRunner = app.NewSingletonRunner(op.server, false)
@@ -100,7 +92,7 @@ type RunnerConfig struct {
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
 	// Health checks for liveness and readiness
-	HealthCheck health.HealthCheck
+	HealthCheck health.Check
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
@@ -252,17 +244,17 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Health
-	s.healthCheck.RegisterHealthCheck(func(ctx context.Context) error {
+	/* s.healthCheck.RegisterHealthCheck(func(ctx context.Context) error {
 		if !s.running {
 			return errors.New("app has not started yet")
 		}
 		return nil
-	})
+	}) */
 
 	// Add Metrics+Health cumulative server runnable, healthcheck based on "running" should
 	// be passed down to the serverRunner
 	runner.AddRunnable(s.serverRunner)
-	runner.AddRunnable(app.NewSingletonRunner(s.healthCheckRunner, false))
+	// runner.AddRunnable(app.NewSingletonRunner(s.healthCheckRunner, false))
 
 	return runner.Run(ctx)
 }
