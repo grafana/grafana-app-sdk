@@ -12,6 +12,6 @@ type Check interface {
 
 // Checker
 type Checker interface {
-	// HealthChecks runs all registered health checks and returns any errors combined into a single error
+	// HealthChecks returns a slice of all Check instances which should be run for health checks
 	HealthChecks() []Check
 }
