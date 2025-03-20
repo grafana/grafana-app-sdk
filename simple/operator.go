@@ -121,9 +121,9 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 
 	// this deprecated operator doesn't have any actual health checks, use the new operator runner
 	// in order to get a true read on the readiness of the operator
-	operatorServer := &operator.OperatorServer{
-		Port:        cfg.Port,
-		Mux:         http.NewServeMux(),
+	operatorServer := &operator.MetricsServer{
+		Port:                cfg.Port,
+		mux:                 http.NewServeMux(),
 		HealthCheckInterval: cfg.HealthCheckInterval,
 	}
 
@@ -182,7 +182,7 @@ type Operator struct {
 	clientGen           resource.ClientGenerator
 	controller          *operator.InformerController
 	admission           *k8s.WebhookServer
-	operatorServer      *operator.OperatorServer
+	operatorServer      *operator.MetricsServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
 	patcher             *k8s.DynamicPatcher

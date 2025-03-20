@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"os"
 	"sync"
 
@@ -27,15 +26,15 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config          RunnerConfig
-	webhookServer   *webhookServerRunner
-	metricsExporter *metrics.Exporter
-	serverRunner    *app.SingletonRunner
-	healthCheck     health.Check
-	server          *OperatorServer
-	startMux        sync.Mutex
-	running         bool
-	runningWG       sync.WaitGroup
+	config              RunnerConfig
+	webhookServer       *webhookServerRunner
+	metricsExporter     *metrics.Exporter
+	healthCheck         health.Check
+	metricsServer       *MetricsServer
+	metricsServerRunner *app.SingletonRunner
+	startMux            sync.Mutex
+	running             bool
+	runningWG           sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -47,21 +46,17 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
 	// }
 
-	if cfg.Port <= 0 {
-		cfg.Port = 9090
+	if cfg.MetricsConfig.Port <= 0 {
+		cfg.MetricsConfig.Port = 9090
 	}
 
+	metricsServer := NewMetricsServer(cfg.MetricsConfig.MetricsServerConfig)
 	op := Runner{
-		config: cfg,
-		server: &OperatorServer{
-			Port:   cfg.Port,
-			Mux:    http.NewServeMux(),
-			Checks: []health.Check{cfg.HealthCheck},
-		},
-		healthCheck: cfg.HealthCheck,
+		config:              cfg,
+		healthCheck:         cfg.HealthCheck,
+		metricsServer:       metricsServer,
+		metricsServerRunner: app.NewSingletonRunner(metricsServer, false),
 	}
-
-	op.serverRunner = app.NewSingletonRunner(op.server, false)
 
 	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
 		ws, err := k8s.NewWebhookServer(k8s.WebhookServerConfig{
@@ -84,8 +79,6 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 }
 
 type RunnerConfig struct {
-	// Server port for metrics and health endpoints
-	Port int
 	// WebhookConfig contains configuration information for exposing k8s webhooks.
 	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
 	WebhookConfig RunnerWebhookConfig
@@ -103,6 +96,7 @@ type RunnerConfig struct {
 // RunnerMetricsConfig contains configuration information for exposing prometheus metrics
 type RunnerMetricsConfig struct {
 	metrics.ExporterConfig
+	MetricsServerConfig
 	Enabled   bool
 	Namespace string
 }
@@ -240,23 +234,31 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 			return err
 		}
 
-		s.server.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
+		s.metricsServer.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
 	}
 
 	// Health
-	/* s.healthCheck.RegisterHealthCheck(func(ctx context.Context) error {
-		if !s.running {
-			return errors.New("app has not started yet")
-		}
-		return nil
-	}) */
 
 	// Add Metrics+Health cumulative server runnable, healthcheck based on "running" should
 	// be passed down to the serverRunner
-	runner.AddRunnable(s.serverRunner)
-	// runner.AddRunnable(app.NewSingletonRunner(s.healthCheckRunner, false))
+
+	s.metricsServer.RegisterHealthChecks(s)
+	s.metricsServer.RegisterHealthChecks(runner.HealthChecks()...)
+
+	runner.AddRunnable(s.metricsServerRunner)
 
 	return runner.Run(ctx)
+}
+
+func (s *Runner) HealthCheck(ctx context.Context) error {
+	if s.running {
+		return nil
+	}
+	return errors.New("app has not started yet")
+}
+
+func (s *Runner) HealthCheckName() string {
+	return "operator-runner"
 }
 
 func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {

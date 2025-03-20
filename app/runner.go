@@ -24,9 +24,8 @@ var RunnableCollectorDefaultErrorHandler = func(ctx context.Context, err error) 
 // NewMultiRunner creates a new MultiRunner with Runners as an empty slice and ErrorHandler set to RunnableCollectorDefaultErrorHandler
 func NewMultiRunner() *MultiRunner {
 	return &MultiRunner{
-		Runners:             make([]Runnable, 0),
-		ErrorHandler:        RunnableCollectorDefaultErrorHandler,
-		HealthCheckInterval: time.Minute * 2,
+		Runners:      make([]Runnable, 0),
+		ErrorHandler: RunnableCollectorDefaultErrorHandler,
 	}
 }
 
@@ -41,9 +40,6 @@ type MultiRunner struct {
 	// before stopping execution and returning a timeout error instead of exiting gracefully.
 	// If ExitWait is nil, Run execution will always block until all Runners have exited.
 	ExitWait *time.Duration
-	// HelthCheckInterval is the duration at which the runner will periodically run the registered health checks. The
-	// cached result is what's returned by the ready endpoint.
-	HealthCheckInterval time.Duration
 }
 
 // Run runs all Runners in separate goroutines, and calls ErrorHandler if any of them exits early with an error.
@@ -121,12 +117,15 @@ func (m *MultiRunner) PrometheusCollectors() []prometheus.Collector {
 
 // HealthChecks implements HealthChecker
 func (m *MultiRunner) HealthChecks() []health.Check {
-	// TODO: there isn't a running property on the multirunner itself, should there be?
-	checks := []health.Check{}
+	checks := make([]health.Check, 0)
 
 	for _, runner := range m.Runners {
 		if cast, ok := runner.(health.Checker); ok {
 			checks = append(checks, cast.HealthChecks()...)
+		}
+
+		if cast, ok := runner.(health.Check); ok {
+			checks = append(checks, cast)
 		}
 	}
 
@@ -227,6 +226,19 @@ func (s *SingletonRunner) PrometheusCollectors() []prometheus.Collector {
 		return cast.PrometheusCollectors()
 	}
 	return nil
+}
+
+// HealthChecks
+func (s *SingletonRunner) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+	if cast, ok := s.Wrapped.(health.Check); ok {
+		checks = append(checks, cast)
+	}
+
+	if cast, ok := s.Wrapped.(health.Checker); ok {
+		checks = append(checks, cast.HealthChecks()...)
+	}
+	return checks
 }
 
 type dynamicMultiRunnerTuple struct {
@@ -367,6 +379,22 @@ func (d *DynamicMultiRunner) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
+// HealthChecks implements HealthChecker
+func (m *DynamicMultiRunner) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+
+	for _, tpl := range m.runners {
+		if cast, ok := tpl.runner.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+
+		if cast, ok := tpl.runner.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+	}
+
+	return checks
+}
 func (d *DynamicMultiRunner) runTuple(tpl *dynamicMultiRunnerTuple) {
 	d.wg.Add(1)
 	ctx, cancel := context.WithCancel(d.runCtx)

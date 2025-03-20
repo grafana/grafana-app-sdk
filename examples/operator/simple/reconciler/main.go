@@ -73,9 +73,12 @@ func main() {
 	runner, err := operator.NewRunner(operator.RunnerConfig{
 		KubeConfig: *kubeConfig,
 		MetricsConfig: operator.RunnerMetricsConfig{
+			MetricsServerConfig: operator.MetricsServerConfig{
+				Port:                9090,
+				HealthCheckInterval: 1 * time.Minute,
+			},
 			Enabled: true,
 		},
-		HealthCheckInterval: 2 * time.Minute,
 	})
 	if err != nil {
 		panic(fmt.Errorf("unable to create runner: %w", err))
