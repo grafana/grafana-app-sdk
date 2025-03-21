@@ -73,6 +73,10 @@ func main() {
 	runner, err := operator.NewRunner(operator.RunnerConfig{
 		KubeConfig: *kubeConfig,
 		MetricsConfig: operator.RunnerMetricsConfig{
+			MetricsServerConfig: operator.MetricsServerConfig{
+				Port:                9090,
+				HealthCheckInterval: 1 * time.Minute,
+			},
 			Enabled: true,
 		},
 	})
