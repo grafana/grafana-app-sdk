@@ -107,13 +107,15 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 
 	t.Run("no kind", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		routes := a.CustomRoutes()
+		identifier := app.CustomRouteIdentifier{
 			ResourceIdentifier: id,
 			SubresourcePath:    "foo",
 			Method:             http.MethodPost,
-		})
-		assert.Nil(t, resp)
-		assert.Equal(t, app.ErrCustomRouteNotFound, err)
+		}
+		handler, ok := routes[identifier]
+		assert.False(t, ok)
+		assert.Nil(t, handler)
 	})
 
 	t.Run("no method", func(t *testing.T) {
@@ -211,13 +213,20 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
-			ResourceIdentifier: id,
-			SubresourcePath:    "foo",
-			Method:             http.MethodPost,
-		})
-		assert.Nil(t, resp)
-		assert.Equal(t, app.ErrCustomRouteNotFound, err)
+		routes := a.CustomRoutes()
+		identifier := app.CustomRouteIdentifier{
+			ResourceIdentifier: resource.FullIdentifier{
+				Group:   kind.Group(),
+				Version: kind.Version(),
+				Kind:    kind.Kind(),
+				Plural:  kind.Plural(),
+			},
+			SubresourcePath: "foo",
+			Method:          http.MethodPost,
+		}
+		handler, ok := routes[identifier]
+		assert.False(t, ok)
+		assert.Nil(t, handler)
 	})
 
 	t.Run("incorrect method", func(t *testing.T) {
@@ -234,13 +243,20 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
-			ResourceIdentifier: id,
-			SubresourcePath:    "baz",
-			Method:             http.MethodPost,
-		})
-		assert.Nil(t, resp)
-		assert.Equal(t, app.ErrCustomRouteNotFound, err)
+		routes := a.CustomRoutes()
+		identifier := app.CustomRouteIdentifier{
+			ResourceIdentifier: resource.FullIdentifier{
+				Group:   kind.Group(),
+				Version: kind.Version(),
+				Kind:    kind.Kind(),
+				Plural:  kind.Plural(),
+			},
+			SubresourcePath: "baz",
+			Method:          http.MethodPost,
+		}
+		handler, ok := routes[identifier]
+		assert.False(t, ok)
+		assert.Nil(t, handler)
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -263,10 +279,31 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
-			ResourceIdentifier: id,
-			SubresourcePath:    "baz",
-			Method:             http.MethodPost,
+		routes := a.CustomRoutes()
+		identifier := app.CustomRouteIdentifier{
+			ResourceIdentifier: resource.FullIdentifier{
+				Group:   kind.Group(),
+				Version: kind.Version(),
+				Kind:    kind.Kind(),
+				Plural:  kind.Plural(),
+			},
+			SubresourcePath: "baz",
+			Method:          http.MethodPost,
+		}
+		handler, ok := routes[identifier]
+		assert.True(t, ok)
+		assert.NotNil(t, handler)
+		resp, err := handler(context.TODO(), &app.ResourceCustomRouteRequest{
+			ResourceIdentifier: resource.FullIdentifier{
+				Group:     kind.Group(),
+				Version:   kind.Version(),
+				Kind:      kind.Kind(),
+				Namespace: "foz",
+				Name:      "baz",
+				Plural:    kind.Plural(),
+			},
+			SubresourcePath: "baz",
+			Method:          http.MethodPost,
 		})
 		assert.Equal(t, expectedErr, err)
 		assert.NotNil(t, resp)
@@ -483,7 +520,7 @@ func createTestApp(t *testing.T, cfg AppConfig) *App {
 }
 
 func testKind() resource.Kind {
-	sch := resource.NewSimpleSchema("foo", "v1", &resource.UntypedObject{}, &resource.UntypedList{}, resource.WithKind("Bar"))
+	sch := resource.NewSimpleSchema("foo", "v1", &resource.UntypedObject{}, &resource.UntypedList{}, resource.WithKind("Bar"), resource.WithPlural("bars"))
 	return resource.Kind{
 		Schema: sch,
 		Codecs: map[resource.KindEncoding]resource.Codec{

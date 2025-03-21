@@ -82,7 +82,7 @@ var appManifestData = app.ManifestData{
 
 func jsonToMap(j string) map[string]any {
 	m := make(map[string]any)
-	json.Unmarshal([]byte(j), &j)
+	json.Unmarshal([]byte(j), &m)
 	return m
 }
 

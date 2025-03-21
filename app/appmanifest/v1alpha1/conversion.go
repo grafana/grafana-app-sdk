@@ -1,6 +1,8 @@
 package v1alpha1
 
-import "github.com/grafana/grafana-app-sdk/app"
+import (
+	"github.com/grafana/grafana-app-sdk/app"
+)
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
 // to the generic app.ManifestData type for usage with an app.Manifest.
@@ -44,6 +46,32 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				}
 				ver.Admission = &adm
 			}
+
+			if version.CustomRoutes != nil {
+				ver.CustomRoutes = make(map[string]app.CustomRoute)
+				for path, route := range *version.CustomRoutes {
+					customRoute := app.CustomRoute{
+						Summary:     route.Summary,
+						Description: route.Description,
+					}
+
+					if route.Operations != nil {
+						customRoute.Operations = &app.CustomRouteOperations{
+							Get:    convertCustomRouteOperation(route.Operations.Get),
+							Post:   convertCustomRouteOperation(route.Operations.Post),
+							Put:    convertCustomRouteOperation(route.Operations.Put),
+							Delete: convertCustomRouteOperation(route.Operations.Delete),
+							Patch:  convertCustomRouteOperation(route.Operations.Patch),
+						}
+					}
+
+					if len(route.Parameters) > 0 {
+						customRoute.Parameters = convertParameters(route.Parameters)
+					}
+
+					ver.CustomRoutes[path] = customRoute
+				}
+			}
 			// Schema
 			if version.Schema != nil {
 				var err error
@@ -74,4 +102,99 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		}
 	}
 	return data, nil
+}
+
+func convertParameters(params []AppManifestCustomRouteParameter) []app.CustomRouteParameter {
+	result := make([]app.CustomRouteParameter, 0, len(params))
+	for _, param := range params {
+		parameter := app.CustomRouteParameter{
+			Name:        *param.Name,
+			Description: *param.Description,
+			In:          app.CustomRouteParameterLocation(*param.In),
+			Required:    *param.Required,
+			AllowEmpty:  *param.AllowEmptyValue,
+		}
+
+		if param.Schema != nil {
+			if schema, err := app.VersionSchemaFromMap(param.Schema); err == nil {
+				parameter.Schema = schema
+			}
+		}
+		result = append(result, parameter)
+	}
+	return result
+}
+
+func convertCustomRouteOperation(op *AppManifestCustomRouteOperation) *app.CustomRouteOperation {
+	if op == nil {
+		return nil
+	}
+
+	result := &app.CustomRouteOperation{
+		Tags:        op.Tags,
+		Summary:     op.Summary,
+		Description: op.Description,
+		OperationID: op.OperationId,
+		Deprecated:  op.Deprecated,
+		Consumes:    op.Consumes,
+		Produces:    op.Produces,
+	}
+
+	if op.Parameters != nil {
+		result.Parameters = convertParameters(op.Parameters)
+	}
+
+	if op.Responses != nil {
+		result.Responses = convertResponses(op.Responses)
+	}
+
+	return result
+}
+
+func convertResponses(responses *AppManifestV1alpha1CustomRouteOperationResponses) *app.CustomRouteOperationResponses {
+	if responses == nil {
+		return nil
+	}
+
+	result := &app.CustomRouteOperationResponses{
+		StatusCodeResponses: make(map[int]app.CustomRouteResponse),
+	}
+
+	if responses.Default != nil {
+		result.Default = convertResponse(responses.Default)
+	}
+
+	if responses.StatusCodeResponses != nil {
+		if statusCodes, ok := responses.StatusCodeResponses.(map[int]AppManifestCustomRouteResponse); ok {
+			for code, resp := range statusCodes {
+				result.StatusCodeResponses[code] = *convertResponse(&resp)
+			}
+		}
+	}
+
+	return result
+}
+
+func convertResponse(resp *AppManifestCustomRouteResponse) *app.CustomRouteResponse {
+	if resp == nil {
+		return nil
+	}
+
+	result := &app.CustomRouteResponse{
+		Description: resp.Description,
+	}
+
+	if resp.Schema != nil {
+		if schema, err := app.VersionSchemaFromMap(resp.Schema); err == nil {
+			result.Schema = schema
+		}
+	}
+
+	if resp.Examples != nil {
+		if examples, err := app.VersionSchemaFromMap(resp.Examples); err == nil {
+			result.Examples = examples
+		}
+	}
+
+	return result
 }

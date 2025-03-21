@@ -35,6 +35,15 @@ type RawObject struct {
 	Encoding resource.KindEncoding `json:"-"`
 }
 
+type CustomRouteIdentifier struct {
+	ResourceIdentifier resource.FullIdentifier
+	SubresourcePath    string
+	Method             string
+}
+
+// CustomRouteHandler is a function that processes a custom route request and returns a response or error
+type CustomRouteHandler func(ctx context.Context, request *ResourceCustomRouteRequest) (*ResourceCustomRouteResponse, error)
+
 // ResourceCustomRouteRequest is a request to a custom subresource
 type ResourceCustomRouteRequest struct {
 	ResourceIdentifier resource.FullIdentifier
@@ -106,11 +115,9 @@ type App interface {
 	// the converted bytes and encoding (Raw and Encoding respectively), and MAY contain the Object representation of those bytes.
 	// It returns an error if the conversion fails, or if the functionality is not supported by the app.
 	Convert(ctx context.Context, req ConversionRequest) (*RawObject, error)
-	// CallResourceCustomRoute handles the call to a resource custom route, and returns a response to the request or an error.
-	// If the route doesn't exist, the implementer MAY return ErrCustomRouteNotFound to signal to the runner,
-	// or may choose to return a response with a not found status code and custom body.
-	// It returns an error if the functionality is not supported by the app.
-	CallResourceCustomRoute(ctx context.Context, request *ResourceCustomRouteRequest) (*ResourceCustomRouteResponse, error)
+	// CustomRoutes returns a map of custom route identifiers to their handler functions.
+	// Returns an empty map if the app doesn't support any custom routes.
+	CustomRoutes() map[CustomRouteIdentifier]CustomRouteHandler
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
 	// If there are multiple versions of a Kind, each one SHOULD be returned by this method,
 	// as app runners may depend on having access to all kinds.

@@ -22,6 +22,7 @@ type AppManifestManifestKindVersion struct {
 	Schema                   AppManifestManifestKindVersionSchema  `json:"schema"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
+	CustomRoutes             *AppManifestCustomRouteCapabilities   `json:"customRoutes,omitempty"`
 }
 
 // NewAppManifestManifestKindVersion creates a new AppManifestManifestKindVersion object.
@@ -102,6 +103,67 @@ func NewAppManifestAdditionalPrinterColumns() *AppManifestAdditionalPrinterColum
 }
 
 // +k8s:openapi-gen=true
+type AppManifestCustomRouteCapabilities map[string]AppManifestCustomRoute
+
+// +k8s:openapi-gen=true
+type AppManifestCustomRoute struct {
+	Summary     *string                                   `json:"summary,omitempty"`
+	Description *string                                   `json:"description,omitempty"`
+	Operations  *AppManifestV1alpha1CustomRouteOperations `json:"operations,omitempty"`
+	Parameters  []AppManifestCustomRouteParameter         `json:"parameters,omitempty"`
+}
+
+// NewAppManifestCustomRoute creates a new AppManifestCustomRoute object.
+func NewAppManifestCustomRoute() *AppManifestCustomRoute {
+	return &AppManifestCustomRoute{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestCustomRouteOperation struct {
+	Tags        []string                                          `json:"tags,omitempty"`
+	Summary     *string                                           `json:"summary,omitempty"`
+	Description *string                                           `json:"description,omitempty"`
+	OperationId *string                                           `json:"operationId,omitempty"`
+	Deprecated  *bool                                             `json:"deprecated,omitempty"`
+	Consumes    []string                                          `json:"consumes,omitempty"`
+	Produces    []string                                          `json:"produces,omitempty"`
+	Parameters  []AppManifestCustomRouteParameter                 `json:"parameters,omitempty"`
+	Responses   *AppManifestV1alpha1CustomRouteOperationResponses `json:"responses,omitempty"`
+}
+
+// NewAppManifestCustomRouteOperation creates a new AppManifestCustomRouteOperation object.
+func NewAppManifestCustomRouteOperation() *AppManifestCustomRouteOperation {
+	return &AppManifestCustomRouteOperation{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestCustomRouteParameter struct {
+	Description     *string                            `json:"description,omitempty"`
+	Name            *string                            `json:"name,omitempty"`
+	In              *AppManifestCustomRouteParameterIn `json:"in,omitempty"`
+	Required        *bool                              `json:"required,omitempty"`
+	Schema          map[string]interface{}             `json:"schema,omitempty"`
+	AllowEmptyValue *bool                              `json:"allowEmptyValue,omitempty"`
+}
+
+// NewAppManifestCustomRouteParameter creates a new AppManifestCustomRouteParameter object.
+func NewAppManifestCustomRouteParameter() *AppManifestCustomRouteParameter {
+	return &AppManifestCustomRouteParameter{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestCustomRouteResponse struct {
+	Description string                 `json:"description"`
+	Schema      map[string]interface{} `json:"schema,omitempty"`
+	Examples    map[string]interface{} `json:"examples,omitempty"`
+}
+
+// NewAppManifestCustomRouteResponse creates a new AppManifestCustomRouteResponse object.
+func NewAppManifestCustomRouteResponse() *AppManifestCustomRouteResponse {
+	return &AppManifestCustomRouteResponse{}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestKindPermission struct {
 	Group    string   `json:"group"`
 	Resource string   `json:"resource"`
@@ -136,6 +198,34 @@ func NewAppManifestSpec() *AppManifestSpec {
 }
 
 // +k8s:openapi-gen=true
+type AppManifestV1alpha1CustomRouteOperations struct {
+	Get     *AppManifestCustomRouteOperation `json:"get,omitempty"`
+	Put     *AppManifestCustomRouteOperation `json:"put,omitempty"`
+	Post    *AppManifestCustomRouteOperation `json:"post,omitempty"`
+	Delete  *AppManifestCustomRouteOperation `json:"delete,omitempty"`
+	Options *AppManifestCustomRouteOperation `json:"options,omitempty"`
+	Head    *AppManifestCustomRouteOperation `json:"head,omitempty"`
+	Patch   *AppManifestCustomRouteOperation `json:"patch,omitempty"`
+	Trace   *AppManifestCustomRouteOperation `json:"trace,omitempty"`
+}
+
+// NewAppManifestV1alpha1CustomRouteOperations creates a new AppManifestV1alpha1CustomRouteOperations object.
+func NewAppManifestV1alpha1CustomRouteOperations() *AppManifestV1alpha1CustomRouteOperations {
+	return &AppManifestV1alpha1CustomRouteOperations{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestV1alpha1CustomRouteOperationResponses struct {
+	Default             *AppManifestCustomRouteResponse `json:"default,omitempty"`
+	StatusCodeResponses interface{}                     `json:"statusCodeResponses,omitempty"`
+}
+
+// NewAppManifestV1alpha1CustomRouteOperationResponses creates a new AppManifestV1alpha1CustomRouteOperationResponses object.
+func NewAppManifestV1alpha1CustomRouteOperationResponses() *AppManifestV1alpha1CustomRouteOperationResponses {
+	return &AppManifestV1alpha1CustomRouteOperationResponses{}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestV1alpha1SpecExtraPermissions struct {
 	// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
 	AccessKinds []AppManifestKindPermission `json:"accessKinds"`
@@ -145,3 +235,14 @@ type AppManifestV1alpha1SpecExtraPermissions struct {
 func NewAppManifestV1alpha1SpecExtraPermissions() *AppManifestV1alpha1SpecExtraPermissions {
 	return &AppManifestV1alpha1SpecExtraPermissions{}
 }
+
+// +k8s:openapi-gen=true
+type AppManifestCustomRouteParameterIn string
+
+const (
+	AppManifestCustomRouteParameterInBody     AppManifestCustomRouteParameterIn = "body"
+	AppManifestCustomRouteParameterInQuery    AppManifestCustomRouteParameterIn = "query"
+	AppManifestCustomRouteParameterInPath     AppManifestCustomRouteParameterIn = "path"
+	AppManifestCustomRouteParameterInHeader   AppManifestCustomRouteParameterIn = "header"
+	AppManifestCustomRouteParameterInFormData AppManifestCustomRouteParameterIn = "formData"
+)

@@ -78,6 +78,52 @@ SchemaWithOperatorState: Schema & {
 	operations: [...string]
 }
 
+#CustomRoute: {
+	summary?: string
+	description?: string
+	operations?: {
+		get?: #CustomRouteOperation
+		put?: #CustomRouteOperation
+		post?: #CustomRouteOperation
+		delete?: #CustomRouteOperation
+		options?: #CustomRouteOperation
+		head?: #CustomRouteOperation
+		patch?: #CustomRouteOperation
+		trace?: #CustomRouteOperation
+	}
+	parameters?: [...#CustomRouteParameter]
+}
+
+#CustomRouteOperation: {
+	tags?: [...string]
+	summary?: string
+	description?: string
+	operationId?: string
+	deprecated?: bool
+	consumes?: [...string]
+	produces?: [...string]
+	parameters?: [...#CustomRouteParameter]
+	responses?:  {
+		default?: #CustomRouteResponse
+		statusCodeResponses?: [int]: #CustomRouteResponse
+	}
+}
+#CustomRouteParameter: {
+	description?: string
+	name?: string
+	"in"?: "body" | "query" | "path" | "header" | "formData" @cog(kind="enum",memberNames="body|query|path|header|formData")
+	required?: bool
+	schema?: [string]: _
+	allowEmptyValue?: bool
+}
+#CustomRouteResponse: {
+	description: string
+	schema?: [string]: _
+	examples?: [string]: _
+}
+
+#CustomRouteCapabilities: [string]: #CustomRoute
+
 #AdditionalPrinterColumns: {
 	// name is a human readable name for the column.
 	name: string
@@ -118,6 +164,10 @@ Kind: S={
 	mutation: #AdmissionCapability | *{
 		operations: []
 	}
+
+	// customRoutes is a map of custom route names to custom route capabilities.
+	customRoutes: #CustomRouteCapabilities
+
 	// conversion determines whether there is code-based conversion for this kind.
 	conversion: bool | *false
 	// conversionWebhookProps is a temporary way of specifying the service webhook information

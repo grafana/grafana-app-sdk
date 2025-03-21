@@ -14,6 +14,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   -t="${testdir}/typescript/versioned" \
   --grouping=group \
   --manifest="customManifest"
+echo "Finished generating group by group"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
   --defpath="${testdir}/crd" \
@@ -38,6 +39,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
 mv ${testdir}/go/groupbygroup/*.go "${testdir}/manifest/go/"
 mv ${testdir}/crd/test-app-manifest.* "${testdir}/manifest/"
 mv ${testdir}/crd/custom-app-manifest.* "${testdir}/manifest/"
+echo "Finished moving manifest files"
 # Group by kind (only customKind)
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbykind" \
@@ -45,6 +47,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   -t="${testdir}/typescript/versioned" \
   --grouping=kind \
   --manifest="customManifest"
+echo "Finished generating group by kind"
 
 # Rename files to append .txt
 find "${testdir}" -depth -name "*.go" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;

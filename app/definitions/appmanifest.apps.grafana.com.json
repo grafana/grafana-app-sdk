@@ -162,12 +162,833 @@
                                                                 },
                                                                 "type": "object"
                                                             },
+                                                            "customRoutes": {
+                                                                "additionalProperties": {
+                                                                    "properties": {
+                                                                        "description": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "operations": {
+                                                                            "properties": {
+                                                                                "delete": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "get": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "head": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "options": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "patch": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "post": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "put": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                },
+                                                                                "trace": {
+                                                                                    "properties": {
+                                                                                        "consumes": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "deprecated": {
+                                                                                            "type": "boolean"
+                                                                                        },
+                                                                                        "description": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "operationId": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "parameters": {
+                                                                                            "items": {
+                                                                                                "properties": {
+                                                                                                    "allowEmptyValue": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "description": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "in": {
+                                                                                                        "enum": [
+                                                                                                            "body",
+                                                                                                            "query",
+                                                                                                            "path",
+                                                                                                            "header",
+                                                                                                            "formData"
+                                                                                                        ],
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "name": {
+                                                                                                        "type": "string"
+                                                                                                    },
+                                                                                                    "required": {
+                                                                                                        "type": "boolean"
+                                                                                                    },
+                                                                                                    "schema": {
+                                                                                                        "type": "object",
+                                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                                    }
+                                                                                                },
+                                                                                                "type": "object"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "produces": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        },
+                                                                                        "responses": {
+                                                                                            "properties": {
+                                                                                                "default": {
+                                                                                                    "properties": {
+                                                                                                        "description": {
+                                                                                                            "type": "string"
+                                                                                                        },
+                                                                                                        "examples": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        },
+                                                                                                        "schema": {
+                                                                                                            "type": "object",
+                                                                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                                                                        }
+                                                                                                    },
+                                                                                                    "required": [
+                                                                                                        "description"
+                                                                                                    ],
+                                                                                                    "type": "object"
+                                                                                                },
+                                                                                                "statusCodeResponses": {
+                                                                                                    "type": "object"
+                                                                                                }
+                                                                                            },
+                                                                                            "type": "object"
+                                                                                        },
+                                                                                        "summary": {
+                                                                                            "type": "string"
+                                                                                        },
+                                                                                        "tags": {
+                                                                                            "items": {
+                                                                                                "type": "string"
+                                                                                            },
+                                                                                            "type": "array"
+                                                                                        }
+                                                                                    },
+                                                                                    "type": "object"
+                                                                                }
+                                                                            },
+                                                                            "type": "object"
+                                                                        },
+                                                                        "parameters": {
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "allowEmptyValue": {
+                                                                                        "type": "boolean"
+                                                                                    },
+                                                                                    "description": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "in": {
+                                                                                        "enum": [
+                                                                                            "body",
+                                                                                            "query",
+                                                                                            "path",
+                                                                                            "header",
+                                                                                            "formData"
+                                                                                        ],
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "name": {
+                                                                                        "type": "string"
+                                                                                    },
+                                                                                    "required": {
+                                                                                        "type": "boolean"
+                                                                                    },
+                                                                                    "schema": {
+                                                                                        "type": "object",
+                                                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "summary": {
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "object"
+                                                            },
                                                             "name": {
                                                                 "type": "string"
                                                             },
                                                             "schema": {
-                                                                "additionalProperties": {},
-                                                                "type": "object"
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
                                                             },
                                                             "selectableFields": {
                                                                 "items": {
@@ -276,8 +1097,7 @@
                                 "required": [
                                     "resources"
                                 ],
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "type": "object"
                             }
                         },
                         "required": [
