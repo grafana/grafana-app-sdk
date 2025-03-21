@@ -222,6 +222,20 @@ func (o *CustomKind) DeepCopyObject() runtime.Object {
 	return o.Copy()
 }
 
+func (o *CustomKind) DeepCopy() *CustomKind {
+	cpy := &CustomKind{}
+	o.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (o *CustomKind) DeepCopyInto(dst *CustomKind) {
+	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = o.TypeMeta.Kind
+	o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
+	o.Spec.DeepCopyInto(&dst.Spec)
+	o.Status.DeepCopyInto(&dst.Status)
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &CustomKind{}
 
@@ -265,5 +279,41 @@ func (o *CustomKindList) SetItems(items []resource.Object) {
 	}
 }
 
+func (o *CustomKindList) DeepCopy() *CustomKindList {
+	cpy := &CustomKindList{}
+	o.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (o *CustomKindList) DeepCopyInto(dst *CustomKindList) {
+	resource.CopyObjectInto(dst, o)
+}
+
 // Interface compliance compile-time check
 var _ resource.ListObject = &CustomKindList{}
+
+// Copy methods for all subresource types
+
+// DeepCopy creates a full deep copy of Spec
+func (s *Spec) DeepCopy() *Spec {
+	cpy := &Spec{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies Spec into another Spec object
+func (s *Spec) DeepCopyInto(dst *Spec) {
+	resource.CopyObjectInto(dst, s)
+}
+
+// DeepCopy creates a full deep copy of Status
+func (s *Status) DeepCopy() *Status {
+	cpy := &Status{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies Status into another Status object
+func (s *Status) DeepCopyInto(dst *Status) {
+	resource.CopyObjectInto(dst, s)
+}
