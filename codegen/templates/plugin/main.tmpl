@@ -2,6 +2,7 @@ package main
 
 import (
     "context"
+    "errors"
 	"fmt"
 	"os"
 	"strings"
@@ -89,7 +90,12 @@ func newInstanceFactory(logger logging.Logger) app.InstanceFactoryFunc {
 				Namespace: strings.ReplaceAll(pluginID, "-", "_"),
 			},
 		})
-		prometheus.MustRegister(clientGenerator.PrometheusCollectors()...)
+		// newInstanceFactory can be called multiple times, so we don't want to panic when re-registering collectors
+		for _, c := range clientGenerator.PrometheusCollectors() {
+			if err := prometheus.Register(c); err != nil && !errors.As(err, &prometheus.AlreadyRegisteredError{}) {
+				return nil, fmt.Errorf("unable to register prometheus collectors: %w", err)
+			}
+		}
 
         // Create our PluginService, then assign values to the individual Kind service(s)
         svc := PluginService{}
