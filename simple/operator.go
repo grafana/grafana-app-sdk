@@ -3,7 +3,6 @@ package simple
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -65,6 +64,7 @@ type WebhookConfig struct {
 // MetricsConfig contains configuration information for exposing prometheus metrics
 type MetricsConfig struct {
 	metrics.ExporterConfig
+	operator.MetricsServerConfig
 	Enabled   bool
 	Namespace string
 }
@@ -83,10 +83,11 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 
 	if cfg.Port <= 0 {
 		cfg.Port = 9090
+		cfg.Metrics.MetricsServerConfig.Port = 9090
 	}
 
-	if cfg.HealthCheckInterval <= 0 {
-		cfg.HealthCheckInterval = 2 * time.Minute
+	if cfg.Metrics.MetricsServerConfig.HealthCheckInterval <= 0 {
+		cfg.HealthCheckInterval = 1 * time.Minute
 	}
 
 	if cfg.Webhooks.Enabled {
@@ -121,11 +122,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 
 	// this deprecated operator doesn't have any actual health checks, use the new operator runner
 	// in order to get a true read on the readiness of the operator
-	operatorServer := &operator.MetricsServer{
-		Port:                cfg.Port,
-		mux:                 http.NewServeMux(),
-		HealthCheckInterval: cfg.HealthCheckInterval,
-	}
+	metricsServer := operator.NewMetricsServer(cfg.Metrics.MetricsServerConfig)
 
 	// Telemetry (metrics, traces)
 	var me *metrics.Exporter
@@ -140,7 +137,9 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 			return nil, err
 		}
 
-		operatorServer.RegisterMetricsHandler(me.HTTPHandler())
+		metricsServer.RegisterHealthChecks(controller.HealthChecks()...)
+
+		metricsServer.RegisterMetricsHandler(me.HTTPHandler())
 	}
 	if cfg.Tracing.Enabled {
 		err := SetTraceProvider(cfg.Tracing.OpenTelemetryConfig)
@@ -159,7 +158,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		metricsExporter:     me,
 		cacheResyncInterval: cfg.InformerCacheResyncInterval,
 		patcher:             patcher,
-		operatorServer:      operatorServer,
+		metricsServer:       metricsServer,
 	}
 
 	op.controller.ErrorHandler = op.ErrorHandler
@@ -182,7 +181,7 @@ type Operator struct {
 	clientGen           resource.ClientGenerator
 	controller          *operator.InformerController
 	admission           *k8s.WebhookServer
-	operatorServer      *operator.MetricsServer
+	metricsServer       *operator.MetricsServer
 	metricsExporter     *metrics.Exporter
 	cacheResyncInterval time.Duration
 	patcher             *k8s.DynamicPatcher
@@ -215,7 +214,10 @@ func (o *Operator) Run(ctx context.Context) error {
 		op.AddController(&k8sRunnable{runner: o.admission})
 	}
 
-	op.AddController(o.operatorServer)
+	// todo: is this the correct place to add these? op is only a local variable?
+	// in the Run method
+	o.metricsServer.RegisterHealthChecks(op.HealthChecks()...)
+	op.AddController(o.metricsServer)
 	return op.Run(ctx)
 }
 
