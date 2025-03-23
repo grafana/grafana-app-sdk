@@ -238,13 +238,8 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Health
-
-	// Add Metrics+Health cumulative server runnable, healthcheck based on "running" should
-	// be passed down to the serverRunner
-
 	s.metricsServer.RegisterHealthChecks(s)
 	s.metricsServer.RegisterHealthChecks(runner.HealthChecks()...)
-
 	runner.AddRunnable(s.metricsServerRunner)
 
 	return runner.Run(ctx)

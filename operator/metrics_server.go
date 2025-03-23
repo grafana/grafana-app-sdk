@@ -137,7 +137,7 @@ func (s *MetricsServer) runChecks(ctx context.Context) error {
 	var allErrors error
 	for _, check := range s.checks {
 		if err := check.HealthCheck(ctx); err != nil {
-			allErrors = errors.Join(allErrors, err)
+			allErrors = errors.Join(allErrors, fmt.Errorf("%s: %w", check.HealthCheckName(), err))
 		}
 	}
 	if allErrors != nil {

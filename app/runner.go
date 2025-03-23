@@ -115,7 +115,7 @@ func (m *MultiRunner) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
-// HealthChecks implements HealthChecker
+// HealthChecks implements health.Checker
 func (m *MultiRunner) HealthChecks() []health.Check {
 	checks := make([]health.Check, 0)
 
@@ -379,7 +379,7 @@ func (d *DynamicMultiRunner) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
-// HealthChecks implements HealthChecker
+// HealthChecks implements health.Checker
 func (m *DynamicMultiRunner) HealthChecks() []health.Check {
 	checks := make([]health.Check, 0)
 
