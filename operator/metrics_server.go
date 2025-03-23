@@ -16,22 +16,17 @@ import (
 
 // MetricsServer exports metrics as well as health checks under the same mux
 type MetricsServer struct {
-	checks []health.Check
-	mux    *http.ServeMux
-	Port   int
+	mux  *http.ServeMux
+	Port int
 
-	// HealthCheckInterval is the duration at which the server will periodically run the registered health checks. The
-	// cached result is what's returned by the ready endpoint.
-	HealthCheckInterval time.Duration
-
-	// access to healthCheckErr is guarded with healthCheckErrMu
-	healthCheckErr   error
-	healthCheckErrMu sync.RWMutex
+	observer *health.Observer
 }
 
 type MetricsServerConfig struct {
 	// Server port for metrics and health endpoints
-	Port                int
+	Port int
+
+	// HealthCheckInterval is the duration at which the server will periodically run the registered health checks
 	HealthCheckInterval time.Duration
 }
 
@@ -41,17 +36,14 @@ func NewMetricsServer(config MetricsServerConfig) *MetricsServer {
 	}
 
 	return &MetricsServer{
-		Port:                config.Port,
-		mux:                 http.NewServeMux(),
-		HealthCheckInterval: config.HealthCheckInterval,
+		Port:     config.Port,
+		mux:      http.NewServeMux(),
+		observer: health.NewObserver(config.HealthCheckInterval),
 	}
 }
 
 func (s *MetricsServer) RegisterHealthChecks(checks ...health.Check) {
-	if s.checks == nil {
-		s.checks = make([]health.Check, 0)
-	}
-	s.checks = append(s.checks, checks...)
+	s.observer.AddChecks(checks...)
 }
 
 func (s *MetricsServer) RegisterMetricsHandler(handler http.Handler) {
@@ -64,7 +56,7 @@ func (s *MetricsServer) registerHealthHandlers() error {
 		return
 	}))
 	s.mux.Handle("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := s.cachedChecks(); err != nil {
+		if err := s.observer.Status(); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("readiness check failed: " + err.Error()))
 			return
@@ -99,49 +91,21 @@ func (s *MetricsServer) Run(ctx context.Context) error {
 		wg.Done()
 	}()
 
-	// hydrate the result on startup, so that we have something set before the periodic checks start happening
-	if err := s.runChecks(ctx); err != nil {
+	// hydrate the result on startup
+	if err := s.observer.CollectInitialChecks(ctx); err != nil {
 		return err
 	}
+
 	wg.Add(1)
 	go func() {
-		for {
-			select {
-			case <-time.After(s.HealthCheckInterval):
-				_ = s.runChecks(ctx)
-			case <-ctx.Done():
-				_ = server.Shutdown(ctx)
-				wg.Done()
-			}
-
+		if err := s.observer.Run(ctx); err != nil {
+			serverErr = err
 		}
+		wg.Done()
+		// is this correct to call here?
+		_ = server.Shutdown(ctx)
 	}()
 
 	wg.Wait()
 	return serverErr
-}
-
-func (s *MetricsServer) cachedChecks() error {
-	s.healthCheckErrMu.RLock()
-	defer s.healthCheckErrMu.RUnlock()
-
-	return s.healthCheckErr
-}
-
-func (s *MetricsServer) runChecks(ctx context.Context) error {
-	s.healthCheckErrMu.Lock()
-	defer s.healthCheckErrMu.Unlock()
-
-	fmt.Println("Running health check...")
-
-	var allErrors error
-	for _, check := range s.checks {
-		if err := check.HealthCheck(ctx); err != nil {
-			allErrors = errors.Join(allErrors, fmt.Errorf("%s: %w", check.HealthCheckName(), err))
-		}
-	}
-	if allErrors != nil {
-		s.healthCheckErr = allErrors
-	}
-	return nil
 }
