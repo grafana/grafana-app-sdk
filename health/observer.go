@@ -56,11 +56,11 @@ func (c *Observer) AddChecks(checks ...Check) {
 	c.checkLock.Unlock()
 }
 
-func (c *Observer) Status() CheckStatus {
+func (c *Observer) Status() *CheckStatus {
 	c.runLock.RLock()
 	defer c.runLock.RUnlock()
 
-	return *c.runStatus
+	return c.runStatus
 }
 
 func (c *Observer) Run(ctx context.Context) error {
