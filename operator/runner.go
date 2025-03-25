@@ -276,11 +276,10 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
 		}
 		m := app.Manifest{}
-		if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
-			data = *m.ManifestData
-		} else {
+		if err = json.Unmarshal(contents, &m); err != nil || m.ManifestData == nil {
 			return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
 		}
+		data = *m.ManifestData
 	case app.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server
 		return nil, fmt.Errorf("apiserver location not supported yet")

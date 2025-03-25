@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -26,15 +27,12 @@ type CheckStatus struct {
 }
 
 func (c CheckStatus) String() string {
-	var status string
-	for i, result := range c.Results {
-		if i == 0 {
-			status = result.String()
-		} else {
-			status = fmt.Sprintf(status, fmt.Sprintf("%s\n%s", status, result.String()))
-		}
+	b := strings.Builder{}
+
+	for _, result := range c.Results {
+		b.WriteString(fmt.Sprintf("%s\n", result.String()))
 	}
-	return status
+	return b.String()
 }
 
 type Observer struct {
@@ -65,7 +63,7 @@ func (c *Observer) Status() CheckStatus {
 	return *c.runStatus
 }
 
-func (c *Observer) Run(ctx context.Context) {
+func (c *Observer) Run(ctx context.Context) error {
 	t := time.NewTicker(c.runInterval)
 	defer t.Stop()
 
@@ -78,7 +76,7 @@ func (c *Observer) Run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return ctx.Err()
 		case <-t.C:
 			lastStatus := c.collectChecks(ctx)
 

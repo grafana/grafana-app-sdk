@@ -80,28 +80,31 @@ func (s *MetricsServer) Run(ctx context.Context) error {
 	defer cancelObserver()
 
 	wg := &sync.WaitGroup{}
+	// channel size is 2 since there is a possibility of 2 error writes if we can't read from it for some reason
+	processErr := make(chan error, 2)
 
 	wg.Add(1)
 	go func() {
 		// is it worth it to return the last check result when this server is shutting down? I don't think so,
 		// the error here should pertain to the metrics server having encountered an error in its own Run, related to its own aggregation logic
 		// currently, the aggregation logic is pretty barebones and doesn't create its own errors
-		s.observer.Run(observerCtx)
+		if err := s.observer.Run(observerCtx); err != nil {
+			processErr <- err
+		}
 		_ = server.Shutdown(ctx)
 		wg.Done()
 	}()
 
-	serverErr := make(chan error, 1)
-
 	wg.Add(1)
 	go func() {
-		serverErr <- server.ListenAndServe()
+		processErr <- server.ListenAndServe()
+		cancelObserver()
 		wg.Done()
 	}()
 
 	var returnedErr error
 	select {
-	case err := <-serverErr:
+	case err := <-processErr:
 		returnedErr = err
 	case <-ctx.Done():
 		_ = server.Shutdown(ctx)
