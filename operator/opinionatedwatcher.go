@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
@@ -38,13 +39,15 @@ type PatchClient interface {
 //
 // OpinionatedWatcher contains unexported fields, and must be created with NewOpinionatedWatcher
 type OpinionatedWatcher struct {
-	AddFunc    func(ctx context.Context, object resource.Object) error
-	UpdateFunc func(ctx context.Context, old resource.Object, newObj resource.Object) error
-	DeleteFunc func(ctx context.Context, object resource.Object) error
-	SyncFunc   func(ctx context.Context, object resource.Object) error
-	finalizer  string
-	schema     resource.Schema
-	client     PatchClient
+	AddFunc             func(ctx context.Context, object resource.Object) error
+	UpdateFunc          func(ctx context.Context, src resource.Object, tgt resource.Object) error
+	DeleteFunc          func(ctx context.Context, object resource.Object) error
+	SyncFunc            func(ctx context.Context, object resource.Object) error
+	finalizer           string
+	addPendingFinalizer string
+	schema              resource.Schema
+	client              PatchClient
+	collectors          []prometheus.Collector
 }
 
 // FinalizerSupplier represents a function that creates string finalizer from provider schema.
@@ -55,27 +58,52 @@ func DefaultFinalizerSupplier(sch resource.Schema) string {
 	return fmt.Sprintf("operator.%s.%s.%s", sch.Version(), sch.Kind(), sch.Group())
 }
 
-// NewOpinionatedWatcher sets up a new OpinionatedWatcher and returns a pointer to it.
-func NewOpinionatedWatcher(sch resource.Schema, client PatchClient) (*OpinionatedWatcher, error) {
-	return NewOpinionatedWatcherWithFinalizer(sch, client, DefaultFinalizerSupplier)
+// InProgressFinalizerSupplier creates the finalizer used to indicate an incomplete action
+// and prevent deletes until completion.
+func InProgressFinalizerSupplier(sch resource.Schema) string {
+	return fmt.Sprintf("wip.%s.%s.%s", sch.Version(), sch.Kind(), sch.Group())
 }
 
-// NewOpinionatedWatcherWithFinalizer sets up a new OpinionatedWatcher with finalizer from provided supplier and returns a pointer to it.
-func NewOpinionatedWatcherWithFinalizer(sch resource.Schema, client PatchClient, supplier FinalizerSupplier) (*OpinionatedWatcher, error) {
+// OpinionatedWatcherConfig contains configuration options for creating a new OpinionatedWatcher
+type OpinionatedWatcherConfig struct {
+	// Finalizer supplies the finalizer used for the OpinionatedWatcher.
+	// If nil, DefaultFinalizerSupplier will be used.
+	Finalizer FinalizerSupplier
+	// InProgressFinalizer supplies the finalizer used to indicate an incomplete action and prevent deletes until completion.
+	// If nil, InProgressFinalizerSupplier will be used.
+	InProgressFinalizer FinalizerSupplier
+}
+
+// NewOpinionatedWatcher sets up a new OpinionatedWatcher and returns a pointer to it.
+func NewOpinionatedWatcher(sch resource.Schema, client PatchClient, config OpinionatedWatcherConfig) (*OpinionatedWatcher, error) {
 	if sch == nil {
 		return nil, errors.New("schema cannot be nil")
 	}
 	if client == nil {
 		return nil, errors.New("client cannot be nil")
 	}
+	supplier := config.Finalizer
+	if supplier == nil {
+		supplier = DefaultFinalizerSupplier
+	}
 	finalizer := supplier(sch)
 	if len(finalizer) > 63 {
 		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
 	}
+	pendingAddSupplier := config.InProgressFinalizer
+	if pendingAddSupplier == nil {
+		pendingAddSupplier = InProgressFinalizerSupplier
+	}
+	pendingAddFinalizer := pendingAddSupplier(sch)
+	if len(pendingAddFinalizer) > 63 {
+		return nil, fmt.Errorf("in-progress finalizer length cannot exceed 63 chars: %s", finalizer)
+	}
 	return &OpinionatedWatcher{
-		client:    client,
-		schema:    sch,
-		finalizer: finalizer,
+		client:              client,
+		schema:              sch,
+		finalizer:           finalizer,
+		addPendingFinalizer: pendingAddFinalizer,
+		collectors:          make([]prometheus.Collector, 0),
 	}, nil
 }
 
@@ -121,7 +149,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		span.AddEvent("object is deleted and pending finalizer removal")
 
 		// Check if we're the finalizer it's waiting for. If we're not, we can drop this whole event.
-		if !slices.Contains(finalizers, o.finalizer) {
+		if !slices.Contains(finalizers, o.finalizer) && !slices.Contains(finalizers, o.addPendingFinalizer) {
 			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", object.GetDeletionTimestamp())
 			return nil
 		}
@@ -135,11 +163,21 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 		}
 
 		// The remove finalizer code is shared by both our add and update handlers, as this logic can be hit from either
-		logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
-		err = o.removeFinalizer(ctx, object, finalizers)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
-			return err
+		if slices.Contains(finalizers, o.finalizer) {
+			logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
+			err = o.removeFinalizer(ctx, object, o.finalizer)
+			if err != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				return err
+			}
+		}
+		if slices.Contains(finalizers, o.addPendingFinalizer) {
+			logger.Debug("Delete successful, removing finalizer", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
+			err = o.removeFinalizer(ctx, object, o.addPendingFinalizer)
+			if err != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				return err
+			}
 		}
 		return nil
 	}
@@ -155,20 +193,36 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher sync error: %s", err.Error()))
 			return err
 		}
+		// If we somehow still have the add-pending finalizer, remove it
+		if slices.Contains(finalizers, o.addPendingFinalizer) {
+			logger.Debug("Add-pending finalizer still on object, removing", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
+			err = o.removeFinalizer(ctx, object, o.addPendingFinalizer)
+			if err != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				return err
+			}
+		}
 		return nil
 	}
 
 	// If this isn't a delete or an add we've seen before, then it's a new resource we need to handle appropriately.
-	// Call the add handler, and if it returns successfully (no error), add the finalizer
-	err := o.addFunc(ctx, object)
+	// Call the add handler, and if it returns successfully (no error), add the finalizer.
+	// Before we call the downstream add, add an "add pending" finalizer to prevent us missing a delete during the add process (and/or its retries)
+	logger.Debug("Adding in-progress finalizer before add call", "finalizer", o.addPendingFinalizer, "currentFinalizers", finalizers)
+	err := o.addFinalizer(ctx, object, o.addPendingFinalizer)
+	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
+		return fmt.Errorf("error adding finalizer: %w", err)
+	}
+	err = o.addFunc(ctx, object)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
 		return err
 	}
 
 	// Add the finalizer
-	logger.Debug("Successful Add call, adding finalizer", "finalizer", o.finalizer, "currentFinalizers", finalizers)
-	err = o.addFinalizer(ctx, object, finalizers)
+	logger.Debug("Successful Add call, adding finalizer and removing in-progress one", "finalizer", o.finalizer, "currentFinalizers", finalizers)
+	err = o.replaceFinalizer(ctx, object, o.addPendingFinalizer, o.finalizer)
 	if err != nil {
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
@@ -182,40 +236,40 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
 //
 //nolint:revive
-func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, new resource.Object) error {
+func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-update")
 	defer span.End()
 	// TODO: If old is nil, it _might_ be ok?
-	if old == nil {
-		return fmt.Errorf("old cannot be nil")
+	if src == nil {
+		return fmt.Errorf("src cannot be nil")
 	}
-	if new == nil {
-		return fmt.Errorf("new cannot be nil")
+	if tgt == nil {
+		return fmt.Errorf("tgt cannot be nil")
 	}
 
-	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", new.GroupVersionKind().Kind, "namespace", new.GetNamespace(), "name", new.GetName())
+	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
 	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if new.GetGeneration() > 0 && old.GetGeneration() == new.GetGeneration() {
+	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
 		return nil
 	}
 
 	// TODO: finalizers part of object metadata?
-	oldFinalizers := o.getFinalizers(old)
-	newFinalizers := o.getFinalizers(new)
-	if !slices.Contains(newFinalizers, o.finalizer) && new.GetDeletionTimestamp() == nil {
+	oldFinalizers := o.getFinalizers(src)
+	newFinalizers := o.getFinalizers(tgt)
+	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
 		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
 		// Either way, we need to try calling AddFunc
 		logger.Debug("Missing finalizer, calling Add")
-		err := o.addFunc(ctx, new)
+		err := o.addFunc(ctx, tgt)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
 			return err
 		}
 		// Add the finalizer (which also updates `new` inline)
 		logger.Debug("Successful call to Add, add the finalizer to the object", "finalizer", o.finalizer)
-		err = o.addFinalizer(ctx, new, newFinalizers)
+		err = o.replaceFinalizer(ctx, tgt, o.addPendingFinalizer, o.finalizer)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
 			return fmt.Errorf("error adding finalizer: %w", err)
@@ -224,27 +278,37 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 
 	// Check if the deletion timestamp is non-nil.
 	// This denotes that the resource was deletes, but has one or more finalizers blocking it from actually deleting.
-	if new.GetDeletionTimestamp() != nil {
+	if tgt.GetDeletionTimestamp() != nil {
 		// If our finalizer is in the list, treat this as a delete.
 		// Otherwise, drop the event and don't handle it as an update.
-		if !slices.Contains(newFinalizers, o.finalizer) {
-			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", new.GetDeletionTimestamp())
+		if !slices.Contains(newFinalizers, o.finalizer) && !slices.Contains(newFinalizers, o.addPendingFinalizer) {
+			logger.Debug("Update has a DeletionTimestamp, but missing our finalizer, ignoring", "deletionTimestamp", tgt.GetDeletionTimestamp())
 			return nil
 		}
 
 		// Call the delete handler, then remove the finalizer on success
-		logger.Debug("Update has a DeletionTimestamp, calling Delete", "deletionTimestamp", new.GetDeletionTimestamp())
-		err := o.deleteFunc(ctx, new)
+		logger.Debug("Update has a DeletionTimestamp, calling Delete", "deletionTimestamp", tgt.GetDeletionTimestamp())
+		err := o.deleteFunc(ctx, tgt)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher delete error: %s", err.Error()))
 			return err
 		}
 
-		logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", newFinalizers)
-		err = o.removeFinalizer(ctx, new, newFinalizers)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("watcher remove finalizer error: %s", err.Error()))
-			return err
+		if slices.Contains(newFinalizers, o.finalizer) {
+			logger.Debug("Delete successful, removing finalizer", "finalizer", o.finalizer, "currentFinalizers", newFinalizers)
+			err = o.removeFinalizer(ctx, tgt, o.finalizer)
+			if err != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				return err
+			}
+		}
+		if slices.Contains(newFinalizers, o.addPendingFinalizer) {
+			logger.Debug("Delete successful, removing finalizer", "finalizer", o.addPendingFinalizer, "currentFinalizers", newFinalizers)
+			err = o.removeFinalizer(ctx, tgt, o.addPendingFinalizer)
+			if err != nil {
+				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				return err
+			}
 		}
 		return nil
 	}
@@ -255,7 +319,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, old resource.Object, ne
 		return nil
 	}
 
-	err := o.updateFunc(ctx, old, new)
+	err := o.updateFunc(ctx, src, tgt)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher update error: %s", err.Error()))
 		return err
@@ -306,8 +370,9 @@ func (o *OpinionatedWatcher) syncFunc(ctx context.Context, object resource.Objec
 	return nil
 }
 
-func (o *OpinionatedWatcher) addFinalizer(ctx context.Context, object resource.Object, finalizers []string) error {
-	if slices.Contains(finalizers, o.finalizer) {
+func (o *OpinionatedWatcher) addFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
+	finalizers := o.getFinalizers(object)
+	if slices.Contains(finalizers, finalizer) {
 		// Finalizer already added
 		return nil
 	}
@@ -316,13 +381,37 @@ func (o *OpinionatedWatcher) addFinalizer(ctx context.Context, object resource.O
 		Operations: []resource.PatchOperation{{
 			Operation: resource.PatchOpAdd,
 			Path:      "/metadata/finalizers",
-			Value:     []string{o.finalizer},
+			Value:     []string{finalizer},
 		}},
 	}, resource.PatchOptions{}, object)
 }
 
-func (o *OpinionatedWatcher) removeFinalizer(ctx context.Context, object resource.Object, finalizers []string) error {
-	if !slices.Contains(finalizers, o.finalizer) {
+func (o *OpinionatedWatcher) replaceFinalizer(ctx context.Context, object resource.Object, toReplace, replaceWith string) error {
+	finalizers := o.getFinalizers(object)
+	if slices.Contains(finalizers, replaceWith) {
+		// Finalizer already added, check if toReplace is already removed (and remove it if it's still present)
+		if slices.Contains(finalizers, toReplace) {
+			return o.removeFinalizer(ctx, object, toReplace)
+		}
+		return nil
+	}
+	if !slices.Contains(finalizers, toReplace) {
+		// toReplace already removed, just add replaceWith
+		return o.addFinalizer(ctx, object, toReplace)
+	}
+
+	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
+		Operations: []resource.PatchOperation{{
+			Operation: resource.PatchOpReplace,
+			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, toReplace)),
+			Value:     replaceWith,
+		}},
+	}, resource.PatchOptions{}, object)
+}
+
+func (o *OpinionatedWatcher) removeFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
+	finalizers := object.GetFinalizers()
+	if !slices.Contains(finalizers, finalizer) {
 		// Finalizer already removed
 		return nil
 	}
@@ -330,7 +419,7 @@ func (o *OpinionatedWatcher) removeFinalizer(ctx context.Context, object resourc
 	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
 		Operations: []resource.PatchOperation{{
 			Operation: resource.PatchOpRemove,
-			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, o.finalizer)),
+			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, finalizer)),
 		}},
 	}, resource.PatchOptions{}, object)
 }

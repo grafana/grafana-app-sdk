@@ -72,7 +72,7 @@ func main() {
 	}
 
 	// Set up the watcher
-	watcher, err := operator.NewOpinionatedWatcher(schema, client)
+	watcher, err := operator.NewOpinionatedWatcher(schema, client, operator.OpinionatedWatcherConfig{})
 	if err != nil {
 		panic(fmt.Errorf("unable to create opinionated watcher: %w", err))
 	}
