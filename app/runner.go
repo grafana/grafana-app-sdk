@@ -380,10 +380,10 @@ func (d *DynamicMultiRunner) PrometheusCollectors() []prometheus.Collector {
 }
 
 // HealthChecks implements health.Checker
-func (m *DynamicMultiRunner) HealthChecks() []health.Check {
+func (d *DynamicMultiRunner) HealthChecks() []health.Check {
 	checks := make([]health.Check, 0)
 
-	for _, tpl := range m.runners {
+	for _, tpl := range d.runners {
 		if cast, ok := tpl.runner.(health.Checker); ok {
 			checks = append(checks, cast.HealthChecks()...)
 		}

@@ -100,7 +100,7 @@ func (c *Observer) collectChecks(ctx context.Context) *CheckStatus {
 
 	for _, check := range c.checks {
 		err := check.HealthCheck(ctx)
-		runStatus.Results = append(c.runStatus.Results, CheckResult{
+		runStatus.Results = append(runStatus.Results, CheckResult{
 			Name:  check.HealthCheckName(),
 			Error: err,
 		})

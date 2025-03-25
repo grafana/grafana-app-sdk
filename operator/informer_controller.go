@@ -7,10 +7,10 @@ import (
 	"math"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"

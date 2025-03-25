@@ -9,12 +9,12 @@ import (
 	"os"
 	"sync"
 
-	"github.com/grafana/grafana-app-sdk/health"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -245,14 +245,14 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	return runner.Run(ctx)
 }
 
-func (s *Runner) HealthCheck(ctx context.Context) error {
+func (s *Runner) HealthCheck(_ context.Context) error {
 	if s.running {
 		return nil
 	}
 	return errors.New("app has not started yet")
 }
 
-func (s *Runner) HealthCheckName() string {
+func (*Runner) HealthCheckName() string {
 	return "operator-runner"
 }
 
