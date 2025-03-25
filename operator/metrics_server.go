@@ -5,7 +5,6 @@ package operator
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/http"
 	"sync"
@@ -56,19 +55,19 @@ func (s *MetricsServer) registerHealthHandlers() error {
 		return
 	}))
 	s.mux.Handle("/readyz", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := s.observer.Status(); err != nil {
+		status := s.observer.Status()
+		if !status.Successful {
 			w.WriteHeader(http.StatusInternalServerError)
-			_, _ = w.Write([]byte("readiness check failed: " + err.Error()))
+			_, _ = w.Write([]byte("readiness check failed: " + status.String()))
 			return
 		}
-		_, _ = w.Write([]byte("ok"))
+		_, _ = w.Write([]byte(status.String()))
 		return
 	}))
 	return nil
 }
 
 func (s *MetricsServer) Run(ctx context.Context) error {
-	wg := &sync.WaitGroup{}
 	// Run creates an HTTP server which exposes
 	// 1. if enabled, a /metrics endpoint on the configured port
 	// 2. health endpoints for liveness and readiness
@@ -82,30 +81,38 @@ func (s *MetricsServer) Run(ctx context.Context) error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	var serverErr error
+	observerCtx, cancelObserver := context.WithCancel(ctx)
+	defer cancelObserver()
+
+	wg := &sync.WaitGroup{}
+
 	wg.Add(1)
 	go func() {
-		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
-			serverErr = err
-		}
+		// is it worth it to return the last check result when this server is shutting down? I don't think so,
+		// the error here should pertain to the metrics server having encountered an error in its own Run, related to its own aggregation logic
+		// currently, the aggregation logic is pretty barebones and doesn't create its own errors
+		s.observer.Run(observerCtx)
+		_ = server.Shutdown(ctx)
 		wg.Done()
 	}()
 
-	// hydrate the result on startup
-	if err := s.observer.CollectInitialChecks(ctx); err != nil {
-		return err
+	serverErr := make(chan error, 1)
+
+	wg.Add(1)
+	go func() {
+		serverErr <- server.ListenAndServe()
+		wg.Done()
+	}()
+
+	var returnedErr error
+	select {
+	case err := <-serverErr:
+		returnedErr = err
+	case <-ctx.Done():
+		_ = server.Shutdown(ctx)
 	}
 
-	wg.Add(1)
-	go func() {
-		if err := s.observer.Run(ctx); err != nil {
-			serverErr = err
-		}
-		wg.Done()
-		// is this correct to call here?
-		_ = server.Shutdown(ctx)
-	}()
-
 	wg.Wait()
-	return serverErr
+
+	return returnedErr
 }
