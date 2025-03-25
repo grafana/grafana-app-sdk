@@ -156,7 +156,7 @@ func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathP
 		return j.generateFilesAtDepth(version.Schema, version, 0, pathPrefix, prefix)
 	}
 
-	tsBytes, err := generateTypescriptBytes(version.Schema, exportField(sanitizeLabelString(name)), cog.TypescriptConfig{
+	tsBytes, err := generateTypescriptBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.TypescriptConfig{
 		ImportsMap:        version.Codegen.TS.Config.ImportsMap,
 		EnumsAsUnionTypes: version.Codegen.TS.Config.EnumsAsUnionTypes,
 	})
@@ -176,7 +176,7 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
-		tsBytes, err := generateTypescriptBytes(v, exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
+		tsBytes, err := generateTypescriptBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
 			ImportsMap:        kv.Codegen.TS.Config.ImportsMap,
 			EnumsAsUnionTypes: kv.Codegen.TS.Config.EnumsAsUnionTypes,
 		})
@@ -206,9 +206,9 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 	return files, nil
 }
 
-func generateTypescriptBytes(v cue.Value, name string, tsConfig cog.TypescriptConfig) ([]byte, error) {
+func generateTypescriptBytes(v cue.Value, packageName string, name string, tsConfig cog.TypescriptConfig) ([]byte, error) {
 	files, err := cog.TypesFromSchema().
-		CUEValue("", v, cog.ForceEnvelope(name)).
+		CUEValue(packageName, v, cog.ForceEnvelope(name)).
 		Typescript(tsConfig).
 		Run(context.Background())
 	if err != nil {
