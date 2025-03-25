@@ -5,5 +5,4 @@
 # https://github.community/t/order-of-owners-in-codeowners-file/143073
 # https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners#codeowners-syntax
 
-* @grafana/cloud-app-platform-squad
-
+* @grafana/grafana-app-platform-squad
