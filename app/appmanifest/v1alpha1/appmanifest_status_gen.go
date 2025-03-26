@@ -48,7 +48,9 @@ type AppManifestStatus struct {
 
 // NewAppManifestStatus creates a new AppManifestStatus object.
 func NewAppManifestStatus() *AppManifestStatus {
-	return &AppManifestStatus{}
+	return &AppManifestStatus{
+		Resources: map[string]AppManifeststatusApplyStatus{},
+	}
 }
 
 // +k8s:openapi-gen=true

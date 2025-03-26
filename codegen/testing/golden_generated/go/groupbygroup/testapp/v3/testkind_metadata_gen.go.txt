@@ -1,6 +1,6 @@
 // Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
-package v1alpha1
+package v3
 
 import (
 	time "time"
@@ -9,7 +9,7 @@ import (
 // metadata contains embedded CommonMetadata and can be extended with custom string fields
 // TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
 // without external reference as using the CommonMetadata reference breaks thema codegen.
-type AppManifestMetadata struct {
+type TestKindMetadata struct {
 	UpdateTimestamp   time.Time         `json:"updateTimestamp"`
 	CreatedBy         string            `json:"createdBy"`
 	Uid               string            `json:"uid"`
@@ -22,9 +22,9 @@ type AppManifestMetadata struct {
 	Labels            map[string]string `json:"labels"`
 }
 
-// NewAppManifestMetadata creates a new AppManifestMetadata object.
-func NewAppManifestMetadata() *AppManifestMetadata {
-	return &AppManifestMetadata{
+// NewTestKindMetadata creates a new TestKindMetadata object.
+func NewTestKindMetadata() *TestKindMetadata {
+	return &TestKindMetadata{
 		Finalizers: []string{},
 		Labels:     map[string]string{},
 	}

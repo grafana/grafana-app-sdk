@@ -362,7 +362,7 @@ type crdYAML struct {
 
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
-//nolint:funlen,errcheck,revive,gocyclo
+//nolint:funlen,errcheck,revive,gocyclo,gocognit
 func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, yamlGenProperties, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{

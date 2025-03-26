@@ -12,7 +12,9 @@ type AppManifestManifestKind struct {
 
 // NewAppManifestManifestKind creates a new AppManifestManifestKind object.
 func NewAppManifestManifestKind() *AppManifestManifestKind {
-	return &AppManifestManifestKind{}
+	return &AppManifestManifestKind{
+		Versions: []AppManifestManifestKindVersion{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -47,7 +49,9 @@ type AppManifestValidationCapability struct {
 
 // NewAppManifestValidationCapability creates a new AppManifestValidationCapability object.
 func NewAppManifestValidationCapability() *AppManifestValidationCapability {
-	return &AppManifestValidationCapability{}
+	return &AppManifestValidationCapability{
+		Operations: []AppManifestAdmissionOperation{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -68,7 +72,9 @@ type AppManifestMutationCapability struct {
 
 // NewAppManifestMutationCapability creates a new AppManifestMutationCapability object.
 func NewAppManifestMutationCapability() *AppManifestMutationCapability {
-	return &AppManifestMutationCapability{}
+	return &AppManifestMutationCapability{
+		Operations: []AppManifestAdmissionOperation{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -110,7 +116,9 @@ type AppManifestKindPermission struct {
 
 // NewAppManifestKindPermission creates a new AppManifestKindPermission object.
 func NewAppManifestKindPermission() *AppManifestKindPermission {
-	return &AppManifestKindPermission{}
+	return &AppManifestKindPermission{
+		Actions: []string{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -166,6 +174,7 @@ type AppManifestSpec struct {
 // NewAppManifestSpec creates a new AppManifestSpec object.
 func NewAppManifestSpec() *AppManifestSpec {
 	return &AppManifestSpec{
+		Kinds:       []AppManifestManifestKind{},
 		DryRunKinds: (func(input bool) *bool { return &input })(false),
 	}
 }
@@ -178,5 +187,7 @@ type AppManifestV1alpha1SpecExtraPermissions struct {
 
 // NewAppManifestV1alpha1SpecExtraPermissions creates a new AppManifestV1alpha1SpecExtraPermissions object.
 func NewAppManifestV1alpha1SpecExtraPermissions() *AppManifestV1alpha1SpecExtraPermissions {
-	return &AppManifestV1alpha1SpecExtraPermissions{}
+	return &AppManifestV1alpha1SpecExtraPermissions{
+		AccessKinds: []AppManifestKindPermission{},
+	}
 }

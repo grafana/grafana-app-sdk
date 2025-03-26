@@ -49,5 +49,51 @@ testKind: {
                 }
             ]
 		}
+		"v3": {
+			schema: {
+				spec: {
+					stringField: string
+					intField: int64
+					timeField: string & time.Time
+					boolField: bool
+				}
+			}
+			mutation: operations: ["create","update"]
+			validation: operations: ["create","update"]
+			customRoutes: {
+				"/reconcile": {
+					POST: {
+						request: {
+							body: {
+								force: bool | *false 
+								reason?: string
+							}
+						}
+						response: {
+							status: "success" | "failure"
+							message: string
+						}
+					}
+				}
+				"/search": {
+					GET: {
+						request: {
+							query: {
+								q: string
+								limit?: int | *10
+								offset?: int | *0
+							}
+						}
+						response: {
+							items: [...{
+								name: string
+								score: float
+							}]
+							total: int
+						}
+					}
+				}
+			}
+		}
 	}
 }
