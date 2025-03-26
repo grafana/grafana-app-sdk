@@ -1,6 +1,9 @@
 package codegen
 
-import "cuelang.org/go/cue"
+import (
+	"cuelang.org/go/cue"
+	"k8s.io/kube-openapi/pkg/spec3"
+)
 
 // Kind is a common interface declaration for code generation.
 // Any type parser should be able to parse a kind into this definition to supply
@@ -93,13 +96,14 @@ type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema                   cue.Value                 `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen                  KindCodegenProperties     `json:"codegen"`
-	Served                   bool                      `json:"served"`
-	SelectableFields         []string                  `json:"selectableFields"`
-	Validation               KindAdmissionCapability   `json:"validation"`
-	Mutation                 KindAdmissionCapability   `json:"mutation"`
-	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
+	Schema                   cue.Value                  `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen                  KindCodegenProperties      `json:"codegen"`
+	Served                   bool                       `json:"served"`
+	SelectableFields         []string                   `json:"selectableFields"`
+	Validation               KindAdmissionCapability    `json:"validation"`
+	Mutation                 KindAdmissionCapability    `json:"mutation"`
+	AdditionalPrinterColumns []AdditionalPrinterColumn  `json:"additionalPrinterColumns"`
+	CustomRoutes             map[string]spec3.PathProps `json:"customRoutes"`
 }
 
 // AnyKind is a simple implementation of Kind

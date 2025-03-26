@@ -6,6 +6,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3"
 	"gopkg.in/yaml.v3"
+	"k8s.io/kube-openapi/pkg/spec3"
 )
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
@@ -101,6 +102,8 @@ type ManifestKindVersion struct {
 	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
 	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
+	// CustomRoutes is a map of of path patterns to custom routes for this version.
+	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind

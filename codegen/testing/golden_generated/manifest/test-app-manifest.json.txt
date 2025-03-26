@@ -165,6 +165,272 @@
                                 "type": "object"
                             }
                         }
+                    },
+                    {
+                        "name": "v3",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            },
+                            "mutation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "boolField": {
+                                        "type": "boolean"
+                                    },
+                                    "intField": {
+                                        "format": "int64",
+                                        "type": "integer"
+                                    },
+                                    "stringField": {
+                                        "type": "string"
+                                    },
+                                    "timeField": {
+                                        "format": "date-time",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "stringField",
+                                    "intField",
+                                    "timeField",
+                                    "boolField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "customRoutes": {
+                            "/reconcile": {
+                                "summary": "Resource reconciliation",
+                                "description": "Manually trigger resource reconciliation",
+                                "post": {
+                                    "tags": [
+                                        "operations",
+                                        "management"
+                                    ],
+                                    "summary": "Reconcile resource",
+                                    "description": "Trigger a manual reconciliation of the resource",
+                                    "externalDocs": {
+                                        "description": "Learn more about reconciliation",
+                                        "url": "https://example.com/docs/reconciliation"
+                                    },
+                                    "operationId": "reconcileResource",
+                                    "parameters": [
+                                        {
+                                            "name": "X-Tenant-ID",
+                                            "in": "header",
+                                            "description": "Tenant identifier for multi-tenant operations",
+                                            "schema": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    ],
+                                    "requestBody": {
+                                        "description": "Reconciliation options",
+                                        "content": {
+                                            "application/json": {
+                                                "schema": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "force"
+                                                    ],
+                                                    "properties": {
+                                                        "force": {
+                                                            "description": "Force reconciliation even if already in progress",
+                                                            "type": "boolean"
+                                                        },
+                                                        "skipValidation": {
+                                                            "description": "Skip pre-reconciliation validation checks",
+                                                            "type": "boolean"
+                                                        },
+                                                        "timeout": {
+                                                            "description": "Maximum time to wait for reconciliation (in seconds)",
+                                                            "type": "integer",
+                                                            "format": "int32"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "required": true
+                                    },
+                                    "responses": {
+                                        "200": {
+                                            "description": "Successful reconciliation",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "id",
+                                                            "status"
+                                                        ],
+                                                        "properties": {
+                                                            "completionTime": {
+                                                                "description": "When the reconciliation was completed (if finished)",
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            },
+                                                            "id": {
+                                                                "description": "Reconciliation operation ID",
+                                                                "type": "string"
+                                                            },
+                                                            "message": {
+                                                                "description": "Additional information about the reconciliation",
+                                                                "type": "string"
+                                                            },
+                                                            "startTime": {
+                                                                "description": "When the reconciliation was started",
+                                                                "type": "string",
+                                                                "format": "date-time"
+                                                            },
+                                                            "status": {
+                                                                "description": "Status of the reconciliation operation",
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "success",
+                                                                    "in-progress",
+                                                                    "failed"
+                                                                ]
+                                                            }
+                                                        }
+                                                    },
+                                                    "examples": {
+                                                        "default": {
+                                                            "value": {
+                                                                "completionTime": "2023-10-24T14:15:42Z",
+                                                                "id": "rec-1234-abcd",
+                                                                "message": "Resource successfully reconciled",
+                                                                "startTime": "2023-10-24T14:15:22Z",
+                                                                "status": "success"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "400": {
+                                            "description": "Invalid request",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "error"
+                                                        ],
+                                                        "properties": {
+                                                            "details": {
+                                                                "description": "Detailed error information",
+                                                                "type": "string"
+                                                            },
+                                                            "error": {
+                                                                "description": "Error message",
+                                                                "type": "string"
+                                                            }
+                                                        }
+                                                    },
+                                                    "examples": {
+                                                        "application/json": {
+                                                            "value": {
+                                                                "details": "Missing required field 'force'",
+                                                                "error": "Invalid reconciliation request"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "servers": [
+                                        {
+                                            "description": "Test API server",
+                                            "url": "https://api-test.example.com/v3"
+                                        },
+                                        {
+                                            "description": "Production API server",
+                                            "url": "https://api.example.com/v3"
+                                        }
+                                    ]
+                                },
+                                "parameters": [
+                                    {
+                                        "name": "dryRun",
+                                        "in": "query",
+                                        "description": "When true, only validate the request without performing reconciliation",
+                                        "schema": {
+                                            "type": "boolean"
+                                        }
+                                    },
+                                    {
+                                        "name": "timeout",
+                                        "in": "query",
+                                        "description": "Timeout in seconds for the reconciliation operation",
+                                        "schema": {
+                                            "type": "integer",
+                                            "format": "int32",
+                                            "default": 60,
+                                            "maximum": 300,
+                                            "minimum": 1
+                                        }
+                                    }
+                                ]
+                            }
+                        }
                     }
                 ],
                 "conversion": true

@@ -50,7 +50,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 				}},
 			}},
 		},
-		AppManifestStatus: AppManifestStatus{
+		Status: AppManifestStatus{
 			Resources: map[string]AppManifeststatusApplyStatus{
 				"crds": {
 					Status: AppManifestStatusApplyStatusStatusSuccess,

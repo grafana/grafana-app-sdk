@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/grafana/codejen"
+	"golang.org/x/tools/imports"
+	"k8s.io/kube-openapi/pkg/spec3"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -104,6 +106,14 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	if err != nil {
 		return nil, err
 	}
+
+	formatted, err = imports.Process("", formatted, &imports.Options{
+		Comments: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	files := make(codejen.Files, 0)
 	files = append(files, codejen.File{
 		Data:         formatted,
@@ -170,6 +180,12 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 				}
 				mver.Admission.Validation = &app.ValidationCapability{
 					Operations: operations,
+				}
+			}
+			if len(version.CustomRoutes) > 0 {
+				mver.CustomRoutes = make(map[string]spec3.PathProps)
+				for path, props := range version.CustomRoutes {
+					mver.CustomRoutes[path] = props
 				}
 			}
 			// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)

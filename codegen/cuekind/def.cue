@@ -156,6 +156,10 @@ Kind: S={
 			mutation:   #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			// customRoutes is a map of of path patterns to custom routes for this version.
+			customRoutes?: {
+				[string]: #PathProps
+			}
 		}
 	}
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
@@ -179,18 +183,18 @@ Kind: S={
 				// enumsAsUnionTypes generates enums as a union of values instead of using
 				// an actual `enum` declaration.
 				// If EnumsAsUnionTypes is false, an enum will be generated as:
-				// “`ts
+				// "`ts
 				// enum Direction {
 				//   Up = "up",
 				//   Down = "down",
 				//   Left = "left",
 				//   Right = "right",
 				// }
-				// “`
+				// "`
 				// If EnumsAsUnionTypes is true, the same enum will be generated as:
-				// “`ts
+				// "`ts
 				// type Direction = "up" | "down" | "left" | "right";
-				// “`
+				// "`
 				enumsAsUnionTypes: bool | *false
 			}
 		}
@@ -256,4 +260,337 @@ Manifest: S={
 			}
 		},
 	]
+}
+
+#PathProps: {
+	// summary is a short summary of what the operation does
+	summary?: string
+	// description is a verbose explanation of the operation behavior
+	description?: string
+	// get defines a GET operation
+	get?: #Operation
+	// put defines a PUT operation
+	put?: #Operation
+	// post defines a POST operation
+	post?: #Operation
+	// delete defines a DELETE operation
+	delete?: #Operation
+	// options defines an OPTIONS operation
+	options?: #Operation
+	// head defines a HEAD operation
+	head?: #Operation
+	// patch defines a PATCH operation
+	patch?: #Operation
+	// trace defines a TRACE operation
+	trace?: #Operation
+	// servers is an alternative server array to service this operation
+	servers?: [...#Server]
+	// parameters is a list of parameters that are applicable for this operation
+	parameters?: [...#Parameter]
+}
+
+#Operation: {
+	// tags is a list of tags for API documentation control
+	tags?: [...string]
+	// summary is a short summary of what the operation does
+	summary?: string
+	// description is a verbose explanation of the operation behavior
+	description?: string
+	// externalDocs is additional external documentation for this operation
+	externalDocs?: #ExternalDocumentation
+	// operationId is a unique identifier for this operation
+	operationId?: string
+	// parameters is a list of parameters that are applicable for this operation
+	parameters?: [...#Parameter]
+	// requestBody is the request body applicable for this operation
+	requestBody?: #RequestBody
+	// responses is a map of possible responses as they are returned from executing this operation
+	responses?: {
+		[string]: #Response
+	}
+	// deprecated declares this operation to be deprecated
+	deprecated?: bool
+	// security is a declaration of which security mechanisms can be used for this operation
+	security?: [...#SecurityRequirement]
+	// servers is an alternative server array to service this operation
+	servers?: [...#Server]
+}
+
+#Parameter: {
+	// name is the name of the parameter
+	name: string
+	// in is the location of the parameter
+	in: "query" | "header" | "path" | "cookie"
+	// description is a brief description of the parameter
+	description?: string
+	// required determines whether this parameter is mandatory
+	required?: bool
+	// deprecated declares this parameter to be deprecated
+	deprecated?: bool
+	// allowEmptyValue sets the ability to pass empty-valued parameters
+	allowEmptyValue?: bool
+	// style defines how the parameter value will be serialized depending on the type of the parameter value
+	style?: string
+	// explode when true, parameter values of type array or object generate separate parameters for each value of the array or key-value pair of the map
+	explode?: bool
+	// allowReserved determines whether the parameter value should allow reserved characters
+	allowReserved?: bool
+	// schema defines the type used for the parameter
+	schema?: #Schema
+	// example is an example of the parameter's potential value
+	example?: _
+	// examples are examples of the parameter's potential value
+	examples?: {
+		[string]: #Example
+	}
+	// content is a map containing the representations for the parameter
+	content?: {
+		[string]: #MediaType
+	}
+}
+
+#RequestBody: {
+	// description is a brief description of the request body
+	description?: string
+	// content is the content of the request body
+	content: {
+		[string]: #MediaType
+	}
+	// required determines if the request body is required in the request
+	required?: bool
+}
+
+#Responses: {
+	// default is the documentation of responses other than the ones declared for specific HTTP response codes
+	default?: #Response
+	// responses is a map of any HTTP status code to the response definition
+	responses?: {
+		[string]: #Response
+	}
+}
+
+#Response: {
+	// description is a short description of the response
+	description: string
+	// headers is a map of possible headers that are sent with the response
+	headers?: {
+		[string]: #Header
+	}
+	// content is a map containing descriptions of potential response payloads
+	content?: {
+		[string]: #MediaType
+	}
+	// links is a map of operations links that can be followed from the response
+	links?: {
+		[string]: #Link
+	}
+}
+
+#MediaType: {
+	// schema defines the schema defining the type used for the request body
+	schema?: #Schema
+	// example is an example of the media type
+	example?: _
+	// examples are examples of the media type
+	examples?: {
+		[string]: #Example
+	}
+	// encoding is a map between a property name and its encoding information
+	encoding?: {
+		[string]: #Encoding
+	}
+}
+
+#Schema: {
+	// type is the type of the schema
+	type?: string
+	// format is the format of the schema
+	format?: string
+	// description is a brief description of the schema
+	description?: string
+	// title is the title of the schema
+	title?: string
+	// default is the default value of the schema
+	default?: _
+	// enum specifies the list of allowed values
+	enum?: [..._]
+	// multipleOf is the multiple of the schema
+	multipleOf?: number
+	// maximum is the maximum value of the schema
+	maximum?: number
+	// exclusiveMaximum is the exclusive maximum value of the schema
+	exclusiveMaximum?: bool
+	// minimum is the minimum value of the schema
+	minimum?: number
+	// exclusiveMinimum is the exclusive minimum value of the schema
+	exclusiveMinimum?: bool
+	// maxLength is the maximum length of the schema
+	maxLength?: int
+	// minLength is the minimum length of the schema
+	minLength?: int
+	// pattern is the pattern of the schema
+	pattern?: string
+	// maxItems is the maximum number of items in the schema
+	maxItems?: int
+	// minItems is the minimum number of items in the schema
+	minItems?: int
+	// uniqueItems determines if the schema items must be unique
+	uniqueItems?: bool
+	// maxProperties is the maximum number of properties in the schema
+	maxProperties?: int
+	// minProperties is the minimum number of properties in the schema
+	minProperties?: int
+	// required is a list of required properties in the schema
+	required?: [...string]
+	// properties is a map of properties in the schema
+	properties?: {
+		[string]: #Schema
+	}
+	// additionalProperties is the additional properties of the schema
+	additionalProperties?: #Schema | bool
+	// items is the items of the schema
+	items?: #Schema
+	// allOf is a list of schemas that must all be valid
+	allOf?: [...#Schema]
+	// oneOf is a list of schemas where exactly one must be valid
+	oneOf?: [...#Schema]
+	// anyOf is a list of schemas where at least one must be valid
+	anyOf?: [...#Schema]
+	// not is a schema that must not be valid
+	not?: #Schema
+	// nullable determines if the schema can be null
+	nullable?: bool
+	// discriminator is the discriminator for the schema
+	discriminator?: #Discriminator
+	// externalDocs is external documentation for the schema
+	externalDocs?: #ExternalDocumentation
+	// deprecated declares this schema to be deprecated
+	deprecated?: bool
+	// xml is XML-specific attributes for the schema
+	xml?: #XML
+}
+
+#Example: {
+	// summary is a short summary of the example
+	summary?: string
+	// description is a description of the example
+	description?: string
+	// value is the value of the example
+	value?: _
+	// externalValue is a URL that points to the literal example
+	externalValue?: string
+}
+
+#Encoding: {
+	// contentType is the Content-Type for encoding a specific property
+	contentType?: string
+	// headers is a map allowing additional information to be included as headers
+	headers?: {
+		[string]: #Header
+	}
+	// style describes how the parameter value will be serialized depending on the type of the parameter value
+	style?: string
+	// explode when true, property values of type array or object generate separate parameters for each value of the array or key-value pair of the map
+	explode?: bool
+	// allowReserved determines whether the parameter value should allow reserved characters
+	allowReserved?: bool
+}
+
+#Header: {
+	// description is a brief description of the header
+	description?: string
+	// required determines if the header is required
+	required?: bool
+	// deprecated declares this header to be deprecated
+	deprecated?: bool
+	// allowEmptyValue sets the ability to pass empty-valued headers
+	allowEmptyValue?: bool
+	// style defines how the header value will be serialized depending on the type of the header value
+	style?: string
+	// explode when true, header values of type array or object generate separate headers for each value of the array or key-value pair of the map
+	explode?: bool
+	// allowReserved determines whether the header value should allow reserved characters
+	allowReserved?: bool
+	// schema defines the type used for the header
+	schema?: #Schema
+	// example is an example of the header's potential value
+	example?: _
+	// examples are examples of the header's potential value
+	examples?: {
+		[string]: #Example
+	}
+	// content is a map containing the representations for the header
+	content?: {
+		[string]: #MediaType
+	}
+}
+
+#Link: {
+	// operationRef is a relative or absolute reference to an OAS operation
+	operationRef?: string
+	// operationId is the name of an existing, resolvable operation, as defined with a unique operationId
+	operationId?: string
+	// parameters is a map representing parameters to pass to an operation as specified with operationId or identified via operationRef
+	parameters?: {
+		[string]: _
+	}
+	// requestBody is a literal value or expression to use as a request body when calling the target operation
+	requestBody?: _
+	// description is a description of the link
+	description?: string
+	// server is a server object to be used by the target operation
+	server?: #Server
+}
+
+#Server: {
+	// url is the URL to the target host
+	url: string
+	// description is an optional string describing the host designated by the URL
+	description?: string
+	// variables is a map between a variable name and its value
+	variables?: {
+		[string]: #ServerVariable
+	}
+}
+
+#ServerVariable: {
+	// enum is an enumeration of string values to be used if the substitution options are from a limited set
+	enum?: [...string]
+	// default is the default value to use for substitution
+	default: string
+	// description is a description for the server variable
+	description?: string
+}
+
+#SecurityRequirement: {
+	[string]: [...string]
+}
+
+#ExternalDocumentation: {
+	// description is a short description of the target documentation
+	description?: string
+	// url is the URL for the target documentation
+	url: string
+}
+
+#Discriminator: {
+	// propertyName is the name of the property in the payload that will hold the discriminator value
+	propertyName: string
+	// mapping is an object to hold mappings between payload values and schema names or references
+	mapping?: {
+		[string]: string
+	}
+}
+
+#XML: {
+	// name is the name of the XML element
+	name?: string
+	// namespace is the namespace of the XML element
+	namespace?: string
+	// prefix is the prefix of the XML element
+	prefix?: string
+	// attribute determines if the property should be treated as an attribute
+	attribute?: bool
+	// wrapped determines if the property should be wrapped in an array
+	wrapped?: bool
 }
