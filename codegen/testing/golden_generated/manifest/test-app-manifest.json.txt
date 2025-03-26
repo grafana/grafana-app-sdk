@@ -165,6 +165,220 @@
                                 "type": "object"
                             }
                         }
+                    },
+                    {
+                        "name": "v3",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            },
+                            "mutation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "boolField": {
+                                        "type": "boolean"
+                                    },
+                                    "intField": {
+                                        "format": "int64",
+                                        "type": "integer"
+                                    },
+                                    "stringField": {
+                                        "type": "string"
+                                    },
+                                    "timeField": {
+                                        "format": "date-time",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "stringField",
+                                    "intField",
+                                    "timeField",
+                                    "boolField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "customRoutes": {
+                            "/reconcile": {
+                                "post": {
+                                    "requestBody": {
+                                        "content": {
+                                            "application/json": {
+                                                "schema": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "force"
+                                                    ],
+                                                    "properties": {
+                                                        "force": {
+                                                            "type": "boolean",
+                                                            "default": false
+                                                        },
+                                                        "reason": {
+                                                            "type": "string"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        "required": true
+                                    },
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "status",
+                                                            "message"
+                                                        ],
+                                                        "properties": {
+                                                            "message": {
+                                                                "type": "string"
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "success",
+                                                                    "failure"
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "/search": {
+                                "get": {
+                                    "parameters": [
+                                        {
+                                            "name": "limit",
+                                            "in": "query",
+                                            "schema": {
+                                                "type": "integer",
+                                                "default": 10
+                                            }
+                                        },
+                                        {
+                                            "name": "offset",
+                                            "in": "query",
+                                            "schema": {
+                                                "type": "integer",
+                                                "default": 0
+                                            }
+                                        },
+                                        {
+                                            "name": "q",
+                                            "in": "query",
+                                            "required": true,
+                                            "schema": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    ],
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "items",
+                                                            "total"
+                                                        ],
+                                                        "properties": {
+                                                            "items": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "object",
+                                                                    "required": [
+                                                                        "name",
+                                                                        "score"
+                                                                    ],
+                                                                    "properties": {
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "score": {
+                                                                            "type": "number"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "total": {
+                                                                "type": "integer"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 ],
                 "conversion": true

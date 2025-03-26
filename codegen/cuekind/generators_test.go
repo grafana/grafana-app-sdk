@@ -84,7 +84,7 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator(true).Generate(sameGroupKinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 20, "should be 20 files generated, got %d", len(files))
+		assert.Len(t, files, 27, "should be 27 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")
 	})
