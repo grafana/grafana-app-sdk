@@ -2,35 +2,50 @@ package health
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
-	// "github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 type testCheck struct {
+	mock.Mock
 }
 
 func (c *testCheck) HealthCheckName() string {
-	return "test-check"
+	args := c.Called()
+	return args.Get(0).(string)
 }
 
-func (c *testCheck) HealthCheck(context.Context) error {
-	return nil
+func (c *testCheck) HealthCheck(ctx context.Context) error {
+	args := c.Called(ctx)
+	return args.Error(0)
 }
 
 func TestObserverAdd(t *testing.T) {
-	runInterval := time.Second * 1
-	o := NewObserver(runInterval)
-
-	/* tt := []struct {
-		name string
+	tt := []struct {
+		allowSingleInitialRun bool
 	}{
-		{name: "add checks concurrently manages the internal checks slice"},
-	} */
+		{allowSingleInitialRun: true},
+		{allowSingleInitialRun: false},
+	}
+
+	for _, tt := range tt {
+		if tt.allowSingleInitialRun {
+			testObserverCommon(t, time.Minute*1, time.Second*2, "only test a single initial run")
+		} else {
+			testObserverCommon(t, time.Second*1, time.Second*2, "test the checks after at least one initial run")
+		}
+	}
+
+}
+
+func testObserverCommon(t *testing.T, runInterval time.Duration, waitInterval time.Duration, name string) {
+	o := NewObserver(runInterval)
 
 	numChecks := 10
 	wg := sync.WaitGroup{}
@@ -38,8 +53,16 @@ func TestObserverAdd(t *testing.T) {
 	// Simulate concurrent access
 	for i := 0; i < numChecks; i++ {
 		wg.Add(1)
+		tc := &testCheck{}
+		if i%2 == 0 {
+			tc.On("HealthCheckName").Return("HealthCheck-pass")
+			tc.On("HealthCheck", mock.Anything).Return(nil)
+		} else {
+			tc.On("HealthCheckName").Return("HealthCheck-fail")
+			tc.On("HealthCheck", mock.Anything).Return(errors.New("test error"))
+		}
 		go func() {
-			o.AddChecks(&testCheck{})
+			o.AddChecks(tc)
 			wg.Done()
 		}()
 	}
@@ -47,7 +70,7 @@ func TestObserverAdd(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	time.AfterFunc(runInterval*2, func() {
+	time.AfterFunc(waitInterval, func() {
 		cancel()
 	})
 
@@ -63,4 +86,21 @@ func TestObserverAdd(t *testing.T) {
 	status := o.Status()
 	require.NotNil(t, status, "status shouldn't be nil if the observer was started")
 	require.Len(t, status.Results, numChecks, "number of results didn't match the number of checks added")
+
+	numFailed := 0
+	numSuccess := 0
+	for _, result := range status.Results {
+		if result.Name == "HealthCheck-pass" {
+			numSuccess++
+			assert.Nil(t, result.Error, "error should be nil")
+		} else if result.Name == "HealthCheck-fail" {
+			numFailed++
+			assert.NotNil(t, result.Error, "should have received an error")
+		} else {
+			assert.Fail(t, "should have either received a result with name -pass or -fail")
+		}
+	}
+
+	assert.Equal(t, numChecks/2, numSuccess, "number of success checks didn't match expected half of total")
+	assert.Equal(t, numChecks/2, numFailed, "number of failed checks didn't match expected half of total")
 }
