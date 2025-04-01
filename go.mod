@@ -1,6 +1,7 @@
 module github.com/grafana/grafana-app-sdk
 
 go 1.24.0
+
 retract (
 	v0.20.0 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
