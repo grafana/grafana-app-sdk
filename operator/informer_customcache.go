@@ -35,15 +35,15 @@ type CustomCacheInformer struct {
 	// but may stop it from processing a given event.
 	ErrorHandler func(context.Context, error)
 
-	started           bool
-	startedLock       sync.Mutex
-	store             cache.Store
-	controller        cache.Controller
-	listerWatcher     cache.ListerWatcher
-	objectType        resource.Object
-	processor         *informerProcessor
-	objectTransformer func(any) (resource.Object, error)
-	runContext        context.Context
+	started       bool
+	startedLock   sync.Mutex
+	store         cache.Store
+	controller    cache.Controller
+	listerWatcher cache.ListerWatcher
+	objectType    resource.Object
+	processor     *informerProcessor
+	schema        resource.Kind
+	runContext    context.Context
 }
 
 type MemcachedInformerOptions struct {
@@ -78,9 +78,7 @@ func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind reso
 		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
 		// objectType:    kind.ZeroValue(),
 		processor: newInformerProcessor(),
-		objectTransformer: func(a any) (resource.Object, error) {
-			return toResourceObject(a, kind)
-		},
+		schema:    kind,
 		ErrorHandler: func(ctx context.Context, err error) {
 			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
 		},
@@ -96,14 +94,13 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 }
 
 // AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
-func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
-	c.processor.addListener(newInformerProcessorListener(toResourceEventHandlerFuncs(handler, c.objectTransformer, c.errorHandler, func() context.Context {
-		if c.runContext != nil {
-			return c.runContext
-		}
-		return context.Background()
-	}), processorBufferSize))
+func (c *CustomCacheInformer) AddEventHandler(handler cache.ResourceEventHandler) error {
+	c.processor.addListener(newInformerProcessorListener(handler, processorBufferSize))
 	return nil
+}
+
+func (c *CustomCacheInformer) Kind() resource.Kind {
+	return c.schema
 }
 
 // Run runs the informer until stopCh is closed or receives a message.
