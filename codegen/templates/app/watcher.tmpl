@@ -9,8 +9,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 	"go.opentelemetry.io/otel"
 
-	{{ if ne .Version "" }}{{.MachineName}} "{{.Repo}}/{{.CodegenPath}}{{ if not .KindsAreGrouped }}{{end}}/{{.KindPackage}}"
-	{{ else }}"{{.Repo}}/{{.CodegenPath}}/{{.MachineName}}"{{ end }}
+	{{ if ne .Version "" }}{{.KindPackageAlias}} "{{.Repo}}/{{.CodegenPath}}{{ if not .KindsAreGrouped }}{{end}}/{{.KindPackage}}"
+	{{ else }}{{.KindPackageAlias}} "{{.Repo}}/{{.CodegenPath}}/{{.MachineName}}"{{ end }}
 )
 
 var _ operator.ResourceWatcher = &{{.Kind}}Watcher{}
@@ -21,13 +21,13 @@ func New{{.Kind}}Watcher() (*{{.Kind}}Watcher, error) {
 	return &{{.Kind}}Watcher{}, nil
 }
 
-// Add handles add events for {{.MachineName}}.{{.Kind}} resources.
+// Add handles add events for {{.KindPackageAlias}}.{{.Kind}} resources.
 func (s *{{.Kind}}Watcher) Add(ctx context.Context, rObj resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-add")
 	defer span.End()
-    object, ok := rObj.(*{{.MachineName}}.{{.Kind}})
+    object, ok := rObj.(*{{.KindPackageAlias}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+        return fmt.Errorf("provided object is not of type *{{.KindPackageAlias}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
             rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
     }
 
@@ -36,19 +36,19 @@ func (s *{{.Kind}}Watcher) Add(ctx context.Context, rObj resource.Object) error 
 	return nil
 }
 
-// Update handles update events for {{.MachineName}}.{{.Kind}} resources.
+// Update handles update events for {{.KindPackageAlias}}.{{.Kind}} resources.
 func (s *{{.Kind}}Watcher) Update(ctx context.Context, rOld resource.Object, rNew resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-update")
 	defer span.End()
-    oldObject, ok := rOld.(*{{.MachineName}}.{{.Kind}})
+    oldObject, ok := rOld.(*{{.KindPackageAlias}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+        return fmt.Errorf("provided object is not of type *{{.KindPackageAlias}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
             rOld.GetStaticMetadata().Name, rOld.GetStaticMetadata().Namespace, rOld.GetStaticMetadata().Kind)
     }
 
-    _, ok = rNew.(*{{.MachineName}}.{{.Kind}})
+    _, ok = rNew.(*{{.KindPackageAlias}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+        return fmt.Errorf("provided object is not of type *{{.KindPackageAlias}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
             rNew.GetStaticMetadata().Name, rNew.GetStaticMetadata().Namespace, rNew.GetStaticMetadata().Kind)
     }
 
@@ -57,13 +57,13 @@ func (s *{{.Kind}}Watcher) Update(ctx context.Context, rOld resource.Object, rNe
 	return nil
 }
 
-// Delete handles delete events for {{.MachineName}}.{{.Kind}} resources.
+// Delete handles delete events for {{.KindPackageAlias}}.{{.Kind}} resources.
 func (s *{{.Kind}}Watcher) Delete(ctx context.Context, rObj resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-delete")
 	defer span.End()
-    object, ok := rObj.(*{{.MachineName}}.{{.Kind}})
+    object, ok := rObj.(*{{.KindPackageAlias}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+        return fmt.Errorf("provided object is not of type *{{.KindPackageAlias}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
             rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
     }
 
@@ -77,9 +77,9 @@ func (s *{{.Kind}}Watcher) Delete(ctx context.Context, rObj resource.Object) err
 func (s *{{.Kind}}Watcher) Sync(ctx context.Context, rObj resource.Object) error {
     ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-sync")
 	defer span.End()
-    object, ok := rObj.(*{{.MachineName}}.{{.Kind}})
+    object, ok := rObj.(*{{.KindPackageAlias}}.{{.Kind}})
     if !ok {
-        return fmt.Errorf("provided object is not of type *{{.MachineName}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
+        return fmt.Errorf("provided object is not of type *{{.KindPackageAlias}}.{{.Kind}} (name=%s, namespace=%s, kind=%s)",
             rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
     }
 
