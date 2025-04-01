@@ -3,6 +3,7 @@ package health
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -77,30 +78,30 @@ func testObserverCommon(t *testing.T, runInterval time.Duration, waitInterval ti
 	wg.Add(1)
 	go func() {
 		err := o.Run(ctx)
-		assert.Equal(t, err, context.Canceled, "could not start the observer")
+		assert.Equal(t, err, context.Canceled, fmt.Sprintf("%s: %s", name, "could not start the observer"))
 		wg.Done()
 	}()
 
 	wg.Wait()
 
 	status := o.Status()
-	require.NotNil(t, status, "status shouldn't be nil if the observer was started")
-	require.Len(t, status.Results, numChecks, "number of results didn't match the number of checks added")
+	require.NotNil(t, status, fmt.Sprintf("%s: %s", name, "status shouldn't be nil if the observer was started"))
+	require.Len(t, status.Results, numChecks, fmt.Sprintf("%s: %s", name, "number of results didn't match the number of checks added"))
 
 	numFailed := 0
 	numSuccess := 0
 	for _, result := range status.Results {
 		if result.Name == "HealthCheck-pass" {
 			numSuccess++
-			assert.Nil(t, result.Error, "error should be nil")
+			assert.Nil(t, result.Error, fmt.Sprintf("%s: %s", name, "error should be nil"))
 		} else if result.Name == "HealthCheck-fail" {
 			numFailed++
-			assert.NotNil(t, result.Error, "should have received an error")
+			assert.NotNil(t, result.Error, fmt.Sprintf("%s: %s", name, "should have received an error"))
 		} else {
-			assert.Fail(t, "should have either received a result with name -pass or -fail")
+			assert.Fail(t, fmt.Sprintf("%s: %s", name, "should have either received a result with name -pass or -fail"))
 		}
 	}
 
-	assert.Equal(t, numChecks/2, numSuccess, "number of success checks didn't match expected half of total")
-	assert.Equal(t, numChecks/2, numFailed, "number of failed checks didn't match expected half of total")
+	assert.Equal(t, numChecks/2, numSuccess, fmt.Sprintf("%s: %s", name, "number of success checks didn't match expected half of total"))
+	assert.Equal(t, numChecks/2, numFailed, fmt.Sprintf("%s: %s", name, "number of failed checks didn't match expected half of total"))
 }
