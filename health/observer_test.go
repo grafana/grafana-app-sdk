@@ -27,26 +27,39 @@ func (c *testCheck) HealthCheck(ctx context.Context) error {
 	return args.Error(0)
 }
 
+type ObserverTestOptions struct {
+	expectedRuns int
+	runInterval  time.Duration
+	waitInterval time.Duration
+}
+
 func TestObserverAdd(t *testing.T) {
-	tt := []struct {
-		allowSingleInitialRun bool
-	}{
-		{allowSingleInitialRun: true},
-		{allowSingleInitialRun: false},
+	tt := []ObserverTestOptions{
+		{
+			expectedRuns: 1,
+			runInterval:  time.Minute * 1,
+			waitInterval: time.Second * 2,
+		},
+		{
+			expectedRuns: 3, // initial + 2
+			runInterval:  time.Second * 1,
+			waitInterval: time.Second*2 + time.Millisecond*100,
+		},
 	}
 
-	for _, tt := range tt {
-		if tt.allowSingleInitialRun {
-			testObserverCommon(t, time.Minute*1, time.Second*2, "only test a single initial run")
+	for _, tc := range tt {
+		if tc.expectedRuns == 1 {
+			testObserverCommon(t, tc, "only test a single initial run")
 		} else {
-			testObserverCommon(t, time.Second*1, time.Second*2, "test the checks after at least one initial run")
+			testObserverCommon(t, tc, "test the checks after at least one initial run")
 		}
 	}
 
 }
 
-func testObserverCommon(t *testing.T, runInterval time.Duration, waitInterval time.Duration, name string) {
-	o := NewObserver(runInterval)
+func testObserverCommon(t *testing.T, options ObserverTestOptions, name string) {
+	o := NewObserver(options.runInterval)
+	checks := []*testCheck{}
 
 	numChecks := 10
 	wg := sync.WaitGroup{}
@@ -55,12 +68,15 @@ func testObserverCommon(t *testing.T, runInterval time.Duration, waitInterval ti
 	for i := 0; i < numChecks; i++ {
 		wg.Add(1)
 		tc := &testCheck{}
+		// copy the checks here so we can assert mock expectations on it
+		checks = append(checks, tc)
+
 		if i%2 == 0 {
-			tc.On("HealthCheckName").Return("HealthCheck-pass")
-			tc.On("HealthCheck", mock.Anything).Return(nil)
+			tc.On("HealthCheckName").Return("HealthCheck-pass").Times(options.expectedRuns)
+			tc.On("HealthCheck", mock.Anything).Return(nil).Times(options.expectedRuns)
 		} else {
-			tc.On("HealthCheckName").Return("HealthCheck-fail")
-			tc.On("HealthCheck", mock.Anything).Return(errors.New("test error"))
+			tc.On("HealthCheckName").Return("HealthCheck-fail").Times(options.expectedRuns)
+			tc.On("HealthCheck", mock.Anything).Return(errors.New("test error")).Times(options.expectedRuns)
 		}
 		go func() {
 			o.AddChecks(tc)
@@ -71,7 +87,7 @@ func testObserverCommon(t *testing.T, runInterval time.Duration, waitInterval ti
 
 	ctx, cancel := context.WithCancel(context.Background())
 
-	time.AfterFunc(waitInterval, func() {
+	time.AfterFunc(options.waitInterval, func() {
 		cancel()
 	})
 
@@ -104,4 +120,13 @@ func testObserverCommon(t *testing.T, runInterval time.Duration, waitInterval ti
 
 	assert.Equal(t, numChecks/2, numSuccess, fmt.Sprintf("%s: %s", name, "number of success checks didn't match expected half of total"))
 	assert.Equal(t, numChecks/2, numFailed, fmt.Sprintf("%s: %s", name, "number of failed checks didn't match expected half of total"))
+
+	assertMockExpectationOnChecks(t, checks, options, name)
+}
+
+func assertMockExpectationOnChecks(t *testing.T, checks []*testCheck, options ObserverTestOptions, name string) {
+	for i, check := range checks {
+		t.Logf("Checking expectations for %s: check #%d", name, i)
+		mock.AssertExpectationsForObjects(t, check)
+	}
 }
