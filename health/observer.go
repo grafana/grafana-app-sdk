@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// CheckResult comprises a single result from a health check
 type CheckResult struct {
 	Name  string
 	Error error
@@ -21,6 +22,7 @@ func (c CheckResult) String() string {
 	return fmt.Sprintf("%s: %s", c.Name, status)
 }
 
+// CheckStatus comprises multiple check results as well as the overall successful value as arising from the component results
 type CheckStatus struct {
 	Successful bool
 	Results    []CheckResult
@@ -92,12 +94,15 @@ func (c *Observer) collectChecks(ctx context.Context) *CheckStatus {
 	defer c.checkLock.RUnlock()
 
 	runStatus := &CheckStatus{
-		Successful: false,
+		Successful: true,
 		Results:    []CheckResult{},
 	}
 
 	for _, check := range c.checks {
 		err := check.HealthCheck(ctx)
+		if runStatus.Successful && err != nil {
+			runStatus.Successful = false
+		}
 		runStatus.Results = append(runStatus.Results, CheckResult{
 			Name:  check.HealthCheckName(),
 			Error: err,

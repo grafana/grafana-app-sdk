@@ -10,7 +10,7 @@ type Check interface {
 	HealthCheckName() string
 }
 
-// Checker
+// Checker is an interface that describes the registered health checks for a given component (informer, controller, runner etc.)
 type Checker interface {
 	// HealthChecks returns a slice of all Check instances which should be run for health checks
 	HealthChecks() []Check

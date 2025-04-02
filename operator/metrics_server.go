@@ -21,6 +21,7 @@ type MetricsServer struct {
 	observer *health.Observer
 }
 
+// MetricsServerConfig specifies the config for the metrics server
 type MetricsServerConfig struct {
 	// Server port for metrics and health endpoints
 	Port int
@@ -85,9 +86,6 @@ func (s *MetricsServer) Run(ctx context.Context) error {
 
 	wg.Add(1)
 	go func() {
-		// is it worth it to return the last check result when this server is shutting down? I don't think so,
-		// the error here should pertain to the metrics server having encountered an error in its own Run, related to its own aggregation logic
-		// currently, the aggregation logic is pretty barebones and doesn't create its own errors
 		if err := s.observer.Run(observerCtx); err != nil {
 			processErr <- err
 		}
