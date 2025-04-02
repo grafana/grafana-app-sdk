@@ -314,12 +314,13 @@ func GetBackendPluginSecurePackageFiles() (map[string][]byte, error) {
 
 type WatcherMetadata struct {
 	codegen.KindProperties
-	PackageName     string
-	Repo            string
-	CodegenPath     string
-	Version         string
-	KindPackage     string
-	KindsAreGrouped bool
+	PackageName      string
+	Repo             string
+	CodegenPath      string
+	Version          string
+	KindPackage      string
+	KindsAreGrouped  bool
+	KindPackageAlias string
 }
 
 func (WatcherMetadata) ToPackageName(input string) string {
@@ -327,6 +328,10 @@ func (WatcherMetadata) ToPackageName(input string) string {
 }
 
 func WriteWatcher(metadata WatcherMetadata, out io.Writer) error {
+	if metadata.KindPackageAlias == "" {
+		metadata.KindPackageAlias = metadata.MachineName
+	}
+	metadata.KindPackageAlias = ToPackageName(metadata.KindPackageAlias)
 	return templateWatcher.Execute(out, metadata)
 }
 

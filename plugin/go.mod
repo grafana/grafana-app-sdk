@@ -2,14 +2,16 @@ module github.com/grafana/grafana-app-sdk/plugin
 
 go 1.24.0
 
+toolchain go1.24.1
+
 retract (
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
 	v0.18.3 // Tag was deleted and re-created with a new commit, causing GOPROXY conflicts
 )
 
 require (
-	github.com/grafana/grafana-app-sdk v0.35.0
-	github.com/grafana/grafana-app-sdk/logging v0.35.0
+	github.com/grafana/grafana-app-sdk v0.35.1
+	github.com/grafana/grafana-app-sdk/logging v0.35.1
 	github.com/grafana/grafana-plugin-sdk-go v0.274.0
 	github.com/prometheus/client_golang v1.21.1
 	github.com/stretchr/testify v1.10.0
