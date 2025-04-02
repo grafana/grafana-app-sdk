@@ -395,7 +395,7 @@ func newInformer(
 // Multiplexes updates in the form of a list of Deltas into a Store, and informs
 // a given handler of events OnUpdate, OnAdd, OnDelete.
 func processDeltas(
-// Object which receives event notifications from the given deltas
+	// Object which receives event notifications from the given deltas
 	handler cache.ResourceEventHandler,
 	clientState cache.Store,
 	deltas cache.Deltas,
