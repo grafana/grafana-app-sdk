@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/health"
 	"golang.org/x/sync/errgroup"
+
+	"github.com/grafana/grafana-app-sdk/health"
 )
 
 // MetricsServer exports metrics as well as health checks under the same mux
