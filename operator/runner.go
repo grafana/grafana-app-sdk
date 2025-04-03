@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -48,6 +49,10 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 
 	if cfg.MetricsConfig.Port <= 0 {
 		cfg.MetricsConfig.Port = 9090
+	}
+
+	if cfg.MetricsConfig.HealthCheckInterval <= 0 {
+		cfg.MetricsConfig.HealthCheckInterval = 1 * time.Minute
 	}
 
 	metricsServer := NewMetricsServer(cfg.MetricsConfig.MetricsServerConfig)

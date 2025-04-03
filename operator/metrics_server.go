@@ -7,10 +7,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 	"time"
 
 	"github.com/grafana/grafana-app-sdk/health"
+	"golang.org/x/sync/errgroup"
 )
 
 // MetricsServer exports metrics as well as health checks under the same mux
@@ -33,6 +33,10 @@ type MetricsServerConfig struct {
 func NewMetricsServer(config MetricsServerConfig) *MetricsServer {
 	if config.Port <= 0 {
 		config.Port = 9090
+	}
+
+	if config.HealthCheckInterval <= 0 {
+		config.HealthCheckInterval = 1 * time.Minute
 	}
 
 	return &MetricsServer{
@@ -77,38 +81,16 @@ func (s *MetricsServer) Run(ctx context.Context) error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	observerCtx, cancelObserver := context.WithCancel(ctx)
-	defer cancelObserver()
+	g, gctx := errgroup.WithContext(ctx)
 
-	wg := &sync.WaitGroup{}
-	// channel size is 2 since there is a possibility of 2 error writes if we can't read from it for some reason
-	processErr := make(chan error, 2)
+	g.Go(func() error {
+		defer server.Shutdown(gctx) //nolint:errcheck
+		return s.observer.Run(gctx)
+	})
 
-	wg.Add(1)
-	go func() {
-		if err := s.observer.Run(observerCtx); err != nil {
-			processErr <- err
-		}
-		_ = server.Shutdown(ctx)
-		wg.Done()
-	}()
+	g.Go(func() error {
+		return server.ListenAndServe()
+	})
 
-	wg.Add(1)
-	go func() {
-		processErr <- server.ListenAndServe()
-		cancelObserver()
-		wg.Done()
-	}()
-
-	var returnedErr error
-	select {
-	case err := <-processErr:
-		returnedErr = err
-	case <-ctx.Done():
-		_ = server.Shutdown(ctx)
-	}
-
-	wg.Wait()
-
-	return returnedErr
+	return g.Wait()
 }
