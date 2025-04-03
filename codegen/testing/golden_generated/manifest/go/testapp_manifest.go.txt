@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 var (
@@ -18,6 +20,9 @@ var (
 	rawSchemaTestKindv2      = []byte(`{"spec":{"properties":{"intField":{"format":"int64","type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"}},"required":["stringField","intField","timeField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv2  app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKindv2, &versionSchemaTestKindv2)
+	rawSchemaTestKindv3      = []byte(`{"spec":{"properties":{"boolField":{"type":"boolean"},"intField":{"format":"int64","type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"}},"required":["stringField","intField","timeField","boolField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	versionSchemaTestKindv3  app.VersionSchema
+	_                        = json.Unmarshal(rawSchemaTestKindv3, &versionSchemaTestKindv3)
 	rawSchemaTestKind2v1     = []byte(`{"spec":{"properties":{"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKind2v1 app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKind2v1, &versionSchemaTestKind2v1)
@@ -63,6 +68,251 @@ var appManifestData = app.ManifestData{
 					},
 					Schema: &versionSchemaTestKindv2,
 				},
+
+				{
+					Name: "v3",
+					Admission: &app.AdmissionCapabilities{
+						Validation: &app.ValidationCapability{
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
+							},
+						},
+						Mutation: &app.MutationCapability{
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
+							},
+						},
+					},
+					Schema: &versionSchemaTestKindv3,
+					CustomRoutes: map[string]spec3.PathProps{
+						"/reconcile": {
+							Summary:     "Resource reconciliation",
+							Description: "Manually trigger resource reconciliation",
+							Parameters: []spec3.Parameter{
+
+								{
+									Name:        "dryRun",
+									In:          "query",
+									Description: "When true, only validate the request without performing reconciliation",
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"boolean"},
+										},
+									},
+								},
+
+								{
+									Name:        "timeout",
+									In:          "query",
+									Description: "Timeout in seconds for the reconciliation operation",
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type:   []string{"integer"},
+											Format: "int32",
+										},
+									},
+								},
+							},
+							Post: &spec3.Operation{
+								OperationProps: spec3.OperationProps{
+									Summary:     "Reconcile resource",
+									Description: "Trigger a manual reconciliation of the resource",
+									OperationId: "reconcileResource",
+									Tags:        []string{"operations", "management"},
+									ExternalDocs: &spec3.ExternalDocumentation{
+										URL:         "https://example.com/docs/reconciliation",
+										Description: "Learn more about reconciliation",
+									},
+									Parameters: []*spec3.Parameter{
+
+										{
+											Name:        "X-Tenant-ID",
+											In:          "header",
+											Description: "Tenant identifier for multi-tenant operations",
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+													Type: []string{"string"},
+												},
+											},
+										},
+									},
+									RequestBody: &spec3.RequestBody{
+										RequestBodyProps: spec3.RequestBodyProps{
+											Description: "Reconciliation options",
+											Required:    true,
+											Content: map[string]*spec3.MediaType{
+												"application/json": {
+													MediaTypeProps: spec3.MediaTypeProps{
+														Schema: &spec.Schema{
+															SchemaProps: spec.SchemaProps{
+																Type: []string{"object"},
+																Properties: map[string]spec.Schema{
+																	"force": {
+																		SchemaProps: spec.SchemaProps{
+																			Type:        []string{"boolean"},
+																			Description: "Force reconciliation even if already in progress",
+																		},
+																	},
+																	"skipValidation": {
+																		SchemaProps: spec.SchemaProps{
+																			Type:        []string{"boolean"},
+																			Description: "Skip pre-reconciliation validation checks",
+																		},
+																	},
+																	"timeout": {
+																		SchemaProps: spec.SchemaProps{
+																			Type:        []string{"integer"},
+																			Format:      "int32",
+																			Description: "Maximum time to wait for reconciliation (in seconds)",
+																		},
+																	},
+																},
+																Required: []string{
+																	"force",
+																},
+															}},
+													}},
+											},
+										}},
+									Responses: &spec3.Responses{
+										ResponsesProps: spec3.ResponsesProps{
+
+											StatusCodeResponses: map[int]*spec3.Response{
+												200: &spec3.Response{
+													ResponseProps: spec3.ResponseProps{
+														Description: "Successful reconciliation",
+														Content: map[string]*spec3.MediaType{
+															"application/json": {
+																MediaTypeProps: spec3.MediaTypeProps{
+																	Schema: &spec.Schema{
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"object"},
+																			Properties: map[string]spec.Schema{
+																				"completionTime": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Format:      "date-time",
+																						Description: "When the reconciliation was completed (if finished)",
+																					},
+																				},
+																				"id": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Description: "Reconciliation operation ID",
+																					},
+																				},
+																				"message": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Description: "Additional information about the reconciliation",
+																					},
+																				},
+																				"startTime": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Format:      "date-time",
+																						Description: "When the reconciliation was started",
+																					},
+																				},
+																				"status": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Description: "Status of the reconciliation operation",
+																						Enum: []interface{}{
+																							"success",
+																							"in-progress",
+																							"failed",
+																						},
+																					},
+																				},
+																			},
+																			Required: []string{
+																				"id",
+																				"status",
+																			},
+																		}},
+
+																	Examples: map[string]*spec3.Example{
+																		"default": {
+																			ExampleProps: spec3.ExampleProps{
+
+																				Value: map[string]interface{}{
+																					"completionTime": "2023-10-24T14:15:42Z",
+																					"id":             "rec-1234-abcd",
+																					"message":        "Resource successfully reconciled",
+																					"startTime":      "2023-10-24T14:15:22Z",
+																					"status":         "success",
+																				},
+																			},
+																		},
+																	},
+																}},
+														},
+													},
+												},
+												400: &spec3.Response{
+													ResponseProps: spec3.ResponseProps{
+														Description: "Invalid request",
+														Content: map[string]*spec3.MediaType{
+															"application/json": {
+																MediaTypeProps: spec3.MediaTypeProps{
+																	Schema: &spec.Schema{
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"object"},
+																			Properties: map[string]spec.Schema{
+																				"details": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Description: "Detailed error information",
+																					},
+																				},
+																				"error": {
+																					SchemaProps: spec.SchemaProps{
+																						Type:        []string{"string"},
+																						Description: "Error message",
+																					},
+																				},
+																			},
+																			Required: []string{
+																				"error",
+																			},
+																		}},
+
+																	Examples: map[string]*spec3.Example{
+																		"application/json": {
+																			ExampleProps: spec3.ExampleProps{
+
+																				Value: map[string]interface{}{
+																					"details": "Missing required field 'force'",
+																					"error":   "Invalid reconciliation request",
+																				},
+																			},
+																		},
+																	},
+																}},
+														},
+													},
+												},
+											},
+										}},
+
+									Servers: []*spec3.Server{
+										{
+											URL:         "https://api-test.example.com/v3",
+											Description: "Test API server",
+										},
+										{
+											URL:         "https://api.example.com/v3",
+											Description: "Production API server",
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 
@@ -78,12 +328,6 @@ var appManifestData = app.ManifestData{
 			},
 		},
 	},
-}
-
-func jsonToMap(j string) map[string]any {
-	m := make(map[string]any)
-	json.Unmarshal([]byte(j), &j)
-	return m
 }
 
 func LocalManifest() app.Manifest {
