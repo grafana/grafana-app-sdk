@@ -1,7 +1,6 @@
 module github.com/grafana/grafana-app-sdk
 
 go 1.24.0
-
 retract (
 	v0.20.0 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
@@ -32,7 +31,7 @@ require (
 	golang.org/x/text v0.23.0
 	golang.org/x/tools v0.31.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
-	google.golang.org/grpc v1.71.0
+	google.golang.org/grpc v1.71.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.32.3
 	k8s.io/apiextensions-apiserver v0.32.3
