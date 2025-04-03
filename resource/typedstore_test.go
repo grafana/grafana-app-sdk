@@ -3,11 +3,12 @@ package resource
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestNewTypedStore(t *testing.T) {
@@ -224,7 +225,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 	})
 
 	t.Run("error get 503", func(t *testing.T) {
-		cerr := &testAPIError{fmt.Errorf("Internal Server Error"), http.StatusInternalServerError}
+		cerr := apierrors.NewInternalError(fmt.Errorf("Internal Server Error"))
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
 		}
@@ -250,7 +251,7 @@ func TestTypedStore_Upsert(t *testing.T) {
 
 	t.Run("success, get 404", func(t *testing.T) {
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
-			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+			return nil, apierrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, identifier.Name)
 		}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
@@ -394,7 +395,7 @@ func TestTypedStore_ForceDelete(t *testing.T) {
 		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, id, identifier)
-			return &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+			return apierrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, identifier.Name)
 		}
 		err := store.ForceDelete(ctx, id)
 		assert.Nil(t, err)

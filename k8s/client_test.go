@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -69,9 +70,9 @@ func TestClient_Get(t *testing.T) {
 		resp, err := client.Get(ctx, id)
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -117,9 +118,9 @@ func TestClient_GetInto(t *testing.T) {
 		err := client.GetInto(ctx, id, &into)
 		assert.Equal(t, resource.TypedSpecObject[any]{}, into)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -166,9 +167,9 @@ func TestClient_Create(t *testing.T) {
 		resp, err := client.Create(ctx, id, getTestObject(), resource.CreateOptions{})
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -229,9 +230,9 @@ func TestClient_CreateInto(t *testing.T) {
 
 		err := client.CreateInto(ctx, id, getTestObject(), resource.CreateOptions{}, &resource.TypedSpecObject[any]{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -286,9 +287,9 @@ func TestClient_Update(t *testing.T) {
 		resp, err := client.Update(ctx, id, getTestObject(), resource.UpdateOptions{})
 		assert.Nil(t, resp)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, explicit RV", func(t *testing.T) {
@@ -407,9 +408,9 @@ func TestClient_UpdateInto(t *testing.T) {
 
 		err := client.UpdateInto(ctx, id, getTestObject(), resource.UpdateOptions{}, getTestObject())
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, explicit RV", func(t *testing.T) {
@@ -513,9 +514,9 @@ func TestClient_Delete(t *testing.T) {
 
 		err := client.Delete(ctx, id, resource.DeleteOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success", func(t *testing.T) {
@@ -590,9 +591,9 @@ func TestClient_List(t *testing.T) {
 		list, err := client.List(ctx, ns, resource.ListOptions{})
 		assert.Nil(t, list)
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("success, no options", func(t *testing.T) {

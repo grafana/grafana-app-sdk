@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"reflect"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 var ErrMissingResourceVersion = errors.New("object is missing a ResourceVersion")
@@ -116,16 +117,11 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 // It returns the updated Object from the storage system.
 func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T) (T, error) {
 	resp, err := t.client.Get(ctx, identifier)
-
-	if err != nil {
+	if err != nil && !apierrors.IsNotFound(err) {
 		var n T
-		cast, ok := err.(APIServerResponseError)
-		if !ok {
-			return n, err
-		} else if cast.StatusCode() != http.StatusNotFound {
-			return n, err
-		}
+		return n, err
 	}
+
 	var ret Object
 
 	if resp != nil {
@@ -171,7 +167,7 @@ func (t *TypedStore[T]) Delete(ctx context.Context, identifier Identifier) error
 func (t *TypedStore[T]) ForceDelete(ctx context.Context, identifier Identifier) error {
 	err := t.client.Delete(ctx, identifier, DeleteOptions{})
 
-	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+	if apierrors.IsNotFound(err) {
 		return nil
 	}
 

@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type TestGroup struct {
@@ -656,8 +657,8 @@ func TestStore_Upsert(t *testing.T) {
 		assert.Equal(t, cerr, err)
 	})
 
-	t.Run("client get error http 503", func(t *testing.T) {
-		cerr := &testAPIError{fmt.Errorf("Internal Server Error"), http.StatusInternalServerError}
+	t.Run("client get error http 500", func(t *testing.T) {
+		cerr := apierrors.NewInternalError(fmt.Errorf("Internal Server Error"))
 
 		client.GetFunc = func(ctx context.Context, identifier Identifier) (Object, error) {
 			return nil, cerr
@@ -692,7 +693,7 @@ func TestStore_Upsert(t *testing.T) {
 	t.Run("success, get 404", func(t *testing.T) {
 		resp := &TypedSpecObject[int]{}
 		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
-			return nil, &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+			return nil, apierrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, identifier.Name)
 		}
 		client.CreateFunc = func(c context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
@@ -819,7 +820,7 @@ func TestStore_ForceDelete(t *testing.T) {
 	})
 
 	t.Run("success with 404", func(t *testing.T) {
-		cerr := &testAPIError{fmt.Errorf("Not Found"), http.StatusNotFound}
+		cerr := apierrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "test"}, Identifier{}.Name)
 		client.DeleteFunc = func(c context.Context, identifier Identifier, _ DeleteOptions) error {
 			return cerr
 		}
@@ -846,10 +847,6 @@ func TestStore_ForceDelete(t *testing.T) {
 		err := store.ForceDelete(ctx, kind.Kind(), id)
 		assert.Nil(t, err)
 	})
-}
-
-func NewServerResponseError(s string, i int) {
-	panic("unimplemented")
 }
 
 func TestStore_Client(t *testing.T) {
@@ -1032,17 +1029,4 @@ func (c *mockClient) Watch(ctx context.Context, namespace string, options WatchO
 		return c.WatchFunc(ctx, namespace, options)
 	}
 	return nil, nil
-}
-
-type testAPIError struct {
-	err        error
-	statusCode int
-}
-
-func (t *testAPIError) Error() string {
-	return t.err.Error()
-}
-
-func (t *testAPIError) StatusCode() int {
-	return t.statusCode
 }
