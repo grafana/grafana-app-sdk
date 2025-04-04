@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -428,6 +429,15 @@ func (a *App) PrometheusCollectors() []prometheus.Collector {
 	collectors = append(collectors, a.collectors...)
 	collectors = append(collectors, a.runner.PrometheusCollectors()...)
 	return collectors
+}
+
+func (a *App) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+
+	checks = append(checks, a.runner.HealthChecks()...)
+	checks = append(checks, a.informerController.HealthChecks()...)
+
+	return checks
 }
 
 // RegisterMetricsCollectors registers additional prometheus collectors for the app, in addition to those provided

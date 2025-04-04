@@ -10,6 +10,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -343,6 +344,40 @@ func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
 		}
 	})
 	return collectors
+}
+
+// HealthChecks
+func (c *InformerController) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+
+	c.informers.RangeAll(func(_ string, _ int, value Informer) {
+		if cast, ok := value.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+
+		if cast, ok := value.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+	})
+	c.watchers.RangeAll(func(_ string, _ int, value ResourceWatcher) {
+		if cast, ok := value.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+
+		if cast, ok := value.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+	})
+	c.reconcilers.RangeAll(func(_ string, _ int, value Reconciler) {
+		if cast, ok := value.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+
+		if cast, ok := value.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+	})
+	return checks
 }
 
 // nolint:dupl
