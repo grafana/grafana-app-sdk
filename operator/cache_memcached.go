@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bradfitz/gomemcache/memcache"
@@ -26,19 +27,29 @@ const (
 	keysCacheKey = "%s-keys"
 )
 
+// MemcachedServerSelector enhances memcache.ServerSelector with a method to refresh the server list used.
+type MemcachedServerSelector interface {
+	memcache.ServerSelector
+	// RefreshServers refreshes the underlying list of servers, re-resolving any hostnames.
+	// This is used by the MemcachedStore when an operation results in an EOF or timeout error to ensure that
+	// the resolved addresses are still valid.
+	RefreshServers() error
+}
+
 // MemcachedStore implements cache.Store using memcached as the store for objects.
 // It should be instantiated with NewMemcachedStore.
 type MemcachedStore struct {
-	client       *memcache.Client
-	keyFunc      func(any) (string, error)
-	kind         resource.Kind
-	readLatency  *prometheus.HistogramVec
-	writeLatency *prometheus.HistogramVec
-	keys         sync.Map
-	trackKeys    bool
-	syncTicker   *time.Ticker
-	pageSize     int
-	cacheKeysKey string
+	client          *memcache.Client
+	keyFunc         func(any) (string, error)
+	kind            resource.Kind
+	readLatency     *prometheus.HistogramVec
+	writeLatency    *prometheus.HistogramVec
+	keys            sync.Map
+	trackKeys       bool
+	syncTicker      *time.Ticker
+	pageSize        int
+	cacheKeysKey    string
+	serverRefresher *memcachedServerRefresher
 }
 
 // MemcachedStoreConfig is a collection of config values for a MemcachedStore
@@ -47,6 +58,9 @@ type MemcachedStoreConfig struct {
 	KeyFunc func(any) (string, error)
 	// Addrs is a list of addresses (including ports) to connect to
 	Addrs []string
+	// ServerSelector is a server selector for the memcached client.
+	// If present, it overrides Addrs and is used to determine the memcached servers to connect to.
+	ServerSelector MemcachedServerSelector
 	// Metrics is metrics configuration
 	Metrics metrics.Config
 	// KeySyncInterval is the interval at which keys stored in the in-memory map will be pushed to memcached.
@@ -79,7 +93,12 @@ func NewMemcachedStore(kind resource.Kind, cfg MemcachedStoreConfig) (*Memcached
 	if cfg.KeyFunc != nil {
 		keyFunc = cfg.KeyFunc
 	}
-	client := memcache.New(cfg.Addrs...)
+	var client *memcache.Client
+	if cfg.ServerSelector != nil {
+		client = memcache.NewFromSelector(cfg.ServerSelector)
+	} else {
+		client = memcache.New(cfg.Addrs...)
+	}
 	client.Timeout = cfg.Timeout
 	client.MaxIdleConns = cfg.MaxIdleConns
 	store := &MemcachedStore{
@@ -110,6 +129,11 @@ func NewMemcachedStore(kind resource.Kind, cfg MemcachedStoreConfig) (*Memcached
 		keys:         sync.Map{},
 		pageSize:     MemcachedStoreDefaultPageSize,
 		cacheKeysKey: fmt.Sprintf(keysCacheKey, kind.Plural()),
+	}
+	if cfg.ServerSelector != nil {
+		store.serverRefresher = &memcachedServerRefresher{
+			refresher: cfg.ServerSelector,
+		}
 	}
 	if cfg.PageSize > 0 {
 		store.pageSize = cfg.PageSize
@@ -173,9 +197,11 @@ func (m *MemcachedStore) Update(obj any) error {
 		return err
 	}
 	start := time.Now()
-	err = m.client.Replace(&memcache.Item{
-		Key:   key,
-		Value: o,
+	err = m.attemptWithRefreshOnTimeout(func() error {
+		return m.client.Replace(&memcache.Item{
+			Key:   key,
+			Value: o,
+		})
 	})
 	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	return err
@@ -186,7 +212,9 @@ func (m *MemcachedStore) Delete(obj any) error {
 		return err
 	}
 	start := time.Now()
-	err = m.client.Delete(key)
+	err = m.attemptWithRefreshOnTimeout(func() error {
+		return m.client.Delete(key)
+	})
 	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	if err == nil && m.trackKeys {
 		m.keys.Delete(trackKey)
@@ -253,7 +281,11 @@ func (m *MemcachedStore) GetByKey(key string) (item any, exists bool, err error)
 
 func (m *MemcachedStore) getByKey(key string) (item any, exists bool, err error) {
 	start := time.Now()
-	fromCache, err := m.client.Get(key)
+	var fromCache *memcache.Item
+	err = m.attemptWithRefreshOnTimeout(func() error {
+		fromCache, err = m.client.Get(key)
+		return err
+	})
 	m.readLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	if err != nil && !errors.Is(err, memcache.ErrCacheMiss) {
 		return nil, false, err
@@ -333,4 +365,45 @@ func (m *MemcachedStore) syncKeys() error {
 		Key:   m.cacheKeysKey,
 		Value: externalKeysJSON,
 	})
+}
+
+func (m *MemcachedStore) attemptWithRefreshOnTimeout(f func() error) error {
+	if err := f(); err != nil {
+		if m.serverRefresher != nil {
+			var e *memcache.ConnectTimeoutError
+			if errors.As(err, &e) || err.Error() == "EOF" {
+				refreshErr := m.serverRefresher.refresh()
+				if refreshErr != nil {
+					return fmt.Errorf("%w: could not refresh server list: %w", err, refreshErr)
+				}
+				return f()
+			}
+		}
+		return err
+	}
+	return nil
+}
+
+type memcachedServerRefresher struct {
+	refresher  MemcachedServerSelector
+	mux        sync.Mutex
+	inProgress atomic.Bool
+}
+
+func (m *memcachedServerRefresher) refresh() error {
+	if !m.inProgress.CompareAndSwap(false, true) {
+		// Block until the ongoing refresh is finished,
+		// just attempt to lock the mutex so we wait until it's freed by the existing process
+		m.mux.Lock()
+		defer m.mux.Unlock()
+		return nil
+	}
+	if logging.DefaultLogger != nil {
+		logging.DefaultLogger.Info("Refreshing memcached servers")
+	}
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	defer m.inProgress.Store(false)
+
+	return m.refresher.RefreshServers()
 }

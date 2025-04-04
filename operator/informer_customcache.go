@@ -47,7 +47,10 @@ type CustomCacheInformer struct {
 }
 
 type MemcachedInformerOptions struct {
-	Addrs            []string
+	Addrs []string
+	// ServerSelector is a server selector for the memcached client.
+	// If present, it overrides Addrs and is used to determine the memcached servers to connect to.
+	ServerSelector   MemcachedServerSelector
 	ListWatchOptions ListWatchOptions
 }
 
@@ -56,7 +59,8 @@ type MemcachedInformerOptions struct {
 // To set additional memcached options, use NewCustomCacheInformer and NewMemcachedStore.
 func NewMemcachedInformer(kind resource.Kind, client ListWatchClient, opts MemcachedInformerOptions) (*CustomCacheInformer, error) {
 	c, err := NewMemcachedStore(kind, MemcachedStoreConfig{
-		Addrs: opts.Addrs,
+		Addrs:          opts.Addrs,
+		ServerSelector: opts.ServerSelector,
 	})
 	if err != nil {
 		return nil, err
