@@ -13,6 +13,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -28,9 +29,9 @@ func TestResourceManager_RegisterSchema(t *testing.T) {
 		}
 		err := manager.RegisterSchema(ctx, testSchema, resource.RegisterSchemaOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("exists, version exists, error on conflict", func(t *testing.T) {
@@ -169,9 +170,9 @@ func TestResourceManager_RegisterSchema(t *testing.T) {
 		}
 		err := manager.RegisterSchema(ctx, testSchema, resource.RegisterSchemaOptions{})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 
 	t.Run("error on update", func(t *testing.T) {
@@ -196,9 +197,9 @@ func TestResourceManager_RegisterSchema(t *testing.T) {
 			UpdateOnConflict: true,
 		})
 		require.NotNil(t, err)
-		cast, ok := err.(*ServerResponseError)
+		cast, ok := err.(apierrors.APIStatus)
 		require.True(t, ok)
-		assert.Equal(t, http.StatusBadRequest, cast.StatusCode())
+		assert.Equal(t, http.StatusBadRequest, int(cast.Status().Code))
 	})
 }
 

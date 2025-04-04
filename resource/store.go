@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // TODO: rewrite the godocs, this is all copied from crd/store.go
@@ -23,11 +24,6 @@ const (
 	SubresourceStatus = SubresourceName("status")
 	SubresourceScale  = SubresourceName("scale")
 )
-
-type APIServerResponseError interface {
-	error
-	StatusCode() int
-}
 
 type KindCollection interface {
 	Kinds() []Kind
@@ -200,14 +196,8 @@ func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	}
 
 	resp, err := client.Get(ctx, obj.GetStaticMetadata().Identifier())
-
-	if err != nil {
-		cast, ok := err.(APIServerResponseError)
-		if !ok {
-			return nil, err
-		} else if cast.StatusCode() != http.StatusNotFound {
-			return nil, err
-		}
+	if err != nil && !apierrors.IsNotFound(err) {
+		return nil, err
 	}
 
 	if resp != nil {
@@ -246,7 +236,7 @@ func (s *Store) ForceDelete(ctx context.Context, kind string, identifier Identif
 
 	err = client.Delete(ctx, identifier, DeleteOptions{})
 
-	if cast, ok := err.(APIServerResponseError); ok && cast.StatusCode() == http.StatusNotFound {
+	if apierrors.IsNotFound(err) {
 		return nil
 	}
 	return err
