@@ -8,6 +8,10 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
@@ -43,7 +47,8 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
 	app.Runnable
-	AddEventHandler(handler ResourceWatcher) error
+	AddEventHandler(handler cache.ResourceEventHandler) error
+	Kind() resource.Kind
 }
 
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
@@ -112,6 +117,7 @@ type InformerController struct {
 	toRetry             *ListMap[string, retryInfo]
 	retryTickerInterval time.Duration
 	runner              *app.DynamicMultiRunner
+	runContext          context.Context
 	totalEvents         *prometheus.CounterVec
 	reconcileLatency    *prometheus.HistogramVec
 	reconcilerLatency   *prometheus.HistogramVec
@@ -239,11 +245,17 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return fmt.Errorf("resourceKind cannot be empty")
 	}
 
-	err := informer.AddEventHandler(&SimpleWatcher{
-		AddFunc:    c.informerAddFunc(resourceKind),
-		UpdateFunc: c.informerUpdateFunc(resourceKind),
-		DeleteFunc: c.informerDeleteFunc(resourceKind),
-	})
+	err := informer.AddEventHandler(c.resourceWatcherToEventHandler(
+		NewConcurrentWatcher(
+			&SimpleWatcher{
+				AddFunc:    c.informerAddFunc(resourceKind),
+				UpdateFunc: c.informerUpdateFunc(resourceKind),
+				DeleteFunc: c.informerDeleteFunc(resourceKind),
+			},
+			16,
+		),
+		informer.Kind(),
+	))
 	if err != nil {
 		return err
 	}
@@ -251,6 +263,87 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 	c.runner.AddRunnable(informer)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
+}
+
+func (c *InformerController) resourceWatcherToEventHandler(handler ResourceWatcher, kind resource.Kind) cache.ResourceEventHandler {
+	transformer := func(obj any) (resource.Object, error) {
+		return toResourceObject(obj, kind)
+	}
+
+	contextProvider := func() context.Context {
+		if c.runContext != nil {
+			return c.runContext
+		}
+		return context.Background()
+	}
+
+	setSpanAttributes := func(span trace.Span, obj resource.Object) {
+		span.SetAttributes(
+			attribute.String("kind.name", kind.Kind()),
+			attribute.String("kind.group", kind.Group()),
+			attribute.String("kind.version", kind.Version()),
+			attribute.String("namespace", obj.GetNamespace()),
+			attribute.String("name", obj.GetName()),
+		)
+	}
+
+	return &cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj any) {
+			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-update")
+			defer span.End()
+			cast, err := transformer(obj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+				return
+			}
+			setSpanAttributes(span, cast)
+			err = handler.Add(ctx, cast)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+			}
+		},
+		UpdateFunc: func(oldObj, newObj any) {
+			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-update")
+			defer span.End()
+			cOld, err := transformer(oldObj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+				return
+			}
+			// None of the attributes should change between old and new, so we can set them here with old's values
+			setSpanAttributes(span, cOld)
+			cNew, err := transformer(newObj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+				return
+			}
+			err = handler.Update(ctx, cOld, cNew)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+			}
+		},
+		DeleteFunc: func(obj any) {
+			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-delete")
+			defer span.End()
+			cast, err := transformer(obj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+				return
+			}
+			setSpanAttributes(span, cast)
+			err = handler.Delete(ctx, cast)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				c.ErrorHandler(ctx, err)
+			}
+		},
+	}
 }
 
 // RemoveInformer removes the provided informer, stopping it if it is currently running.
@@ -322,6 +415,8 @@ func (c *InformerController) Run(ctx context.Context) error {
 	// Using derivedCtx ensures that if c.runner exits prematurely due to an error, c.retryTicker will also stop
 	derivedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+
+	c.runContext = derivedCtx
 
 	go c.retryTicker(derivedCtx)
 	return c.runner.Run(ctx)

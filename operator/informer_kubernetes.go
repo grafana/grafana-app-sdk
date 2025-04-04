@@ -57,18 +57,17 @@ func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, optio
 // Event handlers are not guaranteed to be executed in parallel or in any particular order by the underlying
 // kubernetes apimachinery code. If you want to coordinate ResourceWatchers, use am InformerController.
 // nolint:dupl
-func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error {
+func (k *KubernetesBasedInformer) AddEventHandler(handler cache.ResourceEventHandler) error {
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
-	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler, func() context.Context {
-		if k.runContext != nil {
-			return k.runContext
-		}
-		return context.Background()
-	}))
+	_, err := k.SharedIndexInformer.AddEventHandler(handler)
 
 	return err
+}
+
+func (k *KubernetesBasedInformer) Kind() resource.Kind {
+	return k.schema
 }
 
 // Run starts the informer and blocks until stopCh receives a message
