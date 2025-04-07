@@ -237,7 +237,12 @@ func (m *MemcachedStore) List() []any {
 		for j := 0; j < len(fetchKeys); j++ {
 			fetchKeys[j] = fmt.Sprintf("%s/%s", m.kind.Plural(), fetchKeys[j])
 		}
-		res, err := m.client.GetMulti(fetchKeys)
+		var res map[string]*memcache.Item
+		err := m.attemptWithRefreshOnTimeout(func() error {
+			var err error
+			res, err = m.client.GetMulti(fetchKeys)
+			return err
+		})
 		if err != nil {
 			// TODO: ???
 			return nil
@@ -319,7 +324,12 @@ func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string
 }
 
 func (m *MemcachedStore) setKeysFromCache() error {
-	item, err := m.client.Get(m.cacheKeysKey)
+	var item *memcache.Item
+	err := m.attemptWithRefreshOnTimeout(func() error {
+		var err error
+		item, err = m.client.Get(m.cacheKeysKey)
+		return err
+	})
 	if err != nil {
 		if errors.Is(err, memcache.ErrCacheMiss) {
 			return nil
@@ -338,19 +348,22 @@ func (m *MemcachedStore) setKeysFromCache() error {
 }
 
 func (m *MemcachedStore) syncKeys() error {
-	_, err := m.client.Get(m.cacheKeysKey)
-	if err != nil {
-		if !errors.Is(err, memcache.ErrCacheMiss) {
-			return err
-		}
-		item := &memcache.Item{
-			Key:   m.cacheKeysKey,
-			Value: []byte("[]"),
-		}
-		err = m.client.Add(item)
+	err := m.attemptWithRefreshOnTimeout(func() error {
+		_, err := m.client.Get(m.cacheKeysKey)
 		if err != nil {
-			return err
+			if !errors.Is(err, memcache.ErrCacheMiss) {
+				return err
+			}
+			item := &memcache.Item{
+				Key:   m.cacheKeysKey,
+				Value: []byte("[]"),
+			}
+			return m.client.Add(item)
 		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	externalKeys := make([]string, 0)
 	m.keys.Range(func(key, _ any) bool {
@@ -361,9 +374,11 @@ func (m *MemcachedStore) syncKeys() error {
 	if err != nil {
 		return err
 	}
-	return m.client.Replace(&memcache.Item{
-		Key:   m.cacheKeysKey,
-		Value: externalKeysJSON,
+	return m.attemptWithRefreshOnTimeout(func() error {
+		return m.client.Replace(&memcache.Item{
+			Key:   m.cacheKeysKey,
+			Value: externalKeysJSON,
+		})
 	})
 }
 
