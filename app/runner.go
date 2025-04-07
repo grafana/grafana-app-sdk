@@ -9,6 +9,7 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
@@ -114,6 +115,23 @@ func (m *MultiRunner) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
+// HealthChecks implements health.Checker
+func (m *MultiRunner) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+
+	for _, runner := range m.Runners {
+		if cast, ok := runner.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+
+		if cast, ok := runner.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+	}
+
+	return checks
+}
+
 // AddRunnable adds the provided Runnable to the Runners slice. If the slice is nil, it will create it.
 func (m *MultiRunner) AddRunnable(runnable Runnable) {
 	if m.Runners == nil {
@@ -208,6 +226,19 @@ func (s *SingletonRunner) PrometheusCollectors() []prometheus.Collector {
 		return cast.PrometheusCollectors()
 	}
 	return nil
+}
+
+// HealthChecks
+func (s *SingletonRunner) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+	if cast, ok := s.Wrapped.(health.Check); ok {
+		checks = append(checks, cast)
+	}
+
+	if cast, ok := s.Wrapped.(health.Checker); ok {
+		checks = append(checks, cast.HealthChecks()...)
+	}
+	return checks
 }
 
 type dynamicMultiRunnerTuple struct {
@@ -348,6 +379,22 @@ func (d *DynamicMultiRunner) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
+// HealthChecks implements health.Checker
+func (d *DynamicMultiRunner) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+
+	for _, tpl := range d.runners {
+		if cast, ok := tpl.runner.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+
+		if cast, ok := tpl.runner.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+	}
+
+	return checks
+}
 func (d *DynamicMultiRunner) runTuple(tpl *dynamicMultiRunnerTuple) {
 	d.wg.Add(1)
 	ctx, cancel := context.WithCancel(d.runCtx)

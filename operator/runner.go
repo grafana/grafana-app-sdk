@@ -8,13 +8,14 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -26,12 +27,15 @@ import (
 // or another type. It does not support certain advanced app.App functionality which is not natively supported by
 // CRDs, such as arbitrary subresources (app.App.CallSubresource). It should be instantiated with NewRunner.
 type Runner struct {
-	config        RunnerConfig
-	webhookServer *webhookServerRunner
-	metricsServer *metricsServerRunner
-	startMux      sync.Mutex
-	running       bool
-	runningWG     sync.WaitGroup
+	config              RunnerConfig
+	webhookServer       *webhookServerRunner
+	metricsExporter     *metrics.Exporter
+	healthCheck         health.Check
+	metricsServer       *MetricsServer
+	metricsServerRunner *app.SingletonRunner
+	startMux            sync.Mutex
+	running             bool
+	runningWG           sync.WaitGroup
 }
 
 // NewRunner creates a new, properly-initialized instance of a Runner
@@ -43,8 +47,20 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	// 	return nil, fmt.Errorf("invalid KubeConfig: %w", err)
 	// }
 
+	if cfg.MetricsConfig.Port <= 0 {
+		cfg.MetricsConfig.Port = 9090
+	}
+
+	if cfg.MetricsConfig.HealthCheckInterval <= 0 {
+		cfg.MetricsConfig.HealthCheckInterval = 1 * time.Minute
+	}
+
+	metricsServer := NewMetricsServer(cfg.MetricsConfig.MetricsServerConfig)
 	op := Runner{
-		config: cfg,
+		config:              cfg,
+		healthCheck:         cfg.HealthCheck,
+		metricsServer:       metricsServer,
+		metricsServerRunner: app.NewSingletonRunner(metricsServer, false),
 	}
 
 	if cfg.WebhookConfig.TLSConfig.CertPath != "" {
@@ -61,9 +77,9 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 		op.webhookServer = newWebhookServerRunner(ws)
 	}
 	if cfg.MetricsConfig.Enabled {
-		exporter := metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
-		op.metricsServer = newMetricsServerRunner(exporter)
+		op.metricsExporter = metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
 	}
+
 	return &op, nil
 }
 
@@ -73,6 +89,8 @@ type RunnerConfig struct {
 	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
+	// Health checks for liveness and readiness
+	HealthCheck health.Check
 	// KubeConfig is the kubernetes rest.Config to use when communicating with the API server
 	KubeConfig rest.Config
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
@@ -83,6 +101,7 @@ type RunnerConfig struct {
 // RunnerMetricsConfig contains configuration information for exposing prometheus metrics
 type RunnerMetricsConfig struct {
 	metrics.ExporterConfig
+	MetricsServerConfig
 	Enabled   bool
 	Namespace string
 }
@@ -214,18 +233,34 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Metrics
-	if s.metricsServer != nil {
-		err = s.metricsServer.RegisterCollectors(runner.PrometheusCollectors()...)
+	if s.metricsExporter != nil {
+		err = s.metricsExporter.RegisterCollectors(runner.PrometheusCollectors()...)
 		if err != nil {
 			return err
 		}
-		runner.AddRunnable(s.metricsServer)
+
+		s.metricsServer.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
 	}
+
+	// Health
+	s.metricsServer.RegisterHealthChecks(s)
+	s.metricsServer.RegisterHealthChecks(runner.HealthChecks()...)
+	runner.AddRunnable(s.metricsServerRunner)
 
 	return runner.Run(ctx)
 }
 
-//nolint:revive
+func (s *Runner) HealthCheck(_ context.Context) error {
+	if s.running {
+		return nil
+	}
+	return errors.New("app has not started yet")
+}
+
+func (*Runner) HealthCheckName() string {
+	return "operator-runner"
+}
+
 func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {
 	manifest := provider.Manifest()
 	data := app.ManifestData{}
@@ -246,11 +281,10 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
 		}
 		m := app.Manifest{}
-		if err = json.Unmarshal(contents, &m); err == nil && m.ManifestData != nil {
-			data = *m.ManifestData
-		} else {
+		if err = json.Unmarshal(contents, &m); err != nil || m.ManifestData == nil {
 			return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
 		}
+		data = *m.ManifestData
 	case app.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server
 		return nil, fmt.Errorf("apiserver location not supported yet")
@@ -331,28 +365,6 @@ func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource
 
 func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
 	s.server.AddConverter(converter, groupKind)
-}
-
-func newMetricsServerRunner(exporter *metrics.Exporter) *metricsServerRunner {
-	return &metricsServerRunner{
-		server: exporter,
-		runner: app.NewSingletonRunner(&k8sRunnable{
-			runner: exporter,
-		}, false),
-	}
-}
-
-type metricsServerRunner struct {
-	runner *app.SingletonRunner
-	server *metrics.Exporter
-}
-
-func (m *metricsServerRunner) Run(ctx context.Context) error {
-	return m.runner.Run(ctx)
-}
-
-func (m *metricsServerRunner) RegisterCollectors(collectors ...prometheus.Collector) error {
-	return m.server.RegisterCollectors(collectors...)
 }
 
 type k8sRunner interface {

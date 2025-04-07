@@ -6,6 +6,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
@@ -53,6 +54,20 @@ func (o *Operator) PrometheusCollectors() []prometheus.Collector {
 		}
 	}
 	return collectors
+}
+
+func (o *Operator) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+	for _, c := range o.controllers {
+		if cast, ok := c.(health.Checker); ok {
+			checks = append(checks, cast.HealthChecks()...)
+		}
+
+		if cast, ok := c.(health.Check); ok {
+			checks = append(checks, cast)
+		}
+	}
+	return checks
 }
 
 // Run runs the operator until an unrecoverable error occurs or the context is canceled.
