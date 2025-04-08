@@ -81,10 +81,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 	err := m.client.Get().Resource("customresourcedefinitions").Name(name).
 		Do(ctx).StatusCode(&sc).Into(&existing)
 	if err != nil && sc != http.StatusNotFound {
-		if sc >= 300 {
-			return NewServerResponseError(err, sc)
-		}
-		return err
+		return ParseKubernetesError(nil, sc, err)
 	}
 	if sc == http.StatusNotFound {
 		// Create new
@@ -124,10 +121,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 	}
 	err = m.client.Put().Resource("customresourcedefinitions").Body(bytes).Do(ctx).StatusCode(&sc).Error()
 	if err != nil {
-		if sc >= 300 {
-			return NewServerResponseError(err, sc)
-		}
-		return err
+		return ParseKubernetesError(nil, sc, err)
 	}
 	if options.WaitForAvailability {
 		return m.WaitForAvailability(ctx, schema)
@@ -165,10 +159,7 @@ func (m *ResourceManager) create(ctx context.Context, schema resource.Schema, na
 	}
 	sc := 0
 	err = m.client.Post().Resource("customresourcedefinitions").Body(bytes).Do(ctx).StatusCode(&sc).Error()
-	if sc >= 300 {
-		return NewServerResponseError(err, sc)
-	}
-	return err
+	return ParseKubernetesError(nil, sc, err)
 }
 
 func toVersion(schema resource.Schema) CustomResourceDefinitionSpecVersion {
