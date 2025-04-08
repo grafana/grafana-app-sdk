@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -15,7 +14,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
@@ -64,7 +62,7 @@ func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identi
 	)
 	g.incRequestCounter(sc, "GET", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -103,7 +101,7 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 	)
 	g.incRequestCounter(sc, "GET", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
@@ -121,33 +119,30 @@ func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Ide
 	bool, error) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-exists")
 	defer span.End()
-	sc := 0
+	statusCode := 0
 	request := g.client.Get().Resource(plural).Name(identifier.Name)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
 	start := time.Now()
-	err := request.Do(ctx).StatusCode(&sc).Error()
-	g.logRequestDuration(time.Since(start), sc, "GET", plural, "spec")
+	err := request.Do(ctx).StatusCode(&statusCode).Error()
+	g.logRequestDuration(time.Since(start), statusCode, "GET", plural, "spec")
 	span.SetAttributes(
-		attribute.Int("http.response.status_code", sc),
+		attribute.Int("http.response.status_code", statusCode),
 		attribute.String("http.request.method", http.MethodGet),
 		attribute.String("server.address", request.URL().Hostname()),
 		attribute.String("server.port", request.URL().Port()),
 		attribute.String("url.full", request.URL().String()),
 	)
-	g.incRequestCounter(sc, "GET", plural, "spec")
+	g.incRequestCounter(statusCode, "GET", plural, "spec")
 	if err != nil {
-		// HTTP error?
-		if sc == http.StatusNotFound {
+		// Ignore not found errors.
+		if statusCode == http.StatusNotFound {
 			return false, nil
 		}
-		if sc > 0 {
-			span.SetStatus(codes.Error, err.Error())
-			return false, NewServerResponseError(err, sc)
-		}
+
 		span.SetStatus(codes.Error, err.Error())
-		return false, err
+		return false, ParseKubernetesError(nil, statusCode, err)
 	}
 	return true, nil
 }
@@ -194,7 +189,7 @@ func (g *groupVersionClient) create(
 	)
 	g.incRequestCounter(sc, "CREATE", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -247,7 +242,7 @@ func (g *groupVersionClient) update(
 	)
 	g.incRequestCounter(sc, "UPDATE", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -302,7 +297,7 @@ func (g *groupVersionClient) updateSubresource(
 	)
 	g.incRequestCounter(sc, "UPDATE", plural, subresource)
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -351,7 +346,7 @@ func (g *groupVersionClient) patch(
 	)
 	g.incRequestCounter(sc, "PATCH", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -392,7 +387,7 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 	)
 	g.incRequestCounter(sc, "DELETE", plural, "spec")
 	if err != nil && sc >= 300 {
-		return NewServerResponseError(err, sc)
+		return ParseKubernetesError(nil, sc, err)
 	}
 	return err
 }
@@ -433,7 +428,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	)
 	g.incRequestCounter(sc, "LIST", plural, "spec")
 	if err != nil {
-		err = parseKubernetesError(raw, sc, err)
+		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
@@ -601,46 +596,6 @@ func (w *WatchResponse) KubernetesWatch() watch.Interface {
 		w.started = false
 	}
 	return w.watch
-}
-
-type k8sErrBody struct {
-	Message string `json:"message"`
-	Code    int    `json:"code"`
-}
-
-// parseKubernetesError attempts to create a better error response from a k8s error
-// by using the body and status code from the request. The normal k8s error string is very generic
-// (typically: "the server rejected our request for an unknown reason (<METHOD> <GV> <NAME>)"),
-// but the response body often has more details about the nature of the failure (for example, missing a required field).
-// Ths method will parse the response body for a better error message if available, and return a *ServerResponseError
-// if the status code is a non-success (>= 300).
-//
-//nolint:govet
-func parseKubernetesError(responseBytes []byte, statusCode int, err error) error {
-	if err != nil {
-		statusErr := &k8serrors.StatusError{}
-		if errors.As(err, &statusErr) {
-			if statusCode == 0 || (statusErr.ErrStatus.Code > 0 && statusCode != int(statusErr.ErrStatus.Code)) {
-				return NewServerResponseError(statusErr, int(statusErr.ErrStatus.Code))
-			}
-			return NewServerResponseError(statusErr, statusCode)
-		}
-	}
-	if len(responseBytes) > 0 {
-		parsed := k8sErrBody{}
-		// If we can parse the response body, use the error contained there instead, because it's clearer
-		if e := json.Unmarshal(responseBytes, &parsed); e == nil {
-			err = errors.New(parsed.Message)
-			if statusCode == 0 && parsed.Code > 0 {
-				statusCode = parsed.Code
-			}
-		}
-	}
-	// HTTP error?
-	if statusCode >= 300 {
-		return NewServerResponseError(err, statusCode)
-	}
-	return err
 }
 
 func addLabels(obj resource.Object, labels map[string]string) {
