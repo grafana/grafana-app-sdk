@@ -43,12 +43,6 @@ var appManifestData = app.ManifestData{
 	},
 }
 
-func jsonToMap(j string) map[string]any {
-	m := make(map[string]any)
-	json.Unmarshal([]byte(j), &j)
-	return m
-}
-
 func LocalManifest() app.Manifest {
 	return app.NewEmbeddedManifest(appManifestData)
 }

@@ -167,8 +167,8 @@
                                                                 "type": "string"
                                                             },
                                                             "schema": {
-                                                                "additionalProperties": {},
-                                                                "type": "object"
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
                                                             },
                                                             "selectableFields": {
                                                                 "items": {
@@ -277,8 +277,7 @@
                                 "required": [
                                     "resources"
                                 ],
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "type": "object"
                             }
                         }
                     }
