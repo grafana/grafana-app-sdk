@@ -1,6 +1,7 @@
 module github.com/grafana/grafana-app-sdk
 
 go 1.24.0
+
 retract (
 	v0.20.0 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
@@ -27,8 +28,8 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.35.0
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
-	golang.org/x/sync v0.12.0
-	golang.org/x/text v0.23.0
+	golang.org/x/sync v0.13.0
+	golang.org/x/text v0.24.0
 	golang.org/x/tools v0.31.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	google.golang.org/grpc v1.71.1
