@@ -151,7 +151,7 @@ type InformerControllerConfig struct {
 	RetryDequeuePolicy RetryDequeuePolicy
 	// MaxConcurrentWorkers is a limit on the number of workers to run concurrently. Each worker maintains a queue of
 	// events which are processed sequentially. Events for a particular object are assigned to the same worker, as to
-	// maintain the gurantee of in-order delivery of events per object.
+	// maintain the guarantee of in-order delivery of events per object.
 	MaxConcurrentWorkers uint64
 }
 
