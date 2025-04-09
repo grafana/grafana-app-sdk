@@ -37,7 +37,7 @@ type ConcurrentWatcher struct {
 	workers map[uint64]*bufferedQueue
 }
 
-func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) *ConcurrentWatcher {
+func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) (*ConcurrentWatcher, context.CancelFunc) {
 	cw := &ConcurrentWatcher{
 		watcher: watcher,
 		size:    initialPoolSize,
@@ -49,12 +49,13 @@ func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) *Conc
 		cw.workers[i] = newBufferedQueue(initialBufferSize)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	// Start the workers in background as part of the watcher initialisation itself.
-	go func() {
-		cw.run(context.TODO())
-	}()
+	go func(ctx context.Context) {
+		cw.run(ctx)
+	}(ctx)
 
-	return cw
+	return cw, cancel
 }
 
 func (w *ConcurrentWatcher) Add(ctx context.Context, object resource.Object) error {

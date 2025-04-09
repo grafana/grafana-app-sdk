@@ -254,24 +254,40 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return fmt.Errorf("resourceKind cannot be empty")
 	}
 
+	watcher, stopWatcher := NewConcurrentWatcher(
+		&SimpleWatcher{
+			AddFunc:    c.informerAddFunc(resourceKind),
+			UpdateFunc: c.informerUpdateFunc(resourceKind),
+			DeleteFunc: c.informerDeleteFunc(resourceKind),
+		},
+		c.informerMaxWorkers,
+	)
+
 	err := informer.AddEventHandler(c.resourceWatcherToEventHandler(
-		NewConcurrentWatcher(
-			&SimpleWatcher{
-				AddFunc:    c.informerAddFunc(resourceKind),
-				UpdateFunc: c.informerUpdateFunc(resourceKind),
-				DeleteFunc: c.informerDeleteFunc(resourceKind),
-			},
-			c.informerMaxWorkers,
-		),
+		watcher,
 		informer.Kind(),
 	))
 	if err != nil {
 		return err
 	}
 
-	c.runner.AddRunnable(informer)
+	c.runner.AddRunnable(&informerWrapper{
+		informer: informer,
+		cancel:   stopWatcher,
+	})
 	c.informers.AddItem(resourceKind, informer)
 	return nil
+}
+
+type informerWrapper struct {
+	informer Informer
+	cancel   context.CancelFunc
+}
+
+func (iw *informerWrapper) Run(ctx context.Context) error {
+	defer iw.cancel()
+
+	return iw.informer.Run(ctx)
 }
 
 func (c *InformerController) resourceWatcherToEventHandler(handler ResourceWatcher, kind resource.Kind) cache.ResourceEventHandler {
