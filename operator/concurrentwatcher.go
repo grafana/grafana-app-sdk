@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cespare/xxhash/v2"
 	"github.com/grafana/grafana-app-sdk/resource"
+
+	"github.com/cespare/xxhash/v2"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/utils/buffer"
@@ -22,10 +23,6 @@ type eventInfo struct {
 	action ResourceAction
 	target resource.Object
 	source resource.Object
-}
-
-type worker struct {
-	toProcess chan eventInfo
 }
 
 // ConcurrentWatcher is a struct that implements ResourceWatcher, but takes no action on its own.
@@ -44,7 +41,7 @@ func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) (*Con
 		workers: make(map[uint64]*bufferedQueue),
 	}
 
-	var i uint64 = 0
+	var i uint64
 	for i < initialPoolSize {
 		cw.workers[i] = newBufferedQueue(initialBufferSize)
 	}
@@ -91,16 +88,19 @@ func (w *ConcurrentWatcher) Delete(ctx context.Context, object resource.Object) 
 
 func (w *ConcurrentWatcher) run(ctx context.Context) {
 	var wg sync.WaitGroup
-	for _, v := range w.workers {
+	for _, queue := range w.workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
+			// Start the background process to emit the events from queue.
+			go queue.run()
+			defer queue.stop()
+
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			events := v.events()
-
+			events := queue.events()
 			wait.Until(func() {
 				for next := range events {
 					event, ok := next.(eventInfo)
