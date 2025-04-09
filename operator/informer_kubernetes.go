@@ -85,16 +85,6 @@ func (k *KubernetesBasedInformer) Schema() resource.Schema {
 	return k.schema
 }
 
-func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
-	return toResourceObject(obj, k.schema)
-}
-
-func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
-	if k.ErrorHandler != nil {
-		k.ErrorHandler(ctx, err)
-	}
-}
-
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 	// Nil check
 	if obj == nil {
