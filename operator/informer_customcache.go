@@ -9,7 +9,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -197,12 +196,6 @@ func (c *CustomCacheInformer) OnDelete(obj any) {
 	})
 }
 
-func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
-	if c.ErrorHandler != nil {
-		c.ErrorHandler(ctx, err)
-	}
-}
-
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
 // The List and Watch requests will always use the provided namespace and labelFilters.
 func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions ListWatchOptions) cache.ListerWatcher {
@@ -265,87 +258,6 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 			}
 			go w.start()
 			return w, nil
-		},
-	}
-}
-
-func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) (resource.Object, error), errorHandler func(context.Context, error), contextProvider func() context.Context) *cache.ResourceEventHandlerFuncs {
-	return &cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-event-add")
-			defer span.End()
-			cast, err := transformer(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			gvk := cast.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cast.GetNamespace()),
-				attribute.String("name", cast.GetName()),
-			)
-			err = handler.Add(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-			}
-		},
-		UpdateFunc: func(oldObj, newObj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-event-update")
-			defer span.End()
-			cOld, err := transformer(oldObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			// None of these should change between old and new, so we can set them here with old's values
-			gvk := cOld.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cOld.GetNamespace()),
-				attribute.String("name", cOld.GetName()),
-			)
-			cNew, err := transformer(newObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			err = handler.Update(ctx, cOld, cNew)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-			}
-		},
-		DeleteFunc: func(obj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-event-delete")
-			defer span.End()
-			cast, err := transformer(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			gvk := cast.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cast.GetNamespace()),
-				attribute.String("name", cast.GetName()),
-			)
-			err = handler.Delete(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-			}
 		},
 	}
 }
