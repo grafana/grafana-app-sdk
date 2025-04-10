@@ -31,19 +31,23 @@ type eventInfo struct {
 // the events one-by-one. The events are sharded using hash mod algorithm, ensuring events for same object
 // end up in the same worker. This is to uphold the guarantee of in-order delivery of events for an object.
 type ConcurrentWatcher struct {
-	watcher ResourceWatcher
-	size    uint64
-	workers map[uint64]*bufferedQueue
+	watcher      ResourceWatcher
+	size         uint64
+	workers      map[uint64]*bufferedQueue
+	errorHandler func(context.Context, error)
 }
 
 // NewConcurrentWatcher returns a properly initialised ConcurrentWatcher. The consumer **must**
 // call the `ConcurrentWatcher.Run()` method afterwards to start the underlying workers. If not, the
 // wrapped ResourceWatcher methods will not be called.
-func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) *ConcurrentWatcher {
+func NewConcurrentWatcher(
+	watcher ResourceWatcher, initialPoolSize uint64, errorHandler func(context.Context, error),
+) *ConcurrentWatcher {
 	cw := &ConcurrentWatcher{
-		watcher: watcher,
-		size:    initialPoolSize,
-		workers: make(map[uint64]*bufferedQueue),
+		watcher:      watcher,
+		size:         initialPoolSize,
+		workers:      make(map[uint64]*bufferedQueue),
+		errorHandler: errorHandler,
 	}
 
 	var i uint64
@@ -109,15 +113,19 @@ func (w *ConcurrentWatcher) Run(ctx context.Context) {
 						utilruntime.HandleError(fmt.Errorf("unrecognized notification: %T", next))
 					}
 
+					var err error
 					switch event.action {
 					case ResourceActionCreate:
-						_ = w.watcher.Add(event.ctx, event.target)
+						err = w.watcher.Add(event.ctx, event.target)
 					case ResourceActionUpdate:
-						_ = w.watcher.Update(event.ctx, event.source, event.target)
+						err = w.watcher.Update(event.ctx, event.source, event.target)
 					case ResourceActionDelete:
-						_ = w.watcher.Delete(event.ctx, event.target)
+						err = w.watcher.Delete(event.ctx, event.target)
 					default:
 						utilruntime.HandleError(fmt.Errorf("invalid event type: %T", event.action))
+					}
+					if err != nil && w.errorHandler != nil {
+						w.errorHandler(ctx, err)
 					}
 				}
 				// the only way to get here is if the l.toProcess is empty and closed
