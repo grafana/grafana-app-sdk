@@ -71,7 +71,7 @@ data:
     address = tempo.default.svc:4317
     [auth.anonymous]
     enabled = true
-    org_role = Admin
+    org_role = Viewer
     [log.frontend]
     enabled = true
     [plugins]
