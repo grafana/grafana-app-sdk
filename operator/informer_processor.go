@@ -110,7 +110,7 @@ func (l *informerProcessorListener) push(event any) {
 	l.queue.push(event)
 }
 
-// run starts the queue (to start recieving events) in the background, and
+// run starts the queue (to start receiving events) in the background, and
 // then reads events from the queue's output channel and dispatches them to
 // the handler based on event type.
 func (l *informerProcessorListener) run() {
@@ -143,7 +143,7 @@ func (l *informerProcessorListener) stop() {
 	l.queue.stop()
 }
 
-// bufferedQueue is a FIFO queue that allows concurrent listeneres by streaming
+// bufferedQueue is a FIFO queue that allows concurrent listeners by streaming
 // events to a channel. The queue uses a growing ring buffer to avoid blocking
 // event push.
 type bufferedQueue struct {
@@ -152,8 +152,8 @@ type bufferedQueue struct {
 	buf            buffer.RingGrowing
 }
 
-// newBufferedQueue returns a properly initialised bufferedQueue. The consumer
-// need to run `bufferedQueue.run()` method to start recieving the events.
+// newBufferedQueue returns a properly initialized bufferedQueue. The consumer
+// need to run `bufferedQueue.run()` method to start receiving the events.
 func newBufferedQueue(bufferSize int) *bufferedQueue {
 	return &bufferedQueue{
 		incomingEvents: make(chan any),
