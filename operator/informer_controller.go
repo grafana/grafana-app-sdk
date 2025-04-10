@@ -254,7 +254,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return fmt.Errorf("resourceKind cannot be empty")
 	}
 
-	watcher, stopWatcher := NewConcurrentWatcher(
+	watcher := NewConcurrentWatcher(
 		&SimpleWatcher{
 			AddFunc:    c.informerAddFunc(resourceKind),
 			UpdateFunc: c.informerUpdateFunc(resourceKind),
@@ -273,7 +273,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 
 	c.runner.AddRunnable(&informerWrapper{
 		informer: informer,
-		cancel:   stopWatcher,
+		watcher:  watcher,
 	})
 	c.informers.AddItem(resourceKind, informer)
 	return nil
@@ -281,11 +281,15 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 
 type informerWrapper struct {
 	informer Informer
-	cancel   context.CancelFunc
+	watcher  *ConcurrentWatcher
 }
 
 func (iw *informerWrapper) Run(ctx context.Context) error {
-	defer iw.cancel()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Start the ConcurrentWatcher workers in the background.
+	go iw.watcher.Run(ctx)
 
 	return iw.informer.Run(ctx)
 }

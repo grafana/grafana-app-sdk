@@ -27,13 +27,19 @@ type eventInfo struct {
 // ConcurrentWatcher is a struct that implements ResourceWatcher, but takes no action on its own.
 // For each method in (Add, Update, Delete) the event is added in a buffered queue and the corresponding
 // methods of the underlying ResourceWatcher are called concurrently.
+// The events are processed by a fixed number of workers running concurrently. Each worker processing
+// the events one-by-one. The events are sharded using hash mod algorithm, ensuring events for same object
+// end up in the same worker. This is to uphold the guarantee of in-order delivery of events for an object.
 type ConcurrentWatcher struct {
 	watcher ResourceWatcher
 	size    uint64
 	workers map[uint64]*bufferedQueue
 }
 
-func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) (*ConcurrentWatcher, context.CancelFunc) {
+// NewConcurrentWatcher returns a properly initialised ConcurrentWatcher. The consumer **must**
+// call the `ConcurrentWatcher.Run()` method afterwards to start the underlying workers. If not, the
+// wrapped ResourceWatcher methods will not be called.
+func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) *ConcurrentWatcher {
 	cw := &ConcurrentWatcher{
 		watcher: watcher,
 		size:    initialPoolSize,
@@ -45,13 +51,7 @@ func NewConcurrentWatcher(watcher ResourceWatcher, initialPoolSize uint64) (*Con
 		cw.workers[i] = newBufferedQueue(initialBufferSize)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	// Start the workers in background as part of the watcher initialisation itself.
-	go func(ctx context.Context) {
-		cw.run(ctx)
-	}(ctx)
-
-	return cw, cancel
+	return cw
 }
 
 func (w *ConcurrentWatcher) Add(ctx context.Context, object resource.Object) error {
@@ -85,14 +85,16 @@ func (w *ConcurrentWatcher) Delete(ctx context.Context, object resource.Object) 
 	return nil
 }
 
-func (w *ConcurrentWatcher) run(ctx context.Context) {
+// Run starts a number of workers, processing the events concurrently by triggering the
+// methods of underlying watcher as per the event type.
+func (w *ConcurrentWatcher) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, queue := range w.workers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
-			// Start the background process to emit the events from queue.
+			// Start the background process responsible for emitting the events from queue.
 			go queue.run()
 			defer queue.stop()
 
