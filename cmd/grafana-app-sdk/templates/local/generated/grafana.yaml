@@ -70,8 +70,7 @@ data:
     [tracing.opentelemetry.otlp]
     address = tempo.default.svc:4317
     [auth.anonymous]
-    enabled = true
-    org_role = Admin
+    enabled = false
     [log.frontend]
     enabled = true
     [plugins]
