@@ -69,8 +69,10 @@ data:
     reporting_enabled = false
     [tracing.opentelemetry.otlp]
     address = tempo.default.svc:4317
-    [auth.anonymous]
-    enabled = false
+    [auth.anonymous]{{ if .GrafanaAnonymousAuth }}
+    enabled = true
+    org_role = {{ .GrafanaAnonymousAuth }}{{ else }}
+    enabled = false{{ end }}
     [log.frontend]
     enabled = true
     [plugins]
