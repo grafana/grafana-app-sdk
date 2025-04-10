@@ -261,6 +261,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 			DeleteFunc: c.informerDeleteFunc(resourceKind),
 		},
 		c.informerMaxWorkers,
+		c.ErrorHandler,
 	)
 
 	err := informer.AddEventHandler(c.resourceWatcherToEventHandler(
