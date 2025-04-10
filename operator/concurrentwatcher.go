@@ -11,7 +11,6 @@ import (
 	"github.com/cespare/xxhash/v2"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/utils/buffer"
 )
 
 var (
@@ -133,62 +132,4 @@ func (w *ConcurrentWatcher) hashMod(obj resource.Object) uint64 {
 	digest := xxhash.Sum64([]byte(id))
 
 	return digest % w.size
-}
-
-type bufferedQueue struct {
-	incomingEvents chan any
-	toProcess      chan any
-	buf            buffer.RingGrowing
-}
-
-func newBufferedQueue(bufferSize int) *bufferedQueue {
-	return &bufferedQueue{
-		incomingEvents: make(chan any),
-		toProcess:      make(chan any),
-		buf:            *buffer.NewRingGrowing(bufferSize),
-	}
-}
-
-func (l *bufferedQueue) events() chan any {
-	return l.toProcess
-}
-
-func (l *bufferedQueue) push(event any) {
-	l.incomingEvents <- event
-}
-
-// run will continuously read messages from the events channel, and write them to a buffer.
-// while any contents exist in the buffer, it will also attempt to write them out to the toProcess channel.
-// This allows writes to the events channel to not be blocked by processing of the events, which instead consumes
-// from the toProcess channel.
-func (l *bufferedQueue) run() {
-	defer close(l.toProcess)
-
-	var nextCh chan<- any
-	var event any
-	var ok bool
-	for {
-		select {
-		case nextCh <- event:
-			event, ok = l.buf.ReadOne()
-			if !ok {
-				nextCh = nil
-			}
-		case eventToAdd, ok := <-l.incomingEvents:
-			if !ok {
-				return
-			}
-			if event == nil {
-				event = eventToAdd
-				nextCh = l.toProcess
-			} else { // There is already a notification waiting to be dispatched
-				l.buf.WriteOne(eventToAdd)
-			}
-		}
-	}
-}
-
-// stop stops the run processes. Because the channels are closed, the listener cannot be re-used.
-func (l *bufferedQueue) stop() {
-	close(l.incomingEvents)
 }
