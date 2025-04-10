@@ -150,6 +150,10 @@ type AppInformerConfig struct {
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
 	InformerSupplier InformerSupplier
+	// MaxConcurrentWorkers is a limit on the number of workers to run concurrently. Each worker maintains a queue of
+	// events which are then processed sequentially inside the worker. Events for a particular object are assigned to
+	// the same worker, as to maintain the guarantee of in-order delivery of events per object.
+	MaxConcurrentWorkers uint64
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -227,16 +231,19 @@ type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
 	a := &App{
-		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
-		runner:             app.NewMultiRunner(),
-		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
-		kinds:              make(map[string]AppManagedKind),
-		internalKinds:      make(map[string]resource.Kind),
-		converters:         make(map[string]Converter),
-		customRoutes:       make(map[string]AppCustomRouteHandler),
-		cfg:                config,
-		collectors:         make([]prometheus.Collector, 0),
+		runner:          app.NewMultiRunner(),
+		clientGenerator: k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
+		kinds:           make(map[string]AppManagedKind),
+		internalKinds:   make(map[string]resource.Kind),
+		converters:      make(map[string]Converter),
+		customRoutes:    make(map[string]AppCustomRouteHandler),
+		cfg:             config,
+		collectors:      make([]prometheus.Collector, 0),
 	}
+	informerCtlCfg := operator.DefaultInformerControllerConfig()
+	informerCtlCfg.MaxConcurrentWorkers = config.InformerConfig.MaxConcurrentWorkers
+	a.informerController = operator.NewInformerController(informerCtlCfg)
+
 	if config.InformerConfig.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.ErrorHandler
 	}
