@@ -37,7 +37,7 @@ type ConcurrentWatcher struct {
 	errorHandler func(context.Context, error)
 }
 
-// NewConcurrentWatcher returns a properly initialised ConcurrentWatcher. The consumer **must**
+// NewConcurrentWatcher returns a properly initialized ConcurrentWatcher. The consumer **must**
 // call the `ConcurrentWatcher.Run()` method afterwards to start the underlying workers. If not, the
 // wrapped ResourceWatcher methods will not be called.
 func NewConcurrentWatcher(
