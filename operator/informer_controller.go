@@ -254,7 +254,7 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return fmt.Errorf("resourceKind cannot be empty")
 	}
 
-	watcher := NewConcurrentWatcher(
+	watcher, err := NewConcurrentWatcher(
 		&SimpleWatcher{
 			AddFunc:    c.informerAddFunc(resourceKind),
 			UpdateFunc: c.informerUpdateFunc(resourceKind),
@@ -263,8 +263,11 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		c.informerMaxWorkers,
 		c.ErrorHandler,
 	)
+	if err != nil {
+		return fmt.Errorf("initializing concurrent watcher: %w", err)
+	}
 
-	err := informer.AddEventHandler(c.resourceWatcherToEventHandler(
+	err = informer.AddEventHandler(c.resourceWatcherToEventHandler(
 		watcher,
 		informer.Kind(),
 	))

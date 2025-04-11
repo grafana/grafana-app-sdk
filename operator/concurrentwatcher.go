@@ -42,20 +42,31 @@ type ConcurrentWatcher struct {
 // wrapped ResourceWatcher methods will not be called.
 func NewConcurrentWatcher(
 	watcher ResourceWatcher, initialPoolSize uint64, errorHandler func(context.Context, error),
-) *ConcurrentWatcher {
+) (*ConcurrentWatcher, error) {
+	if watcher == nil {
+		return nil, fmt.Errorf("resource watcher cannot be nil")
+	}
+	if initialPoolSize <= 0 {
+		return nil, fmt.Errorf("initial worker pool size needs to be greater than 0")
+	}
+
 	cw := &ConcurrentWatcher{
 		watcher:      watcher,
 		size:         initialPoolSize,
-		workers:      make(map[uint64]*bufferedQueue),
-		errorHandler: errorHandler,
+		workers:      make(map[uint64]*bufferedQueue, initialBufferSize),
+		errorHandler: DefaultErrorHandler,
+	}
+	if errorHandler != nil {
+		cw.errorHandler = errorHandler
 	}
 
 	var i uint64
 	for i < initialPoolSize {
 		cw.workers[i] = newBufferedQueue(initialBufferSize)
+		i++
 	}
 
-	return cw
+	return cw, nil
 }
 
 func (w *ConcurrentWatcher) Add(ctx context.Context, object resource.Object) error {
@@ -91,6 +102,7 @@ func (w *ConcurrentWatcher) Delete(ctx context.Context, object resource.Object) 
 
 // Run starts a number of workers, processing the events concurrently by triggering the
 // methods of underlying watcher as per the event type.
+// Run will clean up and exit once the provided context is canceled.
 func (w *ConcurrentWatcher) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, queue := range w.workers {

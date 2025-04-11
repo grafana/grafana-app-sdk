@@ -785,7 +785,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			<-addCh
 		}
 		// Fire an update, which should halt the add retries
-		inf.FireUpdate(context.Background(), nil, emptyObject)
+		inf.FireUpdate(context.Background(), emptyObject, emptyObject)
 		// We _may_ get one more add retry, if it was already happening when the update was processed. But we shouldn't get any more than that
 		// Wait a second before stopping in case another retry _does_ come through
 		time.Sleep(time.Second * 1)
@@ -854,7 +854,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		<-addCh
 		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 		time.Sleep(time.Millisecond * 500)
-		inf.FireUpdate(context.Background(), nil, emptyObject)
+		inf.FireUpdate(context.Background(), emptyObject, emptyObject)
 		// Wait for two updates
 		<-updateCh
 		<-updateCh
