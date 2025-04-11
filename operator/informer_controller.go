@@ -254,41 +254,48 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return fmt.Errorf("resourceKind cannot be empty")
 	}
 
-	watcher, err := NewConcurrentWatcher(
-		&SimpleWatcher{
-			AddFunc:    c.informerAddFunc(resourceKind),
-			UpdateFunc: c.informerUpdateFunc(resourceKind),
-			DeleteFunc: c.informerDeleteFunc(resourceKind),
-		},
-		c.informerMaxWorkers,
-		c.ErrorHandler,
-	)
-	if err != nil {
-		return fmt.Errorf("initializing concurrent watcher: %w", err)
+	simple := &SimpleWatcher{
+		AddFunc:    c.informerAddFunc(resourceKind),
+		UpdateFunc: c.informerUpdateFunc(resourceKind),
+		DeleteFunc: c.informerDeleteFunc(resourceKind),
 	}
 
-	err = informer.AddEventHandler(c.resourceWatcherToEventHandler(
-		watcher,
+	var runnable app.Runnable = informer
+	var handler ResourceWatcher = simple
+
+	if c.informerMaxWorkers > 1 {
+		concurrent, err := NewConcurrentWatcher(simple, c.informerMaxWorkers, c.ErrorHandler)
+		if err != nil {
+			return fmt.Errorf("initializing concurrent watcher: %w", err)
+		}
+		handler = concurrent
+		runnable = &concurrentInformerWrapper{
+			informer: informer,
+			watcher:  concurrent,
+		}
+	}
+
+	err := informer.AddEventHandler(c.resourceWatcherToEventHandler(
+		handler,
 		informer.Kind(),
 	))
 	if err != nil {
 		return err
 	}
 
-	c.runner.AddRunnable(&informerWrapper{
-		informer: informer,
-		watcher:  watcher,
-	})
+	c.runner.AddRunnable(runnable)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
 }
 
-type informerWrapper struct {
+// concurrentInformerWrapper wraps an existing Informer's `Run()` method to also start
+// the `Run()` method for the attched `ConcurrentWatcher` in the background.
+type concurrentInformerWrapper struct {
 	informer Informer
 	watcher  *ConcurrentWatcher
 }
 
-func (iw *informerWrapper) Run(ctx context.Context) error {
+func (iw *concurrentInformerWrapper) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
