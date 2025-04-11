@@ -149,7 +149,7 @@ func (l *informerProcessorListener) stop() {
 type bufferedQueue struct {
 	incomingEvents chan any
 	toProcess      chan any
-	buf            buffer.RingGrowing
+	buf            *buffer.RingGrowing
 }
 
 // newBufferedQueue returns a properly initialized bufferedQueue. The consumer
@@ -158,7 +158,7 @@ func newBufferedQueue(bufferSize int) *bufferedQueue {
 	return &bufferedQueue{
 		incomingEvents: make(chan any),
 		toProcess:      make(chan any),
-		buf:            *buffer.NewRingGrowing(bufferSize),
+		buf:            buffer.NewRingGrowing(bufferSize),
 	}
 }
 
