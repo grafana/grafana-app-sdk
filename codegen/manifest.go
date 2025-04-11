@@ -11,6 +11,7 @@ type AppManifestProperties struct {
 	Group            string                                `json:"group"`
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
+	OperatorURL      *string                               `json:"operatorURL,omitempty"`
 }
 
 type AppManifestPropertiesExtraPermissions struct {

@@ -226,6 +226,11 @@ Manifest: S={
 		accessKinds: [...#AccessKind]
 	}
 
+	// operatorURL is the HTTPS URL of your operator, including port if non-standard (443).
+	// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
+	// This is used to construct validation, mutations, or conversion webhooks for your deployment.
+	operatorURL?: string
+
 	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
 	// if present, this value is used for the full group instead.
 	// groupOverride must have at least two parts (i.e. 'foo.bar'), but can be longer.
