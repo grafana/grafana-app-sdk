@@ -275,9 +275,16 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		}
 	}
 
-	err := informer.AddEventHandler(c.resourceWatcherToEventHandler(
+	err := informer.AddEventHandler(ResourceWatcherToEventHandler(
 		handler,
 		informer.Kind(),
+		func() context.Context {
+			if c.runContext != nil {
+				return c.runContext
+			}
+			return context.Background()
+		},
+		c.ErrorHandler,
 	))
 	if err != nil {
 		return err
@@ -286,104 +293,6 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 	c.runner.AddRunnable(runnable)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
-}
-
-// concurrentInformerWrapper wraps an existing Informer's `Run()` method to also start
-// the `Run()` method for the attched `ConcurrentWatcher` in the background.
-type concurrentInformerWrapper struct {
-	informer Informer
-	watcher  *ConcurrentWatcher
-}
-
-func (iw *concurrentInformerWrapper) Run(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// Start the ConcurrentWatcher workers in the background.
-	go iw.watcher.Run(ctx)
-
-	return iw.informer.Run(ctx)
-}
-
-func (c *InformerController) resourceWatcherToEventHandler(handler ResourceWatcher, kind resource.Kind) cache.ResourceEventHandler {
-	transformer := func(obj any) (resource.Object, error) {
-		return toResourceObject(obj, kind)
-	}
-
-	contextProvider := func() context.Context {
-		if c.runContext != nil {
-			return c.runContext
-		}
-		return context.Background()
-	}
-
-	setSpanAttributes := func(span trace.Span, obj resource.Object) {
-		span.SetAttributes(
-			attribute.String("kind.name", kind.Kind()),
-			attribute.String("kind.group", kind.Group()),
-			attribute.String("kind.version", kind.Version()),
-			attribute.String("namespace", obj.GetNamespace()),
-			attribute.String("name", obj.GetName()),
-		)
-	}
-
-	return &cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-update")
-			defer span.End()
-			cast, err := transformer(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-				return
-			}
-			setSpanAttributes(span, cast)
-			err = handler.Add(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-			}
-		},
-		UpdateFunc: func(oldObj, newObj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-update")
-			defer span.End()
-			cOld, err := transformer(oldObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-				return
-			}
-			// None of the attributes should change between old and new, so we can set them here with old's values
-			setSpanAttributes(span, cOld)
-			cNew, err := transformer(newObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-				return
-			}
-			err = handler.Update(ctx, cOld, cNew)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-			}
-		},
-		DeleteFunc: func(obj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-delete")
-			defer span.End()
-			cast, err := transformer(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-				return
-			}
-			setSpanAttributes(span, cast)
-			err = handler.Delete(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				c.ErrorHandler(ctx, err)
-			}
-		},
-	}
 }
 
 // RemoveInformer removes the provided informer, stopping it if it is currently running.
@@ -791,6 +700,109 @@ func (c *InformerController) retryTicker(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		}
+	}
+}
+
+// concurrentInformerWrapper wraps an existing Informer's `Run()` method to also start
+// the `Run()` method for the attched `ConcurrentWatcher` in the background.
+type concurrentInformerWrapper struct {
+	informer Informer
+	watcher  *ConcurrentWatcher
+}
+
+func (iw *concurrentInformerWrapper) Run(ctx context.Context) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Start the ConcurrentWatcher workers in the background.
+	go iw.watcher.Run(ctx)
+
+	return iw.informer.Run(ctx)
+}
+
+func ResourceWatcherToEventHandler(
+	handler ResourceWatcher,
+	kind resource.Kind,
+	contextProvider func() context.Context,
+	errorHandler func(context.Context, error),
+) cache.ResourceEventHandler {
+	transformer := func(obj any) (resource.Object, error) {
+		return toResourceObject(obj, kind)
+	}
+
+	if contextProvider == nil {
+		contextProvider = context.Background
+	}
+	if errorHandler == nil {
+		errorHandler = DefaultErrorHandler
+	}
+
+	setSpanAttributes := func(span trace.Span, obj resource.Object) {
+		span.SetAttributes(
+			attribute.String("kind.name", kind.Kind()),
+			attribute.String("kind.group", kind.Group()),
+			attribute.String("kind.version", kind.Version()),
+			attribute.String("namespace", obj.GetNamespace()),
+			attribute.String("name", obj.GetName()),
+		)
+	}
+
+	return &cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj any) {
+			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-update")
+			defer span.End()
+			cast, err := transformer(obj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			setSpanAttributes(span, cast)
+			err = handler.Add(ctx, cast)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+			}
+		},
+		UpdateFunc: func(oldObj, newObj any) {
+			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-update")
+			defer span.End()
+			cOld, err := transformer(oldObj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			// None of the attributes should change between old and new, so we can set them here with old's values
+			setSpanAttributes(span, cOld)
+			cNew, err := transformer(newObj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			err = handler.Update(ctx, cOld, cNew)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+			}
+		},
+		DeleteFunc: func(obj any) {
+			ctx, span := GetTracer().Start(contextProvider(), "informer-controller-event-delete")
+			defer span.End()
+			cast, err := transformer(obj)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+				return
+			}
+			setSpanAttributes(span, cast)
+			err = handler.Delete(ctx, cast)
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				errorHandler(ctx, err)
+			}
+		},
 	}
 }
 
