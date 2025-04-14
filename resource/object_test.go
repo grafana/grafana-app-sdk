@@ -3,6 +3,7 @@ package resource
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ type ComplexTestObject struct {
 	IntPointer   *int
 	SlicePointer *[]int          // Weird, but valid, types
 	MapPointer   *map[string]int // Weird, but valid, types
+	Timestamp    time.Time       // Times won't be copied right if you try to copy them as a struct (they'll become 0)
 }
 
 type ComplexTestObjectChild struct {
@@ -119,6 +121,7 @@ func TestCopyObjectInto(t *testing.T) {
 			IntPointer:   &i,
 			SlicePointer: &si,
 			MapPointer:   &mi,
+			Timestamp:    time.Now(),
 		},
 		out: &ComplexTestObject{},
 	}}
