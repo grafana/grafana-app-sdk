@@ -40,7 +40,6 @@ Schema: {
 	}
 
 	spec:   _
-	status: _
 
 	// cuetsy is not happy creating spec with the MinFields constraint directly
 	_specIsNonEmpty: spec & struct.MinFields(0)
