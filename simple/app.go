@@ -150,9 +150,10 @@ type AppInformerConfig struct {
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
 	InformerSupplier InformerSupplier
-	// MaxConcurrentWorkers is a limit on the number of workers to run concurrently. Each worker maintains a queue of
-	// events which are then processed sequentially inside the worker. Events for a particular object are assigned to
-	// the same worker, as to maintain the guarantee of in-order delivery of events per object.
+	// MaxConcurrentWorkers limits the number of workers running concurrently to reconcile events. Each worker maintains a
+	// queue of events which are then processed sequentially inside the worker. Events for a particular object are
+	// assigned to the same worker, as to maintain the guarantee of in-order delivery of events per object.
+	// By default, a single worker is run to process all events sequentially.
 	MaxConcurrentWorkers uint64
 }
 
