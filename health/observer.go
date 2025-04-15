@@ -32,7 +32,7 @@ func (c CheckStatus) String() string {
 	b := strings.Builder{}
 
 	for _, result := range c.Results {
-		b.WriteString(fmt.Sprintf("%s\n", result.String()))
+		b.WriteString(fmt.Sprintf("%s\n", result.String())) //nolint:revive
 	}
 	return b.String()
 }
