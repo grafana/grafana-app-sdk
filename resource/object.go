@@ -218,8 +218,9 @@ func CopyObjectInto[T any](out T, in T) error {
 }
 
 var errCannotSetValue = errors.New("cannot set value")
+var reflectTypeTime = reflect.TypeOf(time.Time{})
 
-// nolint:gocognit,gocritic
+// nolint:gocognit,gocritic,funlen
 func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 	// Check if we can set the value (Set panics if this is false)
 	if !dst.CanSet() {
@@ -239,6 +240,10 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 		typ := src.Type().Elem()
 		switch src.Type().Elem().Kind() {
 		case reflect.Struct:
+			if src.Type() == reflectTypeTime {
+				dst.Set(src)
+				return nil
+			}
 			dstPtr := reflect.New(typ).Interface()
 			err := CopyObjectInto(dstPtr, src.Interface())
 			if err != nil {
@@ -259,6 +264,11 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 			dst.Set(src)
 		}
 	case reflect.Struct:
+		// Special case for time.Time:
+		if src.Type() == reflectTypeTime {
+			dst.Set(src)
+			return nil
+		}
 		// Recursively copy the struct
 		dstStruct := reflect.New(dst.Type()).Interface()
 		err := CopyObjectInto(dstStruct, src.Interface())
