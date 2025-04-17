@@ -240,7 +240,7 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 		typ := src.Type().Elem()
 		switch src.Type().Elem().Kind() {
 		case reflect.Struct:
-			if src.Type() == reflectTypeTime {
+			if src.Elem().Type() == reflectTypeTime {
 				dst.Set(src)
 				return nil
 			}
