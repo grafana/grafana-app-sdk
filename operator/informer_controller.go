@@ -48,7 +48,6 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 type Informer interface {
 	app.Runnable
 	AddEventHandler(handler ResourceWatcher) error
-	Kind() resource.Kind
 }
 
 // ResourceWatcher describes an object which handles Add/Update/Delete actions for a resource
@@ -115,7 +114,6 @@ type InformerController struct {
 	watchers            *ListMap[string, ResourceWatcher]
 	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
-	informerMaxWorkers  uint64
 	retryTickerInterval time.Duration
 	runner              *app.DynamicMultiRunner
 	runContext          context.Context
@@ -149,10 +147,6 @@ type InformerControllerConfig struct {
 	// when one or more retries for the object are still pending. If not present, existing retries are always dequeued.
 	// If left nil, no RetryDequeuePolicy will be used, and retries will only be dequeued when RetryPolicy returns false.
 	RetryDequeuePolicy RetryDequeuePolicy
-	// MaxConcurrentWorkers is a limit on the number of workers to run concurrently. Each worker maintains a queue of
-	// events which are processed sequentially. Events for a particular object are assigned to the same worker, as to
-	// maintain the guarantee of in-order delivery of events per object.
-	MaxConcurrentWorkers uint64
 }
 
 // DefaultInformerControllerConfig returns an InformerControllerConfig with default values
@@ -171,7 +165,6 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 		watchers:            NewListMap[ResourceWatcher](),
 		reconcilers:         NewListMap[Reconciler](),
 		toRetry:             NewListMap[retryInfo](),
-		informerMaxWorkers:  1,
 		retryTickerInterval: time.Second,
 		runner:              app.NewDynamicMultiRunner(),
 		reconcileLatency: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -229,9 +222,6 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 	}
 	if cfg.RetryDequeuePolicy != nil {
 		inf.RetryDequeuePolicy = cfg.RetryDequeuePolicy
-	}
-	if cfg.MaxConcurrentWorkers > 0 {
-		inf.informerMaxWorkers = cfg.MaxConcurrentWorkers
 	}
 	return inf
 }
