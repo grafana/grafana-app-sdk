@@ -95,14 +95,10 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 // AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
 	c.processor.addListener(newInformerProcessorListener(
-		ResourceWatcherToEventHandler(handler, c.Kind(), func() context.Context { return c.runContext }, c.ErrorHandler),
+		ResourceWatcherToEventHandler(handler, c.schema, func() context.Context { return c.runContext }, c.ErrorHandler),
 		processorBufferSize),
 	)
 	return nil
-}
-
-func (c *CustomCacheInformer) Kind() resource.Kind {
-	return c.schema
 }
 
 // Run runs the informer until stopCh is closed or receives a message.

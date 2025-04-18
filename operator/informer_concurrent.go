@@ -3,8 +3,6 @@ package operator
 import (
 	"context"
 	"sync"
-
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 var _ Informer = &ConcurrentInformer{}
@@ -15,7 +13,7 @@ var _ Informer = &ConcurrentInformer{}
 // (ie the business logic) will be processed by concurrent workers. Events for an object will be assigned
 // to the same worker to preserve the per-object in-order guarantee provided by K8s client tooling.
 type ConcurrentInformer struct {
-	ErrorHandler func(context.Context, error)
+	errorHandler func(context.Context, error)
 
 	informer             Informer
 	watchers             []*concurrentWatcher
@@ -24,15 +22,34 @@ type ConcurrentInformer struct {
 	mtx sync.RWMutex
 }
 
+type ConcurrentInformerOptions struct {
+	// ErrorHandler is a user-specified error handling function. This is typically for logging/metrics use,
+	// as retry logic is covered by the RetryPolicy. If left nil, DefaultErrorHandler will be used.
+	ErrorHandler func(context.Context, error)
+	// MaxConcurrentWorkers is a limit on the number of workers to run concurrently for each ResourceWatcher. Each
+	// worker maintains a queue of events which are processed sequentially. Events for a particular object are assigned
+	// to the same worker, as to maintain the guarantee of in-order delivery of events per object.
+	// By default, a single worker is run to process all events sequentially.
+	MaxConcurrentWorkers uint64
+}
+
 // NewConcurrentInformer creates a new ConcurrentInformer wrapping the provided Informer.
-func NewConcurrentInformer(inf Informer, maxConcurrentWorkers uint64) (
+func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 	*ConcurrentInformer, error) {
-	return &ConcurrentInformer{
-		ErrorHandler:         DefaultErrorHandler,
+	ci := &ConcurrentInformer{
+		errorHandler:         DefaultErrorHandler,
 		informer:             inf,
 		watchers:             make([]*concurrentWatcher, 0),
-		maxConcurrentWorkers: maxConcurrentWorkers,
-	}, nil
+		maxConcurrentWorkers: 1,
+	}
+	if opts.ErrorHandler != nil {
+		ci.errorHandler = opts.ErrorHandler
+	}
+	if opts.MaxConcurrentWorkers > 1 {
+		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
+	}
+
+	return ci, nil
 }
 
 // AddEventHandler adds a ResourceWatcher as an event handler for watch events from the informer.
@@ -42,7 +59,7 @@ func NewConcurrentInformer(inf Informer, maxConcurrentWorkers uint64) (
 // Informer. If you want to coordinate between ResourceWatchers, use an InformerController.
 // nolint:dupl
 func (k *ConcurrentInformer) AddEventHandler(handler ResourceWatcher) error {
-	cw, err := newConcurrentWatcher(handler, k.maxConcurrentWorkers, k.ErrorHandler)
+	cw, err := newConcurrentWatcher(handler, k.maxConcurrentWorkers, k.errorHandler)
 	if err != nil {
 		return err
 	}
@@ -54,10 +71,6 @@ func (k *ConcurrentInformer) AddEventHandler(handler ResourceWatcher) error {
 	}
 
 	return k.informer.AddEventHandler(cw)
-}
-
-func (k *ConcurrentInformer) Kind() resource.Kind {
-	return k.Kind()
 }
 
 // Run starts the informer and blocks until stopCh receives a message
