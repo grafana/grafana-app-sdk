@@ -66,8 +66,8 @@ github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d h1:hrXbGJ5jgp6yN
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d/go.mod h1:zmwwM/DRyQB7pfuBjTWII3CWtxcXh8LTwAYGfDfpR6s=
 github.com/grafana/cog v0.0.30 h1:JjltmHbzh1L/vKd4g/jBqPJOivuCmSOIn6pDrDR12Fs=
 github.com/grafana/cog v0.0.30/go.mod h1:UDstzYqMdgIROmbfkHL8fB9XWQO2lnf5z+4W/eJo4Dc=
-github.com/grafana/grafana-app-sdk/logging v0.36.2 h1:gPJDga6WMbFeiTOLhLkqaEAlOGCu1F3KNOV459/VMd4=
-github.com/grafana/grafana-app-sdk/logging v0.36.2/go.mod h1:Y/bvbDhBiV/tkIle9RW49pgfSPIPSON8Q4qjx3pyqDk=
+github.com/grafana/grafana-app-sdk/logging v0.36.3 h1:N5Bm5wTIt+kdb0XmAeJwAGPFHdEEZJ2M8UDKk5PE2hE=
+github.com/grafana/grafana-app-sdk/logging v0.36.3/go.mod h1:Y/bvbDhBiV/tkIle9RW49pgfSPIPSON8Q4qjx3pyqDk=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1 h1:e9Rjr40Z98/clHv5Yg79Is0NtosR5LXRvdr7o/6NwbA=
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.1/go.mod h1:tIxuGz/9mpox++sgp9fJjHO0+q1X9/UOWd798aAm22M=
 github.com/hashicorp/errwrap v1.0.0/go.mod h1:YH+1FKiLXxHSkmPseP+kNlulaMuP3n2brvKWEqk/Jc4=
