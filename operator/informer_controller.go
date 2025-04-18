@@ -47,7 +47,7 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
 	app.Runnable
-	AddEventHandler(handler cache.ResourceEventHandler) error
+	AddEventHandler(handler ResourceWatcher) error
 	Kind() resource.Kind
 }
 
@@ -254,43 +254,16 @@ func (c *InformerController) AddInformer(informer Informer, resourceKind string)
 		return fmt.Errorf("resourceKind cannot be empty")
 	}
 
-	simple := &SimpleWatcher{
+	err := informer.AddEventHandler(&SimpleWatcher{
 		AddFunc:    c.informerAddFunc(resourceKind),
 		UpdateFunc: c.informerUpdateFunc(resourceKind),
 		DeleteFunc: c.informerDeleteFunc(resourceKind),
-	}
-
-	var runnable app.Runnable = informer
-	var handler ResourceWatcher = simple
-
-	if c.informerMaxWorkers > 1 {
-		concurrent, err := NewConcurrentWatcher(simple, c.informerMaxWorkers, c.ErrorHandler)
-		if err != nil {
-			return fmt.Errorf("initializing concurrent watcher: %w", err)
-		}
-		handler = concurrent
-		runnable = &concurrentInformerWrapper{
-			informer: informer,
-			watcher:  concurrent,
-		}
-	}
-
-	err := informer.AddEventHandler(ResourceWatcherToEventHandler(
-		handler,
-		informer.Kind(),
-		func() context.Context {
-			if c.runContext != nil {
-				return c.runContext
-			}
-			return context.Background()
-		},
-		c.ErrorHandler,
-	))
+	})
 	if err != nil {
 		return err
 	}
 
-	c.runner.AddRunnable(runnable)
+	c.runner.AddRunnable(informer)
 	c.informers.AddItem(resourceKind, informer)
 	return nil
 }
@@ -701,23 +674,6 @@ func (c *InformerController) retryTicker(ctx context.Context) {
 			return
 		}
 	}
-}
-
-// concurrentInformerWrapper wraps an existing Informer's `Run()` method to also start
-// the `Run()` method for the attched `ConcurrentWatcher` in the background.
-type concurrentInformerWrapper struct {
-	informer Informer
-	watcher  *ConcurrentWatcher
-}
-
-func (iw *concurrentInformerWrapper) Run(ctx context.Context) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	// Start the ConcurrentWatcher workers in the background.
-	go iw.watcher.Run(ctx)
-
-	return iw.informer.Run(ctx)
 }
 
 func ResourceWatcherToEventHandler(

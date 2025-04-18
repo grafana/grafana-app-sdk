@@ -24,25 +24,25 @@ type eventInfo struct {
 	source resource.Object
 }
 
-// ConcurrentWatcher is a struct that implements ResourceWatcher, but takes no action on its own.
+// concurrentWatcher is a struct that implements ResourceWatcher, but takes no action on its own.
 // For each method in (Add, Update, Delete) the event is added in a buffered queue and the corresponding
 // methods of the underlying ResourceWatcher are called concurrently.
 // The events are processed by a fixed number of workers running concurrently. Each worker processing
 // the events one-by-one. The events are sharded using hash mod algorithm, ensuring events for same object
 // end up in the same worker. This is to uphold the guarantee of in-order delivery of events for an object.
-type ConcurrentWatcher struct {
+type concurrentWatcher struct {
 	watcher      ResourceWatcher
 	size         uint64
 	workers      map[uint64]*bufferedQueue
 	errorHandler func(context.Context, error)
 }
 
-// NewConcurrentWatcher returns a properly initialized ConcurrentWatcher. The consumer **must**
+// newConcurrentWatcher returns a properly initialized ConcurrentWatcher. The consumer **must**
 // call the `ConcurrentWatcher.Run()` method afterwards to start the underlying workers. If not, the
 // wrapped ResourceWatcher methods will not be called.
-func NewConcurrentWatcher(
+func newConcurrentWatcher(
 	watcher ResourceWatcher, initialPoolSize uint64, errorHandler func(context.Context, error),
-) (*ConcurrentWatcher, error) {
+) (*concurrentWatcher, error) {
 	if watcher == nil {
 		return nil, fmt.Errorf("resource watcher cannot be nil")
 	}
@@ -50,7 +50,7 @@ func NewConcurrentWatcher(
 		return nil, fmt.Errorf("initial worker pool size needs to be greater than 0")
 	}
 
-	cw := &ConcurrentWatcher{
+	cw := &concurrentWatcher{
 		watcher:      watcher,
 		size:         initialPoolSize,
 		workers:      make(map[uint64]*bufferedQueue, initialBufferSize),
@@ -69,7 +69,7 @@ func NewConcurrentWatcher(
 	return cw, nil
 }
 
-func (w *ConcurrentWatcher) Add(ctx context.Context, object resource.Object) error {
+func (w *concurrentWatcher) Add(ctx context.Context, object resource.Object) error {
 	worker := w.workers[w.hashMod(object)]
 	worker.push(eventInfo{
 		ctx:    ctx,
@@ -79,7 +79,7 @@ func (w *ConcurrentWatcher) Add(ctx context.Context, object resource.Object) err
 	return nil
 }
 
-func (w *ConcurrentWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
+func (w *concurrentWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
 	worker := w.workers[w.hashMod(src)]
 	worker.push(eventInfo{
 		ctx:    ctx,
@@ -90,7 +90,7 @@ func (w *ConcurrentWatcher) Update(ctx context.Context, src resource.Object, tgt
 	return nil
 }
 
-func (w *ConcurrentWatcher) Delete(ctx context.Context, object resource.Object) error {
+func (w *concurrentWatcher) Delete(ctx context.Context, object resource.Object) error {
 	worker := w.workers[w.hashMod(object)]
 	worker.push(eventInfo{
 		ctx:    ctx,
@@ -103,7 +103,7 @@ func (w *ConcurrentWatcher) Delete(ctx context.Context, object resource.Object) 
 // Run starts a number of workers, processing the events concurrently by triggering the
 // methods of underlying watcher as per the event type.
 // Run will clean up and exit once the provided context is canceled.
-func (w *ConcurrentWatcher) Run(ctx context.Context) {
+func (w *concurrentWatcher) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, queue := range w.workers {
 		wg.Add(1)
@@ -149,7 +149,7 @@ func (w *ConcurrentWatcher) Run(ctx context.Context) {
 	wg.Wait()
 }
 
-func (w *ConcurrentWatcher) hashMod(obj resource.Object) uint64 {
+func (w *concurrentWatcher) hashMod(obj resource.Object) uint64 {
 	id := obj.GroupVersionKind().String() + "/" + obj.GetNamespace() + "/" + obj.GetName()
 	digest := xxhash.Sum64([]byte(id))
 

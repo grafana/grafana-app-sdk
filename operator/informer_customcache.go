@@ -93,8 +93,11 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 }
 
 // AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
-func (c *CustomCacheInformer) AddEventHandler(handler cache.ResourceEventHandler) error {
-	c.processor.addListener(newInformerProcessorListener(handler, processorBufferSize))
+func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
+	c.processor.addListener(newInformerProcessorListener(
+		ResourceWatcherToEventHandler(handler, c.Kind(), func() context.Context { return c.runContext }, c.ErrorHandler),
+		processorBufferSize),
+	)
 	return nil
 }
 

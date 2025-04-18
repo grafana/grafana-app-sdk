@@ -15,23 +15,23 @@ import (
 
 func TestNewConcurrentWatcher(t *testing.T) {
 	t.Run("nil args", func(t *testing.T) {
-		cw, err := NewConcurrentWatcher(nil, 0, nil)
+		cw, err := newConcurrentWatcher(nil, 0, nil)
 		assert.Nil(t, cw)
 		assert.EqualError(t, err, "resource watcher cannot be nil")
 
-		cw, err = NewConcurrentWatcher(&SimpleWatcher{}, 0, nil)
+		cw, err = newConcurrentWatcher(&SimpleWatcher{}, 0, nil)
 		assert.Nil(t, cw)
 		assert.EqualError(t, err, "initial worker pool size needs to be greater than 0")
 
 		// In case of a nil errorHandler, we create a ConcurrentWatcher with DefaultErrorHandler
-		cw, err = NewConcurrentWatcher(&SimpleWatcher{}, 1, nil)
+		cw, err = newConcurrentWatcher(&SimpleWatcher{}, 1, nil)
 		assert.NoError(t, err)
 		assert.NotNil(t, cw)
 	})
 
 	t.Run("success", func(t *testing.T) {
 		var size uint64 = 2
-		cw, err := NewConcurrentWatcher(&SimpleWatcher{}, size, DefaultErrorHandler)
+		cw, err := newConcurrentWatcher(&SimpleWatcher{}, size, DefaultErrorHandler)
 		assert.NoError(t, err)
 		assert.NotNil(t, cw)
 		assert.Len(t, cw.workers, int(size))
@@ -45,7 +45,7 @@ func TestConcurrentWatcher_Add(t *testing.T) {
 	t.Run("successful add with single worker", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -63,7 +63,7 @@ func TestConcurrentWatcher_Add(t *testing.T) {
 			return fmt.Errorf("IT'S-A ME, ERRORIO!")
 		}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -78,7 +78,7 @@ func TestConcurrentWatcher_Add(t *testing.T) {
 	t.Run("successful adds with multiple workers", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj1 := schema.ZeroValue()
@@ -107,7 +107,7 @@ func TestConcurrentWatcher_Update(t *testing.T) {
 	t.Run("successful update with single worker", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -125,7 +125,7 @@ func TestConcurrentWatcher_Update(t *testing.T) {
 			return fmt.Errorf("IT'S-A ME, ERRORIO!")
 		}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -140,7 +140,7 @@ func TestConcurrentWatcher_Update(t *testing.T) {
 	t.Run("successful updates with multiple workers", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj1 := schema.ZeroValue()
@@ -169,7 +169,7 @@ func TestConcurrentWatcher_Delete(t *testing.T) {
 	t.Run("successful delete with single worker", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -187,7 +187,7 @@ func TestConcurrentWatcher_Delete(t *testing.T) {
 			return fmt.Errorf("IT'S-A ME, ERRORIO!")
 		}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -202,7 +202,7 @@ func TestConcurrentWatcher_Delete(t *testing.T) {
 	t.Run("successful deletes with multiple workers", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj1 := schema.ZeroValue()
@@ -231,7 +231,7 @@ func TestConcurrentWatcher(t *testing.T) {
 	t.Run("successfully trigger appropriate handler methods with single worker", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 1, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		obj := schema.ZeroValue()
@@ -254,7 +254,7 @@ func TestConcurrentWatcher(t *testing.T) {
 	t.Run("successfully trigger appropriate handler methods with multiple workers", func(t *testing.T) {
 		mock := &mockWatcher{}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		for i := 0; i < 3; i++ {
@@ -293,7 +293,7 @@ func TestConcurrentWatcher(t *testing.T) {
 			return nil
 		}
 		var errCount atomic.Int64
-		cw, err := NewConcurrentWatcher(mock, 4, func(ctx context.Context, err error) { errCount.Add(1) })
+		cw, err := newConcurrentWatcher(mock, 4, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
 		{
