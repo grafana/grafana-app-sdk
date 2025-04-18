@@ -75,6 +75,11 @@ type ManifestData struct {
 	// Permissions is the extra permissions for non-owned kinds this app needs to operate its backend.
 	// It may be nil if no extra permissions are required.
 	ExtraPermissions *Permissions `json:"extraPermissions,omitempty" yaml:"extraPermissions,omitempty"`
+	// Operator has information about the operator being run for the app, if there is one.
+	// When present, it can indicate to the API server the URL and paths for webhooks, if applicable.
+	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
+	// mutation, or conversion.
+	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
 }
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions
@@ -285,3 +290,14 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 // TODO convert AsOpenAPI to kube-openapi?
 //	return nil
 // }
+
+type ManifestOperatorInfo struct {
+	URL      string                             `json:"url" yaml:"url"`
+	Webhooks *ManifestOperatorWebhookProperties `json:"webhooks,omitempty" yaml:"webhooks,omitempty"`
+}
+
+type ManifestOperatorWebhookProperties struct {
+	ConversionPath string `json:"conversionPath" yaml:"conversionPath"`
+	ValidationPath string `json:"validationPath" yaml:"validationPath"`
+	MutationPath   string `json:"mutationPath" yaml:"mutationPath"`
+}

@@ -167,8 +167,8 @@
                                                                 "type": "string"
                                                             },
                                                             "schema": {
-                                                                "additionalProperties": {},
-                                                                "type": "object"
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
                                                             },
                                                             "selectableFields": {
                                                                 "items": {
@@ -195,6 +195,34 @@
                                             "type": "object"
                                         },
                                         "type": "array"
+                                    },
+                                    "operator": {
+                                        "description": "Operator has information about the operator being run for the app, if there is one.\nWhen present, it can indicate to the API server the URL and paths for webhooks, if applicable.\nThis is only required if you run your app as an operator and any of your kinds support webhooks for validation,\nmutation, or conversion.",
+                                        "properties": {
+                                            "url": {
+                                                "description": "URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).\nIt should be a URL which the API server can access.",
+                                                "type": "string"
+                                            },
+                                            "webhooks": {
+                                                "description": "Webhooks contains information about the various webhook paths.",
+                                                "properties": {
+                                                    "conversionPath": {
+                                                        "default": "/convert",
+                                                        "type": "string"
+                                                    },
+                                                    "mutationPath": {
+                                                        "default": "/mutate",
+                                                        "type": "string"
+                                                    },
+                                                    "validationPath": {
+                                                        "default": "/validate",
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
                                     }
                                 },
                                 "required": [
@@ -277,8 +305,7 @@
                                 "required": [
                                     "resources"
                                 ],
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "type": "object"
                             }
                         }
                     }

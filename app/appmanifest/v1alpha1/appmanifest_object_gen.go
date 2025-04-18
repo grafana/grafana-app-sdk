@@ -18,8 +18,11 @@ import (
 type AppManifest struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
-	Spec              AppManifestSpec   `json:"spec" yaml:"spec"`
-	AppManifestStatus AppManifestStatus `json:"status" yaml:"status"`
+
+	// Spec is the spec of the AppManifest
+	Spec AppManifestSpec `json:"spec" yaml:"spec"`
+
+	Status AppManifestStatus `json:"status" yaml:"status"`
 }
 
 func (o *AppManifest) GetSpec() any {
@@ -37,14 +40,14 @@ func (o *AppManifest) SetSpec(spec any) error {
 
 func (o *AppManifest) GetSubresources() map[string]any {
 	return map[string]any{
-		"status": o.AppManifestStatus,
+		"status": o.Status,
 	}
 }
 
 func (o *AppManifest) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
-		return o.AppManifestStatus, true
+		return o.Status, true
 	default:
 		return nil, false
 	}
@@ -57,7 +60,7 @@ func (o *AppManifest) SetSubresource(name string, value any) error {
 		if !ok {
 			return fmt.Errorf("cannot set status type %#v, not of type AppManifestStatus", value)
 		}
-		o.AppManifestStatus = cast
+		o.Status = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)
@@ -219,6 +222,20 @@ func (o *AppManifest) DeepCopyObject() runtime.Object {
 	return o.Copy()
 }
 
+func (o *AppManifest) DeepCopy() *AppManifest {
+	cpy := &AppManifest{}
+	o.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (o *AppManifest) DeepCopyInto(dst *AppManifest) {
+	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = o.TypeMeta.Kind
+	o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
+	o.Spec.DeepCopyInto(&dst.Spec)
+	o.Status.DeepCopyInto(&dst.Status)
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &AppManifest{}
 
@@ -262,5 +279,41 @@ func (o *AppManifestList) SetItems(items []resource.Object) {
 	}
 }
 
+func (o *AppManifestList) DeepCopy() *AppManifestList {
+	cpy := &AppManifestList{}
+	o.DeepCopyInto(cpy)
+	return cpy
+}
+
+func (o *AppManifestList) DeepCopyInto(dst *AppManifestList) {
+	resource.CopyObjectInto(dst, o)
+}
+
 // Interface compliance compile-time check
 var _ resource.ListObject = &AppManifestList{}
+
+// Copy methods for all subresource types
+
+// DeepCopy creates a full deep copy of Spec
+func (s *AppManifestSpec) DeepCopy() *AppManifestSpec {
+	cpy := &AppManifestSpec{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies Spec into another Spec object
+func (s *AppManifestSpec) DeepCopyInto(dst *AppManifestSpec) {
+	resource.CopyObjectInto(dst, s)
+}
+
+// DeepCopy creates a full deep copy of AppManifestStatus
+func (s *AppManifestStatus) DeepCopy() *AppManifestStatus {
+	cpy := &AppManifestStatus{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies AppManifestStatus into another AppManifestStatus object
+func (s *AppManifestStatus) DeepCopyInto(dst *AppManifestStatus) {
+	resource.CopyObjectInto(dst, s)
+}

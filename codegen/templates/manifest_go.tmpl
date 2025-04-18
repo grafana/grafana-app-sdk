@@ -47,7 +47,15 @@ var appManifestData = app.ManifestData{
             },
             {{ end }} },
         },
-        {{ end }} },
+        {{ end }} },{{ if .ManifestData.Operator }}
+    Operator: &app.ManifestOperatorInfo{
+        URL: "{{.ManifestData.Operator.URL}}", {{ if .ManifestData.Operator.Webhooks }}
+        Webhooks: &app.ManifestOperatorWebhookProperties{
+            ConversionPath: "{{.ManifestData.Operator.Webhooks.ConversionPath}}",
+            ValidationPath: "{{.ManifestData.Operator.Webhooks.ValidationPath}}",
+            MutationPath: "{{.ManifestData.Operator.Webhooks.MutationPath}}",
+        },{{ end }}
+    },{{ end }}
 }
 
 func jsonToMap(j string) map[string]any {
