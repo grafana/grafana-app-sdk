@@ -34,5 +34,8 @@ type CustomKindMetadata struct {
 
 // NewCustomKindMetadata creates a new CustomKindMetadata object.
 func NewCustomKindMetadata() *CustomKindMetadata {
-	return &CustomKindMetadata{}
+	return &CustomKindMetadata{
+		Finalizers: []string{},
+		Labels:     map[string]string{},
+	}
 }

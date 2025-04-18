@@ -77,7 +77,6 @@ type KindCodegenTSConfig struct {
 // KindCodegenGoConfig is the Go configuration options for codegen,
 // modeled after the cog Go codegen options.
 type KindCodegenGoConfig struct {
-	AllowMarshalEmptyDisjunctions bool `json:"allowMarshalEmptyDisjunctions"`
 }
 
 type AdditionalPrinterColumn struct {

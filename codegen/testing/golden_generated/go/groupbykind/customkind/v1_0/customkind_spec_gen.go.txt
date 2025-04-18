@@ -16,7 +16,11 @@ type InnerObject1 struct {
 
 // NewInnerObject1 creates a new InnerObject1 object.
 func NewInnerObject1() *InnerObject1 {
-	return &InnerObject1{}
+	return &InnerObject1{
+		InnerField2: []string{},
+		InnerField3: []InnerObject2{},
+		InnerField4: []map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -27,7 +31,9 @@ type InnerObject2 struct {
 
 // NewInnerObject2 creates a new InnerObject2 object.
 func NewInnerObject2() *InnerObject2 {
-	return &InnerObject2{}
+	return &InnerObject2{
+		Details: map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -52,7 +58,9 @@ type Type2 struct {
 
 // NewType2 creates a new Type2 object.
 func NewType2() *Type2 {
-	return &Type2{}
+	return &Type2{
+		Details: map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -73,6 +81,7 @@ type Spec struct {
 func NewSpec() *Spec {
 	return &Spec{
 		Inner:     *NewInnerObject1(),
+		Map:       map[string]Type2{},
 		BoolField: false,
 	}
 }

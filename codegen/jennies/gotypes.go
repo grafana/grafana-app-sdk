@@ -92,8 +92,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 	codegenPipeline := cog.TypesFromSchema().
 		CUEValue(packageName, version.Schema, cog.ForceEnvelope(name)).
 		Golang(cog.GoConfig{
-			AnyAsInterface:                g.AnyAsInterface,
-			AllowMarshalEmptyDisjunctions: version.Codegen.Go.Config.AllowMarshalEmptyDisjunctions,
+			AnyAsInterface: g.AnyAsInterface,
 		})
 
 	if g.AddKubernetesCodegen {
@@ -130,7 +129,6 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 			NamePrefix:                     namePrefix,
 			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && !(len(fieldName) == 1 && fieldName[0] == "metadata"),
 			AnyAsInterface:                 g.AnyAsInterface,
-			AllowMarshalEmptyDisjunctions:  kv.Codegen.Go.Config.AllowMarshalEmptyDisjunctions,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
 		if err != nil {
 			return nil, err
@@ -165,7 +163,6 @@ type CUEGoConfig struct {
 
 	AddKubernetesOpenAPIGenComment bool
 	AnyAsInterface                 bool
-	AllowMarshalEmptyDisjunctions  bool
 
 	// NamePrefix prefixes all generated types with the provided NamePrefix
 	NamePrefix string
@@ -192,8 +189,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
 		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
 		Golang(cog.GoConfig{
-			AnyAsInterface:                cfg.AnyAsInterface,
-			AllowMarshalEmptyDisjunctions: cfg.AllowMarshalEmptyDisjunctions,
+			AnyAsInterface: cfg.AnyAsInterface,
 		})
 
 	if cfg.AddKubernetesOpenAPIGenComment {
