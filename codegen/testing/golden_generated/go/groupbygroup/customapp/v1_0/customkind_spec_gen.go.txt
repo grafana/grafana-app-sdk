@@ -16,7 +16,11 @@ type CustomKindInnerObject1 struct {
 
 // NewCustomKindInnerObject1 creates a new CustomKindInnerObject1 object.
 func NewCustomKindInnerObject1() *CustomKindInnerObject1 {
-	return &CustomKindInnerObject1{}
+	return &CustomKindInnerObject1{
+		InnerField2: []string{},
+		InnerField3: []CustomKindInnerObject2{},
+		InnerField4: []map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -27,7 +31,9 @@ type CustomKindInnerObject2 struct {
 
 // NewCustomKindInnerObject2 creates a new CustomKindInnerObject2 object.
 func NewCustomKindInnerObject2() *CustomKindInnerObject2 {
-	return &CustomKindInnerObject2{}
+	return &CustomKindInnerObject2{
+		Details: map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -52,7 +58,9 @@ type CustomKindType2 struct {
 
 // NewCustomKindType2 creates a new CustomKindType2 object.
 func NewCustomKindType2() *CustomKindType2 {
-	return &CustomKindType2{}
+	return &CustomKindType2{
+		Details: map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -73,6 +81,7 @@ type CustomKindSpec struct {
 func NewCustomKindSpec() *CustomKindSpec {
 	return &CustomKindSpec{
 		Inner:     *NewCustomKindInnerObject1(),
+		Map:       map[string]CustomKindType2{},
 		BoolField: false,
 	}
 }

@@ -24,5 +24,8 @@ type TestKindMetadata struct {
 
 // NewTestKindMetadata creates a new TestKindMetadata object.
 func NewTestKindMetadata() *TestKindMetadata {
-	return &TestKindMetadata{}
+	return &TestKindMetadata{
+		Finalizers: []string{},
+		Labels:     map[string]string{},
+	}
 }
