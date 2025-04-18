@@ -9,7 +9,6 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -35,15 +34,15 @@ type CustomCacheInformer struct {
 	// but may stop it from processing a given event.
 	ErrorHandler func(context.Context, error)
 
-	started           bool
-	startedLock       sync.Mutex
-	store             cache.Store
-	controller        cache.Controller
-	listerWatcher     cache.ListerWatcher
-	objectType        resource.Object
-	processor         *informerProcessor
-	objectTransformer func(any) (resource.Object, error)
-	runContext        context.Context
+	started       bool
+	startedLock   sync.Mutex
+	store         cache.Store
+	controller    cache.Controller
+	listerWatcher cache.ListerWatcher
+	objectType    resource.Object
+	processor     *informerProcessor
+	schema        resource.Kind
+	runContext    context.Context
 }
 
 type MemcachedInformerOptions struct {
@@ -78,9 +77,7 @@ func NewCustomCacheInformer(store cache.Store, lw cache.ListerWatcher, kind reso
 		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
 		// objectType:    kind.ZeroValue(),
 		processor: newInformerProcessor(),
-		objectTransformer: func(a any) (resource.Object, error) {
-			return toResourceObject(a, kind)
-		},
+		schema:    kind,
 		ErrorHandler: func(ctx context.Context, err error) {
 			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
 		},
@@ -97,12 +94,10 @@ func (c *CustomCacheInformer) PrometheusCollectors() []prometheus.Collector {
 
 // AddEventHandler adds the provided ResourceWatcher to the list of handlers to have events reported to.
 func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
-	c.processor.addListener(newInformerProcessorListener(toResourceEventHandlerFuncs(handler, c.objectTransformer, c.errorHandler, func() context.Context {
-		if c.runContext != nil {
-			return c.runContext
-		}
-		return context.Background()
-	}), processorBufferSize))
+	c.processor.addListener(newInformerProcessorListener(
+		ResourceWatcherToEventHandler(handler, c.schema, func() context.Context { return c.runContext }, c.ErrorHandler),
+		processorBufferSize),
+	)
 	return nil
 }
 
@@ -200,12 +195,6 @@ func (c *CustomCacheInformer) OnDelete(obj any) {
 	})
 }
 
-func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
-	if c.ErrorHandler != nil {
-		c.ErrorHandler(ctx, err)
-	}
-}
-
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
 // The List and Watch requests will always use the provided namespace and labelFilters.
 func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions ListWatchOptions) cache.ListerWatcher {
@@ -268,87 +257,6 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 			}
 			go w.start()
 			return w, nil
-		},
-	}
-}
-
-func toResourceEventHandlerFuncs(handler ResourceWatcher, transformer func(any) (resource.Object, error), errorHandler func(context.Context, error), contextProvider func() context.Context) *cache.ResourceEventHandlerFuncs {
-	return &cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-event-add")
-			defer span.End()
-			cast, err := transformer(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			gvk := cast.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cast.GetNamespace()),
-				attribute.String("name", cast.GetName()),
-			)
-			err = handler.Add(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-			}
-		},
-		UpdateFunc: func(oldObj, newObj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-event-update")
-			defer span.End()
-			cOld, err := transformer(oldObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			// None of these should change between old and new, so we can set them here with old's values
-			gvk := cOld.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cOld.GetNamespace()),
-				attribute.String("name", cOld.GetName()),
-			)
-			cNew, err := transformer(newObj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			err = handler.Update(ctx, cOld, cNew)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-			}
-		},
-		DeleteFunc: func(obj any) {
-			ctx, span := GetTracer().Start(contextProvider(), "informer-event-delete")
-			defer span.End()
-			cast, err := transformer(obj)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-				return
-			}
-			gvk := cast.GroupVersionKind()
-			span.SetAttributes(
-				attribute.String("kind.name", gvk.Kind),
-				attribute.String("kind.group", gvk.Group),
-				attribute.String("kind.version", gvk.Version),
-				attribute.String("namespace", cast.GetNamespace()),
-				attribute.String("name", cast.GetName()),
-			)
-			err = handler.Delete(ctx, cast)
-			if err != nil {
-				span.SetStatus(codes.Error, err.Error())
-				errorHandler(ctx, err)
-			}
 		},
 	}
 }

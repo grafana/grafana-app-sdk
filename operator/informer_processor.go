@@ -95,65 +95,31 @@ func (p *informerProcessor) run(stopCh <-chan struct{}) {
 }
 
 type informerProcessorListener struct {
-	events    chan any
-	handler   cache.ResourceEventHandler
-	buf       buffer.RingGrowing
-	toProcess chan any
+	handler cache.ResourceEventHandler
+	queue   *bufferedQueue
 }
 
 func newInformerProcessorListener(handler cache.ResourceEventHandler, bufferSize int) *informerProcessorListener {
 	return &informerProcessorListener{
-		events:    make(chan any),
-		toProcess: make(chan any),
-		buf:       *buffer.NewRingGrowing(bufferSize),
-		handler:   handler,
+		queue:   newBufferedQueue(bufferSize),
+		handler: handler,
 	}
 }
 
 func (l *informerProcessorListener) push(event any) {
-	l.events <- event
+	l.queue.push(event)
 }
 
-// pop will continuously read messages from the events channel, and write them to a buffer.
-// while any contents exist in the buffer, it will also attempt to write them out to the toProcess channel.
-// This allows writes to the events channel to not be blocked by processing of the handler, which instead consumes
-// from the toProcess channel.
-func (l *informerProcessorListener) pop() {
-	// TODO: should this whole thing be a goroutine in run(), rather than a separate method?
-	defer close(l.toProcess)
-
-	var nextCh chan<- any
-	var event any
-	var ok bool
-	for {
-		select {
-		case nextCh <- event:
-			event, ok = l.buf.ReadOne()
-			if !ok {
-				nextCh = nil
-			}
-		case eventToAdd, ok := <-l.events:
-			if !ok {
-				return
-			}
-			if event == nil {
-				event = eventToAdd
-				nextCh = l.toProcess
-			} else { // There is already a notification waiting to be dispatched
-				l.buf.WriteOne(eventToAdd)
-			}
-		}
-	}
-}
-
-// run starts pop to move events from the events channel to the toProcess channel,
-// then reads events from the toProcess channel and dispatches them to the handler based on event type
+// run starts the queue (to start receiving events) in the background, and
+// then reads events from the queue's output channel and dispatches them to
+// the handler based on event type.
 func (l *informerProcessorListener) run() {
-	go l.pop()
+	go l.queue.run()
 
 	stopCh := make(chan struct{})
+	toProcess := l.queue.events()
 	wait.Until(func() {
-		for next := range l.toProcess {
+		for next := range toProcess {
 			switch event := next.(type) {
 			case informerEventAdd:
 				l.handler.OnAdd(event.obj, event.isInInitialList)
@@ -172,7 +138,73 @@ func (l *informerProcessorListener) run() {
 	}, 1*time.Second, stopCh)
 }
 
-// stop stops the run and pop processes. Because the channels are closed, the listener cannot be re-used.
+// stop stops the run process. Because the underlying queue is closed, the listener cannot be re-used.
 func (l *informerProcessorListener) stop() {
-	close(l.events)
+	l.queue.stop()
+}
+
+// bufferedQueue is a FIFO queue that allows concurrent listeners by streaming
+// events to a channel. The queue uses a growing ring buffer to avoid blocking
+// event push.
+type bufferedQueue struct {
+	incomingEvents chan any
+	toProcess      chan any
+	buf            *buffer.RingGrowing
+}
+
+// newBufferedQueue returns a properly initialized bufferedQueue. The consumer
+// need to run `bufferedQueue.run()` method to start receiving the events.
+func newBufferedQueue(bufferSize int) *bufferedQueue {
+	return &bufferedQueue{
+		incomingEvents: make(chan any),
+		toProcess:      make(chan any),
+		buf:            buffer.NewRingGrowing(bufferSize),
+	}
+}
+
+// events returns the output channel of the queue where the events will
+// be streamed for consumption.
+func (l *bufferedQueue) events() chan any {
+	return l.toProcess
+}
+
+// push inserts an event in the queue.
+func (l *bufferedQueue) push(event any) {
+	l.incomingEvents <- event
+}
+
+// run will continuously read messages from the events channel, and write them to a buffer.
+// while any contents exist in the buffer, it will also attempt to write them out to the toProcess channel.
+// This allows writes to the events channel to not be blocked by processing of the events, which instead
+// consumes from the toProcess channel.
+func (l *bufferedQueue) run() {
+	defer close(l.toProcess)
+
+	var nextCh chan<- any
+	var event any
+	var ok bool
+	for {
+		select {
+		case nextCh <- event:
+			event, ok = l.buf.ReadOne()
+			if !ok {
+				nextCh = nil
+			}
+		case eventToAdd, ok := <-l.incomingEvents:
+			if !ok {
+				return
+			}
+			if event == nil {
+				event = eventToAdd
+				nextCh = l.toProcess
+			} else { // There is already a notification waiting to be dispatched
+				l.buf.WriteOne(eventToAdd)
+			}
+		}
+	}
+}
+
+// stop stops the run processes. Because the channels are closed, the listener cannot be re-used.
+func (l *bufferedQueue) stop() {
+	close(l.incomingEvents)
 }
