@@ -47,6 +47,7 @@ type localEnvConfig struct {
 	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
 	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
 	GrafanaInstallPlugins     string                `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
+	GrafanaAnonymousAuth      bool                  `json:"grafanaAnonymousAuth" yaml:"grafanaAnonymousAuth"`
 }
 
 type dataSourceConfig struct {
@@ -320,6 +321,7 @@ type yamlGenProperties struct {
 	GenerateGrafanaDeployment bool
 	GrafanaImage              string
 	GrafanaInstallPlugins     string
+	GrafanaAnonymousAuth      string
 }
 
 type yamlGenPropsCRD struct {
@@ -390,6 +392,9 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 	if props.OperatorImage != "" {
 		// Prefix with "localhost/" to ensure that our local build uses our locally-built image
 		props.OperatorImage = fmt.Sprintf("localhost/%s", props.OperatorImage)
+	}
+	if config.GrafanaAnonymousAuth {
+		props.GrafanaAnonymousAuth = "Viewer"
 	}
 
 	if props.WebhookProperties.Enabled {

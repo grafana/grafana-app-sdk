@@ -217,11 +217,19 @@ Though not recommended, you can deploy without using tilt, if you desire. Not us
 ### Interacting With Our Local Deployment
 
 Our grafana is now available at [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999). 
+By default, the credentials to log in are `admin`/`admin`. You'll be prompted to change the password upon logging in. 
+Note that if you do, you'll need to modify the cURL commands used later in this tutorial. You can also click `Skip` to avoid updating the password. 
 Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, and we can interact with our backend APIs at [grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues](http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues).
 
 Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
 ```shell
-$ curl http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues | jq .
+curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues
+```
+> [!NOTE]
+> If you updated the password for your grafana instance, you'll need to change `-u admin:admin` to `-u admin:<your_new_password>`
+
+```shell
+$ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues | jq .
 {
   "kind": "IssueList",
   "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
@@ -235,7 +243,10 @@ $ curl http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/res
 Our kinds are also available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
 Let's also list our issues that way:
 ```shell
-curl http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+```
+```shell
+$ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
 {
   "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
   "items": [],
@@ -249,7 +260,10 @@ curl http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/
 We can see the output is nearly identical, as the plugin backend is just a proxy to the API server. From this point, we could use the plugin backend or API server API, 
 but seeing as the plugin backend will eventually be phased out of the default path, let's use the API server here, and create an Issue:
 ```shell
-$ curl -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+```
+```shell
+$ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
 {
   "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
   "kind": "Issue",
@@ -290,6 +304,9 @@ Now if we list issues again, we'll see the issue we just made in the output.
 You can see that this includes metadata which we didn't define in our CUE, but was implicitly added (kubernetes metadata). 
 
 For fun, we can also interact with our resources through kubectl:
+```shell
+kubectl get issue test-issue -o yaml
+```
 ```shell
 $ kubectl get issue test-issue -o yaml
 apiVersion: issuetrackerproject.ext.grafana.com/v1

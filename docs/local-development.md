@@ -201,7 +201,8 @@ With those extra two steps done, you should now have a working local deployment.
 
 ## Accessing Your Deployment
 
-Once up, your local grafana can be accessed via [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) (if you used a `port` other than 9999 in your `local/config.yaml`, use that instead in the URL).
+Once up, your local grafana can be accessed via [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) (if you used a `port` other than 9999 in your `local/config.yaml`, use that instead in the URL). 
+The default username and password for the local grafana is `admin`/`admin`.
 
 If you use kubectl, your kubeconfig should have its default context changed to the local cluster, so you can get any resources that way.
 
