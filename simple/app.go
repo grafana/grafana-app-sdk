@@ -227,18 +227,16 @@ type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
 	a := &App{
-		runner:          app.NewMultiRunner(),
-		clientGenerator: k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
-		kinds:           make(map[string]AppManagedKind),
-		internalKinds:   make(map[string]resource.Kind),
-		converters:      make(map[string]Converter),
-		customRoutes:    make(map[string]AppCustomRouteHandler),
-		cfg:             config,
-		collectors:      make([]prometheus.Collector, 0),
+		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
+		runner:             app.NewMultiRunner(),
+		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
+		kinds:              make(map[string]AppManagedKind),
+		internalKinds:      make(map[string]resource.Kind),
+		converters:         make(map[string]Converter),
+		customRoutes:       make(map[string]AppCustomRouteHandler),
+		cfg:                config,
+		collectors:         make([]prometheus.Collector, 0),
 	}
-	informerCtlCfg := operator.DefaultInformerControllerConfig()
-	a.informerController = operator.NewInformerController(informerCtlCfg)
-
 	if config.InformerConfig.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.ErrorHandler
 	}

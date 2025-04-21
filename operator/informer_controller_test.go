@@ -728,7 +728,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	}()
 
 	inf.FireAdd(context.Background(), emptyObject)
-	inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+	inf.FireUpdate(context.Background(), nil, emptyObject)
 
 	assert.True(t, waitOrTimeout(&addWG, time.Second*30), fmt.Sprintf("timed out waiting for adds to finish (saw %d adds)", addAttempt))
 	assert.True(t, waitOrTimeout(&updateWG, time.Second*30), fmt.Sprintf("timed out waiting for updates to finish (saw %d updates)", updateAttempt))
@@ -785,7 +785,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 			<-addCh
 		}
 		// Fire an update, which should halt the add retries
-		inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 		// We _may_ get one more add retry, if it was already happening when the update was processed. But we shouldn't get any more than that
 		// Wait a second before stopping in case another retry _does_ come through
 		time.Sleep(time.Second * 1)
@@ -854,7 +854,7 @@ func TestInformerController_Run_WithRetries(t *testing.T) {
 		<-addCh
 		// Wait for half a second, this should be enough time for many retries if the halt doesn't work
 		time.Sleep(time.Millisecond * 500)
-		inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 		// Wait for two updates
 		<-updateCh
 		<-updateCh
@@ -959,7 +959,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		inf.FireAdd(context.Background(), emptyObject)
 
 		// Now that the retry is queued, we can fire off an update. This SHOULD NOT dequeue the pending add
-		inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
 		timeout := make(chan struct{})
@@ -1022,7 +1022,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		// Now that the retry is queued, we can fire off an update. This SHOULD NOT dequeue the pending add.
 		// The update call should ALSO fail, which will query the retry policy, which will, on attempt 0, tell it to retry after 1 second
 		// without notifying the channel
-		inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
 		timeout := make(chan struct{})

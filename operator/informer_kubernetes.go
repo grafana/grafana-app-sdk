@@ -61,9 +61,12 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
-	_, err := k.SharedIndexInformer.AddEventHandler(ResourceWatcherToEventHandler(handler, k.schema, func() context.Context {
-		return k.runContext
-	}, k.ErrorHandler))
+	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler, func() context.Context {
+		if k.runContext != nil {
+			return k.runContext
+		}
+		return context.Background()
+	}))
 
 	return err
 }
@@ -81,6 +84,16 @@ func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
 // Schema returns the resource.Schema this informer is set up for
 func (k *KubernetesBasedInformer) Schema() resource.Schema {
 	return k.schema
+}
+
+func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
+	return toResourceObject(obj, k.schema)
+}
+
+func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
+	if k.ErrorHandler != nil {
+		k.ErrorHandler(ctx, err)
+	}
 }
 
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
