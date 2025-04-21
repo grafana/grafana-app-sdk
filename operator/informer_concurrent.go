@@ -58,31 +58,31 @@ func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 // Event handlers are not guaranteed to be executed in parallel or in any particular order by the underlying
 // Informer. If you want to coordinate between ResourceWatchers, use an InformerController.
 // nolint:dupl
-func (k *ConcurrentInformer) AddEventHandler(handler ResourceWatcher) error {
-	cw, err := newConcurrentWatcher(handler, k.maxConcurrentWorkers, k.errorHandler)
+func (ci *ConcurrentInformer) AddEventHandler(handler ResourceWatcher) error {
+	cw, err := newConcurrentWatcher(handler, ci.maxConcurrentWorkers, ci.errorHandler)
 	if err != nil {
 		return err
 	}
 
 	{
-		k.mtx.Lock()
-		k.watchers = append(k.watchers, cw)
-		k.mtx.Unlock()
+		ci.mtx.Lock()
+		ci.watchers = append(ci.watchers, cw)
+		ci.mtx.Unlock()
 	}
 
-	return k.informer.AddEventHandler(cw)
+	return ci.informer.AddEventHandler(cw)
 }
 
 // Run starts the informer and blocks until stopCh receives a message
-func (k *ConcurrentInformer) Run(ctx context.Context) error {
+func (ci *ConcurrentInformer) Run(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	k.mtx.RLock()
-	for _, cw := range k.watchers {
+	ci.mtx.RLock()
+	for _, cw := range ci.watchers {
 		go cw.Run(ctx)
 	}
-	k.mtx.RUnlock()
+	ci.mtx.RUnlock()
 
-	return k.informer.Run(ctx)
+	return ci.informer.Run(ctx)
 }

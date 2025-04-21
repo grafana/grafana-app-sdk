@@ -40,7 +40,7 @@ type concurrentWatcher struct {
 }
 
 // newConcurrentWatcher returns a properly initialized ConcurrentWatcher. The consumer **must**
-// call the `ConcurrentWatcher.Run()` method afterwards to start the underlying workers. If not, the
+// call the `concurrentWatcher.Run()` method afterwards to start the underlying workers. If not, the
 // wrapped ResourceWatcher methods will not be called.
 func newConcurrentWatcher(
 	watcher ResourceWatcher, initialPoolSize uint64, errorHandler func(context.Context, error),
@@ -142,7 +142,7 @@ func (w *concurrentWatcher) Run(ctx context.Context) {
 						w.errorHandler(ctx, err)
 					}
 				}
-				// the only way to get here is if the l.toProcess is empty and closed
+				// the only way to get here is if the events channel is empty and closed
 				cancel()
 			}, 1*time.Second, ctx.Done())
 		}()
