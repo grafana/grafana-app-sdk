@@ -24,6 +24,8 @@ type eventInfo struct {
 	source resource.Object
 }
 
+var _ ResourceWatcher = &concurrentWatcher{}
+
 // concurrentWatcher is a struct that implements ResourceWatcher, but takes no action on its own.
 // For each method in (Add, Update, Delete) the event is added in a buffered queue and the corresponding
 // methods of the underlying ResourceWatcher are called concurrently.

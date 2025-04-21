@@ -317,6 +317,30 @@ func TestConcurrentWatcher(t *testing.T) {
 		// Events recieved should be in the same order of events triggered always.
 		assert.Equal(t, []string{"add", "update", "update", "delete"}, events)
 	})
+
+	t.Run("events should be processed concurrently with multiple workers", func(t *testing.T) {
+		mock := &mockWatcher{}
+		mock.AddFunc = func(ctx context.Context, o resource.Object) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		}
+		var errCount atomic.Int64
+		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
+		assert.Nil(t, err)
+		go cw.Run(t.Context())
+		for i := 0; i < 90; i++ {
+			obj := schema.ZeroValue()
+			obj.SetName(strconv.Itoa(i))
+			err = cw.Add(t.Context(), obj)
+			assert.Nil(t, err)
+		}
+		// Assuming an event distribution within 3 workers, 90 events (each taking 100ms) should take ~3 seconds
+		// to get processed concurrently. With some margin, waiting for 4s should be enough to test if the events
+		// are being processed concurrently, as otherwise (sequentially) it would take ~9 seconds.
+		time.Sleep(4 * time.Second)
+		assert.Equal(t, int64(90), mock.addAttempts.Load())
+		assert.Equal(t, int64(0), errCount.Load())
+	})
 }
 
 type mockWatcher struct {
