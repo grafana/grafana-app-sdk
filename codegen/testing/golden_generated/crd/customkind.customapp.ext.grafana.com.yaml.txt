@@ -48,7 +48,6 @@ spec:
                                                 - success
                                                 - in_progress
                                                 - failed
-                                            type: string
                                     required:
                                         - lastEvaluation
                                         - state
@@ -77,23 +76,19 @@ spec:
                             enum:
                                 default: default
                                 enum:
-                                    - default
+                                    - val1
                                     - val2
                                     - val3
                                     - val4
-                                    - val1
-                                type: string
+                                    - default
                             field1:
                                 type: string
                             floatField:
-                                format: double
                                 type: number
                             i32:
                                 maximum: 123456
-                                minimum: -2147483648
                                 type: integer
                             i64:
-                                maximum: 9223372036854775807
                                 minimum: 123456
                                 type: integer
                             inner:
@@ -145,29 +140,19 @@ spec:
                                 format: date-time
                                 type: string
                             union:
-                                oneOf:
-                                    - allOf:
-                                        - required:
-                                            - group
-                                        - not:
-                                            anyOf:
-                                                - required:
-                                                    - group
-                                                    - details
-                                    - required:
-                                        - group
-                                        - details
-                                properties:
-                                    details:
-                                        type: object
-                                        x-kubernetes-preserve-unknown-fields: true
-                                    group:
-                                        type: string
-                                    options:
-                                        items:
+                                anyOf:
+                                    - properties:
+                                        group:
                                             type: string
-                                        type: array
-                                type: object
+                                        options:
+                                            items:
+                                                type: string
+                                            type: array
+                                      required:
+                                        - group
+                                      type: object
+                                    - type: object
+                                      x-kubernetes-preserve-unknown-fields: true
                         required:
                             - field1
                             - inner
@@ -207,7 +192,6 @@ spec:
                                                 - success
                                                 - in_progress
                                                 - failed
-                                            type: string
                                     required:
                                         - lastEvaluation
                                         - state
@@ -221,7 +205,6 @@ spec:
                         required:
                             - statusField1
                         type: object
-                        x-kubernetes-preserve-unknown-fields: true
                 required:
                     - spec
                 type: object

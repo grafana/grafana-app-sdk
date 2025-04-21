@@ -965,6 +965,8 @@ github.com/grafana/cog v0.0.1/go.mod h1:FqZi9WZ/Uzvs3tvo7l+OViThCpfvu3KDGDqHCB2L
 github.com/grafana/cog v0.0.19/go.mod h1:jrS9indvWuDs60RHEZpLaAkmZdgyoLKMOEUT0jiB1t0=
 github.com/grafana/cog v0.0.22 h1:0wMkA52XEbYiTN/NADbFapXcQjq2jFauNKhr+Ml6+R4=
 github.com/grafana/cog v0.0.22/go.mod h1:jrS9indvWuDs60RHEZpLaAkmZdgyoLKMOEUT0jiB1t0=
+github.com/grafana/cog v0.0.31-0.20250421142618-8c8037f19ca4 h1:MAok8s9rBkFZQwXFnPT6BaQRW4yYDOGSVUFWDlK5ZLg=
+github.com/grafana/cog v0.0.31-0.20250421142618-8c8037f19ca4/go.mod h1:UDstzYqMdgIROmbfkHL8fB9XWQO2lnf5z+4W/eJo4Dc=
 github.com/grafana/grafana-plugin-sdk-go v0.222.0/go.mod h1:0lYONo3rJrjIoJNOQP0h2NXmOaF5rFIuH/rwSVSeIrQ=
 github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7 h1:pdN6V1QBWetyv/0+wjACpqVH+eVULgEjkurDLq3goeM=
 github.com/gregjones/httpcache v0.0.0-20180305231024-9cad4c3443a7/go.mod h1:FecbI9+v66THATjSRHfNgh1IVFe/9kFxbXtjV0ctIMA=

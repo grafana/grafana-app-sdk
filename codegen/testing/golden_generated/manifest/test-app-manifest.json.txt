@@ -63,8 +63,7 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ],
-                                                    "type": "string"
+                                                    ]
                                                 }
                                             },
                                             "required": [
@@ -101,7 +100,6 @@
                             "spec": {
                                 "properties": {
                                     "intField": {
-                                        "format": "int64",
                                         "type": "integer"
                                     },
                                     "stringField": {
@@ -148,8 +146,7 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ],
-                                                    "type": "string"
+                                                    ]
                                                 }
                                             },
                                             "required": [
@@ -216,8 +213,7 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ],
-                                                    "type": "string"
+                                                    ]
                                                 }
                                             },
                                             "required": [
