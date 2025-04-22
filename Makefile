@@ -19,10 +19,6 @@ check-go-version:
 	@if [ -z "$(GOBINARY)" ]; then \
 		echo "Error: No Go binary found. It's a no-go!"; \
 		exit 1; \
-	fi; \
-	if [ "$$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//')" != "$(GOVERSION)" ]; then \
-		echo "Error: Go version $(GOVERSION) is required, but version $$($(GOBINARY) version | awk '{print $$3}' | sed 's/go//') is installed."; \
-		exit 1; \
 	fi
 
 all: check-go-version deps lint test build
