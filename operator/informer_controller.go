@@ -105,6 +105,9 @@ type InformerController struct {
 	RetryPolicy RetryPolicy
 	// RetryDequeuePolicy is a user-specified retry dequeue logic function which will be used for new informer actions
 	// when one or more retries for the object are still pending. If not present, existing retries are always dequeued.
+	// If using an OpinionatedWatcher or OpinionatedReconciler, this should be set to OpinionatedRetryDequeuePolicy,
+	// or something with similar logic, as the OpinionatedWatcher and OpinionatedReconciler trigger updates on adds which error,
+	// which will cause the add retry to be dequeued if RetryDequeuePolicy is absent.
 	RetryDequeuePolicy  RetryDequeuePolicy
 	informers           *ListMap[string, Informer]
 	watchers            *ListMap[string, ResourceWatcher]
@@ -147,7 +150,10 @@ type InformerControllerConfig struct {
 // DefaultInformerControllerConfig returns an InformerControllerConfig with default values
 func DefaultInformerControllerConfig() InformerControllerConfig {
 	return InformerControllerConfig{
-		MetricsConfig: metrics.DefaultConfig(""),
+		MetricsConfig:      metrics.DefaultConfig(""),
+		ErrorHandler:       DefaultErrorHandler,
+		RetryPolicy:        DefaultRetryPolicy,
+		RetryDequeuePolicy: OpinionatedRetryDequeuePolicy,
 	}
 }
 
