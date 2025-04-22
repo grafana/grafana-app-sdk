@@ -23,8 +23,7 @@ type ConcurrentInformer struct {
 }
 
 type ConcurrentInformerOptions struct {
-	// ErrorHandler is a user-specified error handling function. This is typically for logging/metrics use,
-	// as retry logic is covered by the RetryPolicy. If left nil, DefaultErrorHandler will be used.
+	// ErrorHandler is a user-specified error handling function. If left nil, DefaultErrorHandler will be used.
 	ErrorHandler func(context.Context, error)
 	// MaxConcurrentWorkers is a limit on the number of workers to run concurrently for each ResourceWatcher. Each
 	// worker maintains a queue of events which are processed sequentially. Events for a particular object are assigned
