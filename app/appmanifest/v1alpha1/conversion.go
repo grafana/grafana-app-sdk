@@ -4,6 +4,7 @@ import "github.com/grafana/grafana-app-sdk/app"
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
 // to the generic app.ManifestData type for usage with an app.Manifest.
+// nolint:gocognit
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
 		AppName: s.AppName,
@@ -71,6 +72,26 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				perm.Actions[aidx] = app.KindPermissionAction(action)
 			}
 			data.ExtraPermissions.AccessKinds[idx] = perm
+		}
+	}
+	// Operator Info
+	if s.Operator != nil {
+		data.Operator = &app.ManifestOperatorInfo{}
+		if s.Operator.Url != nil {
+			data.Operator.URL = *s.Operator.Url
+		}
+		if s.Operator.Webhooks != nil {
+			webhooks := app.ManifestOperatorWebhookProperties{}
+			if s.Operator.Webhooks.ConversionPath != nil {
+				webhooks.ConversionPath = *s.Operator.Webhooks.ConversionPath
+			}
+			if s.Operator.Webhooks.ValidationPath != nil {
+				webhooks.ValidationPath = *s.Operator.Webhooks.ValidationPath
+			}
+			if s.Operator.Webhooks.MutationPath != nil {
+				webhooks.MutationPath = *s.Operator.Webhooks.MutationPath
+			}
+			data.Operator.Webhooks = &webhooks
 		}
 	}
 	return data, nil

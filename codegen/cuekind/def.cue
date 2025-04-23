@@ -198,9 +198,6 @@ Kind: S={
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *true
 			config: {
-				// allowMarshalEmptyDisjunctions determines whether to allow marshaling empty disjunctions.
-				// If true, empty disjunctions will be marshaled as `null` instead of returning an error.
-				allowMarshalEmptyDisjunctions: bool | *true
 			}
 		}
 	}
@@ -224,6 +221,11 @@ Manifest: S={
 	extraPermissions: {
 		accessKinds: [...#AccessKind]
 	}
+
+	// operatorURL is the HTTPS URL of your operator, including port if non-standard (443).
+	// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
+	// This is used to construct validation, mutations, or conversion webhooks for your deployment.
+	operatorURL?: string
 
 	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
 	// if present, this value is used for the full group instead.

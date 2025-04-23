@@ -240,6 +240,12 @@ func NewApp(config AppConfig) (*App, error) {
 	if config.InformerConfig.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.ErrorHandler
 	}
+	if config.InformerConfig.RetryPolicy != nil {
+		a.informerController.RetryPolicy = config.InformerConfig.RetryPolicy
+	}
+	if config.InformerConfig.RetryDequeuePolicy != nil {
+		a.informerController.RetryDequeuePolicy = config.InformerConfig.RetryDequeuePolicy
+	}
 	discoveryRefresh := config.DiscoveryRefreshInterval
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10

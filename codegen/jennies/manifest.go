@@ -114,7 +114,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive
+//nolint:revive,gocognit,funlen
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		Kinds: make([]app.ManifestKind, 0),
@@ -122,6 +122,10 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 	manifest.AppName = m.Name()
 	manifest.Group = m.Properties().FullGroup
+
+	hasAnyValidation := false
+	hasAnyMutation := false
+	hasAnyConversion := false
 
 	for _, kind := range m.Kinds() {
 		// TODO
@@ -144,12 +148,16 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			Conversion: kind.Properties().Conversion,
 			Versions:   make([]app.ManifestKindVersion, 0),
 		}
+		if kind.Properties().Conversion {
+			hasAnyConversion = true
+		}
 
 		for _, version := range kind.Versions() {
 			mver := app.ManifestKindVersion{
 				Name: version.Version,
 			}
 			if len(version.Mutation.Operations) > 0 {
+				hasAnyMutation = true
 				operations, err := sanitizeAdmissionOperations(version.Mutation.Operations)
 				if err != nil {
 					return nil, fmt.Errorf("mutation operations error: %w", err)
@@ -161,6 +169,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 				}
 			}
 			if len(version.Validation.Operations) > 0 {
+				hasAnyValidation = true
 				if mver.Admission == nil {
 					mver.Admission = &app.AdmissionCapabilities{}
 				}
@@ -200,6 +209,23 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 		manifest.ExtraPermissions = &app.Permissions{
 			AccessKinds: perms,
+		}
+	}
+
+	if m.Properties().OperatorURL != nil {
+		webhooks := app.ManifestOperatorWebhookProperties{}
+		if hasAnyConversion {
+			webhooks.ConversionPath = "/convert"
+		}
+		if hasAnyValidation {
+			webhooks.ValidationPath = "/validate"
+		}
+		if hasAnyMutation {
+			webhooks.MutationPath = "/mutate"
+		}
+		manifest.Operator = &app.ManifestOperatorInfo{
+			URL:      *m.Properties().OperatorURL,
+			Webhooks: &webhooks,
 		}
 	}
 

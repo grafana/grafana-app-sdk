@@ -77,6 +77,18 @@ appManifest: versions: v1alpha1: {
 			resource: string
 			actions: [...string]
 		}
+		#OperatorWebhookProperties: {
+			conversionPath?: string | *"/convert"
+			validationPath?: string | *"/validate"
+			mutationPath?: string | *"/mutate"
+		}
+		#OperatorInfo: {
+			// URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).
+			// It should be a URL which the API server can access.
+			url?: string
+			// Webhooks contains information about the various webhook paths.
+			webhooks?: #OperatorWebhookProperties
+		}
 		spec: {
 			appName: string
 			group: string
@@ -92,6 +104,11 @@ appManifest: versions: v1alpha1: {
 			// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
 			// Even if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.
 			dryRunKinds?: bool | *false
+			// Operator has information about the operator being run for the app, if there is one.
+			// When present, it can indicate to the API server the URL and paths for webhooks, if applicable.
+			// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
+			// mutation, or conversion.
+			operator?: #OperatorInfo
 		}
 		status: {
 			#ApplyStatus: {

@@ -8,10 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestAppManifestKind_Read(t *testing.T) {
@@ -50,7 +51,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 				}},
 			}},
 		},
-		AppManifestStatus: AppManifestStatus{
+		Status: AppManifestStatus{
 			Resources: map[string]AppManifeststatusApplyStatus{
 				"crds": {
 					Status: AppManifestStatusApplyStatusStatusSuccess,

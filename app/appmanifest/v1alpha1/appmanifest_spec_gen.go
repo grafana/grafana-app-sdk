@@ -114,6 +114,36 @@ func NewAppManifestKindPermission() *AppManifestKindPermission {
 }
 
 // +k8s:openapi-gen=true
+type AppManifestOperatorInfo struct {
+	// URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).
+	// It should be a URL which the API server can access.
+	Url *string `json:"url,omitempty"`
+	// Webhooks contains information about the various webhook paths.
+	Webhooks *AppManifestOperatorWebhookProperties `json:"webhooks,omitempty"`
+}
+
+// NewAppManifestOperatorInfo creates a new AppManifestOperatorInfo object.
+func NewAppManifestOperatorInfo() *AppManifestOperatorInfo {
+	return &AppManifestOperatorInfo{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestOperatorWebhookProperties struct {
+	ConversionPath *string `json:"conversionPath,omitempty"`
+	ValidationPath *string `json:"validationPath,omitempty"`
+	MutationPath   *string `json:"mutationPath,omitempty"`
+}
+
+// NewAppManifestOperatorWebhookProperties creates a new AppManifestOperatorWebhookProperties object.
+func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProperties {
+	return &AppManifestOperatorWebhookProperties{
+		ConversionPath: (func(input string) *string { return &input })("/convert"),
+		ValidationPath: (func(input string) *string { return &input })("/validate"),
+		MutationPath:   (func(input string) *string { return &input })("/mutate"),
+	}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestSpec struct {
 	AppName string                    `json:"appName"`
 	Group   string                    `json:"group"`
@@ -126,6 +156,11 @@ type AppManifestSpec struct {
 	// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
 	// Even if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.
 	DryRunKinds *bool `json:"dryRunKinds,omitempty"`
+	// Operator has information about the operator being run for the app, if there is one.
+	// When present, it can indicate to the API server the URL and paths for webhooks, if applicable.
+	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
+	// mutation, or conversion.
+	Operator *AppManifestOperatorInfo `json:"operator,omitempty"`
 }
 
 // NewAppManifestSpec creates a new AppManifestSpec object.

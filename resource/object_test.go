@@ -19,6 +19,7 @@ type ComplexTestObject struct {
 	SlicePointer *[]int          // Weird, but valid, types
 	MapPointer   *map[string]int // Weird, but valid, types
 	Timestamp    time.Time       // Times won't be copied right if you try to copy them as a struct (they'll become 0)
+	TimePointer  *time.Time
 }
 
 type ComplexTestObjectChild struct {
@@ -36,6 +37,7 @@ func TestCopyObjectInto(t *testing.T) {
 		"b": 2,
 	}
 	var ncto *ComplexTestObject
+	tm := time.Date(2020, time.January, 1, 2, 3, 4, 5, time.UTC)
 	tests := []struct {
 		name string
 		in   any
@@ -122,6 +124,7 @@ func TestCopyObjectInto(t *testing.T) {
 			SlicePointer: &si,
 			MapPointer:   &mi,
 			Timestamp:    time.Now(),
+			TimePointer:  &tm,
 		},
 		out: &ComplexTestObject{},
 	}}
