@@ -175,11 +175,13 @@ type cueOpenAPIEncodedComponents struct {
 	Schemas map[string]any `json:"schemas"`
 }
 
+const extKubernetesPreserveUnknownFields = "x-kubernetes-preserve-unknown-fields"
+
 func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) {
-	codegenPipeline2 := cog.TypesFromSchema().
+	codegenPipeline := cog.TypesFromSchema().
 		CUEValue(name, v, cog.ForceEnvelope(name)).
 		GenerateOpenAPI(cog.OpenAPIGenerationConfig{})
-	files, err := codegenPipeline2.Run(context.Background())
+	files, err := codegenPipeline.Run(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -198,12 +200,58 @@ func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) 
 	}
 	// Delete the "metadata" property
 	delete(converted.Properties, "metadata")
+	// cog-generated openAPI doesn't consider CUE values which have fields other than _ or [string]:any in them to be open,
+	// so they don't have additionalProperties/x-kubernetes-preserve-unknown-fields
+	// TODO: @IfSentient file a bug for this with cog
+	// TODO: @IfSentient CUE actually considers all structs to be open, so might need to re-map to a definition before handing off to cog
+	// In the meantime, use the @appsdk(open=true) attribute to tell the generator to consider a struct open
+	for k, sch := range converted.Properties {
+		val := v.LookupPath(cue.MakePath(cue.Str(k)))
+		if !val.Exists() {
+			continue
+		}
+		attr := val.Attribute("appsdk")
+		if attr.Err() != nil {
+			continue
+		}
+		attrVal, found, _ := attr.Lookup(0, "open")
+		if found {
+			if len(attrVal) >= 1 && attrVal[0] == 't' || attrVal[0] == 'T' {
+				if sch.Value.Extensions == nil {
+					sch.Value.Extensions = make(map[string]any)
+				}
+				sch.Value.Extensions[extKubernetesPreserveUnknownFields] = true
+				converted.Properties[k] = sch
+			}
+		}
+		/*fmt.Println("check ", k)
+		chk := val.Context().CompileString("{[string]: _}")
+		if chk.Err() != nil {
+			return nil, chk.Err()
+		}
+		if err := val.Subsume(chk, cue.Final()); err != nil {
+			fmt.Println("subsume err "+k+":", err)
+		}
+		if val.Eval().Allows(cue.AnyString) {
+			fmt.Println(CUEValueToString(val.Eval()))
+			fmt.Println("allows ", k)
+			if sch.Value == nil {
+				// We shouldn't be able to hit this, but just in case, let's return something nice instead of panicking
+				return nil, fmt.Errorf("property %s has no value after transforming with GetCRDOpenAPISchema", k)
+			}
+			if sch.Value.Extensions == nil {
+				sch.Value.Extensions = make(map[string]any)
+			}
+			sch.Value.Extensions[extKubernetesPreserveUnknownFields] = true
+			converted.Properties[k] = sch
+		}*/
+	}
 	// Convert to JSON and then into a map
 	j, err := json.MarshalIndent(converted.Properties, "", "  ")
 	if err != nil {
 		return nil, err
 	}
-	m := make(map[string]interface{})
+	m := make(map[string]any)
 	err = json.Unmarshal(j, &m)
 	if err != nil {
 		return nil, err
@@ -242,7 +290,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 			// We've found a cycle, return object with x-kubernetes-preserve-unknown-fields
 			return &openapi3.Schema{
 				Type:       &openapi3.Types{openapi3.TypeObject},
-				Extensions: map[string]any{"x-kubernetes-preserve-unknown-fields": true},
+				Extensions: map[string]any{extKubernetesPreserveUnknownFields: true},
 			}, nil
 		}
 
@@ -319,7 +367,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 				if result.Extensions == nil {
 					result.Extensions = make(map[string]any)
 				}
-				result.Extensions["x-kubernetes-preserve-unknown-fields"] = true
+				result.Extensions[extKubernetesPreserveUnknownFields] = true
 			}
 		} else if *result.AdditionalProperties.Has {
 			// If AdditionalProperties.Schema is nil, then remove AdditionalProperties and set x-kubernetes-preserve-unknown-fields to true
@@ -328,7 +376,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 			if result.Extensions == nil {
 				result.Extensions = make(map[string]any)
 			}
-			result.Extensions["x-kubernetes-preserve-unknown-fields"] = true
+			result.Extensions[extKubernetesPreserveUnknownFields] = true
 		} else {
 			result.AdditionalProperties.Has = nil
 		}
