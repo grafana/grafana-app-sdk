@@ -12,7 +12,7 @@ For this tutorial, we have one pre-written, that we'll discuss a few parts of. E
 mkdir -p plugin/src/api && curl -o plugin/src/api/issue_client.ts https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/issue-client.ts
 ```
 
-The client uses grafana libraries to make fetch requests to perform relevent actions, and uses the generated `Issue` type in `generated/issue/v1/issue_object_gen.ts` that mirrors our generated go `v1.Issue` type. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
+The client uses grafana libraries to make fetch requests to perform relevant actions, and uses the generated `Issue` type in `generated/issue/v1/issue_object_gen.ts` that mirrors our generated go `v1.Issue` type. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
 
 ## Main Page
 
@@ -92,11 +92,11 @@ That we'll use in our display output to show the correct Issue status and displa
 
 Now we want to redeploy our plugin front-end to see the changes. Since we don't need to rebuild the operator or the plugin's backend, we can just do
 ```bash
-$ make build/plugin-frontend
+make build/plugin-frontend
 ```
 After that completes, we can redploy to our active local environment with
 ```bash
-$ make local/deploy_plugin
+make local/deploy_plugin
 ```
 And just like that, we can refresh or go to [http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/], and see our brand-new plugin UI. 
 If we create a new issue, we can see that it shows up in the list, or via a `kubectl get issues`.
