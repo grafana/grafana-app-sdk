@@ -24,7 +24,7 @@ jobs:
     steps:
     - name: Retrieve GitHub App secrets
       id: get-secrets
-      uses: grafana/shared-workflows/actions/get-vault-secrets@get-vault-secrets-v1.0.1
+      uses: grafana/shared-workflows/actions/get-vault-secrets@97c6f45f01d4bca8a3b1acfe397113ce88858a81
       with:
         repo_secrets: |
           APP_ID=grafana-go-workspace-bot:app-id
@@ -44,6 +44,7 @@ jobs:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
         ref: ${{ github.event.pull_request.head.ref }}
         token: ${{ steps.generate_token.outputs.token }}
+        persist-credentials: false
 
     - name: Set go version
       uses: actions/setup-go@v4
