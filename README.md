@@ -44,7 +44,7 @@ Which will print the version of the CLI which you have installed.
 
 ## App Design
 
-An agnotic view of an app using the SDK looks like:
+An agnostic view of an app using the SDK looks like:
 
 ![Application Using SDK Diagram](docs/diagrams/app_logic.png)
 

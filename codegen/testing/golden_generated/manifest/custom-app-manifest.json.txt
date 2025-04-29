@@ -198,8 +198,20 @@
                                                 "type": "object"
                                             },
                                             {
-                                                "type": "object",
-                                                "x-kubernetes-preserve-unknown-fields": true
+                                                "properties": {
+                                                    "details": {
+                                                        "type": "object",
+                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                    },
+                                                    "group": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "group",
+                                                    "details"
+                                                ],
+                                                "type": "object"
                                             }
                                         ]
                                     }
