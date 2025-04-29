@@ -151,16 +151,8 @@ spec:
                                       required:
                                         - group
                                       type: object
-                                    - properties:
-                                        details:
-                                            type: object
-                                            x-kubernetes-preserve-unknown-fields: true
-                                        group:
-                                            type: string
-                                      required:
-                                        - group
-                                        - details
-                                      type: object
+                                    - type: object
+                                      x-kubernetes-preserve-unknown-fields: true
                         required:
                             - field1
                             - inner
