@@ -44,7 +44,7 @@ jobs:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
         ref: ${{ github.event.pull_request.head.ref }}
         token: ${{ steps.generate_token.outputs.token }}
-        persist-credentials: false
+        persist-credentials: true
 
     - name: Set go version
       uses: actions/setup-go@v4
