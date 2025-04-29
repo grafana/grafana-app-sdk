@@ -1,6 +1,8 @@
 package codegen
 
-import "cuelang.org/go/cue"
+import (
+	"cuelang.org/go/cue"
+)
 
 // Kind is a common interface declaration for code generation.
 // Any type parser should be able to parse a kind into this definition to supply
@@ -88,17 +90,35 @@ type AdditionalPrinterColumn struct {
 	JSONPath    string  `json:"jsonPath"`
 }
 
+// CustomRouteRequest represents the request part of a custom route definition.
+type CustomRouteRequest struct {
+	Query cue.Value `json:"query,omitempty"`
+	Body  cue.Value `json:"body,omitempty"`
+}
+
+// CustomRouteResponse represents the response part of a custom route definition.
+type CustomRouteResponse struct {
+	Schema cue.Value `json:"schema,omitempty"`
+}
+
+// CustomRoute represents a single custom route definition for a specific HTTP method.
+type CustomRoute struct {
+	Request  CustomRouteRequest  `json:"request"`
+	Response CustomRouteResponse `json:"response"`
+}
+
 type KindVersion struct {
 	Version string `json:"version"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema                   cue.Value                 `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Codegen                  KindCodegenProperties     `json:"codegen"`
-	Served                   bool                      `json:"served"`
-	SelectableFields         []string                  `json:"selectableFields"`
-	Validation               KindAdmissionCapability   `json:"validation"`
-	Mutation                 KindAdmissionCapability   `json:"mutation"`
-	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
+	Schema                   cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Codegen                  KindCodegenProperties             `json:"codegen"`
+	Served                   bool                              `json:"served"`
+	SelectableFields         []string                          `json:"selectableFields"`
+	Validation               KindAdmissionCapability           `json:"validation"`
+	Mutation                 KindAdmissionCapability           `json:"mutation"`
+	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
+	CustomRoutes             map[string]map[string]CustomRoute `json:"customRoutes"`
 }
 
 // AnyKind is a simple implementation of Kind

@@ -76,7 +76,22 @@ SchemaWithOperatorState: Schema & {
 #AdmissionCapability: {
 	operations: [...string]
 }
-
+#CustomRouteRequest: {
+    query?: _
+    body?: _
+}
+#CustomRouteResponse: _
+#CustomRoute: {
+    request: #CustomRouteRequest
+    response: #CustomRouteResponse
+}
+#CustomRoutePath: string
+#CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
+#CustomRouteCapability: {
+	[#CustomRoutePath]: {
+		[#CustomRouteMethod]: #CustomRoute
+	}
+}
 #AdditionalPrinterColumns: {
 	// name is a human readable name for the column.
 	name: string
@@ -155,6 +170,8 @@ Kind: S={
 			mutation:   #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			// customRoutes is a map of path patterns to custom routes for this version.
+			customRoutes?: #CustomRouteCapability
 		}
 	}
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
@@ -178,18 +195,18 @@ Kind: S={
 				// enumsAsUnionTypes generates enums as a union of values instead of using
 				// an actual `enum` declaration.
 				// If EnumsAsUnionTypes is false, an enum will be generated as:
-				// “`ts
+				// "`ts
 				// enum Direction {
 				//   Up = "up",
 				//   Down = "down",
 				//   Left = "left",
 				//   Right = "right",
 				// }
-				// “`
+				// "`
 				// If EnumsAsUnionTypes is true, the same enum will be generated as:
-				// “`ts
+				// "`ts
 				// type Direction = "up" | "down" | "left" | "right";
-				// “`
+				// "`
 				enumsAsUnionTypes: bool | *false
 			}
 		}

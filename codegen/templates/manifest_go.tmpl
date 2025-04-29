@@ -9,7 +9,112 @@ import (
     "encoding/json"
 
     "github.com/grafana/grafana-app-sdk/app"
+    "k8s.io/kube-openapi/pkg/spec3"
+    "k8s.io/kube-openapi/pkg/validation/spec"
 )
+
+{{ define "schema" }}
+SchemaProps: spec.SchemaProps{
+    {{ if .Type }}Type: []string{ {{ range $index, $type := .Type }}{{ if $index }}, {{ end }}"{{$type}}"{{ end }} },{{ end }}{{ if .Format }}
+    Format: "{{.Format}}",{{ end }}{{ if .Description }}
+    Description: "{{.Description}}",{{ end }}{{ if .Enum }}
+    Enum: []interface{}{ {{ range .Enum }}
+        "{{.}}",{{ end }}
+    },{{ end }}{{ if .Properties }}
+    Properties: map[string]spec.Schema{ {{ range $key, $prop := .Properties }}
+        "{{$key}}": { {{ template "schema" $prop }}
+        },{{ end }}
+    },{{ end }}{{ if .Required }}
+    Required: []string{ {{ range .Required }}
+        "{{.}}",{{ end }}
+    },{{ end }}
+},{{ end }}
+
+{{ define "parameter" }}
+{ {{ if .Name }}
+    Name: "{{.Name}}",{{ end }}{{ if .In }}
+    In: "{{.In}}",{{ end }}{{ if .Description }}
+    Description: "{{.Description}}",{{ end }}{{ if .Required }}
+    Required: {{.Required}},{{ end }}{{ if .Schema }}
+    Schema: &spec.Schema{ {{ template "schema" .Schema }}
+    },{{ end }}
+},{{ end }}
+
+{{ define "mediaTypeContent" }}
+MediaTypeProps: spec3.MediaTypeProps{
+    {{ if .Schema }}Schema: &spec.Schema{ {{ template "schema" .Schema }} },{{ end }}
+    {{ if .Example }}Example: {{ printf "%#v" .Example }},{{ end }}
+    {{ if .Examples }}Examples: map[string]*spec3.Example{
+        {{ range $key, $example := .Examples }}"{{$key}}": {
+            ExampleProps: spec3.ExampleProps{
+                {{ if $example.Summary }}Summary: "{{$example.Summary}}",{{ end }}
+                {{ if $example.Description }}Description: "{{$example.Description}}",{{ end }}
+                {{ if $example.Value }}Value: map[string]interface{}{
+                    {{- range $k, $v := $example.Value }}
+                    "{{$k}}": {{- if eq (printf "%T" $v) "string" -}}"{{$v}}"{{- else -}}{{printf "%#v" $v}}{{- end -}},
+                    {{- end }}
+                },{{ end }}
+                {{ if $example.ExternalValue }}ExternalValue: "{{$example.ExternalValue}}",{{ end }}
+            },
+        },{{ end }}
+    },{{ end }}
+},{{ end }}
+
+{{ define "responses" }}
+ResponsesProps: spec3.ResponsesProps{
+    {{ if .Default }}Default: {{ template "response" .Default }},{{ end }}
+    {{ if .StatusCodeResponses }}StatusCodeResponses: map[int]*spec3.Response{ {{ range $code, $response := .StatusCodeResponses }}
+        {{$code}}: {{ template "response" $response }},{{ end }}
+    },{{ end }}
+},{{ end }}
+
+{{ define "response" }}
+&spec3.Response{
+    ResponseProps: spec3.ResponseProps{
+        {{ if .Description }}Description: "{{.Description}}",{{ end }}
+        {{ if .Content }}Content: map[string]*spec3.MediaType{ {{ range $contentType, $mediaType := .Content }}
+            "{{$contentType}}": { {{ template "mediaTypeContent" $mediaType }} },{{ end }}
+        },{{ end }}
+    },
+}{{ end }}
+
+{{ define "requestBody" }}
+RequestBodyProps: spec3.RequestBodyProps{
+    {{ if .Description }}Description: "{{.Description}}",{{ end }}
+    {{ if .Required }}Required: {{.Required}},{{ end }}
+    {{ if .Content }}Content: map[string]*spec3.MediaType{ {{ range $contentType, $mediaType := .Content }}
+        "{{$contentType}}": { {{ template "mediaTypeContent" $mediaType }} },{{ end }}
+    },{{ end }}
+},{{ end }}
+
+{{ define "operation" }}
+OperationProps: spec3.OperationProps{
+    {{ if .Summary }}Summary: "{{.Summary}}",{{ end }}
+    {{ if .Description }}Description: "{{.Description}}",{{ end }}
+    {{ if .OperationId }}OperationId: "{{.OperationId}}",{{ end }}
+    {{ if .Tags }}Tags: []string{ {{ range $index, $tag := .Tags }}{{ if $index }}, {{ end }}"{{$tag}}"{{ end }} },{{ end }}
+    {{ if .ExternalDocs }}ExternalDocs: &spec3.ExternalDocumentation{
+        {{ if .ExternalDocs.URL }}URL: "{{.ExternalDocs.URL}}",{{ end }}
+        {{ if .ExternalDocs.Description }}Description: "{{.ExternalDocs.Description}}",{{ end }}
+    },{{ end }}
+    {{ if .Parameters }}Parameters: []*spec3.Parameter{ {{ range .Parameters }}
+        {{ template "parameter" . }}{{ end }}
+    },{{ end }}
+    {{ if .RequestBody }}RequestBody: &spec3.RequestBody{ {{ template "requestBody" .RequestBody }} },{{ end }}
+    {{ if .Responses }}Responses: &spec3.Responses{ {{ template "responses" .Responses }} },{{ end }}
+    {{ if .Deprecated }}Deprecated: {{.Deprecated}},{{ end }}
+    {{ if .SecurityRequirement }}SecurityRequirement: []map[string][]string{ {{ range .SecurityRequirement }}
+        { {{ range $key, $scopes := . }}
+            "{{$key}}": []string{ {{ range $index, $scope := $scopes }}{{ if $index }}, {{ end }}"{{$scope}}"{{ end }} },{{ end }}
+        },{{ end }}
+    },{{ end }}
+    {{ if .Servers }}Servers: []*spec3.Server{ {{ range .Servers }}
+        {
+            {{ if .URL }}URL: "{{.URL}}",{{ end }}
+            {{ if .Description }}Description: "{{.Description}}",{{ end }}
+        },{{ end }}
+    },{{ end }}
+},{{ end }}
 
 var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}{{ if .Schema }}
     rawSchema{{$k.Kind}}{{$.ToPackageName .Name}} = []byte({{$.ToJSONBacktickString .Schema}})
@@ -43,6 +148,25 @@ var appManifestData = app.ManifestData{
                 Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
+                },{{end}}{{ if .CustomRoutes }}
+                CustomRoutes: map[string]spec3.PathProps{ {{ range $path, $props := .CustomRoutes }}{{ if $props }}
+                    "{{$path}}": { {{ if $props.Summary }}
+                        Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
+                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+                        Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
+                            {{ template "parameter" . }}{{ end }}
+                        },{{ end }}{{ if $props.Get }}
+                        Get: &spec3.Operation{ {{ template "operation" $props.Get }}
+                        },{{ end }}{{ if $props.Post }}
+                        Post: &spec3.Operation{ {{ template "operation" $props.Post }}
+                        },{{ end }}{{ if $props.Put }}
+                        Put: &spec3.Operation{ {{ template "operation" $props.Put }}
+                        },{{ end }}{{ if $props.Delete }}
+                        Delete: &spec3.Operation{ {{ template "operation" $props.Delete }}
+                        },{{ end }}{{ if $props.Patch }}
+                        Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
+                        },{{ end }}
+                    },{{ end }}{{ end }}
                 },{{end}}
             },
             {{ end }} },
@@ -56,12 +180,6 @@ var appManifestData = app.ManifestData{
             MutationPath: "{{.ManifestData.Operator.Webhooks.MutationPath}}",
         },{{ end }}
     },{{ end }}
-}
-
-func jsonToMap(j string) map[string]any {
-    m := make(map[string]any)
-    json.Unmarshal([]byte(j), &j)
-    return m
 }
 
 func LocalManifest() app.Manifest {

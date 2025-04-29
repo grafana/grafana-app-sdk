@@ -287,6 +287,57 @@ func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen.K
 		if v.Schema.Err() != nil {
 			return nil, v.Schema.Err()
 		}
+
+		customRoutesVal := val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("customRoutes")))
+		if customRoutesVal.Exists() && customRoutesVal.Err() == nil {
+			v.CustomRoutes = make(map[string]map[string]codegen.CustomRoute)
+
+			pathsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
+			if err != nil {
+				return nil, fmt.Errorf("error iterating customRoutes paths for version %s: %w", k, err)
+			}
+			for pathsIter.Next() {
+				pathStr := pathsIter.Selector().String()
+				pathStr = strings.Trim(pathStr, `"`)
+				methodsMapVal := pathsIter.Value()
+				v.CustomRoutes[pathStr] = make(map[string]codegen.CustomRoute)
+
+				methodsIter, err := methodsMapVal.Fields(cue.Optional(true), cue.Definitions(false))
+				if err != nil {
+					return nil, fmt.Errorf("error iterating customRoutes methods for path '%s' in version %s: %w", pathStr, k, err)
+				}
+				for methodsIter.Next() {
+					methodStr := methodsIter.Selector().String()
+					methodStr = strings.Trim(methodStr, `"`)
+					routeVal := methodsIter.Value()
+
+					requestVal := routeVal.LookupPath(cue.MakePath(cue.Str("request")))
+					var querySchema, bodySchema cue.Value
+					if requestVal.Exists() && requestVal.Err() == nil {
+						querySchema = requestVal.LookupPath(cue.MakePath(cue.Str("query")))
+						bodySchema = requestVal.LookupPath(cue.MakePath(cue.Str("body")))
+					}
+
+					responseVal := routeVal.LookupPath(cue.MakePath(cue.Str("response")))
+					var responseSchema cue.Value
+					if responseVal.Exists() && responseVal.Err() == nil {
+						responseSchema = responseVal
+					}
+
+					route := codegen.CustomRoute{
+						Request: codegen.CustomRouteRequest{
+							Query: querySchema,
+							Body:  bodySchema,
+						},
+						Response: codegen.CustomRouteResponse{
+							Schema: responseSchema,
+						},
+					}
+					v.CustomRoutes[pathStr][methodStr] = route
+				}
+			}
+		}
+
 		someKind.AllVersions = append(someKind.AllVersions, v)
 	}
 	// Now we need to sort AllVersions, as map key order is random
