@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"text/template"
 
@@ -388,8 +390,11 @@ func WriteOperatorConfig(out io.Writer) error {
 }
 
 type ManifestGoFileMetadata struct {
-	Package      string
-	ManifestData app.ManifestData
+	Package         string
+	Repo            string
+	CodegenPath     string
+	KindsAreGrouped bool
+	ManifestData    app.ManifestData
 }
 
 func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
@@ -421,6 +426,45 @@ func (ManifestGoFileMetadata) ToJSONBacktickString(input any) string {
 
 func (ManifestGoFileMetadata) ToPackageName(input string) string {
 	return ToPackageName(input)
+}
+
+func (ManifestGoFileMetadata) KindToPackageName(input string) string {
+	return ToPackageName(strings.ToLower(input))
+}
+
+func (ManifestGoFileMetadata) GroupToPackageName(input string) string {
+	return ToPackageName(strings.Split(input, ".")[0])
+}
+
+func (ManifestGoFileMetadata) GoKindName(kind string) string {
+	if len(kind) > 0 {
+		return strings.ToUpper(kind[:1]) + kind[1:]
+	}
+	return strings.ToUpper(kind)
+}
+
+func (m ManifestGoFileMetadata) Packages() []string {
+	pkgs := make([]string, 0)
+	if m.KindsAreGrouped {
+		gvs := make(map[string]string)
+		for _, k := range m.ManifestData.Kinds {
+			for _, v := range k.Versions {
+				gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.ManifestData.Group), ToPackageName(v.Name))] = ToPackageName(v.Name)
+			}
+		}
+		for pkg, alias := range gvs {
+			pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", alias, filepath.Join(m.Repo, m.CodegenPath, pkg)))
+		}
+	} else {
+		for _, k := range m.ManifestData.Kinds {
+			for _, v := range k.Versions {
+				pkgs = append(pkgs, fmt.Sprintf("%s%s \"%s\"", m.KindToPackageName(k.Kind), ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.KindToPackageName(k.Kind), ToPackageName(v.Name))))
+			}
+		}
+	}
+	// Sort for consistent output
+	slices.Sort(pkgs)
+	return pkgs
 }
 
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {

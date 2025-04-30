@@ -133,11 +133,14 @@ func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, 
 	return g
 }
 
-func ManifestGoGenerator(pkg string, includeSchemas bool) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
 		Package:        pkg,
 		IncludeSchemas: includeSchemas,
+		ProjectRepo:    projectRepo,
+		CodegenPath:    goGenPath,
+		GroupByKind:    !groupKinds,
 	})
 	return g
 }

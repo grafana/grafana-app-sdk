@@ -7,10 +7,16 @@ package groupbygroup
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
+
+	v1 "codegen-tests/pkg/generated/testapp/v1"
+	v2 "codegen-tests/pkg/generated/testapp/v2"
+	v3 "codegen-tests/pkg/generated/testapp/v3"
 )
 
 var (
@@ -48,6 +54,7 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv1,
+					GoKind: v1.TestKindKind(),
 				},
 
 				{
@@ -67,6 +74,7 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv2,
+					GoKind: v2.TestKindKind(),
 				},
 
 				{
@@ -235,6 +243,7 @@ var appManifestData = app.ManifestData{
 							},
 						},
 					},
+					GoKind: v3.TestKindKind(),
 				},
 			},
 		},
@@ -247,6 +256,7 @@ var appManifestData = app.ManifestData{
 				{
 					Name:   "v1",
 					Schema: &versionSchemaTestKind2v1,
+					GoKind: v1.TestKind2Kind(),
 				},
 			},
 		},
@@ -267,4 +277,18 @@ func LocalManifest() app.Manifest {
 
 func RemoteManifest() app.Manifest {
 	return app.NewAPIServerManifest("test-app")
+}
+
+var kindVersionToGoType = map[string]resource.Kind{
+	"TestKind/v1":  v1.TestKindKind(),
+	"TestKind/v2":  v2.TestKindKind(),
+	"TestKind/v3":  v3.TestKindKind(),
+	"TestKind2/v1": v1.TestKind2Kind(),
+}
+
+// ManifestGoTypeAssociator returns the associated resource.Kind instance for a given Kind and Version, if one exists.
+// If there is no association for the provided Kind and Version, exists will return false.
+func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exists bool) {
+	goType, exists = kindVersionToGoType[fmt.Sprintf("%s/%s", kind, version)]
+	return goType, exists
 }

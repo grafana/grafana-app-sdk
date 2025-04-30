@@ -77,6 +77,9 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 
 type ManifestGoGenerator struct {
 	Package        string
+	ProjectRepo    string
+	CodegenPath    string
+	GroupByKind    bool
 	IncludeSchemas bool
 }
 
@@ -101,8 +104,11 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 
 	buf := bytes.Buffer{}
 	err = templates.WriteManifestGoFile(templates.ManifestGoFileMetadata{
-		Package:      g.Package,
-		ManifestData: *manifestData,
+		Package:         g.Package,
+		Repo:            g.ProjectRepo,
+		CodegenPath:     g.CodegenPath,
+		KindsAreGrouped: !g.GroupByKind,
+		ManifestData:    *manifestData,
 	}, &buf)
 	if err != nil {
 		return nil, err

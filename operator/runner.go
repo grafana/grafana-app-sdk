@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -96,6 +97,11 @@ type RunnerConfig struct {
 	// Filesystem is an fs.FS that can be used in lieu of the OS filesystem.
 	// if empty, it defaults to os.DirFS(".")
 	Filesystem fs.FS
+	// GoTypesAssociator is used to associate the go resource.Kind type to the Kind and Version in a manifest.
+	// This is used when loading the manifest from disk, or an external source,
+	// but is not used with an embedded manifest (and can be nil when using an embedded manifest).
+	// It is used on `Run` to populate the loaded manifest data with the type associations.
+	GoTypesAssociator func(kind, version string) (resource.Kind, bool)
 }
 
 // RunnerMetricsConfig contains configuration information for exposing prometheus metrics
@@ -130,7 +136,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	}
 
 	// Get capabilities from manifest
-	manifestData, err := s.getManifestData(provider)
+	manifestData, err := s.getManifestData(ctx, provider)
 	if err != nil {
 		return fmt.Errorf("unable to get app manifest capabilities: %w", err)
 	}
@@ -261,7 +267,7 @@ func (*Runner) HealthCheckName() string {
 	return "operator-runner"
 }
 
-func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, error) {
+func (s *Runner) getManifestData(ctx context.Context, provider app.Provider) (*app.ManifestData, error) {
 	manifest := provider.Manifest()
 	data := app.ManifestData{}
 	switch manifest.Location.Type {
@@ -271,6 +277,9 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 		}
 		data = *manifest.ManifestData
 	case app.ManifestLocationFilePath:
+		if s.config.GoTypesAssociator == nil {
+			logging.FromContext(ctx).Warn("Runner config is missing GoTypesAssociator, go types will not be associated with the loaded on-disk manifest. This may impact the app depending on implementation.")
+		}
 		// TODO: more correct version?
 		dir := s.config.Filesystem
 		if dir == nil {
@@ -280,11 +289,22 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 		if err != nil {
 			return nil, fmt.Errorf("error reading manifest file from disk (path: %s): %w", manifest.Location.Path, err)
 		}
-		m := app.Manifest{}
-		if err = json.Unmarshal(contents, &m); err != nil || m.ManifestData == nil {
+		if err = json.Unmarshal(contents, &data); err != nil {
 			return nil, fmt.Errorf("unable to unmarshal manifest data: %w", err)
 		}
-		data = *m.ManifestData
+		// Associate the go kinds in the manifest
+		for i := 0; i < len(data.Kinds); i++ {
+			for j := 0; j < len(data.Kinds[i].Versions); j++ {
+				if s.config.GoTypesAssociator == nil {
+					continue
+				}
+				goType, ok := s.config.GoTypesAssociator(data.Kinds[i].Kind, data.Kinds[i].Versions[j].Name)
+				if !ok {
+					return nil, fmt.Errorf("unable to load go type association for kind %s/%s", data.Kinds[i].Kind, data.Kinds[i].Versions[j].Name)
+				}
+				data.Kinds[i].Versions[j].GoKind = goType
+			}
+		}
 	case app.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server
 		return nil, fmt.Errorf("apiserver location not supported yet")

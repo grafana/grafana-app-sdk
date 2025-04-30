@@ -7,6 +7,8 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"gopkg.in/yaml.v3"
 	"k8s.io/kube-openapi/pkg/spec3"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
@@ -109,6 +111,8 @@ type ManifestKindVersion struct {
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 	// CustomRoutes is a map of of path patterns to custom routes for this version.
 	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
+	// GoKind is the association of this kind to the go resource.Kind type, which can be used for accessing the go type(s) and codec information
+	GoKind resource.Kind `json:"-" yaml:"-"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind
