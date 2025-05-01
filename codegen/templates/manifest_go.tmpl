@@ -172,7 +172,6 @@ var appManifestData = app.ManifestData{
                         },{{ end }}
                     },{{ end }}{{ end }}
                 },{{end}}
-                GoKind: {{ if $.KindsAreGrouped }}{{ $.ToPackageName .Name}}.{{ $.GoKindName $k.Kind }}Kind(){{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName .Name }}.Kind(){{ end }},
             },
             {{ end }} },
         },

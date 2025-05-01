@@ -37,13 +37,11 @@ var appManifestData = app.ManifestData{
 				{
 					Name:   "v0-0",
 					Schema: &versionSchemaCustomKindv0_0,
-					GoKind: v0_0.CustomKindKind(),
 				},
 
 				{
 					Name:   "v1-0",
 					Schema: &versionSchemaCustomKindv1_0,
-					GoKind: v1_0.CustomKindKind(),
 				},
 			},
 		},

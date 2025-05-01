@@ -54,7 +54,6 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv1,
-					GoKind: v1.TestKindKind(),
 				},
 
 				{
@@ -74,7 +73,6 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv2,
-					GoKind: v2.TestKindKind(),
 				},
 
 				{
@@ -243,7 +241,6 @@ var appManifestData = app.ManifestData{
 							},
 						},
 					},
-					GoKind: v3.TestKindKind(),
 				},
 			},
 		},
@@ -256,7 +253,6 @@ var appManifestData = app.ManifestData{
 				{
 					Name:   "v1",
 					Schema: &versionSchemaTestKind2v1,
-					GoKind: v1.TestKind2Kind(),
 				},
 			},
 		},
