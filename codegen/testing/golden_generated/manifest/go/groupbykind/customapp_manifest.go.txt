@@ -3,12 +3,17 @@
 // DO NOT EDIT
 //
 
-package groupbygroup
+package groupbykind
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
+
+	customkindv0_0 "codegen-tests/pkg/generated/customkind/v0_0"
+	customkindv1_0 "codegen-tests/pkg/generated/customkind/v1_0"
 )
 
 var (
@@ -49,4 +54,16 @@ func LocalManifest() app.Manifest {
 
 func RemoteManifest() app.Manifest {
 	return app.NewAPIServerManifest("custom-app")
+}
+
+var kindVersionToGoType = map[string]resource.Kind{
+	"CustomKind/v0-0": customkindv0_0.Kind(),
+	"CustomKind/v1-0": customkindv1_0.Kind(),
+}
+
+// ManifestGoTypeAssociator returns the associated resource.Kind instance for a given Kind and Version, if one exists.
+// If there is no association for the provided Kind and Version, exists will return false.
+func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exists bool) {
+	goType, exists = kindVersionToGoType[fmt.Sprintf("%s/%s", kind, version)]
+	return goType, exists
 }

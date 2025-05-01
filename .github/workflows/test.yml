@@ -70,7 +70,7 @@ jobs:
           cp ../grafana-app-sdk/codegen/cuekind/testing/*.cue kinds/
           mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
           mv cmp/manifest/*.txt cmp/crd/
-          cp cmp/manifest/go/*.txt cmp/go/groupbygroup/
+          cp cmp/manifest/go/groupbygroup/*.txt cmp/go/groupbygroup/
           find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
       - name: Generate code
         run: |
@@ -80,6 +80,7 @@ jobs:
           grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=customManifest
           grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=testManifest
           sed -i 's/^package gen2/package groupbygroup/g' pkg/gen2/*.go
+          sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/*.go
           diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
           difflines=$(wc -l diff.txt | awk '{ print $1 }')

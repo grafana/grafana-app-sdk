@@ -130,16 +130,28 @@ func TestManifestGoGenerator(t *testing.T) {
 	parser, err := NewParser()
 	require.Nil(t, err)
 
-	t.Run("resource", func(t *testing.T) {
+	t.Run("group by group", func(t *testing.T) {
 		kinds, err := parser.ManifestParser(true).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("groupbygroup", true).Generate(kinds...)
+		files, err := ManifestGoGenerator("groupbygroup", true, "codegen-tests", "pkg/generated", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
-		compareToGolden(t, files, "manifest/go")
+		compareToGolden(t, files, "manifest/go/groupbygroup")
+	})
+
+	t.Run("group by kind", func(t *testing.T) {
+		kinds, err := parser.ManifestParser(true).Parse(os.DirFS(TestCUEDirectory), "customManifest")
+		require.Nil(t, err)
+		files, err := ManifestGoGenerator("groupbykind", true, "codegen-tests", "pkg/generated", false).Generate(kinds...)
+		require.Nil(t, err)
+		// Check number of files generated
+		// 5 -> object, spec, metadata, status, schema
+		assert.Len(t, files, 1)
+		// Check content against the golden files
+		compareToGolden(t, files, "manifest/go/groupbykind")
 	})
 }
 
