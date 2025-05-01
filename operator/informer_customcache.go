@@ -362,7 +362,6 @@ func newInformer(
 		ListerWatcher:    lw,
 		ObjectType:       objType,
 		FullResyncPeriod: resyncPeriod,
-		RetryOnError:     false,
 
 		Process: func(obj any, isInInitialList bool) error {
 			if deltas, ok := obj.(cache.Deltas); ok {
