@@ -12,7 +12,7 @@ require (
 	cuelang.org/go v0.5.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/dave/dst v0.27.3
-	github.com/getkin/kin-openapi v0.131.0
+	github.com/getkin/kin-openapi v0.132.0
 	github.com/grafana/codejen v0.0.3
 	github.com/grafana/cuetsy v0.1.11
 	github.com/grafana/thema v0.0.0-20230511182720-3146087fcc26
