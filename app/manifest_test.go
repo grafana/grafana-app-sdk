@@ -25,10 +25,6 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		}
 		return r
 	}
-	// sometimes the pointer difference seems to break things
-	/*refnoptr := func(path string) spec.Ref {
-		return spec.Ref{}
-	}*/
 	tests := []struct {
 		name   string
 		schema []byte
