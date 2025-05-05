@@ -179,11 +179,14 @@ type KindPermission struct {
 	Actions  []KindPermissionAction `json:"actions,omitempty" yaml:"actions,omitempty"`
 }
 
+// ManifestOperatorInfo contains information on the app's Operator deployment (if a deployment exists).
+// This is primarily used to specify the location of webhook endpoints for the app.
 type ManifestOperatorInfo struct {
 	URL      string                             `json:"url" yaml:"url"`
 	Webhooks *ManifestOperatorWebhookProperties `json:"webhooks,omitempty" yaml:"webhooks,omitempty"`
 }
 
+// ManifestOperatorWebhookProperties contains information on webhook paths for an app's operator deployment.
 type ManifestOperatorWebhookProperties struct {
 	ConversionPath string `json:"conversionPath" yaml:"conversionPath"`
 	ValidationPath string `json:"validationPath" yaml:"validationPath"`
@@ -364,10 +367,11 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
+		key := fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, k)
 		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk)
 		// sort dependencies for consistent output
 		slices.Sort(deps)
-		result[fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, k)] = common.OpenAPIDefinition{
+		result[key] = common.OpenAPIDefinition{
 			Schema:       sch,
 			Dependencies: deps,
 		}
@@ -376,11 +380,11 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			continue
 		}
 		// Add the entry as a dependency in the kind object, and add it as a subresource
-		kind.Dependencies = append(kind.Dependencies, fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, k))
+		kind.Dependencies = append(kind.Dependencies, key)
 		kind.Schema.Properties[k] = spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Default: map[string]any{},
-				Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, k)),
+				Ref:     ref(key),
 			},
 		}
 	}
