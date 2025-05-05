@@ -11,9 +11,15 @@ type TestKindSpec struct {
 	StringField string    `json:"stringField"`
 	IntField    int64     `json:"intField"`
 	TimeField   time.Time `json:"timeField"`
+	// +format=int32
+	Uint8field uint8 `json:"uint8field"`
+	// +format=int32
+	Uint8array []uint8 `json:"uint8array"`
 }
 
 // NewTestKindSpec creates a new TestKindSpec object.
 func NewTestKindSpec() *TestKindSpec {
-	return &TestKindSpec{}
+	return &TestKindSpec{
+		Uint8array: []uint8{},
+	}
 }

@@ -4,11 +4,15 @@ export interface Spec {
 	stringField: string;
 	intField: number;
 	timeField: string;
+	uint8field: number;
+	uint8array: number[];
 }
 
 export const defaultSpec = (): Spec => ({
 	stringField: "",
 	intField: 0,
 	timeField: "",
+	uint8field: 0,
+	uint8array: [],
 });
 

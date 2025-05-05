@@ -96,7 +96,10 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 		})
 
 	if g.AddKubernetesCodegen {
-		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
+		codegenPipeline = codegenPipeline.SchemaTransformations(
+			cog.AppendCommentToObjects("+k8s:openapi-gen=true"),
+			cog.AddOpenAPIFormatForUint8(),
+		)
 	}
 
 	files, err := codegenPipeline.Run(context.Background())
@@ -193,7 +196,10 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 		})
 
 	if cfg.AddKubernetesOpenAPIGenComment {
-		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
+		codegenPipeline = codegenPipeline.SchemaTransformations(
+			cog.AppendCommentToObjects("+k8s:openapi-gen=true"),
+			cog.AddOpenAPIFormatForUint8(),
+		)
 	}
 
 	files, err := codegenPipeline.Run(context.Background())

@@ -38,6 +38,8 @@ testKind: {
 					stringField: string
 					intField: int64
 					timeField: string & time.Time
+					uint8field: uint8
+					uint8array: [...uint8]
 				}
 			}
 			mutation: operations: ["create","update"]

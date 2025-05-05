@@ -100,12 +100,27 @@
                                     "timeField": {
                                         "format": "date-time",
                                         "type": "string"
+                                    },
+                                    "uint8array": {
+                                        "items": {
+                                            "maximum": 255,
+                                            "minimum": 0,
+                                            "type": "integer"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "uint8field": {
+                                        "maximum": 255,
+                                        "minimum": 0,
+                                        "type": "integer"
                                     }
                                 },
                                 "required": [
                                     "stringField",
                                     "intField",
-                                    "timeField"
+                                    "timeField",
+                                    "uint8field",
+                                    "uint8array"
                                 ],
                                 "type": "object"
                             },
