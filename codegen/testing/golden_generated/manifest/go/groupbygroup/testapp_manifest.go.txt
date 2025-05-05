@@ -93,7 +93,7 @@ var appManifestData = app.ManifestData{
 					},
 					Schema: &versionSchemaTestKindv3,
 					CustomRoutes: map[string]spec3.PathProps{
-						"/reconcile": {
+						"/reconcile": spec3.PathProps{
 							Post: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
@@ -166,7 +166,7 @@ var appManifestData = app.ManifestData{
 								},
 							},
 						},
-						"/search": {
+						"/search": spec3.PathProps{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
@@ -255,14 +255,6 @@ var appManifestData = app.ManifestData{
 					Schema: &versionSchemaTestKind2v1,
 				},
 			},
-		},
-	},
-	Operator: &app.ManifestOperatorInfo{
-		URL: "https://foo.bar:8443",
-		Webhooks: &app.ManifestOperatorWebhookProperties{
-			ConversionPath: "/convert",
-			ValidationPath: "/validate",
-			MutationPath:   "/mutate",
 		},
 	},
 }

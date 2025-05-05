@@ -7,6 +7,7 @@ package {{.Package}}
 
 import (
     "encoding/json"
+    "fmt"
 
     "github.com/grafana/grafana-app-sdk/app"
     "github.com/grafana/grafana-app-sdk/resource"
@@ -120,6 +121,26 @@ OperationProps: spec3.OperationProps{
     },{{ end }}
 },{{ end }}
 
+{{ define "custom_routes" }}CustomRoutes: map[string]spec3.PathProps{ {{ range $path, $props := . }}{{ if $props }}
+    "{{$path}}": spec3.PathProps{ {{ if $props.Summary }}
+        Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
+        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+        Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
+            {{ template "parameter" . }}{{ end }}
+        },{{ end }}{{ if $props.Get }}
+        Get: &spec3.Operation{ {{ template "operation" $props.Get }}
+        },{{ end }}{{ if $props.Post }}
+        Post: &spec3.Operation{ {{ template "operation" $props.Post }}
+        },{{ end }}{{ if $props.Put }}
+        Put: &spec3.Operation{ {{ template "operation" $props.Put }}
+        },{{ end }}{{ if $props.Delete }}
+        Delete: &spec3.Operation{ {{ template "operation" $props.Delete }}
+        },{{ end }}{{ if $props.Patch }}
+        Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
+        },{{ end }}
+    },{{ end }}{{ end }}
+},{{ end }}
+
 var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}{{ if .Schema }}
     rawSchema{{$k.Kind}}{{$.ToPackageName .Name}} = []byte({{$.ToJSONBacktickString .Schema}})
     versionSchema{{$k.Kind}}{{$.ToPackageName .Name}} app.VersionSchema
@@ -153,25 +174,8 @@ var appManifestData = app.ManifestData{
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
                 },{{end}}{{ if .CustomRoutes }}
-                CustomRoutes: map[string]spec3.PathProps{ {{ range $path, $props := .CustomRoutes }}{{ if $props }}
-                    "{{$path}}": { {{ if $props.Summary }}
-                        Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
-                        Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
-                            {{ template "parameter" . }}{{ end }}
-                        },{{ end }}{{ if $props.Get }}
-                        Get: &spec3.Operation{ {{ template "operation" $props.Get }}
-                        },{{ end }}{{ if $props.Post }}
-                        Post: &spec3.Operation{ {{ template "operation" $props.Post }}
-                        },{{ end }}{{ if $props.Put }}
-                        Put: &spec3.Operation{ {{ template "operation" $props.Put }}
-                        },{{ end }}{{ if $props.Delete }}
-                        Delete: &spec3.Operation{ {{ template "operation" $props.Delete }}
-                        },{{ end }}{{ if $props.Patch }}
-                        Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
-                        },{{ end }}
-                    },{{ end }}{{ end }}
-                },{{end}}
+                {{ template "custom_routes" .CustomRoutes }}
+                {{end}}
             },
             {{ end }} },
         },

@@ -7,18 +7,58 @@ testManifest: {
 	kinds: [testKind, testKind2]
 	extraPermissions: {
 		accessKinds: [{
-			group: "foo.bar"
+			group:    "foo.bar"
 			resource: "foos"
-			actions: ["get","list","watch"]
+			actions: ["get", "list", "watch"]
 		}]
 	}
-	operatorURL: "https://foo.bar:8443"
+	customRoutes: {
+		"v4": {
+			namespaced: {
+				"/reconcile": {
+					POST: {
+						request: {
+							body: {
+								force:   bool | *false
+								reason?: string
+							}
+						}
+						response: {
+							status:  "success" | "failure"
+							message: string
+						}
+					}
+				}
+			}
+			root: {
+				"/search": {
+					GET: {
+						request: {
+							query: {
+								q:       string
+								limit?:  int | *10
+								offset?: int | *0
+							}
+						}
+						response: {
+							items: [...{
+								name:  string
+								score: float
+							}]
+							total: int
+						}
+					}
+				}
+
+			}
+		}
+	}
 }
 
 testKind: {
-	kind: "TestKind"
+	kind:   "TestKind"
 	plural: "testkinds"
-	validation: operations: ["create","update"]
+	validation: operations: ["create", "update"]
 	conversion: true
 	conversionWebhookProps: url: "http://foo.bar/convert"
 	current: "v1"
@@ -36,41 +76,41 @@ testKind: {
 			schema: {
 				spec: {
 					stringField: string
-					intField: int64
-					timeField: string & time.Time
+					intField:    int64
+					timeField:   string & time.Time
 				}
 			}
-			mutation: operations: ["create","update"]
+			mutation: operations: ["create", "update"]
 			additionalPrinterColumns: [
-                {
-                    jsonPath: ".spec.stringField"
-                    name: "STRING FIELD"
-                    type: "string"
-                }
-            ]
+				{
+					jsonPath: ".spec.stringField"
+					name:     "STRING FIELD"
+					type:     "string"
+				},
+			]
 		}
 		"v3": {
 			schema: {
 				spec: {
 					stringField: string
-					intField: int64
-					timeField: string & time.Time
-					boolField: bool
+					intField:    int64
+					timeField:   string & time.Time
+					boolField:   bool
 				}
 			}
-			mutation: operations: ["create","update"]
-			validation: operations: ["create","update"]
+			mutation: operations: ["create", "update"]
+			validation: operations: ["create", "update"]
 			customRoutes: {
 				"/reconcile": {
 					POST: {
 						request: {
 							body: {
-								force: bool | *false 
+								force:   bool | *false
 								reason?: string
 							}
 						}
 						response: {
-							status: "success" | "failure"
+							status:  "success" | "failure"
 							message: string
 						}
 					}
@@ -79,14 +119,14 @@ testKind: {
 					GET: {
 						request: {
 							query: {
-								q: string
-								limit?: int | *10
+								q:       string
+								limit?:  int | *10
 								offset?: int | *0
 							}
 						}
 						response: {
 							items: [...{
-								name: string
+								name:  string
 								score: float
 							}]
 							total: int
