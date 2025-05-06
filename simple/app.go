@@ -218,7 +218,7 @@ type AppCustomRoute struct {
 	Path   string
 }
 
-type AppCustomRouteHandler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
+type AppCustomRouteHandler func(context.Context, *app.CustomRouteRequest) (*app.CustomRouteResponse, error)
 
 type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 
@@ -344,7 +344,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 		if handler == nil {
 			return fmt.Errorf("custom route cannot have a nil handler")
 		}
-		key := a.customRouteHandlerKey(kind.Kind, string(route.Method), route.Path)
+		key := a.customRouteHandlerKey(&kind.Kind, string(route.Method), route.Path, kind.Kind.Scope())
 		if _, ok := a.customRoutes[key]; ok {
 			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
 		}
@@ -500,14 +500,23 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 	}, err
 }
 
-// CallResourceCustomRoute implements app.App and handles custom resource route requests
-func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
+// CallCustomRoute implements app.App and handles custom resource route requests
+func (a *App) CallCustomRoute(ctx context.Context, req *app.CustomRouteRequest) (*app.CustomRouteResponse, error) {
+	if req.ResourceIdentifier.Kind == "" {
+		scope := resource.NamespacedScope
+		if req.ResourceIdentifier.Namespace == "" {
+			scope = resource.ClusterScope
+		}
+		if handler, ok := a.customRoutes[a.customRouteHandlerKey(nil, req.Method, req.Path, scope)]; ok {
+			return handler(ctx, req)
+		}
+	}
 	k, ok := a.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
 	if !ok {
 		// TODO: still return the not found, or just return NotImplemented?
 		return nil, app.ErrCustomRouteNotFound
 	}
-	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind, req.Method, req.SubresourcePath)]; ok {
+	if handler, ok := a.customRoutes[a.customRouteHandlerKey(&k.Kind, req.Method, req.Path, k.Kind.Scope())]; ok {
 		return handler(ctx, req)
 	}
 	return nil, app.ErrCustomRouteNotFound
@@ -533,8 +542,11 @@ func (a *App) getInProgressFinalizer(sch resource.Schema) string {
 	return fmt.Sprintf("%s-wip", sch.Plural())
 }
 
-func (*App) customRouteHandlerKey(kind resource.Kind, method string, path string) string {
-	return fmt.Sprintf("%s/%s/%s/%s/%s", kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
+func (*App) customRouteHandlerKey(kind *resource.Kind, method string, path string, scope resource.SchemaScope) string {
+	if kind == nil {
+		return fmt.Sprintf("%s/%s/%s", scope, path, method)
+	}
+	return fmt.Sprintf("%s/%s/%s/%s/%s/%s", kind.Scope(), kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
 }
 
 type syncWatcher interface {
