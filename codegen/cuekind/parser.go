@@ -312,7 +312,46 @@ func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (codegen
 	return someKind, nil
 }
 
-func (p *Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[string]codegen.CustomRoute, error) {
+func (p *Parser) parseManifestCustomRoutes(customRoutesVal cue.Value, group string) ([]codegen.AppManifestCustomRoute, error) {
+	customRoutes := make([]codegen.AppManifestCustomRoute, 0)
+	versionsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
+	if err != nil {
+		return nil, err
+	}
+	for versionsIter.Next() {
+		version := versionsIter.Selector().String()
+		version = strings.Trim(version, `"`)
+		versionVal := versionsIter.Value()
+
+		customRoute := codegen.AppManifestCustomRoute{
+			Group:   group,
+			Version: version,
+		}
+
+		namespacedVal := versionVal.LookupPath(cue.MakePath(cue.Str("namespaced")))
+		if namespacedVal.Exists() && namespacedVal.Err() == nil {
+			namespacedRoutes, err := p.parseCustomRoutes(namespacedVal)
+			if err != nil {
+				return nil, err
+			}
+			customRoute.Namespaced = namespacedRoutes
+		}
+
+		rootVal := versionVal.LookupPath(cue.MakePath(cue.Str("root")))
+		if rootVal.Exists() && rootVal.Err() == nil {
+			rootRoutes, err := p.parseCustomRoutes(rootVal)
+			if err != nil {
+				return nil, err
+			}
+			customRoute.Root = rootRoutes
+		}
+
+		customRoutes = append(customRoutes, customRoute)
+	}
+	return customRoutes, nil
+}
+
+func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[string]codegen.CustomRoute, error) {
 	parsed := make(map[string]map[string]codegen.CustomRoute)
 	if customRoutesVal.Exists() && customRoutesVal.Err() == nil {
 		pathsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
@@ -489,43 +528,4 @@ func sortVersions(a, b codegen.KindVersion) int {
 		return -1
 	}
 	return 0
-}
-
-func (p *Parser) parseManifestCustomRoutes(customRoutesVal cue.Value, group string) ([]codegen.AppManifestCustomRoute, error) {
-	customRoutes := make([]codegen.AppManifestCustomRoute, 0)
-	versionsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
-	if err != nil {
-		return nil, err
-	}
-	for versionsIter.Next() {
-		version := versionsIter.Selector().String()
-		version = strings.Trim(version, `"`)
-		versionVal := versionsIter.Value()
-
-		customRoute := codegen.AppManifestCustomRoute{
-			Group:   group,
-			Version: version,
-		}
-
-		namespacedVal := versionVal.LookupPath(cue.MakePath(cue.Str("namespaced")))
-		if namespacedVal.Exists() && namespacedVal.Err() == nil {
-			namespacedRoutes, err := p.parseCustomRoutes(namespacedVal)
-			if err != nil {
-				return nil, err
-			}
-			customRoute.Namespaced = namespacedRoutes
-		}
-
-		rootVal := versionVal.LookupPath(cue.MakePath(cue.Str("root")))
-		if rootVal.Exists() && rootVal.Err() == nil {
-			rootRoutes, err := p.parseCustomRoutes(rootVal)
-			if err != nil {
-				return nil, err
-			}
-			customRoute.Root = rootRoutes
-		}
-
-		customRoutes = append(customRoutes, customRoute)
-	}
-	return customRoutes, nil
 }
