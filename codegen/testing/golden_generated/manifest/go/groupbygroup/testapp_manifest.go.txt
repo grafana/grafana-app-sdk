@@ -257,6 +257,14 @@ var appManifestData = app.ManifestData{
 			},
 		},
 	},
+	Operator: &app.ManifestOperatorInfo{
+		URL: "https://foo.bar:8443",
+		Webhooks: &app.ManifestOperatorWebhookProperties{
+			ConversionPath: "/convert",
+			ValidationPath: "/validate",
+			MutationPath:   "/mutate",
+		},
+	},
 	CustomRoutes: []app.ManifestCustomRoute{
 		{
 			Group:   "testapp.ext.grafana.com",

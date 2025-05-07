@@ -465,6 +465,14 @@
                 }
             ]
         },
+        "operator": {
+            "url": "https://foo.bar:8443",
+            "webhooks": {
+                "conversionPath": "/convert",
+                "validationPath": "/validate",
+                "mutationPath": "/mutate"
+            }
+        },
         "customRoutes": [
             {
                 "group": "testapp.ext.grafana.com",

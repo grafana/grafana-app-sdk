@@ -12,6 +12,7 @@ testManifest: {
 			actions: ["get", "list", "watch"]
 		}]
 	}
+	operatorURL: "https://foo.bar:8443"
 	customRoutes: {
 		"v4": {
 			namespaced: {
