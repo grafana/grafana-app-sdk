@@ -98,7 +98,7 @@ func TestApp_Convert(t *testing.T) {
 	})
 }
 
-func TestApp_CallResourceCustomRoute(t *testing.T) {
+func TestApp_CallCustomRoute(t *testing.T) {
 	kind := testKind()
 	id := resource.FullIdentifier{
 		Group:     kind.Group(),
@@ -272,6 +272,44 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 			Method:             http.MethodPost,
 		})
 		assert.Equal(t, expectedErr, err)
+		assert.NotNil(t, resp)
+		assert.Equal(t, expectedStatus, resp.StatusCode)
+		contents, err := io.ReadAll(resp.Body)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedBody, contents)
+	})
+	t.Run("success, plural instead of kind", func(t *testing.T) {
+		expectedErr := errors.New("error")
+		expectedStatus := http.StatusConflict
+		expectedBody := []byte("foo")
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodPost,
+						Path:   "baz",
+					}: func(ctx context.Context, request *app.CustomRouteRequest) (*app.CustomRouteResponse, error) {
+						return &app.CustomRouteResponse{
+							StatusCode: expectedStatus,
+							Body:       io.NopCloser(bytes.NewReader(expectedBody)),
+						}, expectedErr
+					},
+				},
+			}},
+		})
+		resp, err := a.CallCustomRoute(context.TODO(), &app.CustomRouteRequest{
+			ResourceIdentifier: resource.FullIdentifier{
+				Name:      id.Name,
+				Namespace: id.Namespace,
+				Group:     kind.Group(),
+				Version:   kind.Version(),
+				Plural:    kind.Plural(),
+			},
+			Path:   "baz",
+			Method: http.MethodPost,
+		})
+		require.Equal(t, expectedErr, err)
 		assert.NotNil(t, resp)
 		assert.Equal(t, expectedStatus, resp.StatusCode)
 		contents, err := io.ReadAll(resp.Body)
