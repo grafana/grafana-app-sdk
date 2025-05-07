@@ -121,7 +121,7 @@ OperationProps: spec3.OperationProps{
     },{{ end }}
 },{{ end }}
 
-{{ define "custom_routes" }}CustomRoutes: map[string]spec3.PathProps{ {{ range $path, $props := . }}{{ if $props }}
+{{ define "custom_routes" }}map[string]spec3.PathProps{ {{ range $path, $props := . }}{{ if $props }}
     "{{$path}}": spec3.PathProps{ {{ if $props.Summary }}
         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
         Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
@@ -139,7 +139,7 @@ OperationProps: spec3.OperationProps{
         Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
         },{{ end }}
     },{{ end }}{{ end }}
-},{{ end }}
+}{{ end }}
 
 var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}{{ if .Schema }}
     rawSchema{{$k.Kind}}{{$.ToPackageName .Name}} = []byte({{$.ToJSONBacktickString .Schema}})
@@ -174,7 +174,7 @@ var appManifestData = app.ManifestData{
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
                 },{{end}}{{ if .CustomRoutes }}
-                {{ template "custom_routes" .CustomRoutes }}
+                CustomRoutes: {{ template "custom_routes" .CustomRoutes }},
                 {{end}}
             },
             {{ end }} },
@@ -186,6 +186,14 @@ var appManifestData = app.ManifestData{
             ConversionPath: "{{.ManifestData.Operator.Webhooks.ConversionPath}}",
             ValidationPath: "{{.ManifestData.Operator.Webhooks.ValidationPath}}",
             MutationPath: "{{.ManifestData.Operator.Webhooks.MutationPath}}",
+        },{{ end }}
+    },{{ end }} {{ if .ManifestData.CustomRoutes }}
+    CustomRoutes: []app.ManifestCustomRoute{ {{ range .ManifestData.CustomRoutes }}
+        {
+            Group: "{{.Group}}",
+            Version: "{{.Version}}",
+            Namespaced: {{ template "custom_routes" .Namespaced }},
+            Root: {{ template "custom_routes" .Root }},
         },{{ end }}
     },{{ end }}
 }

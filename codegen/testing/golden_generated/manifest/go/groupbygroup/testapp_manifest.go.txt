@@ -257,6 +257,163 @@ var appManifestData = app.ManifestData{
 			},
 		},
 	},
+	CustomRoutes: []app.ManifestCustomRoute{
+		{
+			Group:   "testapp.ext.grafana.com",
+			Version: "v4",
+			Namespaced: map[string]spec3.PathProps{
+				"/reconcile": spec3.PathProps{
+					Post: &spec3.Operation{
+						OperationProps: spec3.OperationProps{
+
+							RequestBody: &spec3.RequestBody{
+								RequestBodyProps: spec3.RequestBodyProps{
+
+									Required: true,
+									Content: map[string]*spec3.MediaType{
+										"application/json": {
+											MediaTypeProps: spec3.MediaTypeProps{
+												Schema: &spec.Schema{
+													SchemaProps: spec.SchemaProps{
+														Type: []string{"object"},
+														Properties: map[string]spec.Schema{
+															"force": {
+																SchemaProps: spec.SchemaProps{
+																	Type: []string{"boolean"},
+																},
+															},
+															"reason": {
+																SchemaProps: spec.SchemaProps{
+																	Type: []string{"string"},
+																},
+															},
+														},
+														Required: []string{
+															"force",
+														},
+													}},
+											}},
+									},
+								}},
+							Responses: &spec3.Responses{
+								ResponsesProps: spec3.ResponsesProps{
+									Default: &spec3.Response{
+										ResponseProps: spec3.ResponseProps{
+											Description: "Default OK response",
+											Content: map[string]*spec3.MediaType{
+												"application/json": {
+													MediaTypeProps: spec3.MediaTypeProps{
+														Schema: &spec.Schema{
+															SchemaProps: spec.SchemaProps{
+																Type: []string{"object"},
+																Properties: map[string]spec.Schema{
+																	"message": {
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"string"},
+																		},
+																	},
+																	"status": {
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"string"},
+																			Enum: []interface{}{
+																				"success",
+																				"failure",
+																			},
+																		},
+																	},
+																},
+																Required: []string{
+																	"status",
+																	"message",
+																},
+															}},
+													}},
+											},
+										},
+									},
+								}},
+						},
+					},
+				},
+			},
+			Root: map[string]spec3.PathProps{
+				"/search": spec3.PathProps{
+					Get: &spec3.Operation{
+						OperationProps: spec3.OperationProps{
+
+							Parameters: []*spec3.Parameter{
+
+								{
+									Name: "limit",
+									In:   "query",
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"integer"},
+										},
+									},
+								},
+
+								{
+									Name: "offset",
+									In:   "query",
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"integer"},
+										},
+									},
+								},
+
+								{
+									Name:     "q",
+									In:       "query",
+									Required: true,
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"string"},
+										},
+									},
+								},
+							},
+
+							Responses: &spec3.Responses{
+								ResponsesProps: spec3.ResponsesProps{
+									Default: &spec3.Response{
+										ResponseProps: spec3.ResponseProps{
+											Description: "Default OK response",
+											Content: map[string]*spec3.MediaType{
+												"application/json": {
+													MediaTypeProps: spec3.MediaTypeProps{
+														Schema: &spec.Schema{
+															SchemaProps: spec.SchemaProps{
+																Type: []string{"object"},
+																Properties: map[string]spec.Schema{
+																	"items": {
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"array"},
+																		},
+																	},
+																	"total": {
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"integer"},
+																		},
+																	},
+																},
+																Required: []string{
+																	"items",
+																	"total",
+																},
+															}},
+													}},
+											},
+										},
+									},
+								}},
+						},
+					},
+				},
+			},
+		},
+	},
 }
 
 func LocalManifest() app.Manifest {

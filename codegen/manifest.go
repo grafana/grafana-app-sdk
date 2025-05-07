@@ -4,6 +4,14 @@ type AppManifest interface {
 	Name() string
 	Kinds() []Kind
 	Properties() AppManifestProperties
+	CustomRoutes() []AppManifestCustomRoute
+}
+
+type AppManifestCustomRoute struct {
+	Group      string                            `json:"group"`
+	Version    string                            `json:"version"`
+	Namespaced map[string]map[string]CustomRoute `json:"namespaced"`
+	Root       map[string]map[string]CustomRoute `json:"root"`
 }
 
 type AppManifestProperties struct {
@@ -25,8 +33,9 @@ type AppManifestKindPermission struct {
 }
 
 type SimpleManifest struct {
-	Props    AppManifestProperties
-	AllKinds []Kind
+	Props                AppManifestProperties
+	AllKinds             []Kind
+	ManifestCustomRoutes []AppManifestCustomRoute
 }
 
 func (m *SimpleManifest) Name() string {
@@ -39,4 +48,8 @@ func (m *SimpleManifest) Properties() AppManifestProperties {
 
 func (m *SimpleManifest) Kinds() []Kind {
 	return m.AllKinds
+}
+
+func (m *SimpleManifest) CustomRoutes() []AppManifestCustomRoute {
+	return m.ManifestCustomRoutes
 }

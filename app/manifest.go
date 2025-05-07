@@ -87,6 +87,8 @@ type ManifestData struct {
 	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 	// mutation, or conversion.
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
+	// CustomRoutes is a list of custom routes for the app
+	CustomRoutes []ManifestCustomRoute `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
 }
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions
@@ -115,6 +117,13 @@ type ManifestKindVersion struct {
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 	// CustomRoutes is a map of of path patterns to custom routes for this version.
 	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
+}
+
+type ManifestCustomRoute struct {
+	Group      string                     `json:"group" yaml:"group"`
+	Version    string                     `json:"version" yaml:"version"`
+	Namespaced map[string]spec3.PathProps `json:"namespaced" yaml:"namespaced"`
+	Root       map[string]spec3.PathProps `json:"root" yaml:"root"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind
