@@ -219,7 +219,7 @@ type AppCustomRoute struct {
 	Path   string
 }
 
-type AppCustomRouteHandler func(context.Context, *app.CustomRouteRequest) (*app.CustomRouteResponse, error)
+type AppCustomRouteHandler func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error
 
 type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 
@@ -504,14 +504,14 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 }
 
 // CallCustomRoute implements app.App and handles custom resource route requests
-func (a *App) CallCustomRoute(ctx context.Context, req *app.CustomRouteRequest) (*app.CustomRouteResponse, error) {
+func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteResponseWriter, req *app.CustomRouteRequest) error {
 	if req.ResourceIdentifier.Kind == "" && req.ResourceIdentifier.Plural == "" {
 		scope := resource.NamespacedScope
 		if req.ResourceIdentifier.Namespace == "" {
 			scope = resource.ClusterScope
 		}
 		if handler, ok := a.customRoutes[a.customRouteHandlerKey(nil, req.Method, req.Path, scope)]; ok {
-			return handler(ctx, req)
+			return handler(ctx, writer, req)
 		}
 	}
 	key := gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)
@@ -521,12 +521,12 @@ func (a *App) CallCustomRoute(ctx context.Context, req *app.CustomRouteRequest) 
 	k, ok := a.kinds[key]
 	if !ok {
 		// TODO: still return the not found, or just return NotImplemented?
-		return nil, app.ErrCustomRouteNotFound
+		return app.ErrCustomRouteNotFound
 	}
 	if handler, ok := a.customRoutes[a.customRouteHandlerKey(&k.Kind, req.Method, req.Path, k.Kind.Scope())]; ok {
-		return handler(ctx, req)
+		return handler(ctx, writer, req)
 	}
-	return nil, app.ErrCustomRouteNotFound
+	return app.ErrCustomRouteNotFound
 }
 
 func (a *App) getFinalizer(sch resource.Schema) string {

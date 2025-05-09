@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -60,16 +59,22 @@ type CustomRouteRequest struct {
 type CustomRouteResponse struct {
 	// Headers contains the HTTP headers for the response
 	Headers http.Header
-	// StatusCode if the HTTP status code of the response
-	StatusCode int
-	// Body is the payload of the response. Runners MAY support response streaming.
-	// In this case, an EOF returned by Body.Read() should designate the end of the response
-	// (0 bytes read with no error only denotes that there is nothing currently to write to the response stream),
-	// consistent with the behavior described in the godoc for io.Reader.
-	// If a Runner does not support response streaming, it should call Close() on Body when the payload's response
-	// has been written and the stream closed (this should also be done when streaming is supported after getting an
-	// EOF or other error and no further bytes).
-	Body io.ReadCloser
+	// Body is the contents of the response
+	Body []byte
+}
+
+var ErrCustomRouteResponseWriterClosed = errors.New("custom route response writer is closed")
+
+// CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects.
+type CustomRouteResponseWriter interface {
+	// WriteStatus writes the HTTP status code of the response to the underlying response stream.
+	// Implementations SHOULD assume a 200 status if WriteStatus is not called before the body of the response is written.
+	WriteStatus(int) error
+	// Write writes the contents of the CustomRouteResponse to the underling response stream.
+	// An implementation may support Write being called only once, or multiple times.
+	// If the underlying response stream is closed and can no longer be written to,
+	// the implementation should return ErrCustomRouteResponseWriterClosed.
+	Write(CustomRouteResponse) error
 }
 
 // Config is the app configuration used in a Provider for instantiating a new App.
@@ -128,11 +133,12 @@ type App interface {
 	// the converted bytes and encoding (Raw and Encoding respectively), and MAY contain the Object representation of those bytes.
 	// It returns an error if the conversion fails, or if the functionality is not supported by the app.
 	Convert(ctx context.Context, req ConversionRequest) (*RawObject, error)
-	// CallCustomRoute handles the call to a custom route, and returns a response to the request or an error.
+	// CallCustomRoute handles the call to a custom route, and the caller provides a CustomRouteResponseWriter for the App
+	// to write the status code and response object(s) to.
 	// If the route doesn't exist, the implementer MAY return ErrCustomRouteNotFound to signal to the runner,
-	// or may choose to return a response with a not found status code and custom body.
+	// or may choose to write a not found status code and custom body.
 	// It returns an error if the functionality is not supported by the app.
-	CallCustomRoute(ctx context.Context, request *CustomRouteRequest) (*CustomRouteResponse, error)
+	CallCustomRoute(ctx context.Context, responseWriter CustomRouteResponseWriter, request *CustomRouteRequest) error
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
 	// If there are multiple versions of a Kind, each one SHOULD be returned by this method,
 	// as app runners may depend on having access to all kinds.
