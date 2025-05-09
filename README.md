@@ -77,7 +77,7 @@ The [examples](./examples) directory contains small examples of different grafan
 ## Further Reading
 
 Please see the [/docs](docs/README.md) directory for full documentation,
-or take a look at the [Design Patterns](docs/design-patterns.md), [Kubernetes Concepts](docs/kubernetes.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
+or take a look at the [Design Patterns](docs/application-design/README.md), [Kubernetes Concepts](docs/kubernetes.md), or the [tutorial](docs/tutorials/issue-tracker/README.md).
 
 The `examples` directory contains runnable example projects that use different SDK components.
 
