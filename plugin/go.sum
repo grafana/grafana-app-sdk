@@ -87,10 +87,10 @@ github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e h1:JKmoR8x90Iww1
 github.com/gopherjs/gopherjs v0.0.0-20181103185306-d547d1d9531e/go.mod h1:wJfORRmW1u3UXTncJ5qlYoELFm8eSnnEO6hX4iZ3EWY=
 github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
 github.com/gorilla/mux v1.8.1/go.mod h1:AKf9I4AEqPTmMytcMc0KkNouC66V3BtZ4qD5fmWSiMQ=
-github.com/grafana/grafana-app-sdk v0.38.0 h1:M8BZ6XOnd4uchj16W04EjGDUJxb2ev2Fc7m0RkKz5xs=
-github.com/grafana/grafana-app-sdk v0.38.0/go.mod h1:v2rZ2xtOxDK7/Bkz8IcO6X2p0sK2zZfJoqJB2tfWflk=
-github.com/grafana/grafana-app-sdk/logging v0.38.0 h1:ApujAcdcxydqbOukPi/GQFriA4pmViHlQYeOXd3PpvI=
-github.com/grafana/grafana-app-sdk/logging v0.38.0/go.mod h1:Y/bvbDhBiV/tkIle9RW49pgfSPIPSON8Q4qjx3pyqDk=
+github.com/grafana/grafana-app-sdk v0.38.1 h1:vCUNvRSl+QEHe0X3vDfpGDEy4NuLh+sV3ZtLEIzkU6o=
+github.com/grafana/grafana-app-sdk v0.38.1/go.mod h1:JWe0jQO6WLeopxw40gTqYtwodcwSNAK42OZYPiBjSW8=
+github.com/grafana/grafana-app-sdk/logging v0.38.1 h1:tKZEyT/jEcGUC6b85ho0v8dED18NIcahY4KeM/lOGrk=
+github.com/grafana/grafana-app-sdk/logging v0.38.1/go.mod h1:Y/bvbDhBiV/tkIle9RW49pgfSPIPSON8Q4qjx3pyqDk=
 github.com/grafana/grafana-plugin-sdk-go v0.277.1 h1:CF2pk2Pc/VX0DNBdk1+n3XSL0KvzMEcy6oubN/qdEmY=
 github.com/grafana/grafana-plugin-sdk-go v0.277.1/go.mod h1:2ekE3wh4VyHmvBKP3VBdJNoAK4fD50HLxhlco9FzTwg=
 github.com/grafana/otel-profiling-go v0.5.1 h1:stVPKAFZSa7eGiqbYuG25VcqYksR6iWvF3YH66t4qL8=
