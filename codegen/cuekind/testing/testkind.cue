@@ -8,7 +8,9 @@ testManifest: {
 	versions: {
 		"v1": testManifestV1
 		"v2": testManifestV2
+		"v3": testManifestV3
 	}
+	preferredVersion: "v1"
 	extraPermissions: {
 		accessKinds: [{
 			group: "foo.bar"
@@ -22,19 +24,19 @@ testManifest: {
 testManifestV1: {
 	codegen: ts: enabled: false
 	kinds: [
-		{schema: testKind.versions["v1"].schema} & testKind,
-		{schema: testKind2.versions["v1"].schema} & testKind2
+		testKind.versions["v1"] & testKind,
+		testKind2.versions["v1"] & testKind2
 	]
 }
 
 testManifestV2: {
-	codegen: ts: enabled: true
-	kinds: [{testKind.versions["v2"]} & testKind]
+	codegen: ts: enabled: false
+	kinds: [testKind & testKind.versions["v2"]]
 }
 
 testManifestV3: {
 	codegen: ts: enabled: false
-	kinds: [{testKind.versions["v3"]} & testKind]
+	kinds: [testKind & testKind.versions["v3"]]
 }
 
 testKind: {

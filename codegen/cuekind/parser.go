@@ -138,7 +138,6 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 	if val.Err() != nil {
 		return nil, val.Err()
 	}
-	fmt.Println(val)
 
 	// Decode
 	manifestProps := codegen.AppManifestProperties{}
@@ -184,7 +183,6 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println(kind.Schema)
 			version.AllKinds = append(version.AllKinds, *kind)
 		}
 		manifest.AllVersions = append(manifest.AllVersions, version)
@@ -220,83 +218,7 @@ func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.
 	if someKind.Schema.Err() != nil {
 		return nil, someKind.Schema.Err()
 	}
-	/*
-		goVers := make(map[string]codegen.KindVersion)
-		vers := val.LookupPath(cue.MakePath(cue.Str("versions")))
-		if vers.Err() != nil {
-			return nil, vers.Err()
-		}
-		err = vers.Decode(&goVers)
-		if err != nil {
-			return nil, err
-		}
-		for k, v := range goVers {
-			v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
-			if v.Schema.Err() != nil {
-				return nil, v.Schema.Err()
-			}
-			// Normally, we would use a conditional unify in the def.cue file of kindDef,
-			// but there is a bug where the conditional evaluation creates a nil vertex somewhere
-			// when loading with the CLI, so this is a faster fix (TODO: long-term fix)
-			v.Schema = v.Schema.Unify(schemaDef)
-			if v.Schema.Err() != nil {
-				return nil, v.Schema.Err()
-			}
 
-			customRoutesVal := val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("customRoutes")))
-			if customRoutesVal.Exists() && customRoutesVal.Err() == nil {
-				v.CustomRoutes = make(map[string]map[string]codegen.CustomRoute)
-
-				pathsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
-				if err != nil {
-					return nil, fmt.Errorf("error iterating customRoutes paths for version %s: %w", k, err)
-				}
-				for pathsIter.Next() {
-					pathStr := pathsIter.Selector().String()
-					pathStr = strings.Trim(pathStr, `"`)
-					methodsMapVal := pathsIter.Value()
-					v.CustomRoutes[pathStr] = make(map[string]codegen.CustomRoute)
-
-					methodsIter, err := methodsMapVal.Fields(cue.Optional(true), cue.Definitions(false))
-					if err != nil {
-						return nil, fmt.Errorf("error iterating customRoutes methods for path '%s' in version %s: %w", pathStr, k, err)
-					}
-					for methodsIter.Next() {
-						methodStr := methodsIter.Selector().String()
-						methodStr = strings.Trim(methodStr, `"`)
-						routeVal := methodsIter.Value()
-
-						requestVal := routeVal.LookupPath(cue.MakePath(cue.Str("request")))
-						var querySchema, bodySchema cue.Value
-						if requestVal.Exists() && requestVal.Err() == nil {
-							querySchema = requestVal.LookupPath(cue.MakePath(cue.Str("query")))
-							bodySchema = requestVal.LookupPath(cue.MakePath(cue.Str("body")))
-						}
-
-						responseVal := routeVal.LookupPath(cue.MakePath(cue.Str("response")))
-						var responseSchema cue.Value
-						if responseVal.Exists() && responseVal.Err() == nil {
-							responseSchema = responseVal
-						}
-
-						route := codegen.CustomRoute{
-							Request: codegen.CustomRouteRequest{
-								Query: querySchema,
-								Body:  bodySchema,
-							},
-							Response: codegen.CustomRouteResponse{
-								Schema: responseSchema,
-							},
-						}
-						v.CustomRoutes[pathStr][methodStr] = route
-					}
-				}
-			}
-
-			someKind.AllVersions = append(someKind.AllVersions, v)
-		}
-		// Now we need to sort AllVersions, as map key order is random
-		slices.SortFunc(someKind.AllVersions, sortVersions)*/
 	return someKind, nil
 }
 

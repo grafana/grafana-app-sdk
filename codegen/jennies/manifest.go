@@ -175,6 +175,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 			ver.Kinds[i] = mvkind
 		}
+		manifest.Versions = append(manifest.Versions, ver)
 	}
 
 	if len(m.Properties().ExtraPermissions.AccessKinds) > 0 {

@@ -139,7 +139,6 @@ Kind: S={
 	conversionWebhookProps: {
 		url: string | *""
 	}
-	schema: _
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
 	pluralName:        =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
 	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
@@ -150,7 +149,7 @@ Kind: S={
 		// ts is the section for TypeScript codegen
 		ts: {
 			// enabled indicates whether front-end TypeScript code should be generated for this kind's schema
-			enabled: bool | *true
+			enabled: bool | *S._codegen.ts.enabled
 			// config is code generation configuration specific to TypeScript.
 			// Currently, these config options are passed directly to grafana/cog when generating TypeScript
 			config: {
@@ -174,16 +173,23 @@ Kind: S={
 				// type Direction = "up" | "down" | "left" | "right";
 				// "`
 				enumsAsUnionTypes: bool | *false
-			}
+			} | *S._codegen.ts.config
 		}
 		// go is the section for go codegen
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
-			enabled: bool | *true
+			enabled: bool | *S._codegen.go.enabled
 			config: {
-			}
+			} | *S._codegen.go.config
 		}
 	}
+
+	schema: _
+	selectableFields: [...string]
+	// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
+	additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+	// customRoutes is a map of path patterns to custom routes for this version.
+	customRoutes?: #CustomRouteCapability
 
 	_computedGroupKind: S.machineName+"."+group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
 }
@@ -235,6 +241,7 @@ Version: S={
 	kinds: [...{
 		group:         S.fullGroup
 		manifestGroup: S.group
+		_codegen: S.codegen
 	} & Kind]
 }
 
