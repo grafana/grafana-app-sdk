@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
@@ -77,8 +78,11 @@ type ManifestData struct {
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.com"
 	Group string `json:"group" yaml:"group"`
-	// Kinds is a list of all Kinds maintained by this App
-	Kinds []ManifestKind `json:"kinds,omitempty" yaml:"kinds,omitempty"`
+	// Versions is a list of versions supported by this App
+	Versions []ManifestVersion `json:"versions" yaml:"versions"`
+	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
+	// For CRDs, this also dictates which version is used for storage.
+	PreferredVersion string `json:"preferredVersion" yaml:"preferredVersion"`
 	// Permissions is the extra permissions for non-owned kinds this app needs to operate its backend.
 	// It may be nil if no extra permissions are required.
 	ExtraPermissions *Permissions `json:"extraPermissions,omitempty" yaml:"extraPermissions,omitempty"`
@@ -89,10 +93,81 @@ type ManifestData struct {
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
 }
 
-// ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions
+// Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
+func (m *ManifestData) Validate() error {
+	type kindData struct {
+		kind       string
+		plural     string
+		scope      string
+		conversion bool
+		version    string
+	}
+	var errs error
+	kinds := make(map[string]kindData)
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if k, ok := kinds[kind.Kind]; !ok {
+				k = kindData{
+					kind:       kind.Kind,
+					plural:     kind.Plural,
+					scope:      kind.Scope,
+					conversion: kind.Conversion,
+					version:    version.Name,
+				}
+				kinds[kind.Kind] = k
+			} else {
+				if k.plural != kind.Plural {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different plural in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.scope != kind.Scope {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different scope in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.conversion != kind.Conversion {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' conversion does not match in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+			}
+		}
+	}
+	return errs
+}
+
+// Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
+// deprecated: this exists to support current workflows, and should not be used for new ones.
+func (m *ManifestData) Kinds() []ManifestKind {
+	kinds := make(map[string]ManifestKind)
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			k, ok := kinds[kind.Kind]
+			if !ok {
+				k = ManifestKind{
+					Kind:       kind.Kind,
+					Plural:     kind.Plural,
+					Scope:      kind.Scope,
+					Conversion: kind.Conversion,
+					Versions:   make([]ManifestKindVersion, 0),
+				}
+			}
+			k.Versions = append(k.Versions, ManifestKindVersion{
+				ManifestVersionKind: kind,
+				VersionName:         version.Name,
+			})
+			kinds[kind.Kind] = k
+		}
+	}
+	k := make([]ManifestKind, 0, len(kinds))
+	for _, kind := range kinds {
+		k = append(k, kind)
+	}
+	return k
+}
+
+// ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions.
+// The values for Kind, Plural, Scope, and Conversion are hoisted up from their namesakes in Versions entries
+// deprecated: this is used only for the deprecated method ManifestData.Kinds()
 type ManifestKind struct {
 	// Kind is the name of the kind
-	Kind string `json:"kind" yaml:"kind"`
+	Kind   string `json:"kind" yaml:"kind"`
+	Plural string `json:"plural" yaml:"plural"`
 	// Scope if the scope of the kind, typically restricted to "Namespaced" or "Cluster"
 	Scope string `json:"scope" yaml:"scope"`
 	// Versions is the set of versions for the kind. This list should be ordered as a series of progressively later versions.
@@ -101,10 +176,34 @@ type ManifestKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 }
 
-// ManifestKindVersion contains details for a version of a kind in a Manifest
+// ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
+// deprecated: this type if used only as part of the deprecated method ManifestData.Kinds()
 type ManifestKindVersion struct {
-	// Name is the version string name, such as "v1"
-	Name string `yaml:"name" json:"name"`
+	ManifestVersionKind `json:",inline" yaml:",inline"`
+	VersionName         string `json:"versionName" yaml:"versionName"`
+}
+
+type ManifestVersion struct {
+	// Name is the version name string, such as "v1" or "v1alpha1"
+	Name string `json:"name" yaml:"name"`
+	// Served dictates whether this version is served by the API server.
+	// A version cannot be removed from a manifest until it is no longer served.
+	Served bool `json:"served" yaml:"served"`
+	// Kinds is a list of all the kinds served in this version.
+	// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
+	// or newly added (and didn't exist for older versions).
+	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
+}
+
+// ManifestVersionKind contains details for a version of a kind in a Manifest
+type ManifestVersionKind struct {
+	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
+	Kind string `json:"kind" yaml:"kind"`
+	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+	Plural string `json:"plural,omitempty" yaml:"plural,omitempty"`
+	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
+	// Different values will result in an error or undefined behavior.
+	Scope string `json:"scope" yaml:"scope"`
 	// Admission is the collection of admission capabilities for this version.
 	// If nil, no admission capabilities exist for the version.
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
@@ -115,6 +214,11 @@ type ManifestKindVersion struct {
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 	// CustomRoutes is a map of of path patterns to custom routes for this version.
 	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
+	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
+	// It may not prevent automatic conversion behavior between versions of the kind when set to false
+	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
+	// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
+	Conversion bool `json:"conversion" yaml:"conversion"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind

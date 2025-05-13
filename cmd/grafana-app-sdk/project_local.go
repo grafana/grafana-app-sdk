@@ -794,15 +794,15 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 			if md.Kind != "AppManifest" {
 				continue
 			}
-			for _, k := range md.Spec.Kinds {
-				if k.Conversion {
-					config.Webhooks.Converting = true
-				}
-				for _, v := range k.Versions {
-					if v.Admission != nil && v.Admission.SupportsAnyValidation() {
+			for _, v := range md.Spec.Versions {
+				for _, k := range v.Kinds {
+					if k.Conversion {
+						config.Webhooks.Converting = true
+					}
+					if k.Admission != nil && k.Admission.SupportsAnyValidation() {
 						config.Webhooks.Validating = true
 					}
-					if v.Admission != nil && v.Admission.SupportsAnyMutation() {
+					if k.Admission != nil && k.Admission.SupportsAnyMutation() {
 						config.Webhooks.Mutating = true
 					}
 				}

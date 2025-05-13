@@ -1,6 +1,7 @@
 package cuekind
 
 import (
+	"list"
 	"strings"
 	"struct"
 	"time"
@@ -120,7 +121,6 @@ Kind: S={
 	// manifestGroup is a group shortname used for package naming in codegen
 	// TODO: remove this when all jenny pipelines use the manifest, or keep around for convenience?
 	manifestGroup: string
-	current:       string
 	// scope determines whether resources of this kind exist globally ("Cluster") or
 	// within Kubernetes namespaces.
 	scope: "Cluster" | *"Namespaced"
@@ -139,41 +139,7 @@ Kind: S={
 	conversionWebhookProps: {
 		url: string | *""
 	}
-	versions: {
-		[V=string]: {
-			// Version must be the key in the map, but is pulled into the value of the map for ease-of-access when dealing with the resulting value
-			version: V
-			schema:  _
-			// served indicates whether this version is served by the API server
-			served: bool | *true
-			// codegen contains properties specific to generating code using tooling
-			codegen: {
-				ts: {
-					enabled: bool | *S.codegen.ts.enabled
-					config: {
-						importsMap: {
-							[string]: string
-						} | *S.codegen.ts.config.importsMap
-						enumsAsUnionTypes: bool | *S.codegen.ts.config.enumsAsUnionTypes
-					} | *S.codegen.ts.config
-				}
-				go: {
-					enabled: bool | *S.codegen.go.enabled
-					config: {} | *S.codegen.go.config
-				}
-			}
-			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
-			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
-			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
-			selectableFields: [...string]
-			validation: #AdmissionCapability | *S.validation
-			mutation:   #AdmissionCapability | *S.mutation
-			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
-			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
-			// customRoutes is a map of path patterns to custom routes for this version.
-			customRoutes?: #CustomRouteCapability
-		}
-	}
+	schema: _
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))
 	pluralName:        =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z])$" | *(S.kind + "s")
 	pluralMachineName: strings.ToLower(strings.Replace(S.pluralName, "-", "_", -1))
@@ -222,6 +188,56 @@ Kind: S={
 	_computedGroupKind: S.machineName+"."+group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
 }
 
+Version: S={
+	name: string
+	// served dictates whether this version is served by the apiserver
+	served: bool | *true
+	// codegen contains properties specific to generating code using tooling. At the root level of the version, it sets
+	// the defaults for the `codegen` field in all entries in `kinds`.
+	// Valus set in `kinds[x]: codegen` will overwrite the value set here.
+	codegen: {
+		// ts is the section for TypeScript codegen
+		ts: {
+			// enabled indicates whether front-end TypeScript code should be generated for this kind's schema
+			enabled: bool | *true
+			// config is code generation configuration specific to TypeScript.
+			// Currently, these config options are passed directly to grafana/cog when generating TypeScript
+			config: {
+				// importsMap associates package names to their import path.
+				importsMap: {
+					[string]: string
+				}
+				// enumsAsUnionTypes generates enums as a union of values instead of using
+				// an actual `enum` declaration.
+				// If EnumsAsUnionTypes is false, an enum will be generated as:
+				// "`ts
+				// enum Direction {
+				//   Up = "up",
+				//   Down = "down",
+				//   Left = "left",
+				//   Right = "right",
+				// }
+				// "`
+				// If EnumsAsUnionTypes is true, the same enum will be generated as:
+				// "`ts
+				// type Direction = "up" | "down" | "left" | "right";
+				// "`
+				enumsAsUnionTypes: bool | *false
+			}
+		}
+		// go is the section for go codegen
+		go: {
+			// enabled indicates whether back-end Go code should be generated for this kind's schema
+			enabled: bool | *true
+			config: {}
+		}
+	}
+	kinds: [...{
+		group:         S.fullGroup
+		manifestGroup: S.group
+	} & Kind]
+}
+
 #AccessKind: {
 	group:    string
 	resource: string
@@ -231,10 +247,15 @@ Kind: S={
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
 	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
-	kinds: [...{
-		group:         S.fullGroup
-		manifestGroup: S.group
-	} & Kind]
+	versions: {
+		[V=string]: {
+			name: V
+			group:         S.fullGroup
+			manifestGroup: S.group
+		} & Version
+	}
+	_allVersions: [for key, _ in S.versions { key }]
+	preferredVersion: string | *(list.Sort(S._allVersions, list.Descending)[0])
 	extraPermissions: {
 		accessKinds: [...#AccessKind]
 	}

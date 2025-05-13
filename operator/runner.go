@@ -171,9 +171,9 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	// Admission control
 	anyWebhooks := false
 	vkCapabilities := make(map[string]capabilities)
-	for _, kind := range manifestData.Kinds {
-		for _, version := range kind.Versions {
-			if version.Admission == nil {
+	for _, version := range manifestData.Versions {
+		for _, kind := range version.Kinds {
+			if kind.Admission == nil {
 				if kind.Conversion {
 					anyWebhooks = true
 					vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
@@ -182,12 +182,12 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 				}
 				continue
 			}
-			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
+			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version)] = capabilities{
 				conversion: kind.Conversion,
-				mutation:   version.Admission.SupportsAnyMutation(),
-				validation: version.Admission.SupportsAnyValidation(),
+				mutation:   kind.Admission.SupportsAnyMutation(),
+				validation: kind.Admission.SupportsAnyValidation(),
 			}
-			if kind.Conversion || version.Admission.SupportsAnyMutation() || version.Admission.SupportsAnyValidation() {
+			if kind.Conversion || kind.Admission.SupportsAnyMutation() || kind.Admission.SupportsAnyValidation() {
 				anyWebhooks = true
 			}
 		}

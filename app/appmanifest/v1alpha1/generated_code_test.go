@@ -30,6 +30,8 @@ func TestAppManifestKind_Read(t *testing.T) {
 	require.Nil(t, err)
 	schema := make(map[string]interface{})
 	require.Nil(t, json.Unmarshal(schemaBytes, &schema))
+	plural := "issues"
+	served := true
 	assert.Equal(t, &AppManifest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AppManifest",
@@ -42,11 +44,13 @@ func TestAppManifestKind_Read(t *testing.T) {
 		Spec: AppManifestSpec{
 			AppName: "issue-tracker-project",
 			Group:   "issuetrackerproject.ext.grafana.com",
-			Kinds: []AppManifestManifestKind{{
-				Kind:  "Issue",
-				Scope: "Namespaced",
-				Versions: []AppManifestManifestKindVersion{{
-					Name:   "v1",
+			Versions: []AppManifestManifestVersion{{
+				Name:   "v1",
+				Served: &served,
+				Kinds: []AppManifestManifestVersionKind{{
+					Kind:   "Issue",
+					Plural: &plural,
+					Scope:  "Namespaced",
 					Schema: schema,
 				}},
 			}},
