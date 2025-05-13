@@ -182,7 +182,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 				}
 				continue
 			}
-			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version)] = capabilities{
+			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
 				conversion: kind.Conversion,
 				mutation:   kind.Admission.SupportsAnyMutation(),
 				validation: kind.Admission.SupportsAnyValidation(),

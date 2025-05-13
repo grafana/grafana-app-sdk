@@ -9,6 +9,7 @@
       "mutationPath": "/mutate"
     }
   },
+  "preferredVersion": "v1",
   "versions": [
     {
       "name": "v1",

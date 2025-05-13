@@ -132,7 +132,7 @@ func (m *ManifestData) Validate() error {
 }
 
 // Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
-// deprecated: this exists to support current workflows, and should not be used for new ones.
+// Deprecated: this exists to support current workflows, and should not be used for new ones.
 func (m *ManifestData) Kinds() []ManifestKind {
 	kinds := make(map[string]ManifestKind)
 	for _, version := range m.Versions {
@@ -163,7 +163,7 @@ func (m *ManifestData) Kinds() []ManifestKind {
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions.
 // The values for Kind, Plural, Scope, and Conversion are hoisted up from their namesakes in Versions entries
-// deprecated: this is used only for the deprecated method ManifestData.Kinds()
+// Deprecated: this is used only for the deprecated method ManifestData.Kinds()
 type ManifestKind struct {
 	// Kind is the name of the kind
 	Kind   string `json:"kind" yaml:"kind"`
@@ -177,7 +177,7 @@ type ManifestKind struct {
 }
 
 // ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
-// deprecated: this type if used only as part of the deprecated method ManifestData.Kinds()
+// Deprecated: this type if used only as part of the deprecated method ManifestData.Kinds()
 type ManifestKindVersion struct {
 	ManifestVersionKind `json:",inline" yaml:",inline"`
 	VersionName         string `json:"versionName" yaml:"versionName"`
