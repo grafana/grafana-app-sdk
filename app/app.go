@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -51,30 +52,17 @@ type CustomRouteRequest struct {
 	Method string
 	// Headers contains the HTTP headers of the original request. Runners MAY remove or sanitize some headers.
 	Headers http.Header
-	// Body contains the payload of the request
-	Body []byte
+	// Body contains the payload of the request. Body may contain incomplete data if the request is streamed and not yet complete.
+	// Body data is considered complete once a call to Read results in zero bytes read and an error such as io.EOF
+	// (see godoc for io.Reader). A consumer SHOULD call Body.Close() when they are finished consuming the body,
+	// especially in the case of incomplete data, to signal to the runner that the handler has finished consuming the payload.
+	Body io.ReadCloser
 }
 
-// CustomRouteResponse is the response object to a CustomRouteRequest
-type CustomRouteResponse struct {
-	// Headers contains the HTTP headers for the response
-	Headers http.Header
-	// Body is the contents of the response
-	Body []byte
-}
-
-var ErrCustomRouteResponseWriterClosed = errors.New("custom route response writer is closed")
-
-// CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects.
+// CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects. It mirrors http.ResponseWriter,
+// but exact implementation is runner-dependent.
 type CustomRouteResponseWriter interface {
-	// WriteStatus writes the HTTP status code of the response to the underlying response stream.
-	// Implementations SHOULD assume a 200 status if WriteStatus is not called before the body of the response is written.
-	WriteStatus(int) error
-	// Write writes the contents of the CustomRouteResponse to the underling response stream.
-	// An implementation may support Write being called only once, or multiple times.
-	// If the underlying response stream is closed and can no longer be written to,
-	// the implementation should return ErrCustomRouteResponseWriterClosed.
-	Write(CustomRouteResponse) error
+	http.ResponseWriter
 }
 
 // Config is the app configuration used in a Provider for instantiating a new App.
