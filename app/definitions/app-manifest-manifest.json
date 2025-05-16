@@ -7,13 +7,15 @@
     "spec": {
         "appName": "app-manifest",
         "group": "apps.grafana.com",
-        "kinds": [
+        "versions": [
             {
-                "kind": "AppManifest",
-                "scope": "Cluster",
-                "versions": [
+                "name": "v1alpha1",
+                "served": true,
+                "kinds": [
                     {
-                        "name": "v1alpha1",
+                        "kind": "AppManifest",
+                        "plural": "AppManifests",
+                        "scope": "Cluster",
                         "schema": {
                             "spec": {
                                 "properties": {
@@ -331,12 +333,13 @@
                                 ],
                                 "type": "object"
                             }
-                        }
+                        },
+                        "conversion": false
                     }
-                ],
-                "conversion": false
+                ]
             }
         ],
+        "preferredVersion": "",
         "extraPermissions": {
             "accessKinds": [
                 {

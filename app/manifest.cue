@@ -3,7 +3,12 @@ package app
 manifest: {
 	appName: "app-manifest"
 	groupOverride: "apps.grafana.com"
-	kinds: [appManifest]
+	versions: {
+		"v1alpha1": {
+			codegen: ts: enabled: false
+			kinds: [appManifestv1alpha1]
+		}
+	}
 	extraPermissions: {
 		accessKinds: [{
 			group: "apiextensions.k8s.io",
@@ -13,17 +18,15 @@ manifest: {
 	}
 }
 
-appManifest: {
+appManifestKind: {
 	kind: "AppManifest"
 	scope: "Cluster"
 	codegen: {
 		ts: enabled: false
 	}
-	current: "v1alpha1"
-	versions: {}
 }
 
-appManifest: versions: v1alpha1: {
+appManifestv1alpha1: appManifestKind & {
 	schema: {
 		#AdditionalPrinterColumns: {
 			// name is a human readable name for the column.

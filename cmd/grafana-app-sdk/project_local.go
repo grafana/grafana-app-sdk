@@ -168,6 +168,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	useOldManifestKinds, err := cmd.Flags().GetBool("useoldmanifestkinds")
+	if err != nil {
+		return err
+	}
 	localPath := filepath.Join(path, "local")
 	localGenPath := filepath.Join(localPath, "generated")
 	absPath, err := filepath.Abs(path)
@@ -197,7 +201,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	err = updateLocalConfigFromManifest(config, format, sourcePath, selector)
+	err = updateLocalConfigFromManifest(config, format, sourcePath, useOldManifestKinds, selector)
 	if err != nil {
 		return err
 	}
@@ -210,7 +214,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState), os.DirFS(sourcePath))
+			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState, useOldManifestKinds), os.DirFS(sourcePath))
 			if err != nil {
 				return nil, err
 			}
@@ -767,7 +771,7 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string, selectors ...string) error {
+func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string, useOldManifestKinds bool, selectors ...string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
@@ -777,7 +781,7 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 		if err != nil {
 			return err
 		}
-		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(true), os.DirFS(cuePath))
+		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(true, useOldManifestKinds), os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}

@@ -6,6 +6,9 @@ import (
 	"io"
 	"io/fs"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
@@ -27,6 +30,7 @@ type Parser struct {
 	kindDef     *cue.Value
 	schemaDef   *cue.Value
 	manifestDef *cue.Value
+	oldKindDef  *cue.Value
 }
 
 type parser[T any] struct {
@@ -37,7 +41,7 @@ func (p *parser[T]) Parse(f fs.FS, args ...string) ([]T, error) {
 	return p.parseFunc(f, args...)
 }
 
-func (p *Parser) ManifestParser(genOperatorState bool) codegen.Parser[codegen.AppManifest] {
+func (p *Parser) ManifestParser(genOperatorState bool, useOldKinds bool) codegen.Parser[codegen.AppManifest] {
 	return &parser[codegen.AppManifest]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.AppManifest, error) {
 			if len(s) == 0 {
@@ -45,7 +49,7 @@ func (p *Parser) ManifestParser(genOperatorState bool) codegen.Parser[codegen.Ap
 			}
 			manifests := make([]codegen.AppManifest, 0, len(s))
 			for _, selector := range s {
-				m, err := p.ParseManifest(f, selector, genOperatorState)
+				m, err := p.ParseManifest(f, selector, genOperatorState, useOldKinds)
 				if err != nil {
 					return nil, err
 				}
@@ -61,7 +65,7 @@ func (p *Parser) ManifestParser(genOperatorState bool) codegen.Parser[codegen.Ap
 // rather than loading the selector(s) as kinds.
 //
 //nolint:revive
-func (p *Parser) KindParser(useManifest bool, genOperatorState bool) codegen.Parser[codegen.Kind] {
+func (p *Parser) KindParser(useManifest bool, genOperatorState bool, useOldKinds bool) codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.Kind, error) {
 			if useManifest {
@@ -70,7 +74,7 @@ func (p *Parser) KindParser(useManifest bool, genOperatorState bool) codegen.Par
 				}
 				kinds := make([]codegen.Kind, 0)
 				for _, selector := range s {
-					m, err := p.ParseManifest(f, selector, genOperatorState)
+					m, err := p.ParseManifest(f, selector, genOperatorState, useOldKinds)
 					if err != nil {
 						return nil, err
 					}
@@ -87,7 +91,7 @@ func (p *Parser) KindParser(useManifest bool, genOperatorState bool) codegen.Par
 // returning the parsed codegen.AppManifest object or an error.
 //
 //nolint:funlen
-func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperatorState bool) (codegen.AppManifest, error) {
+func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperatorState bool, useOldKinds bool) (codegen.AppManifest, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -129,12 +133,12 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
-	kindDef, schemaDef, manifestDef, err := p.getKindDefinition(genOperatorState)
+	err = p.loadKindDefinition(genOperatorState)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
 
-	val = val.Unify(manifestDef)
+	val = val.Unify(*p.manifestDef)
 	if val.Err() != nil {
 		return nil, val.Err()
 	}
@@ -179,7 +183,7 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 			return nil, err
 		}
 		for kit.Next() {
-			kind, err := p.parseKind(kit.Value(), kindDef, schemaDef)
+			kind, err := p.parseKind(kit.Value(), *p.kindDef, *p.schemaDef)
 			if err != nil {
 				return nil, err
 			}
@@ -224,15 +228,15 @@ func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.
 
 // revive complains about the usage of control flag, but it's not a problem here.
 // nolint:revive
-func (p *Parser) getKindDefinition(genOperatorState bool) (cue.Value, cue.Value, cue.Value, error) {
+func (p *Parser) loadKindDefinition(genOperatorState bool) error {
 	if p.kindDef != nil {
-		return *p.kindDef, *p.schemaDef, *p.manifestDef, nil
+		return nil
 	}
 
 	kindOverlay := make(map[string]load.Source)
 	err := ToOverlay("/github.com/grafana/grafana-app-sdk/codegen/cuekind", overlayFS, kindOverlay)
 	if err != nil {
-		return cue.Value{}, cue.Value{}, cue.Value{}, err
+		return err
 	}
 	kindInstWithDef := load.Instances(nil, &load.Config{
 		Overlay:    kindOverlay,
@@ -242,36 +246,42 @@ func (p *Parser) getKindDefinition(genOperatorState bool) (cue.Value, cue.Value,
 	})[0]
 	inst := cuecontext.New().BuildInstance(kindInstWithDef)
 	if inst.Err() != nil {
-		return cue.Value{}, cue.Value{}, cue.Value{}, inst.Err()
+		return inst.Err()
 	}
 	kindDef := inst.LookupPath(cue.MakePath(cue.Str("Kind")))
 	if kindDef.Err() != nil {
-		return cue.Value{}, cue.Value{}, cue.Value{}, kindDef.Err()
+		return kindDef.Err()
 	}
 
 	var schemaDef cue.Value
 	if genOperatorState {
 		schemaDef = inst.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
 		if schemaDef.Err() != nil {
-			return cue.Value{}, cue.Value{}, cue.Value{}, schemaDef.Err()
+			return schemaDef.Err()
 		}
 	} else {
 		schemaDef = inst.LookupPath(cue.MakePath(cue.Str("Schema")))
 		if schemaDef.Err() != nil {
-			return cue.Value{}, cue.Value{}, cue.Value{}, schemaDef.Err()
+			return schemaDef.Err()
 		}
 	}
 
 	manifestDef := inst.LookupPath(cue.MakePath(cue.Str("Manifest")))
 	if manifestDef.Err() != nil {
-		return cue.Value{}, cue.Value{}, cue.Value{}, manifestDef.Err()
+		return manifestDef.Err()
+	}
+
+	oldKindDef := inst.LookupPath(cue.MakePath(cue.Str("KindOld")))
+	if oldKindDef.Err() != nil {
+		return oldKindDef.Err()
 	}
 
 	p.kindDef = &kindDef
 	p.schemaDef = &schemaDef
 	p.manifestDef = &manifestDef
+	p.oldKindDef = &oldKindDef
 
-	return *p.kindDef, *p.schemaDef, *p.manifestDef, nil
+	return nil
 }
 
 func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
@@ -308,4 +318,146 @@ func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
 	}
 
 	return nil
+}
+
+func (*Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
+	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
+	// This gives us default values for all fields that weren't filled out,
+	// and will create errors for required fields that may be missing.
+	val = val.Unify(kindDef)
+	if val.Err() != nil {
+		return nil, val.Err()
+	}
+
+	// Decode the unified value into our collection of properties.
+	props := codegen.KindProperties{}
+	err := val.Decode(&props)
+	if err != nil {
+		return nil, err
+	}
+
+	// We can't simply decode the version map, because we need to extract some values as types,
+	// but leave the schema value as a cue.Value. So we tell cue to decode it into a map,
+	// then still need to iterate through the map and adjust values
+	someKind := &codegen.AnyKind{
+		Props:       props,
+		AllVersions: make([]codegen.KindVersion, 0),
+	}
+	goVers := make(map[string]codegen.KindVersion)
+	vers := val.LookupPath(cue.MakePath(cue.Str("versions")))
+	if vers.Err() != nil {
+		return nil, vers.Err()
+	}
+	err = vers.Decode(&goVers)
+	if err != nil {
+		return nil, err
+	}
+	for k, v := range goVers {
+		v.Schema = val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("schema")))
+		if v.Schema.Err() != nil {
+			return nil, v.Schema.Err()
+		}
+		// Normally, we would use a conditional unify in the def.cue file of kindDef,
+		// but there is a bug where the conditional evaluation creates a nil vertex somewhere
+		// when loading with the CLI, so this is a faster fix (TODO: long-term fix)
+		v.Schema = v.Schema.Unify(schemaDef)
+		if v.Schema.Err() != nil {
+			return nil, v.Schema.Err()
+		}
+
+		customRoutesVal := val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("customRoutes")))
+		if customRoutesVal.Exists() && customRoutesVal.Err() == nil {
+			v.CustomRoutes = make(map[string]map[string]codegen.CustomRoute)
+
+			pathsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
+			if err != nil {
+				return nil, fmt.Errorf("error iterating customRoutes paths for version %s: %w", k, err)
+			}
+			for pathsIter.Next() {
+				pathStr := pathsIter.Selector().String()
+				pathStr = strings.Trim(pathStr, `"`)
+				methodsMapVal := pathsIter.Value()
+				v.CustomRoutes[pathStr] = make(map[string]codegen.CustomRoute)
+
+				methodsIter, err := methodsMapVal.Fields(cue.Optional(true), cue.Definitions(false))
+				if err != nil {
+					return nil, fmt.Errorf("error iterating customRoutes methods for path '%s' in version %s: %w", pathStr, k, err)
+				}
+				for methodsIter.Next() {
+					methodStr := methodsIter.Selector().String()
+					methodStr = strings.Trim(methodStr, `"`)
+					routeVal := methodsIter.Value()
+
+					requestVal := routeVal.LookupPath(cue.MakePath(cue.Str("request")))
+					var querySchema, bodySchema cue.Value
+					if requestVal.Exists() && requestVal.Err() == nil {
+						querySchema = requestVal.LookupPath(cue.MakePath(cue.Str("query")))
+						bodySchema = requestVal.LookupPath(cue.MakePath(cue.Str("body")))
+					}
+
+					responseVal := routeVal.LookupPath(cue.MakePath(cue.Str("response")))
+					var responseSchema cue.Value
+					if responseVal.Exists() && responseVal.Err() == nil {
+						responseSchema = responseVal
+					}
+
+					route := codegen.CustomRoute{
+						Request: codegen.CustomRouteRequest{
+							Query: querySchema,
+							Body:  bodySchema,
+						},
+						Response: codegen.CustomRouteResponse{
+							Schema: responseSchema,
+						},
+					}
+					v.CustomRoutes[pathStr][methodStr] = route
+				}
+			}
+		}
+
+		someKind.AllVersions = append(someKind.AllVersions, v)
+	}
+	// Now we need to sort AllVersions, as map key order is random
+	slices.SortFunc(someKind.AllVersions, sortVersions)
+	return someKind, nil
+}
+
+var (
+	kubeVersionMatcher  = regexp.MustCompile(`v([0-9]+)([a-z]+[0-9]+)?`)
+	themaVersionMatcher = regexp.MustCompile(`v([0-9]+)\-([0-9]+)`)
+)
+
+// sortVersions is a sort function for codegen.KindVersion objects
+//
+//nolint:gocritic
+func sortVersions(a, b codegen.KindVersion) int {
+	var aparts []string
+	var bparts []string
+	if kubeVersionMatcher.MatchString(a.Version) {
+		aparts = kubeVersionMatcher.FindStringSubmatch(a.Version)
+	} else if themaVersionMatcher.MatchString(a.Version) {
+		aparts = themaVersionMatcher.FindStringSubmatch(a.Version)
+	} else {
+		aparts = []string{a.Version}
+	}
+	if kubeVersionMatcher.MatchString(b.Version) {
+		bparts = kubeVersionMatcher.FindStringSubmatch(b.Version)
+	} else if themaVersionMatcher.MatchString(b.Version) {
+		bparts = themaVersionMatcher.FindStringSubmatch(b.Version)
+	} else {
+		bparts = []string{b.Version}
+	}
+	if aparts[1] != bparts[1] {
+		return strings.Compare(aparts[1], bparts[1])
+	}
+	if len(aparts) > 2 {
+		if len(bparts) > 2 {
+			return strings.Compare(aparts[2], bparts[2])
+		}
+		return 1
+	}
+	if len(bparts) > 2 {
+		return -1
+	}
+	return 0
 }

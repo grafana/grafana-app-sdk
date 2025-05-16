@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -54,6 +53,16 @@ var projectAddKindCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
+var projectKindVersionCmd = &cobra.Command{
+	Use: "version",
+}
+
+var projectKindVersionAddCmd = &cobra.Command{
+	Use:          "add",
+	RunE:         projectAddKindVersion,
+	SilenceUsage: true,
+}
+
 var projectLocalCmd = &cobra.Command{
 	Use: "local",
 }
@@ -77,6 +86,9 @@ func setupProjectCmd() {
 
 	projectAddComponentCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
+
+	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
+	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
 
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
@@ -301,10 +313,10 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	defer file.Close()
-	manifestBytes, err := io.ReadAll(file)
+	/*manifestBytes, err := io.ReadAll(file)
 	if err != nil {
 		return err
-	}
+	}*/
 
 	for _, kindName := range args {
 		validName := regexp.MustCompile(`^([A-Z][a-zA-Z0-9]{0,61}[a-zA-Z0-9])$`)
@@ -319,45 +331,91 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 
 		fieldName := strings.ToLower(kindName[0:1]) + kindName[1:]
 
-		manifestBytes, err = addKindToManifestBytesCUE(manifestBytes, fieldName)
+		/*manifestBytes, err = addKindToManifestBytesCUE(manifestBytes, fieldName)
 		if err != nil {
 			return err
-		}
+		}*/
 
-		var templatePath string
+		var files codejen.Files
 		switch format {
 		case FormatCUE:
-			templatePath = "templates/kind.cue.tmpl"
+			files, err = projectAddKindCUE(filepath.Join(path, sourcePath), "manifest.cue", fieldName, kindName, pkg)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown kind format '%s'", format)
 		}
 
-		kindTmpl, err := template.ParseFS(templates, templatePath)
-		if err != nil {
-			return err
-		}
-
-		buf := &bytes.Buffer{}
-		err = kindTmpl.Execute(buf, map[string]string{
-			"FieldName": fieldName,
-			"Name":      kindName,
-			"Target":    "resource",
-			"Package":   pkg,
-		})
-		if err != nil {
-			return err
-		}
-		kindPath := filepath.Join(path, sourcePath, fmt.Sprintf("%s.cue", strings.ToLower(kindName)))
-		if !overwrite {
-			err = writeFileWithOverwriteConfirm(kindPath, buf.Bytes())
-		} else {
-			err = writeFile(kindPath, buf.Bytes())
-		}
-		if err != nil {
-			return err
+		for _, f := range files {
+			if !overwrite {
+				err = writeFileWithOverwriteConfirm(filepath.Join(path, sourcePath, f.RelativePath), f.Data)
+			} else {
+				err = writeFile(filepath.Join(path, sourcePath, f.RelativePath), f.Data)
+			}
+			if err != nil {
+				return err
+			}
 		}
 	}
-	return writeFile(filepath.Join(path, sourcePath, "manifest.cue"), manifestBytes)
+	return nil
+	//return writeFile(filepath.Join(path, sourcePath, "manifest.cue"), manifestBytes)
+}
+
+func projectAddKindVersion(cmd *cobra.Command, args []string) error {
+	return nil
+}
+
+func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, pkg string) (codejen.Files, error) {
+	current, err := getManifestLatestVersion(srcPath)
+	if err != nil {
+		if err != errNoVersions {
+			return nil, err
+		}
+		current = "v1alpha1"
+	}
+	kindTmpl, err := template.ParseFS(templates, "templates/kind.cue.tmpl")
+	if err != nil {
+		return nil, err
+	}
+	kindVersionTmpl, err := template.ParseFS(templates, "templates/kindversion.cue.tmpl")
+	if err != nil {
+		return nil, err
+	}
+	data := map[string]string{
+		"FieldName": fieldName,
+		"Name":      kindName,
+		"Target":    "resource",
+		"Package":   pkg,
+		"Version":   current,
+	}
+
+	buf := &bytes.Buffer{}
+	err = kindTmpl.Execute(buf, data)
+	if err != nil {
+		return nil, err
+	}
+	files := make(codejen.Files, 2)
+	files[0] = codejen.File{
+		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
+		Data:         buf.Bytes(),
+	}
+	buf2 := &bytes.Buffer{}
+	err = kindVersionTmpl.Execute(buf2, data)
+	if err != nil {
+		return nil, err
+	}
+	files[1] = codejen.File{
+		RelativePath: fmt.Sprintf("%s_%s.cue", strings.ToLower(kindName), current),
+		Data:         buf2.Bytes(),
+	}
+
+	mFiles, err := addVersionedKindToManifestBytesCUE(srcPath, manifestFileName, current, fieldName+current, pkg)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, mFiles...)
+	return files, nil
 }
 
 //nolint:revive,funlen,gocyclo
@@ -424,11 +482,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState), os.DirFS(sourcePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState, false), os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser(genOperatorState)
+		manifestParser = parser.ManifestParser(genOperatorState, false)
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
