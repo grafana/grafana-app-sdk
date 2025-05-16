@@ -146,6 +146,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			GroupKinds:             grouping == kindGroupingGroup,
 			ManifestIncludeSchemas: !noSchemasInManifest,
 			GenOperatorState:       genOperatorState,
+			UseOldManifestKinds:    useOldManifestKinds,
 		}, selector)
 		if err != nil {
 			return err

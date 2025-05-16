@@ -27,10 +27,11 @@ func NewParser() (*Parser, error) {
 }
 
 type Parser struct {
-	kindDef     *cue.Value
-	schemaDef   *cue.Value
-	manifestDef *cue.Value
-	oldKindDef  *cue.Value
+	kindDef        *cue.Value
+	schemaDef      *cue.Value
+	manifestDef    *cue.Value
+	oldKindDef     *cue.Value
+	oldManifestDef *cue.Value
 }
 
 type parser[T any] struct {
@@ -138,7 +139,11 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
 
-	val = val.Unify(*p.manifestDef)
+	if useOldKinds {
+		val = val.Unify(*p.oldManifestDef)
+	} else {
+		val = val.Unify(*p.manifestDef)
+	}
 	if val.Err() != nil {
 		return nil, val.Err()
 	}
@@ -154,21 +159,34 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 		Props: manifestProps,
 	}
 
+	if useOldKinds {
+		err = p.parseManifestKinds(manifest, val)
+	} else {
+		err = p.parseManifestVersions(manifest, val)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	return manifest, nil
+}
+
+func (p *Parser) parseManifestVersions(manifest *codegen.SimpleManifest, val cue.Value) error {
 	manifest.AllVersions = make([]codegen.Version, 0)
 	versionsVal := val.LookupPath(cue.MakePath(cue.Str("versions")))
 	if versionsVal.Err() != nil {
-		return nil, versionsVal.Err()
+		return versionsVal.Err()
 	}
 	it, err := versionsVal.Fields()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for it.Next() {
 		ver := it.Value()
 		vProps := codegen.VersionProperties{}
 		err = ver.Decode(&vProps)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		version := &codegen.SimpleVersion{
 			Props:    vProps,
@@ -176,23 +194,93 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 		}
 		kinds := ver.LookupPath(cue.MakePath(cue.Str("kinds")))
 		if kinds.Err() != nil {
-			return nil, kinds.Err()
+			return kinds.Err()
 		}
 		kit, err := kinds.List()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		for kit.Next() {
 			kind, err := p.parseKind(kit.Value(), *p.kindDef, *p.schemaDef)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			version.AllKinds = append(version.AllKinds, *kind)
 		}
 		manifest.AllVersions = append(manifest.AllVersions, version)
 	}
 
-	return manifest, nil
+	return nil
+}
+
+func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Value) error {
+	kindsVal := val.LookupPath(cue.MakePath(cue.Str("kinds")))
+	if kindsVal.Err() != nil {
+		return kindsVal.Err()
+	}
+	it, err := kindsVal.List()
+	if err != nil {
+		return err
+	}
+	kinds := make([]codegen.Kind, 0)
+	for it.Next() {
+		kind, err := p.parseKindOld(it.Value(), *p.oldKindDef, *p.schemaDef)
+		if err != nil {
+			return err
+		}
+		kinds = append(kinds, kind)
+	}
+	// Set up the versions from the kinds
+	vers := make(map[string]*codegen.SimpleVersion)
+	pref := ""
+	for _, kind := range kinds {
+		props := kind.Properties()
+		for _, ver := range kind.Versions() {
+			v, ok := vers[ver.Version]
+			if !ok {
+				v = &codegen.SimpleVersion{
+					Props: codegen.VersionProperties{
+						Name:   ver.Version,
+						Served: ver.Served,
+					},
+					AllKinds: make([]codegen.VersionedKind, 0),
+				}
+			}
+			if ver.Served {
+				v.Props.Served = true
+			}
+			v.AllKinds = append(v.AllKinds, codegen.VersionedKind{
+				Kind:                     props.Kind,
+				MachineName:              props.MachineName,
+				PluralName:               props.PluralName,
+				PluralMachineName:        props.PluralMachineName,
+				Scope:                    props.Scope,
+				Validation:               props.Validation,
+				Mutation:                 props.Mutation,
+				Conversion:               props.Conversion,
+				ConversionWebhookProps:   props.ConversionWebhookProps,
+				Codegen:                  props.Codegen,
+				Served:                   ver.Served,
+				SelectableFields:         ver.SelectableFields,
+				AdditionalPrinterColumns: ver.AdditionalPrinterColumns,
+				Schema:                   ver.Schema,
+				CustomRoutes:             ver.CustomRoutes,
+			})
+			vers[ver.Version] = v
+		}
+		if kind.Properties().Current > pref {
+			pref = kind.Properties().Current
+		}
+	}
+	manifest.Props.PreferredVersion = pref
+	manifest.AllVersions = make([]codegen.Version, 0)
+	for key, _ := range vers {
+		manifest.AllVersions = append(manifest.AllVersions, vers[key])
+	}
+	slices.SortFunc(manifest.AllVersions, func(a, b codegen.Version) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+	return nil
 }
 
 func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.VersionedKind, error) {
@@ -276,10 +364,16 @@ func (p *Parser) loadKindDefinition(genOperatorState bool) error {
 		return oldKindDef.Err()
 	}
 
+	oldManifestDef := inst.LookupPath(cue.MakePath(cue.Str("ManifestOld")))
+	if oldManifestDef.Err() != nil {
+		return oldManifestDef.Err()
+	}
+
 	p.kindDef = &kindDef
 	p.schemaDef = &schemaDef
 	p.manifestDef = &manifestDef
 	p.oldKindDef = &oldKindDef
+	p.oldManifestDef = &oldManifestDef
 
 	return nil
 }
