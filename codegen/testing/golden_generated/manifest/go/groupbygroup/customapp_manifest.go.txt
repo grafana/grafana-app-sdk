@@ -28,20 +28,31 @@ var (
 var appManifestData = app.ManifestData{
 	AppName: "custom-app",
 	Group:   "customapp.ext.grafana.com",
-	Kinds: []app.ManifestKind{
+	Versions: []app.ManifestVersion{
 		{
-			Kind:       "CustomKind",
-			Scope:      "Namespaced",
-			Conversion: false,
-			Versions: []app.ManifestKindVersion{
+			Name:   "v0-0",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{
 				{
-					Name:   "v0-0",
-					Schema: &versionSchemaCustomKindv0_0,
+					Kind:       "CustomKind",
+					Plural:     "CustomKinds",
+					Scope:      "Namespaced",
+					Conversion: false,
+					Schema:     &versionSchemaCustomKindv0_0,
 				},
+			},
+		},
 
+		{
+			Name:   "v1-0",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{
 				{
-					Name:   "v1-0",
-					Schema: &versionSchemaCustomKindv1_0,
+					Kind:       "CustomKind",
+					Plural:     "CustomKinds",
+					Scope:      "Namespaced",
+					Conversion: false,
+					Schema:     &versionSchemaCustomKindv1_0,
 				},
 			},
 		},

@@ -7,9 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/app"
 )
 
 func TestAppManifestSpec_ToManifestData(t *testing.T) {
@@ -32,8 +33,8 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 
 	t.Run("bad schema data", func(t *testing.T) {
 		v1alpha1 := AppManifestSpec{
-			Kinds: []AppManifestManifestKind{{
-				Versions: []AppManifestManifestKindVersion{{
+			Versions: []AppManifestManifestVersion{{
+				Kinds: []AppManifestManifestVersionKind{{
 					Schema: map[string]interface{}{
 						"openAPIV3Schema": "foo", // Bad OpenAPI document, conversion will fail when loading the openAPI
 					},

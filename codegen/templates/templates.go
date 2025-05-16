@@ -447,17 +447,15 @@ func (m ManifestGoFileMetadata) Packages() []string {
 	pkgs := make([]string, 0)
 	if m.KindsAreGrouped {
 		gvs := make(map[string]string)
-		for _, k := range m.ManifestData.Kinds {
-			for _, v := range k.Versions {
-				gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.ManifestData.Group), ToPackageName(v.Name))] = ToPackageName(v.Name)
-			}
+		for _, v := range m.ManifestData.Versions {
+			gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.ManifestData.Group), ToPackageName(v.Name))] = ToPackageName(v.Name)
 		}
 		for pkg, alias := range gvs {
 			pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", alias, filepath.Join(m.Repo, m.CodegenPath, pkg)))
 		}
 	} else {
-		for _, k := range m.ManifestData.Kinds {
-			for _, v := range k.Versions {
+		for _, v := range m.ManifestData.Versions {
+			for _, k := range v.Kinds {
 				pkgs = append(pkgs, fmt.Sprintf("%s%s \"%s\"", m.KindToPackageName(k.Kind), ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.KindToPackageName(k.Kind), ToPackageName(v.Name))))
 			}
 		}

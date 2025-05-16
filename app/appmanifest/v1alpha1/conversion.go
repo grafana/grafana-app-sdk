@@ -1,61 +1,82 @@
 package v1alpha1
 
-import "github.com/grafana/grafana-app-sdk/app"
+import (
+	"strings"
+
+	"github.com/grafana/grafana-app-sdk/app"
+)
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
 // to the generic app.ManifestData type for usage with an app.Manifest.
-// nolint:gocognit
+// nolint:gocognit,funlen
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
-		AppName: s.AppName,
-		Group:   s.Group,
-		Kinds:   make([]app.ManifestKind, len(s.Kinds)),
+		AppName:  s.AppName,
+		Group:    s.Group,
+		Versions: make([]app.ManifestVersion, len(s.Versions)),
 	}
-	// Kinds
-	for idx, kind := range s.Kinds {
-		k := app.ManifestKind{
-			Kind:       kind.Kind,
-			Scope:      kind.Scope,
-			Conversion: kind.Conversion,
-			Versions:   make([]app.ManifestKindVersion, len(kind.Versions)),
+	// Versions
+	for idx, version := range s.Versions {
+		v := app.ManifestVersion{
+			Name:   version.Name,
+			Served: true,
+			Kinds:  make([]app.ManifestVersionKind, len(version.Kinds)),
 		}
-		for vidx, version := range kind.Versions {
-			ver := app.ManifestKindVersion{
-				Name:             version.Name,
-				SelectableFields: version.SelectableFields,
+		if version.Served != nil {
+			v.Served = *version.Served
+		}
+
+		for kidx, kind := range version.Kinds {
+			k := app.ManifestVersionKind{
+				Kind:             kind.Kind,
+				Plural:           strings.ToLower(kind.Kind) + "s",
+				SelectableFields: kind.SelectableFields,
+				Scope:            string(kind.Scope),
+			}
+			if kind.Plural != nil {
+				k.Plural = strings.ToLower(*kind.Plural)
+			}
+			if kind.Conversion != nil {
+				k.Conversion = *kind.Conversion
 			}
 			// Admission
-			if version.Admission != nil {
+			if kind.Admission != nil {
 				adm := app.AdmissionCapabilities{}
-				if version.Admission.Validation != nil {
+				if kind.Admission.Validation != nil {
 					adm.Validation = &app.ValidationCapability{
-						Operations: make([]app.AdmissionOperation, len(version.Admission.Validation.Operations)),
+						Operations: make([]app.AdmissionOperation, len(kind.Admission.Validation.Operations)),
 					}
-					for oidx, op := range version.Admission.Validation.Operations {
+					for oidx, op := range kind.Admission.Validation.Operations {
 						adm.Validation.Operations[oidx] = app.AdmissionOperation(op) // TODO: make this case-insensitive?
 					}
 				}
-				if version.Admission.Mutation != nil {
+				if kind.Admission.Mutation != nil {
 					adm.Mutation = &app.MutationCapability{
-						Operations: make([]app.AdmissionOperation, len(version.Admission.Mutation.Operations)),
+						Operations: make([]app.AdmissionOperation, len(kind.Admission.Mutation.Operations)),
 					}
-					for oidx, op := range version.Admission.Mutation.Operations {
+					for oidx, op := range kind.Admission.Mutation.Operations {
 						adm.Mutation.Operations[oidx] = app.AdmissionOperation(op) // TODO: make this case-insensitive?
 					}
 				}
-				ver.Admission = &adm
+				k.Admission = &adm
 			}
 			// Schema
-			if version.Schema != nil {
+			if kind.Schema != nil {
 				var err error
-				ver.Schema, err = app.VersionSchemaFromMap(version.Schema)
+				k.Schema, err = app.VersionSchemaFromMap(kind.Schema)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
 			}
-			k.Versions[vidx] = ver
+			v.Kinds[kidx] = k
 		}
-		data.Kinds[idx] = k
+
+		data.Versions[idx] = v
+	}
+	if s.PreferredVersion != nil {
+		data.PreferredVersion = *s.PreferredVersion
+	} else {
+		data.PreferredVersion = s.Versions[len(s.Versions)-1].Name
 	}
 	// Permissions
 	if s.ExtraPermissions != nil && s.ExtraPermissions.AccessKinds != nil {
@@ -94,5 +115,5 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			data.Operator.Webhooks = &webhooks
 		}
 	}
-	return data, nil
+	return data, data.Validate()
 }

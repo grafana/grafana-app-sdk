@@ -120,23 +120,25 @@ OperationProps: spec3.OperationProps{
     },{{ end }}
 },{{ end }}
 
-var ({{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}{{ if .Schema }}
-    rawSchema{{$k.Kind}}{{$.ToPackageName .Name}} = []byte({{$.ToJSONBacktickString .Schema}})
-    versionSchema{{$k.Kind}}{{$.ToPackageName .Name}} app.VersionSchema
-    _ = json.Unmarshal(rawSchema{{$k.Kind}}{{$.ToPackageName .Name}}, &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}}){{end}}{{end}}{{end}}
+var ({{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{ if .Schema }}
+    rawSchema{{.Kind}}{{$.ToPackageName $v.Name}} = []byte({{$.ToJSONBacktickString .Schema}})
+    versionSchema{{.Kind}}{{$.ToPackageName $v.Name}} app.VersionSchema
+    _ = json.Unmarshal(rawSchema{{.Kind}}{{$.ToPackageName $v.Name}}, &versionSchema{{.Kind}}{{$.ToPackageName $v.Name}}){{end}}{{end}}{{end}}
 )
 
 var appManifestData = app.ManifestData{
     AppName: "{{.ManifestData.AppName}}",
     Group: "{{.ManifestData.Group}}",
-    Kinds: []app.ManifestKind{ {{ range .ManifestData.Kinds }}{{$k:=.}}
+    Versions: []app.ManifestVersion{ {{ range .ManifestData.Versions }}{{$v:=.}}
         {
-            Kind: "{{.Kind}}",
-            Scope: "{{.Scope}}",
-            Conversion: {{.Conversion}},
-            Versions: []app.ManifestKindVersion{ {{ range .Versions }}
+            Name: "{{.Name}}",
+            Served: {{.Served}},
+            Kinds: []app.ManifestVersionKind{ {{ range .Kinds }}
             {
-                Name: "{{.Name}}", {{ if .Admission }}
+                Kind: "{{.Kind}}",
+                Plural: "{{.Plural}}",
+                Scope: "{{.Scope}}",
+                Conversion: {{.Conversion}}, {{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
                         {{ if .Admission.Validation.Operations }} Operations: []app.AdmissionOperation{
@@ -149,7 +151,7 @@ var appManifestData = app.ManifestData{
                         {{ end }} }, {{ end }}
                     }, {{ end }}
                 }, {{ end }}{{ if .Schema }}
-                Schema: &versionSchema{{$k.Kind}}{{$.ToPackageName .Name}},{{end}}{{ if .SelectableFields }}
+                Schema: &versionSchema{{.Kind}}{{$.ToPackageName $v.Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
                 },{{end}}{{ if .CustomRoutes }}
@@ -194,8 +196,8 @@ func RemoteManifest() app.Manifest {
     return app.NewAPIServerManifest("{{ .ManifestData.AppName }}")
 }
 
-var kindVersionToGoType = map[string]resource.Kind { {{ range .ManifestData.Kinds }}{{$k:=.}}{{ range .Versions }}
-    "{{ $k.Kind }}/{{ .Name }}": {{ if $.KindsAreGrouped }}{{ $.ToPackageName .Name}}.{{ $.GoKindName $k.Kind }}Kind(){{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName .Name }}.Kind(){{ end }},{{ end }}{{ end }}
+var kindVersionToGoType = map[string]resource.Kind { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}
+    "{{ .Kind }}/{{ $v.Name }}": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName .Kind }}Kind(){{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.Kind(){{ end }},{{ end }}{{ end }}
 }
 
 // ManifestGoTypeAssociator returns the associated resource.Kind instance for a given Kind and Version, if one exists.

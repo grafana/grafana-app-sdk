@@ -44,7 +44,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	}
 
 	if manifestData.Group == "" {
-		if len(manifestData.Kinds) > 0 {
+		if len(manifestData.Versions) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
@@ -94,7 +94,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	}
 
 	if manifestData.Group == "" {
-		if len(manifestData.Kinds) > 0 {
+		if len(manifestData.Versions) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
 			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
 		}
@@ -139,7 +139,9 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 //nolint:revive,gocognit
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
-		Kinds: make([]app.ManifestKind, 0),
+		AppName:  m.Properties().AppName,
+		Group:    m.Properties().FullGroup,
+		Versions: make([]app.ManifestVersion, 0),
 	}
 
 	manifest.AppName = m.Name()
@@ -149,45 +151,31 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	hasAnyMutation := false
 	hasAnyConversion := false
 
-	for _, kind := range m.Kinds() {
-		// TODO
-		if manifest.AppName == "" {
-			manifest.AppName = kind.Properties().Group
+	for _, version := range m.Versions() {
+		ver := app.ManifestVersion{
+			Name:   version.Name(),
+			Served: version.Properties().Served,
+			Kinds:  make([]app.ManifestVersionKind, len(version.Kinds())),
 		}
-		if manifest.Group == "" {
-			manifest.Group = kind.Properties().Group
-		}
-		if kind.Properties().Group == "" {
-			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
-		}
-		if kind.Properties().Group != manifest.Group {
-			return nil, fmt.Errorf("all kinds must have the same group %q", manifest.Group)
-		}
+		for i, kind := range version.Kinds() {
+			if kind.Conversion {
+				hasAnyConversion = true
+			}
 
-		mkind := app.ManifestKind{
-			Kind:       kind.Name(),
-			Scope:      kind.Properties().Scope,
-			Conversion: kind.Properties().Conversion,
-			Versions:   make([]app.ManifestKindVersion, 0, len(kind.Versions())),
-		}
-		if kind.Properties().Conversion {
-			hasAnyConversion = true
-		}
-
-		for _, version := range kind.Versions() {
-			mver, err := processKindVersion(version, mkind.Kind, includeSchemas)
+			mvkind, err := processKindVersion(kind, version.Name(), includeSchemas)
 			if err != nil {
 				return nil, err
 			}
-			if len(version.Validation.Operations) > 0 {
+			if len(kind.Validation.Operations) > 0 {
 				hasAnyValidation = true
 			}
-			if len(version.Mutation.Operations) > 0 {
+			if len(kind.Mutation.Operations) > 0 {
 				hasAnyMutation = true
 			}
-			mkind.Versions = append(mkind.Versions, mver)
+
+			ver.Kinds[i] = mvkind
 		}
-		manifest.Kinds = append(manifest.Kinds, mkind)
+		manifest.Versions = append(manifest.Versions, ver)
 	}
 
 	if len(m.Properties().ExtraPermissions.AccessKinds) > 0 {
@@ -225,14 +213,17 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 }
 
 //nolint:revive
-func processKindVersion(version codegen.KindVersion, kindName string, includeSchemas bool) (app.ManifestKindVersion, error) {
-	mver := app.ManifestKindVersion{
-		Name: version.Version,
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+	mver := app.ManifestVersionKind{
+		Kind:       vk.Kind,
+		Plural:     vk.PluralName,
+		Scope:      vk.Scope,
+		Conversion: vk.Conversion,
 	}
-	if len(version.Mutation.Operations) > 0 {
-		operations, err := sanitizeAdmissionOperations(version.Mutation.Operations)
+	if len(vk.Mutation.Operations) > 0 {
+		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {
-			return app.ManifestKindVersion{}, fmt.Errorf("mutation operations error: %w", err)
+			return app.ManifestVersionKind{}, fmt.Errorf("mutation operations error: %w", err)
 		}
 		mver.Admission = &app.AdmissionCapabilities{
 			Mutation: &app.MutationCapability{
@@ -240,40 +231,50 @@ func processKindVersion(version codegen.KindVersion, kindName string, includeSch
 			},
 		}
 	}
-	if len(version.Validation.Operations) > 0 {
+	if len(vk.Validation.Operations) > 0 {
 		if mver.Admission == nil {
 			mver.Admission = &app.AdmissionCapabilities{}
 		}
-		operations, err := sanitizeAdmissionOperations(version.Validation.Operations)
+		operations, err := sanitizeAdmissionOperations(vk.Validation.Operations)
 		if err != nil {
-			return app.ManifestKindVersion{}, fmt.Errorf("validation operations error: %w", err)
+			return app.ManifestVersionKind{}, fmt.Errorf("validation operations error: %w", err)
 		}
 		mver.Admission.Validation = &app.ValidationCapability{
 			Operations: operations,
 		}
 	}
-	if len(version.CustomRoutes) > 0 {
+	if len(vk.CustomRoutes) > 0 {
 		mver.CustomRoutes = make(map[string]spec3.PathProps)
-		for sourcePath, sourceMethodsMap := range version.CustomRoutes {
+		for sourcePath, sourceMethodsMap := range vk.CustomRoutes {
 			targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 			if err != nil {
-				return app.ManifestKindVersion{}, fmt.Errorf("custom routes error for path '%s': %w", sourcePath, err)
+				return app.ManifestVersionKind{}, fmt.Errorf("custom routes error for path '%s': %w", sourcePath, err)
 			}
 			mver.CustomRoutes[sourcePath] = targetPathProps
 		}
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
-	if includeSchemas {
-		crd, err := KindVersionToCRDSpecVersion(version, kindName, true)
+	if includeSchema {
+		crd, err := KindVersionToCRDSpecVersion(codegen.KindVersion{
+			Version:                  version,
+			Schema:                   vk.Schema,
+			Codegen:                  vk.Codegen,
+			Served:                   vk.Served,
+			SelectableFields:         vk.SelectableFields,
+			Validation:               vk.Validation,
+			Mutation:                 vk.Mutation,
+			AdditionalPrinterColumns: vk.AdditionalPrinterColumns,
+			CustomRoutes:             vk.CustomRoutes,
+		}, vk.Kind, true)
 		if err != nil {
-			return app.ManifestKindVersion{}, err
+			return app.ManifestVersionKind{}, err
 		}
 		mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
 		if err != nil {
-			return app.ManifestKindVersion{}, fmt.Errorf("version schema error: %w", err)
+			return app.ManifestVersionKind{}, fmt.Errorf("version schema error: %w", err)
 		}
 	}
-	mver.SelectableFields = version.SelectableFields
+	mver.SelectableFields = vk.SelectableFields
 	return mver, nil
 }
 

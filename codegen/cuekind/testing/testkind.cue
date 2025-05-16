@@ -5,6 +5,12 @@ import "time"
 testManifest: {
 	appName: "test-app"
 	kinds: [testKind, testKind2]
+	versions: {
+		"v1": testManifestV1
+		"v2": testManifestV2
+		"v3": testManifestV3
+	}
+	preferredVersion: "v1"
 	extraPermissions: {
 		accessKinds: [{
 			group: "foo.bar"
@@ -15,6 +21,24 @@ testManifest: {
 	operatorURL: "https://foo.bar:8443"
 }
 
+testManifestV1: {
+	codegen: ts: enabled: false
+	kinds: [
+		testKind.versions["v1"] & testKind,
+		testKind2.versions["v1"] & testKind2
+	]
+}
+
+testManifestV2: {
+	codegen: ts: enabled: false
+	kinds: [testKind & testKind.versions["v2"]]
+}
+
+testManifestV3: {
+	codegen: ts: enabled: false
+	kinds: [testKind & testKind.versions["v3"]]
+}
+
 testKind: {
 	kind: "TestKind"
 	plural: "testkinds"
@@ -22,7 +46,6 @@ testKind: {
 	conversion: true
 	conversionWebhookProps: url: "http://foo.bar/convert"
 	current: "v1"
-	codegen: ts: enabled: false
 	versions: {
 		"v1": {
 			schema: {
