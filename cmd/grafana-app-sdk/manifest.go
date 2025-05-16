@@ -15,34 +15,6 @@ import (
 	k8sversion "k8s.io/apimachinery/pkg/version"
 )
 
-func addKindToManifestBytesCUE(manifestBytes []byte, kindFieldName string) ([]byte, error) {
-	// Rather than attempt to load and modify in-CUE (as this is complex and will also change the CUE the user has written)
-	// We will just modify the file at <kindpath>/manifest.cue and stick kindFieldName at the beginning of the `kinds` array
-	// This is slightly brittle, but it keeps decent compatibility with the current `kind add` functionality.
-	contents := string(manifestBytes)
-	expr := regexp.MustCompile(`(?m)^(\s*kinds\s*:)(.*)$`)
-	matches := expr.FindStringSubmatch(contents)
-	if len(matches) < 3 {
-		return nil, fmt.Errorf("could not find kinds field in manifest.cue")
-	}
-	kindsStr := matches[2]
-	if regexp.MustCompile(`^\s*\[`).MatchString(kindsStr) {
-		// Direct array, we can prepend our field
-		// Check if there's anything in the array
-		if regexp.MustCompile(`^\s\[\s*]`).MatchString(kindsStr) {
-			// Empty, just replace with our field
-			contents = expr.ReplaceAllString(contents, matches[1]+" ["+kindFieldName+"]")
-		} else {
-			kindsStr = regexp.MustCompile(`^\s*\[`).ReplaceAllString(kindsStr, " ["+kindFieldName+", ")
-			contents = expr.ReplaceAllString(contents, matches[1]+kindsStr)
-		}
-	} else {
-		// Not a simple list, prepend `[<fieldname>] + `
-		contents = expr.ReplaceAllString(contents, matches[1]+" ["+kindFieldName+"] + "+matches[2])
-	}
-	return []byte(contents), nil
-}
-
 var errNoVersions = errors.New("no versions found")
 
 func getManifestLatestVersion(manifestDir string) (string, error) {
@@ -83,7 +55,52 @@ func getManifestLatestVersion(manifestDir string) (string, error) {
 	return versions[0], nil
 }
 
-func addVersionedKindToManifestBytesCUE(manifestDir string, manifestFileName string, version string, fieldName string, pkg string) (codejen.Files, error) {
+func getManifestKindsForVersion(manifestDir, version string) ([]string, error) {
+	// Parse the CUE
+	inst := load.Instances(nil, &load.Config{
+		Dir:        manifestDir,
+		ModuleRoot: manifestDir,
+	})
+	if len(inst) == 0 {
+		return nil, fmt.Errorf("no data")
+	}
+	root := cuecontext.New().BuildInstance(inst[0])
+	if root.Err() != nil {
+		return nil, fmt.Errorf("failed to load manifest: %w", root.Err())
+	}
+
+	// Find manifest.versions and check if the version key already exists.
+	// The easiest way to do this is in the CUE, rather than the bytes
+	versionsObj := root.LookupPath(cue.MakePath(cue.Str("manifest"), cue.Str("versions")))
+	if versionsObj.Err() != nil {
+		return nil, fmt.Errorf("could not find versions field in manifest.cue: %w", versionsObj.Err())
+	}
+	it, err := versionsObj.Fields()
+	if err != nil {
+		return nil, fmt.Errorf("could not get versions fields: %w", err)
+	}
+	kinds := make([]string, 0)
+	for it.Next() {
+		if it.Selector().String() != version {
+			continue
+		}
+		kit, err := it.Value().LookupPath(cue.MakePath(cue.Str("kinds"))).List()
+		if err != nil {
+			return nil, fmt.Errorf("could not get kinds for version %s in manifest.cue: %w", version, err)
+		}
+		for kit.Next() {
+			kind, err := kit.Value().LookupPath(cue.MakePath(cue.Str("kind"))).String()
+			if err != nil {
+				return nil, fmt.Errorf("could not get kind for versions[\"%s\"].kinds[%s] in manifest.cue: %w", version, kit.Selector().String(), err)
+			}
+			kinds = append(kinds, kind)
+		}
+	}
+	return kinds, nil
+}
+
+//nolint:funlen
+func addVersionedKindToManifestBytesCUE(manifestDir string, manifestFileName string, version string, fieldName string) (codejen.Files, error) {
 	// Parse the CUE
 	inst := load.Instances(nil, &load.Config{
 		Dir:        manifestDir,
@@ -143,9 +160,7 @@ func addVersionedKindToManifestBytesCUE(manifestDir string, manifestFileName str
 			// get the remainder of the line
 			restOfLine := ""
 			lineMatches := regexp.MustCompile(`^(\s*\{)(.*)$`).FindStringSubmatch(versionsStr)
-			if len(lineMatches) < 3 {
-				// Nothing else to match after the line?
-			} else {
+			if len(lineMatches) == 3 {
 				restOfLine = lineMatches[2]
 			}
 			contents = versionsMatcher.ReplaceAllString(contents, matches[1]+" {\n\""+version+"\":"+version+"\n"+restOfLine)
@@ -154,11 +169,11 @@ func addVersionedKindToManifestBytesCUE(manifestDir string, manifestFileName str
 			contents = versionsMatcher.ReplaceAllString(contents, matches[1]+" {\""+version+"\": "+version+"} + "+matches[2])
 		}
 
-		contents = contents + fmt.Sprintf(`
+		contents = fmt.Sprintf(`%s
 %s: {
 	kinds: [%s]
 }
-`, version, fieldName)
+`, contents, version, fieldName)
 
 		return codejen.Files{{
 			RelativePath: manifestFileName,
@@ -180,7 +195,7 @@ func addVersionedKindToManifestBytesCUE(manifestDir string, manifestFileName str
 		if len(loc) == 0 || loc[0] <= 0 {
 			return nil, fmt.Errorf("could not find versions[\"%s\"] field in %s.cue", version, manifestFileName)
 		}
-		prev = prev + next[:loc[1]]
+		prev += next[:loc[1]]
 		next = next[loc[1]:]
 		next, err = addToFirstKindsSection(next, fieldName)
 		if err != nil {
@@ -232,12 +247,10 @@ func addToFirstKindsSection(contents string, toAdd string) (string, error) {
 		if regexp.MustCompile(`^\s\[\s*]`).MatchString(kindsStr) {
 			// Empty, just replace with our field
 			return contents[:loc0] + "[" + toAdd + "]" + contents[loc[1]:], nil
-		} else {
-			kindsStr = regexp.MustCompile(`^\s*\[`).ReplaceAllString(kindsStr, " ["+toAdd+", ")
-			return contents[:loc0] + kindsStr + contents[loc[1]:], nil
 		}
-	} else {
-		// Not a simple list, prepend `[<fieldname>] + `
-		return contents[:loc0] + "kinds: [" + toAdd + "] + " + kindsStr + contents[loc[1]:], nil
+		kindsStr = regexp.MustCompile(`^\s*\[`).ReplaceAllString(kindsStr, " ["+toAdd+", ")
+		return contents[:loc0] + kindsStr + contents[loc[1]:], nil
 	}
+	// Not a simple list, prepend `[<fieldname>] + `
+	return contents[:loc0] + "kinds: [" + toAdd + "] + " + kindsStr + contents[loc[1]:], nil
 }

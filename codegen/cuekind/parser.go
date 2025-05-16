@@ -34,6 +34,11 @@ type Parser struct {
 	oldManifestDef *cue.Value
 }
 
+type ParseConfig struct {
+	GenOperatorState bool
+	UseOldKinds      bool
+}
+
 type parser[T any] struct {
 	parseFunc func(fs.FS, ...string) ([]T, error)
 }
@@ -42,7 +47,7 @@ func (p *parser[T]) Parse(f fs.FS, args ...string) ([]T, error) {
 	return p.parseFunc(f, args...)
 }
 
-func (p *Parser) ManifestParser(genOperatorState bool, useOldKinds bool) codegen.Parser[codegen.AppManifest] {
+func (p *Parser) ManifestParser(cfg ParseConfig) codegen.Parser[codegen.AppManifest] {
 	return &parser[codegen.AppManifest]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.AppManifest, error) {
 			if len(s) == 0 {
@@ -50,7 +55,7 @@ func (p *Parser) ManifestParser(genOperatorState bool, useOldKinds bool) codegen
 			}
 			manifests := make([]codegen.AppManifest, 0, len(s))
 			for _, selector := range s {
-				m, err := p.ParseManifest(f, selector, genOperatorState, useOldKinds)
+				m, err := p.ParseManifest(f, selector, cfg)
 				if err != nil {
 					return nil, err
 				}
@@ -66,24 +71,21 @@ func (p *Parser) ManifestParser(genOperatorState bool, useOldKinds bool) codegen
 // rather than loading the selector(s) as kinds.
 //
 //nolint:revive
-func (p *Parser) KindParser(useManifest bool, genOperatorState bool, useOldKinds bool) codegen.Parser[codegen.Kind] {
+func (p *Parser) KindParser(cfg ParseConfig) codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(f fs.FS, s ...string) ([]codegen.Kind, error) {
-			if useManifest {
-				if len(s) == 0 {
-					s = []string{"manifest"}
-				}
-				kinds := make([]codegen.Kind, 0)
-				for _, selector := range s {
-					m, err := p.ParseManifest(f, selector, genOperatorState, useOldKinds)
-					if err != nil {
-						return nil, err
-					}
-					kinds = append(kinds, m.Kinds()...)
-				}
-				return kinds, nil
+			if len(s) == 0 {
+				s = []string{"manifest"}
 			}
-			return nil, fmt.Errorf("parsing kinds without manifest no longer supported")
+			kinds := make([]codegen.Kind, 0)
+			for _, selector := range s {
+				m, err := p.ParseManifest(f, selector, cfg)
+				if err != nil {
+					return nil, err
+				}
+				kinds = append(kinds, m.Kinds()...)
+			}
+			return kinds, nil
 		},
 	}
 }
@@ -92,7 +94,7 @@ func (p *Parser) KindParser(useManifest bool, genOperatorState bool, useOldKinds
 // returning the parsed codegen.AppManifest object or an error.
 //
 //nolint:funlen
-func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperatorState bool, useOldKinds bool) (codegen.AppManifest, error) {
+func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, cfg ParseConfig) (codegen.AppManifest, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -134,12 +136,12 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 	}
 
 	// Load the kind definition (this function does this only once regardless of how many times the user calls Parse())
-	err = p.loadKindDefinition(genOperatorState)
+	err = p.loadKindDefinition(cfg.GenOperatorState)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
 
-	if useOldKinds {
+	if cfg.UseOldKinds {
 		val = val.Unify(*p.oldManifestDef)
 	} else {
 		val = val.Unify(*p.manifestDef)
@@ -159,7 +161,7 @@ func (p *Parser) ParseManifest(files fs.FS, manifestSelector string, genOperator
 		Props: manifestProps,
 	}
 
-	if useOldKinds {
+	if cfg.UseOldKinds {
 		err = p.parseManifestKinds(manifest, val)
 	} else {
 		err = p.parseManifestVersions(manifest, val)
@@ -274,7 +276,7 @@ func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Va
 	}
 	manifest.Props.PreferredVersion = pref
 	manifest.AllVersions = make([]codegen.Version, 0)
-	for key, _ := range vers {
+	for key := range vers {
 		manifest.AllVersions = append(manifest.AllVersions, vers[key])
 	}
 	slices.SortFunc(manifest.AllVersions, func(a, b codegen.Version) int {

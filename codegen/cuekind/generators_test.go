@@ -27,7 +27,9 @@ func TestCRDGenerator(t *testing.T) {
 
 	parser, err := NewParser()
 	require.Nil(t, err)
-	kinds, err := parser.KindParser(true, true).Parse(os.DirFS(TestCUEDirectory), "customManifest", "testManifest")
+	kinds, err := parser.KindParser(ParseConfig{
+		GenOperatorState: true,
+	}).Parse(os.DirFS(TestCUEDirectory), "customManifest", "testManifest")
 	require.Nil(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
@@ -55,9 +57,13 @@ func TestResourceGenerator(t *testing.T) {
 
 	parser, err := NewParser()
 	require.Nil(t, err)
-	kinds, err := parser.KindParser(true, true).Parse(os.DirFS(TestCUEDirectory), "customManifest")
+	kinds, err := parser.KindParser(ParseConfig{
+		GenOperatorState: true,
+	}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 	require.Nil(t, err)
-	sameGroupKinds, err := parser.KindParser(true, true).Parse(os.DirFS(TestCUEDirectory), "testManifest")
+	sameGroupKinds, err := parser.KindParser(ParseConfig{
+		GenOperatorState: true,
+	}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 	require.Nil(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
@@ -98,7 +104,9 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
-		kinds, err := parser.KindParser(true, true).Parse(os.DirFS(TestCUEDirectory), "customManifest")
+		kinds, err := parser.KindParser(ParseConfig{
+			GenOperatorState: true,
+		}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 		require.Nil(t, err)
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
 		require.Nil(t, err)
@@ -114,7 +122,9 @@ func TestManifestGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("resource", func(t *testing.T) {
-		kinds, err := parser.ManifestParser(true).Parse(os.DirFS(TestCUEDirectory), "testManifest")
+		kinds, err := parser.ManifestParser(ParseConfig{
+			GenOperatorState: true,
+		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
 		files, err := ManifestGenerator(yaml.Marshal, "yaml", true).Generate(kinds...)
 		require.Nil(t, err)
@@ -131,7 +141,9 @@ func TestManifestGoGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
-		kinds, err := parser.ManifestParser(true).Parse(os.DirFS(TestCUEDirectory), "testManifest")
+		kinds, err := parser.ManifestParser(ParseConfig{
+			GenOperatorState: true,
+		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
 		files, err := ManifestGoGenerator("groupbygroup", true, "codegen-tests", "pkg/generated", true).Generate(kinds...)
 		require.Nil(t, err)
@@ -143,7 +155,9 @@ func TestManifestGoGenerator(t *testing.T) {
 	})
 
 	t.Run("group by kind", func(t *testing.T) {
-		kinds, err := parser.ManifestParser(true).Parse(os.DirFS(TestCUEDirectory), "customManifest")
+		kinds, err := parser.ManifestParser(ParseConfig{
+			GenOperatorState: true,
+		}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 		require.Nil(t, err)
 		files, err := ManifestGoGenerator("groupbykind", true, "codegen-tests", "pkg/generated", false).Generate(kinds...)
 		require.Nil(t, err)
