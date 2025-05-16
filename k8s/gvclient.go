@@ -325,8 +325,13 @@ func (g *groupVersionClient) patch(
 	if err != nil {
 		return err
 	}
-	req := g.client.Patch(types.JSONPatchType).Resource(plural).
-		Name(identifier.Name).Body(patchBytes)
+	sr := "spec"
+	req := g.client.Patch(types.JSONPatchType).Resource(plural)
+	if opts.Subresource != "" {
+		req = req.SubResource(opts.Subresource)
+		sr = opts.Subresource
+	}
+	req = req.Name(identifier.Name).Body(patchBytes)
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		req = req.Namespace(identifier.Namespace)
 	}
@@ -336,7 +341,7 @@ func (g *groupVersionClient) patch(
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
-	g.logRequestDuration(time.Since(start), sc, "PATCH", plural, "spec")
+	g.logRequestDuration(time.Since(start), sc, "PATCH", plural, sr)
 	span.SetAttributes(
 		attribute.Int("http.response.status_code", sc),
 		attribute.String("http.request.method", http.MethodPatch),
@@ -344,7 +349,7 @@ func (g *groupVersionClient) patch(
 		attribute.String("server.port", req.URL().Port()),
 		attribute.String("url.full", req.URL().String()),
 	)
-	g.incRequestCounter(sc, "PATCH", plural, "spec")
+	g.incRequestCounter(sc, "PATCH", plural, sr)
 	if err != nil {
 		err = ParseKubernetesError(raw, sc, err)
 		span.SetStatus(codes.Error, err.Error())
