@@ -3,16 +3,19 @@ package simple
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestApp_Convert(t *testing.T) {
@@ -95,7 +98,7 @@ func TestApp_Convert(t *testing.T) {
 	})
 }
 
-func TestApp_CallResourceCustomRoute(t *testing.T) {
+func TestApp_CallCustomRoute(t *testing.T) {
 	kind := testKind()
 	id := resource.FullIdentifier{
 		Group:     kind.Group(),
@@ -107,12 +110,12 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 
 	t.Run("no kind", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "foo",
+			Path:               "foo",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, resp)
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
@@ -123,8 +126,8 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				CustomRoutes: AppCustomRouteHandlers{
 					AppCustomRoute{
 						Path: "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
@@ -141,8 +144,8 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 				CustomRoutes: AppCustomRouteHandlers{
 					AppCustomRoute{
 						Method: AppCustomRouteMethodGet,
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
@@ -205,18 +208,18 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 					AppCustomRoute{
 						Method: AppCustomRouteMethodGet,
 						Path:   "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "foo",
+			Path:               "foo",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, resp)
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
@@ -228,18 +231,18 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 					AppCustomRoute{
 						Method: AppCustomRouteMethodGet,
 						Path:   "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return nil, errors.New("error")
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						return errors.New("error")
 					},
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "baz",
+			Path:               "baz",
 			Method:             http.MethodPost,
 		})
-		assert.Nil(t, resp)
 		assert.Equal(t, app.ErrCustomRouteNotFound, err)
 	})
 
@@ -254,24 +257,62 @@ func TestApp_CallResourceCustomRoute(t *testing.T) {
 					AppCustomRoute{
 						Method: AppCustomRouteMethodPost,
 						Path:   "baz",
-					}: func(ctx context.Context, request *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-						return &app.ResourceCustomRouteResponse{
-							StatusCode: expectedStatus,
-							Body:       expectedBody,
-						}, expectedErr
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						writer.WriteHeader(expectedStatus)
+						writer.Write(expectedBody)
+						return expectedErr
 					},
 				},
 			}},
 		})
-		resp, err := a.CallResourceCustomRoute(context.TODO(), &app.ResourceCustomRouteRequest{
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
 			ResourceIdentifier: id,
-			SubresourcePath:    "baz",
+			Path:               "baz",
 			Method:             http.MethodPost,
 		})
 		assert.Equal(t, expectedErr, err)
-		assert.NotNil(t, resp)
-		assert.Equal(t, expectedStatus, resp.StatusCode)
-		assert.Equal(t, expectedBody, resp.Body)
+		assert.Equal(t, expectedStatus, rw.Result().StatusCode)
+		resBody, err := io.ReadAll(rw.Result().Body)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedBody, resBody)
+	})
+	t.Run("success, plural instead of kind", func(t *testing.T) {
+		expectedErr := errors.New("error")
+		expectedStatus := http.StatusConflict
+		expectedBody := []byte("foo")
+		a := createTestApp(t, AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				CustomRoutes: AppCustomRouteHandlers{
+					AppCustomRoute{
+						Method: AppCustomRouteMethodPost,
+						Path:   "baz",
+					}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+						writer.WriteHeader(expectedStatus)
+						writer.Write(expectedBody)
+						return expectedErr
+					},
+				},
+			}},
+		})
+		rw := httptest.NewRecorder()
+		err := a.CallCustomRoute(context.TODO(), rw, &app.CustomRouteRequest{
+			ResourceIdentifier: resource.FullIdentifier{
+				Name:      id.Name,
+				Namespace: id.Namespace,
+				Group:     kind.Group(),
+				Version:   kind.Version(),
+				Plural:    kind.Plural(),
+			},
+			Path:   "baz",
+			Method: http.MethodPost,
+		})
+		require.Equal(t, expectedErr, err)
+		assert.Equal(t, expectedStatus, rw.Result().StatusCode)
+		resBody, err := io.ReadAll(rw.Result().Body)
+		assert.Nil(t, err)
+		assert.Equal(t, expectedBody, resBody)
 	})
 }
 
