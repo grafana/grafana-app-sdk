@@ -66,27 +66,49 @@ issue.spec.status = newStatus;
 ```
 
 Finally, we have to display the information. We define one more function:
-```TypeScript
+```tsx
 const getActions = (issue: Issue) => {
-    if(issue.spec.status === 'open') {
+    if (issue.spec.status === 'open') {
         return (
-        <Card.Actions>
-            <Button key="mark-in-progress" onClick={() => {updateStatus(issue, 'in_progress')}}>Start Progress</Button>
-        </Card.Actions>
-        )
-    } else if(issue.spec.status === 'in_progress') {
+            <Card.Actions>
+                <Button
+                    key="mark-in-progress"
+                    onClick={() => {
+                        updateStatus(issue, 'in_progress');
+                    }}
+                >
+                    Start Progress
+                </Button>
+            </Card.Actions>
+        );
+    } else if (issue.spec.status === 'in_progress') {
         return (
-        <Card.Actions>
-            <Button key="mark-open" onClick={() => {updateStatus(issue, 'open')}}>Stop Progress</Button>
-            <Button key="mark-closed" onClick={() => {updateStatus(issue, 'closed')}}>Complete</Button>
-        </Card.Actions>
-        )
+            <Card.Actions>
+                <Button
+                    key="mark-open"
+                    onClick={() => {
+                        updateStatus(issue, 'open');
+                    }}
+                >
+                    Stop Progress
+                </Button>
+                <Button
+                    key="mark-closed"
+                    onClick={() => {
+                        updateStatus(issue, 'closed');
+                    }}
+                >
+                    Complete
+                </Button>
+            </Card.Actions>
+        );
     } else {
-        return <Card.Actions></Card.Actions>
+        return <Card.Actions></Card.Actions>;
     }
-}
+};
+
 ```
-That we'll use in our display output to show the correct Issue status and display button(s) to transition its status. Then it's just a matter of returning the appropriate HTML in our `return` function, populating the data from `issuesData` where appropriate, which we know will get set to the list of issues from the API server.
+We'll use this information in the display output to show the current issue status and to display the button(s) used to transition its status. After that, it’s simply a matter of returning the appropriate HTML from our component, populating it with data from `issuesData`, which will contain the list of issues retrieved from the API server.
 
 ## Redeploy
 
@@ -94,7 +116,7 @@ Now we want to redeploy our plugin front-end to see the changes. Since we don't 
 ```bash
 make build/plugin-frontend
 ```
-After that completes, we can redploy to our active local environment with
+After that is completed, we can redeploy to our active local environment with
 ```bash
 make local/deploy_plugin
 ```
