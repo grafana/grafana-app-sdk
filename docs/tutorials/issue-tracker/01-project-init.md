@@ -70,7 +70,7 @@ $ tree .
 
 As we can see from the command output, and the `tree` command, the `project init` command created a go module in the current directory, a Makefile, and several other directories. 
 * `cmd/operator` is an empty place for us to put the operator binary code
-* `local` is the initial setup for a local development environment, which we'll talk about in [Deployment and Running Locally](deployment.md)
+* `local` is the initial setup for a local development environment, which we'll talk about in [Deployment and Running Locally](05-local-deployment.md)
 * `pkg` is the empty directory for all our go packages
 * `plugin` is an empty directory where our grafana plugin code will live
 * `kinds` contains a CUE module, and it's where we'll be [Defining Our Kinds](02-defining-our-kinds.md) next
