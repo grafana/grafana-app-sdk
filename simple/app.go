@@ -100,6 +100,7 @@ type App struct {
 	runner             *app.MultiRunner
 	clientGenerator    resource.ClientGenerator
 	kinds              map[string]AppManagedKind
+	gvrToGVK           map[string]string
 	internalKinds      map[string]resource.Kind
 	cfg                AppConfig
 	converters         map[string]Converter
@@ -218,7 +219,7 @@ type AppCustomRoute struct {
 	Path   string
 }
 
-type AppCustomRouteHandler func(context.Context, *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error)
+type AppCustomRouteHandler func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error
 
 type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 
@@ -231,6 +232,7 @@ func NewApp(config AppConfig) (*App, error) {
 		runner:             app.NewMultiRunner(),
 		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
 		kinds:              make(map[string]AppManagedKind),
+		gvrToGVK:           make(map[string]string),
 		internalKinds:      make(map[string]resource.Kind),
 		converters:         make(map[string]Converter),
 		customRoutes:       make(map[string]AppCustomRouteHandler),
@@ -332,6 +334,7 @@ func (a *App) AddRunnable(runner app.Runnable) {
 
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
+	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
@@ -344,7 +347,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 		if handler == nil {
 			return fmt.Errorf("custom route cannot have a nil handler")
 		}
-		key := a.customRouteHandlerKey(kind.Kind, string(route.Method), route.Path)
+		key := a.customRouteHandlerKey(&kind.Kind, string(route.Method), route.Path, kind.Kind.Scope())
 		if _, ok := a.customRoutes[key]; ok {
 			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
 		}
@@ -500,17 +503,30 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 	}, err
 }
 
-// CallResourceCustomRoute implements app.App and handles custom resource route requests
-func (a *App) CallResourceCustomRoute(ctx context.Context, req *app.ResourceCustomRouteRequest) (*app.ResourceCustomRouteResponse, error) {
-	k, ok := a.kinds[gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)]
+// CallCustomRoute implements app.App and handles custom resource route requests
+func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteResponseWriter, req *app.CustomRouteRequest) error {
+	if req.ResourceIdentifier.Kind == "" && req.ResourceIdentifier.Plural == "" {
+		scope := resource.NamespacedScope
+		if req.ResourceIdentifier.Namespace == "" {
+			scope = resource.ClusterScope
+		}
+		if handler, ok := a.customRoutes[a.customRouteHandlerKey(nil, req.Method, req.Path, scope)]; ok {
+			return handler(ctx, writer, req)
+		}
+	}
+	key := gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)
+	if req.ResourceIdentifier.Kind == "" {
+		key = a.gvrToGVK[gvr(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Plural)]
+	}
+	k, ok := a.kinds[key]
 	if !ok {
 		// TODO: still return the not found, or just return NotImplemented?
-		return nil, app.ErrCustomRouteNotFound
+		return app.ErrCustomRouteNotFound
 	}
-	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind, req.Method, req.SubresourcePath)]; ok {
-		return handler(ctx, req)
+	if handler, ok := a.customRoutes[a.customRouteHandlerKey(&k.Kind, req.Method, req.Path, k.Kind.Scope())]; ok {
+		return handler(ctx, writer, req)
 	}
-	return nil, app.ErrCustomRouteNotFound
+	return app.ErrCustomRouteNotFound
 }
 
 func (a *App) getFinalizer(sch resource.Schema) string {
@@ -533,8 +549,11 @@ func (a *App) getInProgressFinalizer(sch resource.Schema) string {
 	return fmt.Sprintf("%s-wip", sch.Plural())
 }
 
-func (*App) customRouteHandlerKey(kind resource.Kind, method string, path string) string {
-	return fmt.Sprintf("%s/%s/%s/%s/%s", kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
+func (*App) customRouteHandlerKey(kind *resource.Kind, method string, path string, scope resource.SchemaScope) string {
+	if kind == nil {
+		return fmt.Sprintf("%s/%s/%s", scope, path, method)
+	}
+	return fmt.Sprintf("%s/%s/%s/%s/%s/%s", kind.Scope(), kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
 }
 
 type syncWatcher interface {
@@ -544,6 +563,10 @@ type syncWatcher interface {
 
 func gvk(group, version, kind string) string {
 	return fmt.Sprintf("%s/%s/%s", group, version, kind)
+}
+
+func gvr(group, version, plural string) string {
+	return fmt.Sprintf("%s/%s/%s", group, version, plural)
 }
 
 type k8sRunner interface {
