@@ -62,19 +62,44 @@
                                     "group": {
                                         "type": "string"
                                     },
-                                    "kinds": {
+                                    "operator": {
+                                        "description": "Operator has information about the operator being run for the app, if there is one.\nWhen present, it can indicate to the API server the URL and paths for webhooks, if applicable.\nThis is only required if you run your app as an operator and any of your kinds support webhooks for validation,\nmutation, or conversion.",
+                                        "properties": {
+                                            "url": {
+                                                "description": "URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).\nIt should be a URL which the API server can access.",
+                                                "type": "string"
+                                            },
+                                            "webhooks": {
+                                                "description": "Webhooks contains information about the various webhook paths.",
+                                                "properties": {
+                                                    "conversionPath": {
+                                                        "default": "/convert",
+                                                        "type": "string"
+                                                    },
+                                                    "mutationPath": {
+                                                        "default": "/mutate",
+                                                        "type": "string"
+                                                    },
+                                                    "validationPath": {
+                                                        "default": "/validate",
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "preferredVersion": {
+                                        "description": "PreferredVersion is the preferred version for API use. If empty, it will use the version of the last entry in versions.\nFor CRDs, this also dictates which version is used for storage.",
+                                        "type": "string"
+                                    },
+                                    "versions": {
+                                        "description": "Versions is the list of versions for this manifest, in order.",
                                         "items": {
                                             "properties": {
-                                                "conversion": {
-                                                    "type": "boolean"
-                                                },
-                                                "kind": {
-                                                    "type": "string"
-                                                },
-                                                "scope": {
-                                                    "type": "string"
-                                                },
-                                                "versions": {
+                                                "kinds": {
+                                                    "description": "Kinds is a list of all the kinds served in this version.\nGenerally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)\nor newly added (and didn't exist for older versions).",
                                                     "items": {
                                                         "properties": {
                                                             "additionalPrinterColumns": {
@@ -162,12 +187,31 @@
                                                                 },
                                                                 "type": "object"
                                                             },
-                                                            "name": {
+                                                            "conversion": {
+                                                                "default": false,
+                                                                "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
+                                                                "type": "boolean"
+                                                            },
+                                                            "kind": {
+                                                                "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
+                                                                "type": "string"
+                                                            },
+                                                            "plural": {
+                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
                                                                 "type": "string"
                                                             },
                                                             "schema": {
                                                                 "type": "object",
                                                                 "x-kubernetes-preserve-unknown-fields": true
+                                                            },
+                                                            "scope": {
+                                                                "default": "Namespaced",
+                                                                "description": "Scope dictates the scope of the kind. This field must be the same for all versions of the kind.\nDifferent values will result in an error or undefined behavior.",
+                                                                "enum": [
+                                                                    "Namespaced",
+                                                                    "Cluster"
+                                                                ],
+                                                                "type": "string"
                                                             },
                                                             "selectableFields": {
                                                                 "items": {
@@ -177,57 +221,37 @@
                                                             }
                                                         },
                                                         "required": [
-                                                            "name",
+                                                            "kind",
+                                                            "scope",
                                                             "schema"
                                                         ],
                                                         "type": "object"
                                                     },
                                                     "type": "array"
+                                                },
+                                                "name": {
+                                                    "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
+                                                    "type": "string"
+                                                },
+                                                "served": {
+                                                    "default": true,
+                                                    "description": "Served dictates whether this version is served by the API server.\nA version cannot be removed from a manifest until it is no longer served.",
+                                                    "type": "boolean"
                                                 }
                                             },
                                             "required": [
-                                                "kind",
-                                                "scope",
-                                                "conversion",
-                                                "versions"
+                                                "name",
+                                                "kinds"
                                             ],
                                             "type": "object"
                                         },
                                         "type": "array"
-                                    },
-                                    "operator": {
-                                        "description": "Operator has information about the operator being run for the app, if there is one.\nWhen present, it can indicate to the API server the URL and paths for webhooks, if applicable.\nThis is only required if you run your app as an operator and any of your kinds support webhooks for validation,\nmutation, or conversion.",
-                                        "properties": {
-                                            "url": {
-                                                "description": "URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).\nIt should be a URL which the API server can access.",
-                                                "type": "string"
-                                            },
-                                            "webhooks": {
-                                                "description": "Webhooks contains information about the various webhook paths.",
-                                                "properties": {
-                                                    "conversionPath": {
-                                                        "default": "/convert",
-                                                        "type": "string"
-                                                    },
-                                                    "mutationPath": {
-                                                        "default": "/mutate",
-                                                        "type": "string"
-                                                    },
-                                                    "validationPath": {
-                                                        "default": "/validate",
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "type": "object"
-                                            }
-                                        },
-                                        "type": "object"
                                     }
                                 },
                                 "required": [
                                     "appName",
                                     "group",
-                                    "kinds"
+                                    "versions"
                                 ],
                                 "type": "object"
                             },

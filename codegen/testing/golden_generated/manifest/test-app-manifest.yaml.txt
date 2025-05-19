@@ -5,11 +5,13 @@ metadata:
 spec:
     appName: test-app
     group: testapp.ext.grafana.com
-    kinds:
-        - kind: TestKind
-          scope: Namespaced
-          versions:
-            - name: v1
+    versions:
+        - name: v1
+          served: true
+          kinds:
+            - kind: TestKind
+              plural: TestKinds
+              scope: Namespaced
               admission:
                 validation:
                     operations:
@@ -60,13 +62,64 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-            - name: v2
+              conversion: true
+            - kind: TestKind2
+              plural: TestKind2s
+              scope: Namespaced
+              schema:
+                spec:
+                    properties:
+                        testField:
+                            type: string
+                    required:
+                        - testField
+                    type: object
+                status:
+                    properties:
+                        additionalFields:
+                            description: additionalFields is reserved for future use
+                            type: object
+                            x-kubernetes-preserve-unknown-fields: true
+                        operatorStates:
+                            additionalProperties:
+                                properties:
+                                    descriptiveState:
+                                        description: descriptiveState is an optional more descriptive state field which has no requirements on format
+                                        type: string
+                                    details:
+                                        description: details contains any extra information that is operator-specific
+                                        type: object
+                                        x-kubernetes-preserve-unknown-fields: true
+                                    lastEvaluation:
+                                        description: lastEvaluation is the ResourceVersion last evaluated
+                                        type: string
+                                    state:
+                                        description: |-
+                                            state describes the state of the lastEvaluation.
+                                            It is limited to three possible states for machine evaluation.
+                                        enum:
+                                            - success
+                                            - in_progress
+                                            - failed
+                                        type: string
+                                required:
+                                    - lastEvaluation
+                                    - state
+                                type: object
+                            description: |-
+                                operatorStates is a map of operator ID to operator state evaluations.
+                                Any operator which consumes this kind SHOULD add its state evaluation information to this field.
+                            type: object
+                    type: object
+              conversion: false
+        - name: v2
+          served: true
+          kinds:
+            - kind: TestKind
+              plural: TestKinds
+              scope: Namespaced
               admission:
                 validation:
-                    operations:
-                        - CREATE
-                        - UPDATE
-                mutation:
                     operations:
                         - CREATE
                         - UPDATE
@@ -123,13 +176,15 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-            - name: v3
+              conversion: true
+        - name: v3
+          served: true
+          kinds:
+            - kind: TestKind
+              plural: TestKinds
+              scope: Namespaced
               admission:
                 validation:
-                    operations:
-                        - CREATE
-                        - UPDATE
-                mutation:
                     operations:
                         - CREATE
                         - UPDATE
@@ -1178,57 +1233,8 @@ spec:
                     trace: null
                     servers: []
                     parameters: []
-          conversion: true
-        - kind: TestKind2
-          scope: Namespaced
-          versions:
-            - name: v1
-              schema:
-                spec:
-                    properties:
-                        testField:
-                            type: string
-                    required:
-                        - testField
-                    type: object
-                status:
-                    properties:
-                        additionalFields:
-                            description: additionalFields is reserved for future use
-                            type: object
-                            x-kubernetes-preserve-unknown-fields: true
-                        operatorStates:
-                            additionalProperties:
-                                properties:
-                                    descriptiveState:
-                                        description: descriptiveState is an optional more descriptive state field which has no requirements on format
-                                        type: string
-                                    details:
-                                        description: details contains any extra information that is operator-specific
-                                        type: object
-                                        x-kubernetes-preserve-unknown-fields: true
-                                    lastEvaluation:
-                                        description: lastEvaluation is the ResourceVersion last evaluated
-                                        type: string
-                                    state:
-                                        description: |-
-                                            state describes the state of the lastEvaluation.
-                                            It is limited to three possible states for machine evaluation.
-                                        enum:
-                                            - success
-                                            - in_progress
-                                            - failed
-                                        type: string
-                                required:
-                                    - lastEvaluation
-                                    - state
-                                type: object
-                            description: |-
-                                operatorStates is a map of operator ID to operator state evaluations.
-                                Any operator which consumes this kind SHOULD add its state evaluation information to this field.
-                            type: object
-                    type: object
-          conversion: false
+              conversion: true
+    preferredVersion: ""
     extraPermissions:
         accessKinds:
             - group: foo.bar
@@ -1242,4 +1248,4 @@ spec:
         webhooks:
             conversionPath: /convert
             validationPath: /validate
-            mutationPath: /mutate
+            mutationPath: ""

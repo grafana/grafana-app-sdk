@@ -283,26 +283,26 @@ func NewApp(config AppConfig) (*App, error) {
 // indicates, no error will be returned.
 // This method can be used after initializing an app to verify it matches the loaded app.ManifestData from the app runner.
 func (a *App) ValidateManifest(manifest app.ManifestData) error {
-	for _, k := range manifest.Kinds {
-		if _, ok := a.converters[schema.GroupKind{Group: manifest.Group, Kind: k.Kind}.String()]; !ok && k.Conversion {
-			return fmt.Errorf("kind %s has conversion enabled but no converter is registered", k.Kind)
-		}
-		for _, v := range k.Versions {
+	for _, v := range manifest.Versions {
+		for _, k := range v.Kinds {
+			if _, ok := a.converters[schema.GroupKind{Group: manifest.Group, Kind: k.Kind}.String()]; !ok && k.Conversion {
+				return fmt.Errorf("kind %s has conversion enabled but no converter is registered", k.Kind)
+			}
 			kind, ok := a.kinds[gvk(manifest.Group, v.Name, k.Kind)]
 			if !ok {
 				return fmt.Errorf("kind %s/%s exists in manifest but is not managed by the app", k.Kind, v.Name)
 			}
-			if v.Admission != nil && v.Admission.SupportsAnyValidation() && kind.Validator == nil {
+			if k.Admission != nil && k.Admission.SupportsAnyValidation() && kind.Validator == nil {
 				return fmt.Errorf("kind %s/%s supports validation but has no validator", k.Kind, v.Name)
 			}
-			if v.Admission != nil && v.Admission.SupportsAnyMutation() && kind.Mutator == nil {
+			if k.Admission != nil && k.Admission.SupportsAnyMutation() && kind.Mutator == nil {
 				return fmt.Errorf("kind %s/%s supports mutation but has no mutator", k.Kind, v.Name)
 			}
 			// Check for the inverse
-			if kind.Validator != nil && (v.Admission == nil || !v.Admission.SupportsAnyValidation()) {
+			if kind.Validator != nil && (k.Admission == nil || !k.Admission.SupportsAnyValidation()) {
 				return fmt.Errorf("kind %s/%s does not support validation, but has a validator", k.Kind, v.Name)
 			}
-			if kind.Mutator != nil && (v.Admission == nil || !v.Admission.SupportsAnyMutation()) {
+			if kind.Mutator != nil && (k.Admission == nil || !k.Admission.SupportsAnyMutation()) {
 				return fmt.Errorf("kind %s/%s does not support mutation, but has a mutator", k.Kind, v.Name)
 			}
 		}

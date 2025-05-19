@@ -2,15 +2,113 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
+
+func TestManifestData_Validate(t *testing.T) {
+	tests := []struct {
+		name        string
+		data        ManifestData
+		expectedErr error
+	}{{
+		name: "valid (empty manifest)",
+		data: ManifestData{},
+	}, {
+		name: "plural mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "bars",
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'")),
+	}, {
+		name: "scope mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:  "Foo",
+					Scope: "Namespaced",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:  "Foo",
+					Scope: "Cluster",
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'")),
+	}, {
+		name: "conversion mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Conversion: true,
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Conversion: false,
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}, {
+		name: "plural, scope, and conversion mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Plural:     "foos",
+					Scope:      "Namespaced",
+					Conversion: true,
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Plural:     "bars",
+					Scope:      "Cluster",
+					Conversion: false,
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedErr, test.data.Validate())
+		})
+	}
+}
 
 func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 	gvk := schema.GroupVersionKind{

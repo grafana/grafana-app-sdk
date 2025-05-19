@@ -424,11 +424,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState), os.DirFS(sourcePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{GenOperatorState: genOperatorState}), os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser(genOperatorState)
+		manifestParser = parser.ManifestParser(cuekind.ParseConfig{GenOperatorState: genOperatorState})
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}

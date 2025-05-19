@@ -200,11 +200,11 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 	// Slightly hacky multiple generators as an intermediary while we move to a better system.
 	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
-	generatorForKinds, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, cfg.GenOperatorState), modFS)
+	generatorForKinds, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{GenOperatorState: cfg.GenOperatorState}), modFS)
 	if err != nil {
 		return nil, err
 	}
-	generatorForManifest, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(cfg.GenOperatorState), modFS)
+	generatorForManifest, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(cuekind.ParseConfig{GenOperatorState: cfg.GenOperatorState}), modFS)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +287,7 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	if err != nil {
 		return nil, err
 	}
-	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, cfg.GenOperatorState), modFS)
+	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{GenOperatorState: cfg.GenOperatorState}), modFS)
 	if err != nil {
 		return nil, err
 	}

@@ -29,11 +29,11 @@ var (
 	manifest = app.NewEmbeddedManifest(app.ManifestData{
 		AppName: "example-app",
 		Group:   kind.Group(),
-		Kinds: []app.ManifestKind{{
-			Kind:  kind.Kind(),
-			Scope: string(kind.Scope()),
-			Versions: []app.ManifestKindVersion{{
-				Name: kind.Version(),
+		Versions: []app.ManifestVersion{{
+			Name: kind.Version(),
+			Kinds: []app.ManifestVersionKind{{
+				Kind:  kind.Kind(),
+				Scope: string(kind.Scope()),
 			}},
 		}},
 	})
@@ -122,8 +122,8 @@ func NewApp(config app.Config) (app.App, error) {
 		Name:       "simple-reconciler-app",
 		KubeConfig: config.KubeConfig,
 		ManagedKinds: []simple.AppManagedKind{{
-			Kind:             kind,
-			Reconciler:       reconciler,
+			Kind:       kind,
+			Reconciler: reconciler,
 			ReconcileOptions: simple.BasicReconcileOptions{
 				// FIXME: Uncomment this line to turn off the opinionated logic
 				// UsePlain: true, // UsePlain = true turns off the opinionated logic.
