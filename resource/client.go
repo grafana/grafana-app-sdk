@@ -93,6 +93,14 @@ type PatchOptions struct {
 	// DryRun will perform a server-side dry-run of the request, if set to true.
 	// The server will return the result of the patch, but will not actually apply it.
 	DryRun bool
+	// Subresource can be set to a non-empty subresource field name to update that subresource,
+	// instead of the main object. It is not enough for a path in the patch request to use the subresource,
+	// this field must also be set to the subresource explicitly, as they are considered
+	// two distinct obejects for the purposes of mutation.
+	// If the subresource has not been set in any prior request, it will be empty,
+	// and a patch request should set the **entire object** (with the "/<subresource>" path),
+	// rather than a component of the subresource, as a JSON patch cannot alter an absent object.
+	Subresource string
 }
 
 type DeleteOptionsPropagationPolicy string
