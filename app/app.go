@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -35,19 +36,33 @@ type RawObject struct {
 	Encoding resource.KindEncoding `json:"-"`
 }
 
-// ResourceCustomRouteRequest is a request to a custom subresource
-type ResourceCustomRouteRequest struct {
+// CustomRouteRequest is a request to a custom subresource or resource route
+type CustomRouteRequest struct {
+	// ResourceIdentifier is the full identifier of the resource.
+	// If the request is not a subresource route request, ResourceIdentifier will contain only group,
+	// version, and namespace (if applicable).
+	// ResourceIdentifier will contain all information the runner is able to provide.
+	// In practical terms, this often means that either Kind or Plural will be included, but both may not be present.
 	ResourceIdentifier resource.FullIdentifier
-	SubresourcePath    string
-	Method             string
-	Headers            http.Header
-	Body               []byte
+	// Path contains path information past the identifier information.
+	// For a subresource route, this is the subresource (for example, `bar` in the case of `test.grafana.app/v1/foos/foo/bar`).
+	// In the case of a non-subresource route, this will be the path section past the namespace (or version if the route is not namespaced).
+	Path string
+	// Method is the HTTP request method
+	Method string
+	// Headers contains the HTTP headers of the original request. Runners MAY remove or sanitize some headers.
+	Headers http.Header
+	// Body contains the payload of the request. Body may contain incomplete data if the request is streamed and not yet complete.
+	// Body data is considered complete once a call to Read results in zero bytes read and an error such as io.EOF
+	// (see godoc for io.Reader). A consumer SHOULD call Body.Close() when they are finished consuming the body,
+	// especially in the case of incomplete data, to signal to the runner that the handler has finished consuming the payload.
+	Body io.ReadCloser
 }
 
-type ResourceCustomRouteResponse struct {
-	Headers    http.Header
-	StatusCode int
-	Body       []byte
+// CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects. It mirrors http.ResponseWriter,
+// but exact implementation is runner-dependent.
+type CustomRouteResponseWriter interface {
+	http.ResponseWriter
 }
 
 // Config is the app configuration used in a Provider for instantiating a new App.
@@ -106,11 +121,12 @@ type App interface {
 	// the converted bytes and encoding (Raw and Encoding respectively), and MAY contain the Object representation of those bytes.
 	// It returns an error if the conversion fails, or if the functionality is not supported by the app.
 	Convert(ctx context.Context, req ConversionRequest) (*RawObject, error)
-	// CallResourceCustomRoute handles the call to a resource custom route, and returns a response to the request or an error.
+	// CallCustomRoute handles the call to a custom route, and the caller provides a CustomRouteResponseWriter for the App
+	// to write the status code and response object(s) to.
 	// If the route doesn't exist, the implementer MAY return ErrCustomRouteNotFound to signal to the runner,
-	// or may choose to return a response with a not found status code and custom body.
+	// or may choose to write a not found status code and custom body.
 	// It returns an error if the functionality is not supported by the app.
-	CallResourceCustomRoute(ctx context.Context, request *ResourceCustomRouteRequest) (*ResourceCustomRouteResponse, error)
+	CallCustomRoute(ctx context.Context, responseWriter CustomRouteResponseWriter, request *CustomRouteRequest) error
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
 	// If there are multiple versions of a Kind, each one SHOULD be returned by this method,
 	// as app runners may depend on having access to all kinds.
