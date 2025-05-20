@@ -2,9 +2,9 @@
 
 We actually already have some simple operator code generated for us by our `project add` command earlier, so instead of writing new code, let's just talk a bit about what the operator does, and ways of running it.
 
-By default, the operator is run as a separate container alongside your grafana deployment. For simple cases, where there will only be one instance of grafana running, it can be run as an embedded part of your plugin, but that comes with several caveats, namely, that it can't _start_ running until you browse to your plugin page in grafana itself. So, the ordinary use-case for the operator is as a separate deployment.
+By default, the operator is run as a separate container alongside your grafana deployment. For simple cases in which only one Grafana instance is running, the operator can be embedded in your plugin. However, this approach has several caveats — most notably, it can’t start until you navigate to your plugin’s page in Grafana. For this reason, the operator is ordinarily deployed as a separate service.
 
-The operator is a logical pattern which runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
+The operator is a logical pattern that runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
 * One or more informers, which subscribe to events for a particular resource kind and namespace
 * One or more watchers, which consume events for particular kinds
 
@@ -180,19 +180,20 @@ type Provider interface {
 	PrometheusCollectors() []prometheus.Collector
 }
 ```
-So, to conform with the best practices of the app-sdk, let's also implement this interface in our watcher, by adding that method:
+So, to conform with the best practices of the app-sdk, let's also implement this interface in our watcher by adding that method:
 ```go
 func (s *IssueWatcher) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{s.statsGauge}
 }
 ```
-Easy! Now, since we implemented that interface, the metrics will be automatically picked up by the app. 
+Easy! Now that we’ve implemented the interface, the app will automatically pick up the metrics.
+
 The operator runner then exposes the app's metrics via a `/metrics` endpoint, which the local setup automatically scrapes. 
 So if we re-build and re-deploy our operator, we'll start picking up that new metric in our local grafana.
 ```shell
 make build/operator && make local/push_operator
 ```
-Then restart the operator in your tilt console, and hop on over to [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) to find the metric. [this link](http://grafana.k3d.localhost:9999/explore?orgId=1&left=%7B%22datasource%22:%22grafana-prom-cortex%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22issue_tracker_project_issue_watcher_issues%22,%22range%22:true,%22instant%22:true,%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22grafana-prom-cortex%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-15m%22,%22to%22:%22now%22%7D%7D) will bring you right to the explore page for the metric, but feel free to play around with it yourself to get used to it, or build out a dashboard.
+Then restart the operator in your tilt console and hop on over to [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) to find the metric. [This link](http://grafana.k3d.localhost:9999/explore?orgId=1&left=%7B%22datasource%22:%22grafana-prom-cortex%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22issue_tracker_project_issue_watcher_issues%22,%22range%22:true,%22instant%22:true,%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22grafana-prom-cortex%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-15m%22,%22to%22:%22now%22%7D%7D) will bring you right to the Explore page for the metric, but feel free to play around with it yourself to get used to it, or build out a dashboard.
 
 ![Example Grafana Dashboard with Issue Metrics](./images/grafana-watcher-dashboard.png)
 
