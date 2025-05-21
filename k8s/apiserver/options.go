@@ -15,7 +15,7 @@ type Options struct {
 	RecommendedOptions *genericoptions.RecommendedOptions
 	scheme             *runtime.Scheme
 	codecs             serializer.CodecFactory
-	installers         []APIServerInstaller
+	installers         []apiServerInstaller
 }
 
 var defaultEtcdPathPrefix = "/registry/grafana.app"
@@ -26,9 +26,7 @@ func NewOptions(installers []APIServerInstaller) *Options {
 
 	gvs := []schema.GroupVersion{}
 	for _, installer := range installers {
-		for _, gv := range installer.appProvider.Manifest().ManifestData.Versions {
-			gvs = append(gvs, schema.GroupVersion{Group: installer.appProvider.Manifest().ManifestData.Group, Version: gv.Name})
-		}
+		gvs = append(gvs, installer.GroupVersions()...)
 	}
 
 	return &Options{

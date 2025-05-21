@@ -26,7 +26,16 @@ import (
 
 type ManagedKindResolver func(kind, version string) (resource.Kind, error)
 
-type APIServerInstaller struct {
+type APIServerInstaller interface {
+	AddToScheme(scheme *runtime.Scheme) error
+	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
+	InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
+	AdmissionPlugin() (string, admission.Factory)
+	App(restConfig clientrest.Config) (app.App, error)
+	GroupVersions() []schema.GroupVersion
+}
+
+type apiServerInstaller struct {
 	appProvider         app.Provider
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
@@ -36,8 +45,8 @@ type APIServerInstaller struct {
 	codecs serializer.CodecFactory
 }
 
-func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*APIServerInstaller, error) {
-	installer := &APIServerInstaller{
+func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*apiServerInstaller, error) {
+	installer := &apiServerInstaller{
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
@@ -45,7 +54,7 @@ func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindR
 	return installer, nil
 }
 
-func (r *APIServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
+func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	kindsByGV, err := r.getKindsByGroupVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get kinds by group version: %w", err)
@@ -95,7 +104,7 @@ func (r *APIServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
-func (r *APIServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
@@ -113,7 +122,7 @@ func (r *APIServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 	return res
 }
 
-func (r *APIServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
+func (r *apiServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
 		r.scheme = newScheme()
@@ -146,7 +155,7 @@ func (r *APIServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServ
 	return nil
 }
 
-func (r *APIServerInstaller) AdmissionPlugin() (string, admission.Factory) {
+func (r *apiServerInstaller) AdmissionPlugin() (string, admission.Factory) {
 
 	supportsMutation := false
 	supportsValidation := false
@@ -175,7 +184,7 @@ func (r *APIServerInstaller) AdmissionPlugin() (string, admission.Factory) {
 	return "", nil
 }
 
-func (r *APIServerInstaller) App(restConfig clientrest.Config) (app.App, error) {
+func (r *apiServerInstaller) App(restConfig clientrest.Config) (app.App, error) {
 	if r.app != nil {
 		return r.app, nil
 	}
@@ -188,7 +197,7 @@ func (r *APIServerInstaller) App(restConfig clientrest.Config) (app.App, error) 
 	return app, nil
 }
 
-func (r *APIServerInstaller) conversionHandler(a, b interface{}, scope conversion.Scope) error {
+func (r *apiServerInstaller) conversionHandler(a, b interface{}, scope conversion.Scope) error {
 	if r.app == nil {
 		return fmt.Errorf("app is not initialized")
 	}
@@ -231,7 +240,15 @@ func (r *APIServerInstaller) conversionHandler(a, b interface{}, scope conversio
 	return runtime.DecodeInto(r.codecs.UniversalDecoder(bResourceObj.GroupVersionKind().GroupVersion()), res.Raw, bObj)
 }
 
-func (r *APIServerInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]resource.Kind, error) {
+func (r *apiServerInstaller) GroupVersions() []schema.GroupVersion {
+	groupVersions := []schema.GroupVersion{}
+	for _, gv := range r.appConfig.ManifestData.Versions {
+		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
+	}
+	return groupVersions
+}
+
+func (r *apiServerInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]resource.Kind, error) {
 	out := map[schema.GroupVersion][]resource.Kind{}
 	group := r.appConfig.ManifestData.Group
 	for _, v := range r.appConfig.ManifestData.Versions {
