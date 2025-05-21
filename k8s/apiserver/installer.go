@@ -188,13 +188,6 @@ func (r *APIServerInstaller) App(restConfig clientrest.Config) (app.App, error) 
 	return app, nil
 }
 
-func (r *APIServerInstaller) admissionHandler(supportsMutation, supportsValidation bool) func(a admission.Attributes, o admission.ObjectInterfaces) error {
-	return func(a admission.Attributes, o admission.ObjectInterfaces) error {
-
-		return nil
-	}
-}
-
 func (r *APIServerInstaller) conversionHandler(a, b interface{}, scope conversion.Scope) error {
 	if r.app == nil {
 		return fmt.Errorf("app is not initialized")

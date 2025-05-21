@@ -2,8 +2,11 @@ package apiserver
 
 import (
 	"github.com/spf13/pflag"
+	"k8s.io/api/node/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
+	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
 )
@@ -15,13 +18,23 @@ type Options struct {
 	installers         []APIServerInstaller
 }
 
+var defaultEtcdPathPrefix = "/registry/grafana.app"
+
 func NewOptions(installers []APIServerInstaller) *Options {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 
+	gvs := []schema.GroupVersion{}
+	for _, installer := range installers {
+		for _, gv := range installer.appProvider.Manifest().ManifestData.Versions {
+			gvs = append(gvs, schema.GroupVersion{Group: installer.appProvider.Manifest().ManifestData.Group, Version: gv.Name})
+		}
+	}
+
 	return &Options{
-		scheme: scheme,
-		codecs: codecs,
+		scheme:             scheme,
+		codecs:             codecs,
+		RecommendedOptions: genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, codecs.LegacyCodec(v1alpha1.SchemeGroupVersion)),
 	}
 }
 
@@ -29,10 +42,10 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	o.RecommendedOptions.AddFlags(fs)
 }
 
-func (o *Options) Validate() []error {
+func (o *Options) Validate() error {
 	errs := []error{}
 	errs = append(errs, o.RecommendedOptions.Validate()...)
-	return errs
+	return utilerrors.NewAggregate(errs)
 }
 
 func (o *Options) ApplyTo(cfg *Config) error {
