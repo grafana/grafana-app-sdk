@@ -4,9 +4,10 @@ import (
 	"os"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis"
+	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -19,50 +20,24 @@ type BasicModel struct {
 	String string `json:"stringField"`
 }
 
-// Schema, Kind, and Manifest are typically generated, but can be crafted by hand as seen here.
-// For anything more complex than this simple example, it is advised that you use the CLI (grafana-app-sdk generate) to get these values
-var (
-	schema = resource.NewSimpleSchema("example.grafana.com", "v1", &resource.TypedSpecObject[BasicModel]{}, &resource.TypedList[*resource.TypedSpecObject[BasicModel]]{}, resource.WithKind("BasicCustomResource"))
-	kind   = resource.Kind{
-		Schema: schema,
-		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
-	}
-	manifest = app.NewEmbeddedManifest(app.ManifestData{
-		AppName: "example-app",
-		Group:   kind.Group(),
-		Versions: []app.ManifestVersion{{
-			Name: kind.Version(),
-			Kinds: []app.ManifestVersionKind{{
-				Schema: &app.VersionSchema{},
-				Kind:   kind.Kind(),
-				Scope:  string(kind.Scope()),
-			}},
-		}},
-	})
-)
-
-func managedKindResolver(k, v string) (resource.Kind, error) {
-	return kind, nil
-}
-
 func NewApp(config app.Config) (app.App, error) {
 	return simple.NewApp(simple.AppConfig{
-		Name:       "simple-reconciler-app",
+		Name:       apis.LocalManifest().ManifestData.AppName,
 		KubeConfig: config.KubeConfig,
 		ManagedKinds: []simple.AppManagedKind{{
-			Kind: kind,
+			Kind: v1alpha1.TestKindKind(),
 		}},
 	})
 }
 
 func main() {
-	provider := simple.NewAppProvider(manifest, nil, NewApp)
+	provider := simple.NewAppProvider(apis.LocalManifest(), nil, NewApp)
 	config := app.Config{
 		KubeConfig:     rest.Config{}, // this will be replaced by the apiserver loopback config
-		ManifestData:   *manifest.ManifestData,
+		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewApIServerInstaller(provider, config, managedKindResolver)
+	installer, err := apiserver.NewApIServerInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
 	if err != nil {
 		panic(err)
 	}
