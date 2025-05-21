@@ -24,7 +24,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type ManagedKindResolver func(kind, version string) (resource.Kind, error)
+type ManagedKindResolver func(kind, version string) (resource.Kind, bool)
 
 type APIServerInstaller interface {
 	AddToScheme(scheme *runtime.Scheme) error
@@ -33,7 +33,10 @@ type APIServerInstaller interface {
 	AdmissionPlugin() (string, admission.Factory)
 	App(restConfig clientrest.Config) (app.App, error)
 	GroupVersions() []schema.GroupVersion
+	ManifestData() *app.ManifestData
 }
+
+var _ APIServerInstaller = (*apiServerInstaller)(nil)
 
 type apiServerInstaller struct {
 	appProvider         app.Provider
@@ -104,12 +107,16 @@ func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
+func (r *apiServerInstaller) ManifestData() *app.ManifestData {
+	return r.appProvider.Manifest().ManifestData
+}
+
 func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
-			kind, err := r.managedKindResolver(manifestKind.Kind, v.Name)
-			if err != nil {
+			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)
+			if !ok {
 				continue
 			}
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback)
@@ -254,9 +261,9 @@ func (r *apiServerInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
 			gv := schema.GroupVersion{Group: group, Version: v.Name}
-			kind, err := r.managedKindResolver(manifestKind.Kind, v.Name)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve kind %s: %w", manifestKind.Kind, err)
+			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)
+			if !ok {
+				return nil, fmt.Errorf("failed to resolve kind %s", manifestKind.Kind)
 			}
 			out[gv] = append(out[gv], kind)
 		}

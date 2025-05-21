@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"k8s.io/api/node/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
@@ -20,7 +19,7 @@ type Options struct {
 	RecommendedOptions *genericoptions.RecommendedOptions
 	scheme             *runtime.Scheme
 	codecs             serializer.CodecFactory
-	installers         []apiServerInstaller
+	installers         []APIServerInstaller
 }
 
 var defaultEtcdPathPrefix = "/registry/grafana.app"
@@ -37,7 +36,8 @@ func NewOptions(installers []APIServerInstaller) *Options {
 	return &Options{
 		scheme:             scheme,
 		codecs:             codecs,
-		RecommendedOptions: genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, codecs.LegacyCodec(v1alpha1.SchemeGroupVersion)),
+		RecommendedOptions: genericoptions.NewRecommendedOptions(defaultEtcdPathPrefix, codecs.LegacyCodec(gvs...)),
+		installers:         installers,
 	}
 }
 
