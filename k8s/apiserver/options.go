@@ -1,6 +1,8 @@
 package apiserver
 
 import (
+	"time"
+
 	"github.com/spf13/pflag"
 	"k8s.io/api/node/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -9,6 +11,9 @@ import (
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	genericoptions "k8s.io/apiserver/pkg/server/options"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 )
 
 type Options struct {
@@ -55,6 +60,14 @@ func (o *Options) ApplyTo(cfg *Config) error {
 			o.RecommendedOptions.Admission.EnablePlugins = append(o.RecommendedOptions.Admission.EnablePlugins, pluginName)
 		}
 	}
+
+	if o.RecommendedOptions.CoreAPI == nil {
+		cs := &fake.Clientset{}
+		sf := informers.NewSharedInformerFactory(cs, time.Duration(1)*time.Second)
+		cfg.Generic.SharedInformerFactory = sf
+		cfg.Generic.ClientConfig = &rest.Config{}
+	}
+
 	if err := o.RecommendedOptions.ApplyTo(cfg.Generic); err != nil {
 		return err
 	}

@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
+	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
 	"k8s.io/component-base/cli"
@@ -32,8 +33,9 @@ var (
 		Versions: []app.ManifestVersion{{
 			Name: kind.Version(),
 			Kinds: []app.ManifestVersionKind{{
-				Kind:  kind.Kind(),
-				Scope: string(kind.Scope()),
+				Schema: &app.VersionSchema{},
+				Kind:   kind.Kind(),
+				Scope:  string(kind.Scope()),
 			}},
 		}},
 	})
@@ -65,7 +67,19 @@ func main() {
 		panic(err)
 	}
 	ctx := genericapiserver.SetupSignalContext()
-	cmd := server.NewCommandStartServer(ctx, []apiserver.APIServerInstaller{installer})
+	opts := apiserver.NewOptions([]apiserver.APIServerInstaller{installer})
+	opts.RecommendedOptions.Authentication = nil
+	opts.RecommendedOptions.Authorization = nil
+	opts.RecommendedOptions.CoreAPI = nil
+	opts.RecommendedOptions.EgressSelector = nil
+	opts.RecommendedOptions.Admission.Plugins = admission.NewPlugins()
+	opts.RecommendedOptions.Admission.RecommendedPluginOrder = []string{}
+	opts.RecommendedOptions.Admission.EnablePlugins = []string{}
+	opts.RecommendedOptions.Features.EnablePriorityAndFairness = false
+	opts.RecommendedOptions.ExtraAdmissionInitializers = func(c *genericapiserver.RecommendedConfig) ([]admission.PluginInitializer, error) {
+		return nil, nil
+	}
+	cmd := server.NewCommandStartServer(ctx, opts)
 	code := cli.Run(cmd)
 	os.Exit(code)
 

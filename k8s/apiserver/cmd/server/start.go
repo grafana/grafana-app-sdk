@@ -9,8 +9,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 )
 
-func NewCommandStartServer(ctx context.Context, installers []apiserver.APIServerInstaller) *cobra.Command {
-	o := apiserver.NewOptions(installers)
+func NewCommandStartServer(ctx context.Context, o *apiserver.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Short: "Launch a API server",
 		Long:  "Launch a API server",
