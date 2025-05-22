@@ -239,6 +239,15 @@ Manifest: S={
 		accessKinds: [...#AccessKind]
 	}
 
+	customRoutes?: {
+		[V=string] : {
+			group: S.fullGroup
+			version: V
+			namespaced?:#CustomRouteCapability
+			root?: #CustomRouteCapability
+ 	   }
+	}
+
 	// operatorURL is the HTTPS URL of your operator, including port if non-standard (443).
 	// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
 	// This is used to construct validation, mutations, or conversion webhooks for your deployment.
