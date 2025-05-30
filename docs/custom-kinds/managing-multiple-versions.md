@@ -118,7 +118,7 @@ type MyKindConverter struct {}
 func (m *MyKindConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
     // We shouldn't ever see this, but just in case...
     if targetAPIVersion == obj.APIVersion {
-        return nil, obj.Raw
+        return obj.Raw, nil
     }
     targetGVK := schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind)
 
