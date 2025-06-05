@@ -16,7 +16,7 @@ The client uses grafana libraries to make fetch requests to perform relevant act
 
 ## Main Page
 
-We already have a very empty generated main page located at `plugin/src/pages/main.tsx`. We're going to overwrite all of this with new contents. 
+We already have a main page located at `plugin/src/pages/PageOne.tsx`. We're going to overwrite all of this with new contents.
 Either copy [the contents of this file](frontend-files/main.tsx) into `plugin/src/pages/PageOne.tsx` (overwriting the current contents), or do it with curl:
 ```bash
 curl -o plugin/src/pages/PageOne.tsx https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/main.tsx
