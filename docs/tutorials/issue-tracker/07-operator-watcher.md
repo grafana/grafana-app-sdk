@@ -46,11 +46,11 @@ func NewIssueWatcher() (*IssueWatcher, error) {
 ```
 So we have `IssueWatcher`, which implements `operator.ResourceWatcher`. The `Add`, `Update`, `Delete`, and `Sync` functions are all relatively self-explanatory, but let's examine the `Add` one just to be on the same page:
 ```go
-// Add handles add events for issue.Issue resources.
+// Add handles add events for issuev1.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
 	}
 
@@ -59,7 +59,7 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	return nil
 }
 ```
-Each method does a check to see if the provided `resource.Object` is of type `*issue.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
+Each method does a check to see if the provided `resource.Object` is of type `*issuev1.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
 
 So what else can we do in our watcher?
 
@@ -94,13 +94,13 @@ func NewIssueWatcher() (*IssueWatcher, error) {
 ```
 The code in `NewIssueWatcher` now creates a new `GaugeVec` named `issue_tracker_project_issue_watcher_issues` with a `status` label, allowing us to track issue counts by status. All we need to do now is update the gauge with the correct label on our different watcher methods:
 ```go
-// Add handles add events for issue.Issue resources.
+// Add handles add events for issuev1.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-add")
 	defer span.End()
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -111,19 +111,19 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	return nil
 }
 
-// Update handles update events for issue.Issue resources.
+// Update handles update events for issuev1.Issue resources.
 func (s *IssueWatcher) Update(ctx context.Context, rOld resource.Object, rNew resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-update")
 	defer span.End()
-	oldObject, ok := rOld.(*issue.Issue)
+	oldObject, ok := rOld.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rOld.GetStaticMetadata().Name, rOld.GetStaticMetadata().Namespace, rOld.GetStaticMetadata().Kind)
 	}
 
-	newObject, ok := rNew.(*issue.Issue)
+	newObject, ok := rNew.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rNew.GetStaticMetadata().Name, rNew.GetStaticMetadata().Namespace, rNew.GetStaticMetadata().Kind)
 	}
 
@@ -137,13 +137,13 @@ func (s *IssueWatcher) Update(ctx context.Context, rOld resource.Object, rNew re
 	return nil
 }
 
-// Delete handles delete events for issue.Issue resources.
+// Delete handles delete events for issuev1.Issue resources.
 func (s *IssueWatcher) Delete(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-delete")
 	defer span.End()
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -159,9 +159,9 @@ func (s *IssueWatcher) Delete(ctx context.Context, rObj resource.Object) error {
 func (s *IssueWatcher) Sync(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-sync")
 	defer span.End()
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -226,7 +226,7 @@ Alright, let's put a store in our watcher:
 ```go
 type IssueWatcher struct {
 	statsGauge *prometheus.GaugeVec
-	issueStore *resource.TypedStore[*issue.Issue]
+	issueStore *resource.TypedStore[*issuev1.Issue]
 }
 
 func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, error) {
@@ -236,7 +236,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 		Namespace: "issue_tracker_project",
 		Help:      "Number of issues",
 	}, []string{"status"})
-	issueStore, err := resource.NewTypedStore[*issue.Issue](issue.Kind(), clientGenerator)
+	issueStore, err := resource.NewTypedStore[*issuev1.Issue](issuev1.Kind(), clientGenerator)
 	if err != nil {
 		return nil, fmt.Errorf("error creating issue TypedStore: %w", err)
 	}
@@ -246,7 +246,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 	}, nil
 }
 ```
-What is `resource.TypedStore`? It's a type which will let us interact with our `issue.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
+What is `resource.TypedStore`? It's a type which will let us interact with our `issuev1.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
 
 > [!IMPORTANT]
 > Note that updating the resource inside a watcher or reconciler event will trigger _another_ event based on the update. Updating a subresource (such as `status`) will not update the resource's `Generation` value, so if you use the opinionated logic (which `simple.Operator` wraps your watchers and reconcilers in) these events won't propagate to your watchers/reconcilers. If you don't use the opinionated logic, you'll need to be aware of and handle these subresource updates properly in your business logic.
