@@ -77,8 +77,8 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	return files, nil
 }
 
-func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templates.SchemaMetadataSeletableField, error) {
-	fields := make([]templates.SchemaMetadataSeletableField, 0)
+func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templates.SchemaMetadataSelectableField, error) {
+	fields := make([]templates.SchemaMetadataSelectableField, 0)
 	if len(ver.SelectableFields) == 0 {
 		return fields, nil
 	}
@@ -101,14 +101,24 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 		if val := ver.Schema.LookupPath(cue.MakePath(path...).Optional()); val.Err() == nil {
 			// Simplest way to check if it's an optional field is to try to look it up as non-optional, then try optional
 			if lookup := val.LookupPath(cue.MakePath(cue.Str(field))); lookup.Exists() {
-				fields = append(fields, templates.SchemaMetadataSeletableField{
+				typ, err := getCUEValueKindString(val, cue.MakePath(cue.Str(field)))
+				if err != nil {
+					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
+				}
+				fields = append(fields, templates.SchemaMetadataSelectableField{
 					Field:    s,
 					Optional: false,
+					Type:     typ,
 				})
 			} else if optional := val.LookupPath(cue.MakePath(cue.Str(field).Optional())); optional.Exists() {
-				fields = append(fields, templates.SchemaMetadataSeletableField{
+				typ, err := getCUEValueKindString(val, cue.MakePath(cue.Str(field).Optional()))
+				if err != nil {
+					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
+				}
+				fields = append(fields, templates.SchemaMetadataSelectableField{
 					Field:    s,
 					Optional: true,
+					Type:     typ,
 				})
 			} else {
 				return nil, fmt.Errorf("invalid selectable field path: %s", fieldPath)
@@ -116,4 +126,20 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 		}
 	}
 	return fields, nil
+}
+
+func getCUEValueKindString(v cue.Value, path cue.Path) (string, error) {
+	// This is a kind of messy way of guessing type without having to actually parse the AST
+	roughType := CUEValueToString(v.LookupPath(path))
+	switch {
+	case strings.Contains(roughType, "time.Time"):
+		return "time", nil
+	case strings.Contains(roughType, "string"):
+		return "string", nil
+	case strings.Contains(roughType, "bool"):
+		return "bool", nil
+	case strings.Contains(roughType, "int"):
+		return "int", nil
+	}
+	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, and int", v.Kind())
 }
