@@ -126,6 +126,8 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 			maps.Copy(res, oapi)
 		}
 	}
+	// Copy in the common definitions
+	maps.Copy(res, GetCommonOpenAPIDefinitions(callback))
 	return res
 }
 
