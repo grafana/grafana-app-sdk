@@ -8,6 +8,7 @@ import (
 
 // GetCommonOpenAPIDefinitions returns a map of the kubernetes common OpenAPI definitions copied from
 // https://raw.githubusercontent.com/kubernetes/sample-apiserver/refs/heads/master/pkg/generated/openapi/zz_generated.openapi.go
+// TODO: can we automate this and use the kube-codegen tooling to make this function?
 func GetCommonOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
 		"k8s.io/apimachinery/pkg/apis/meta/v1.APIGroup":                  schema_pkg_apis_meta_v1_APIGroup(ref),

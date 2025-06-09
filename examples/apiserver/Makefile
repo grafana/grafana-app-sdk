@@ -8,4 +8,4 @@ generate:
 
 .PHONY: run
 run:
-	@go run . --etcd-servers=http://127.0.0.1:2739 --secure-port 6443
+	@go run . --etcd-servers=http://127.0.0.1:2379 --secure-port 6443

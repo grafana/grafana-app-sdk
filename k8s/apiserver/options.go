@@ -52,6 +52,8 @@ func (o *Options) Validate() error {
 }
 
 func (o *Options) ApplyTo(cfg *Config) error {
+	cfg.AddToScheme()
+
 	for _, installer := range o.installers {
 		pluginName, plugin := installer.AdmissionPlugin()
 		if pluginName != "" {

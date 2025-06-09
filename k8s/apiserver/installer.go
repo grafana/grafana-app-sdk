@@ -113,6 +113,8 @@ func (r *apiServerInstaller) ManifestData() *app.ManifestData {
 
 func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
+	// Copy in the common definitions
+	maps.Copy(res, GetCommonOpenAPIDefinitions(callback))
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)
@@ -121,13 +123,12 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 			}
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback)
 			if err != nil {
+				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err)
 				continue
 			}
 			maps.Copy(res, oapi)
 		}
 	}
-	// Copy in the common definitions
-	maps.Copy(res, GetCommonOpenAPIDefinitions(callback))
 	return res
 }
 
@@ -159,9 +160,7 @@ func (r *apiServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServ
 		}
 	}
 
-	server.InstallAPIGroup(&apiGroupInfo)
-
-	return nil
+	return server.InstallAPIGroup(&apiGroupInfo)
 }
 
 func (r *apiServerInstaller) AdmissionPlugin() (string, admission.Factory) {

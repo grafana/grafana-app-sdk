@@ -45,6 +45,7 @@ func (c *Config) AddToScheme() error {
 func (c *Config) UpdateOpenAPIConfig() {
 	defGetter := func(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 		res := make(map[string]common.OpenAPIDefinition)
+		maps.Copy(res, GetCommonOpenAPIDefinitions(callback))
 		for _, installer := range c.installers {
 			maps.Copy(res, installer.GetOpenAPIDefinitions(callback))
 		}
@@ -69,5 +70,15 @@ func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*generic
 	}
 	c.Generic.EffectiveVersion = compatibility.DefaultBuildEffectiveVersion()
 	completedConfig := c.Generic.Complete()
-	return completedConfig.New("grafana-app-sdk", delegate)
+	server, err := completedConfig.New("grafana-app-sdk", delegate)
+	if err != nil {
+		return nil, err
+	}
+	for _, installer := range c.installers {
+		err = installer.InstallAPIs(server, c.Generic.RESTOptionsGetter)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return server, nil
 }
