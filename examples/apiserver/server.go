@@ -3,16 +3,18 @@ package main
 import (
 	"os"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/admission"
+	genericapiserver "k8s.io/apiserver/pkg/server"
+	"k8s.io/client-go/rest"
+	"k8s.io/component-base/cli"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
 	"github.com/grafana/grafana-app-sdk/simple"
-	"k8s.io/apiserver/pkg/admission"
-	genericapiserver "k8s.io/apiserver/pkg/server"
-	"k8s.io/client-go/rest"
-	"k8s.io/component-base/cli"
 )
 
 type BasicModel struct {
@@ -37,7 +39,9 @@ func main() {
 		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewApIServerInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
+	installer, err := apiserver.NewApIServerInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator), func(gvk schema.GroupVersionKind) (string, bool) {
+		return "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example", true
+	})
 	if err != nil {
 		panic(err)
 	}

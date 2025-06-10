@@ -36,23 +36,27 @@ type APIServerInstaller interface {
 	ManifestData() *app.ManifestData
 }
 
+type PackagePathProvider func(gvk schema.GroupVersionKind) (string, bool)
+
 var _ APIServerInstaller = (*apiServerInstaller)(nil)
 
 type apiServerInstaller struct {
 	appProvider         app.Provider
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
+	generatedPkg        PackagePathProvider
 
 	app    app.App
 	scheme *runtime.Scheme
 	codecs serializer.CodecFactory
 }
 
-func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*apiServerInstaller, error) {
+func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver, pkgPaths PackagePathProvider) (*apiServerInstaller, error) {
 	installer := &apiServerInstaller{
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
+		generatedPkg:        pkgPaths,
 	}
 	return installer, nil
 }
@@ -81,6 +85,7 @@ func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		}
 		groupVersions = append(groupVersions, gv)
 	}
+	fmt.Println(scheme.AllKnownTypes())
 
 	internalGv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: runtime.APIVersionInternal}
 	for _, internalKind := range internalKinds {
@@ -92,11 +97,17 @@ func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 			scheme.AddConversionFunc(internalKind.ZeroValue(), kind.ZeroValue(), r.conversionHandler)
 		}
 	}
+	fmt.Println(scheme.AllKnownTypes())
 
 	sort.Slice(groupVersions, func(i, j int) bool {
 		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) < 0
 	})
 	scheme.SetVersionPriority(groupVersions...)
+
+	for _, groupVersion := range groupVersions {
+		fmt.Println(groupVersion.String())
+		fmt.Println(scheme.VersionsForGroupKind(schema.GroupKind{Group: groupVersion.Group, Kind: "TestKind"}))
+	}
 
 	// save the scheme for later use
 	if r.scheme == nil {
@@ -121,7 +132,11 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 			if !ok {
 				continue
 			}
-			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback)
+			pkgPrefix, ok := r.generatedPkg(kind.GroupVersionKind())
+			if !ok {
+				pkgPrefix = ""
+			}
+			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
 			if err != nil {
 				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err)
 				continue
@@ -155,8 +170,8 @@ func (r *apiServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServ
 			if err != nil {
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind(), err)
 			}
-			storage[kind.Kind()] = s
-			apiGroupInfo.VersionedResourcesStorageMap[gv.String()] = storage
+			storage[kind.Plural()] = s
+			apiGroupInfo.VersionedResourcesStorageMap[gv.Version] = storage
 		}
 	}
 
