@@ -7,7 +7,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/goleak"
 )
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
 
 type mockController struct {
 	RunFunc func(ctx context.Context) error
@@ -33,6 +38,8 @@ func TestOperator_AddController(t *testing.T) {
 }
 
 func TestOperator_Run(t *testing.T) {
+	var expectedErr = errors.New("I AM ERROR")
+
 	t.Run("controller run error propagates up", func(t *testing.T) {
 		done := make(chan struct{}, 1)
 		o := New()
@@ -46,7 +53,7 @@ func TestOperator_Run(t *testing.T) {
 		o.AddController(&mockController{
 			RunFunc: func(_ context.Context) error {
 				time.Sleep(time.Second)
-				return errors.New("I AM ERROR")
+				return expectedErr
 			},
 		})
 
@@ -54,9 +61,29 @@ func TestOperator_Run(t *testing.T) {
 		defer cancel()
 
 		err := o.Run(ctx)
-		assert.Equal(t, errors.New("I AM ERROR"), err)
+		assert.Equal(t, expectedErr, err)
 		_, open := <-done
 		assert.False(t, open)
+	})
+
+	t.Run("two failing controllers don't leak goroutines", func(t *testing.T) {
+		o := New()
+		o.AddController(&mockController{
+			RunFunc: func(ctx context.Context) error {
+				return expectedErr
+			},
+		})
+		o.AddController(&mockController{
+			RunFunc: func(_ context.Context) error {
+				return expectedErr
+			},
+		})
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		err := o.Run(ctx)
+		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("stopping operator stops controllers", func(t *testing.T) {

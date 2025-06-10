@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestInformerController_AddWatcher(t *testing.T) {
@@ -962,16 +963,13 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
-		timeout := make(chan struct{})
-		go func() {
-			time.Sleep(time.Second * 2)
-			timeout <- struct{}{}
-		}()
+		timeout := time.NewTimer(2 * time.Second)
+		t.Cleanup(func() { timeout.Stop() })
 		select {
 		case <-retryQuery:
 			// The retry wasn't dequeued, we can tell it to stop retrying now and finish the test
 			retryResponse <- true
-		case <-timeout:
+		case <-timeout.C:
 			assert.Fail(t, "Add Event retry appears to have been dequeued")
 		}
 	})
@@ -1025,11 +1023,8 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		inf.FireUpdate(context.Background(), nil, emptyObject)
 
 		// Now we wait for the RetryPolicy to be queried again, OR for a timeout, which indicates a failure
-		timeout := make(chan struct{})
-		go func() {
-			time.Sleep(time.Second * 5)
-			timeout <- struct{}{}
-		}()
+		timeout := time.NewTimer(2 * time.Second)
+		t.Cleanup(func() { timeout.Stop() })
 		addRetries := 0
 		updateRetries := 0
 		for i := 0; i < 2; i++ {
@@ -1044,7 +1039,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				// The retry wasn't dequeued, we can tell it to stop retrying now and either wait for the other
 				// request's retry, or finish the test
 				retryResponse <- true
-			case <-timeout:
+			case <-timeout.C:
 				assert.Fail(t, "Add Event retry appears to have been dequeued")
 			}
 		}
