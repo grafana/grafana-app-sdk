@@ -2,9 +2,11 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -12,20 +14,45 @@ import (
 )
 
 type appAdmission struct {
-	app app.App
+	appGetter    func() app.App
+	manifestData app.ManifestData
 }
 
 var _ admission.MutationInterface = (*appAdmission)(nil)
 var _ admission.ValidationInterface = (*appAdmission)(nil)
 
 func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, _ admission.ObjectInterfaces) error {
+	adApp := ad.appGetter()
+	if adApp == nil {
+		return admission.NewForbidden(a, errors.New("app is not initialized"))
+	}
+
+	adInfo := ad.getAdmissionInfo(a.GetKind())
+	if adInfo == nil || !adInfo.SupportsAnyMutation() {
+		return nil
+	}
+
 	req, err := translateAdmissionAttributes(a)
 	if err != nil {
 		return admission.NewForbidden(a, err)
 	}
 
-	res, err := ad.app.Mutate(ctx, req)
+	supported := false
+	for _, val := range adInfo.Mutation.Operations {
+		if string(val) == string(req.Action) {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return nil
+	}
+
+	res, err := adApp.Mutate(ctx, req)
 	if err != nil {
+		if errors.Is(err, app.ErrNotImplemented) {
+			return nil
+		}
 		return admission.NewForbidden(a, err)
 	}
 
@@ -37,13 +64,37 @@ func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, _ adm
 }
 
 func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, _ admission.ObjectInterfaces) error {
+	adApp := ad.appGetter()
+	if adApp == nil {
+		return admission.NewForbidden(a, errors.New("app is not initialized"))
+	}
+
+	adInfo := ad.getAdmissionInfo(a.GetKind())
+	if adInfo == nil || !adInfo.SupportsAnyValidation() {
+		return nil
+	}
+
 	req, err := translateAdmissionAttributes(a)
 	if err != nil {
 		return admission.NewForbidden(a, err)
 	}
 
-	err = ad.app.Validate(ctx, req)
+	supported := false
+	for _, val := range adInfo.Validation.Operations {
+		if string(val) == string(req.Action) {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return nil
+	}
+
+	err = adApp.Validate(ctx, req)
 	if err != nil {
+		if errors.Is(err, app.ErrNotImplemented) {
+			return nil
+		}
 		return admission.NewForbidden(a, err)
 	}
 	return nil
@@ -53,12 +104,22 @@ func (*appAdmission) Handles(_ admission.Operation) bool {
 	return true
 }
 
-func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest, error) {
-	extra := make(map[string]any)
-	for k, v := range a.GetUserInfo().GetExtra() {
-		extra[k] = any(v)
+func (ad *appAdmission) getAdmissionInfo(gvk schema.GroupVersionKind) *app.AdmissionCapabilities {
+	for _, v := range ad.manifestData.Versions {
+		if gvk.Version != v.Name {
+			continue
+		}
+		for _, k := range v.Kinds {
+			if gvk.Kind != k.Kind {
+				continue
+			}
+			return k.Admission
+		}
 	}
+	return nil
+}
 
+func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest, error) {
 	var action resource.AdmissionAction
 	switch a.GetOperation() {
 	case admission.Create:
@@ -93,17 +154,25 @@ func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest
 		}
 	}
 
+	userInfo := resource.AdmissionUserInfo{}
+	// a.GetUserInfo() is nil for anonymous auth
+	if a.GetUserInfo() != nil {
+		extra := make(map[string]any)
+		for k, v := range a.GetUserInfo().GetExtra() {
+			extra[k] = any(v)
+		}
+		userInfo.UID = a.GetUserInfo().GetUID()
+		userInfo.Username = a.GetUserInfo().GetName()
+		userInfo.Groups = a.GetUserInfo().GetGroups()
+		userInfo.Extra = extra
+	}
+
 	req := app.AdmissionRequest{
-		Action:  action,
-		Kind:    a.GetKind().Kind,
-		Group:   a.GetKind().Group,
-		Version: a.GetKind().Version,
-		UserInfo: resource.AdmissionUserInfo{
-			UID:      a.GetUserInfo().GetUID(),
-			Username: a.GetUserInfo().GetName(),
-			Groups:   a.GetUserInfo().GetGroups(),
-			Extra:    extra,
-		},
+		Action:    action,
+		Kind:      a.GetKind().Kind,
+		Group:     a.GetKind().Group,
+		Version:   a.GetKind().Version,
+		UserInfo:  userInfo,
 		Object:    obj,
 		OldObject: oldObj,
 	}

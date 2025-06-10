@@ -30,6 +30,14 @@ func NewApp(config app.Config) (app.App, error) {
 		KubeConfig: config.KubeConfig,
 		ManagedKinds: []simple.AppManagedKind{{
 			Kind: v1alpha1.TestKindKind(),
+			Validator: &simple.Validator{
+				ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
+					if request.Object.GetName() == "notallowed" {
+						return fmt.Errorf("not allowed")
+					}
+					return nil
+				},
+			},
 			Reconciler: &operator.TypedReconciler[*v1alpha1.TestKind]{
 				ReconcileFunc: func(_ context.Context, t operator.TypedReconcileRequest[*v1alpha1.TestKind]) (operator.ReconcileResult, error) {
 					fmt.Printf("Reconciled %s\n", t.Object.GetName()) //nolint:revive

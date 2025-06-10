@@ -203,11 +203,11 @@ func (r *defaultInstaller) AdmissionPlugin() (string, admission.Factory) {
 	if supportsMutation || supportsValidation {
 		pluginName := r.appProvider.Manifest().ManifestData.AppName + " admission"
 		return pluginName, func(_ io.Reader) (admission.Interface, error) {
-			if r.app == nil {
-				return nil, fmt.Errorf("app is not initialized")
-			}
 			return &appAdmission{
-				app: r.app,
+				appGetter: func() app.App {
+					return r.app
+				},
+				manifestData: r.appConfig.ManifestData,
 			}, nil
 		}
 	}

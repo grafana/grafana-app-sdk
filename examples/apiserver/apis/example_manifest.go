@@ -34,7 +34,15 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKinds",
 					Scope:      "Namespaced",
 					Conversion: false,
-					Schema:     &versionSchemaTestKindv1alpha1,
+					Admission: &app.AdmissionCapabilities{
+						Validation: &app.ValidationCapability{
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
+							},
+						},
+					},
+					Schema: &versionSchemaTestKindv1alpha1,
 				},
 			},
 		},
