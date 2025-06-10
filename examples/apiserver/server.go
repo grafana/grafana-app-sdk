@@ -60,7 +60,7 @@ func main() {
 		panic(err)
 	}
 	ctx := genericapiserver.SetupSignalContext()
-	opts := apiserver.NewOptions([]apiserver.Installer{installer})
+	opts := apiserver.NewOptions([]apiserver.AppInstaller{installer})
 	opts.RecommendedOptions.Authentication = nil
 	opts.RecommendedOptions.Authorization = nil
 	opts.RecommendedOptions.CoreAPI = nil

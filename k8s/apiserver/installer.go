@@ -19,18 +19,22 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+// ManagedKindResolver resolves a kind and version into a resource.Kind instance.
+// group is not provided as a ManagedKindResolver function is expected to exist on a per-group basis.
 type ManagedKindResolver func(kind, ver string) (resource.Kind, bool)
 
-// Installer represents an App which can be installed on a kubernetes API server.
+// AppInstaller represents an App which can be installed on a kubernetes API server.
 // It provides all the methods needed to configure and install an App onto an API server.
-type Installer interface {
-	// AddToScheme registers all the kinds provided by the App to the runtime.Scheme
+type AppInstaller interface {
+	// AddToScheme registers all the kinds provided by the App to the runtime.Scheme.
+	// Other functionality which relies on a runtime.Scheme may use the last scheme provided in AddToScheme for this purpose.
 	AddToScheme(scheme *runtime.Scheme) error
 	// GetOpenAPIDefinitions gets a map of OpenAPI definitions for use with kubernetes OpenAPI
 	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
@@ -39,80 +43,41 @@ type Installer interface {
 	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
 	// If the App does not provide admission control, it should return nil
 	AdmissionPlugin() admission.Factory
-	// App returns an AppAccessor which allows for access and/or initialization of the App for the installer.
-	// An App should only be initialized once the rest.Config is ready.
-	// Processes which depend on App().App() availability should lazy-load or return temporary errors until the app is initialized.
-	App() *AppAccessor
-	// GroupVersions returns the list of all GroupVersions supported by this Installer
+	InitializeApp(clientrest.Config) error
+	App() (app.App, error)
+	// GroupVersions returns the list of all GroupVersions supported by this AppInstaller
 	GroupVersions() []schema.GroupVersion
 	// ManifestData returns the App's ManifestData
 	ManifestData() *app.ManifestData
 }
 
+// GenericAPIServer describes a generic API server which can have an API Group installed onto it
 type GenericAPIServer interface {
+	// InstallAPIGroup installs the provided APIGroupInfo onto the API Server
 	InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error
 }
 
 var (
-	ErrAppNotInitialized     = errors.New("app not initialized")
+	// ErrAppNotInitialized is returned if the app.App has not been initialized
+	ErrAppNotInitialized = errors.New("app not initialized")
+	// ErrAppAlreadyInitialized is returned if the app.App has already been initialized and cannot be initialized again
 	ErrAppAlreadyInitialized = errors.New("app already initialized")
 )
 
-// AppAccessor wraps an app.Provider and ensures that an App is only initialized once with provider.NewApp.
-// Once the App has been initialized, it can be accessed from the Provider and subsequent initialization calls will fail.
-type AppAccessor struct {
-	provider app.Provider
-	app      app.App
-	mux      sync.Mutex
-}
-
-func NewAppAccessor(provider app.Provider) *AppAccessor {
-	return &AppAccessor{
-		provider: provider,
-	}
-}
-
-// App returns the underlying app.App if it has been initialized with Initialize. Otherwise it returns nil and ErrAppNotInitialized
-func (a *AppAccessor) App() (app.App, error) {
-	if a.app == nil {
-		return nil, ErrAppNotInitialized
-	}
-	return a.app, nil
-}
-
-// Initialize initializes the app.App with the provided config, and returns the initialized app.App and any error.
-// If the app.App has already been initialized, it returns nil and ErrAppAlreadyInitialized
-func (a *AppAccessor) Initialize(cfg app.Config) (app.App, error) {
-	a.mux.Lock()
-	defer a.mux.Unlock()
-	if a.app != nil {
-		return nil, ErrAppAlreadyInitialized
-	}
-	initApp, err := a.provider.NewApp(cfg)
-	if err != nil {
-		return nil, err
-	}
-	a.app = initApp
-	return a.app, nil
-}
-
-func (a *AppAccessor) Manifest() app.Manifest {
-	return a.provider.Manifest()
-}
-
-var _ Installer = (*defaultInstaller)(nil)
+var _ AppInstaller = (*defaultInstaller)(nil)
 
 type defaultInstaller struct {
 	appProvider         app.Provider
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
 
-	app    *AppAccessor
+	app    app.App
+	appMux sync.Mutex
 	scheme *runtime.Scheme
 	codecs serializer.CodecFactory
 }
 
-// NewDefaultInstaller creates a new Installer with default behavior for an app.Provider and app.Config.
+// NewDefaultInstaller creates a new AppInstaller with default behavior for an app.Provider and app.Config.
 //
 //nolint:revive
 func NewDefaultInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*defaultInstaller, error) {
@@ -120,7 +85,6 @@ func NewDefaultInstaller(appProvider app.Provider, appConfig app.Config, kindRes
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
-		app:                 NewAppAccessor(appProvider),
 	}
 	return installer, nil
 }
@@ -133,7 +97,7 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 
 	internalKinds := map[string]resource.Kind{}
 	kindsByGroup := map[string][]resource.Kind{}
-	groupVersions := []schema.GroupVersion{}
+	groupVersions := make([]schema.GroupVersion, 0)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
 			scheme.AddKnownTypeWithName(kind.GroupVersionKind(), kind.ZeroValue())
@@ -267,11 +231,7 @@ func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 		return func(_ io.Reader) (admission.Interface, error) {
 			return &appAdmission{
 				appGetter: func() app.App {
-					a, err := r.app.App()
-					if err != nil {
-						return nil
-					}
-					return a
+					return r.app
 				},
 				manifestData: r.appConfig.ManifestData,
 			}, nil
@@ -281,8 +241,29 @@ func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 	return nil
 }
 
-func (r *defaultInstaller) App() *AppAccessor {
-	return r.app
+func (r *defaultInstaller) InitializeApp(cfg clientrest.Config) error {
+	r.appMux.Lock()
+	defer r.appMux.Unlock()
+	if r.app != nil {
+		return ErrAppAlreadyInitialized
+	}
+	initApp, err := r.appProvider.NewApp(app.Config{
+		KubeConfig:     cfg,
+		SpecificConfig: r.appConfig.SpecificConfig,
+		ManifestData:   r.appConfig.ManifestData,
+	})
+	if err != nil {
+		return err
+	}
+	r.app = initApp
+	return nil
+}
+
+func (r *defaultInstaller) App() (app.App, error) {
+	if r.app == nil {
+		return nil, ErrAppNotInitialized
+	}
+	return r.app, nil
 }
 
 func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error {
@@ -315,7 +296,7 @@ func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error
 			Encoding: resource.KindEncodingJSON,
 		},
 	}
-	fetchedApp, err := r.app.App()
+	fetchedApp, err := r.App()
 	if err != nil {
 		return fmt.Errorf("failed to convert object %s: %w", aResourceObj.GetName(), err)
 	}
@@ -333,7 +314,7 @@ func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error
 }
 
 func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
-	groupVersions := []schema.GroupVersion{}
+	groupVersions := make([]schema.GroupVersion, 0)
 	for _, gv := range r.appConfig.ManifestData.Versions {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}

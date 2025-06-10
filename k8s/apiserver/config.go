@@ -18,11 +18,11 @@ type Config struct {
 	Generic    *genericapiserver.RecommendedConfig
 	scheme     *runtime.Scheme
 	codecs     serializer.CodecFactory
-	installers []Installer
+	installers []AppInstaller
 }
 
 // NewConfig returns a new Config for the provided installers
-func NewConfig(installers []Installer) (*Config, error) {
+func NewConfig(installers []AppInstaller) (*Config, error) {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 	return NewConfigWithScheme(installers, scheme, codecs)
@@ -30,7 +30,7 @@ func NewConfig(installers []Installer) (*Config, error) {
 
 // NewConfigWithScheme creates a new Config with a provided runtime.Scheme and serializer.CodecFactory.
 // This can be used for more fine-grained control of the scheme.
-func NewConfigWithScheme(installers []Installer, scheme *runtime.Scheme, codecs serializer.CodecFactory) (*Config, error) {
+func NewConfigWithScheme(installers []AppInstaller, scheme *runtime.Scheme, codecs serializer.CodecFactory) (*Config, error) {
 	c := &Config{
 		scheme:     scheme,
 		codecs:     codecs,
@@ -79,11 +79,7 @@ func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*generic
 		if md == nil {
 			return nil, fmt.Errorf("no manifest data for installer for GroupVersions %v", installer.GroupVersions())
 		}
-		_, err := installer.App().Initialize(app.Config{
-			// TODO: propagate SpecificConfig
-			KubeConfig:   loopbackConfig,
-			ManifestData: *md,
-		})
+		err := installer.InitializeApp(loopbackConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +99,7 @@ func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*generic
 	err = server.AddPostStartHook("app runners", func(context genericapiserver.PostStartHookContext) error {
 		runner := app.NewMultiRunner()
 		for _, installer := range c.installers {
-			installerApp, err := installer.App().App()
+			installerApp, err := installer.App()
 			if err != nil {
 				return fmt.Errorf("error getting app on startup: %w", err)
 			}

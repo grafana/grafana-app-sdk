@@ -20,12 +20,12 @@ type Options struct {
 	RecommendedOptions *genericoptions.RecommendedOptions
 	scheme             *runtime.Scheme
 	codecs             serializer.CodecFactory
-	installers         []Installer
+	installers         []AppInstaller
 }
 
 var defaultEtcdPathPrefix = "/registry/grafana.app"
 
-func NewOptions(installers []Installer) *Options {
+func NewOptions(installers []AppInstaller) *Options {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 
