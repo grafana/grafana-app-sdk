@@ -221,6 +221,14 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
+	if len(m.CustomRoutes()) > 0 {
+		customRoutes, err := processCustomRoutes(m)
+		if err != nil {
+			return nil, fmt.Errorf("error building manifest custom routes: %w", err)
+		}
+		manifest.CustomRoutes = customRoutes
+	}
+
 	return &manifest, nil
 }
 
@@ -275,6 +283,34 @@ func processKindVersion(version codegen.KindVersion, kindName string, includeSch
 	}
 	mver.SelectableFields = version.SelectableFields
 	return mver, nil
+}
+
+func processCustomRoutes(m codegen.AppManifest) ([]app.ManifestCustomRoute, error) {
+	customRoutes := make([]app.ManifestCustomRoute, 0)
+	for _, cr := range m.CustomRoutes() {
+		customRoute := app.ManifestCustomRoute{
+			Group:      cr.Group,
+			Version:    cr.Version,
+			Namespaced: make(map[string]spec3.PathProps),
+			Root:       make(map[string]spec3.PathProps),
+		}
+		for sourcePath, sourceMethodsMap := range cr.Namespaced {
+			targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+			if err != nil {
+				return customRoutes, err
+			}
+			customRoute.Namespaced[sourcePath] = targetPathProps
+		}
+		for sourcePath, sourceMethodsMap := range cr.Root {
+			targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+			if err != nil {
+				return customRoutes, err
+			}
+			customRoute.Root[sourcePath] = targetPathProps
+		}
+		customRoutes = append(customRoutes, customRoute)
+	}
+	return customRoutes, nil
 }
 
 var validAdmissionOperations = map[codegen.KindAdmissionCapabilityOperation]app.AdmissionOperation{
