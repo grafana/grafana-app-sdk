@@ -36,27 +36,23 @@ type APIServerInstaller interface {
 	ManifestData() *app.ManifestData
 }
 
-type PackagePathProvider func(gvk schema.GroupVersionKind) (string, bool)
-
 var _ APIServerInstaller = (*apiServerInstaller)(nil)
 
 type apiServerInstaller struct {
 	appProvider         app.Provider
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
-	generatedPkg        PackagePathProvider
 
 	app    app.App
 	scheme *runtime.Scheme
 	codecs serializer.CodecFactory
 }
 
-func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver, pkgPaths PackagePathProvider) (*apiServerInstaller, error) {
+func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*apiServerInstaller, error) {
 	installer := &apiServerInstaller{
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
-		generatedPkg:        pkgPaths,
 	}
 	return installer, nil
 }
@@ -132,9 +128,18 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 			if !ok {
 				continue
 			}
-			pkgPrefix, ok := r.generatedPkg(kind.GroupVersionKind())
-			if !ok {
-				pkgPrefix = ""
+			if r.scheme == nil {
+				fmt.Printf("scheme is not set in apiServerInstaller.GetOpenAPIDefinitions, skipping %s. This will impact kind availability\n", manifestKind.Kind)
+				continue
+			}
+			pkgPrefix := ""
+			for k, t := range r.scheme.KnownTypes(schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}) {
+				if k == manifestKind.Kind {
+					pkgPrefix = t.PkgPath()
+				}
+			}
+			if pkgPrefix == "" {
+				fmt.Printf("scheme does not contain kind %s.%s, skipping OpenAPI component\n", v.Name, manifestKind.Kind)
 			}
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
 			if err != nil {

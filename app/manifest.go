@@ -496,9 +496,9 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	slices.Sort(kind.Dependencies)
 
 	// add the kind object to our result map
-	result[fmt.Sprintf("%s/%s.%s", pkgPrefix, gvk.Version, gvk.Kind)] = kind
+	result[fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)] = kind
 	// add the kind list object to our result map (static object type based on the kind object)
-	result[fmt.Sprintf("%s/%s.%sList", pkgPrefix, gvk.Version, gvk.Kind)] = common.OpenAPIDefinition{
+	result[fmt.Sprintf("%s.%sList", pkgPrefix, gvk.Kind)] = common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
@@ -518,7 +518,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]any{},
-										Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)),
+										Ref:     ref(fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)),
 									},
 								},
 							},
@@ -529,7 +529,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s/%s.%s", pkgPrefix, gvk.Version, gvk.Kind)},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
 	}
 
 	return result, nil
@@ -542,7 +542,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind, pkgPrefix string) (resSchema spec.Schema, dependencies []string) {
 	if sch.Ref != "" {
 		// Reformat the ref to use the path derived from the GVK
-		schRef := fmt.Sprintf("%s/%s.%s", pkgPrefix, gvk.Version, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
+		schRef := fmt.Sprintf("%s.%s", pkgPrefix, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
 		return spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Ref: ref(schRef),

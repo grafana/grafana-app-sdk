@@ -1,9 +1,10 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
 
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
@@ -14,6 +15,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
+	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/simple"
 )
 
@@ -28,6 +30,12 @@ func NewApp(config app.Config) (app.App, error) {
 		KubeConfig: config.KubeConfig,
 		ManagedKinds: []simple.AppManagedKind{{
 			Kind: v1alpha1.TestKindKind(),
+			Reconciler: &operator.TypedReconciler[*v1alpha1.TestKind]{
+				ReconcileFunc: func(ctx context.Context, t operator.TypedReconcileRequest[*v1alpha1.TestKind]) (operator.ReconcileResult, error) {
+					fmt.Printf("Reconciled %s\n", t.Object.GetName())
+					return operator.ReconcileResult{}, nil
+				},
+			},
 		}},
 	})
 }
@@ -39,9 +47,7 @@ func main() {
 		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewApIServerInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator), func(gvk schema.GroupVersionKind) (string, bool) {
-		return "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example", true
-	})
+	installer, err := apiserver.NewApIServerInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
 	if err != nil {
 		panic(err)
 	}
