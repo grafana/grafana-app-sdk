@@ -151,8 +151,6 @@ func (r *defaultInstaller) ManifestData() *app.ManifestData {
 
 func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
-	// Copy in the common definitions
-	maps.Copy(res, GetCommonOpenAPIDefinitions(callback))
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)

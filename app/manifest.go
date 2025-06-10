@@ -414,11 +414,11 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 }
 
 // AsKubeOpenAPI converts the schema into a map of reference string to common.OpenAPIDefinition objects, suitable for use with kubernetes API server code.
-// It uses the provided schema.GroupVersionKind for naming of the kind and for reference naming. The map output will look something like:
+// It uses the provided schema.GroupVersionKind and pkgPrefix for naming of the kind and for reference naming. The map output will look something like:
 //
-//	"<group>/<version>.<kind>": {...},
-//	"<group>/<version>.<kind>List": {...},
-//	"<group>/<version>.spec": {...}, // ...etc. for all other resources
+//	"<pkgPrefix>.<kind>": {...},
+//	"<pkgPrefix>.<kind>List": {...},
+//	"<pkgPrefix>.<kind>Spec": {...}, // ...etc. for all other resources
 //
 // If you wish to exclude a field from your kind's object, ensure that the field name begins with a `#`, which will be treated as a definition.
 // Definitions are included in the returned map as types, but are not included as fields (alongside "spec","status", etc.) in the kind object.
@@ -468,6 +468,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		},
 		Dependencies: make([]string, 0),
 	}
+	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
