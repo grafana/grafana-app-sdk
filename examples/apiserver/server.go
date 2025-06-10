@@ -55,7 +55,7 @@ func main() {
 		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewDefaultInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
+	installer, err := apiserver.NewDefaultAppInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
 	if err != nil {
 		panic(err)
 	}

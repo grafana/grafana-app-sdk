@@ -77,10 +77,10 @@ type defaultInstaller struct {
 	codecs serializer.CodecFactory
 }
 
-// NewDefaultInstaller creates a new AppInstaller with default behavior for an app.Provider and app.Config.
+// NewDefaultAppInstaller creates a new AppInstaller with default behavior for an app.Provider and app.Config.
 //
 //nolint:revive
-func NewDefaultInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*defaultInstaller, error) {
+func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*defaultInstaller, error) {
 	installer := &defaultInstaller{
 		appProvider:         appProvider,
 		appConfig:           appConfig,
