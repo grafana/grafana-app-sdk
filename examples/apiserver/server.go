@@ -31,8 +31,8 @@ func NewApp(config app.Config) (app.App, error) {
 		ManagedKinds: []simple.AppManagedKind{{
 			Kind: v1alpha1.TestKindKind(),
 			Reconciler: &operator.TypedReconciler[*v1alpha1.TestKind]{
-				ReconcileFunc: func(ctx context.Context, t operator.TypedReconcileRequest[*v1alpha1.TestKind]) (operator.ReconcileResult, error) {
-					fmt.Printf("Reconciled %s\n", t.Object.GetName())
+				ReconcileFunc: func(_ context.Context, t operator.TypedReconcileRequest[*v1alpha1.TestKind]) (operator.ReconcileResult, error) {
+					fmt.Printf("Reconciled %s\n", t.Object.GetName()) //nolint:revive
 					return operator.ReconcileResult{}, nil
 				},
 			},
@@ -47,12 +47,12 @@ func main() {
 		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewApIServerInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
+	installer, err := apiserver.NewDefaultInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
 	if err != nil {
 		panic(err)
 	}
 	ctx := genericapiserver.SetupSignalContext()
-	opts := apiserver.NewOptions([]apiserver.APIServerInstaller{installer})
+	opts := apiserver.NewOptions([]apiserver.Installer{installer})
 	opts.RecommendedOptions.Authentication = nil
 	opts.RecommendedOptions.Authorization = nil
 	opts.RecommendedOptions.CoreAPI = nil
@@ -61,11 +61,10 @@ func main() {
 	opts.RecommendedOptions.Admission.RecommendedPluginOrder = []string{}
 	opts.RecommendedOptions.Admission.EnablePlugins = []string{}
 	opts.RecommendedOptions.Features.EnablePriorityAndFairness = false
-	opts.RecommendedOptions.ExtraAdmissionInitializers = func(c *genericapiserver.RecommendedConfig) ([]admission.PluginInitializer, error) {
+	opts.RecommendedOptions.ExtraAdmissionInitializers = func(_ *genericapiserver.RecommendedConfig) ([]admission.PluginInitializer, error) {
 		return nil, nil
 	}
 	cmd := server.NewCommandStartServer(ctx, opts)
 	code := cli.Run(cmd)
 	os.Exit(code)
-
 }

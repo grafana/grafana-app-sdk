@@ -24,9 +24,11 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type ManagedKindResolver func(kind, version string) (resource.Kind, bool)
+type ManagedKindResolver func(kind, ver string) (resource.Kind, bool)
 
-type APIServerInstaller interface {
+// Installer represents an App which can be installed on a kubernetes API server.
+// It provides all the methods needed to configure and install an App onto an API server.
+type Installer interface {
 	AddToScheme(scheme *runtime.Scheme) error
 	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
 	InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
@@ -36,9 +38,9 @@ type APIServerInstaller interface {
 	ManifestData() *app.ManifestData
 }
 
-var _ APIServerInstaller = (*apiServerInstaller)(nil)
+var _ Installer = (*defaultInstaller)(nil)
 
-type apiServerInstaller struct {
+type defaultInstaller struct {
 	appProvider         app.Provider
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
@@ -48,8 +50,11 @@ type apiServerInstaller struct {
 	codecs serializer.CodecFactory
 }
 
-func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*apiServerInstaller, error) {
-	installer := &apiServerInstaller{
+// NewDefaultInstaller creates a new Installer with default behavior for an app.Provider and app.Config.
+//
+//nolint:revive
+func NewDefaultInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*defaultInstaller, error) {
+	installer := &defaultInstaller{
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
@@ -57,7 +62,7 @@ func NewApIServerInstaller(appProvider app.Provider, appConfig app.Config, kindR
 	return installer, nil
 }
 
-func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
+func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	kindsByGV, err := r.getKindsByGroupVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get kinds by group version: %w", err)
@@ -81,7 +86,6 @@ func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		}
 		groupVersions = append(groupVersions, gv)
 	}
-	fmt.Println(scheme.AllKnownTypes())
 
 	internalGv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: runtime.APIVersionInternal}
 	for _, internalKind := range internalKinds {
@@ -89,20 +93,20 @@ func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		scheme.AddKnownTypeWithName(internalGv.WithKind(internalKind.Kind()+"List"), internalKind.ZeroListValue())
 
 		for _, kind := range kindsByGroup[internalKind.Group()] {
-			scheme.AddConversionFunc(kind.ZeroValue(), internalKind.ZeroValue(), r.conversionHandler)
-			scheme.AddConversionFunc(internalKind.ZeroValue(), kind.ZeroValue(), r.conversionHandler)
+			if err = scheme.AddConversionFunc(kind.ZeroValue(), internalKind.ZeroValue(), r.conversionHandler); err != nil {
+				return fmt.Errorf("could not add conversion func for kind %s: %w", internalKind.Kind(), err)
+			}
+			if err = scheme.AddConversionFunc(internalKind.ZeroValue(), kind.ZeroValue(), r.conversionHandler); err != nil {
+				return fmt.Errorf("could not add conversion func for kind %s: %w", internalKind.Kind(), err)
+			}
 		}
 	}
-	fmt.Println(scheme.AllKnownTypes())
 
 	sort.Slice(groupVersions, func(i, j int) bool {
 		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) < 0
 	})
-	scheme.SetVersionPriority(groupVersions...)
-
-	for _, groupVersion := range groupVersions {
-		fmt.Println(groupVersion.String())
-		fmt.Println(scheme.VersionsForGroupKind(schema.GroupKind{Group: groupVersion.Group, Kind: "TestKind"}))
+	if err = scheme.SetVersionPriority(groupVersions...); err != nil {
+		return fmt.Errorf("failed to set version priority: %w", err)
 	}
 
 	// save the scheme for later use
@@ -114,11 +118,11 @@ func (r *apiServerInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
-func (r *apiServerInstaller) ManifestData() *app.ManifestData {
+func (r *defaultInstaller) ManifestData() *app.ManifestData {
 	return r.appProvider.Manifest().ManifestData
 }
 
-func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
 	// Copy in the common definitions
 	maps.Copy(res, GetCommonOpenAPIDefinitions(callback))
@@ -129,7 +133,7 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 				continue
 			}
 			if r.scheme == nil {
-				fmt.Printf("scheme is not set in apiServerInstaller.GetOpenAPIDefinitions, skipping %s. This will impact kind availability\n", manifestKind.Kind)
+				fmt.Printf("scheme is not set in defaultInstaller.GetOpenAPIDefinitions, skipping %s. This will impact kind availability\n", manifestKind.Kind) //nolint:revive
 				continue
 			}
 			pkgPrefix := ""
@@ -139,11 +143,11 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 				}
 			}
 			if pkgPrefix == "" {
-				fmt.Printf("scheme does not contain kind %s.%s, skipping OpenAPI component\n", v.Name, manifestKind.Kind)
+				fmt.Printf("scheme does not contain kind %s.%s, skipping OpenAPI component\n", v.Name, manifestKind.Kind) //nolint:revive
 			}
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
 			if err != nil {
-				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err)
+				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err) //nolint:revive
 				continue
 			}
 			maps.Copy(res, oapi)
@@ -152,7 +156,7 @@ func (r *apiServerInstaller) GetOpenAPIDefinitions(callback common.ReferenceCall
 	return res
 }
 
-func (r *apiServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
+func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
 		r.scheme = newScheme()
@@ -183,8 +187,7 @@ func (r *apiServerInstaller) InstallAPIs(server *genericapiserver.GenericAPIServ
 	return server.InstallAPIGroup(&apiGroupInfo)
 }
 
-func (r *apiServerInstaller) AdmissionPlugin() (string, admission.Factory) {
-
+func (r *defaultInstaller) AdmissionPlugin() (string, admission.Factory) {
 	supportsMutation := false
 	supportsValidation := false
 	for _, v := range r.appConfig.ManifestData.Versions {
@@ -212,20 +215,20 @@ func (r *apiServerInstaller) AdmissionPlugin() (string, admission.Factory) {
 	return "", nil
 }
 
-func (r *apiServerInstaller) App(restConfig clientrest.Config) (app.App, error) {
+func (r *defaultInstaller) App(restConfig clientrest.Config) (app.App, error) {
 	if r.app != nil {
 		return r.app, nil
 	}
 	r.appConfig.KubeConfig = restConfig
-	app, err := r.appProvider.NewApp(r.appConfig)
+	a, err := r.appProvider.NewApp(r.appConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create app: %w", err)
 	}
-	r.app = app
-	return app, nil
+	r.app = a
+	return a, nil
 }
 
-func (r *apiServerInstaller) conversionHandler(a, b interface{}, scope conversion.Scope) error {
+func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error {
 	if r.app == nil {
 		return fmt.Errorf("app is not initialized")
 	}
@@ -268,7 +271,7 @@ func (r *apiServerInstaller) conversionHandler(a, b interface{}, scope conversio
 	return runtime.DecodeInto(r.codecs.UniversalDecoder(bResourceObj.GroupVersionKind().GroupVersion()), res.Raw, bObj)
 }
 
-func (r *apiServerInstaller) GroupVersions() []schema.GroupVersion {
+func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 	groupVersions := []schema.GroupVersion{}
 	for _, gv := range r.appConfig.ManifestData.Versions {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
@@ -276,7 +279,7 @@ func (r *apiServerInstaller) GroupVersions() []schema.GroupVersion {
 	return groupVersions
 }
 
-func (r *apiServerInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]resource.Kind, error) {
+func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]resource.Kind, error) {
 	out := map[schema.GroupVersion][]resource.Kind{}
 	group := r.appConfig.ManifestData.Group
 	for _, v := range r.appConfig.ManifestData.Versions {

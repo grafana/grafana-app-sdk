@@ -1,3 +1,4 @@
+//nolint:misspell,revive,unparam,funlen,dupl
 package apiserver
 
 import (

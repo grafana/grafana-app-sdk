@@ -535,7 +535,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			vs := VersionSchema{}
 			require.Nil(t, json.Unmarshal(test.schema, &vs))
-			res, err := vs.AsKubeOpenAPI(test.gvk, test.ref)
+			res, err := vs.AsKubeOpenAPI(test.gvk, test.ref, "test.grafana.app/v1")
 			if test.err != nil {
 				assert.Equal(t, test.err, err)
 			} else {

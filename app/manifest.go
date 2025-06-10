@@ -471,7 +471,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
-		key := fmt.Sprintf("%s/%s.%s", pkgPrefix, gvk.Version, k)
+		key := fmt.Sprintf("%s.%s", pkgPrefix, k)
 		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk, pkgPrefix)
 		// sort dependencies for consistent output
 		slices.Sort(deps)
@@ -538,7 +538,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 // oapi3SchemaToKubeSchema converts a SchemaRef into a spec.Schema and its dependencies.
 // It requires a ReferenceCallback for creating any references, and uses the gvk to rename references as "<group>/<version>.<reference>"
 //
-//nolint:funlen
+//nolint:funlen,unparam
 func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind, pkgPrefix string) (resSchema spec.Schema, dependencies []string) {
 	if sch.Ref != "" {
 		// Reformat the ref to use the path derived from the GVK

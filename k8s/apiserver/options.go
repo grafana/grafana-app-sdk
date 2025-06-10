@@ -19,12 +19,12 @@ type Options struct {
 	RecommendedOptions *genericoptions.RecommendedOptions
 	scheme             *runtime.Scheme
 	codecs             serializer.CodecFactory
-	installers         []APIServerInstaller
+	installers         []Installer
 }
 
 var defaultEtcdPathPrefix = "/registry/grafana.app"
 
-func NewOptions(installers []APIServerInstaller) *Options {
+func NewOptions(installers []Installer) *Options {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 
@@ -52,7 +52,9 @@ func (o *Options) Validate() error {
 }
 
 func (o *Options) ApplyTo(cfg *Config) error {
-	cfg.AddToScheme()
+	if err := cfg.AddToScheme(); err != nil {
+		return err
+	}
 
 	for _, installer := range o.installers {
 		pluginName, plugin := installer.AdmissionPlugin()

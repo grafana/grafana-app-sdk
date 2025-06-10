@@ -15,10 +15,10 @@ type Config struct {
 	Generic    *genericapiserver.RecommendedConfig
 	scheme     *runtime.Scheme
 	codecs     serializer.CodecFactory
-	installers []APIServerInstaller
+	installers []Installer
 }
 
-func NewConfig(installers []APIServerInstaller) (*Config, error) {
+func NewConfig(installers []Installer) (*Config, error) {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 	c := &Config{

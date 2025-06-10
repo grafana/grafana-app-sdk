@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"reflect"
 
+	"k8s.io/apiserver/pkg/admission"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"k8s.io/apiserver/pkg/admission"
 )
 
 type appAdmission struct {
@@ -17,7 +18,7 @@ type appAdmission struct {
 var _ admission.MutationInterface = (*appAdmission)(nil)
 var _ admission.ValidationInterface = (*appAdmission)(nil)
 
-func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
+func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, _ admission.ObjectInterfaces) error {
 	req, err := translateAdmissionAttributes(a)
 	if err != nil {
 		return admission.NewForbidden(a, err)
@@ -35,7 +36,7 @@ func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, o adm
 	return nil
 }
 
-func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, o admission.ObjectInterfaces) error {
+func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, _ admission.ObjectInterfaces) error {
 	req, err := translateAdmissionAttributes(a)
 	if err != nil {
 		return admission.NewForbidden(a, err)
@@ -48,7 +49,7 @@ func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, o 
 	return nil
 }
 
-func (a *appAdmission) Handles(operation admission.Operation) bool {
+func (*appAdmission) Handles(_ admission.Operation) bool {
 	return true
 }
 
@@ -75,14 +76,21 @@ func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest
 	var (
 		obj    resource.Object
 		oldObj resource.Object
+		ok     bool
 	)
 
 	if a.GetObject() != nil {
-		obj = a.GetObject().(resource.Object)
+		obj, ok = a.GetObject().(resource.Object)
+		if !ok {
+			return nil, admission.NewForbidden(a, fmt.Errorf("object is not a resource.Object"))
+		}
 	}
 
 	if a.GetOldObject() != nil {
-		oldObj = a.GetOldObject().(resource.Object)
+		oldObj, ok = a.GetOldObject().(resource.Object)
+		if !ok {
+			return nil, admission.NewForbidden(a, fmt.Errorf("oldObject is not a resource.Object"))
+		}
 	}
 
 	req := app.AdmissionRequest{

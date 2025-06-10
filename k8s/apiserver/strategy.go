@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/registry/rest"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type strategy struct {
@@ -28,47 +29,47 @@ func (s *strategy) NamespaceScoped() bool {
 	return s.kind.Scope() == resource.NamespacedScope
 }
 
-func (s *strategy) GenerateName(base string) string {
+func (*strategy) GenerateName(base string) string {
 	return fmt.Sprintf("%s-", base)
 }
 
-func (s *strategy) PrepareForCreate(ctx context.Context, obj runtime.Object) {
+func (*strategy) PrepareForCreate(_ context.Context, _ runtime.Object) {
 }
 
-func (s *strategy) Validate(ctx context.Context, obj runtime.Object) field.ErrorList {
+func (*strategy) Validate(_ context.Context, _ runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 
-func (s *strategy) Canonicalize(obj runtime.Object) {
+func (*strategy) Canonicalize(_ runtime.Object) {
 }
 
-func (s *strategy) AllowCreateOnUpdate() bool {
+func (*strategy) AllowCreateOnUpdate() bool {
 	return false
 }
 
-func (s *strategy) WarningsOnCreate(ctx context.Context, obj runtime.Object) []string {
+func (*strategy) WarningsOnCreate(_ context.Context, _ runtime.Object) []string {
 	return nil
 }
 
-func (s *strategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+func (*strategy) PrepareForUpdate(_ context.Context, _, _ runtime.Object) {
 }
 
-func (s *strategy) ValidateUpdate(ctx context.Context, obj, old runtime.Object) field.ErrorList {
+func (*strategy) ValidateUpdate(_ context.Context, _, _ runtime.Object) field.ErrorList {
 	return field.ErrorList{}
 }
 
-func (s *strategy) AllowUnconditionalUpdate() bool {
+func (*strategy) AllowUnconditionalUpdate() bool {
 	return false
 }
 
-func (s *strategy) WarningsOnUpdate(ctx context.Context, obj, old runtime.Object) []string {
+func (*strategy) WarningsOnUpdate(_ context.Context, _, _ runtime.Object) []string {
 	return nil
 }
 
-func (s *strategy) PrepareForDelete(ctx context.Context, obj runtime.Object) {
+func (*strategy) PrepareForDelete(_ context.Context, _ runtime.Object) {
 }
 
-func (s *strategy) WarningsOnDelete(ctx context.Context, obj runtime.Object) []string {
+func (*strategy) WarningsOnDelete(_ context.Context, _ runtime.Object) []string {
 	return nil
 }
 
@@ -80,7 +81,7 @@ func (s *strategy) Recognizes(gvk schema.GroupVersionKind) bool {
 	return gvk == s.kind.GroupVersionKind()
 }
 
-func (s *strategy) CheckGracefulDelete(ctx context.Context, obj runtime.Object, options *metav1.DeleteOptions) bool {
+func (*strategy) CheckGracefulDelete(_ context.Context, _ runtime.Object, _ *metav1.DeleteOptions) bool {
 	return false
 }
 

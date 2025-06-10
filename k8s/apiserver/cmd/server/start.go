@@ -13,7 +13,7 @@ func NewCommandStartServer(ctx context.Context, o *apiserver.Options) *cobra.Com
 	cmd := &cobra.Command{
 		Short: "Launch a API server",
 		Long:  "Launch a API server",
-		RunE: func(c *cobra.Command, args []string) error {
+		RunE: func(_ *cobra.Command, _ []string) error {
 			if err := o.Validate(); err != nil {
 				return err
 			}
