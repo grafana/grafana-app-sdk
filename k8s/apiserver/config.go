@@ -75,7 +75,15 @@ func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*generic
 	loopbackConfig := *c.Generic.LoopbackClientConfig
 	loopbackConfig.APIPath = "/apis"
 	for _, installer := range c.installers {
-		_, err := installer.App(loopbackConfig)
+		md := installer.ManifestData()
+		if md == nil {
+			return nil, fmt.Errorf("no manifest data for installer for GroupVersions %v", installer.GroupVersions())
+		}
+		_, err := installer.App().Initialize(app.Config{
+			// TODO: propagate SpecificConfig
+			KubeConfig:   loopbackConfig,
+			ManifestData: *md,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -95,11 +103,11 @@ func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*generic
 	err = server.AddPostStartHook("app runners", func(context genericapiserver.PostStartHookContext) error {
 		runner := app.NewMultiRunner()
 		for _, installer := range c.installers {
-			app, err := installer.App(loopbackConfig)
+			installerApp, err := installer.App().App()
 			if err != nil {
-				return fmt.Errorf("error initializing app: %w", err)
+				return fmt.Errorf("error getting app on startup: %w", err)
 			}
-			runner.AddRunnable(app.Runner())
+			runner.AddRunnable(installerApp.Runner())
 		}
 		return runner.Run(context.Context)
 	})

@@ -31,7 +31,7 @@ func NewApp(config app.Config) (app.App, error) {
 		ManagedKinds: []simple.AppManagedKind{{
 			Kind: v1alpha1.TestKindKind(),
 			Validator: &simple.Validator{
-				ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
+				ValidateFunc: func(_ context.Context, request *app.AdmissionRequest) error {
 					if request.Object.GetName() == "notallowed" {
 						return fmt.Errorf("not allowed")
 					}

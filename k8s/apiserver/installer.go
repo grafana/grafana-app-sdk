@@ -2,10 +2,12 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
 	"sort"
+	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -17,7 +19,6 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
-	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -38,8 +39,10 @@ type Installer interface {
 	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
 	// If the App does not provide admission control, it should return nil
 	AdmissionPlugin() admission.Factory
-	// App creates the app.App if it does not yet exist, or returns the existing app.App if already initialized
-	App(restConfig clientrest.Config) (app.App, error)
+	// App returns an AppAccessor which allows for access and/or initialization of the App for the installer.
+	// An App should only be initialized once the rest.Config is ready.
+	// Processes which depend on App().App() availability should lazy-load or return temporary errors until the app is initialized.
+	App() *AppAccessor
 	// GroupVersions returns the list of all GroupVersions supported by this Installer
 	GroupVersions() []schema.GroupVersion
 	// ManifestData returns the App's ManifestData
@@ -50,6 +53,53 @@ type GenericAPIServer interface {
 	InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error
 }
 
+var (
+	ErrAppNotInitialized     = errors.New("app not initialized")
+	ErrAppAlreadyInitialized = errors.New("app already initialized")
+)
+
+// AppAccessor wraps an app.Provider and ensures that an App is only initialized once with provider.NewApp.
+// Once the App has been initialized, it can be accessed from the Provider and subsequent initialization calls will fail.
+type AppAccessor struct {
+	provider app.Provider
+	app      app.App
+	mux      sync.Mutex
+}
+
+func NewAppAccessor(provider app.Provider) *AppAccessor {
+	return &AppAccessor{
+		provider: provider,
+	}
+}
+
+// App returns the underlying app.App if it has been initialized with Initialize. Otherwise it returns nil and ErrAppNotInitialized
+func (a *AppAccessor) App() (app.App, error) {
+	if a.app == nil {
+		return nil, ErrAppNotInitialized
+	}
+	return a.app, nil
+}
+
+// Initialize initializes the app.App with the provided config, and returns the initialized app.App and any error.
+// If the app.App has already been initialized, it returns nil and ErrAppAlreadyInitialized
+func (a *AppAccessor) Initialize(cfg app.Config) (app.App, error) {
+	a.mux.Lock()
+	defer a.mux.Unlock()
+	if a.app != nil {
+		return nil, ErrAppAlreadyInitialized
+	}
+	initApp, err := a.provider.NewApp(cfg)
+	if err != nil {
+		return nil, err
+	}
+	a.app = initApp
+	return a.app, nil
+}
+
+func (a *AppAccessor) Manifest() app.Manifest {
+	return a.provider.Manifest()
+}
+
 var _ Installer = (*defaultInstaller)(nil)
 
 type defaultInstaller struct {
@@ -57,7 +107,7 @@ type defaultInstaller struct {
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
 
-	app    app.App
+	app    *AppAccessor
 	scheme *runtime.Scheme
 	codecs serializer.CodecFactory
 }
@@ -70,6 +120,7 @@ func NewDefaultInstaller(appProvider app.Provider, appConfig app.Config, kindRes
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
+		app:                 NewAppAccessor(appProvider),
 	}
 	return installer, nil
 }
@@ -216,7 +267,11 @@ func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 		return func(_ io.Reader) (admission.Interface, error) {
 			return &appAdmission{
 				appGetter: func() app.App {
-					return r.app
+					a, err := r.app.App()
+					if err != nil {
+						return nil
+					}
+					return a
 				},
 				manifestData: r.appConfig.ManifestData,
 			}, nil
@@ -226,17 +281,8 @@ func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 	return nil
 }
 
-func (r *defaultInstaller) App(restConfig clientrest.Config) (app.App, error) {
-	if r.app != nil {
-		return r.app, nil
-	}
-	r.appConfig.KubeConfig = restConfig
-	a, err := r.appProvider.NewApp(r.appConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create app: %w", err)
-	}
-	r.app = a
-	return a, nil
+func (r *defaultInstaller) App() *AppAccessor {
+	return r.app
 }
 
 func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error {
@@ -269,7 +315,11 @@ func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error
 			Encoding: resource.KindEncodingJSON,
 		},
 	}
-	res, err := r.app.Convert(context.Background(), req)
+	fetchedApp, err := r.app.App()
+	if err != nil {
+		return fmt.Errorf("failed to convert object %s: %w", aResourceObj.GetName(), err)
+	}
+	res, err := fetchedApp.Convert(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("failed to convert object %s from %s to %s: %w", aResourceObj.GetName(), req.SourceGVK, req.TargetGVK, err)
 	}
