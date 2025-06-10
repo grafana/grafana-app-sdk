@@ -29,13 +29,25 @@ type ManagedKindResolver func(kind, ver string) (resource.Kind, bool)
 // Installer represents an App which can be installed on a kubernetes API server.
 // It provides all the methods needed to configure and install an App onto an API server.
 type Installer interface {
+	// AddToScheme registers all the kinds provided by the App to the runtime.Scheme
 	AddToScheme(scheme *runtime.Scheme) error
+	// GetOpenAPIDefinitions gets a map of OpenAPI definitions for use with kubernetes OpenAPI
 	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
-	InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
-	AdmissionPlugin() (string, admission.Factory)
+	// InstallAPIs installs the API endpoints to an API server
+	InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
+	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
+	// If the App does not provide admission control, it should return nil
+	AdmissionPlugin() admission.Factory
+	// App creates the app.App if it does not yet exist, or returns the existing app.App if already initialized
 	App(restConfig clientrest.Config) (app.App, error)
+	// GroupVersions returns the list of all GroupVersions supported by this Installer
 	GroupVersions() []schema.GroupVersion
+	// ManifestData returns the App's ManifestData
 	ManifestData() *app.ManifestData
+}
+
+type GenericAPIServer interface {
+	InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error
 }
 
 var _ Installer = (*defaultInstaller)(nil)
@@ -156,7 +168,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
-func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
+func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
 		r.scheme = newScheme()
@@ -187,7 +199,7 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 	return server.InstallAPIGroup(&apiGroupInfo)
 }
 
-func (r *defaultInstaller) AdmissionPlugin() (string, admission.Factory) {
+func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 	supportsMutation := false
 	supportsValidation := false
 	for _, v := range r.appConfig.ManifestData.Versions {
@@ -201,8 +213,7 @@ func (r *defaultInstaller) AdmissionPlugin() (string, admission.Factory) {
 		}
 	}
 	if supportsMutation || supportsValidation {
-		pluginName := r.appProvider.Manifest().ManifestData.AppName + " admission"
-		return pluginName, func(_ io.Reader) (admission.Interface, error) {
+		return func(_ io.Reader) (admission.Interface, error) {
 			return &appAdmission{
 				appGetter: func() app.App {
 					return r.app
@@ -212,7 +223,7 @@ func (r *defaultInstaller) AdmissionPlugin() (string, admission.Factory) {
 		}
 	}
 
-	return "", nil
+	return nil
 }
 
 func (r *defaultInstaller) App(restConfig clientrest.Config) (app.App, error) {

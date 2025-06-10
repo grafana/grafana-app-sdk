@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -52,13 +53,21 @@ func (o *Options) Validate() error {
 }
 
 func (o *Options) ApplyTo(cfg *Config) error {
-	if err := cfg.AddToScheme(); err != nil {
+	// Ensure the config's scheme matches the options' scheme. Otherwise there can be problems with codecs
+	cfg.scheme = o.scheme
+	cfg.codecs = o.codecs
+	if err := cfg.addToScheme(); err != nil {
 		return err
 	}
 
 	for _, installer := range o.installers {
-		pluginName, plugin := installer.AdmissionPlugin()
-		if pluginName != "" {
+		md := installer.ManifestData()
+		if md == nil {
+			return fmt.Errorf("manifest is not initialized for installer for GroupVersions %v", installer.GroupVersions())
+		}
+		pluginName := md.AppName + " admission"
+		plugin := installer.AdmissionPlugin()
+		if plugin != nil {
 			o.RecommendedOptions.Admission.Plugins.Register(pluginName, plugin)
 			o.RecommendedOptions.Admission.RecommendedPluginOrder = append(o.RecommendedOptions.Admission.RecommendedPluginOrder, pluginName)
 			o.RecommendedOptions.Admission.EnablePlugins = append(o.RecommendedOptions.Admission.EnablePlugins, pluginName)
@@ -81,6 +90,7 @@ func (o *Options) ApplyTo(cfg *Config) error {
 	return nil
 }
 
+// Config creates a config
 func (o *Options) Config() (*Config, error) {
 	cfg := &Config{
 		Generic:    genericapiserver.NewRecommendedConfig(o.codecs),
