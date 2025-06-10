@@ -121,34 +121,47 @@ func (w *concurrentWatcher) Run(ctx context.Context) {
 
 			events := queue.events()
 			wait.Until(func() {
-				for next := range events {
-					event, ok := next.(eventInfo)
-					if !ok {
-						utilruntime.HandleError(fmt.Errorf("unrecognized notification: %T", next))
-					}
+				for {
+					select {
+					case <-ctx.Done():
+						return
 
-					var err error
-					switch event.action {
-					case ResourceActionCreate:
-						err = w.watcher.Add(event.ctx, event.target)
-					case ResourceActionUpdate:
-						err = w.watcher.Update(event.ctx, event.source, event.target)
-					case ResourceActionDelete:
-						err = w.watcher.Delete(event.ctx, event.target)
-					default:
-						utilruntime.HandleError(fmt.Errorf("invalid event type: %T", event.action))
-					}
-					if err != nil && w.errorHandler != nil {
-						w.errorHandler(ctx, err)
+					case next, ok := <-events:
+						if !ok {
+							cancel()
+							return
+						}
+
+						event, ok := next.(eventInfo)
+						if !ok {
+							utilruntime.HandleError(fmt.Errorf("unrecognized notification: %T", next))
+						}
+
+						w.handleEvent(ctx, event)
 					}
 				}
-				// the only way to get here is if the events channel is empty and closed
-				cancel()
 			}, 1*time.Second, ctx.Done())
 		}()
 	}
 
 	wg.Wait()
+}
+
+func (w *concurrentWatcher) handleEvent(ctx context.Context, event eventInfo) {
+	var err error
+	switch event.action {
+	case ResourceActionCreate:
+		err = w.watcher.Add(event.ctx, event.target)
+	case ResourceActionUpdate:
+		err = w.watcher.Update(event.ctx, event.source, event.target)
+	case ResourceActionDelete:
+		err = w.watcher.Delete(event.ctx, event.target)
+	default:
+		utilruntime.HandleError(fmt.Errorf("invalid event type: %T", event.action))
+	}
+	if err != nil && w.errorHandler != nil {
+		w.errorHandler(ctx, err)
+	}
 }
 
 func (w *concurrentWatcher) hashMod(obj resource.Object) uint64 {
