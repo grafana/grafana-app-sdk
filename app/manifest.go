@@ -93,6 +93,10 @@ type ManifestData struct {
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
 }
 
+func (m *ManifestData) IsEmpty() bool {
+	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
+}
+
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
 func (m *ManifestData) Validate() error {
 	type kindData struct {
@@ -414,11 +418,11 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 }
 
 // AsKubeOpenAPI converts the schema into a map of reference string to common.OpenAPIDefinition objects, suitable for use with kubernetes API server code.
-// It uses the provided schema.GroupVersionKind for naming of the kind and for reference naming. The map output will look something like:
+// It uses the provided schema.GroupVersionKind and pkgPrefix for naming of the kind and for reference naming. The map output will look something like:
 //
-//	"<group>/<version>.<kind>": {...},
-//	"<group>/<version>.<kind>List": {...},
-//	"<group>/<version>.spec": {...}, // ...etc. for all other resources
+//	"<pkgPrefix>.<kind>": {...},
+//	"<pkgPrefix>.<kind>List": {...},
+//	"<pkgPrefix>.<kind>Spec": {...}, // ...etc. for all other resources
 //
 // If you wish to exclude a field from your kind's object, ensure that the field name begins with a `#`, which will be treated as a definition.
 // Definitions are included in the returned map as types, but are not included as fields (alongside "spec","status", etc.) in the kind object.
@@ -426,7 +430,7 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 // It will error if the underlying schema cannot be parsed as valid openAPI.
 //
 //nolint:funlen
-func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback) (map[string]common.OpenAPIDefinition, error) {
+func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback, pkgPrefix string) (map[string]common.OpenAPIDefinition, error) {
 	// Convert the kin-openapi to kube-openapi
 	oapi, err := v.AsOpenAPI3()
 	if err != nil {
@@ -468,11 +472,18 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		},
 		Dependencies: make([]string, 0),
 	}
+	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
-		key := fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, k)
-		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk)
+		// Name the schema as <pkgPrefix>.<Kind><schema>
+		// This ensures no conflicts when merging with other OpenAPI defs later
+		ucK := strings.ToUpper(k)
+		if len(k) > 1 {
+			ucK = strings.ToUpper(k[:1]) + k[1:]
+		}
+		key := fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
+		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk, pkgPrefix)
 		// sort dependencies for consistent output
 		slices.Sort(deps)
 		result[key] = common.OpenAPIDefinition{
@@ -496,9 +507,9 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	slices.Sort(kind.Dependencies)
 
 	// add the kind object to our result map
-	result[fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)] = kind
+	result[fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)] = kind
 	// add the kind list object to our result map (static object type based on the kind object)
-	result[fmt.Sprintf("%s/%s.%sList", gvk.Group, gvk.Version, gvk.Kind)] = common.OpenAPIDefinition{
+	result[fmt.Sprintf("%s.%sList", pkgPrefix, gvk.Kind)] = common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
@@ -518,7 +529,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]any{},
-										Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)),
+										Ref:     ref(fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)),
 									},
 								},
 							},
@@ -529,7 +540,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
 	}
 
 	return result, nil
@@ -538,11 +549,11 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 // oapi3SchemaToKubeSchema converts a SchemaRef into a spec.Schema and its dependencies.
 // It requires a ReferenceCallback for creating any references, and uses the gvk to rename references as "<group>/<version>.<reference>"
 //
-//nolint:funlen
-func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind) (resSchema spec.Schema, dependencies []string) {
+//nolint:funlen,unparam
+func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind, pkgPrefix string) (resSchema spec.Schema, dependencies []string) {
 	if sch.Ref != "" {
 		// Reformat the ref to use the path derived from the GVK
-		schRef := fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
+		schRef := fmt.Sprintf("%s.%s", pkgPrefix, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
 		return spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Ref: ref(schRef),
@@ -603,7 +614,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 		}
 	}
 	if sch.Value.AdditionalProperties.Schema != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk, pkgPrefix)
 		resSchema.AdditionalProperties = &spec.SchemaOrBool{
 			Schema: &s,
 		}
@@ -624,7 +635,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AllOf != nil {
 		resSchema.AllOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.AllOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.AllOf = append(resSchema.AllOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -632,7 +643,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AnyOf != nil {
 		resSchema.AnyOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.AnyOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.AnyOf = append(resSchema.AnyOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -640,20 +651,20 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.OneOf != nil {
 		resSchema.OneOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.OneOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.OneOf = append(resSchema.OneOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
 	}
 	if sch.Value.Not != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.Not, ref, gvk)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.Not, ref, gvk, pkgPrefix)
 		resSchema.Not = &s
 		dependencies = updateDependencies(dependencies, deps)
 	}
 
 	// Items
 	if sch.Value.Items != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.Items, ref, gvk)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.Items, ref, gvk, pkgPrefix)
 		resSchema.Items = &spec.SchemaOrArray{
 			Schema: &s,
 		}
@@ -664,7 +675,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if len(sch.Value.Properties) > 0 {
 		resSchema.Properties = make(map[string]spec.Schema)
 		for k, v := range sch.Value.Properties {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.Properties[k] = s
 			dependencies = updateDependencies(dependencies, deps)
 		}
