@@ -93,6 +93,10 @@ type ManifestData struct {
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
 }
 
+func (m *ManifestData) IsEmpty() bool {
+	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
+}
+
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
 func (m *ManifestData) Validate() error {
 	type kindData struct {
@@ -472,7 +476,13 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
-		key := fmt.Sprintf("%s.%s", pkgPrefix, k)
+		// Name the schema as <pkgPrefix>.<Kind><schema>
+		// This ensures no conflicts when merging with other OpenAPI defs later
+		ucK := strings.ToUpper(k)
+		if len(k) > 1 {
+			ucK = strings.ToUpper(k[:1]) + k[1:]
+		}
+		key := fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
 		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk, pkgPrefix)
 		// sort dependencies for consistent output
 		slices.Sort(deps)

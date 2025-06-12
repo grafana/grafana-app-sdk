@@ -39,7 +39,7 @@ func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, _ adm
 
 	supported := false
 	for _, val := range adInfo.Mutation.Operations {
-		if string(val) == string(req.Action) {
+		if string(val) == string(req.Action) || val == app.AdmissionOperationAny {
 			supported = true
 			break
 		}
@@ -81,7 +81,7 @@ func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, _ 
 
 	supported := false
 	for _, val := range adInfo.Validation.Operations {
-		if string(val) == string(req.Action) {
+		if string(val) == string(req.Action) || val == app.AdmissionOperationAny {
 			supported = true
 			break
 		}
@@ -120,6 +120,10 @@ func (ad *appAdmission) getAdmissionInfo(gvk schema.GroupVersionKind) *app.Admis
 }
 
 func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest, error) {
+	if a == nil {
+		return nil, errors.New("admission.Attributes cannot be nil")
+	}
+
 	var action resource.AdmissionAction
 	switch a.GetOperation() {
 	case admission.Create:

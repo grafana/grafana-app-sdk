@@ -43,7 +43,12 @@ type AppInstaller interface {
 	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
 	// If the App does not provide admission control, it should return nil
 	AdmissionPlugin() admission.Factory
+	// InitializeApp initializes the underlying App for the AppInstaller using the provided kube config.
+	// This should only be called once, if the App is already initialized the method should return ErrAppAlreadyInitialized.
+	// App initialization should only be done once the final kube config is ready, as it cannot be changed after initialization.
 	InitializeApp(clientrest.Config) error
+	// App returns the underlying App, if initialized, or ErrAppNotInitialized if not.
+	// Callers which depend on the App should account for the App not yet being initialized and do lazy loading or delayed retries.
 	App() (app.App, error)
 	// GroupVersions returns the list of all GroupVersions supported by this AppInstaller
 	GroupVersions() []schema.GroupVersion
@@ -86,10 +91,24 @@ func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, kind
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
 	}
+	if installer.appConfig.ManifestData.IsEmpty() {
+		// Fill in the manifest data from the Provider if we can
+		m := appProvider.Manifest()
+		if m.ManifestData != nil {
+			installer.appConfig.ManifestData = *m.ManifestData
+		}
+	}
+	if installer.appConfig.SpecificConfig == nil {
+		installer.appConfig.SpecificConfig = appProvider.SpecificConfig()
+	}
 	return installer, nil
 }
 
 func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
+	if scheme == nil {
+		return errors.New("scheme cannot be nil")
+	}
+
 	kindsByGV, err := r.getKindsByGroupVersion()
 	if err != nil {
 		return fmt.Errorf("failed to get kinds by group version: %w", err)
@@ -294,11 +313,7 @@ func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error
 			Encoding: resource.KindEncodingJSON,
 		},
 	}
-	fetchedApp, err := r.App()
-	if err != nil {
-		return fmt.Errorf("failed to convert object %s: %w", aResourceObj.GetName(), err)
-	}
-	res, err := fetchedApp.Convert(context.Background(), req)
+	res, err := r.app.Convert(context.Background(), req)
 	if err != nil {
 		return fmt.Errorf("failed to convert object %s from %s to %s: %w", aResourceObj.GetName(), req.SourceGVK, req.TargetGVK, err)
 	}
