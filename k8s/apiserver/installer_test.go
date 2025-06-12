@@ -3,13 +3,17 @@ package apiserver
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
+	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -75,15 +79,172 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 }
 
 func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
-	// TODO
+	sch1, err := app.VersionSchemaFromMap(map[string]any{
+		"spec": map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"foo": map[string]any{
+					"type": "string",
+				},
+			},
+		},
+	})
+	kind := TestKind
+	require.Nil(t, err)
+	md := app.ManifestData{
+		Group: kind.Group(),
+		Versions: []app.ManifestVersion{{
+			Name: kind.Version(),
+			Kinds: []app.ManifestVersionKind{{
+				Kind:   kind.Kind(),
+				Schema: sch1,
+			}},
+		}},
+	}
+	refCallback := func(path string) spec.Ref {
+		ref, _ := spec.NewRef(path)
+		return ref
+	}
+	expected := make(map[string]common.OpenAPIDefinition)
+	oapi1, err := md.Versions[0].Kinds[0].Schema.AsKubeOpenAPI(kind.GroupVersionKind(), refCallback, "github.com/grafana/grafana-app-sdk/resource")
+	require.Nil(t, err)
+	maps.Copy(expected, oapi1)
+
+	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(k, v string) (resource.Kind, bool) {
+		return kind, true
+	})
+	require.Nil(t, err)
+	scheme := newScheme()
+	require.Nil(t, installer.AddToScheme(scheme))
+	res := installer.GetOpenAPIDefinitions(refCallback)
+	require.Equal(t, len(expected), len(res))
+	assert.Equal(t, expected, res)
 }
 
 func TestDefaultInstaller_InstallAPIs(t *testing.T) {
-	// TODO
+	md := app.ManifestData{
+		Versions: []app.ManifestVersion{{
+			Name:   TestKind.Version(),
+			Served: true,
+			Kinds: []app.ManifestVersionKind{{
+				Kind:   TestKind.Kind(),
+				Plural: TestKind.Plural(),
+				Admission: &app.AdmissionCapabilities{
+					Validation: &app.ValidationCapability{
+						Operations: []app.AdmissionOperation{app.AdmissionOperationAny},
+					},
+				},
+			}},
+		}},
+	}
+	t.Run("error adding to scheme", func(t *testing.T) {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(kind, ver string) (resource.Kind, bool) {
+			return TestKind, false
+		})
+		require.Nil(t, err)
+		err = installer.InstallAPIs(&MockGenericAPIServer{
+			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
+				assert.Fail(t, "should not be called")
+				return errors.New("I AM ERROR")
+			},
+		}, nil)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, "failed to add to scheme: failed to get kinds by group version: failed to resolve kind Test")
+	})
+
+	t.Run("error getting groupversions", func(t *testing.T) {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(kind, ver string) (resource.Kind, bool) {
+			return TestKind, false
+		})
+		require.Nil(t, err)
+		installer.scheme = newScheme()
+		err = installer.InstallAPIs(&MockGenericAPIServer{
+			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
+				assert.Fail(t, "should not be called")
+				return errors.New("I AM ERROR")
+			},
+		}, nil)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, "failed to get kinds by group version: failed to resolve kind Test")
+	})
+
+	t.Run("error creating store", func(t *testing.T) {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(kind, ver string) (resource.Kind, bool) {
+			return TestKind, true
+		})
+		require.Nil(t, err)
+		err = installer.InstallAPIs(&MockGenericAPIServer{
+			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
+				assert.Fail(t, "should not be called")
+				return errors.New("I AM ERROR")
+			},
+		}, nil)
+		assert.NotNil(t, err)
+		assert.EqualError(t, err, "failed to create store for kind Test: failed completing storage options for Test: options for tests.test.ext.grafana.app must have RESTOptions set")
+	})
 }
 
 func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
-	// TODO
+	t.Run("no admission control", func(t *testing.T) {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil)
+		require.Nil(t, err)
+		plugin := installer.AdmissionPlugin()
+		assert.Nil(t, plugin)
+	})
+
+	t.Run("validation", func(t *testing.T) {
+		md := app.ManifestData{
+			Versions: []app.ManifestVersion{{
+				Name:   TestKind.Version(),
+				Served: true,
+				Kinds: []app.ManifestVersionKind{{
+					Kind:   TestKind.Kind(),
+					Plural: TestKind.Plural(),
+					Admission: &app.AdmissionCapabilities{
+						Validation: &app.ValidationCapability{
+							Operations: []app.AdmissionOperation{app.AdmissionOperationAny},
+						},
+					},
+				}},
+			}},
+		}
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil)
+		require.Nil(t, err)
+		plugin := installer.AdmissionPlugin()
+		assert.NotNil(t, plugin)
+		adm, err := plugin(nil)
+		require.Nil(t, err)
+		appAdm, ok := adm.(*appAdmission)
+		require.True(t, ok)
+		assert.Equal(t, md, appAdm.manifestData)
+	})
+
+	t.Run("mutation", func(t *testing.T) {
+		md := app.ManifestData{
+			Versions: []app.ManifestVersion{{
+				Name:   TestKind.Version(),
+				Served: true,
+				Kinds: []app.ManifestVersionKind{{
+					Kind:   TestKind.Kind(),
+					Plural: TestKind.Plural(),
+					Admission: &app.AdmissionCapabilities{
+						Mutation: &app.MutationCapability{
+							Operations: []app.AdmissionOperation{app.AdmissionOperationAny},
+						},
+					},
+				}},
+			}},
+		}
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil)
+		require.Nil(t, err)
+		plugin := installer.AdmissionPlugin()
+		assert.NotNil(t, plugin)
+		adm, err := plugin(nil)
+		require.Nil(t, err)
+		appAdm, ok := adm.(*appAdmission)
+		require.True(t, ok)
+		assert.Equal(t, md, appAdm.manifestData)
+	})
 }
 
 func TestDefaultInstaller_InitializeApp(t *testing.T) {
@@ -224,4 +385,15 @@ func TestDefaultInstaller_ManifestData(t *testing.T) {
 	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(data), nil, nil), app.Config{}, nil)
 	require.Nil(t, err)
 	assert.Equal(t, &data, installer.ManifestData())
+}
+
+type MockGenericAPIServer struct {
+	InstallAPIGroupFunc func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+}
+
+func (m *MockGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error {
+	if m.InstallAPIGroupFunc != nil {
+		return m.InstallAPIGroupFunc(apiGroupInfo)
+	}
+	return nil
 }
