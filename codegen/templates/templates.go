@@ -391,11 +391,12 @@ func WriteOperatorConfig(out io.Writer) error {
 }
 
 type ManifestGoFileMetadata struct {
-	Package         string
-	Repo            string
-	CodegenPath     string
-	KindsAreGrouped bool
-	ManifestData    app.ManifestData
+	Package              string
+	Repo                 string
+	CodegenPath          string
+	KindsAreGrouped      bool
+	ManifestData         app.ManifestData
+	CodegenManifestGroup string
 }
 
 func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
@@ -450,7 +451,7 @@ func (m ManifestGoFileMetadata) Packages() []string {
 		gvs := make(map[string]string)
 		for _, k := range m.ManifestData.Kinds {
 			for _, v := range k.Versions {
-				gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.ManifestData.Group), ToPackageName(v.Name))] = ToPackageName(v.Name)
+				gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))] = ToPackageName(v.Name)
 			}
 		}
 		for pkg, alias := range gvs {
