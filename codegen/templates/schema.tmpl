@@ -22,9 +22,13 @@ var (
                 }{{ if .Optional }}
                 if cast.{{$root.ToObjectPath .Field}} == nil {
                     return "", nil
-                }
-                return *cast.{{$root.ToObjectPath .Field}}, nil{{ else }}
-                return cast.{{$root.ToObjectPath .Field}}, nil{{ end }}
+                }{{ if eq .Type "string" }}
+                return *cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
+                return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
+                return fmt.Sprintf("%v", *cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ else }}{{ if eq .Type "string" }}
+                return cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
+                return fmt.Sprintf("%d", cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
+                return fmt.Sprintf("%v", cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ end }}
             },
         },
         {{ end }} }){{ end }})
