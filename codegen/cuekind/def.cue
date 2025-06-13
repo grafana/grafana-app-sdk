@@ -4,6 +4,7 @@ import (
 	"strings"
 	"struct"
 	"time"
+	"list"
 )
 
 // _kubeObjectMetadata is metadata found in a kubernetes object's metadata field.
@@ -165,7 +166,7 @@ Kind: S={
 			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
 			// Fields cannot include custom metadata (TODO: check if we can use annotations for field selectors)
-			selectableFields: [...string]
+			selectableFields: [...string] & list.MaxItems(8)
 			validation: #AdmissionCapability | *S.validation
 			mutation:   #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
