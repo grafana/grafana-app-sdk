@@ -141,5 +141,5 @@ func getCUEValueKindString(v cue.Value, path cue.Path) (string, error) {
 	case strings.Contains(roughType, "int"):
 		return "int", nil
 	}
-	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, and int", v.Kind())
+	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, int and time.Time", v.Kind())
 }
