@@ -118,7 +118,7 @@ type MyKindConverter struct {}
 func (m *MyKindConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
     // We shouldn't ever see this, but just in case...
     if targetAPIVersion == obj.APIVersion {
-        return obj.Raw, nil
+        return nil, fmt.Errorf("conversion from a version to itself should not call the webhook: %s", targetAPIVersion)
     }
     targetGVK := schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind)
 

@@ -26,13 +26,11 @@ Custom Resource Definitions must have a **group** and **version**, which are use
 ### CRDs & grafana-app-sdk
 
 When you author kinds and use `grafana-app-sdk generate` to [generate code](code-generation.md), you'll get a CRD file for each kind as well. 
-The CRD file will contain the entire lineage expressed in openAPI format, and can be used to create your kind as a CRD in a kubernetes cluster. 
+The CRD file will contain the entire lineage expressed in openAPI format, and can be used to create your kind as a CRD in a kubernetes cluster.
 The generated `resource.Schema` is then used to identify the **group**, **version**, and **kind** of your CRD when interacting with kubernetes. 
 You can then use a `k8s.ClientRegistry` to generate clients which can translate the CRDs in the cluster into the generated go type. 
 
-The reason the client intermediary is necessary is twofold:
-1. It allows thema to be inserted at the unmarshal point
-2. The format of metadata in your authored kind doesn't exactly match kubernetes' metadata format--the kind has more metadata, which is encoded and decoded in kubernetes' annotations for the object. The client performs this translation.
+The client intermediary is necessary because the metadata format in your authored kind doesn't exactly match Kubernetes' metadata format. The kind has more metadata, which is encoded and decoded in the Kubernetes object's annotations, and the client performs this translation.
 
 You can still directly interface with the CRD's through kubernetes tooling or APIs as well, the SDK's tooling just makes understanding and updating the object's metadata simpler.
 
@@ -51,7 +49,7 @@ or even resources which your code doesn't manage, but you want to take action ba
 
 Within the SDK, there is the `operator.Operator` type, which handles one or more `operator.Controller` objects, which are intended to handle specific resources or groups of resources. An `operator.Controller` can be run on its own, as well, without being a part of an `operator.Operator`.
 The built-in `operator.Controller` object is the `operator.InformerController`, which uses a pattern of having `operator.Informer` objects which handle emitting events for add, update, or delete actions on a specific kind, and `operator.ResourceWatcher` objects which are user-defined and react to events emitted by Informers (this is very similar to the kubernetes informer pattern, just with a decoupling between the informer and the actions to take for events). A reconciler-pattern controller is also planned for the very near future. 
-For more details, see the [Operator Examples](../examples/operator) or the [Operator Package README](../operator/README.md).
+For more details, see the [Operator Examples](../examples/operator) or the [Operator Package README](../docs/operators.md).
 
 ### Running an Operator
 

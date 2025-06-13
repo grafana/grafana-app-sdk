@@ -1,11 +1,8 @@
-import React from 'react';
-import { css } from '@emotion/css';
+import React, { useState, useEffect }  from 'react';
 import { useForm } from 'react-hook-form';
-import { GrafanaTheme2 } from '@grafana/data';
-import { useStyles2, Button, IconButton, Field, Input, Card, TagList } from '@grafana/ui';
+import {  Button, IconButton, Field, Input, Card, TagList } from '@grafana/ui';
 import { IssueClient } from '../api/issue_client';
 import { Issue } from '../generated/issue/v1/issue_object_gen';
-import { useState, useEffect } from 'react';
 import { PluginPage } from '@grafana/runtime';
 
 // This is used for the create new issue form
@@ -15,8 +12,6 @@ type ReactHookFormProps = {
 };
 
 function PageOne() {
-    const s = useStyles2(getStyles);
-
     let issues: Issue[] = [];
     const [issuesData, setIssuesData] = useState(issues);
     useEffect(() => {
@@ -139,9 +134,3 @@ function PageOne() {
 }
 
 export default PageOne;
-
-const getStyles = (theme: GrafanaTheme2) => ({
-    marginTop: css`
-    margin-top: ${theme.spacing(2)};
-  `,
-});

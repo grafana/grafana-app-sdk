@@ -140,7 +140,8 @@ So, what are these new bits of code doing?
 
 ## Go Code from backend component
 
-**Important note**: the back-end part of the plugin is primarily used as a proxy to the app API server, in order to allow the user to use grafana auth to make the request to the grafana resource API, and let the plugin make the request to the API server using credentials for the API server. The final state of app platform will allow for grafana auth to be used with the API server, and direct access to the API server from outside of the back-end, so the eventual goal is to both allow and encourage the front-end to directly interact with the API server and kubernetes-style APIs.
+> [!IMPORTANT]  
+> The back-end part of the plugin is primarily used as a proxy to the app API server, in order to allow the user to use grafana auth to make the request to the grafana resource API, and let the plugin make the request to the API server using credentials for the API server. The final state of app platform will allow for grafana auth to be used with the API server, and direct access to the API server from outside of the back-end, so the eventual goal is to both allow and encourage the front-end to directly interact with the API server and kubernetes-style APIs.
 
 ### `pkg/plugin`
 
@@ -188,6 +189,8 @@ func New(namespace string, service Service) (*Plugin, error) {
 	}
 
 	p.router.Use(
+		router.NewTracingMiddleware(otel.GetTracerProvider().Tracer("tracing-middleware")),
+		router.NewLoggingMiddleware(logging.DefaultLogger),
 		kubeconfig.LoadingMiddleware(),
 		router.MiddlewareFunc(secure.Middleware))
 

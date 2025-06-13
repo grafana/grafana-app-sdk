@@ -17,7 +17,6 @@ Now, we could go about initializing a go module, and a cue module, and creating 
 go install github.com/grafana/grafana-app-sdk/cmd/grafana-app-sdk@latest
 ```
 If you're unfamiliar with `go install`, it's similar to `go get`, but will compile a binary for the `main` package in what it pulls, and put that in `$GOPATH/bin`. If you don't have `$GOPATH/bin` in your path, you will want to add it, otherwise the CLI commands won't work for you. You can check if the CLI was installed successfully with:
-You can then check if the install was successful by running.
 
 ```shell
 grafana-app-sdk --help
