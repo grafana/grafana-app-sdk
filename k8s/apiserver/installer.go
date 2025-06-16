@@ -224,6 +224,9 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind(), err)
 			}
 			storage[kind.Plural()] = s
+			for subPath := range kind.ZeroValue().GetSubresources() {
+				storage[fmt.Sprintf("%s/%s", kind.Plural(), subPath)] = newRegistryStatusStoreForKind(r.scheme, kind, s)
+			}
 			apiGroupInfo.VersionedResourcesStorageMap[gv.Version] = storage
 		}
 	}
