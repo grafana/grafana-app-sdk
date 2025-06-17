@@ -79,7 +79,7 @@ This will add a CUE file to your `--source` directory with a filled-out custom k
 
 Arguably the most important function of the CLI, as it needs to be run whenever you update your kinds, is generating code from your CUE kinds.
 
-For more details on kinds, see [Custom Kinds & CUE](custom-kinds.md).
+For more details on kinds, see [Custom Kinds & CUE](./custom-kinds/README.md).
 
 To generate code for your kinds, use 
 ```
