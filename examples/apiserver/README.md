@@ -1,0 +1,56 @@
+# API Server Example
+
+This example is of an app running as a simple API server. It uses etcd to store data.
+
+#### Start etcd
+
+If you don't already have an etcd instance running on port 2379, start etcd with
+```shell
+make etcd
+```
+This will run etcd in a docker container and forward port 2379 on your localhost to it
+
+#### Start the API Server
+
+Start the API server with
+```shell
+make run
+```
+Logs will be output to standard out
+
+#### (re-)Generate the Code
+
+If you make changes to the CUE in `kinds`, you can re-generate the code with 
+```shell
+make generate
+```
+
+#### Make Requests
+
+You can make unauthenticated requests with cURL:
+
+List TestKinds:
+```shell
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds
+```
+
+Create a TestKind named "foo":
+```shell
+curl -k -X POST -H "content-type: application/json" -d '{"apiVersion":"example.ext.grafana.com/v1alpha1","kind":"TestKind","metadata":{"name":"foo","namespace":"default"},"spec":{"testField":"foo"}}' https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds
+```
+
+Update status of foo:
+```shell
+curl -k -X PUT -H "content-type: application/json" -d '{"apiVersion":"example.ext.grafana.com/v1alpha1","kind":"TestKind","metadata":{"name":"foo","namespace":"default","resourceVersion":"<RESOURCEVERSION>"},"status":{"additionalFields":{"foo":"bar"}}}' https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo/status
+```
+Note that `<RESOURCEVERSION>` must be replaced by the current `metadata.resourceVersion`
+
+Attempt to create a TestKind named "notallowed" (forbidden by validation):
+```shell
+curl -k -X POST -H "content-type: application/json" -d '{"apiVersion":"example.ext.grafana.com/v1alpha1","kind":"TestKind","metadata":{"name":"notallowed","namespace":"default"},"spec":{"testField":"foo"}}' https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds
+```
+
+Delete `foo`:
+```shell
+curl -k -X DELETE https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo
+```

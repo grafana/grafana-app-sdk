@@ -5,6 +5,7 @@ on:
     branches:
     - main
     - "lts/v0.24"
+    - "feat/*"
 
 permissions:
   contents: read
