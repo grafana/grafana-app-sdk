@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
@@ -14,8 +15,28 @@ import (
 )
 
 type appAdmission struct {
-	appGetter    func() app.App
-	manifestData app.ManifestData
+	appGetter        func() app.App
+	manifestData     app.ManifestData
+	perKindAdmission map[string]app.AdmissionCapabilities
+}
+
+func newAppAdmission(md app.ManifestData, appGetter func() app.App) *appAdmission {
+	adm := appAdmission{
+		appGetter:        appGetter,
+		manifestData:     md,
+		perKindAdmission: make(map[string]app.AdmissionCapabilities),
+	}
+	for _, v := range md.Versions {
+		for _, k := range v.Kinds {
+			if k.Admission != nil {
+				if !k.Admission.SupportsAnyValidation() && !k.Admission.SupportsAnyMutation() {
+					continue
+				}
+				adm.perKindAdmission[fmt.Sprintf("%s/%s", v.Name, k.Kind)] = *k.Admission
+			}
+		}
+	}
+	return &adm
 }
 
 var _ admission.MutationInterface = (*appAdmission)(nil)
@@ -100,21 +121,37 @@ func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, _ 
 	return nil
 }
 
-func (*appAdmission) Handles(_ admission.Operation) bool {
-	return true
+func (ad *appAdmission) Handles(op admission.Operation) bool {
+	if len(ad.perKindAdmission) == 0 {
+		return false
+	}
+	for _, adm := range ad.perKindAdmission {
+		var action app.AdmissionOperation
+		switch op {
+		case admission.Create:
+			action = app.AdmissionOperationCreate
+		case admission.Update:
+			action = app.AdmissionOperationUpdate
+		case admission.Delete:
+			action = app.AdmissionOperationDelete
+		case admission.Connect:
+			action = app.AdmissionOperationConnect
+		default:
+			return false
+		}
+		if adm.SupportsAnyValidation() && (slices.Contains(adm.Validation.Operations, action) || slices.Contains(adm.Validation.Operations, app.AdmissionOperationAny)) {
+			return true
+		}
+		if adm.SupportsAnyMutation() && (slices.Contains(adm.Mutation.Operations, action) || slices.Contains(adm.Mutation.Operations, app.AdmissionOperationAny)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (ad *appAdmission) getAdmissionInfo(gvk schema.GroupVersionKind) *app.AdmissionCapabilities {
-	for _, v := range ad.manifestData.Versions {
-		if gvk.Version != v.Name {
-			continue
-		}
-		for _, k := range v.Kinds {
-			if gvk.Kind != k.Kind {
-				continue
-			}
-			return k.Admission
-		}
+	if adm, ok := ad.perKindAdmission[fmt.Sprintf("%s/%s", gvk.Version, gvk.Kind)]; ok {
+		return &adm
 	}
 	return nil
 }

@@ -224,8 +224,8 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind(), err)
 			}
 			storage[kind.Plural()] = s
-			for subPath := range kind.ZeroValue().GetSubresources() {
-				storage[fmt.Sprintf("%s/%s", kind.Plural(), subPath)] = newRegistryStatusStoreForKind(r.scheme, kind, s)
+			if _, ok := kind.ZeroValue().GetSubresource(string(resource.SubresourceStatus)); ok {
+				storage[fmt.Sprintf("%s/%s", kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind, s)
 			}
 			apiGroupInfo.VersionedResourcesStorageMap[gv.Version] = storage
 		}
@@ -249,12 +249,9 @@ func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 	}
 	if supportsMutation || supportsValidation {
 		return func(_ io.Reader) (admission.Interface, error) {
-			return &appAdmission{
-				appGetter: func() app.App {
-					return r.app
-				},
-				manifestData: r.appConfig.ManifestData,
-			}, nil
+			return newAppAdmission(r.appConfig.ManifestData, func() app.App {
+				return r.app
+			}), nil
 		}
 	}
 

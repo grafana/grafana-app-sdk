@@ -129,10 +129,7 @@ func TestAppAdmission_Admit(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			adm := appAdmission{
-				appGetter:    test.appGetter,
-				manifestData: test.manifestData,
-			}
+			adm := newAppAdmission(test.manifestData, test.appGetter)
 			err := adm.Admit(context.Background(), test.req, nil)
 			assert.Equal(t, test.expectedError, err)
 			if test.expectedObj != nil {
@@ -246,10 +243,7 @@ func TestAppAdmission_Validate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			adm := appAdmission{
-				appGetter:    test.appGetter,
-				manifestData: test.manifestData,
-			}
+			adm := newAppAdmission(test.manifestData, test.appGetter)
 			err := adm.Validate(context.Background(), test.req, nil)
 			assert.Equal(t, test.expectedError, err)
 		})
@@ -257,12 +251,195 @@ func TestAppAdmission_Validate(t *testing.T) {
 }
 
 func TestAppAdmission_Handles(t *testing.T) {
-	// This just exists to break if we expand the Handles() logic to do anything besides always return true
-	adm := appAdmission{}
-	assert.True(t, adm.Handles(admission.Create))
-	assert.True(t, adm.Handles(admission.Update))
-	assert.True(t, adm.Handles(admission.Delete))
-	assert.True(t, adm.Handles(admission.Connect))
+	noAdmission := app.ManifestData{}
+	withValidation := func(ops ...app.AdmissionOperation) app.ManifestData {
+		return app.ManifestData{
+			Versions: []app.ManifestVersion{{
+				Name:   TestKind.Version(),
+				Served: true,
+				Kinds: []app.ManifestVersionKind{{
+					Kind:   TestKind.Kind(),
+					Plural: TestKind.Plural(),
+					Admission: &app.AdmissionCapabilities{
+						Validation: &app.ValidationCapability{
+							Operations: ops,
+						},
+					},
+				}},
+			}},
+		}
+	}
+	withMutation := func(ops ...app.AdmissionOperation) app.ManifestData {
+		return app.ManifestData{
+			Versions: []app.ManifestVersion{{
+				Name:   TestKind.Version(),
+				Served: true,
+				Kinds: []app.ManifestVersionKind{{
+					Kind:   TestKind.Kind(),
+					Plural: TestKind.Plural(),
+					Admission: &app.AdmissionCapabilities{
+						Mutation: &app.MutationCapability{
+							Operations: ops,
+						},
+					},
+				}},
+			}},
+		}
+	}
+
+	tests := []struct {
+		name     string
+		manifest app.ManifestData
+		op       admission.Operation
+		expected bool
+	}{{
+		name:     "create: no admission",
+		manifest: noAdmission,
+		op:       admission.Create,
+		expected: false,
+	}, {
+		name:     "update: no admission",
+		manifest: noAdmission,
+		op:       admission.Update,
+		expected: false,
+	}, {
+		name:     "delete: no admission",
+		manifest: noAdmission,
+		op:       admission.Delete,
+		expected: false,
+	}, {
+		name:     "connect: no admission",
+		manifest: noAdmission,
+		op:       admission.Connect,
+		expected: false,
+	}, {
+		name:     "create: any validation",
+		manifest: withValidation(app.AdmissionOperationAny),
+		op:       admission.Create,
+		expected: true,
+	}, {
+		name:     "create: create validation",
+		manifest: withValidation(app.AdmissionOperationCreate),
+		op:       admission.Create,
+		expected: true,
+	}, {
+		name:     "create: no create validation",
+		manifest: withValidation(app.AdmissionOperationUpdate, app.AdmissionOperationDelete, app.AdmissionOperationConnect),
+		op:       admission.Create,
+		expected: false,
+	}, {
+		name:     "update: any validation",
+		manifest: withValidation(app.AdmissionOperationAny),
+		op:       admission.Update,
+		expected: true,
+	}, {
+		name:     "update: create validation",
+		manifest: withValidation(app.AdmissionOperationUpdate),
+		op:       admission.Update,
+		expected: true,
+	}, {
+		name:     "update: no create validation",
+		manifest: withValidation(app.AdmissionOperationCreate, app.AdmissionOperationDelete, app.AdmissionOperationConnect),
+		op:       admission.Update,
+		expected: false,
+	}, {
+		name:     "delete: any validation",
+		manifest: withValidation(app.AdmissionOperationAny),
+		op:       admission.Delete,
+		expected: true,
+	}, {
+		name:     "delete: create validation",
+		manifest: withValidation(app.AdmissionOperationDelete),
+		op:       admission.Delete,
+		expected: true,
+	}, {
+		name:     "delete: no create validation",
+		manifest: withValidation(app.AdmissionOperationUpdate, app.AdmissionOperationCreate, app.AdmissionOperationConnect),
+		op:       admission.Delete,
+		expected: false,
+	}, {
+		name:     "connect: any validation",
+		manifest: withValidation(app.AdmissionOperationAny),
+		op:       admission.Connect,
+		expected: true,
+	}, {
+		name:     "connect: create validation",
+		manifest: withValidation(app.AdmissionOperationConnect),
+		op:       admission.Connect,
+		expected: true,
+	}, {
+		name:     "connect: no create validation",
+		manifest: withValidation(app.AdmissionOperationUpdate, app.AdmissionOperationDelete, app.AdmissionOperationCreate),
+		op:       admission.Connect,
+		expected: false,
+	}, {
+		name:     "create: any mutation",
+		manifest: withMutation(app.AdmissionOperationAny),
+		op:       admission.Create,
+		expected: true,
+	}, {
+		name:     "create: create mutation",
+		manifest: withMutation(app.AdmissionOperationCreate),
+		op:       admission.Create,
+		expected: true,
+	}, {
+		name:     "create: no create mutation",
+		manifest: withMutation(app.AdmissionOperationUpdate, app.AdmissionOperationDelete, app.AdmissionOperationConnect),
+		op:       admission.Create,
+		expected: false,
+	}, {
+		name:     "update: any mutation",
+		manifest: withMutation(app.AdmissionOperationAny),
+		op:       admission.Update,
+		expected: true,
+	}, {
+		name:     "update: create mutation",
+		manifest: withMutation(app.AdmissionOperationUpdate),
+		op:       admission.Update,
+		expected: true,
+	}, {
+		name:     "update: no create mutation",
+		manifest: withMutation(app.AdmissionOperationCreate, app.AdmissionOperationDelete, app.AdmissionOperationConnect),
+		op:       admission.Update,
+		expected: false,
+	}, {
+		name:     "delete: any mutation",
+		manifest: withMutation(app.AdmissionOperationAny),
+		op:       admission.Delete,
+		expected: true,
+	}, {
+		name:     "delete: create mutation",
+		manifest: withMutation(app.AdmissionOperationDelete),
+		op:       admission.Delete,
+		expected: true,
+	}, {
+		name:     "delete: no create mutation",
+		manifest: withMutation(app.AdmissionOperationUpdate, app.AdmissionOperationCreate, app.AdmissionOperationConnect),
+		op:       admission.Delete,
+		expected: false,
+	}, {
+		name:     "connect: any mutation",
+		manifest: withMutation(app.AdmissionOperationAny),
+		op:       admission.Connect,
+		expected: true,
+	}, {
+		name:     "connect: create mutation",
+		manifest: withMutation(app.AdmissionOperationConnect),
+		op:       admission.Connect,
+		expected: true,
+	}, {
+		name:     "connect: no create mutation",
+		manifest: withMutation(app.AdmissionOperationUpdate, app.AdmissionOperationDelete, app.AdmissionOperationCreate),
+		op:       admission.Connect,
+		expected: false,
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			adm := newAppAdmission(test.manifest, nil)
+			assert.Equal(t, test.expected, adm.Handles(test.op))
+		})
+	}
 }
 
 func TestTranslateAdmissionOperation(t *testing.T) {
