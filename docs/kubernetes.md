@@ -30,7 +30,11 @@ The CRD file will contain the entire lineage expressed in openAPI format, and ca
 The generated `resource.Schema` is then used to identify the **group**, **version**, and **kind** of your CRD when interacting with kubernetes. 
 You can then use a `k8s.ClientRegistry` to generate clients which can translate the CRDs in the cluster into the generated go type. 
 
-The client intermediary is necessary because the metadata format in your authored kind doesn't exactly match Kubernetes' metadata format. The kind has more metadata, which is encoded and decoded in the Kubernetes object's annotations, and the client performs this translation.
+The client intermediary is used for two main reasons: 
+1. It allows us to introduce efficiencies under the hood transparently to the app authors
+2. It ensures that we use the encoding/decoding process in the kind's resource.Codec, rather than a straight JSON marshal/unmarshal.
+
+The client intermediary is not strictly necessary for generated resource.Object implementations, but is still favored because of the above two reasons.
 
 You can still directly interface with the CRD's through kubernetes tooling or APIs as well, the SDK's tooling just makes understanding and updating the object's metadata simpler.
 

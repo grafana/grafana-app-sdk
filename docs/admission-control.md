@@ -21,7 +21,7 @@ func main() {
     validatingController := resource.SimpleValidatingAdmissionController{
         ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
             // Check that the name is allowed
-            if request.Object.GetStaticMetadata().Name == "not-allowed" {
+            if request.Object.GetName() == "not-allowed" {
                 return k8s.NewSimpleAdmissionError(fmt.Errorf("name not allowed"), http.StatusBadRequest, "ERR_NAME_NOT_ALLOWED")
             }
             return nil
