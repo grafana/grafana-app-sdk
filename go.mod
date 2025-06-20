@@ -14,8 +14,8 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/getkin/kin-openapi v0.132.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
-	github.com/grafana/cog v0.0.34
-	github.com/grafana/grafana-app-sdk/logging v0.39.0
+	github.com/grafana/cog v0.0.36
+	github.com/grafana/grafana-app-sdk/logging v0.39.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
@@ -32,10 +32,10 @@ require (
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	google.golang.org/grpc v1.73.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.33.1
-	k8s.io/apiextensions-apiserver v0.33.1
-	k8s.io/apimachinery v0.33.1
-	k8s.io/client-go v0.33.1
+	k8s.io/api v0.33.2
+	k8s.io/apiextensions-apiserver v0.33.2
+	k8s.io/apimachinery v0.33.2
+	k8s.io/client-go v0.33.2
 	k8s.io/gengo/v2 v2.0.0-20250207200755-1244d31929d7
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
