@@ -5,6 +5,7 @@ package v1alpha1
 // +k8s:openapi-gen=true
 type AppManifestManifestKind struct {
 	Kind       string                           `json:"kind"`
+	Plural     *string                          `json:"plural,omitempty"`
 	Scope      string                           `json:"scope"`
 	Conversion bool                             `json:"conversion"`
 	Versions   []AppManifestManifestKindVersion `json:"versions"`

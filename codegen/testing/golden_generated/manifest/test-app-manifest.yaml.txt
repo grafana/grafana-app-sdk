@@ -8,6 +8,7 @@ spec:
     kinds:
         - kind: TestKind
           scope: Namespaced
+          plural: TestKinds
           versions:
             - name: v1
               admission:
@@ -1181,6 +1182,7 @@ spec:
           conversion: true
         - kind: TestKind2
           scope: Namespaced
+          plural: TestKind2s
           versions:
             - name: v1
               schema:

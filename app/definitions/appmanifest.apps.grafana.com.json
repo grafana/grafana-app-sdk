@@ -71,6 +71,9 @@
                                                 "kind": {
                                                     "type": "string"
                                                 },
+                                                "plural": {
+                                                    "type": "string"
+                                                },
                                                 "scope": {
                                                     "type": "string"
                                                 },
