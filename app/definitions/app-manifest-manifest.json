@@ -11,6 +11,7 @@
             {
                 "kind": "AppManifest",
                 "scope": "Cluster",
+                "plural": "AppManifests",
                 "versions": [
                     {
                         "name": "v1alpha1",
@@ -70,6 +71,9 @@
                                                     "type": "boolean"
                                                 },
                                                 "kind": {
+                                                    "type": "string"
+                                                },
+                                                "plural": {
                                                     "type": "string"
                                                 },
                                                 "scope": {

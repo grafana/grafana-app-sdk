@@ -11,6 +11,7 @@
             {
                 "kind": "CustomKind",
                 "scope": "Namespaced",
+                "plural": "CustomKinds",
                 "versions": [
                     {
                         "name": "v0-0",
