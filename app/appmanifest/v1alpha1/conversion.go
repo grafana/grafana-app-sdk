@@ -13,9 +13,14 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	}
 	// Kinds
 	for idx, kind := range s.Kinds {
+		plural := ""
+		if kind.Plural != nil {
+			plural = *kind.Plural
+		}
 		k := app.ManifestKind{
 			Kind:       kind.Kind,
 			Scope:      kind.Scope,
+			Plural:     plural,
 			Conversion: kind.Conversion,
 			Versions:   make([]app.ManifestKindVersion, len(kind.Versions)),
 		}
