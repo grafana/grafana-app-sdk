@@ -168,6 +168,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		mkind := app.ManifestKind{
 			Kind:       kind.Name(),
 			Scope:      kind.Properties().Scope,
+			Plural:     kind.Properties().PluralName,
 			Conversion: kind.Properties().Conversion,
 			Versions:   make([]app.ManifestKindVersion, 0, len(kind.Versions())),
 		}
