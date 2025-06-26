@@ -92,6 +92,24 @@ func JavaResourceGenerator() *codejen.JennyList[codegen.Kind] {
     return g
 }
 
+// PythonResourceGenerator returns a Generator which generates TypeScript resource code.
+func PythonResourceGenerator() *codejen.JennyList[codegen.Kind] {
+    g := codejen.JennyListWithNamer(namerFunc)
+    g.Append(&jennies.PythonTypes{
+        Depth: 1,
+    }, &jennies.PythonResourceTypes{})
+    return g
+}
+
+// PHPResourceGenerator returns a Generator which generates TypeScript resource code.
+func PHPResourceGenerator() *codejen.JennyList[codegen.Kind] {
+    g := codejen.JennyListWithNamer(namerFunc)
+    g.Append(&jennies.PHPTypes{
+        Depth: 1,
+    }, &jennies.PHPResourceTypes{})
+    return g
+}
+
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
 func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {

@@ -9,27 +9,24 @@ import (
     "github.com/grafana/cog"
     "github.com/grafana/grafana-app-sdk/codegen"
     "github.com/grafana/grafana-app-sdk/codegen/templates"
-    "golang.org/x/text/cases"
-    "golang.org/x/text/language"
     "path"
-    "regexp"
     "strings"
 )
 
-type JavaResourceTypes struct {
+type PHPResourceTypes struct {
     GenerateOnlyCurrent bool
 }
 
-func (t *JavaResourceTypes) JennyName() string { return "JavaResourceTypes" }
+func (t *PHPResourceTypes) JennyName() string { return "PHPResourceTypes" }
 
-func (t *JavaResourceTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
+func (t *PHPResourceTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
     files := make(codejen.Files, 0)
     if t.GenerateOnlyCurrent {
         ver := kind.Version(kind.Properties().Current)
         if ver == nil {
             return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
         }
-        if !ver.Codegen.Java.Enabled {
+        if !ver.Codegen.PHP.Enabled {
             return nil, nil
         }
         b, err := t.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName)+"_")
@@ -37,7 +34,7 @@ func (t *JavaResourceTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
             return nil, err
         }
         files = append(files, codejen.File{
-            RelativePath: fmt.Sprintf("%s/%s.java", kind.Properties().MachineName, formatJavaFilename(kind.Properties().MachineName)),
+            RelativePath: fmt.Sprintf("src/%s/%s.php", kind.Properties().MachineName, formatJavaFilename(kind.Properties().MachineName)),
             Data:         b,
             From:         []codejen.NamedJenny{t},
         })
@@ -45,16 +42,15 @@ func (t *JavaResourceTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
         allVersions := kind.Versions()
         for i := 0; i < len(allVersions); i++ {
             ver := allVersions[i]
-            if !ver.Codegen.Java.Enabled {
+            if !ver.Codegen.PHP.Enabled {
                 continue
             }
-
             b, err := t.generateObjectFile(kind, &ver, "")
             if err != nil {
                 return nil, err
             }
             files = append(files, codejen.File{
-                RelativePath: fmt.Sprintf("%s/%s/%s.java", kind.Properties().MachineName, ver.Version, formatJavaFilename(kind.Properties().MachineName)),
+                RelativePath: fmt.Sprintf("%s/%s/%s.php", kind.Properties().MachineName, ver.Version, formatJavaFilename(kind.Properties().MachineName)),
                 Data:         b,
                 From:         []codejen.NamedJenny{t},
             })
@@ -63,12 +59,12 @@ func (t *JavaResourceTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
     return files, nil
 }
 
-// TODO: Support metadata for Java
-func (t *JavaResourceTypes) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, javaTypePrefix string) ([]byte, error) {
+// TODO: Support metadata for PHP
+func (t *PHPResourceTypes) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, phpTypePrefix string) ([]byte, error) {
     metadata := templates.ResourceTSTemplateMetadata{
         TypeName:     exportField(kind.Name()),
         Subresources: make([]templates.SubresourceMetadata, 0),
-        FilePrefix:   javaTypePrefix,
+        FilePrefix:   phpTypePrefix,
     }
 
     it, err := version.Schema.Fields()
@@ -85,20 +81,20 @@ func (t *JavaResourceTypes) generateObjectFile(kind codegen.Kind, version *codeg
         })
     }
 
-    javaBytes := &bytes.Buffer{}
-    err = templates.WriteResourceTSType(metadata, javaBytes)
+    phpBytes := &bytes.Buffer{}
+    err = templates.WriteResourceTSType(metadata, phpBytes)
     if err != nil {
         return nil, err
     }
-    return javaBytes.Bytes(), nil
+    return phpBytes.Bytes(), nil
 }
 
-// JavaTypes is a one-to-many jenny that generates one or more JavaTypes types for a kind.
+// PHPTypes is a one-to-many jenny that generates one or more PHPTypes types for a kind.
 // Each type is a specific version of the kind where codegen.frontend is true.
 // If GenerateOnlyCurrent is true, then all other versions of the kind will be ignored and only
-// the kind.Properties().Current version will be used for JavaTypes type generation
+// the kind.Properties().Current version will be used for PHPTypes type generation
 // (this will impact the generated file path).
-type JavaTypes struct {
+type PHPTypes struct {
     // GenerateOnlyCurrent should be set to true if you only want to generate code for the kind.Properties().Current version.
     // This will affect the package and path(s) of the generated file(s).
     GenerateOnlyCurrent bool
@@ -117,15 +113,15 @@ type JavaTypes struct {
     NamingDepth int
 }
 
-func (j *JavaTypes) JennyName() string { return "JavaTypes" }
+func (j *PHPTypes) JennyName() string { return "PHPTypes" }
 
-func (j *JavaTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
+func (j *PHPTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
     if j.GenerateOnlyCurrent {
         ver := kind.Version(kind.Properties().Current)
         if ver == nil {
             return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
         }
-        if !ver.Codegen.Java.Enabled {
+        if !ver.Codegen.PHP.Enabled {
             return nil, nil
         }
 
@@ -137,7 +133,7 @@ func (j *JavaTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
     allVersions := kind.Versions()
     for i := 0; i < len(allVersions); i++ {
         v := allVersions[i]
-        if !v.Codegen.Java.Enabled {
+        if !v.Codegen.PHP.Enabled {
             continue
         }
 
@@ -150,35 +146,35 @@ func (j *JavaTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
     return files, nil
 }
 
-func (j *JavaTypes) generateFiles(version *codegen.KindVersion, name string) (codejen.Files, error) {
+func (j *PHPTypes) generateFiles(version *codegen.KindVersion, name string) (codejen.Files, error) {
     if j.Depth > 0 {
         return j.generateFilesAtDepth(version.Schema, version, 0)
     }
 
-    javaBytes, err := generateJavaBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.JavaConfig{})
+    phpBytes, err := generatePHPBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.PHPConfig{})
     if err != nil {
         return nil, err
     }
     return codejen.Files{codejen.File{
-        Data:         javaBytes,
-        RelativePath: path.Join(exportField(sanitizeLabelString(name)), ".java"),
+        Data:         phpBytes,
+        RelativePath: fmt.Sprintf("%s.php", formatJavaFilename(name)),
         From:         []codejen.NamedJenny{j},
     }}, nil
 }
 
-func (j *JavaTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int) (codejen.Files, error) {
+func (j *PHPTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int) (codejen.Files, error) {
     if currDepth == j.Depth {
         fieldName := make([]string, 0)
         for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
             fieldName = append(fieldName, s.String())
         }
-        javaBytes, err := generateJavaBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.JavaConfig{})
+        phpBytes, err := generatePHPBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.PHPConfig{})
         if err != nil {
             return nil, err
         }
         return codejen.Files{codejen.File{
-            Data:         javaBytes,
-            RelativePath: path.Join(formatJavaFilename(strings.Join(fieldName, "")), ".java"),
+            Data:         phpBytes,
+            RelativePath: path.Join(formatJavaFilename(strings.Join(fieldName, "")), ".py"),
             From:         []codejen.NamedJenny{j},
         }}, nil
     }
@@ -199,10 +195,10 @@ func (j *JavaTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, c
     return files, nil
 }
 
-func generateJavaBytes(v cue.Value, packageName string, name string, javaConfig cog.JavaConfig) ([]byte, error) {
+func generatePHPBytes(v cue.Value, packageName string, name string, phpConfig cog.PHPConfig) ([]byte, error) {
     files, err := cog.TypesFromSchema().
         CUEValue(packageName, v, cog.ForceEnvelope(name)).
-        Java(javaConfig).
+        PHP(phpConfig).
         Run(context.Background())
     if err != nil {
         return nil, err
@@ -213,25 +209,4 @@ func generateJavaBytes(v cue.Value, packageName string, name string, javaConfig 
     }
 
     return files[0].Data, nil
-}
-
-func formatJavaFilename(s string) string {
-    s = regexp.MustCompile("[^a-zA-Z0-9 ]+").ReplaceAllString(s, " ")
-
-    // Title case s
-    s = cases.Title(language.AmericanEnglish, cases.NoLower).String(s)
-
-    // Remove all spaces
-    s = strings.ReplaceAll(s, " ", "")
-
-    // Lowercase the first letter
-    if len(s) > 0 {
-        s = strings.ToLower(s[:1]) + s[1:]
-    }
-
-    if len(s) > 0 {
-        s = strings.ToUpper(s[:1]) + s[1:]
-    }
-
-    return s
 }
