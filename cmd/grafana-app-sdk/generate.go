@@ -33,11 +33,11 @@ func setupGenerateCmd() {
         "Path to directory where generated go code will reside")
     generateCmd.PersistentFlags().StringP("tsgenpath", "t", "plugin/src/generated/",
         "Path to directory where generated TypeScript code will reside")
-    generateCmd.PersistentFlags().StringP("javagenpath", "j", "plugin/src/generated/",
+    generateCmd.PersistentFlags().StringP("javagenpath", "j", "pkg/generated/src/main/java/com/",
         "Path to directory where generated Java code will reside")
-    generateCmd.PersistentFlags().StringP("phpgenpath", "php", "plugin/src/generated/",
+    generateCmd.PersistentFlags().StringP("phpgenpath", "php", "pkg/generated/src/",
         "Path to directory where generated PHP code will reside")
-    generateCmd.PersistentFlags().StringP("pythongenpath", "p", "plugin/src/generated/",
+    generateCmd.PersistentFlags().StringP("pythongenpath", "p", "pkg/generated/models/",
         "Path to directory where generated Python code will reside")
     generateCmd.Flags().String("defencoding", "json", `Encoding for Custom Resource Definition 
 files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD generation.`)
@@ -51,6 +51,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
     generateCmd.Flags().Lookup("noschemasinmanifest").NoOptDefVal = "true"
     generateCmd.Flags().String("gomodule", "", `module name found in go.mod. If absent it will be inferred from ./go.mod`)
     generateCmd.Flags().String("gomodgenpath", "", `This argument is used as a relative path for generated go code from the go module root. It only needs to be present if gogenpath is an absolute path, or is not a relative path from the go module root.`)
+    generateCmd.Flags().BoolP("builders", "b", false, "Enable to generate builders.")
 
     // Don't show "usage" information when an error is returned form the command,
     // because our errors are not command-usage-based
@@ -136,6 +137,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
     if err != nil {
         return err
     }
+    genBuidlers, err := cmd.Flags().GetBool("genbuidlers")
+    if err != nil {
+        return err
+    }
 
     if goModule == "" {
         goModule, err = getGoModule("go.mod")
@@ -164,6 +169,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
             GroupKinds:             grouping == kindGroupingGroup,
             ManifestIncludeSchemas: !noSchemasInManifest,
             GenOperatorState:       genOperatorState,
+            GenBuilders:            genBuidlers,
         }, selector)
         if err != nil {
             return err
@@ -220,6 +226,7 @@ type kindGenConfig struct {
     GroupKinds             bool
     ManifestIncludeSchemas bool
     GenOperatorState       bool
+    GenBuilders            bool
 }
 
 //nolint:funlen,goconst
@@ -239,26 +246,40 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
         return nil, err
     }
     // Resource
-    resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds), selectors...)
+    resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds, cfg.GenBuilders), selectors...)
     if err != nil {
         return nil, err
     }
     for i, f := range resourceFiles {
         resourceFiles[i].RelativePath = filepath.Join(cfg.GoGenBasePath, f.RelativePath)
     }
-    tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), selectors...)
+    tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(cfg.GenBuilders), selectors...)
     if err != nil {
         return nil, err
     }
     for i, f := range tsResourceFiles {
         tsResourceFiles[i].RelativePath = filepath.Join(cfg.TSGenBasePath, f.RelativePath)
     }
-    javaResourceFiles, err := generatorForKinds.Generate(cuekind.JavaResourceGenerator(), selectors...)
+    javaResourceFiles, err := generatorForKinds.Generate(cuekind.JavaResourceGenerator(cfg.GenBuilders), selectors...)
     if err != nil {
         return nil, err
     }
     for i, f := range javaResourceFiles {
         javaResourceFiles[i].RelativePath = filepath.Join(cfg.JavaGenBasePath, f.RelativePath)
+    }
+    pythonResourceFiles, err := generatorForKinds.Generate(cuekind.PythonResourceGenerator(cfg.GenBuilders), selectors...)
+    if err != nil {
+        return nil, err
+    }
+    for i, f := range pythonResourceFiles {
+        pythonResourceFiles[i].RelativePath = filepath.Join(cfg.JavaGenBasePath, f.RelativePath)
+    }
+    phpResourceFiles, err := generatorForKinds.Generate(cuekind.PHPResourceGenerator(cfg.GenBuilders), selectors...)
+    if err != nil {
+        return nil, err
+    }
+    for i, f := range phpResourceFiles {
+        phpResourceFiles[i].RelativePath = filepath.Join(cfg.JavaGenBasePath, f.RelativePath)
     }
     // CRD
     var crdFiles codejen.Files

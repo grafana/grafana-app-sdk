@@ -115,6 +115,8 @@ type JavaTypes struct {
     // Typically, a value of 0 is "safest" for NamingDepth, as it prevents overlapping names for types.
     // However, if you know that your fields have unique names up to a certain depth, you may configure this to be higher.
     NamingDepth int
+
+    GenBuilders bool
 }
 
 func (j *JavaTypes) JennyName() string { return "JavaTypes" }
@@ -155,7 +157,7 @@ func (j *JavaTypes) generateFiles(version *codegen.KindVersion, name string) (co
         return j.generateFilesAtDepth(version.Schema, version, 0)
     }
 
-    javaBytes, err := generateJavaBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.JavaConfig{})
+    javaBytes, err := generateJavaBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), j.GenBuilders, cog.JavaConfig{})
     if err != nil {
         return nil, err
     }
@@ -172,7 +174,7 @@ func (j *JavaTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, c
         for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
             fieldName = append(fieldName, s.String())
         }
-        javaBytes, err := generateJavaBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.JavaConfig{})
+        javaBytes, err := generateJavaBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), j.GenBuilders, cog.JavaConfig{})
         if err != nil {
             return nil, err
         }
@@ -199,11 +201,16 @@ func (j *JavaTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, c
     return files, nil
 }
 
-func generateJavaBytes(v cue.Value, packageName string, name string, javaConfig cog.JavaConfig) ([]byte, error) {
-    files, err := cog.TypesFromSchema().
+func generateJavaBytes(v cue.Value, packageName string, name string, genBuilders bool, javaConfig cog.JavaConfig) ([]byte, error) {
+    codegenPipeline := cog.TypesFromSchema().
         CUEValue(packageName, v, cog.ForceEnvelope(name)).
-        Java(javaConfig).
-        Run(context.Background())
+        Java(javaConfig)
+
+    if genBuilders {
+        codegenPipeline = codegenPipeline.GenerateBuilders()
+    }
+
+    files, err := codegenPipeline.Run(context.Background())
     if err != nil {
         return nil, err
     }

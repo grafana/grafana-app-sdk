@@ -111,6 +111,8 @@ type PythonTypes struct {
     // Typically, a value of 0 is "safest" for NamingDepth, as it prevents overlapping names for types.
     // However, if you know that your fields have unique names up to a certain depth, you may configure this to be higher.
     NamingDepth int
+
+    GenBuilders bool
 }
 
 func (j *PythonTypes) JennyName() string { return "PythonTypes" }
@@ -151,7 +153,7 @@ func (j *PythonTypes) generateFiles(version *codegen.KindVersion, name string) (
         return j.generateFilesAtDepth(version.Schema, version, 0)
     }
 
-    pythonBytes, err := generatePythonBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.PythonConfig{})
+    pythonBytes, err := generatePythonBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), j.GenBuilders, cog.PythonConfig{})
     if err != nil {
         return nil, err
     }
@@ -168,7 +170,7 @@ func (j *PythonTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion,
         for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
             fieldName = append(fieldName, s.String())
         }
-        pythonBytes, err := generatePythonBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.PythonConfig{})
+        pythonBytes, err := generatePythonBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), j.GenBuilders, cog.PythonConfig{})
         if err != nil {
             return nil, err
         }
@@ -195,11 +197,16 @@ func (j *PythonTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion,
     return files, nil
 }
 
-func generatePythonBytes(v cue.Value, packageName string, name string, pythonConfig cog.PythonConfig) ([]byte, error) {
-    files, err := cog.TypesFromSchema().
+func generatePythonBytes(v cue.Value, packageName string, name string, genBuilders bool, pythonConfig cog.PythonConfig) ([]byte, error) {
+    codegenPipeline := cog.TypesFromSchema().
         CUEValue(packageName, v, cog.ForceEnvelope(name)).
-        Python(pythonConfig).
-        Run(context.Background())
+        Python(pythonConfig)
+
+    if genBuilders {
+        codegenPipeline = codegenPipeline.GenerateBuilders()
+    }
+
+    files, err := codegenPipeline.Run(context.Background())
     if err != nil {
         return nil, err
     }

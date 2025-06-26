@@ -111,6 +111,8 @@ type PHPTypes struct {
     // Typically, a value of 0 is "safest" for NamingDepth, as it prevents overlapping names for types.
     // However, if you know that your fields have unique names up to a certain depth, you may configure this to be higher.
     NamingDepth int
+
+    GenBuilders bool
 }
 
 func (j *PHPTypes) JennyName() string { return "PHPTypes" }
@@ -151,7 +153,7 @@ func (j *PHPTypes) generateFiles(version *codegen.KindVersion, name string) (cod
         return j.generateFilesAtDepth(version.Schema, version, 0)
     }
 
-    phpBytes, err := generatePHPBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.PHPConfig{})
+    phpBytes, err := generatePHPBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), j.GenBuilders, cog.PHPConfig{})
     if err != nil {
         return nil, err
     }
@@ -168,7 +170,7 @@ func (j *PHPTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cu
         for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
             fieldName = append(fieldName, s.String())
         }
-        phpBytes, err := generatePHPBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.PHPConfig{})
+        phpBytes, err := generatePHPBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), j.GenBuilders, cog.PHPConfig{})
         if err != nil {
             return nil, err
         }
@@ -195,11 +197,16 @@ func (j *PHPTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cu
     return files, nil
 }
 
-func generatePHPBytes(v cue.Value, packageName string, name string, phpConfig cog.PHPConfig) ([]byte, error) {
-    files, err := cog.TypesFromSchema().
+func generatePHPBytes(v cue.Value, packageName string, name string, genBuilders bool, phpConfig cog.PHPConfig) ([]byte, error) {
+    codegenPipeline := cog.TypesFromSchema().
         CUEValue(packageName, v, cog.ForceEnvelope(name)).
-        PHP(phpConfig).
-        Run(context.Background())
+        PHP(phpConfig)
+
+    if genBuilders {
+        codegenPipeline = codegenPipeline.GenerateBuilders()
+    }
+
+    files, err := codegenPipeline.Run(context.Background())
     if err != nil {
         return nil, err
     }

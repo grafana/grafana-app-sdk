@@ -23,7 +23,7 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // If `groupKinds` is true, kinds within the same group will exist in the same package.
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
-func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func ResourceGenerator(groupKinds bool, genBuilders bool) *codejen.JennyList[codegen.Kind] {
     g := codejen.JennyListWithNamer(namerFunc)
     g.Append(
         &jennies.GoTypes{
@@ -75,37 +75,41 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 }
 
 // TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
-func TypeScriptResourceGenerator() *codejen.JennyList[codegen.Kind] {
+func TypeScriptResourceGenerator(genBuilders bool) *codejen.JennyList[codegen.Kind] {
     g := codejen.JennyListWithNamer(namerFunc)
     g.Append(&jennies.TypeScriptTypes{
-        Depth: 1,
+        Depth:       1,
+        GenBuilders: genBuilders,
     }, &jennies.TypeScriptResourceTypes{})
     return g
 }
 
 // JavaResourceGenerator returns a Generator which generates TypeScript resource code.
-func JavaResourceGenerator() *codejen.JennyList[codegen.Kind] {
+func JavaResourceGenerator(genBuilders bool) *codejen.JennyList[codegen.Kind] {
     g := codejen.JennyListWithNamer(namerFunc)
     g.Append(&jennies.JavaTypes{
-        Depth: 1,
+        Depth:       1,
+        GenBuilders: genBuilders,
     }, &jennies.JavaResourceTypes{})
     return g
 }
 
 // PythonResourceGenerator returns a Generator which generates TypeScript resource code.
-func PythonResourceGenerator() *codejen.JennyList[codegen.Kind] {
+func PythonResourceGenerator(genBuilders bool) *codejen.JennyList[codegen.Kind] {
     g := codejen.JennyListWithNamer(namerFunc)
     g.Append(&jennies.PythonTypes{
-        Depth: 1,
+        Depth:       1,
+        GenBuilders: genBuilders,
     }, &jennies.PythonResourceTypes{})
     return g
 }
 
 // PHPResourceGenerator returns a Generator which generates TypeScript resource code.
-func PHPResourceGenerator() *codejen.JennyList[codegen.Kind] {
+func PHPResourceGenerator(genBuilders bool) *codejen.JennyList[codegen.Kind] {
     g := codejen.JennyListWithNamer(namerFunc)
     g.Append(&jennies.PHPTypes{
-        Depth: 1,
+        Depth:       1,
+        GenBuilders: genBuilders,
     }, &jennies.PHPResourceTypes{})
     return g
 }
