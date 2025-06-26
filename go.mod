@@ -41,6 +41,8 @@ require (
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 )
 
+replace github.com/grafana/cog => ../cog
+
 require (
 	cuelabs.dev/go/oci/ociregistry v0.0.0-20240906074133-82eb438dd565 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
