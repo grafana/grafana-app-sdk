@@ -10,8 +10,8 @@ retract (
 )
 
 require (
-	github.com/grafana/grafana-app-sdk v0.38.2
-	github.com/grafana/grafana-app-sdk/logging v0.39.0
+	github.com/grafana/grafana-app-sdk v0.39.2
+	github.com/grafana/grafana-app-sdk/logging v0.39.1
 	github.com/grafana/grafana-plugin-sdk-go v0.277.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/stretchr/testify v1.10.0
