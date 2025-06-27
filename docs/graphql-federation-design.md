@@ -58,13 +58,14 @@ graph LR
 
 ### Core Concept
 
-Instead of one centralized GraphQL service, each app provides its own GraphQL subgraph. The App SDK gateway composes these subgraphs into a unified API.
+Instead of one centralized GraphQL service, each app provides its own GraphQL subgraph. The App SDK's native gateway composes these subgraphs into a unified API using runtime schema composition.
 
 ```mermaid
 graph TB
-    subgraph "GraphQL Gateway (App SDK)"
+    subgraph "App SDK Native Gateway"
         GATEWAY["Federated Gateway"]
-        COMPOSER["Schema Composer"]
+        COMPOSER["Runtime Schema Composer"]
+        DISCOVERY["Auto-Discovery Registry"]
     end
 
     subgraph "App Subgraphs"
@@ -75,10 +76,19 @@ graph TB
 
     CLIENT["GraphQL Client"] --> GATEWAY
     GATEWAY --> COMPOSER
+    DISCOVERY --> COMPOSER
     COMPOSER --> PLAYLIST
     COMPOSER --> DASHBOARD
     COMPOSER --> CUSTOM
 ```
+
+### Architecture Principles
+
+**Native Go Implementation**: Built directly into the App SDK without external dependencies, ensuring consistency with App Platform patterns and avoiding operational complexity.
+
+**Runtime Composition**: Schemas are composed at startup and can be refreshed as apps are registered/unregistered, providing flexibility without the overhead of request-time composition.
+
+**Storage Delegation**: GraphQL resolvers delegate to existing REST storage implementations, eliminating the need for data migration while reusing battle-tested storage logic.
 
 ### Schema Generation Strategy
 
@@ -206,100 +216,90 @@ type Query {
 
 ### Architecture Components
 
-#### 1. Subgraph Registration
+#### 1. Subgraph Interface
 
 ```go
-// In App SDK
+// In App SDK graphql/subgraph package
 type GraphQLSubgraph interface {
     GetSchema() *graphql.Schema
-    GetResolvers() map[string]interface{}
     GetGroupVersion() schema.GroupVersion
+    GetKinds() []resource.Kind
+    GetStorage(gvr schema.GroupVersionResource) Storage
 }
 
-type AppProvider interface {
-    // Existing methods...
-    GetGraphQLSubgraph() GraphQLSubgraph
+// Extension interface for app providers
+type GraphQLSubgraphProvider interface {
+    GetGraphQLSubgraph() (GraphQLSubgraph, error)
 }
 ```
 
-#### 2. Schema Composition (Runtime)
+#### 2. Native Schema Composition
 
 ```go
 type FederatedGateway struct {
-    subgraphs   map[string]GraphQLSubgraph
-    meshCompose *MeshComposeClient
-    hiveGateway *HiveGatewayClient
+    subgraphs map[string]GraphQLSubgraph
+    registry  *AppProviderRegistry
+    schema    *graphql.Schema
 }
 
 func (g *FederatedGateway) ComposeSchema() (*graphql.Schema, error) {
-    // Use Mesh Compose to merge subgraph schemas
-    // Use Hive Gateway for query planning and execution
+    // Native Go schema composition
+    // Merge fields from all subgraphs with namespace prefixing
+    // Generate unified query/mutation types
+    return g.buildUnifiedSchema()
 }
 ```
 
-#### 3. Integration with Existing App Platform
+#### 3. Auto-Discovery Integration
 
-The gateway extends the existing app registration pattern:
+The gateway integrates with App Platform's registration pattern:
 
 ```go
-// In pkg/registry/apps/apps.go
-func ProvideRegistryServiceSink(...) (*Service, error) {
-    // Existing REST API setup...
-    providers := []app.Provider{playlistAppProvider, dashboardAppProvider}
-
-    // New GraphQL federation
-    gateway := graphql.NewFederatedGateway()
-    for _, provider := range providers {
-        if gqlProvider, ok := provider.(GraphQLProvider); ok {
-            subgraph := gqlProvider.GetGraphQLSubgraph()
-            gateway.RegisterSubgraph(provider.GroupVersion(), subgraph)
-        }
-    }
-
-    // Compose unified schema using Mesh Compose + Hive Gateway
-    schema, err := gateway.ComposeSchema()
-
-    // Register single federated GraphQL endpoint
-    registrar.RegisterRoute("POST", "/graphql", gateway.HandleGraphQL)
+// Auto-discovery finds GraphQL-capable providers
+registry, err := gateway.AutoDiscovery(playlistProvider, dashboardProvider)
+if err != nil {
+    return nil, err
 }
+
+// Get composed gateway
+federatedGateway := registry.GetFederatedGateway()
+
+// Register GraphQL endpoint
+http.HandleFunc("/graphql", federatedGateway.HandleGraphQL)
 ```
 
-### Mesh Compose + Hive Gateway Integration
+### Native Go Implementation Benefits
 
-Instead of Apollo Federation, we'll use:
+Our native implementation provides:
 
-- **Mesh Compose**: For schema composition and merging
-- **Hive Gateway**: For query planning, execution, and optimization
+- **Zero External Dependencies**: Pure Go, no Node.js runtime required
+- **App Platform Integration**: Seamless integration with existing patterns
+- **Storage Delegation**: Reuses existing REST storage without data migration
+- **Runtime Flexibility**: Compose schemas at startup, refresh as needed
+- **Field Prefixing**: Automatic namespace resolution to avoid conflicts
 
-This approach provides:
+## Implementation Status
 
-- Better performance than Apollo Federation
-- More flexible schema composition
-- Built-in query optimization
-- No need for federation-specific SDL extensions
+### ✅ Phase 1: Foundation (Completed)
 
-## Implementation Phases
+- **Auto-Generation**: GraphQL schemas generated from CUE kinds
+- **Native Gateway**: Runtime schema composition implemented
+- **Storage Integration**: Resolvers delegate to existing REST storage
+- **Subgraph Interface**: Clean interface for apps to implement GraphQL
 
-### Phase 1: Basic Auto-Generation
+### ✅ Phase 2: App Platform Integration (Completed)
 
-- Generate GraphQL schemas from CUE kinds
-- Implement standard CRUD resolvers
-- Basic gateway with schema composition
-- Single app proof-of-concept
+- **Real App Integration**: Playlist app successfully provides GraphQL subgraph
+- **Auto-Discovery**: Gateway automatically finds GraphQL-capable providers
+- **Storage Bridge**: Adapter pattern bridges GraphQL to existing REST storage
+- **Zero Breaking Changes**: Existing apps unaffected, GraphQL is additive
 
-### Phase 2: Relationship Support
+### 🚧 Phase 3: Enhanced Features (Next)
 
-- Define relationship syntax in CUE
-- Auto-generate relationship resolvers
-- Cross-subgraph query support
-- Multi-app integration
-
-### Phase 3: Advanced Features (Future)
-
-- Custom resolver extension points
-- Real-time subscriptions
-- Query optimization
-- Advanced filtering and pagination
+- **Relationship Support**: `@relation` attributes in CUE for cross-kind relationships
+- **Enhanced Type Mapping**: Beyond JSON scalars to proper CUE type conversion
+- **Performance Optimization**: Query batching, caching, connection pooling
+- **Security Features**: Field-level permissions, rate limiting, query complexity analysis
 
 ## Migration Strategy
 
@@ -324,21 +324,55 @@ This approach provides:
 3. GraphQL becomes an additional interface to existing data
 4. No changes to underlying storage or business logic
 
+## Architectural Decision: Native Go Implementation
+
+### Why Not External Tools?
+
+We evaluated several external federation tools but chose to build natively:
+
+**GraphQL Mesh (Rejected)**:
+
+- Requires Node.js runtime (incompatible with Go-based App SDK)
+- Would introduce significant operational complexity
+- Doesn't understand CUE schema definitions
+- Adds external dependencies and potential security concerns
+
+**Bramble (Considered)**:
+
+- Mature Go-based federation gateway
+- Would require significant adaptation for App Platform patterns
+- Lacks CUE integration and storage delegation
+- Major rewrite effort with uncertain benefits
+
+**Apollo Federation (Considered)**:
+
+- Requires federation-specific SDL extensions
+- Designed for services you control, not auto-generation
+- Doesn't solve the problem of generating from CUE kinds
+
+### Benefits of Native Implementation
+
+- **Perfect Integration**: Built specifically for App Platform patterns
+- **Zero Dependencies**: No external runtimes or services to manage
+- **CUE-First**: Designed around CUE schema definitions
+- **Storage Delegation**: Reuses existing, battle-tested storage layers
+- **Incremental Enhancement**: Can evolve exactly as needed
+
 ## Benefits
 
 ### For App Developers
 
 - **Zero GraphQL Knowledge Required**: Automatic generation from familiar CUE
+- **One Interface Method**: Implement `GetGraphQLSubgraph()` to get GraphQL support
+- **Storage Reuse**: Existing REST storage implementations work unchanged
 - **Consistent Patterns**: Follows existing App Platform conventions
-- **Relationship Support**: Express and query data relationships naturally
-- **Flexibility**: Custom resolvers when needed
 
 ### For API Consumers
 
 - **Single Endpoint**: One GraphQL endpoint for all app data
 - **Efficient Queries**: Request exactly the data needed
 - **Type Safety**: Generated types and schema validation
-- **Relationship Traversal**: Query related data in single request
+- **Field Prefixing**: Clear namespacing prevents conflicts (e.g., `playlist_playlist`)
 
 ### For Platform
 
@@ -346,6 +380,7 @@ This approach provides:
 - **Scalable**: Apps can be developed and deployed independently
 - **Maintainable**: Auto-generation reduces manual schema maintenance
 - **Extensible**: Easy to add new apps and capabilities
+- **Operational Simplicity**: Pure Go, no additional runtimes required
 
 ## Example Usage
 
