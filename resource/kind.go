@@ -182,3 +182,20 @@ func (t *TypedList[T]) SetItems(items []Object) {
 		t.Items[i] = cast
 	}
 }
+
+// SimpleKindCollection is a basic implementation of KindCollection
+type SimpleKindCollection struct {
+	kinds []Kind
+}
+
+// NewKindCollection creates a new KindCollection from the provided kinds
+func NewKindCollection(kinds ...Kind) KindCollection {
+	return &SimpleKindCollection{
+		kinds: kinds,
+	}
+}
+
+// Kinds returns the kinds in this collection
+func (s *SimpleKindCollection) Kinds() []Kind {
+	return s.kinds
+}
