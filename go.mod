@@ -14,7 +14,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/getkin/kin-openapi v0.132.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
-	github.com/grafana/cog v0.0.36
+	github.com/grafana/cog v0.0.37-0.20250626100924-666f6d5fea3c
 	github.com/grafana/grafana-app-sdk/logging v0.39.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.22.0
@@ -28,6 +28,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.36.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/sync v0.15.0
+	golang.org/x/text v0.26.0
 	golang.org/x/tools v0.34.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	google.golang.org/grpc v1.73.0
@@ -40,8 +41,6 @@ require (
 	k8s.io/kube-openapi v0.0.0-20250318190949-c8a335a9a2ff
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738
 )
-
-replace github.com/grafana/cog => ../cog
 
 require (
 	cuelabs.dev/go/oci/ociregistry v0.0.0-20240906074133-82eb438dd565 // indirect
@@ -101,7 +100,6 @@ require (
 	golang.org/x/oauth2 v0.29.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250519155744-55703ea1f237 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250519155744-55703ea1f237 // indirect
