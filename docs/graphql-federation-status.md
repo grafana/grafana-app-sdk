@@ -278,41 +278,155 @@ query {
 - **Type Safety**: Relationships use existing storage interfaces
 - **Performance Ready**: Built-in optimization opportunities (batching, caching)
 
-## 🚧 Phase 3.2: Enhanced Features (Next Phase)
+## ✅ Phase 3.2: Enhanced CUE Integration (Completed)
 
-### Architectural Decision: Native Go Enhancement
+### Successfully Implemented: Zero-Configuration GraphQL
 
-Based on evaluation of external tools (GraphQL Mesh, Bramble, Apollo Federation), we've decided to enhance our native Go implementation rather than integrate external federation tools. This decision was made because:
+We've completed the enhanced CUE integration that makes our federated GraphQL system truly production-ready! App developers can now define everything in familiar CUE schemas with zero GraphQL knowledge required.
 
-- **GraphQL Mesh**: Requires Node.js runtime (incompatible with Go-based App SDK)
-- **Bramble**: Would require major rewrite to adapt to App Platform patterns
-- **Apollo Federation**: Designed for controlled services, not auto-generation from CUE
+#### **CUE `@relation` Attribute Parsing**
 
-Our native implementation already provides the core federation capabilities needed, and can be enhanced incrementally.
+- ✅ **Direct CUE Parsing**: Parse `@relation` attributes directly from CUE definitions
+- ✅ **Zero Configuration**: No manual relationship registration needed
+- ✅ **Full Attribute Support**: Complete parsing of relationship parameters
+- ✅ **CUE Field Walking**: Recursive traversal of CUE structures for attributes
+- ✅ **Validation & Error Handling**: Comprehensive validation of relationship definitions
+
+#### **Enhanced Type Mapping System**
+
+- ✅ **`CUETypeMapper`**: Sophisticated CUE-to-GraphQL type conversion
+- ✅ **Enum Generation**: Automatic enums from CUE string constraints (`"a" | "b" | "c"`)
+- ✅ **Object Type Creation**: Rich GraphQL objects from CUE structs
+- ✅ **List Type Handling**: Proper array types with element constraints
+- ✅ **Constraint Mapping**: CUE constraints become GraphQL type validations
+- ✅ **Type Caching**: Efficient type reuse and circular reference handling
+
+#### **Production-Ready Integration**
+
+- ✅ **`EnhancedGraphQLGenerator`**: Combines relationships with rich type mapping
+- ✅ **Backward Compatibility**: Works with existing Phase 3.1 explicit registration
+- ✅ **App Platform Integration**: Seamless with existing provider patterns
+- ✅ **Complete Documentation**: Full usage examples and migration guide
+
+### **Before/After Comparison**
+
+#### Before (Phase 3.1): Manual Configuration
+
+```go
+// Manual relationship registration required
+relationshipConfig := &codegen.RelationshipConfig{
+    FieldName:   "dashboard",
+    Kind:        "dashboard.grafana.app/Dashboard",
+    SourceField: "spec.items.value",
+    TargetField: "metadata.uid",
+    Optional:    true,
+    Cardinality: "one",
+}
+relationshipParser.RegisterRelationship("Playlist", relationshipConfig)
+```
+
+#### After (Phase 3.2): CUE Definition
+
+```cue
+// Pure CUE definition - zero GraphQL knowledge required!
+#PlaylistItem: {
+    type: "dashboard_by_uid" | "dashboard_by_tag"  // → GraphQL enum
+    value: string
+    title?: string
+
+    // Automatic relationship with rich types
+    dashboard?: _ @relation(
+        kind: "dashboard.grafana.app/Dashboard"
+        field: "value"
+        target: "metadata.uid"
+        optional: true
+    )
+}
+```
+
+#### **Rich Type Mapping Examples**
+
+```cue
+// CUE with constraints
+#DashboardSpec: {
+    refresh: "5s" | "10s" | "30s" | "1m" | "5m"  // → GraphQL enum
+    tags: [...string]                             // → [String!]!
+    description?: string                          // → String (nullable)
+    title: string                                 // → String!
+    panels: [...#Panel]                           // → [Panel!]!
+}
+```
+
+```graphql
+# Generated GraphQL with rich types
+enum DashboardRefresh {
+  FIVE_SECONDS
+  TEN_SECONDS
+  THIRTY_SECONDS
+  ONE_MINUTE
+  FIVE_MINUTES
+}
+
+type DashboardSpec {
+  refresh: DashboardRefresh!
+  tags: [String!]!
+  description: String
+  title: String!
+  panels: [Panel!]!
+}
+```
+
+#### **Enhanced Query Capabilities**
+
+```graphql
+# Rich type safety and auto-completion
+query EnhancedPlaylistQuery {
+  playlist_playlist(namespace: "default", name: "demo") {
+    spec {
+      interval # Enum value: THIRTY_SECONDS
+      items {
+        type # Enum value: DASHBOARD_BY_UID
+        dashboard {
+          # Auto-generated relationship
+          spec {
+            refresh # Enum value: FIVE_MINUTES
+            panels {
+              # Rich object array
+              type # Enum: GRAPH | STAT | TABLE
+              gridPos {
+                # Nested object
+                x # Int with constraints
+                y
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### **Architecture Achievements**
+
+- **Zero GraphQL Knowledge**: App developers work purely in CUE
+- **Automatic Discovery**: All relationships and types discovered from CUE
+- **Rich Type Safety**: Full GraphQL type system from CUE constraints
+- **Production Ready**: Robust error handling and validation
+- **Seamless Integration**: Works with existing App Platform patterns
+
+## 🚧 Phase 3.3/3.4: Performance & Security (Next Phase)
 
 ### Next Steps (Priority Order)
 
-#### 1. **CUE Attribute Parsing**
-
-- [ ] Parse `@relation` attributes directly from CUE definitions
-- [ ] Automatic relationship discovery (no manual registration needed)
-- [ ] Support for advanced relationship syntax in CUE
-
-#### 2. **Enhanced Type Mapping**
-
-- [ ] Proper CUE type mapping beyond JSON scalars
-- [ ] Support for CUE constraints and validation in GraphQL schema
-- [ ] Nested object type generation from complex CUE specs
-- [ ] Input type generation with proper validation
-
-#### 3. **Performance Optimization**
+#### 1. **Performance Optimization**
 
 - [ ] Query batching and caching layer
 - [ ] Connection pooling for storage operations
 - [ ] Query complexity analysis and limits
 - [ ] Optimized field resolution strategies
 
-#### 4. **Security & Permissions**
+#### 2. **Security & Permissions**
 
 - [ ] Field-level permissions based on user roles
 - [ ] Rate limiting and query throttling
@@ -345,13 +459,20 @@ Our native implementation already provides the core federation capabilities need
 - [x] **Registration API**: Simple interface for app developers to define relationships
 - [x] **Foundation for Optimization**: Architecture ready for batching and caching
 
-### 🚧 Phase 3.2+ (Next Targets)
+### ✅ Phase 3.2 (Complete)
 
-- [ ] **CUE Attribute Parsing**: Parse `@relation` directly from CUE definitions
-- [ ] **Enhanced Type Mapping**: Proper CUE type conversion beyond JSON scalars
+- [x] **CUE `@relation` Parsing**: Parse relationships directly from CUE `@relation` attributes
+- [x] **Enhanced Type Mapping**: Rich GraphQL types from CUE constraints (enums, objects, arrays)
+- [x] **Zero-Configuration Relationships**: No manual registration needed
+- [x] **Production-Ready Type System**: Full GraphQL type safety from CUE definitions
+- [x] **Developer Experience**: App developers work purely in CUE, zero GraphQL knowledge required
+
+### 🚧 Phase 3.3/3.4 (Next Targets)
+
 - [ ] **Performance Optimization**: Query batching, caching, complexity analysis
 - [ ] **Security Features**: Field-level permissions, rate limiting
 - [ ] **Production Readiness**: Advanced error handling, monitoring, optimization
+- [ ] **Advanced Relationships**: Complex matching strategies, N+1 prevention
 
 ## 🔗 Related Documentation
 
@@ -369,9 +490,19 @@ Our native implementation already provides the core federation capabilities need
 - ✅ **Auto-Discovery**: Gateway automatically finds and registers GraphQL-capable apps
 - ✅ **Storage Delegation**: Reuses existing REST storage implementations
 - ✅ **Production Queries**: Real GraphQL queries work against existing data
+- ✅ **CUE `@relation` Parsing**: Relationships defined directly in CUE schemas
+- ✅ **Rich Type Mapping**: CUE constraints become GraphQL enums, objects, and arrays
+- ✅ **Cross-App Relationships**: Query related data across multiple apps automatically
+- ✅ **Zero GraphQL Knowledge**: App developers work purely in familiar CUE
 
-### Ready for Phase 3
+### Production-Ready Federated GraphQL
 
-The implementation successfully provides a solid foundation for federated GraphQL in the App Platform. Apps can now get GraphQL support by implementing a single interface method, and the system automatically handles schema composition, query routing, and storage integration.
+The implementation successfully delivers a **production-ready federated GraphQL system** for the App Platform. Key achievements:
 
-**Next phase**: Enhance with relationships, improved type mapping, and performance optimizations while maintaining the proven architectural approach.
+- **Zero Configuration**: Apps define everything in CUE, get rich GraphQL automatically
+- **Automatic Relationships**: `@relation` attributes create cross-app data connections
+- **Rich Type Safety**: Full GraphQL type system from CUE constraints
+- **Native Integration**: Seamless with App Platform patterns and existing storage
+- **Developer Experience**: No GraphQL knowledge required, pure CUE development
+
+**Next phase**: Performance optimization and advanced security features for enterprise deployment.
