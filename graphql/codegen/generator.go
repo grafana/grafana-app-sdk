@@ -14,9 +14,11 @@ import (
 
 // GraphQLGenerator generates GraphQL schemas and resolvers from CUE kinds
 type GraphQLGenerator struct {
-	kinds         []resource.Kind
-	groupVersion  schema.GroupVersion
-	storageGetter func(gvr schema.GroupVersionResource) subgraph.Storage
+	kinds              []resource.Kind
+	groupVersion       schema.GroupVersion
+	storageGetter      func(gvr schema.GroupVersionResource) subgraph.Storage
+	relationshipParser *RelationshipParser
+	subgraphRegistry   SubgraphRegistry
 }
 
 // NewGraphQLGenerator creates a new GraphQL generator
@@ -26,6 +28,13 @@ func NewGraphQLGenerator(kinds []resource.Kind, gv schema.GroupVersion, storageG
 		groupVersion:  gv,
 		storageGetter: storageGetter,
 	}
+}
+
+// WithRelationships adds relationship support to the generator
+func (g *GraphQLGenerator) WithRelationships(parser *RelationshipParser, registry SubgraphRegistry) *GraphQLGenerator {
+	g.relationshipParser = parser
+	g.subgraphRegistry = registry
+	return g
 }
 
 // GenerateSchema generates a complete GraphQL schema from the configured kinds
@@ -195,28 +204,44 @@ func (g *GraphQLGenerator) createMetadataType(labelsScalar, annotationsScalar *g
 func (g *GraphQLGenerator) generateTypesForKind(kind resource.Kind, metadataType *graphql.Object, jsonScalar *graphql.Scalar) (*graphql.Object, *graphql.InputObject, error) {
 	kindName := kind.Kind()
 
+	// Start with base fields
+	fields := graphql.Fields{
+		"apiVersion": &graphql.Field{
+			Type: graphql.String,
+		},
+		"kind": &graphql.Field{
+			Type: graphql.String,
+		},
+		"metadata": &graphql.Field{
+			Type: metadataType,
+		},
+		"spec": &graphql.Field{
+			Type:        jsonScalar,
+			Description: fmt.Sprintf("Specification for %s", kindName),
+		},
+		"status": &graphql.Field{
+			Type:        jsonScalar,
+			Description: fmt.Sprintf("Status of %s", kindName),
+		},
+	}
+
+	// Add relationship fields if relationship support is enabled
+	if g.relationshipParser != nil && g.subgraphRegistry != nil {
+		relationshipFields, err := g.generateRelationshipFields(kind)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to generate relationship fields for %s: %w", kindName, err)
+		}
+
+		// Add relationship fields to the base fields
+		for fieldName, field := range relationshipFields {
+			fields[fieldName] = field
+		}
+	}
+
 	// Create the main object type
 	objectType := graphql.NewObject(graphql.ObjectConfig{
-		Name: kindName,
-		Fields: graphql.Fields{
-			"apiVersion": &graphql.Field{
-				Type: graphql.String,
-			},
-			"kind": &graphql.Field{
-				Type: graphql.String,
-			},
-			"metadata": &graphql.Field{
-				Type: metadataType,
-			},
-			"spec": &graphql.Field{
-				Type:        jsonScalar,
-				Description: fmt.Sprintf("Specification for %s", kindName),
-			},
-			"status": &graphql.Field{
-				Type:        jsonScalar,
-				Description: fmt.Sprintf("Status of %s", kindName),
-			},
-		},
+		Name:   kindName,
+		Fields: fields,
 	})
 
 	// Create input type for mutations
@@ -233,6 +258,26 @@ func (g *GraphQLGenerator) generateTypesForKind(kind resource.Kind, metadataType
 	})
 
 	return objectType, inputType, nil
+}
+
+// generateRelationshipFields generates GraphQL fields for relationships
+func (g *GraphQLGenerator) generateRelationshipFields(kind resource.Kind) (graphql.Fields, error) {
+	fields := make(graphql.Fields)
+
+	// Parse relationships for this kind
+	relationships, err := g.relationshipParser.ParseRelationships(kind)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse relationships: %w", err)
+	}
+
+	// Generate GraphQL field for each relationship
+	for fieldName, config := range relationships {
+		resolver := NewRelationshipResolver(config, g.subgraphRegistry)
+		field := resolver.CreateGraphQLField()
+		fields[fieldName] = field
+	}
+
+	return fields, nil
 }
 
 // createMetadataInputType creates an input type for metadata

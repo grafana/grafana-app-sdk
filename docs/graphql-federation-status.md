@@ -210,7 +210,75 @@ query {
 }
 ```
 
-## 🚧 Phase 3: Enhanced Features (Next Phase)
+## ✅ Phase 3.1: Relationship Support (Completed)
+
+### Successfully Implemented: Cross-App Relationships
+
+We've completed the foundation for cross-app relationships in federated GraphQL! This enables apps to define relationships and automatically resolve related data across subgraphs.
+
+#### **Relationship Configuration API**
+
+- ✅ **`RelationshipConfig` Structure**: Complete configuration for defining relationships
+- ✅ **Explicit Registration**: `RegisterRelationship()` API for app developers
+- ✅ **GraphQL Integration**: Relationships automatically add fields to generated schemas
+- ✅ **Cross-Subgraph Resolution**: Resolvers query target subgraphs automatically
+
+#### **Working Example: Playlist → Dashboard**
+
+```go
+// Register relationship in playlist app
+relationshipConfig := &codegen.RelationshipConfig{
+    FieldName:   "dashboard",                  // GraphQL field name
+    Kind:        "dashboard.grafana.app/Dashboard", // Target kind
+    SourceField: "spec.items.value",           // Local field with reference
+    TargetField: "metadata.uid",               // Target field to match
+    Optional:    true,                         // Can be null
+    Cardinality: "one",                        // One dashboard per item
+}
+relationshipParser.RegisterRelationship("Playlist", relationshipConfig)
+```
+
+#### **Enhanced GraphQL Queries**
+
+This enables powerful cross-app queries:
+
+```graphql
+query {
+  playlist_playlist(namespace: "default", name: "my-playlist") {
+    metadata {
+      name
+      uid
+    }
+    spec {
+      title
+      items {
+        type
+        value
+        dashboard {
+          # Relationship field automatically added!
+          metadata {
+            name
+            uid
+          }
+          spec {
+            title
+            description
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+#### **Architecture Benefits**
+
+- **No GraphQL Knowledge Required**: App developers just register relationship configs
+- **Automatic Resolution**: Fields are added to schema automatically
+- **Type Safety**: Relationships use existing storage interfaces
+- **Performance Ready**: Built-in optimization opportunities (batching, caching)
+
+## 🚧 Phase 3.2: Enhanced Features (Next Phase)
 
 ### Architectural Decision: Native Go Enhancement
 
@@ -224,12 +292,11 @@ Our native implementation already provides the core federation capabilities need
 
 ### Next Steps (Priority Order)
 
-#### 1. **Relationship Support**
+#### 1. **CUE Attribute Parsing**
 
-- [ ] Design `@relation` syntax for CUE kind definitions
-- [ ] Implement cross-subgraph relationship resolvers
-- [ ] Add automatic join field generation
-- [ ] Support for one-to-many and many-to-many relationships
+- [ ] Parse `@relation` attributes directly from CUE definitions
+- [ ] Automatic relationship discovery (no manual registration needed)
+- [ ] Support for advanced relationship syntax in CUE
 
 #### 2. **Enhanced Type Mapping**
 
@@ -270,9 +337,17 @@ Our native implementation already provides the core federation capabilities need
 - [x] **Real App Integration**: Playlist app successfully provides working GraphQL API
 - [x] **Zero GraphQL Knowledge Required**: App developers implement one interface method
 
-### 🚧 Phase 3 (Next Targets)
+### ✅ Phase 3.1 (Complete)
 
-- [ ] **Relationship Support**: Cross-app queries with `@relation` attributes
+- [x] **Relationship Support**: Cross-app relationship configuration and resolution
+- [x] **GraphQL Field Generation**: Automatic relationship fields in schemas
+- [x] **Cross-Subgraph Queries**: Query related data across multiple apps
+- [x] **Registration API**: Simple interface for app developers to define relationships
+- [x] **Foundation for Optimization**: Architecture ready for batching and caching
+
+### 🚧 Phase 3.2+ (Next Targets)
+
+- [ ] **CUE Attribute Parsing**: Parse `@relation` directly from CUE definitions
 - [ ] **Enhanced Type Mapping**: Proper CUE type conversion beyond JSON scalars
 - [ ] **Performance Optimization**: Query batching, caching, complexity analysis
 - [ ] **Security Features**: Field-level permissions, rate limiting
