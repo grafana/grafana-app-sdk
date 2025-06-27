@@ -137,7 +137,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	genBuidlers, err := cmd.Flags().GetBool("genbuidlers")
+	genBuilders, err := cmd.Flags().GetBool("builders")
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			GroupKinds:             grouping == kindGroupingGroup,
 			ManifestIncludeSchemas: !noSchemasInManifest,
 			GenOperatorState:       genOperatorState,
-			GenBuilders:            genBuidlers,
+			GenBuilders:            genBuilders,
 		}, selector)
 		if err != nil {
 			return err
@@ -329,6 +329,9 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 
 	allFiles := append(make(codejen.Files, 0), resourceFiles...)
 	allFiles = append(allFiles, tsResourceFiles...)
+	allFiles = append(allFiles, javaResourceFiles...)
+	allFiles = append(allFiles, pythonResourceFiles...)
+	allFiles = append(allFiles, phpResourceFiles...)
 	allFiles = append(allFiles, crdFiles...)
 	allFiles = append(allFiles, manifestFiles...)
 	allFiles = append(allFiles, goManifestFiles...)

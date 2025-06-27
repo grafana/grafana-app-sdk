@@ -162,6 +162,15 @@ Kind: S={
 					enabled: bool | *S.codegen.go.enabled
 					config: {} | *S.codegen.go.config
 				}
+				java: {
+					enabled: bool | *S.codegen.java.enabled
+				}
+				python: {
+					enabled: bool | *S.codegen.python.enabled
+				}
+				php: {
+					enabled: bool | *S.codegen.php.enabled
+				}
 			}
 			// seledtableFields is a list of additional fields which can be used in kubernetes field selectors for this version.
 			// Fields must be from the root of the schema, i.e. 'spec.foo', and have a string type.
@@ -217,6 +226,15 @@ Kind: S={
 			enabled: bool | *true
 			config: {
 			}
+		}
+		java: {
+			enabled: bool | *false
+		}
+		python: {
+			enabled: bool | *false
+		}
+		php: {
+			enabled: bool | *false
 		}
 	}
 

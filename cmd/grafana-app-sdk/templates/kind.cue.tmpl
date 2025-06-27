@@ -30,6 +30,10 @@ package {{ .Package }}
 			// Defaults to true if not present.
 			enabled: true
 		}
+
+		java: { enabled: false }
+		python: { enabled: false }
+		php: { enabled: false }
 	}
 	// [OPTIONAL]
 	// The human-readable plural form of the "name" field.
@@ -99,6 +103,9 @@ package {{ .Package }}
                     // Defaults to the kind's root-level codegen.go.enabled if not present.
                     enabled: true
                 }
+								java: { enabled: false }
+								python: { enabled: false }
+								php: { enabled: false }
 	        }
 	    }
 	}
