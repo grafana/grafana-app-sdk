@@ -111,7 +111,66 @@ subgraph, err := subgraph.New(subgraph.SubgraphConfig{
 }
 ```
 
-## 🚧 Phase 2: Integration & Enhancement
+## ✅ Phase 2: App Platform Integration (Current)
+
+### Just Completed: Real App Integration
+
+We've successfully implemented the integration between the federated GraphQL system and the App Platform's existing app provider pattern.
+
+#### **GraphQL App Provider Integration**
+
+- ✅ **`GraphQLSubgraphProvider` Interface**: Optional interface that app providers can implement
+- ✅ **Auto-Discovery**: `AppProviderRegistry` automatically detects and registers GraphQL-capable providers
+- ✅ **Storage Bridge**: Adapters bridge GraphQL storage interface to existing REST storage
+- ✅ **Zero Breaking Changes**: Existing apps continue to work, GraphQL support is purely additive
+
+#### **Real Implementation Example**
+
+The playlist app now supports GraphQL out of the box:
+
+```go
+// PlaylistAppProvider now implements GraphQLSubgraphProvider
+func (p *PlaylistAppProvider) GetGraphQLSubgraph() (GraphQLSubgraph, error) {
+    return subgraph.CreateSubgraphFromConfig(subgraph.SubgraphProviderConfig{
+        GroupVersion: schema.GroupVersion{
+            Group: "playlist.grafana.app",
+            Version: "v0alpha1",
+        },
+        Kinds: []resource.Kind{playlistv0alpha1.PlaylistKind()},
+        StorageGetter: func(gvr schema.GroupVersionResource) subgraph.Storage {
+            return &playlistStorageAdapter{
+                legacyStorage: p.legacyStorageGetter(gvr),
+                namespacer: request.GetNamespaceMapper(p.cfg),
+            }
+        },
+    })
+}
+```
+
+#### **Auto-Discovery Pattern**
+
+Apps are automatically discovered and registered:
+
+```go
+// Set up auto-discovery for multiple apps
+registry, err := gateway.AutoDiscovery(playlistProvider, dashboardProvider)
+federatedGateway := registry.GetFederatedGateway()
+
+// Or manual registration
+registry.RegisterProvider("playlist", playlistProvider)
+```
+
+#### **Storage Integration**
+
+The `playlistStorageAdapter` bridges GraphQL operations to existing REST storage:
+
+- ✅ GET operations → `rest.Getter`
+- ✅ LIST operations → `rest.Lister`
+- ✅ CREATE operations → `rest.Creater`
+- ✅ UPDATE operations → `rest.Updater`
+- ✅ DELETE operations → `rest.GracefulDeleter`
+
+## 🚧 Phase 2: Remaining Tasks
 
 ### Next Steps (Priority Order)
 
@@ -170,10 +229,14 @@ func (p *PlaylistAppProvider) GetGraphQLSubgraph() subgraph.GraphQLSubgraph {
 
 ### Phase 2 Targets
 
-- [ ] Real playlist app provides working GraphQL subgraph
-- [ ] Queries work across multiple apps in federation
+- [x] **App Platform Integration**: ✅ Complete - Apps can now provide GraphQL subgraphs
+- [x] **Auto-Discovery**: ✅ Complete - Registry automatically finds GraphQL-capable apps
+- [x] **Storage Bridge**: ✅ Complete - GraphQL delegates to existing REST storage
+- [x] **Zero Breaking Changes**: ✅ Complete - Existing apps unaffected
+- [ ] **Enhanced CUE Type Mapping**: Beyond basic JSON scalars
+- [ ] **Relationship Support**: Cross-app queries and joins
 - [ ] Performance comparable to REST API equivalents
-- [ ] Zero GraphQL knowledge required for app developers
+- [ ] Zero GraphQL knowledge required for app developers (mostly achieved)
 
 ### Phase 3 Targets
 
