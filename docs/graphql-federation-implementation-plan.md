@@ -1,38 +1,12 @@
 # GraphQL Federation Implementation Plan
 
-## Branch Strategy
-
-### 1. Create New Branch
-
-```bash
-# Start from main, excluding centralized GraphQL
-git checkout main
-git checkout -b feature/graphql-federation
-```
-
-### 2. Remove Centralized GraphQL
-
-Since we want to replace the centralized approach, we'll remove the existing implementation:
-
-- Remove `/grafana-app-sdk/graphql/` directory
-- Remove any references to centralized GraphQL in the main branch
-- Keep the existing centralized GraphQL intact in main for reference
-
-### 3. Branch Relationship
-
-```
-main (with centralized GraphQL POC)
-├── feature/graphql-federation (federated approach)
-└── [other branches can use either approach]
-```
-
 ## Implementation Phases
 
 ### Phase 1: Foundation (Week 1-2)
 
 #### 1.1 App SDK GraphQL Package Structure
 
-```
+```tree
 grafana-app-sdk/
 ├── graphql/
 │   ├── gateway/          # Federated gateway implementation
