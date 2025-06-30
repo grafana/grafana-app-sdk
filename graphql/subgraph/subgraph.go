@@ -167,6 +167,7 @@ type simpleGenerator struct {
 	groupVersion     schema.GroupVersion
 	storageGetter    func(gvr schema.GroupVersionResource) Storage
 	resourceHandlers *ResourceHandlerRegistry
+	metadataType     *graphql.Object // Cache the ObjectMeta type to avoid duplicates
 }
 
 func (g *simpleGenerator) GenerateSchema() (*graphql.Schema, error) {
@@ -263,8 +264,22 @@ func (g *simpleGenerator) createResourceListType(kind resource.Kind, itemType *g
 
 // getOrCreateMetadataType creates the standard Kubernetes ObjectMeta type
 func (g *simpleGenerator) getOrCreateMetadataType() *graphql.Object {
-	return graphql.NewObject(graphql.ObjectConfig{
-		Name: "ObjectMeta",
+	// Return cached type if already created
+	if g.metadataType != nil {
+		return g.metadataType
+	}
+
+	// Use a unique name based on the group to avoid conflicts with other subgraphs
+	typeName := "ObjectMeta"
+	if g.groupVersion.Group != "" {
+		// Convert group name to camelCase and append to avoid conflicts
+		groupPrefix := strings.ReplaceAll(strings.Title(strings.ReplaceAll(g.groupVersion.Group, ".", "")), "-", "")
+		typeName = groupPrefix + "ObjectMeta"
+	}
+
+	// Create and cache the type
+	g.metadataType = graphql.NewObject(graphql.ObjectConfig{
+		Name: typeName,
 		Fields: graphql.Fields{
 			"name":              &graphql.Field{Type: graphql.String},
 			"namespace":         &graphql.Field{Type: graphql.String},
@@ -276,6 +291,8 @@ func (g *simpleGenerator) getOrCreateMetadataType() *graphql.Object {
 			"annotations":       &graphql.Field{Type: graphql.String}, // JSON scalar for now
 		},
 	})
+
+	return g.metadataType
 }
 
 // createGetField creates a get field for retrieving a single resource
