@@ -28,32 +28,16 @@ Before adding GraphQL support to your resource, ensure you have:
 - [ ] An app provider registered in the Grafana apps registry
 - [ ] REST storage implementation (typically a `legacyStorage` type)
 
-## Step-by-Step Implementation
+## Two Approaches for Adding GraphQL Support
 
-### Step 1: Add GraphQL Interface to Your App Provider
+The modular GraphQL system offers two approaches for adding GraphQL support to your resources:
 
-Modify your app provider to implement the `GraphQLSubgraphProvider` interface:
+### Approach 1: Simple Handler (Recommended for Basic Resources)
+
+For simple resources that don't need complex GraphQL field mapping, use the `SimpleResourceHandler`:
 
 ```go
 // pkg/registry/apps/myapp/register.go
-package myapp
-
-import (
-    graphqlsubgraph "github.com/grafana/grafana-app-sdk/graphql/subgraph"
-    "github.com/grafana/grafana-app-sdk/resource"
-    "k8s.io/apimachinery/pkg/runtime/schema"
-)
-
-type MyAppProvider struct {
-    app.Provider
-    cfg     *setting.Cfg
-    service myapp.Service  // Your existing service
-}
-
-// Ensure your provider implements GraphQLSubgraphProvider
-var _ graphqlsubgraph.GraphQLSubgraphProvider = (*MyAppProvider)(nil)
-
-// Add this method to your existing provider
 func (p *MyAppProvider) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, error) {
     // Get the group version for your app
     gv := schema.GroupVersion{
@@ -92,227 +76,98 @@ func (p *MyAppProvider) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, e
         }
     }
 
-    // Create the subgraph using the helper function
-    return graphqlsubgraph.CreateSubgraphFromConfig(graphqlsubgraph.SubgraphProviderConfig{
-        GroupVersion:  gv,
-        Kinds:         kinds,
-        StorageGetter: storageGetter,
-    })
+    // Create a simple handler for basic GraphQL support
+    handler := graphqlsubgraph.NewSimpleResourceHandler(myappv0alpha1.MyResourceKind()).
+        WithDemoData(func() interface{} {
+            return map[string]interface{}{
+                "metadata": map[string]interface{}{
+                    "name":      "demo-myresource",
+                    "namespace": "default",
+                },
+                "spec": `{"title": "Demo Resource"}`,
+            }
+        })
+
+    // Create the subgraph with the handler
+    return graphqlsubgraph.CreateSubgraphWithHandlers(
+        graphqlsubgraph.SubgraphProviderConfig{
+            GroupVersion:  gv,
+            Kinds:         kinds,
+            StorageGetter: storageGetter,
+        },
+        handler,
+    )
 }
 ```
 
-### Step 2: Create a GraphQL Storage Adapter
+### Approach 2: Custom Handler (For Complex Resources)
 
-Create a storage adapter that bridges the GraphQL storage interface to your existing REST storage:
+For resources with complex GraphQL requirements (like playlists), create a dedicated handler:
 
 ```go
-// pkg/registry/apps/myapp/graphql_storage.go
+// pkg/registry/apps/myapp/graphql_handler.go
 package myapp
 
 import (
-    "context"
-    "fmt"
-
-    graphqlsubgraph "github.com/grafana/grafana-app-sdk/graphql/subgraph"
     "github.com/grafana/grafana-app-sdk/resource"
-    grafanarest "github.com/grafana/grafana/pkg/apiserver/rest"
-    "github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
-    "k8s.io/apimachinery/pkg/apis/meta/internalversion"
-    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-    "k8s.io/apimachinery/pkg/labels"
-    "k8s.io/apiserver/pkg/registry/rest"
+    graphqlsubgraph "github.com/grafana/grafana-app-sdk/graphql/subgraph"
+    "github.com/graphql-go/graphql"
+    myappv0alpha1 "github.com/grafana/grafana/apps/myapp/pkg/apis/myapp/v0alpha1"
 )
 
-// myAppStorageAdapter adapts the existing REST storage to work with GraphQL
-type myAppStorageAdapter struct {
-    legacyStorage grafanarest.Storage
-    namespacer    request.NamespaceMapper
+type myAppGraphQLHandler struct{}
+
+func NewMyAppGraphQLHandler() graphqlsubgraph.ResourceGraphQLHandler {
+    return &myAppGraphQLHandler{}
 }
 
-// Ensure adapter implements graphqlsubgraph.Storage
-var _ graphqlsubgraph.Storage = (*myAppStorageAdapter)(nil)
-
-// Get retrieves a single resource by namespace and name
-func (a *myAppStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
-    getter, ok := a.legacyStorage.(rest.Getter)
-    if !ok {
-        return nil, fmt.Errorf("storage does not support get operations")
-    }
-
-    obj, err := getter.Get(ctx, name, &metav1.GetOptions{})
-    if err != nil {
-        return nil, err
-    }
-
-    resourceObj, ok := obj.(resource.Object)
-    if !ok {
-        return nil, fmt.Errorf("storage returned object that is not a resource.Object: %T", obj)
-    }
-
-    return resourceObj, nil
+func (h *myAppGraphQLHandler) GetResourceKind() resource.Kind {
+    return myappv0alpha1.MyResourceKind()
 }
 
-// List retrieves multiple resources with optional filtering
-func (a *myAppStorageAdapter) List(ctx context.Context, namespace string, options graphqlsubgraph.ListOptions) (resource.ListObject, error) {
-    lister, ok := a.legacyStorage.(rest.Lister)
-    if !ok {
-        return nil, fmt.Errorf("storage does not support list operations")
+func (h *myAppGraphQLHandler) GetGraphQLFields() graphql.Fields {
+    return graphql.Fields{
+        "customField": &graphql.Field{Type: graphql.String},
+        "items":       &graphql.Field{Type: graphql.NewList(graphql.String)},
     }
-
-    // Convert GraphQL list options to Kubernetes list options
-    listOptions := &internalversion.ListOptions{}
-    if options.LabelSelector != "" {
-        selector, err := labels.Parse(options.LabelSelector)
-        if err != nil {
-            return nil, fmt.Errorf("invalid label selector: %v", err)
-        }
-        listOptions.LabelSelector = selector
-    }
-    if options.Limit > 0 {
-        listOptions.Limit = options.Limit
-    }
-    if options.Continue != "" {
-        listOptions.Continue = options.Continue
-    }
-
-    obj, err := lister.List(ctx, listOptions)
-    if err != nil {
-        return nil, err
-    }
-
-    listObj, ok := obj.(resource.ListObject)
-    if !ok {
-        return nil, fmt.Errorf("storage returned object that is not a resource.ListObject: %T", obj)
-    }
-
-    return listObj, nil
 }
 
-// Create creates a new resource
-func (a *myAppStorageAdapter) Create(ctx context.Context, namespace string, obj resource.Object) (resource.Object, error) {
-    creater, ok := a.legacyStorage.(rest.Creater)
-    if !ok {
-        return nil, fmt.Errorf("storage does not support create operations")
+func (h *myAppGraphQLHandler) ConvertResourceToGraphQL(obj resource.Object) map[string]interface{} {
+    // Custom conversion logic specific to your resource
+    return map[string]interface{}{
+        "customField": "custom value",
+        "items":       []string{"item1", "item2"},
     }
-
-    if obj.GetNamespace() == "" {
-        obj.SetNamespace(namespace)
-    }
-
-    created, err := creater.Create(ctx, obj, rest.ValidateAllObjectFunc, &metav1.CreateOptions{})
-    if err != nil {
-        return nil, err
-    }
-
-    resourceObj, ok := created.(resource.Object)
-    if !ok {
-        return nil, fmt.Errorf("storage returned object that is not a resource.Object: %T", created)
-    }
-
-    return resourceObj, nil
 }
 
-// Update updates an existing resource
-func (a *myAppStorageAdapter) Update(ctx context.Context, namespace, name string, obj resource.Object) (resource.Object, error) {
-    updater, ok := a.legacyStorage.(rest.Updater)
-    if !ok {
-        return nil, fmt.Errorf("storage does not support update operations")
+func (h *myAppGraphQLHandler) CreateDemoData() interface{} {
+    return map[string]interface{}{
+        "metadata": map[string]interface{}{
+            "name": "demo-myresource",
+        },
+        "customField": "demo value",
+        "items":       []string{"demo item"},
     }
-
-    obj.SetNamespace(namespace)
-    obj.SetName(name)
-
-    updated, _, err := updater.Update(ctx, name, rest.DefaultUpdatedObjectInfo(obj),
-        rest.ValidateAllObjectFunc, rest.ValidateAllObjectUpdateFunc, false, &metav1.UpdateOptions{})
-    if err != nil {
-        return nil, err
-    }
-
-    resourceObj, ok := updated.(resource.Object)
-    if !ok {
-        return nil, fmt.Errorf("storage returned object that is not a resource.Object: %T", updated)
-    }
-
-    return resourceObj, nil
-}
-
-// Delete deletes a resource by namespace and name
-func (a *myAppStorageAdapter) Delete(ctx context.Context, namespace, name string) error {
-    deleter, ok := a.legacyStorage.(rest.GracefulDeleter)
-    if !ok {
-        return fmt.Errorf("storage does not support delete operations")
-    }
-
-    _, _, err := deleter.Delete(ctx, name, rest.ValidateAllObjectFunc, &metav1.DeleteOptions{})
-    return err
 }
 ```
 
-### Step 3: Register Your Provider in the Apps Registry
-
-Add your provider to the apps registry and wire set:
-
-```go
-// pkg/registry/apps/apps.go
-func ProvideRegistryServiceSink(
-    // ... existing parameters ...
-    myAppProvider *myapp.MyAppProvider,  // Add your provider
-    grafanaCfg *setting.Cfg,
-) (*Service, error) {
-    // ... existing code ...
-
-    providers := []app.Provider{
-        playlistAppProvider,
-        myAppProvider,  // Add your provider to the list
-    }
-
-    // Add feature flag check if needed
-    if features.IsEnabledGlobally(featuremgmt.FlagMyAppBackend) {
-        providers = append(providers, myAppProvider)
-    }
-
-    // ... rest of function ...
-}
-```
-
-```go
-// pkg/registry/apps/wireset.go
-var WireSet = wire.NewSet(
-    ProvideRegistryServiceSink,
-    playlist.RegisterApp,
-    myapp.RegisterApp,  // Add your app registration function
-    // ... other registrations ...
-)
-```
-
-### Step 4: Create Your App Registration Function
-
-Ensure you have a registration function that creates and configures your app provider:
+Then register it in your provider:
 
 ```go
 // pkg/registry/apps/myapp/register.go
-func RegisterApp(
-    service myapp.Service,
-    cfg *setting.Cfg,
-    features featuremgmt.FeatureToggles,
-) *MyAppProvider {
-    provider := &MyAppProvider{
-        cfg:     cfg,
-        service: service,
-    }
+func (p *MyAppProvider) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, error) {
+    // ... storage setup ...
 
-    appCfg := &runner.AppBuilderConfig{
-        OpenAPIDefGetter:    myappv0alpha1.GetOpenAPIDefinitions,
-        LegacyStorageGetter: provider.legacyStorageGetter,
-        ManagedKinds:        myapp.GetKinds(),
-        CustomConfig: any(&myapp.MyAppConfig{
-            EnableReconcilers: features.IsEnabledGlobally(featuremgmt.FlagMyAppReconciler),
-        }),
-        AllowedV0Alpha1Resources: []string{myappv0alpha1.MyResourceKind().Plural()},
-    }
+    // Create resource handler registry and register your custom handler
+    resourceHandlers := graphqlsubgraph.NewResourceHandlerRegistry()
+    resourceHandlers.RegisterHandler(NewMyAppGraphQLHandler())
 
-    provider.Provider = simple.NewAppProvider(apis.LocalManifest(), appCfg, myapp.New)
-    return provider
+    return graphqlsubgraph.CreateSubgraphFromConfig(graphqlsubgraph.SubgraphProviderConfig{
+        GroupVersion:     gv,
+        Kinds:            kinds,
+        StorageGetter:    storageGetter,
+        ResourceHandlers: resourceHandlers,
+    })
 }
 ```
 

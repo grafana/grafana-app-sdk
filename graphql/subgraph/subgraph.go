@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"reflect"
 	"strings"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -33,10 +32,11 @@ type ResolverMap map[string]interface{}
 
 // SubgraphConfig holds configuration for creating a subgraph
 type SubgraphConfig struct {
-	GroupVersion    schema.GroupVersion
-	Kinds           []resource.Kind
-	StorageGetter   func(gvr schema.GroupVersionResource) Storage
-	CustomResolvers ResolverMap
+	GroupVersion     schema.GroupVersion
+	Kinds            []resource.Kind
+	StorageGetter    func(gvr schema.GroupVersionResource) Storage
+	CustomResolvers  ResolverMap
+	ResourceHandlers *ResourceHandlerRegistry // Optional registry for resource-specific handlers
 }
 
 // Storage interface abstracts the underlying storage for resources
@@ -113,7 +113,12 @@ func (s *subgraph) GetKinds() []resource.Kind {
 // This uses the codegen package to generate schemas from CUE kinds
 func generateSchemaAndResolvers(config SubgraphConfig) (*graphql.Schema, ResolverMap, error) {
 	// Use the new GraphQL generator to create schema and resolvers
-	generator := NewGraphQLGenerator(config.Kinds, config.GroupVersion, config.StorageGetter)
+	var generator GraphQLGeneratorInterface
+	if config.ResourceHandlers != nil {
+		generator = NewGraphQLGeneratorWithHandlers(config.Kinds, config.GroupVersion, config.StorageGetter, config.ResourceHandlers)
+	} else {
+		generator = NewGraphQLGenerator(config.Kinds, config.GroupVersion, config.StorageGetter)
+	}
 	fmt.Printf("✅ NewGraphQLGenerator completed\n")
 	schema, err := generator.GenerateSchema()
 	if err != nil {
@@ -140,6 +145,16 @@ func NewGraphQLGenerator(kinds []resource.Kind, gv schema.GroupVersion, storageG
 	}
 }
 
+// NewGraphQLGeneratorWithHandlers creates a new GraphQL generator with resource handlers
+func NewGraphQLGeneratorWithHandlers(kinds []resource.Kind, gv schema.GroupVersion, storageGetter func(gvr schema.GroupVersionResource) Storage, handlers *ResourceHandlerRegistry) GraphQLGeneratorInterface {
+	return &simpleGenerator{
+		kinds:            kinds,
+		groupVersion:     gv,
+		storageGetter:    storageGetter,
+		resourceHandlers: handlers,
+	}
+}
+
 // GraphQLGeneratorInterface defines the interface for GraphQL generation
 type GraphQLGeneratorInterface interface {
 	GenerateSchema() (*graphql.Schema, error)
@@ -148,9 +163,10 @@ type GraphQLGeneratorInterface interface {
 
 // simpleGenerator is a temporary implementation until we can properly integrate with codegen
 type simpleGenerator struct {
-	kinds         []resource.Kind
-	groupVersion  schema.GroupVersion
-	storageGetter func(gvr schema.GroupVersionResource) Storage
+	kinds            []resource.Kind
+	groupVersion     schema.GroupVersion
+	storageGetter    func(gvr schema.GroupVersionResource) Storage
+	resourceHandlers *ResourceHandlerRegistry
 }
 
 func (g *simpleGenerator) GenerateSchema() (*graphql.Schema, error) {
@@ -222,38 +238,15 @@ func (g *simpleGenerator) createResourceType(kind resource.Kind) *graphql.Object
 
 // getResourceSpecificFields returns additional fields for specific resource types
 func (g *simpleGenerator) getResourceSpecificFields(kind resource.Kind) graphql.Fields {
-	kindName := strings.ToLower(kind.Kind())
-
-	switch kindName {
-	case "playlist":
-		return g.getPlaylistFields()
-	default:
-		// For other resource types, return empty - they'll use the generic metadata + spec approach
-		return graphql.Fields{}
+	// Check if we have a resource handler for this kind
+	if g.resourceHandlers != nil {
+		if handler := g.resourceHandlers.GetHandler(kind); handler != nil {
+			return handler.GetGraphQLFields()
+		}
 	}
-}
 
-// getPlaylistFields returns playlist-specific GraphQL fields
-func (g *simpleGenerator) getPlaylistFields() graphql.Fields {
-	// Create playlist item type
-	playlistItemType := graphql.NewObject(graphql.ObjectConfig{
-		Name: "PlaylistItem",
-		Fields: graphql.Fields{
-			"id":          &graphql.Field{Type: graphql.Int},
-			"playlistUid": &graphql.Field{Type: graphql.String},
-			"type":        &graphql.Field{Type: graphql.String},
-			"value":       &graphql.Field{Type: graphql.String},
-			"order":       &graphql.Field{Type: graphql.Int},
-			"title":       &graphql.Field{Type: graphql.String},
-		},
-	})
-
-	return graphql.Fields{
-		"uid":      &graphql.Field{Type: graphql.String},
-		"name":     &graphql.Field{Type: graphql.String},
-		"interval": &graphql.Field{Type: graphql.String},
-		"items":    &graphql.Field{Type: graphql.NewList(playlistItemType)},
-	}
+	// For other resource types, return empty - they'll use the generic metadata + spec approach
+	return graphql.Fields{}
 }
 
 // createResourceListType creates a generic list type for any resource kind
@@ -371,11 +364,20 @@ func (g *simpleGenerator) createListField(kind resource.Kind, listType *graphql.
 
 // createDemoData creates demo data for any resource kind
 func (g *simpleGenerator) createDemoData(kind resource.Kind) interface{} {
+	// Check if we have a resource handler for this kind that provides demo data
+	if g.resourceHandlers != nil {
+		if handler := g.resourceHandlers.GetHandler(kind); handler != nil {
+			if demoData := handler.CreateDemoData(); demoData != nil {
+				return demoData
+			}
+		}
+	}
+
+	// Generic fallback demo data
 	kindName := kind.Kind()
 	lowercaseKind := strings.ToLower(kindName)
 
-	// Base data structure
-	baseData := map[string]interface{}{
+	return map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"name":              fmt.Sprintf("demo-%s", lowercaseKind),
 			"namespace":         "default",
@@ -388,34 +390,6 @@ func (g *simpleGenerator) createDemoData(kind resource.Kind) interface{} {
 		},
 		"spec": fmt.Sprintf(`{"title": "Demo %s", "description": "This is a demo %s for testing"}`, kindName, kindName),
 	}
-
-	// Add resource-specific demo fields
-	switch lowercaseKind {
-	case "playlist":
-		baseData["uid"] = "demo-playlist-uid"
-		baseData["name"] = "Demo Playlist (no args required)"
-		baseData["interval"] = "30s"
-		baseData["items"] = []map[string]interface{}{
-			{
-				"id":          1,
-				"playlistUid": "demo-playlist-uid",
-				"type":        "dashboard_by_uid",
-				"value":       "demo-dashboard-1",
-				"order":       1,
-				"title":       "Demo Dashboard 1",
-			},
-			{
-				"id":          2,
-				"playlistUid": "demo-playlist-uid",
-				"type":        "dashboard_by_tag",
-				"value":       "demo-tag",
-				"order":       2,
-				"title":       "Demo Dashboard 2",
-			},
-		}
-	}
-
-	return baseData
 }
 
 // convertResourceToGraphQL converts any resource.Object to GraphQL format
@@ -462,137 +436,18 @@ func (g *simpleGenerator) convertResourceToGraphQL(obj resource.Object) interfac
 
 // convertResourceSpecificFields extracts resource-specific fields from the spec
 func (g *simpleGenerator) convertResourceSpecificFields(obj resource.Object) map[string]interface{} {
-	staticMetadata := obj.GetStaticMetadata()
-	kindName := strings.ToLower(staticMetadata.Kind)
+	// Check if we have a resource handler for this object's kind
+	if g.resourceHandlers != nil {
+		staticMetadata := obj.GetStaticMetadata()
+		kindName := staticMetadata.Kind
 
-	// Try multiple variations of playlist kind detection
-	if kindName == "playlist" || strings.Contains(kindName, "playlist") || staticMetadata.Kind == "Playlist" {
-		return g.convertPlaylistFields(obj)
-	}
-
-	// FALLBACK: Check if this looks like a playlist based on the spec structure
-	if spec := obj.GetSpec(); spec != nil {
-		specValue := reflect.ValueOf(spec)
-		if specValue.Kind() == reflect.Ptr {
-			specValue = specValue.Elem()
-		}
-		if specValue.Kind() == reflect.Struct {
-			// Check for playlist-specific fields
-			if specValue.FieldByName("Title").IsValid() && specValue.FieldByName("Interval").IsValid() && specValue.FieldByName("Items").IsValid() {
-				return g.convertPlaylistFields(obj)
-			}
+		// First try to find handler by exact kind name
+		if handler := g.resourceHandlers.GetHandlerByKindName(kindName); handler != nil {
+			return handler.ConvertResourceToGraphQL(obj)
 		}
 	}
+
 	return map[string]interface{}{}
-}
-
-// convertPlaylistFields extracts playlist-specific fields from the resource
-func (g *simpleGenerator) convertPlaylistFields(obj resource.Object) map[string]interface{} {
-	metadata := obj.GetStaticMetadata()
-	spec := obj.GetSpec()
-
-	result := map[string]interface{}{
-		"uid":      metadata.Name,   // fallback to name
-		"name":     metadata.Name,   // fallback to name
-		"interval": "5m",            // default interval
-		"items":    []interface{}{}, // empty items array
-	}
-
-	// Try to extract playlist-specific data from spec
-	if spec != nil {
-		// Use reflection to extract fields from typed struct (this is the primary path)
-		specValue := reflect.ValueOf(spec)
-		if specValue.Kind() == reflect.Ptr {
-			specValue = specValue.Elem()
-		}
-
-		if specValue.Kind() == reflect.Struct {
-			// Try to find Title field
-			if titleField := specValue.FieldByName("Title"); titleField.IsValid() && titleField.CanInterface() {
-				if titleStr, ok := titleField.Interface().(string); ok && titleStr != "" {
-					result["name"] = titleStr
-				}
-			}
-
-			// Try to find Interval field
-			if intervalField := specValue.FieldByName("Interval"); intervalField.IsValid() && intervalField.CanInterface() {
-				if intervalStr, ok := intervalField.Interface().(string); ok && intervalStr != "" {
-					result["interval"] = intervalStr
-				}
-			}
-
-			// Try to find Items field
-			if itemsField := specValue.FieldByName("Items"); itemsField.IsValid() && itemsField.CanInterface() {
-				itemsValue := itemsField.Interface()
-
-				// Handle slice of items
-				if itemsSlice := reflect.ValueOf(itemsValue); itemsSlice.Kind() == reflect.Slice {
-					graphqlItems := make([]interface{}, itemsSlice.Len())
-					for i := 0; i < itemsSlice.Len(); i++ {
-						item := itemsSlice.Index(i).Interface()
-
-						// Try to extract fields from item struct
-						itemValue := reflect.ValueOf(item)
-						if itemValue.Kind() == reflect.Ptr {
-							itemValue = itemValue.Elem()
-						}
-
-						graphqlItem := map[string]interface{}{
-							"id":          i + 1,
-							"playlistUid": metadata.Name,
-							"order":       i + 1,
-							"title":       fmt.Sprintf("Dashboard %d", i+1),
-						}
-
-						if itemValue.Kind() == reflect.Struct {
-							// Try to get Type field
-							if typeField := itemValue.FieldByName("Type"); typeField.IsValid() && typeField.CanInterface() {
-								graphqlItem["type"] = fmt.Sprintf("%v", typeField.Interface())
-							}
-							// Try to get Value field
-							if valueField := itemValue.FieldByName("Value"); valueField.IsValid() && valueField.CanInterface() {
-								graphqlItem["value"] = fmt.Sprintf("%v", valueField.Interface())
-							}
-						}
-
-						graphqlItems[i] = graphqlItem
-					}
-					result["items"] = graphqlItems
-				}
-			}
-		} else {
-			// Fallback: try as a map (in case it was unmarshaled as JSON)
-			if specMap, ok := spec.(map[string]interface{}); ok {
-				if title, exists := specMap["title"]; exists {
-					result["name"] = title
-				}
-				if interval, exists := specMap["interval"]; exists {
-					result["interval"] = interval
-				}
-				if items, exists := specMap["items"]; exists {
-					if itemList, ok := items.([]interface{}); ok {
-						// Convert items to GraphQL format
-						graphqlItems := make([]interface{}, len(itemList))
-						for i, item := range itemList {
-							if itemMap, ok := item.(map[string]interface{}); ok {
-								graphqlItems[i] = map[string]interface{}{
-									"id":          i + 1,
-									"playlistUid": metadata.Name,
-									"type":        itemMap["type"],
-									"value":       itemMap["value"],
-									"order":       i + 1,
-									"title":       fmt.Sprintf("Dashboard %d", i+1),
-								}
-							}
-						}
-						result["items"] = graphqlItems
-					}
-				}
-			}
-		}
-	}
-
-	return result
 }
 
 // convertResourceListToGraphQL converts any resource.ListObject to GraphQL format

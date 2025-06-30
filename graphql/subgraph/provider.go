@@ -24,6 +24,8 @@ type SubgraphProviderConfig struct {
 	Kinds []resource.Kind
 	// StorageGetter provides storage access for resolving GraphQL queries
 	StorageGetter func(gvr schema.GroupVersionResource) Storage
+	// ResourceHandlers provides resource-specific GraphQL field generation and conversion
+	ResourceHandlers *ResourceHandlerRegistry
 }
 
 // CreateSubgraphFromConfig is a helper function that creates a GraphQL subgraph
@@ -31,8 +33,9 @@ type SubgraphProviderConfig struct {
 // in their GetGraphQLSubgraph implementation.
 func CreateSubgraphFromConfig(config SubgraphProviderConfig) (GraphQLSubgraph, error) {
 	return New(SubgraphConfig{
-		GroupVersion:  config.GroupVersion,
-		Kinds:         config.Kinds,
-		StorageGetter: config.StorageGetter,
+		GroupVersion:     config.GroupVersion,
+		Kinds:            config.Kinds,
+		StorageGetter:    config.StorageGetter,
+		ResourceHandlers: config.ResourceHandlers,
 	})
 }
