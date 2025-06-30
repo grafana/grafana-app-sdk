@@ -7,9 +7,17 @@ This guide provides a step-by-step recipe for extending Grafana's GraphQL federa
 The GraphQL federation system automatically discovers and integrates App SDK-backed resources by:
 
 1. **Auto-discovery**: Scanning app providers that implement `GraphQLSubgraphProvider`
-2. **Schema generation**: Converting CUE kinds to GraphQL types and resolvers
-3. **Storage bridging**: Reusing existing REST storage without data migration
+2. **Dynamic schema generation**: Converting any CUE kinds to GraphQL types and resolvers automatically
+3. **Generic storage bridging**: Reusing existing REST storage without data migration
 4. **Field prefixing**: Namespacing fields to avoid conflicts (e.g., `playlist_playlist`)
+
+## Key Benefits of the Modular Design
+
+✅ **Zero Resource-Specific Code**: No need to write resource-specific GraphQL types or resolvers
+✅ **Automatic Type Generation**: GraphQL types are dynamically created from your CUE kinds
+✅ **Generic Conversion**: All resource.Object types are automatically converted to GraphQL format
+✅ **Consistent Metadata**: Standard Kubernetes ObjectMeta fields are included for all resources
+✅ **Flexible Demo Data**: Configurable demo data generation for any resource type
 
 ## Prerequisites
 
@@ -310,19 +318,30 @@ func RegisterApp(
 
 ## Generated GraphQL Schema
 
-Once implemented, your resource will be automatically available in the GraphQL schema with:
+The modular system automatically generates a complete GraphQL schema for your resource with:
 
-### Query Fields
+### Query Fields (Auto-Generated)
 
-- `myapp_myresource(namespace: String!, name: String!): MyResource` - Get single resource
-- `myapp_myresources(namespace: String!): MyResourceList` - List resources
+- `<app>_<resource>(namespace: String!, name: String!)` - Get single resource
+- `<app>_<resources>(namespace: String!)` - List resources
+- `demo_<resource>()` - Demo data for testing (configurable)
 
-### Types
+### Types (Auto-Generated)
 
-- `MyResource` - Individual resource type with `metadata` and `spec` fields
-- `MyResourceList` - List wrapper with `items` field
-- `ObjectMeta` - Standard Kubernetes metadata
-- JSON scalar for `spec` (enhanced type mapping coming in future phases)
+- `<ResourceKind>` - Individual resource type with standardized structure:
+  - `metadata: ObjectMeta` - Complete Kubernetes metadata
+  - `spec: String` - JSON scalar (enhanced structured types in future phases)
+- `<ResourceKind>List` - List wrapper with `items` field
+- `ObjectMeta` - Standard Kubernetes metadata with full field support:
+  - `name`, `namespace`, `uid`, `resourceVersion`, `generation`
+  - `creationTimestamp`, `labels`, `annotations`
+
+### Features
+
+✅ **Consistent Structure**: All resources follow the same GraphQL pattern
+✅ **Complete Metadata**: Full Kubernetes ObjectMeta fields included
+✅ **Error Handling**: Proper argument validation and error messages
+✅ **Demo Support**: Optional demo data for easy testing
 
 ## Testing Your Implementation
 
@@ -434,5 +453,30 @@ Resources are exposed with prefixed field names to avoid conflicts:
 - **Real-time Subscriptions**: GraphQL subscriptions for real-time updates
 
 ---
+
+## Modular Design Benefits
+
+The refactored GraphQL federation system provides significant improvements for developers:
+
+### Before (Resource-Specific Implementation)
+
+- ❌ Hard-coded playlist-specific GraphQL types
+- ❌ Manual type definitions for each resource
+- ❌ Resource-specific conversion functions
+- ❌ Duplicate resolver logic for similar resources
+
+### After (Generic Modular System)
+
+- ✅ **Zero Boilerplate**: No resource-specific GraphQL code needed
+- ✅ **Automatic Generation**: Types and resolvers generated from CUE kinds
+- ✅ **Consistent API**: All resources follow the same GraphQL patterns
+- ✅ **Future-Proof**: Enhanced type mapping applies to all resources
+
+### What This Means for You
+
+1. **Faster Development**: Adding a new resource requires only the storage adapter
+2. **Consistency**: All GraphQL APIs follow the same structure and behavior
+3. **Maintainability**: Changes to the core system benefit all resources
+4. **Flexibility**: Easy to add new metadata fields or query capabilities
 
 This pattern provides a consistent, scalable way to extend Grafana's GraphQL federation system while reusing existing storage infrastructure and maintaining backward compatibility with REST APIs.
