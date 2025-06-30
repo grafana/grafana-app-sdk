@@ -10,4 +10,7 @@ testKind: {
 			testField: string
 		}
 	}
+	customRoutes: {
+		"foo": {}
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"sort"
 	"sync"
 
@@ -23,6 +24,7 @@ import (
 	"k8s.io/kube-openapi/pkg/common"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -119,16 +121,23 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	groupVersions := make([]schema.GroupVersion, 0)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
-			scheme.AddKnownTypeWithName(kind.GroupVersionKind(), kind.ZeroValue())
-			scheme.AddKnownTypeWithName(gv.WithKind(kind.Kind()+"List"), kind.ZeroListValue())
-			metav1.AddToGroupVersion(scheme, kind.GroupVersionKind().GroupVersion())
-			if _, ok := internalKinds[kind.Kind()]; !ok {
-				internalKinds[kind.Kind()] = kind
+			scheme.AddKnownTypeWithName(kind.Kind.GroupVersionKind(), kind.Kind.ZeroValue())
+			scheme.AddKnownTypeWithName(gv.WithKind(kind.Kind.Kind()+"List"), kind.Kind.ZeroListValue())
+			metav1.AddToGroupVersion(scheme, kind.Kind.GroupVersionKind().GroupVersion())
+			if _, ok := internalKinds[kind.Kind.Kind()]; !ok {
+				internalKinds[kind.Kind.Kind()] = kind.Kind
 			}
-			if _, ok := kindsByGroup[kind.Group()]; !ok {
-				kindsByGroup[kind.Group()] = []resource.Kind{}
+			if _, ok := kindsByGroup[kind.Kind.Group()]; !ok {
+				kindsByGroup[kind.Kind.Group()] = []resource.Kind{}
 			}
-			kindsByGroup[kind.Group()] = append(kindsByGroup[kind.Group()], kind)
+			kindsByGroup[kind.Kind.Group()] = append(kindsByGroup[kind.Kind.Group()], kind.Kind)
+			if len(kind.ManifestKind.CustomRoutes) > 0 {
+				//scheme.AddUnversionedTypes(gv, &ResourceCallOptions{})
+				scheme.AddKnownTypeWithName(gv.WithKind("ResourceCallOptions"), &ResourceCallOptions{})
+				scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*ResourceCallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
+					return CovertURLValuesToResourceCallOptions(a.(*url.Values), b.(*ResourceCallOptions), scope)
+				})
+			}
 		}
 		groupVersions = append(groupVersions, gv)
 	}
@@ -147,6 +156,7 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 			}
 		}
 	}
+	scheme.AddKnownTypeWithName(internalGv.WithKind("ResourceCallOptions"), &ResourceCallOptions{})
 
 	sort.Slice(groupVersions, func(i, j int) bool {
 		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) < 0
@@ -170,6 +180,7 @@ func (r *defaultInstaller) ManifestData() *app.ManifestData {
 
 func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
+	hasCustomRoutes := false
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)
@@ -195,7 +206,13 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 				continue
 			}
 			maps.Copy(res, oapi)
+			if len(manifestKind.CustomRoutes) > 0 {
+				hasCustomRoutes = true
+			}
 		}
+	}
+	if hasCustomRoutes {
+		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
 	}
 	return res
 }
@@ -219,13 +236,30 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
 			storage := map[string]rest.Storage{}
-			s, err := newGenericStoreForKind(r.scheme, kind, optsGetter)
+			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
 			if err != nil {
-				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind(), err)
+				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
 			}
-			storage[kind.Plural()] = s
-			if _, ok := kind.ZeroValue().GetSubresource(string(resource.SubresourceStatus)); ok {
-				storage[fmt.Sprintf("%s/%s", kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind, s)
+			storage[kind.Kind.Plural()] = s
+			if _, ok := kind.Kind.ZeroValue().GetSubresource(string(resource.SubresourceStatus)); ok {
+				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, s)
+			}
+			for route, _ := range kind.ManifestKind.CustomRoutes {
+				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), route)] = &SubresourceConnector{
+					Route: CustomRoute{
+						Path: route,
+						Handler: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+							logging.FromContext(ctx).Debug("Calling custom subresource route", "path", route, "namespace", request.ResourceIdentifier.Namespace, "name", request.ResourceIdentifier.Name, "gvk", kind.Kind.GroupVersionKind().String())
+							a, err := r.App()
+							if err != nil {
+								logging.FromContext(ctx).Error("failed to get app for calling custom route", "error", err, "path", route, "namespace", request.ResourceIdentifier.Namespace, "name", request.ResourceIdentifier.Name, "gvk", kind.Kind.GroupVersionKind().String())
+								return err
+							}
+							return a.CallCustomRoute(ctx, writer, request)
+						},
+					},
+					Kind: kind.Kind,
+				}
 			}
 			apiGroupInfo.VersionedResourcesStorageMap[gv.Version] = storage
 		}
@@ -334,8 +368,13 @@ func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 	return groupVersions
 }
 
-func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]resource.Kind, error) {
-	out := map[schema.GroupVersion][]resource.Kind{}
+type KindAndManifestKind struct {
+	Kind         resource.Kind
+	ManifestKind app.ManifestVersionKind
+}
+
+func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]KindAndManifestKind, error) {
+	out := make(map[schema.GroupVersion][]KindAndManifestKind)
 	group := r.appConfig.ManifestData.Group
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
@@ -344,22 +383,32 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]r
 			if !ok {
 				return nil, fmt.Errorf("failed to resolve kind %s", manifestKind.Kind)
 			}
-			out[gv] = append(out[gv], kind)
+			out[gv] = append(out[gv], KindAndManifestKind{Kind: kind, ManifestKind: manifestKind})
 		}
 	}
 	return out, nil
 }
 
+func NewDefaultScheme() *runtime.Scheme {
+	return newScheme()
+}
+
 func newScheme() *runtime.Scheme {
-	scheme := runtime.NewScheme()
-	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Version: "v1"})
-	unversioned := schema.GroupVersion{Group: "", Version: "v1"}
-	scheme.AddUnversionedTypes(unversioned,
+	unversionedVersion := schema.GroupVersion{Group: "", Version: "v1"}
+	unversionedTypes := []runtime.Object{
 		&metav1.Status{},
+		&metav1.WatchEvent{},
 		&metav1.APIVersions{},
 		&metav1.APIGroupList{},
 		&metav1.APIGroup{},
 		&metav1.APIResourceList{},
-	)
+		&metav1.PartialObjectMetadata{},
+		&metav1.PartialObjectMetadataList{},
+	}
+
+	scheme := runtime.NewScheme()
+	// we need to add the options to empty v1
+	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Group: "", Version: "v1"})
+	scheme.AddUnversionedTypes(unversionedVersion, unversionedTypes...)
 	return scheme
 }

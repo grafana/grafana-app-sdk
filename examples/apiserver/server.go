@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"net/http"
 	"os"
 
 	"k8s.io/apiserver/pkg/admission"
@@ -15,6 +17,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/simple"
 )
@@ -44,11 +47,25 @@ func NewApp(config app.Config) (app.App, error) {
 					return operator.ReconcileResult{}, nil
 				},
 			},
+			CustomRoutes: map[simple.AppCustomRoute]simple.AppCustomRouteHandler{
+				simple.AppCustomRoute{
+					Method: simple.AppCustomRouteMethodGet,
+					Path:   "foo",
+				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					writer.WriteHeader(http.StatusOK)
+					_, err := writer.Write([]byte(`{"status":"ok"}`))
+					return err
+				},
+			},
 		}},
 	})
 }
 
 func main() {
+	logging.DefaultLogger = logging.NewSLogLogger(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
 	provider := simple.NewAppProvider(apis.LocalManifest(), nil, NewApp)
 	config := app.Config{
 		KubeConfig:     rest.Config{}, // this will be replaced by the apiserver loopback config

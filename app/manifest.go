@@ -197,6 +197,9 @@ type ManifestVersion struct {
 	// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
 	// or newly added (and didn't exist for older versions).
 	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
+	// CustomRoutes is a map of path patterns to custom routes for this version.
+	// Routes should not conflict with the plural name of any kinds for this version.
+	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
 }
 
 // ManifestVersionKind contains details for a version of a kind in a Manifest
@@ -216,7 +219,7 @@ type ManifestVersionKind struct {
 	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
 	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
-	// CustomRoutes is a map of of path patterns to custom routes for this version.
+	// CustomRoutes is a map of path patterns to custom routes for this kind to be used as custom subresource routes.
 	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false

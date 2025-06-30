@@ -11,6 +11,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"k8s.io/kube-openapi/pkg/spec3"
 
 	v1alpha1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 )
@@ -43,6 +44,9 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv1alpha1,
+					CustomRoutes: map[string]spec3.PathProps{
+						"foo": {},
+					},
 				},
 			},
 		},
