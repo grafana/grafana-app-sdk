@@ -11,6 +11,12 @@ testKind: {
 		}
 	}
 	customRoutes: {
-		"foo": {}
+		"/foo": {
+			"GET": {
+				response: {
+					status: string
+				}
+			}
+		}
 	}
 }

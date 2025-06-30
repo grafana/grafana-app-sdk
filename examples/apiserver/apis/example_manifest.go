@@ -45,7 +45,11 @@ var appManifestData = app.ManifestData{
 					},
 					Schema: &versionSchemaTestKindv1alpha1,
 					CustomRoutes: map[string]spec3.PathProps{
-						"foo": {},
+						"/foo": {
+							Get: &spec3.Operation{
+								OperationProps: spec3.OperationProps{},
+							},
+						},
 					},
 				},
 			},

@@ -63,12 +63,10 @@ var (
 	_ = rest.Connecter(&SubresourceConnector{})
 )
 
-// TODO: customize rather than hard-code?
-var methods = []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
-
 type SubresourceConnector struct {
-	Route CustomRoute
-	Kind  resource.Kind
+	Route   CustomRoute
+	Kind    resource.Kind
+	Methods []string
 }
 
 func (r *SubresourceConnector) New() runtime.Object {
@@ -79,11 +77,15 @@ func (r *SubresourceConnector) Destroy() {
 }
 
 func (r *SubresourceConnector) ConnectMethods() []string {
-	return methods
+	return r.Methods
 }
 
 func (r *SubresourceConnector) NewConnectOptions() (runtime.Object, bool, string) {
 	return &ResourceCallOptions{}, false, ""
+}
+
+func (r *SubresourceConnector) ProducesObject(verb string) any {
+	return r.New()
 }
 
 func (r *SubresourceConnector) Connect(ctx context.Context, id string, opts runtime.Object, responder rest.Responder) (http.Handler, error) {
@@ -142,6 +144,7 @@ func (h *handlerWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	err := h.handler(req.Context(), w, &app.CustomRouteRequest{
 		ResourceIdentifier: h.id,
 		Path:               h.urlToPath(req.URL),
+		URL:                req.URL,
 		Method:             req.Method,
 		Headers:            req.Header,
 		Body:               req.Body,

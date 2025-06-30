@@ -22,6 +22,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/spec3"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -244,8 +245,15 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			if _, ok := kind.Kind.ZeroValue().GetSubresource(string(resource.SubresourceStatus)); ok {
 				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, s)
 			}
-			for route, _ := range kind.ManifestKind.CustomRoutes {
+			for route, props := range kind.ManifestKind.CustomRoutes {
+				if route == "" {
+					continue
+				}
+				if route[0] == '/' {
+					route = route[1:]
+				}
 				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), route)] = &SubresourceConnector{
+					Methods: spec3PropsToMethods(props),
 					Route: CustomRoute{
 						Path: route,
 						Handler: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
@@ -387,6 +395,32 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]K
 		}
 	}
 	return out, nil
+}
+
+func spec3PropsToMethods(props spec3.PathProps) []string {
+	methods := make([]string, 0)
+	if props.Get != nil {
+		methods = append(methods, "GET")
+	}
+	if props.Post != nil {
+		methods = append(methods, "POST")
+	}
+	if props.Put != nil {
+		methods = append(methods, "PUT")
+	}
+	if props.Patch != nil {
+		methods = append(methods, "PATCH")
+	}
+	if props.Delete != nil {
+		methods = append(methods, "DELETE")
+	}
+	if props.Head != nil {
+		methods = append(methods, "HEAD")
+	}
+	if props.Options != nil {
+		methods = append(methods, "OPTIONS")
+	}
+	return methods
 }
 
 func NewDefaultScheme() *runtime.Scheme {

@@ -550,6 +550,9 @@ func (a *App) getInProgressFinalizer(sch resource.Schema) string {
 }
 
 func (*App) customRouteHandlerKey(kind *resource.Kind, method string, path string, scope resource.SchemaScope) string {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
 	if kind == nil {
 		return fmt.Sprintf("%s/%s/%s", scope, path, method)
 	}
