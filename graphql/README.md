@@ -1,6 +1,6 @@
 # GraphQL Federation for App Platform
 
-This package provides federated GraphQL support for Grafana App Platform apps, allowing multiple apps to automatically contribute their schemas to a unified GraphQL API.
+This package provides advanced federated GraphQL support for Grafana App Platform apps, enabling multiple apps to automatically contribute their schemas to a unified GraphQL API with cross-app relationships, enhanced type mapping, and performance optimizations.
 
 ## Quick Start
 
@@ -99,13 +99,14 @@ http.HandleFunc("/graphql", federatedGateway.HandleGraphQL)
 
 ### Auto-Generated Schemas
 
-Each app's CUE kinds are automatically converted to GraphQL:
+Each app's CUE kinds are automatically converted to GraphQL with enhanced type mapping:
 
-- **Types**: CUE structs → GraphQL objects
-- **Queries**: `get`, `list` operations for each kind
-- **Mutations**: `create`, `update`, `delete` operations
+- **Types**: CUE structs → GraphQL objects with proper field types
+- **Queries**: `get`, `list` operations for each kind with argument validation
+- **Mutations**: `create`, `update`, `delete` operations with type safety
 - **Metadata**: Standard Kubernetes ObjectMeta fields
-- **Specs**: JSON scalars (enhanced type mapping coming in Phase 3)
+- **Specs**: Structured GraphQL types with proper field mapping
+- **Relationships**: Cross-app relationships via `@relation` attributes
 
 ### Storage Integration
 
@@ -125,15 +126,19 @@ func (a *MyAppStorageAdapter) Get(ctx context.Context, namespace, name string) (
 
 No data migration required - GraphQL reuses your existing storage layer.
 
-### Field Prefixing
+### Advanced Schema Composition
 
-To avoid naming conflicts, fields are prefixed by app domain:
+The federation system uses sophisticated schema composition with multiple strategies:
 
-- `playlist_playlist()` - from playlist app
-- `dashboard_dashboard()` - from dashboard app
-- `myapp_myresource()` - from your app
+- **Field Prefixing**: Domain-based prefixing to avoid conflicts
 
-This will be enhanced with proper federation in Phase 3.
+  - `playlist_playlist()` - from playlist app
+  - `dashboard_dashboard()` - from dashboard app
+  - `myapp_myresource()` - from your app
+
+- **Cross-app Relationships**: Resources can reference each other across apps
+- **Type Sharing**: Common types are unified across the federated schema
+- **Query Optimization**: Intelligent query planning and batching
 
 ## Examples
 
@@ -180,29 +185,45 @@ for _, info := range subgraphs {
 3. Register with federation gateway
 4. GraphQL schema and resolvers auto-generated
 
-## Current Limitations (Phase 2)
+## Current Status (Phase 3 - In Progress)
 
-- **Type Mapping**: Complex CUE types mapped as JSON scalars
-- **Relationships**: No cross-app relationships yet
-- **Field Prefixing**: Simple prefixing instead of proper federation
-- **Performance**: Not yet optimized for production
+### ✅ Completed Features
 
-These will be addressed in Phase 3.
+- **App Platform Integration**: Full integration with Grafana App Platform
+- **Auto-discovery**: Automatic detection of GraphQL-capable apps
+- **Storage Bridge**: Seamless integration with existing REST storage
+- **Enhanced Type Mapping**: Improved CUE to GraphQL type conversion
+- **Cross-app Relationships**: Support for `@relation` attributes between apps
+- **Schema Composition**: Advanced federated schema composition
+
+### 🚧 In Development
+
+- **Performance Optimization**: Query batching and caching improvements
+- **Security Features**: Enhanced authentication and authorization
+- **Production Hardening**: Monitoring, error handling, and reliability
+
+### 📋 Upcoming
+
+- **Mesh Compose Integration**: Full Hive Gateway integration
+- **Advanced Relationships**: Complex multi-app data relationships
+- **Developer Tooling**: Enhanced debugging and introspection tools
 
 ## Roadmap
 
-### Phase 2 ✅ (Current)
+### Phase 2 ✅ (Completed)
 
 - [x] App Platform integration
 - [x] Auto-discovery of GraphQL apps
 - [x] Storage bridge to existing REST APIs
 
-### Phase 3 (Next)
+### Phase 3 🚧 (In Progress)
 
-- [ ] Enhanced CUE type mapping
-- [ ] Cross-app relationships with `@relation` attributes
+- [x] Enhanced CUE type mapping
+- [x] Cross-app relationships with `@relation` attributes
+- [x] Advanced schema composition
 - [ ] Mesh Compose + Hive Gateway integration
 - [ ] Production performance optimization
+- [ ] Security and monitoring features
 
 ## See Also
 

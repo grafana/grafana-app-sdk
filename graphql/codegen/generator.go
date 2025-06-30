@@ -19,6 +19,11 @@ type GraphQLGenerator struct {
 	storageGetter      func(gvr schema.GroupVersionResource) subgraph.Storage
 	relationshipParser *RelationshipParser
 	subgraphRegistry   SubgraphRegistry
+
+	// Shared scalar types to avoid duplicates
+	jsonScalar        *graphql.Scalar
+	labelsScalar      *graphql.Scalar
+	annotationsScalar *graphql.Scalar
 }
 
 // NewGraphQLGenerator creates a new GraphQL generator
@@ -27,6 +32,10 @@ func NewGraphQLGenerator(kinds []resource.Kind, gv schema.GroupVersion, storageG
 		kinds:         kinds,
 		groupVersion:  gv,
 		storageGetter: storageGetter,
+		// Initialize shared scalars to prevent duplicates
+		jsonScalar:        createSharedJSONScalar(),
+		labelsScalar:      createSharedLabelsScalar(),
+		annotationsScalar: createSharedAnnotationsScalar(),
 	}
 }
 
@@ -39,10 +48,10 @@ func (g *GraphQLGenerator) WithRelationships(parser *RelationshipParser, registr
 
 // GenerateSchema generates a complete GraphQL schema from the configured kinds
 func (g *GraphQLGenerator) GenerateSchema() (*graphql.Schema, error) {
-	// Create common scalar types
-	jsonScalar := g.createJSONScalar()
-	labelsScalar := g.createLabelsScalar()
-	annotationsScalar := g.createAnnotationsScalar()
+	// Use shared scalar types to prevent duplicates
+	jsonScalar := g.jsonScalar
+	labelsScalar := g.labelsScalar
+	annotationsScalar := g.annotationsScalar
 
 	// Create metadata type (common to all Kubernetes resources)
 	metadataType := g.createMetadataType(labelsScalar, annotationsScalar)
@@ -113,6 +122,55 @@ func (g *GraphQLGenerator) GenerateResolvers() subgraph.ResolverMap {
 	}
 
 	return resolvers
+}
+
+// Shared scalar creation functions to prevent duplicate type names
+func createSharedJSONScalar() *graphql.Scalar {
+	return graphql.NewScalar(graphql.ScalarConfig{
+		Name:        "JSON",
+		Description: "Arbitrary JSON data",
+		Serialize: func(value interface{}) interface{} {
+			return value
+		},
+		ParseValue: func(value interface{}) interface{} {
+			return value
+		},
+		ParseLiteral: func(valueAST ast.Value) interface{} {
+			return nil
+		},
+	})
+}
+
+func createSharedLabelsScalar() *graphql.Scalar {
+	return graphql.NewScalar(graphql.ScalarConfig{
+		Name:        "Labels",
+		Description: "Key-value pairs for labels",
+		Serialize: func(value interface{}) interface{} {
+			return value
+		},
+		ParseValue: func(value interface{}) interface{} {
+			return value
+		},
+		ParseLiteral: func(valueAST ast.Value) interface{} {
+			return nil
+		},
+	})
+}
+
+func createSharedAnnotationsScalar() *graphql.Scalar {
+	return graphql.NewScalar(graphql.ScalarConfig{
+		Name:        "Annotations",
+		Description: "Key-value pairs for annotations",
+		Serialize: func(value interface{}) interface{} {
+			return value
+		},
+		ParseValue: func(value interface{}) interface{} {
+			return value
+		},
+		ParseLiteral: func(valueAST ast.Value) interface{} {
+			return nil
+		},
+	})
 }
 
 // createJSONScalar creates a JSON scalar type for arbitrary JSON data
@@ -292,10 +350,10 @@ func (g *GraphQLGenerator) createMetadataInputType() *graphql.InputObject {
 				Type: graphql.String,
 			},
 			"labels": &graphql.InputObjectFieldConfig{
-				Type: g.createJSONScalar(),
+				Type: g.labelsScalar,
 			},
 			"annotations": &graphql.InputObjectFieldConfig{
-				Type: g.createJSONScalar(),
+				Type: g.annotationsScalar,
 			},
 		},
 	})

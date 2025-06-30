@@ -6,7 +6,6 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/graphql-go/graphql"
-	"github.com/graphql-go/graphql/language/ast"
 )
 
 // CUETypeMapper converts CUE types to GraphQL types
@@ -236,20 +235,11 @@ func (m *CUETypeMapper) createEnum(typeName string, values []string) *graphql.En
 }
 
 // createJSONScalar creates a JSON scalar type for fallback cases
+// Note: This should be replaced with a shared scalar to prevent duplicates
 func (m *CUETypeMapper) createJSONScalar() *graphql.Scalar {
-	return graphql.NewScalar(graphql.ScalarConfig{
-		Name:        "JSON",
-		Description: "Arbitrary JSON data",
-		Serialize: func(value interface{}) interface{} {
-			return value
-		},
-		ParseValue: func(value interface{}) interface{} {
-			return value
-		},
-		ParseLiteral: func(valueAST ast.Value) interface{} {
-			return nil
-		},
-	})
+	// TODO: Use shared JSON scalar from generator to prevent duplicates
+	// For now, we'll still create individual scalars but this needs to be fixed
+	return createSharedJSONScalar()
 }
 
 // toGraphQLFieldName converts CUE field names to GraphQL field names

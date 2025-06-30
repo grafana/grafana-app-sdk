@@ -105,9 +105,19 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 				}
 
 				// Convert FieldDefinition to Field
-				// For now, create a simple field without args to avoid type conversion issues
+				// Properly convert []*graphql.Argument to graphql.FieldConfigArgument
+				args := make(graphql.FieldConfigArgument)
+				for _, arg := range fieldDef.Args {
+					args[arg.PrivateName] = &graphql.ArgumentConfig{
+						Type:         arg.Type,
+						DefaultValue: arg.DefaultValue,
+						Description:  arg.PrivateDescription,
+					}
+				}
+
 				queryFields[prefixedName] = &graphql.Field{
 					Type:        fieldDef.Type,
+					Args:        args,
 					Resolve:     fieldDef.Resolve,
 					Description: fieldDef.Description,
 				}
@@ -125,9 +135,19 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 				}
 
 				// Convert FieldDefinition to Field
-				// For now, create a simple field without args to avoid type conversion issues
+				// Properly convert []*graphql.Argument to graphql.FieldConfigArgument
+				args := make(graphql.FieldConfigArgument)
+				for _, arg := range fieldDef.Args {
+					args[arg.PrivateName] = &graphql.ArgumentConfig{
+						Type:         arg.Type,
+						DefaultValue: arg.DefaultValue,
+						Description:  arg.PrivateDescription,
+					}
+				}
+
 				mutationFields[prefixedName] = &graphql.Field{
 					Type:        fieldDef.Type,
+					Args:        args,
 					Resolve:     fieldDef.Resolve,
 					Description: fieldDef.Description,
 				}
