@@ -6,4 +6,5 @@ use (
 	.
 	./logging
 	./plugin
+	./issue-tracker-project
 )
