@@ -68,6 +68,7 @@ appManifest: versions: v1alpha1: {
 		}
 		#ManifestKind: {
 			kind: string
+			plural?: string
 			scope: string
 			conversion: bool
 			versions: [...#ManifestKindVersion]
