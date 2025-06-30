@@ -258,14 +258,132 @@ curl -X POST http://localhost:3000/api/graphql \
   }'
 ```
 
+## Storage Adapter Requirements
+
+### ⚠️ CRITICAL: TypeMeta Must Be Set
+
+**Most Common Issue**: Your storage adapter **MUST** set proper `TypeMeta` on resource objects, or resource handlers won't be called during data conversion.
+
+```go
+// ❌ WRONG - Missing TypeMeta causes null values in GraphQL responses
+func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
+    // ... get data from service ...
+
+    return &myappv0alpha1.MyResource{
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      dto.ID,
+            Namespace: namespace,
+        },
+        Spec: myappv0alpha1.MyResourceSpec{
+            Title: dto.Title,
+        },
+    }, nil
+}
+
+// ✅ CORRECT - With TypeMeta, handlers work properly
+func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
+    // ... get data from service ...
+
+    return &myappv0alpha1.MyResource{
+        TypeMeta: metav1.TypeMeta{
+            APIVersion: myappv0alpha1.GroupVersion.String(), // e.g., "myapp.grafana.app/v0alpha1"
+            Kind:       "MyResource",                         // Must match your Kind name exactly
+        },
+        ObjectMeta: metav1.ObjectMeta{
+            Name:      dto.ID,
+            Namespace: namespace,
+        },
+        Spec: myappv0alpha1.MyResourceSpec{
+            Title: dto.Title,
+        },
+    }, nil
+}
+```
+
+**Why This Matters**: Resource handlers are looked up using `staticMetadata.Kind`. Without TypeMeta, this field is empty and handlers aren't called, resulting in null values for custom fields.
+
+### Storage Adapter Checklist
+
+When implementing your storage adapter, ensure you:
+
+- [ ] **Set TypeMeta** with correct `APIVersion` and `Kind`
+- [ ] **Set ObjectMeta** with `Name`, `Namespace`, and other metadata
+- [ ] **Convert service DTOs** to proper CUE-defined Spec structures
+- [ ] **Handle both Get and List** methods consistently
+- [ ] **Test with actual data** to verify custom fields appear
+
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"Unknown field" errors**: Check that your provider implements `GraphQLSubgraphProvider` and is properly registered
+
 2. **"No storage available" errors**: Verify your `storageGetter` function and `legacyStorageGetter` implementation
+
 3. **Interface conversion errors**: Ensure your storage adapter implements all required methods
+
 4. **Missing fields in schema**: Check that your resource kinds are properly defined and returned by `GetKinds()`
+
+5. **🚨 Fields in schema but returning null values**:
+
+   - **Most likely cause**: Storage adapter isn't setting `TypeMeta`
+   - **Debug**: Check if `staticMetadata.Kind` is empty in your resource objects
+   - **Fix**: Add proper `TypeMeta` to all resource objects in your storage adapter
+
+6. **Custom fields not appearing**:
+   - **Cause**: Resource handler not being called during conversion
+   - **Debug**: Verify `GetHandlerByKindName(kindName)` finds your handler
+   - **Fix**: Ensure `TypeMeta.Kind` matches your handler's `GetResourceKind().Kind()`
+
+### Debug Approaches
+
+#### Two-Phase Debugging
+
+GraphQL issues typically fall into two categories:
+
+1. **Schema Generation Issues** (fields missing from schema):
+
+   - Use introspection queries to check available fields
+   - Verify resource handlers are registered
+   - Check `GetGraphQLFields()` method
+
+2. **Data Conversion Issues** (fields in schema but returning null):
+   - Verify TypeMeta is set on resource objects
+   - Check if resource handlers are being called
+   - Validate storage adapter implementation
+
+#### Debugging Commands
+
+```bash
+# 1. Check schema has your fields
+curl -X POST http://localhost:3000/api/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ __type(name: \"MyResource\") { fields { name type { name } } } }"}'
+
+# 2. Test actual data query
+curl -X POST http://localhost:3000/api/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ myapp_myresources(namespace: \"default\") { items { customField } } }"}'
+
+# 3. Compare with REST API
+curl http://localhost:3000/apis/myapp.grafana.app/v0alpha1/namespaces/default/myresources
+```
+
+#### Quick TypeMeta Test
+
+Add this to your storage adapter temporarily to verify TypeMeta:
+
+```go
+func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
+    // ... your existing code ...
+
+    // Debug: Log the TypeMeta
+    fmt.Printf("🔍 Resource TypeMeta: APIVersion=%s, Kind=%s\n",
+               resource.APIVersion, resource.Kind)
+
+    return resource, nil
+}
+```
 
 ### Debug Logging
 
@@ -275,6 +393,7 @@ The GraphQL system includes extensive debug logging. Look for log messages prefi
 - Schema generation process
 - Storage adapter operations
 - Field resolution
+- Resource handler lookup and conversion
 
 ### Verification Steps
 
@@ -282,6 +401,8 @@ The GraphQL system includes extensive debug logging. Look for log messages prefi
 2. **Verify app provider registration**: Check that your provider appears in the apps registry
 3. **Test subgraph creation**: Verify `GetGraphQLSubgraph()` returns without errors
 4. **Inspect generated schema**: Use GraphQL introspection to see your fields
+5. **Test with real data**: Query actual resources, not just demo data
+6. **Verify TypeMeta**: Ensure all resource objects have proper Kind set
 
 ## Example: Complete Playlist Implementation
 
@@ -329,9 +450,31 @@ The refactored GraphQL federation system provides significant improvements for d
 
 ### What This Means for You
 
-1. **Faster Development**: Adding a new resource requires only the storage adapter
+1. **Faster Development**: Adding a new resource requires only the storage adapter (with proper TypeMeta!)
 2. **Consistency**: All GraphQL APIs follow the same structure and behavior
 3. **Maintainability**: Changes to the core system benefit all resources
 4. **Flexibility**: Easy to add new metadata fields or query capabilities
 
 This pattern provides a consistent, scalable way to extend Grafana's GraphQL federation system while reusing existing storage infrastructure and maintaining backward compatibility with REST APIs.
+
+---
+
+## Important Notes for Maintainers
+
+### GraphQL Provider Consistency
+
+If you have multiple GraphQL providers for the same resource (e.g., one in `pkg/api/graphql.go` and one in `pkg/registry/apps/`), ensure **both** use resource handlers. Missing resource handlers in any provider will cause regressions where fields are available in the schema but return null values.
+
+### TypeMeta is Non-Negotiable
+
+The most critical requirement: **All resource objects MUST have TypeMeta set**. This is not optional for GraphQL to work correctly. The system uses `staticMetadata.Kind` to look up resource handlers, and this field comes from TypeMeta.
+
+### Testing Checklist
+
+When adding GraphQL support:
+
+- [ ] Test that fields appear in schema (introspection)
+- [ ] Test that fields return actual data (not null)
+- [ ] Test both single resource and list queries
+- [ ] Verify TypeMeta is set in storage adapter
+- [ ] Test with real data, not just demo data

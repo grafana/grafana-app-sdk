@@ -118,13 +118,26 @@ type MyAppStorageAdapter struct {
 }
 
 func (a *MyAppStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
-    // Delegate to existing REST storage
-    getter := a.legacyStorage.(rest.Getter)
-    return getter.Get(ctx, name, &metav1.GetOptions{})
+    // Get data from existing storage
+    obj, err := a.legacyStorage.Get(ctx, name, &metav1.GetOptions{})
+    if err != nil {
+        return nil, err
+    }
+
+    // ⚠️ CRITICAL: Ensure TypeMeta is set for resource handlers to work
+    if typedObj, ok := obj.(*myappv0alpha1.MyResource); ok {
+        typedObj.TypeMeta = metav1.TypeMeta{
+            APIVersion: myappv0alpha1.GroupVersion.String(),
+            Kind:       "MyResource",
+        }
+        return typedObj, nil
+    }
+
+    return obj, nil
 }
 ```
 
-No data migration required - GraphQL reuses your existing storage layer.
+**Important**: Storage adapters must set proper `TypeMeta` on resource objects, or custom GraphQL fields will return null values. No data migration required - GraphQL reuses your existing storage layer.
 
 ### Advanced Schema Composition
 
@@ -181,9 +194,17 @@ for _, info := range subgraphs {
 ### Adding GraphQL to Your App
 
 1. Implement `GraphQLSubgraphProvider` interface (one method)
-2. Create storage adapter to bridge to existing storage
+2. Create storage adapter to bridge to existing storage ⚠️ **Must set TypeMeta**
 3. Register with federation gateway
 4. GraphQL schema and resolvers auto-generated
+
+### Common Issues
+
+- **Custom fields return null**: Storage adapter not setting `TypeMeta` on resource objects
+- **"Unknown field" errors**: Provider not implementing `GraphQLSubgraphProvider` correctly
+- **Schema missing fields**: Resource handlers not registered properly
+
+See [Adding Resources to GraphQL Federation](docs/adding-resources-to-federated-graphql.md) for detailed troubleshooting.
 
 ## Current Status (Phase 3 - In Progress)
 
