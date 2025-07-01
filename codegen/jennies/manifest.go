@@ -116,6 +116,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
+		fmt.Print(buf.String())
 		return nil, err
 	}
 
@@ -331,8 +332,8 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		}
 
 		operationID := defaultRouteName(sourceMethod, sourcePath)
-		if sourceRoute.Name != nil {
-			operationID = *sourceRoute.Name
+		if sourceRoute.Name != "" {
+			operationID = sourceRoute.Name
 		}
 
 		targetOperation := &spec3.Operation{

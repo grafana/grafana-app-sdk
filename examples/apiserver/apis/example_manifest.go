@@ -51,7 +51,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "Getfoo",
+									OperationId: "GetFoo",
 
 									Responses: &spec3.Responses{
 										ResponsesProps: spec3.ResponsesProps{
@@ -110,7 +110,7 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
 }
 
 var customRouteToGoResponseType = map[string]any{
-	"v1alpha1|TestKind|foo|GET": v1alpha1.Getfoo{},
+	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
 }
 
 func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {

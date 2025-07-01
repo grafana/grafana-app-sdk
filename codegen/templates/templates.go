@@ -29,7 +29,6 @@ var (
 	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
 	templateTSType, _         = template.ParseFS(templates, "tstype.tmpl")
 	templateConstants, _      = template.ParseFS(templates, "constants.tmpl")
-	templateRuntimeObject, _  = template.ParseFS(templates, "runtimeobjectwrapper.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -444,6 +443,14 @@ func (ManifestGoFileMetadata) GoKindName(kind string) string {
 	return strings.ToUpper(kind)
 }
 
+func (ManifestGoFileMetadata) ExportedFieldName(name string) string {
+	sanitized := regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(name, "")
+	if len(sanitized) > 1 {
+		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
+	}
+	return strings.ToUpper(sanitized)
+}
+
 func (m ManifestGoFileMetadata) Packages() []string {
 	pkgs := make([]string, 0)
 	if m.KindsAreGrouped {
@@ -551,14 +558,4 @@ func WriteConstantsFile(metadata ConstantsMetadata, out io.Writer) error {
 // It is used to turn kind names or versions into package names when performing go code generation.
 func ToPackageName(input string) string {
 	return regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
-}
-
-type RuntimeObjectMethodsMetadata struct {
-	Package         string
-	TypeName        string
-	ObjectShortName string
-}
-
-func WriteRuntimeObjectMethodsFile(metadata RuntimeObjectMethodsMetadata, out io.Writer) error {
-	return templateRuntimeObject.Execute(out, metadata)
 }

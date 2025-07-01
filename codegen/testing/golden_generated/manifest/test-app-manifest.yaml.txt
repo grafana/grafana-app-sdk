@@ -264,7 +264,7 @@ spec:
                             summary: ""
                             description: ""
                             externaldocs: null
-                            operationid: ""
+                            operationid: PostReconcile
                             parameters: []
                             requestbody:
                                 refable:
@@ -445,7 +445,194 @@ spec:
                                     required: true
                                 vendorextensible:
                                     extensions: {}
-                            responses: null
+                            responses:
+                                responsesprops:
+                                    default:
+                                        refable:
+                                            ref:
+                                                ref:
+                                                    hasfullurl: false
+                                                    hasurlpathonly: false
+                                                    hasfragmentonly: false
+                                                    hasfilescheme: false
+                                                    hasfullfilepath: false
+                                        responseprops:
+                                            description: Default OK response
+                                            headers: {}
+                                            content:
+                                                application/json:
+                                                    mediatypeprops:
+                                                        schema:
+                                                            vendorextensible:
+                                                                extensions: {}
+                                                            schemaprops:
+                                                                id: ""
+                                                                ref:
+                                                                    ref:
+                                                                        hasfullurl: false
+                                                                        hasurlpathonly: false
+                                                                        hasfragmentonly: false
+                                                                        hasfilescheme: false
+                                                                        hasfullfilepath: false
+                                                                schema: ""
+                                                                description: ""
+                                                                type:
+                                                                    - object
+                                                                nullable: false
+                                                                format: ""
+                                                                title: ""
+                                                                default: null
+                                                                maximum: null
+                                                                exclusivemaximum: false
+                                                                minimum: null
+                                                                exclusiveminimum: false
+                                                                maxlength: null
+                                                                minlength: null
+                                                                pattern: ""
+                                                                maxitems: null
+                                                                minitems: null
+                                                                uniqueitems: false
+                                                                multipleof: null
+                                                                enum: []
+                                                                maxproperties: null
+                                                                minproperties: null
+                                                                required:
+                                                                    - status
+                                                                    - message
+                                                                items: null
+                                                                allof: []
+                                                                oneof: []
+                                                                anyof: []
+                                                                not: null
+                                                                properties:
+                                                                    message:
+                                                                        vendorextensible:
+                                                                            extensions: {}
+                                                                        schemaprops:
+                                                                            id: ""
+                                                                            ref:
+                                                                                ref:
+                                                                                    hasfullurl: false
+                                                                                    hasurlpathonly: false
+                                                                                    hasfragmentonly: false
+                                                                                    hasfilescheme: false
+                                                                                    hasfullfilepath: false
+                                                                            schema: ""
+                                                                            description: ""
+                                                                            type:
+                                                                                - string
+                                                                            nullable: false
+                                                                            format: ""
+                                                                            title: ""
+                                                                            default: null
+                                                                            maximum: null
+                                                                            exclusivemaximum: false
+                                                                            minimum: null
+                                                                            exclusiveminimum: false
+                                                                            maxlength: null
+                                                                            minlength: null
+                                                                            pattern: ""
+                                                                            maxitems: null
+                                                                            minitems: null
+                                                                            uniqueitems: false
+                                                                            multipleof: null
+                                                                            enum: []
+                                                                            maxproperties: null
+                                                                            minproperties: null
+                                                                            required: []
+                                                                            items: null
+                                                                            allof: []
+                                                                            oneof: []
+                                                                            anyof: []
+                                                                            not: null
+                                                                            properties: {}
+                                                                            additionalproperties: null
+                                                                            patternproperties: {}
+                                                                            dependencies: {}
+                                                                            additionalitems: null
+                                                                            definitions: {}
+                                                                        swaggerschemaprops:
+                                                                            discriminator: ""
+                                                                            readonly: false
+                                                                            externaldocs: null
+                                                                            example: null
+                                                                        extraprops: {}
+                                                                    status:
+                                                                        vendorextensible:
+                                                                            extensions: {}
+                                                                        schemaprops:
+                                                                            id: ""
+                                                                            ref:
+                                                                                ref:
+                                                                                    hasfullurl: false
+                                                                                    hasurlpathonly: false
+                                                                                    hasfragmentonly: false
+                                                                                    hasfilescheme: false
+                                                                                    hasfullfilepath: false
+                                                                            schema: ""
+                                                                            description: ""
+                                                                            type:
+                                                                                - string
+                                                                            nullable: false
+                                                                            format: ""
+                                                                            title: ""
+                                                                            default: null
+                                                                            maximum: null
+                                                                            exclusivemaximum: false
+                                                                            minimum: null
+                                                                            exclusiveminimum: false
+                                                                            maxlength: null
+                                                                            minlength: null
+                                                                            pattern: ""
+                                                                            maxitems: null
+                                                                            minitems: null
+                                                                            uniqueitems: false
+                                                                            multipleof: null
+                                                                            enum:
+                                                                                - success
+                                                                                - failure
+                                                                            maxproperties: null
+                                                                            minproperties: null
+                                                                            required: []
+                                                                            items: null
+                                                                            allof: []
+                                                                            oneof: []
+                                                                            anyof: []
+                                                                            not: null
+                                                                            properties: {}
+                                                                            additionalproperties: null
+                                                                            patternproperties: {}
+                                                                            dependencies: {}
+                                                                            additionalitems: null
+                                                                            definitions: {}
+                                                                        swaggerschemaprops:
+                                                                            discriminator: ""
+                                                                            readonly: false
+                                                                            externaldocs: null
+                                                                            example: null
+                                                                        extraprops: {}
+                                                                additionalproperties: null
+                                                                patternproperties: {}
+                                                                dependencies: {}
+                                                                additionalitems: null
+                                                                definitions: {}
+                                                            swaggerschemaprops:
+                                                                discriminator: ""
+                                                                readonly: false
+                                                                externaldocs: null
+                                                                example: null
+                                                            extraprops: {}
+                                                        example: null
+                                                        examples: {}
+                                                        encoding: {}
+                                                    vendorextensible:
+                                                        extensions: {}
+                                            links: {}
+                                        vendorextensible:
+                                            extensions: {}
+                                    statuscoderesponses: {}
+                                vendorextensible:
+                                    extensions: {}
                             deprecated: false
                             securityrequirement: []
                             servers: []
@@ -467,7 +654,7 @@ spec:
                             summary: ""
                             description: ""
                             externaldocs: null
-                            operationid: ""
+                            operationid: searchTestkinds
                             parameters:
                                 - refable:
                                     ref:
@@ -695,7 +882,351 @@ spec:
                                   vendorextensible:
                                     extensions: {}
                             requestbody: null
-                            responses: null
+                            responses:
+                                responsesprops:
+                                    default:
+                                        refable:
+                                            ref:
+                                                ref:
+                                                    hasfullurl: false
+                                                    hasurlpathonly: false
+                                                    hasfragmentonly: false
+                                                    hasfilescheme: false
+                                                    hasfullfilepath: false
+                                        responseprops:
+                                            description: Default OK response
+                                            headers: {}
+                                            content:
+                                                application/json:
+                                                    mediatypeprops:
+                                                        schema:
+                                                            vendorextensible:
+                                                                extensions: {}
+                                                            schemaprops:
+                                                                id: ""
+                                                                ref:
+                                                                    ref:
+                                                                        hasfullurl: false
+                                                                        hasurlpathonly: false
+                                                                        hasfragmentonly: false
+                                                                        hasfilescheme: false
+                                                                        hasfullfilepath: false
+                                                                schema: ""
+                                                                description: ""
+                                                                type:
+                                                                    - object
+                                                                nullable: false
+                                                                format: ""
+                                                                title: ""
+                                                                default: null
+                                                                maximum: null
+                                                                exclusivemaximum: false
+                                                                minimum: null
+                                                                exclusiveminimum: false
+                                                                maxlength: null
+                                                                minlength: null
+                                                                pattern: ""
+                                                                maxitems: null
+                                                                minitems: null
+                                                                uniqueitems: false
+                                                                multipleof: null
+                                                                enum: []
+                                                                maxproperties: null
+                                                                minproperties: null
+                                                                required:
+                                                                    - items
+                                                                    - total
+                                                                items: null
+                                                                allof: []
+                                                                oneof: []
+                                                                anyof: []
+                                                                not: null
+                                                                properties:
+                                                                    items:
+                                                                        vendorextensible:
+                                                                            extensions: {}
+                                                                        schemaprops:
+                                                                            id: ""
+                                                                            ref:
+                                                                                ref:
+                                                                                    hasfullurl: false
+                                                                                    hasurlpathonly: false
+                                                                                    hasfragmentonly: false
+                                                                                    hasfilescheme: false
+                                                                                    hasfullfilepath: false
+                                                                            schema: ""
+                                                                            description: ""
+                                                                            type:
+                                                                                - array
+                                                                            nullable: false
+                                                                            format: ""
+                                                                            title: ""
+                                                                            default: null
+                                                                            maximum: null
+                                                                            exclusivemaximum: false
+                                                                            minimum: null
+                                                                            exclusiveminimum: false
+                                                                            maxlength: null
+                                                                            minlength: null
+                                                                            pattern: ""
+                                                                            maxitems: null
+                                                                            minitems: null
+                                                                            uniqueitems: false
+                                                                            multipleof: null
+                                                                            enum: []
+                                                                            maxproperties: null
+                                                                            minproperties: null
+                                                                            required: []
+                                                                            items:
+                                                                                schema:
+                                                                                    vendorextensible:
+                                                                                        extensions: {}
+                                                                                    schemaprops:
+                                                                                        id: ""
+                                                                                        ref:
+                                                                                            ref:
+                                                                                                hasfullurl: false
+                                                                                                hasurlpathonly: false
+                                                                                                hasfragmentonly: false
+                                                                                                hasfilescheme: false
+                                                                                                hasfullfilepath: false
+                                                                                        schema: ""
+                                                                                        description: ""
+                                                                                        type:
+                                                                                            - object
+                                                                                        nullable: false
+                                                                                        format: ""
+                                                                                        title: ""
+                                                                                        default: null
+                                                                                        maximum: null
+                                                                                        exclusivemaximum: false
+                                                                                        minimum: null
+                                                                                        exclusiveminimum: false
+                                                                                        maxlength: null
+                                                                                        minlength: null
+                                                                                        pattern: ""
+                                                                                        maxitems: null
+                                                                                        minitems: null
+                                                                                        uniqueitems: false
+                                                                                        multipleof: null
+                                                                                        enum: []
+                                                                                        maxproperties: null
+                                                                                        minproperties: null
+                                                                                        required:
+                                                                                            - name
+                                                                                            - score
+                                                                                        items: null
+                                                                                        allof: []
+                                                                                        oneof: []
+                                                                                        anyof: []
+                                                                                        not: null
+                                                                                        properties:
+                                                                                            name:
+                                                                                                vendorextensible:
+                                                                                                    extensions: {}
+                                                                                                schemaprops:
+                                                                                                    id: ""
+                                                                                                    ref:
+                                                                                                        ref:
+                                                                                                            hasfullurl: false
+                                                                                                            hasurlpathonly: false
+                                                                                                            hasfragmentonly: false
+                                                                                                            hasfilescheme: false
+                                                                                                            hasfullfilepath: false
+                                                                                                    schema: ""
+                                                                                                    description: ""
+                                                                                                    type:
+                                                                                                        - string
+                                                                                                    nullable: false
+                                                                                                    format: ""
+                                                                                                    title: ""
+                                                                                                    default: null
+                                                                                                    maximum: null
+                                                                                                    exclusivemaximum: false
+                                                                                                    minimum: null
+                                                                                                    exclusiveminimum: false
+                                                                                                    maxlength: null
+                                                                                                    minlength: null
+                                                                                                    pattern: ""
+                                                                                                    maxitems: null
+                                                                                                    minitems: null
+                                                                                                    uniqueitems: false
+                                                                                                    multipleof: null
+                                                                                                    enum: []
+                                                                                                    maxproperties: null
+                                                                                                    minproperties: null
+                                                                                                    required: []
+                                                                                                    items: null
+                                                                                                    allof: []
+                                                                                                    oneof: []
+                                                                                                    anyof: []
+                                                                                                    not: null
+                                                                                                    properties: {}
+                                                                                                    additionalproperties: null
+                                                                                                    patternproperties: {}
+                                                                                                    dependencies: {}
+                                                                                                    additionalitems: null
+                                                                                                    definitions: {}
+                                                                                                swaggerschemaprops:
+                                                                                                    discriminator: ""
+                                                                                                    readonly: false
+                                                                                                    externaldocs: null
+                                                                                                    example: null
+                                                                                                extraprops: {}
+                                                                                            score:
+                                                                                                vendorextensible:
+                                                                                                    extensions: {}
+                                                                                                schemaprops:
+                                                                                                    id: ""
+                                                                                                    ref:
+                                                                                                        ref:
+                                                                                                            hasfullurl: false
+                                                                                                            hasurlpathonly: false
+                                                                                                            hasfragmentonly: false
+                                                                                                            hasfilescheme: false
+                                                                                                            hasfullfilepath: false
+                                                                                                    schema: ""
+                                                                                                    description: ""
+                                                                                                    type:
+                                                                                                        - number
+                                                                                                    nullable: false
+                                                                                                    format: ""
+                                                                                                    title: ""
+                                                                                                    default: null
+                                                                                                    maximum: null
+                                                                                                    exclusivemaximum: false
+                                                                                                    minimum: null
+                                                                                                    exclusiveminimum: false
+                                                                                                    maxlength: null
+                                                                                                    minlength: null
+                                                                                                    pattern: ""
+                                                                                                    maxitems: null
+                                                                                                    minitems: null
+                                                                                                    uniqueitems: false
+                                                                                                    multipleof: null
+                                                                                                    enum: []
+                                                                                                    maxproperties: null
+                                                                                                    minproperties: null
+                                                                                                    required: []
+                                                                                                    items: null
+                                                                                                    allof: []
+                                                                                                    oneof: []
+                                                                                                    anyof: []
+                                                                                                    not: null
+                                                                                                    properties: {}
+                                                                                                    additionalproperties: null
+                                                                                                    patternproperties: {}
+                                                                                                    dependencies: {}
+                                                                                                    additionalitems: null
+                                                                                                    definitions: {}
+                                                                                                swaggerschemaprops:
+                                                                                                    discriminator: ""
+                                                                                                    readonly: false
+                                                                                                    externaldocs: null
+                                                                                                    example: null
+                                                                                                extraprops: {}
+                                                                                        additionalproperties: null
+                                                                                        patternproperties: {}
+                                                                                        dependencies: {}
+                                                                                        additionalitems: null
+                                                                                        definitions: {}
+                                                                                    swaggerschemaprops:
+                                                                                        discriminator: ""
+                                                                                        readonly: false
+                                                                                        externaldocs: null
+                                                                                        example: null
+                                                                                    extraprops: {}
+                                                                                schemas: []
+                                                                            allof: []
+                                                                            oneof: []
+                                                                            anyof: []
+                                                                            not: null
+                                                                            properties: {}
+                                                                            additionalproperties: null
+                                                                            patternproperties: {}
+                                                                            dependencies: {}
+                                                                            additionalitems: null
+                                                                            definitions: {}
+                                                                        swaggerschemaprops:
+                                                                            discriminator: ""
+                                                                            readonly: false
+                                                                            externaldocs: null
+                                                                            example: null
+                                                                        extraprops: {}
+                                                                    total:
+                                                                        vendorextensible:
+                                                                            extensions: {}
+                                                                        schemaprops:
+                                                                            id: ""
+                                                                            ref:
+                                                                                ref:
+                                                                                    hasfullurl: false
+                                                                                    hasurlpathonly: false
+                                                                                    hasfragmentonly: false
+                                                                                    hasfilescheme: false
+                                                                                    hasfullfilepath: false
+                                                                            schema: ""
+                                                                            description: ""
+                                                                            type:
+                                                                                - integer
+                                                                            nullable: false
+                                                                            format: ""
+                                                                            title: ""
+                                                                            default: null
+                                                                            maximum: null
+                                                                            exclusivemaximum: false
+                                                                            minimum: null
+                                                                            exclusiveminimum: false
+                                                                            maxlength: null
+                                                                            minlength: null
+                                                                            pattern: ""
+                                                                            maxitems: null
+                                                                            minitems: null
+                                                                            uniqueitems: false
+                                                                            multipleof: null
+                                                                            enum: []
+                                                                            maxproperties: null
+                                                                            minproperties: null
+                                                                            required: []
+                                                                            items: null
+                                                                            allof: []
+                                                                            oneof: []
+                                                                            anyof: []
+                                                                            not: null
+                                                                            properties: {}
+                                                                            additionalproperties: null
+                                                                            patternproperties: {}
+                                                                            dependencies: {}
+                                                                            additionalitems: null
+                                                                            definitions: {}
+                                                                        swaggerschemaprops:
+                                                                            discriminator: ""
+                                                                            readonly: false
+                                                                            externaldocs: null
+                                                                            example: null
+                                                                        extraprops: {}
+                                                                additionalproperties: null
+                                                                patternproperties: {}
+                                                                dependencies: {}
+                                                                additionalitems: null
+                                                                definitions: {}
+                                                            swaggerschemaprops:
+                                                                discriminator: ""
+                                                                readonly: false
+                                                                externaldocs: null
+                                                                example: null
+                                                            extraprops: {}
+                                                        example: null
+                                                        examples: {}
+                                                        encoding: {}
+                                                    vendorextensible:
+                                                        extensions: {}
+                                            links: {}
+                                        vendorextensible:
+                                            extensions: {}
+                                    statuscoderesponses: {}
+                                vendorextensible:
+                                    extensions: {}
                             deprecated: false
                             securityrequirement: []
                             servers: []

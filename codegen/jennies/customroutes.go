@@ -1,7 +1,6 @@
 package jennies
 
 import (
-	"bytes"
 	"fmt"
 	"path"
 	"regexp"
@@ -10,7 +9,6 @@ import (
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 type CustomRouteGoTypesJenny struct {
@@ -39,13 +37,12 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 		for _, kind := range version.Kinds() {
 			for cpath, methods := range kind.CustomRoutes {
 				for method, route := range methods {
-					if route.Name == nil || *route.Name == "" {
-						sanitized := defaultRouteName(method, cpath)
-						route.Name = &sanitized
+					if route.Name == "" {
+						route.Name = defaultRouteName(method, cpath)
 					}
 					generated, err := c.generateCustomRouteKind(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), kind.MachineName, route)
 					if err != nil {
-						return nil, fmt.Errorf("failed to generate custom route types for route %s, kind %s: %w", *route.Name, kind.Kind, err)
+						return nil, fmt.Errorf("failed to generate custom route types for route %s, kind %s: %w", route.Name, kind.Kind, err)
 					}
 					files = append(files, generated...)
 				}
@@ -60,10 +57,10 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packa
 	if !customRoute.Response.Schema.Exists() {
 		return nil, fmt.Errorf("custom route response is required")
 	}
-	typeName := exportField(*customRoute.Name)
+	typeName := exportField(customRoute.Name)
 	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
 		PackageName:                    packageName,
-		Name:                           typeName,
+		Name:                           toExportedFieldName(typeName),
 		NamePrefix:                     "", // TODO: not sure if we want this set
 		AddKubernetesOpenAPIGenComment: c.AddKubernetesCodegen,
 		AnyAsInterface:                 c.AnyAsInterface,
@@ -73,22 +70,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packa
 	}
 	files = append(files, codejen.File{
 		Data:         responseTypes,
-		RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(*customRoute.Name)),
-		From:         []codejen.NamedJenny{c},
-	})
-	// Methods to make it a runtime.Object
-	runtimeObject := bytes.Buffer{}
-	err = templates.WriteRuntimeObjectMethodsFile(templates.RuntimeObjectMethodsMetadata{
-		Package:         packageName,
-		TypeName:        typeName,
-		ObjectShortName: strings.ToLower(typeName[0:1]),
-	}, &runtimeObject)
-	if err != nil {
-		return nil, err
-	}
-	files = append(files, codejen.File{
-		Data:         runtimeObject.Bytes(),
-		RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_wrapper_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(*customRoute.Name)),
+		RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
 		From:         []codejen.NamedJenny{c},
 	})
 	return files, nil
@@ -99,9 +81,20 @@ func defaultRouteName(method string, path string) string {
 	if len(method) > 1 {
 		ucFirstMethod = ucFirstMethod[:1] + strings.ToLower(method[1:])
 	}
+	for len(path) > 1 && path[0] == '/' {
+		path = path[1:]
+	}
 	ucFirstPath := strings.ToUpper(path)
 	if len(path) > 1 {
 		ucFirstPath = ucFirstPath[:1] + path[1:]
 	}
 	return fmt.Sprintf("%s%s", ucFirstMethod, regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
+}
+
+func toExportedFieldName(name string) string {
+	sanitized := regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(name, "")
+	if len(sanitized) > 1 {
+		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
+	}
+	return strings.ToUpper(sanitized)
 }

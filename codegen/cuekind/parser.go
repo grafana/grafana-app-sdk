@@ -535,6 +535,10 @@ func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[stri
 					Schema: responseSchema,
 				},
 			}
+			nameStrVal := routeVal.LookupPath(cue.MakePath(cue.Str("name").Optional()))
+			if nameStrVal.Exists() && !nameStrVal.IsNull() {
+				route.Name, _ = nameStrVal.String()
+			}
 			customRoutes[pathStr][methodStr] = route
 		}
 	}

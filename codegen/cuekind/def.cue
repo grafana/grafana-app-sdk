@@ -83,7 +83,7 @@ SchemaWithOperatorState: Schema & {
 }
 #CustomRouteResponse: _
 #CustomRoute: {
-		name?: string
+		name?: =~ "^([A-Za-z])+([A-Za-z0-9]*)$"
     request: #CustomRouteRequest
     response: #CustomRouteResponse
 }

@@ -3,11 +3,11 @@
 package v1alpha1
 
 // +k8s:openapi-gen=true
-type Getfoo struct {
+type GetFoo struct {
 	Status string `json:"status"`
 }
 
-// NewGetfoo creates a new Getfoo object.
-func NewGetfoo() *Getfoo {
-	return &Getfoo{}
+// NewGetFoo creates a new GetFoo object.
+func NewGetFoo() *GetFoo {
+	return &GetFoo{}
 }

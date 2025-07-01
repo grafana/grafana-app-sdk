@@ -100,6 +100,7 @@ testKind: {
 				}
 				"/search": {
 					GET: {
+						name: "searchTestkinds"
 						request: {
 							query: {
 								q: string
