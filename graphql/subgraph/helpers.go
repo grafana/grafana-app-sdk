@@ -9,10 +9,9 @@ import (
 // that only requires minimal configuration. Use this for simple resources that
 // don't need complex GraphQL field mapping.
 type SimpleResourceHandler struct {
-	kind         resource.Kind
-	extraFields  graphql.Fields
-	converter    func(obj resource.Object) map[string]interface{}
-	demoDataFunc func() interface{}
+	kind        resource.Kind
+	extraFields graphql.Fields
+	converter   func(obj resource.Object) map[string]interface{}
 }
 
 // NewSimpleResourceHandler creates a simple resource handler with minimal configuration
@@ -31,12 +30,6 @@ func (h *SimpleResourceHandler) WithExtraFields(fields graphql.Fields) *SimpleRe
 // WithConverter sets a custom converter function for resource-to-GraphQL conversion
 func (h *SimpleResourceHandler) WithConverter(converter func(obj resource.Object) map[string]interface{}) *SimpleResourceHandler {
 	h.converter = converter
-	return h
-}
-
-// WithDemoData sets a custom demo data function
-func (h *SimpleResourceHandler) WithDemoData(demoDataFunc func() interface{}) *SimpleResourceHandler {
-	h.demoDataFunc = demoDataFunc
 	return h
 }
 
@@ -59,14 +52,6 @@ func (h *SimpleResourceHandler) ConvertResourceToGraphQL(obj resource.Object) ma
 		return h.converter(obj)
 	}
 	return map[string]interface{}{}
-}
-
-// CreateDemoData implements ResourceGraphQLHandler
-func (h *SimpleResourceHandler) CreateDemoData() interface{} {
-	if h.demoDataFunc != nil {
-		return h.demoDataFunc()
-	}
-	return nil
 }
 
 // CreateSubgraphWithHandlers is a convenience function for creating a subgraph

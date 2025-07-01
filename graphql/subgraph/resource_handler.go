@@ -18,10 +18,6 @@ type ResourceGraphQLHandler interface {
 	// ConvertResourceToGraphQL converts a resource.Object to GraphQL format
 	// Returns a map of field names to values that will be merged with base fields
 	ConvertResourceToGraphQL(obj resource.Object) map[string]interface{}
-
-	// CreateDemoData creates demo data for this resource type
-	// Returns nil if no demo data should be provided
-	CreateDemoData() interface{}
 }
 
 // ResourceHandlerRegistry manages resource-specific GraphQL handlers

@@ -379,36 +379,6 @@ func (g *simpleGenerator) createListField(kind resource.Kind, listType *graphql.
 	}
 }
 
-// createDemoData creates demo data for any resource kind
-func (g *simpleGenerator) createDemoData(kind resource.Kind) interface{} {
-	// Check if we have a resource handler for this kind that provides demo data
-	if g.resourceHandlers != nil {
-		if handler := g.resourceHandlers.GetHandler(kind); handler != nil {
-			if demoData := handler.CreateDemoData(); demoData != nil {
-				return demoData
-			}
-		}
-	}
-
-	// Generic fallback demo data
-	kindName := kind.Kind()
-	lowercaseKind := strings.ToLower(kindName)
-
-	return map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"name":              fmt.Sprintf("demo-%s", lowercaseKind),
-			"namespace":         "default",
-			"uid":               fmt.Sprintf("demo-%s-uid", lowercaseKind),
-			"resourceVersion":   "1",
-			"generation":        1,
-			"creationTimestamp": "2024-01-01T00:00:00Z",
-			"labels":            "{}",
-			"annotations":       "{}",
-		},
-		"spec": fmt.Sprintf(`{"title": "Demo %s", "description": "This is a demo %s for testing"}`, kindName, kindName),
-	}
-}
-
 // convertResourceToGraphQL converts any resource.Object to GraphQL format
 func (g *simpleGenerator) convertResourceToGraphQL(obj resource.Object) interface{} {
 	// Get the basic metadata
