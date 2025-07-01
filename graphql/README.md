@@ -137,7 +137,31 @@ func (a *MyAppStorageAdapter) Get(ctx context.Context, namespace, name string) (
 }
 ```
 
-**Important**: Storage adapters must set proper `TypeMeta` on resource objects, or custom GraphQL fields will return null values. No data migration required - GraphQL reuses your existing storage layer.
+### ⚠️ Critical: TypeMeta Must Be Set
+
+**Most Important**: Your storage adapter **MUST** set proper `TypeMeta` on resource objects, or resource handlers won't be called during data conversion, resulting in null values.
+
+```go
+// ❌ WRONG - Missing TypeMeta causes null values in GraphQL responses
+return &myappv0alpha1.MyResource{
+    ObjectMeta: metav1.ObjectMeta{Name: "test"},
+    Spec: myappv0alpha1.MyResourceSpec{Title: "Test"},
+}
+
+// ✅ CORRECT - With TypeMeta, handlers work properly
+return &myappv0alpha1.MyResource{
+    TypeMeta: metav1.TypeMeta{
+        APIVersion: myappv0alpha1.GroupVersion.String(),
+        Kind:       "MyResource",
+    },
+    ObjectMeta: metav1.ObjectMeta{Name: "test"},
+    Spec: myappv0alpha1.MyResourceSpec{Title: "Test"},
+}
+```
+
+**Why This Matters**: Resource handlers are looked up using `staticMetadata.Kind`. Without TypeMeta, this field is empty and handlers aren't called, resulting in null values for custom fields.
+
+**Important**: No data migration required - GraphQL reuses your existing storage layer.
 
 ### Advanced Schema Composition
 
@@ -152,6 +176,30 @@ The federation system uses sophisticated schema composition with multiple strate
 - **Cross-app Relationships**: Resources can reference each other across apps
 - **Type Sharing**: Common types are unified across the federated schema
 - **Query Optimization**: Intelligent query planning and batching
+
+### Rate Limiting
+
+Configure rate limiting for production deployments:
+
+```go
+gateway := registry.GetFederatedGateway()
+
+// Configure rate limiting
+rateLimitedGateway := gateway.WithRateLimit(gateway.RateLimitConfig{
+    RequestsPerMinute: 100,
+    BurstSize:        20,
+    KeyExtractor:     gateway.IPBasedKeyExtractor, // or UserBasedKeyExtractor
+})
+
+// Use rate-limited gateway
+http.HandleFunc("/graphql", rateLimitedGateway.HandleGraphQL)
+```
+
+Available rate limiting strategies:
+
+- **IP-based**: Limit requests per IP address
+- **User-based**: Limit requests per authenticated user
+- **Custom**: Define your own key extraction logic
 
 ## Examples
 
@@ -198,6 +246,17 @@ for _, info := range subgraphs {
 3. Register with federation gateway
 4. GraphQL schema and resolvers auto-generated
 
+### Migration from `/api/graphql` to `/apis/graphql`
+
+The new federated system provides:
+
+- ✅ **Same Queries**: Existing GraphQL queries work unchanged
+- ✅ **Better Performance**: Automatic batching and caching
+- ✅ **More Features**: Cross-app relationships and enhanced types
+- ✅ **Auto-Discovery**: No manual registration required
+
+Simply ensure your storage adapters set TypeMeta correctly.
+
 ### Common Issues
 
 - **Custom fields return null**: Storage adapter not setting `TypeMeta` on resource objects
@@ -206,20 +265,22 @@ for _, info := range subgraphs {
 
 See [Adding Resources to GraphQL Federation](docs/adding-resources-to-federated-graphql.md) for detailed troubleshooting.
 
-## Current Status (Phase 3 - In Progress)
+## Current Status (Phase 3 - Completed)
 
 ### ✅ Completed Features
 
 - **App Platform Integration**: Full integration with Grafana App Platform
 - **Auto-discovery**: Automatic detection of GraphQL-capable apps
 - **Storage Bridge**: Seamless integration with existing REST storage
-- **Enhanced Type Mapping**: Improved CUE to GraphQL type conversion
+- **Enhanced Type Mapping**: Rich GraphQL types generated from CUE schemas
 - **Cross-app Relationships**: Support for `@relation` attributes between apps
 - **Schema Composition**: Advanced federated schema composition
+- **Performance Optimization**: Query batching, caching, and complexity analysis
+- **Rate Limiting**: Configurable rate limiting with multiple strategies
+- **Production Integration**: Full integration with `/apis/graphql` endpoint
 
 ### 🚧 In Development
 
-- **Performance Optimization**: Query batching and caching improvements
 - **Security Features**: Enhanced authentication and authorization
 - **Production Hardening**: Monitoring, error handling, and reliability
 
@@ -229,6 +290,32 @@ See [Adding Resources to GraphQL Federation](docs/adding-resources-to-federated-
 - **Advanced Relationships**: Complex multi-app data relationships
 - **Developer Tooling**: Enhanced debugging and introspection tools
 
+## Performance Features
+
+### Query Batching
+
+Automatic batching prevents N+1 query problems:
+
+- Related queries are automatically batched
+- Configurable batch sizes and timeouts
+- Cross-app relationship queries optimized
+
+### Intelligent Caching
+
+Multi-level caching with automatic invalidation:
+
+- Resource-level caching with TTL
+- Query result caching
+- Cross-app relationship caching
+
+### Complexity Analysis
+
+Prevents expensive queries:
+
+- Configurable complexity limits
+- Query depth analysis
+- Field-level complexity scoring
+
 ## Roadmap
 
 ### Phase 2 ✅ (Completed)
@@ -237,14 +324,19 @@ See [Adding Resources to GraphQL Federation](docs/adding-resources-to-federated-
 - [x] Auto-discovery of GraphQL apps
 - [x] Storage bridge to existing REST APIs
 
-### Phase 3 🚧 (In Progress)
+### Phase 3 ✅ (Completed)
 
 - [x] Enhanced CUE type mapping
 - [x] Cross-app relationships with `@relation` attributes
 - [x] Advanced schema composition
-- [ ] Mesh Compose + Hive Gateway integration
-- [ ] Production performance optimization
-- [ ] Security and monitoring features
+- [x] Performance optimization (batching, caching, complexity analysis)
+- [x] Rate limiting and security features
+- [x] Production integration with `/apis/graphql`
+
+### Phase 4 🚧 (In Progress)
+
+- [ ] Advanced security and monitoring features
+- [ ] Enhanced developer tooling
 
 ## See Also
 

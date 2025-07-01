@@ -20,12 +20,13 @@ The GraphQL federation system automatically discovers resources from `pkg/regist
 1. **Provider Registration**: Resources are registered in `apps.go`:
 
    ```go
-   // In pkg/registry/apps/apps.go
+   // In pkg/registry/apps/apps.go - providers are automatically discovered
    providers := []app.Provider{
        playlistAppProvider,           // ✅ Has GraphQL support
        investigationAppProvider,      // ✅ Has GraphQL support
        advisorAppProvider,           // 🔄 Ready for GraphQL support
        alertingNotificationsAppProvider, // 🔄 Ready for GraphQL support
+       yourAppProvider,              // 🔄 Add GraphQL support here
    }
    ```
 
@@ -45,6 +46,8 @@ The GraphQL federation system automatically discovers resources from `pkg/regist
    ```
 
 3. **Schema Integration**: Each discovered provider's subgraph is automatically merged into the federated schema with proper field prefixing.
+
+**No additional registration required** - GraphQL support is automatically discovered through existing app registry.
 
 ### Adding GraphQL Support to Any apps.go Resource
 
@@ -252,7 +255,7 @@ The modular system automatically generates a complete GraphQL schema for your re
 Check that your subgraph is registered:
 
 ```bash
-curl -X POST http://localhost:3000/api/graphql \
+curl -X POST http://localhost:3000/apis/graphql \
   -H "Content-Type: application/json" \
   -d '{"query": "{ __schema { queryType { fields { name } } } }"}'
 ```
@@ -291,14 +294,14 @@ Look for your prefixed fields like `myapp_myresource` and `myapp_myresources`.
 
 ```bash
 # Test single resource query
-curl -X POST http://localhost:3000/api/graphql \
+curl -X POST http://localhost:3000/apis/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "{ myapp_myresource(namespace: \"default\", name: \"test\") { metadata { name } spec } }"
   }'
 
 # Test list query
-curl -X POST http://localhost:3000/api/graphql \
+curl -X POST http://localhost:3000/apis/graphql \
   -H "Content-Type: application/json" \
   -d '{
     "query": "{ myapp_myresources(namespace: \"default\") { items { metadata { name } } } }"
@@ -307,43 +310,46 @@ curl -X POST http://localhost:3000/api/graphql \
 
 ## Storage Adapter Requirements
 
-### ⚠️ CRITICAL: TypeMeta Must Be Set
+### 🚨 #1 Most Common Issue: TypeMeta Not Set
 
-**Most Common Issue**: Your storage adapter **MUST** set proper `TypeMeta` on resource objects, or resource handlers won't be called during data conversion.
+**Symptom**: Fields appear in GraphQL schema but return `null` values
+**Cause**: Storage adapter not setting `TypeMeta` on resource objects
+**Fix**: Ensure your storage adapter sets proper TypeMeta:
 
 ```go
-// ❌ WRONG - Missing TypeMeta causes null values in GraphQL responses
-func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
-    // ... get data from service ...
-
-    return &myappv0alpha1.MyResource{
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      dto.ID,
-            Namespace: namespace,
-        },
-        Spec: myappv0alpha1.MyResourceSpec{
-            Title: dto.Title,
-        },
-    }, nil
+// ensureTypeMetaSet ensures that the TypeMeta is properly set on a resource object
+// This is critical for GraphQL resource handlers to be called during conversion
+func (a *myStorageAdapter) ensureTypeMetaSet(obj resource.Object) {
+    gvk := obj.GroupVersionKind()
+    if gvk.Kind == "" || gvk.Version == "" {
+        kind := myappv0alpha1.MyResourceKind()
+        obj.SetGroupVersionKind(schema.GroupVersionKind{
+            Group:   kind.Group(),
+            Version: kind.Version(),
+            Kind:    kind.Kind(),
+        })
+    }
 }
 
-// ✅ CORRECT - With TypeMeta, handlers work properly
 func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
     // ... get data from service ...
 
-    return &myappv0alpha1.MyResource{
-        TypeMeta: metav1.TypeMeta{
-            APIVersion: myappv0alpha1.GroupVersion.String(), // e.g., "myapp.grafana.app/v0alpha1"
-            Kind:       "MyResource",                         // Must match your Kind name exactly
-        },
-        ObjectMeta: metav1.ObjectMeta{
-            Name:      dto.ID,
-            Namespace: namespace,
-        },
-        Spec: myappv0alpha1.MyResourceSpec{
-            Title: dto.Title,
-        },
-    }, nil
+    // ✅ CRITICAL: Ensure TypeMeta is set for GraphQL resource handlers to work
+    a.ensureTypeMetaSet(resourceObj)
+
+    return resourceObj, nil
+}
+
+func (a *myStorageAdapter) List(ctx context.Context, namespace string, options graphqlsubgraph.ListOptions) (resource.ListObject, error) {
+    // ... get list from service ...
+
+    // ✅ CRITICAL: Ensure TypeMeta is set on all items for GraphQL resource handlers to work
+    items := listObj.GetItems()
+    for _, item := range items {
+        a.ensureTypeMetaSet(item)
+    }
+
+    return listObj, nil
 }
 ```
 
@@ -353,29 +359,65 @@ func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (res
 
 When implementing your storage adapter, ensure you:
 
-- [ ] **Set TypeMeta** with correct `APIVersion` and `Kind`
+- [ ] **Set TypeMeta** with correct `APIVersion` and `Kind` (MOST IMPORTANT)
 - [ ] **Set ObjectMeta** with `Name`, `Namespace`, and other metadata
 - [ ] **Convert service DTOs** to proper CUE-defined Spec structures
 - [ ] **Handle both Get and List** methods consistently
 - [ ] **Test with actual data** to verify custom fields appear
 
+## Real-World Example: Playlist Implementation
+
+See the complete working implementation that demonstrates the TypeMeta fix:
+
+- `grafana/pkg/registry/apps/playlist/register.go` - GraphQL subgraph setup
+- `grafana/pkg/registry/apps/playlist/graphql_storage.go` - Storage adapter with TypeMeta fix
+- `grafana/pkg/registry/apps/playlist/graphql_handler.go` - Custom field handling
+
+**Key Insight**: The TypeMeta fix in the storage adapter was critical for making custom fields work. Before the fix, fields like `name`, `uid`, `interval`, and `items` returned null values even though they appeared in the schema.
+
+## Performance Features
+
+### Query Batching
+
+Automatic batching prevents N+1 query problems:
+
+- Related queries are automatically batched
+- Configurable batch sizes and timeouts
+- Cross-app relationship queries optimized
+
+### Intelligent Caching
+
+Multi-level caching with automatic invalidation:
+
+- Resource-level caching with TTL
+- Query result caching
+- Cross-app relationship caching
+
+### Complexity Analysis
+
+Prevents expensive queries:
+
+- Configurable complexity limits
+- Query depth analysis
+- Field-level complexity scoring
+
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"Unknown field" errors**: Check that your provider implements `GraphQLSubgraphProvider` and is properly registered
-
-2. **"No storage available" errors**: Verify your `storageGetter` function and `legacyStorageGetter` implementation
-
-3. **Interface conversion errors**: Ensure your storage adapter implements all required methods
-
-4. **Missing fields in schema**: Check that your resource kinds are properly defined and returned by `GetKinds()`
-
-5. **🚨 Fields in schema but returning null values**:
+1. **🚨 Fields in schema but returning null values** (MOST COMMON):
 
    - **Most likely cause**: Storage adapter isn't setting `TypeMeta`
    - **Debug**: Check if `staticMetadata.Kind` is empty in your resource objects
    - **Fix**: Add proper `TypeMeta` to all resource objects in your storage adapter
+
+2. **"Unknown field" errors**: Check that your provider implements `GraphQLSubgraphProvider` and is properly registered
+
+3. **"No storage available" errors**: Verify your `storageGetter` function and `legacyStorageGetter` implementation
+
+4. **Interface conversion errors**: Ensure your storage adapter implements all required methods
+
+5. **Missing fields in schema**: Check that your resource kinds are properly defined and returned by `GetKinds()`
 
 6. **Custom fields not appearing**:
    - **Cause**: Resource handler not being called during conversion
@@ -403,12 +445,12 @@ GraphQL issues typically fall into two categories:
 
 ```bash
 # 1. Check schema has your fields
-curl -X POST http://localhost:3000/api/graphql \
+curl -X POST http://localhost:3000/apis/graphql \
   -H "Content-Type: application/json" \
   -d '{"query": "{ __type(name: \"MyResource\") { fields { name type { name } } } }"}'
 
 # 2. Test actual data query
-curl -X POST http://localhost:3000/api/graphql \
+curl -X POST http://localhost:3000/apis/graphql \
   -H "Content-Type: application/json" \
   -d '{"query": "{ myapp_myresources(namespace: \"default\") { items { customField } } }"}'
 
@@ -425,8 +467,9 @@ func (a *myStorageAdapter) Get(ctx context.Context, namespace, name string) (res
     // ... your existing code ...
 
     // Debug: Log the TypeMeta
-    fmt.Printf("🔍 Resource TypeMeta: APIVersion=%s, Kind=%s\n",
-               resource.APIVersion, resource.Kind)
+    gvk := resource.GroupVersionKind()
+    fmt.Printf("🔍 Resource TypeMeta: Group=%s, Version=%s, Kind=%s\n",
+               gvk.Group, gvk.Version, gvk.Kind)
 
     return resource, nil
 }
