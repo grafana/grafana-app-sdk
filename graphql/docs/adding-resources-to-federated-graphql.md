@@ -11,13 +11,79 @@ The GraphQL federation system automatically discovers and integrates App SDK-bac
 3. **Generic storage bridging**: Reusing existing REST storage without data migration
 4. **Field prefixing**: Namespacing fields to avoid conflicts (e.g., `playlist_playlist`)
 
+## Auto-Discovery from apps.go Registry
+
+The GraphQL federation system automatically discovers resources from `pkg/registry/apps/apps.go`. Any provider that implements `GraphQLSubgraphProvider` is automatically included in the federated GraphQL schema.
+
+### How Auto-Discovery Works
+
+1. **Provider Registration**: Resources are registered in `apps.go`:
+
+   ```go
+   // In pkg/registry/apps/apps.go
+   providers := []app.Provider{
+       playlistAppProvider,           // ✅ Has GraphQL support
+       investigationAppProvider,      // ✅ Has GraphQL support
+       advisorAppProvider,           // 🔄 Ready for GraphQL support
+       alertingNotificationsAppProvider, // 🔄 Ready for GraphQL support
+   }
+   ```
+
+2. **Automatic GraphQL Discovery**: The service automatically finds GraphQL-capable providers:
+
+   ```go
+   // The Service.GetGraphQLProviders() method finds all GraphQL-capable providers
+   func (s *Service) GetGraphQLProviders() []graphqlsubgraph.GraphQLSubgraphProvider {
+       var graphqlProviders []graphqlsubgraph.GraphQLSubgraphProvider
+       for _, provider := range s.providers {
+           if graphqlProvider, ok := provider.(graphqlsubgraph.GraphQLSubgraphProvider); ok {
+               graphqlProviders = append(graphqlProviders, graphqlProvider)
+           }
+       }
+       return graphqlProviders
+   }
+   ```
+
+3. **Schema Integration**: Each discovered provider's subgraph is automatically merged into the federated schema with proper field prefixing.
+
+### Adding GraphQL Support to Any apps.go Resource
+
+To add GraphQL support to **any** resource already registered in `apps.go`:
+
+1. **Implement the Interface**: Add `GraphQLSubgraphProvider` to your existing provider:
+
+   ```go
+   // Ensure your provider implements GraphQLSubgraphProvider
+   var _ graphqlsubgraph.GraphQLSubgraphProvider = (*YourAppProvider)(nil)
+
+   func (p *YourAppProvider) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, error) {
+       // Implementation here
+   }
+   ```
+
+2. **No Additional Registration Required**: The GraphQL system automatically discovers your implementation through the existing `apps.go` registration.
+
+3. **Automatic Schema Inclusion**: Your resource's GraphQL fields are automatically included in the federated schema.
+
+### Feature Flag Considerations
+
+Some resources in `apps.go` are feature-flagged. The GraphQL discovery respects these flags:
+
+```go
+// Resources with feature flags are conditionally included
+if features.IsEnabledGlobally(featuremgmt.FlagInvestigationsBackend) {
+    providers = append(providers, investigationAppProvider)
+}
+```
+
+GraphQL support will automatically follow the same feature flag logic - if a resource is conditionally included in `apps.go`, its GraphQL support will be conditionally included as well.
+
 ## Key Benefits of the Modular Design
 
 ✅ **Zero Resource-Specific Code**: No need to write resource-specific GraphQL types or resolvers
 ✅ **Automatic Type Generation**: GraphQL types are dynamically created from your CUE kinds
 ✅ **Generic Conversion**: All resource.Object types are automatically converted to GraphQL format
 ✅ **Consistent Metadata**: Standard Kubernetes ObjectMeta fields are included for all resources
-✅ **Flexible Demo Data**: Configurable demo data generation for any resource type
 
 ## Prerequisites
 
@@ -77,16 +143,7 @@ func (p *MyAppProvider) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, e
     }
 
     // Create a simple handler for basic GraphQL support
-    handler := graphqlsubgraph.NewSimpleResourceHandler(myappv0alpha1.MyResourceKind()).
-        WithDemoData(func() interface{} {
-            return map[string]interface{}{
-                "metadata": map[string]interface{}{
-                    "name":      "demo-myresource",
-                    "namespace": "default",
-                },
-                "spec": `{"title": "Demo Resource"}`,
-            }
-        })
+    handler := graphqlsubgraph.NewSimpleResourceHandler(myappv0alpha1.MyResourceKind())
 
     // Create the subgraph with the handler
     return graphqlsubgraph.CreateSubgraphWithHandlers(
@@ -140,15 +197,7 @@ func (h *myAppGraphQLHandler) ConvertResourceToGraphQL(obj resource.Object) map[
     }
 }
 
-func (h *myAppGraphQLHandler) CreateDemoData() interface{} {
-    return map[string]interface{}{
-        "metadata": map[string]interface{}{
-            "name": "demo-myresource",
-        },
-        "customField": "demo value",
-        "items":       []string{"demo item"},
-    }
-}
+
 ```
 
 Then register it in your provider:
@@ -179,7 +228,6 @@ The modular system automatically generates a complete GraphQL schema for your re
 
 - `<app>_<resource>(namespace: String!, name: String!)` - Get single resource
 - `<app>_<resources>(namespace: String!)` - List resources
-- `demo_<resource>()` - Demo data for testing (configurable)
 
 ### Types (Auto-Generated)
 
@@ -196,7 +244,6 @@ The modular system automatically generates a complete GraphQL schema for your re
 ✅ **Consistent Structure**: All resources follow the same GraphQL pattern
 ✅ **Complete Metadata**: Full Kubernetes ObjectMeta fields included
 ✅ **Error Handling**: Proper argument validation and error messages
-✅ **Demo Support**: Optional demo data for easy testing
 
 ## Testing Your Implementation
 
