@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubectl-proxy
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubectl-proxy
+  template:
+    metadata:
+      labels:
+        app: kubectl-proxy
+    spec:
+      serviceAccountName: kubectl-proxy
+      containers:
+      - name: kubectl-proxy
+        image: bitnami/kubectl:latest
+        command: ["kubectl", "proxy", "--port=8001", "--address=0.0.0.0", "--accept-hosts=^.*"]
+        ports:
+        - containerPort: 8001
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kubectl-proxy
+  namespace: default
+spec:
+  selector:
+    app: kubectl-proxy
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP 

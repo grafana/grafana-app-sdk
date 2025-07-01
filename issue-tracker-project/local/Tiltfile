@@ -49,21 +49,28 @@ for filename in listdir('generated'):
     decoded = decode(read_file(filename))
     yaml_objects += decoded
 # Next, allow for additional yamls which can optionally override the generated yamls
+additional_objects = []
 for filename in listdir('additional'):
   if filename.lower().endswith(('.yaml', '.yml')):
     decoded = decode(read_file(filename))
-    for o in decoded:
-      present = find_overlapping(o, yaml_objects)
-      if present != None:
-        yaml_objects.remove(present)
-    yaml_objects += decoded
+    additional_objects += decoded
+
+# Filter out overlapping objects from yaml_objects
+filtered_objects = []
+for obj in yaml_objects:
+  overlapping = find_overlapping(obj, additional_objects)
+  if overlapping == None:
+    filtered_objects.append(obj)
+
+# Combine filtered original objects with additional objects
+yaml_objects = filtered_objects + additional_objects
 
 bundle = encode_yaml_stream(yaml_objects)
 
 # k8s_yaml automatically creates resources in Tilt for the entities
 # and will inject any images referenced in the Tiltfile when deploying
 # https://docs.tilt.dev/api.html#api.k8s_yaml
-k8s_yaml(bundle)
+k8s_yaml(bundle, allow_duplicates=True)
 
 # Group CRD's together
 crds = [r for r in yaml_objects if (r['kind'] == 'CustomResourceDefinition')]

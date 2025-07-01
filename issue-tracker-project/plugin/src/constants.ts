@@ -1,4 +1,4 @@
-import { NavItem } from 'types';
+import { NavItem } from './types';
 
 export const PLUGIN_ID = "issuetrackerproject-app";
 export const PLUGIN_BASE_URL = `/a/${PLUGIN_ID}`;
