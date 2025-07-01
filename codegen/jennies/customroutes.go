@@ -76,17 +76,17 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packa
 	return files, nil
 }
 
-func defaultRouteName(method string, path string) string {
+func defaultRouteName(method string, route string) string {
 	ucFirstMethod := strings.ToUpper(method)
 	if len(method) > 1 {
 		ucFirstMethod = ucFirstMethod[:1] + strings.ToLower(method[1:])
 	}
-	for len(path) > 1 && path[0] == '/' {
-		path = path[1:]
+	for len(route) > 1 && route[0] == '/' {
+		route = route[1:]
 	}
-	ucFirstPath := strings.ToUpper(path)
-	if len(path) > 1 {
-		ucFirstPath = ucFirstPath[:1] + path[1:]
+	ucFirstPath := strings.ToUpper(route)
+	if len(route) > 1 {
+		ucFirstPath = ucFirstPath[:1] + route[1:]
 	}
 	return fmt.Sprintf("%s%s", ucFirstMethod, regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
 }

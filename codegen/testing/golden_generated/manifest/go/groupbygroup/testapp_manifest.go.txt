@@ -316,6 +316,9 @@ var customRouteToGoResponseType = map[string]any{
 	"v3|TestKind|search|GET": v3.SearchTestkinds{},
 }
 
+// ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
+// kind may be empty for custom routes which are not kind subroutes. Leading slashes are removed from subroute paths.
+// If there is no association for the provided kind, version, custom route path, and method, exists will return false.
 func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
 	if len(path) > 0 && path[0] == '/' {
 		path = path[1:]

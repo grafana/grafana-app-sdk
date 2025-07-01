@@ -47,6 +47,42 @@ var appManifestData = app.ManifestData{
 					},
 					Schema: &versionSchemaTestKindv1alpha1,
 					CustomRoutes: map[string]spec3.PathProps{
+						"/bar": {
+							Get: &spec3.Operation{
+								OperationProps: spec3.OperationProps{
+
+									OperationId: "GetMessage",
+
+									Responses: &spec3.Responses{
+										ResponsesProps: spec3.ResponsesProps{
+											Default: &spec3.Response{
+												ResponseProps: spec3.ResponseProps{
+													Description: "Default OK response",
+													Content: map[string]*spec3.MediaType{
+														"application/json": {
+															MediaTypeProps: spec3.MediaTypeProps{
+																Schema: &spec.Schema{
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"object"},
+																		Properties: map[string]spec.Schema{
+																			"message": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"string"},
+																				},
+																			},
+																		},
+																		Required: []string{
+																			"message",
+																		},
+																	}},
+															}},
+													},
+												},
+											},
+										}},
+								},
+							},
+						},
 						"/foo": {
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
@@ -110,6 +146,8 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
 }
 
 var customRouteToGoResponseType = map[string]any{
+	"v1alpha1|TestKind|bar|GET": v1alpha1.GetMessage{},
+
 	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
 }
 

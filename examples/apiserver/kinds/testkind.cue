@@ -18,5 +18,13 @@ testKind: {
 				}
 			}
 		}
+		"/bar": {
+			"GET": {
+				name: "GetMessage"
+				response: {
+					message: string
+				}
+			}
+		}
 	}
 }

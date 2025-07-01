@@ -30,6 +30,9 @@ func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) strin
 	return filepath.Join(ToPackageName(grp), ToPackageName(version))
 }
 
+// getGeneratedPathForKind uses the same logic as GetGeneratedPath, but uses a codegen.VersionedKind instead of codegen.Kind
+//
+//nolint:revive
 func getGeneratedPathForKind(groupByKind bool, group string, kind codegen.VersionedKind, version string) string {
 	if groupByKind {
 		return filepath.Join(ToPackageName(kind.MachineName), ToPackageName(version))

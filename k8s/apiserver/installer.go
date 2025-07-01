@@ -144,13 +144,13 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 				kindsByGroup[kind.Kind.Group()] = []resource.Kind{}
 			}
 			kindsByGroup[kind.Kind.Group()] = append(kindsByGroup[kind.Kind.Group()], kind.Kind)
-			if len(kind.ManifestKind.CustomRoutes) > 0 {
-				//scheme.AddUnversionedTypes(gv, &ResourceCallOptions{})
-				scheme.AddKnownTypeWithName(gv.WithKind("ResourceCallOptions"), &ResourceCallOptions{})
-				scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*ResourceCallOptions)(nil), func(a, b interface{}, scope conversion.Scope) error {
-					return CovertURLValuesToResourceCallOptions(a.(*url.Values), b.(*ResourceCallOptions), scope)
-				})
-			}
+		}
+		scheme.AddUnversionedTypes(gv, &ResourceCallOptions{})
+		err = scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*ResourceCallOptions)(nil), func(a, b any, scope conversion.Scope) error {
+			return CovertURLValuesToResourceCallOptions(a.(*url.Values), b.(*ResourceCallOptions), scope)
+		})
+		if err != nil {
+			return fmt.Errorf("could not add conversion func for ResourceCallOptions: %w", err)
 		}
 		groupVersions = append(groupVersions, gv)
 	}
@@ -169,7 +169,6 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 			}
 		}
 	}
-	scheme.AddKnownTypeWithName(internalGv.WithKind("ResourceCallOptions"), &ResourceCallOptions{})
 
 	sort.Slice(groupVersions, func(i, j int) bool {
 		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) < 0
@@ -232,44 +231,44 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
-func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, version string, routes map[string]spec3.PathProps, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, routes map[string]spec3.PathProps, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	defs := make(map[string]common.OpenAPIDefinition)
 	for path, pathProps := range routes {
 		if pathProps.Get != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "GET", pathProps.Get, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "GET", pathProps.Get, callback)
 			defs[key] = val
 		}
 		if pathProps.Post != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "POST", pathProps.Post, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "POST", pathProps.Post, callback)
 			defs[key] = val
 		}
 		if pathProps.Put != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "PUT", pathProps.Put, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "PUT", pathProps.Put, callback)
 			defs[key] = val
 		}
 		if pathProps.Patch != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "PATCH", pathProps.Patch, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "PATCH", pathProps.Patch, callback)
 			defs[key] = val
 		}
 		if pathProps.Delete != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "DELETE", pathProps.Delete, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "DELETE", pathProps.Delete, callback)
 			defs[key] = val
 		}
 		if pathProps.Head != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "HEAD", pathProps.Head, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "HEAD", pathProps.Head, callback)
 			defs[key] = val
 		}
 		if pathProps.Options != nil {
-			key, val := r.getOperationOpenAPI(kind, version, path, "OPTIONS", pathProps.Options, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, path, "OPTIONS", pathProps.Options, callback)
 			defs[key] = val
 		}
 	}
 	return defs
 }
 
-func (r *defaultInstaller) getOperationOpenAPI(kind, version, path, method string, operation *spec3.Operation, callback common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (r *defaultInstaller) getOperationOpenAPI(kind, ver, path, method string, operation *spec3.Operation, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
-	goType, ok := r.customRouteResolver(kind, version, path, method)
+	goType, ok := r.customRouteResolver(kind, ver, path, method)
 	if ok {
 		typ := reflect.TypeOf(goType)
 		typePath = typ.PkgPath() + "." + typ.Name()
@@ -488,9 +487,9 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]K
 	return out, nil
 }
 
-func spec3PropsToConnectorMethods(props spec3.PathProps, kind, version, path string, resolver CustomRouteResponseResolver) map[string]SubresourceConnectorResponseObject {
+func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, path string, resolver CustomRouteResponseResolver) map[string]SubresourceConnectorResponseObject {
 	if resolver == nil {
-		resolver = func(kind, ver, path, method string) (any, bool) {
+		resolver = func(_, _, _, _ string) (any, bool) {
 			return nil, false
 		}
 	}
@@ -502,56 +501,56 @@ func spec3PropsToConnectorMethods(props spec3.PathProps, kind, version, path str
 			return []string{"*/*"}
 		}
 		types := make([]string, 0)
-		for contentType, _ := range operation.Responses.Default.Content {
+		for contentType := range operation.Responses.Default.Content {
 			types = append(types, contentType)
 		}
 		return types
 	}
 	methods := make(map[string]SubresourceConnectorResponseObject)
 	if props.Get != nil {
-		resp, _ := resolver(kind, version, path, "GET")
+		resp, _ := resolver(kind, ver, path, "GET")
 		methods["GET"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Post != nil {
-		resp, _ := resolver(kind, version, path, "POST")
+		resp, _ := resolver(kind, ver, path, "POST")
 		methods["POST"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Put != nil {
-		resp, _ := resolver(kind, version, path, "PUT")
+		resp, _ := resolver(kind, ver, path, "PUT")
 		methods["PUT"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Patch != nil {
-		resp, _ := resolver(kind, version, path, "PATCH")
+		resp, _ := resolver(kind, ver, path, "PATCH")
 		methods["PATCH"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Delete != nil {
-		resp, _ := resolver(kind, version, path, "DELETE")
+		resp, _ := resolver(kind, ver, path, "DELETE")
 		methods["DELETE"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Head != nil {
-		resp, _ := resolver(kind, version, path, "HEAD")
+		resp, _ := resolver(kind, ver, path, "HEAD")
 		methods["HEAD"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Options != nil {
-		resp, _ := resolver(kind, version, path, "OPTIONS")
+		resp, _ := resolver(kind, ver, path, "OPTIONS")
 		methods["OPTIONS"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -48,14 +49,20 @@ func NewApp(config app.Config) (app.App, error) {
 				},
 			},
 			CustomRoutes: map[simple.AppCustomRoute]simple.AppCustomRouteHandler{
-				simple.AppCustomRoute{
+				{
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "foo",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
 					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					_, err := writer.Write([]byte(`{"status":"ok"}`))
-					return err
+					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{Status: "ok"})
+				}, {
+					Method: simple.AppCustomRouteMethodGet,
+					Path:   "bar",
+				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					writer.WriteHeader(http.StatusOK)
+					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{Message: "Hello, world!"})
 				},
 			},
 		}},
