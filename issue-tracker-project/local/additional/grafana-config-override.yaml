@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-config
+  namespace: default
+  labels:
+    name: grafana
+data:
+  grafana.ini: |
+    app_mode = development
+    [analytics]
+    reporting_enabled = false
+    [tracing.opentelemetry.otlp]
+    address = tempo.default.svc:4317
+    [auth.anonymous]
+    enabled = false
+    [log.frontend]
+    enabled = true
+    [plugins]
+    allow_loading_unsigned_plugins = issuetrackerproject-app
+    [plugin.issuetrackerproject-app]
+    tracing = true
+    [server]
+    http_port = 3000
+    root_url = 
+    router_logging = true
+    [unified_alerting]
+    enabled = true
+    [users]
+    default_theme = dark
+    [feature_toggles]
+    grafanaAPIServerEnsureKubectlAccess = false
+    ; disable the experimental APIs flag to disable bundling of the example service locally
+    grafanaAPIServerWithExperimentalAPIs = false
+    kubernetesAggregator = false 

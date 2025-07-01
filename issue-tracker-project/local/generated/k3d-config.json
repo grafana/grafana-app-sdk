@@ -29,7 +29,7 @@
       "nodeFilters": [
         "server:*"
       ],
-      "volume": "/Users/joeytawadrous/dev/repos/grafana-app-sdk/issue-tracker-project/local/mounted-files:/tmp/k3d/mounted-files"
+      "volume": "/Users/joeytawadrous/dev/grafana-app-sdk/issue-tracker-project/local/mounted-files:/tmp/k3d/mounted-files"
     }
   ]
 }

@@ -17,7 +17,7 @@
         "@typescript-eslint/no-deprecated": "warn"
       },
       "parserOptions": {
-        "project": "./tsconfig.json"
+        "projectService": true
       }
     },
     {

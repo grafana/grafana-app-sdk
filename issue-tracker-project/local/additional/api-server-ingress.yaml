@@ -1,0 +1,17 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: k8s-api-ingress
+  namespace: default
+spec:
+  rules:
+  - host: grafana.k3d.localhost
+    http:
+      paths:
+      - path: /apis
+        pathType: Prefix
+        backend:
+          service:
+            name: kubectl-proxy
+            port:
+              number: 8001 
