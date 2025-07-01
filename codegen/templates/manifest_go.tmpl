@@ -7,6 +7,7 @@ package {{.Package}}
 
 import (
     "encoding/json"
+    "strings"
 
     "github.com/grafana/grafana-app-sdk/app"
     "github.com/grafana/grafana-app-sdk/resource"
@@ -204,6 +205,25 @@ var kindVersionToGoType = map[string]resource.Kind { {{ range .ManifestData.Vers
 // If there is no association for the provided Kind and Version, exists will return false.
 func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exists bool) {
     goType, exists = kindVersionToGoType[fmt.Sprintf("%s/%s", kind, version)]
+    return goType, exists
+}
+
+var customRouteToGoResponseType = map[string]any { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .CustomRoutes }}{{ if $resp.Get }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Get.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Get.OperationId }}{{ end }}{},{{end}}{{ if $resp.Post }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Post.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Post.OperationId }}{{ end }}{},{{end}}{{ if $resp.Put }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Put.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Put.OperationId }}{{ end }}{},{{end}}{{ if $resp.Patch }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PATCH": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Patch.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Patch.OperationId }}{{ end }}{},{{end}}{{ if $resp.Delete }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|DELETE": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Delete.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Delete.OperationId }}{{ end }}{},{{end}}{{ if $resp.Head }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|HEAD": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Head.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Head.OperationId }}{{ end }}{},{{end}}{{ if $resp.Options }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|OPTIONS": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName $resp.Options.OperationId }}{{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportField $resp.Options.OperationId }}{{ end }}{},{{end}}
+    {{ end }}{{ end }}{{ end }}
+}
+
+func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
+    if len(path) > 0 && path[0] == '/' {
+        path = path[1:]
+    }
+    goType, exists = customRouteToGoResponseType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
     return goType, exists
 }
 

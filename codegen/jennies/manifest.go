@@ -330,6 +330,11 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			return spec3.PathProps{}, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
 
+		operationID := defaultRouteName(sourceMethod, sourcePath)
+		if sourceRoute.Name != nil {
+			operationID = *sourceRoute.Name
+		}
+
 		targetOperation := &spec3.Operation{
 			OperationProps: spec3.OperationProps{
 				Summary:     "",
@@ -337,6 +342,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				Parameters:  targetParameters,
 				RequestBody: targetRequestBody,
 				Responses:   targetResponses,
+				OperationId: operationID,
 			},
 		}
 

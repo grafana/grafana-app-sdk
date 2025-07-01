@@ -61,12 +61,18 @@ func (in *ResourceCallOptions) DeepCopyObject() runtime.Object {
 
 var (
 	_ = rest.Connecter(&SubresourceConnector{})
+	_ = rest.StorageMetadata(&SubresourceConnector{})
 )
 
+type SubresourceConnectorResponseObject struct {
+	Object    any
+	MIMETypes []string
+}
 type SubresourceConnector struct {
-	Route   CustomRoute
-	Kind    resource.Kind
-	Methods []string
+	Route CustomRoute
+	Kind  resource.Kind
+	// Methods is a map of uppercase HTTP methods (ex. GET, PUT) to their response types
+	Methods map[string]SubresourceConnectorResponseObject
 }
 
 func (r *SubresourceConnector) New() runtime.Object {
@@ -77,7 +83,11 @@ func (r *SubresourceConnector) Destroy() {
 }
 
 func (r *SubresourceConnector) ConnectMethods() []string {
-	return r.Methods
+	methods := make([]string, 0)
+	for method, _ := range r.Methods {
+		methods = append(methods, method)
+	}
+	return methods
 }
 
 func (r *SubresourceConnector) NewConnectOptions() (runtime.Object, bool, string) {
@@ -85,7 +95,16 @@ func (r *SubresourceConnector) NewConnectOptions() (runtime.Object, bool, string
 }
 
 func (r *SubresourceConnector) ProducesObject(verb string) any {
-	return r.New()
+	resp := r.Methods[strings.ToUpper(verb)]
+	return resp.Object
+}
+
+func (r *SubresourceConnector) ProducesMIMETypes(verb string) []string {
+	resp := r.Methods[strings.ToUpper(verb)]
+	if len(resp.MIMETypes) == 0 {
+		return []string{"application/json"} // TODO: default to text/plain instead?
+	}
+	return resp.MIMETypes
 }
 
 func (r *SubresourceConnector) Connect(ctx context.Context, id string, opts runtime.Object, responder rest.Responder) (http.Handler, error) {

@@ -103,6 +103,7 @@ type CustomRouteResponse struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
+	Name     *string             `json:"name,omitempty"`
 	Request  CustomRouteRequest  `json:"request"`
 	Response CustomRouteResponse `json:"response"`
 }

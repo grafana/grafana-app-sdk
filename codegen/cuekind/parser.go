@@ -289,7 +289,7 @@ func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Va
 	return nil
 }
 
-func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.VersionedKind, error) {
+func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.VersionedKind, error) {
 	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
 	// This gives us default values for all fields that weren't filled out,
 	// and will create errors for required fields that may be missing.
@@ -315,6 +315,12 @@ func (*Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.
 	someKind.Schema = someKind.Schema.Unify(schemaDef)
 	if someKind.Schema.Err() != nil {
 		return nil, someKind.Schema.Err()
+	}
+
+	// Parse custom routes
+	someKind.CustomRoutes, err = p.parseCustomRoutes(val.LookupPath(cue.MakePath(cue.Str("customRoutes"))))
+	if err != nil {
+		return nil, err
 	}
 
 	return someKind, nil
@@ -424,7 +430,7 @@ func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
 	return nil
 }
 
-func (*Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
+func (p *Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
 	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
 	// This gives us default values for all fields that weren't filled out,
 	// and will create errors for required fields that may be missing.
@@ -470,53 +476,9 @@ func (*Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codege
 		}
 
 		customRoutesVal := val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("customRoutes")))
-		if customRoutesVal.Exists() && customRoutesVal.Err() == nil {
-			v.CustomRoutes = make(map[string]map[string]codegen.CustomRoute)
-
-			pathsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
-			if err != nil {
-				return nil, fmt.Errorf("error iterating customRoutes paths for version %s: %w", k, err)
-			}
-			for pathsIter.Next() {
-				pathStr := pathsIter.Selector().String()
-				pathStr = strings.Trim(pathStr, `"`)
-				methodsMapVal := pathsIter.Value()
-				v.CustomRoutes[pathStr] = make(map[string]codegen.CustomRoute)
-
-				methodsIter, err := methodsMapVal.Fields(cue.Optional(true), cue.Definitions(false))
-				if err != nil {
-					return nil, fmt.Errorf("error iterating customRoutes methods for path '%s' in version %s: %w", pathStr, k, err)
-				}
-				for methodsIter.Next() {
-					methodStr := methodsIter.Selector().String()
-					methodStr = strings.Trim(methodStr, `"`)
-					routeVal := methodsIter.Value()
-
-					requestVal := routeVal.LookupPath(cue.MakePath(cue.Str("request")))
-					var querySchema, bodySchema cue.Value
-					if requestVal.Exists() && requestVal.Err() == nil {
-						querySchema = requestVal.LookupPath(cue.MakePath(cue.Str("query")))
-						bodySchema = requestVal.LookupPath(cue.MakePath(cue.Str("body")))
-					}
-
-					responseVal := routeVal.LookupPath(cue.MakePath(cue.Str("response")))
-					var responseSchema cue.Value
-					if responseVal.Exists() && responseVal.Err() == nil {
-						responseSchema = responseVal
-					}
-
-					route := codegen.CustomRoute{
-						Request: codegen.CustomRouteRequest{
-							Query: querySchema,
-							Body:  bodySchema,
-						},
-						Response: codegen.CustomRouteResponse{
-							Schema: responseSchema,
-						},
-					}
-					v.CustomRoutes[pathStr][methodStr] = route
-				}
-			}
+		v.CustomRoutes, err = p.parseCustomRoutes(customRoutesVal)
+		if err != nil {
+			return nil, err
 		}
 
 		someKind.AllVersions = append(someKind.AllVersions, v)
@@ -524,6 +486,59 @@ func (*Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codege
 	// Now we need to sort AllVersions, as map key order is random
 	slices.SortFunc(someKind.AllVersions, sortVersions)
 	return someKind, nil
+}
+
+func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[string]codegen.CustomRoute, error) {
+	if !customRoutesVal.Exists() || customRoutesVal.Err() != nil {
+		return nil, nil
+	}
+	customRoutes := make(map[string]map[string]codegen.CustomRoute)
+
+	pathsIter, err := customRoutesVal.Fields(cue.Optional(true), cue.Definitions(false))
+	if err != nil {
+		return nil, fmt.Errorf("error iterating customRoutes paths: %w", err)
+	}
+	for pathsIter.Next() {
+		pathStr := pathsIter.Selector().String()
+		pathStr = strings.Trim(pathStr, `"`)
+		methodsMapVal := pathsIter.Value()
+		customRoutes[pathStr] = make(map[string]codegen.CustomRoute)
+
+		methodsIter, err := methodsMapVal.Fields(cue.Optional(true), cue.Definitions(false))
+		if err != nil {
+			return nil, fmt.Errorf("error iterating customRoutes methods for path '%s': %w", pathStr, err)
+		}
+		for methodsIter.Next() {
+			methodStr := methodsIter.Selector().String()
+			methodStr = strings.Trim(methodStr, `"`)
+			routeVal := methodsIter.Value()
+
+			requestVal := routeVal.LookupPath(cue.MakePath(cue.Str("request")))
+			var querySchema, bodySchema cue.Value
+			if requestVal.Exists() && requestVal.Err() == nil {
+				querySchema = requestVal.LookupPath(cue.MakePath(cue.Str("query")))
+				bodySchema = requestVal.LookupPath(cue.MakePath(cue.Str("body")))
+			}
+
+			responseVal := routeVal.LookupPath(cue.MakePath(cue.Str("response")))
+			var responseSchema cue.Value
+			if responseVal.Exists() && responseVal.Err() == nil {
+				responseSchema = responseVal
+			}
+
+			route := codegen.CustomRoute{
+				Request: codegen.CustomRouteRequest{
+					Query: querySchema,
+					Body:  bodySchema,
+				},
+				Response: codegen.CustomRouteResponse{
+					Schema: responseSchema,
+				},
+			}
+			customRoutes[pathStr][methodStr] = route
+		}
+	}
+	return customRoutes, nil
 }
 
 var (

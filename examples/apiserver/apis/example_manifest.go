@@ -8,10 +8,12 @@ package apis
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	v1alpha1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 )
@@ -47,7 +49,38 @@ var appManifestData = app.ManifestData{
 					CustomRoutes: map[string]spec3.PathProps{
 						"/foo": {
 							Get: &spec3.Operation{
-								OperationProps: spec3.OperationProps{},
+								OperationProps: spec3.OperationProps{
+
+									OperationId: "Getfoo",
+
+									Responses: &spec3.Responses{
+										ResponsesProps: spec3.ResponsesProps{
+											Default: &spec3.Response{
+												ResponseProps: spec3.ResponseProps{
+													Description: "Default OK response",
+													Content: map[string]*spec3.MediaType{
+														"application/json": {
+															MediaTypeProps: spec3.MediaTypeProps{
+																Schema: &spec.Schema{
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"object"},
+																		Properties: map[string]spec.Schema{
+																			"status": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"string"},
+																				},
+																			},
+																		},
+																		Required: []string{
+																			"status",
+																		},
+																	}},
+															}},
+													},
+												},
+											},
+										}},
+								},
 							},
 						},
 					},
@@ -73,5 +106,17 @@ var kindVersionToGoType = map[string]resource.Kind{
 // If there is no association for the provided Kind and Version, exists will return false.
 func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exists bool) {
 	goType, exists = kindVersionToGoType[fmt.Sprintf("%s/%s", kind, version)]
+	return goType, exists
+}
+
+var customRouteToGoResponseType = map[string]any{
+	"v1alpha1|TestKind|foo|GET": v1alpha1.Getfoo{},
+}
+
+func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	goType, exists = customRouteToGoResponseType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
 	return goType, exists
 }

@@ -83,6 +83,7 @@ SchemaWithOperatorState: Schema & {
 }
 #CustomRouteResponse: _
 #CustomRoute: {
+		name?: string
     request: #CustomRouteRequest
     response: #CustomRouteResponse
 }

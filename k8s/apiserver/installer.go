@@ -2,14 +2,18 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
+	"net/http"
 	"net/url"
+	"reflect"
 	"sort"
 	"sync"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -23,6 +27,7 @@ import (
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -32,6 +37,11 @@ import (
 // ManagedKindResolver resolves a kind and version into a resource.Kind instance.
 // group is not provided as a ManagedKindResolver function is expected to exist on a per-group basis.
 type ManagedKindResolver func(kind, ver string) (resource.Kind, bool)
+
+// CustomRouteResponseResolver resolves the kind, version, path, and method into a go type which is returned
+// from that custom route call. kind may be empty for resource routes.
+// group is not provided as a CustomRouteResponseResolver function is expected to exist on a per-group basis.
+type CustomRouteResponseResolver func(kind, ver, path, method string) (any, bool)
 
 // AppInstaller represents an App which can be installed on a kubernetes API server.
 // It provides all the methods needed to configure and install an App onto an API server.
@@ -78,6 +88,7 @@ type defaultInstaller struct {
 	appProvider         app.Provider
 	appConfig           app.Config
 	managedKindResolver ManagedKindResolver
+	customRouteResolver CustomRouteResponseResolver
 
 	app    app.App
 	appMux sync.Mutex
@@ -88,11 +99,12 @@ type defaultInstaller struct {
 // NewDefaultAppInstaller creates a new AppInstaller with default behavior for an app.Provider and app.Config.
 //
 //nolint:revive
-func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver) (*defaultInstaller, error) {
+func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver, customRouteResolver CustomRouteResponseResolver) (*defaultInstaller, error) {
 	installer := &defaultInstaller{
 		appProvider:         appProvider,
 		appConfig:           appConfig,
 		managedKindResolver: kindResolver,
+		customRouteResolver: customRouteResolver,
 	}
 	if installer.appConfig.ManifestData.IsEmpty() {
 		// Fill in the manifest data from the Provider if we can
@@ -209,6 +221,8 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			maps.Copy(res, oapi)
 			if len(manifestKind.CustomRoutes) > 0 {
 				hasCustomRoutes = true
+				// Add the definitions and use the name as the reflect type name from the resolver, if it exists
+				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.CustomRoutes, callback))
 			}
 		}
 	}
@@ -216,6 +230,66 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
 	}
 	return res
+}
+
+func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, version string, routes map[string]spec3.PathProps, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+	defs := make(map[string]common.OpenAPIDefinition)
+	for path, pathProps := range routes {
+		if pathProps.Get != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "GET", pathProps.Get, callback)
+			defs[key] = val
+		}
+		if pathProps.Post != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "POST", pathProps.Post, callback)
+			defs[key] = val
+		}
+		if pathProps.Put != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "PUT", pathProps.Put, callback)
+			defs[key] = val
+		}
+		if pathProps.Patch != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "PATCH", pathProps.Patch, callback)
+			defs[key] = val
+		}
+		if pathProps.Delete != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "DELETE", pathProps.Delete, callback)
+			defs[key] = val
+		}
+		if pathProps.Head != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "HEAD", pathProps.Head, callback)
+			defs[key] = val
+		}
+		if pathProps.Options != nil {
+			key, val := r.getOperationOpenAPI(kind, version, path, "OPTIONS", pathProps.Options, callback)
+			defs[key] = val
+		}
+	}
+	return defs
+}
+
+func (r *defaultInstaller) getOperationOpenAPI(kind, version, path, method string, operation *spec3.Operation, callback common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+	typePath := ""
+	goType, ok := r.customRouteResolver(kind, version, path, method)
+	if ok {
+		typ := reflect.TypeOf(goType)
+		typePath = typ.PkgPath() + "." + typ.Name()
+	}
+	var typeSchema spec.Schema
+	if operation.Responses != nil && operation.Responses.Default != nil {
+		if len(operation.Responses.Default.Content) > 0 {
+			for key, val := range operation.Responses.Default.Content {
+				if val.Schema != nil {
+					typeSchema = *val.Schema
+				}
+				if key == "application/json" {
+					break
+				}
+			}
+		}
+	}
+	return typePath, common.OpenAPIDefinition{
+		Schema: typeSchema,
+	}
 }
 
 func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
@@ -253,7 +327,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 					route = route[1:]
 				}
 				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), route)] = &SubresourceConnector{
-					Methods: spec3PropsToMethods(props),
+					Methods: spec3PropsToConnectorMethods(props, kind.Kind.Kind(), gv.Version, route, r.customRouteResolver),
 					Route: CustomRoute{
 						Path: route,
 						Handler: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
@@ -263,7 +337,24 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 								logging.FromContext(ctx).Error("failed to get app for calling custom route", "error", err, "path", route, "namespace", request.ResourceIdentifier.Namespace, "name", request.ResourceIdentifier.Name, "gvk", kind.Kind.GroupVersionKind().String())
 								return err
 							}
-							return a.CallCustomRoute(ctx, writer, request)
+							err = a.CallCustomRoute(ctx, writer, request)
+							if errors.Is(err, app.ErrCustomRouteNotFound) {
+								writer.WriteHeader(http.StatusNotFound)
+								fullError := apierrors.StatusError{
+									ErrStatus: metav1.Status{
+										Status: metav1.StatusFailure,
+										Code:   http.StatusNotFound,
+										Reason: metav1.StatusReasonNotFound,
+										Details: &metav1.StatusDetails{
+											Group: gv.Group,
+											Kind:  kind.ManifestKind.Kind,
+											Name:  request.ResourceIdentifier.Name,
+										},
+										Message: fmt.Sprintf("%s.%s/%s subresource '%s' not found", kind.ManifestKind.Plural, gv.Group, gv.Version, route),
+									}}
+								return json.NewEncoder(writer).Encode(fullError)
+							}
+							return err
 						},
 					},
 					Kind: kind.Kind,
@@ -397,28 +488,74 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]K
 	return out, nil
 }
 
-func spec3PropsToMethods(props spec3.PathProps) []string {
-	methods := make([]string, 0)
+func spec3PropsToConnectorMethods(props spec3.PathProps, kind, version, path string, resolver CustomRouteResponseResolver) map[string]SubresourceConnectorResponseObject {
+	if resolver == nil {
+		resolver = func(kind, ver, path, method string) (any, bool) {
+			return nil, false
+		}
+	}
+	mimeTypes := func(operation *spec3.Operation) []string {
+		if operation.Responses == nil {
+			return []string{"*/*"}
+		}
+		if operation.Responses.Default == nil {
+			return []string{"*/*"}
+		}
+		types := make([]string, 0)
+		for contentType, _ := range operation.Responses.Default.Content {
+			types = append(types, contentType)
+		}
+		return types
+	}
+	methods := make(map[string]SubresourceConnectorResponseObject)
 	if props.Get != nil {
-		methods = append(methods, "GET")
+		resp, _ := resolver(kind, version, path, "GET")
+		methods["GET"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	if props.Post != nil {
-		methods = append(methods, "POST")
+		resp, _ := resolver(kind, version, path, "POST")
+		methods["POST"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	if props.Put != nil {
-		methods = append(methods, "PUT")
+		resp, _ := resolver(kind, version, path, "PUT")
+		methods["PUT"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	if props.Patch != nil {
-		methods = append(methods, "PATCH")
+		resp, _ := resolver(kind, version, path, "PATCH")
+		methods["PATCH"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	if props.Delete != nil {
-		methods = append(methods, "DELETE")
+		resp, _ := resolver(kind, version, path, "DELETE")
+		methods["DELETE"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	if props.Head != nil {
-		methods = append(methods, "HEAD")
+		resp, _ := resolver(kind, version, path, "HEAD")
+		methods["HEAD"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	if props.Options != nil {
-		methods = append(methods, "OPTIONS")
+		resp, _ := resolver(kind, version, path, "OPTIONS")
+		methods["OPTIONS"] = SubresourceConnectorResponseObject{
+			Object:    resp,
+			MIMETypes: mimeTypes(props.Get),
+		}
 	}
 	return methods
 }

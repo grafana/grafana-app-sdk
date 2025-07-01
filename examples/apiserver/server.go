@@ -72,7 +72,7 @@ func main() {
 		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewDefaultAppInstaller(provider, config, apiserver.ManagedKindResolver(apis.ManifestGoTypeAssociator))
+	installer, err := apiserver.NewDefaultAppInstaller(provider, config, apis.ManifestGoTypeAssociator, apis.ManifestCustomRouteResponsesAssociator)
 	if err != nil {
 		panic(err)
 	}
