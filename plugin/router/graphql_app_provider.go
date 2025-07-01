@@ -1,6 +1,8 @@
 package router
 
 import (
+	"fmt"
+
 	"github.com/graphql-go/graphql"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -31,6 +33,32 @@ func NewAppGraphQLProvider(appName string, resourceCollection resource.KindColle
 	}
 	
 	return provider, nil
+}
+
+// NewAppGraphQLProviderFromApp creates a GraphQL provider from an existing app instance
+// This ensures the GraphQL provider uses the same storage backend as the REST API
+func NewAppGraphQLProviderFromApp(appName string, app interface{}) (*AppGraphQLProvider, error) {
+	// Try to extract client generator and kind collection from the app
+	var clientGenerator resource.ClientGenerator
+	var kindCollection resource.KindCollection
+
+	// Check if the app has the methods we need (duck typing)
+	if appWithClientGen, ok := app.(interface{ GetClientGenerator() resource.ClientGenerator }); ok {
+		clientGenerator = appWithClientGen.GetClientGenerator()
+	} else {
+		return nil, fmt.Errorf("app does not provide GetClientGenerator() method")
+	}
+
+	if appWithKindCollection, ok := app.(interface{ GetKindCollection() resource.KindCollection }); ok {
+		kindCollection = appWithKindCollection.GetKindCollection()
+	} else {
+		return nil, fmt.Errorf("app does not provide GetKindCollection() method")
+	}
+
+	// Create a store using the same client generator as the app
+	store := resource.NewStore(clientGenerator, kindCollection)
+
+	return NewAppGraphQLProvider(appName, kindCollection, store)
 }
 
 // AddResourceCollection adds a resource collection to this app's GraphQL schema

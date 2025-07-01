@@ -28,6 +28,7 @@ type AppProvider struct {
 	AppManifest       app.Manifest
 	AppSpecificConfig app.SpecificConfig
 	NewAppFunc        func(config app.Config) (app.App, error)
+	cachedApp         app.App // Cache the app instance for reuse
 }
 
 // Manifest returns the AppManifest in the AppProvider
@@ -41,7 +42,19 @@ func (p *AppProvider) SpecificConfig() app.SpecificConfig {
 
 // NewApp calls NewAppFunc and returns the result
 func (p *AppProvider) NewApp(settings app.Config) (app.App, error) {
-	return p.NewAppFunc(settings)
+	if p.cachedApp == nil {
+		var err error
+		p.cachedApp, err = p.NewAppFunc(settings)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return p.cachedApp, nil
+}
+
+// GetCachedApp returns the cached app instance if it exists
+func (p *AppProvider) GetCachedApp() app.App {
+	return p.cachedApp
 }
 
 // NewAppProvider is a convenience method for creating a new AppProvider
@@ -332,10 +345,25 @@ func (a *App) AddRunnable(runner app.Runnable) {
 	a.runner.AddRunnable(runner)
 }
 
+// GetClientGenerator returns the client generator used by this app for storage operations
+func (a *App) GetClientGenerator() resource.ClientGenerator {
+	return a.clientGenerator
+}
+
+// GetKindCollection returns a collection of all managed kinds by this app
+func (a *App) GetKindCollection() resource.KindCollection {
+	kinds := make([]resource.Kind, 0, len(a.internalKinds))
+	for _, kind := range a.internalKinds {
+		kinds = append(kinds, kind)
+	}
+	return resource.NewKindCollection(kinds...)
+}
+
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
 	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
+	a.internalKinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind.Kind
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
 		if route.Method == "" {
