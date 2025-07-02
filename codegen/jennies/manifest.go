@@ -116,7 +116,6 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
-		fmt.Print(buf.String())
 		return nil, err
 	}
 

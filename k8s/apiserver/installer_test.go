@@ -13,6 +13,7 @@ import (
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -89,6 +90,11 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 			},
 		},
 	})
+	fooSch := spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			ID: "foo",
+		},
+	}
 	kind := TestKind
 	require.Nil(t, err)
 	md := app.ManifestData{
@@ -98,6 +104,29 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 			Kinds: []app.ManifestVersionKind{{
 				Kind:   kind.Kind(),
 				Schema: sch1,
+				CustomRoutes: map[string]spec3.PathProps{
+					"/foo": {
+						Get: &spec3.Operation{
+							OperationProps: spec3.OperationProps{
+								Responses: &spec3.Responses{
+									ResponsesProps: spec3.ResponsesProps{
+										Default: &spec3.Response{
+											ResponseProps: spec3.ResponseProps{
+												Content: map[string]*spec3.MediaType{
+													"application/json": {
+														MediaTypeProps: spec3.MediaTypeProps{
+															Schema: &fooSch,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			}},
 		}},
 	}
@@ -109,6 +138,10 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 	oapi1, err := md.Versions[0].Kinds[0].Schema.AsKubeOpenAPI(kind.GroupVersionKind(), refCallback, "github.com/grafana/grafana-app-sdk/resource")
 	require.Nil(t, err)
 	maps.Copy(expected, oapi1)
+	maps.Copy(expected, GetResourceCallOptionsOpenAPIDefinition())
+	expected["/registry/grafana.app.GetFoo"] = common.OpenAPIDefinition{
+		Schema: fooSch,
+	}
 
 	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(k, v string) (resource.Kind, bool) {
 		return kind, true
@@ -132,6 +165,11 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 				Admission: &app.AdmissionCapabilities{
 					Validation: &app.ValidationCapability{
 						Operations: []app.AdmissionOperation{app.AdmissionOperationAny},
+					},
+				},
+				CustomRoutes: map[string]spec3.PathProps{
+					"/foo": {
+						Get: &spec3.Operation{},
 					},
 				},
 			}},

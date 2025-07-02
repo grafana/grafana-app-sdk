@@ -10,7 +10,9 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"regexp"
 	"sort"
+	"strings"
 	"sync"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -221,7 +223,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if len(manifestKind.CustomRoutes) > 0 {
 				hasCustomRoutes = true
 				// Add the definitions and use the name as the reflect type name from the resolver, if it exists
-				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.CustomRoutes, callback))
+				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.CustomRoutes, defaultEtcdPathPrefix, callback))
 			}
 		}
 	}
@@ -229,66 +231,6 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
 	}
 	return res
-}
-
-func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, routes map[string]spec3.PathProps, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-	defs := make(map[string]common.OpenAPIDefinition)
-	for path, pathProps := range routes {
-		if pathProps.Get != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "GET", pathProps.Get, callback)
-			defs[key] = val
-		}
-		if pathProps.Post != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "POST", pathProps.Post, callback)
-			defs[key] = val
-		}
-		if pathProps.Put != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "PUT", pathProps.Put, callback)
-			defs[key] = val
-		}
-		if pathProps.Patch != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "PATCH", pathProps.Patch, callback)
-			defs[key] = val
-		}
-		if pathProps.Delete != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "DELETE", pathProps.Delete, callback)
-			defs[key] = val
-		}
-		if pathProps.Head != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "HEAD", pathProps.Head, callback)
-			defs[key] = val
-		}
-		if pathProps.Options != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "OPTIONS", pathProps.Options, callback)
-			defs[key] = val
-		}
-	}
-	return defs
-}
-
-func (r *defaultInstaller) getOperationOpenAPI(kind, ver, path, method string, operation *spec3.Operation, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
-	typePath := ""
-	goType, ok := r.customRouteResolver(kind, ver, path, method)
-	if ok {
-		typ := reflect.TypeOf(goType)
-		typePath = typ.PkgPath() + "." + typ.Name()
-	}
-	var typeSchema spec.Schema
-	if operation.Responses != nil && operation.Responses.Default != nil {
-		if len(operation.Responses.Default.Content) > 0 {
-			for key, val := range operation.Responses.Default.Content {
-				if val.Schema != nil {
-					typeSchema = *val.Schema
-				}
-				if key == "application/json" {
-					break
-				}
-			}
-		}
-	}
-	return typePath, common.OpenAPIDefinition{
-		Schema: typeSchema,
-	}
 }
 
 func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
@@ -415,6 +357,14 @@ func (r *defaultInstaller) App() (app.App, error) {
 	return r.app, nil
 }
 
+func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
+	groupVersions := make([]schema.GroupVersion, 0)
+	for _, gv := range r.appConfig.ManifestData.Versions {
+		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
+	}
+	return groupVersions
+}
+
 func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error {
 	if r.app == nil {
 		return fmt.Errorf("app is not initialized")
@@ -458,12 +408,84 @@ func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error
 	return runtime.DecodeInto(r.codecs.UniversalDecoder(bResourceObj.GroupVersionKind().GroupVersion()), res.Raw, bObj)
 }
 
-func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
-	groupVersions := make([]schema.GroupVersion, 0)
-	for _, gv := range r.appConfig.ManifestData.Versions {
-		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
+func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, routes map[string]spec3.PathProps, defaultPkgPrefix string, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+	defs := make(map[string]common.OpenAPIDefinition)
+	for path, pathProps := range routes {
+		if pathProps.Get != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "GET", pathProps.Get, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
+		if pathProps.Post != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "POST", pathProps.Post, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
+		if pathProps.Put != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "PUT", pathProps.Put, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
+		if pathProps.Patch != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "PATCH", pathProps.Patch, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
+		if pathProps.Delete != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "DELETE", pathProps.Delete, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
+		if pathProps.Head != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "HEAD", pathProps.Head, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
+		if pathProps.Options != nil {
+			key, val := r.getOperationOpenAPI(kind, ver, path, "OPTIONS", pathProps.Options, r.customRouteResolver, defaultPkgPrefix, callback)
+			defs[key] = val
+		}
 	}
-	return groupVersions
+	return defs
+}
+
+func (*defaultInstaller) getOperationOpenAPI(kind, ver, path, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+	typePath := ""
+	if resolver == nil {
+		resolver = func(_, _, _, _ string) (any, bool) {
+			return nil, false
+		}
+	}
+	goType, ok := resolver(kind, ver, path, method)
+	if ok {
+		typ := reflect.TypeOf(goType)
+		typePath = typ.PkgPath() + "." + typ.Name()
+	} else {
+		// Use a default type name
+		var ucFirstMethod string
+		if len(method) > 1 {
+			ucFirstMethod = strings.ToUpper(method[:1]) + strings.ToLower(method[1:])
+		} else {
+			ucFirstMethod = strings.ToUpper(method)
+		}
+		ucFirstPath := regexp.MustCompile("[^A-Za-z0-9]").ReplaceAllString(path, "")
+		if len(ucFirstPath) > 1 {
+			ucFirstPath = strings.ToUpper(ucFirstPath[:1]) + ucFirstPath[1:]
+		} else {
+			ucFirstPath = strings.ToUpper(ucFirstPath)
+		}
+		typePath = fmt.Sprintf("%s.%s%s", defaultPkgPrefix, ucFirstMethod, ucFirstPath)
+	}
+	var typeSchema spec.Schema
+	if operation.Responses != nil && operation.Responses.Default != nil {
+		if len(operation.Responses.Default.Content) > 0 {
+			for key, val := range operation.Responses.Default.Content {
+				if val.Schema != nil {
+					typeSchema = *val.Schema
+				}
+				if key == "application/json" {
+					break
+				}
+			}
+		}
+	}
+	return typePath, common.OpenAPIDefinition{
+		Schema: typeSchema,
+	}
 }
 
 type KindAndManifestKind struct {

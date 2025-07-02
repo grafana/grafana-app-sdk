@@ -178,7 +178,7 @@ func (h *handlerWrapper) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		_, e = w.Write(j)
 		if e != nil {
-			logging.FromContext(req.Context()).Error("unable to write response", "error", err, "url", req.URL)
+			logging.FromContext(req.Context()).Error("unable to write response", "error", err, "url", req.URL.Path)
 		}
 	}
 }
