@@ -344,12 +344,8 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 		// Extract query fields
 		if queryType := schema.QueryType(); queryType != nil {
 			for fieldName, fieldDef := range queryType.Fields() {
-				// Prefix field names with group version to avoid conflicts
-				prefix := g.createFieldPrefix(sg.GetGroupVersion())
-				prefixedName := prefix + fieldName
-
-				if _, exists := queryFields[prefixedName]; exists {
-					return nil, fmt.Errorf("query field conflict: %s", prefixedName)
+				if _, exists := queryFields[fieldName]; exists {
+					return nil, fmt.Errorf("query field conflict: %s", fieldName)
 				}
 
 				// Convert FieldDefinition to Field
@@ -363,7 +359,7 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 					}
 				}
 
-				queryFields[prefixedName] = &graphql.Field{
+				queryFields[fieldName] = &graphql.Field{
 					Type:        fieldDef.Type,
 					Args:        args,
 					Resolve:     fieldDef.Resolve,
@@ -375,11 +371,8 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 		// Extract mutation fields
 		if mutationType := schema.MutationType(); mutationType != nil {
 			for fieldName, fieldDef := range mutationType.Fields() {
-				prefix := g.createFieldPrefix(sg.GetGroupVersion())
-				prefixedName := prefix + fieldName
-
-				if _, exists := mutationFields[prefixedName]; exists {
-					return nil, fmt.Errorf("mutation field conflict: %s", prefixedName)
+				if _, exists := mutationFields[fieldName]; exists {
+					return nil, fmt.Errorf("mutation field conflict: %s", fieldName)
 				}
 
 				// Convert FieldDefinition to Field
@@ -393,7 +386,7 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 					}
 				}
 
-				mutationFields[prefixedName] = &graphql.Field{
+				mutationFields[fieldName] = &graphql.Field{
 					Type:        fieldDef.Type,
 					Args:        args,
 					Resolve:     fieldDef.Resolve,
@@ -432,22 +425,6 @@ func (g *FederatedGateway) mergeSubgraphSchemas() (*graphql.Schema, error) {
 	}
 
 	return &schema, nil
-}
-
-// createFieldPrefix creates a field name prefix based on group version
-func (g *FederatedGateway) createFieldPrefix(gv schema.GroupVersion) string {
-	// Convert group.version to prefix like "playlist_"
-	if gv.Group == "" {
-		return ""
-	}
-
-	// Take the first part of the group (before any dots)
-	parts := strings.Split(gv.Group, ".")
-	if len(parts) > 0 {
-		return strings.ToLower(parts[0]) + "_"
-	}
-
-	return ""
 }
 
 // HandleGraphQL handles HTTP GraphQL requests to the composed schema

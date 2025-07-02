@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -172,14 +171,6 @@ type simpleGenerator struct {
 
 func (g *simpleGenerator) GenerateSchema() (*graphql.Schema, error) {
 	queryFields := make(graphql.Fields)
-
-	// Add a hello field to verify the schema works
-	queryFields["hello"] = &graphql.Field{
-		Type: graphql.String,
-		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
-			return "Hello from " + g.groupVersion.String(), nil
-		},
-	}
 
 	// Generate types and fields dynamically for each kind
 	for _, kind := range g.kinds {
@@ -477,18 +468,6 @@ func (g *simpleGenerator) serializeAnyMapToJSON(m map[string]any) string {
 	}
 
 	return "{}"
-}
-
-// HTTPHandler creates an HTTP handler for this subgraph
-// This is useful for testing individual subgraphs
-func HTTPHandler(sg GraphQLSubgraph) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Basic GraphQL HTTP handler implementation
-		// This will be enhanced with proper request parsing, context handling, etc.
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"data": {"hello": "GraphQL subgraph is working"}}`))
-	}
 }
 
 func (g *simpleGenerator) GenerateResolvers() ResolverMap {
