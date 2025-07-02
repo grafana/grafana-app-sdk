@@ -48,7 +48,7 @@ import "github.com/grafana/grafana-app-sdk/graphql/gateway"
 // Auto-discover GraphQL subgraphs from app providers
 registry, err := gateway.AutoDiscovery(
     playlistProvider,
-    dashboardProvider,
+    investigationsProvider,
     myAppProvider,
 )
 if err != nil {
@@ -67,16 +67,7 @@ http.HandleFunc("/graphql", federatedGateway.HandleGraphQL)
 ```graphql
 {
   # Query playlists
-  playlist_playlist(namespace: "default", name: "my-playlist") {
-    metadata {
-      name
-      namespace
-    }
-    spec
-  }
-
-  # Query dashboards
-  dashboard_dashboard(namespace: "default", name: "my-dashboard") {
+  playlist(namespace: "default", name: "my-playlist") {
     metadata {
       name
       namespace
@@ -85,7 +76,7 @@ http.HandleFunc("/graphql", federatedGateway.HandleGraphQL)
   }
 
   # Query your app's resources
-  myapp_myresource(namespace: "default", name: "my-resource") {
+  myresource(namespace: "default", name: "my-resource") {
     metadata {
       name
       namespace
@@ -167,12 +158,6 @@ return &myappv0alpha1.MyResource{
 
 The federation system uses sophisticated schema composition with multiple strategies:
 
-- **Field Prefixing**: Domain-based prefixing to avoid conflicts
-
-  - `playlist_playlist()` - from playlist app
-  - `dashboard_dashboard()` - from dashboard app
-  - `myapp_myresource()` - from your app
-
 - **Cross-app Relationships**: Resources can reference each other across apps
 - **Type Sharing**: Common types are unified across the federated schema
 - **Query Optimization**: Intelligent query planning and batching
@@ -212,7 +197,7 @@ registry := gateway.NewAppProviderRegistry()
 
 // Register each provider manually
 registry.RegisterProvider("playlist", playlistProvider)
-registry.RegisterProvider("dashboard", dashboardProvider)
+registry.RegisterProvider("investigations", investigationsProvider)
 
 federatedGateway := registry.GetFederatedGateway()
 ```
