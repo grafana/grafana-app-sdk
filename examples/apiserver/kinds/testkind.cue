@@ -10,4 +10,21 @@ testKind: {
 			testField: string
 		}
 	}
+	routes: {
+		"/foo": {
+			"GET": {
+				response: {
+					status: string
+				}
+			}
+		}
+		"/bar": {
+			"GET": {
+				name: "GetMessage"
+				response: {
+					message: string
+				}
+			}
+		}
+	}
 }

@@ -338,9 +338,10 @@
                                 "type": "object"
                             }
                         },
-                        "customRoutes": {
+                        "routes": {
                             "/reconcile": {
                                 "post": {
+                                    "operationId": "PostReconcile",
                                     "requestBody": {
                                         "content": {
                                             "application/json": {
@@ -362,11 +363,40 @@
                                             }
                                         },
                                         "required": true
+                                    },
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "status",
+                                                            "message"
+                                                        ],
+                                                        "properties": {
+                                                            "message": {
+                                                                "type": "string"
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "success",
+                                                                    "failure"
+                                                                ]
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             },
                             "/search": {
                                 "get": {
+                                    "operationId": "searchTestkinds",
                                     "parameters": [
                                         {
                                             "name": "limit",
@@ -392,7 +422,46 @@
                                                 "type": "string"
                                             }
                                         }
-                                    ]
+                                    ],
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "items",
+                                                            "total"
+                                                        ],
+                                                        "properties": {
+                                                            "items": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "object",
+                                                                    "required": [
+                                                                        "name",
+                                                                        "score"
+                                                                    ],
+                                                                    "properties": {
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "score": {
+                                                                            "type": "number"
+                                                                        }
+                                                                    }
+                                                                }
+                                                            },
+                                                            "total": {
+                                                                "type": "integer"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         },

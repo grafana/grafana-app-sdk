@@ -83,7 +83,7 @@ testKind: {
 			}
 			mutation: operations: ["create","update"]
 			validation: operations: ["create","update"]
-			customRoutes: {
+			routes: {
 				"/reconcile": {
 					POST: {
 						request: {
@@ -100,6 +100,7 @@ testKind: {
 				}
 				"/search": {
 					GET: {
+						name: "searchTestkinds"
 						request: {
 							query: {
 								q: string

@@ -39,6 +39,16 @@ Create a TestKind named "foo":
 curl -k -X POST -H "content-type: application/json" -d '{"apiVersion":"example.ext.grafana.com/v1alpha1","kind":"TestKind","metadata":{"name":"foo","namespace":"default"},"spec":{"testField":"foo"}}' https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds
 ```
 
+Get the `/foo` subresource (`GetFoo`):
+```shell
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo/foo
+```
+
+or the `/bar` subresource (`GetMessage`):
+```shell
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo/bar
+```
+
 Update status of foo:
 ```shell
 curl -k -X PUT -H "content-type: application/json" -d '{"apiVersion":"example.ext.grafana.com/v1alpha1","kind":"TestKind","metadata":{"name":"foo","namespace":"default","resourceVersion":"<RESOURCEVERSION>"},"status":{"additionalFields":{"foo":"bar"}}}' https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo/status

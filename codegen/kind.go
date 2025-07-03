@@ -103,6 +103,7 @@ type CustomRouteResponse struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
+	Name     string              `json:"name"`
 	Request  CustomRouteRequest  `json:"request"`
 	Response CustomRouteResponse `json:"response"`
 }
@@ -118,7 +119,7 @@ type KindVersion struct {
 	Validation               KindAdmissionCapability           `json:"validation"`
 	Mutation                 KindAdmissionCapability           `json:"mutation"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
-	CustomRoutes             map[string]map[string]CustomRoute `json:"customRoutes"`
+	Routes                   map[string]map[string]CustomRoute `json:"routes"`
 }
 
 // AnyKind is a simple implementation of Kind

@@ -141,7 +141,12 @@ func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath
 		ProjectRepo:    projectRepo,
 		CodegenPath:    goGenPath,
 		GroupByKind:    !groupKinds,
-	})
+	},
+		&jennies.CustomRouteGoTypesJenny{
+			AddKubernetesCodegen: true,
+			GroupByKind:          !groupKinds,
+			AnyAsInterface:       true, // This is for compatibility with kube openAPI generator, which has issues with map[string]any
+		})
 	return g
 }
 

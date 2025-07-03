@@ -443,6 +443,14 @@ func (ManifestGoFileMetadata) GoKindName(kind string) string {
 	return strings.ToUpper(kind)
 }
 
+func (ManifestGoFileMetadata) ExportedFieldName(name string) string {
+	sanitized := regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(name, "")
+	if len(sanitized) > 1 {
+		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
+	}
+	return strings.ToUpper(sanitized)
+}
+
 func (m ManifestGoFileMetadata) Packages() []string {
 	pkgs := make([]string, 0)
 	if m.KindsAreGrouped {
@@ -463,6 +471,13 @@ func (m ManifestGoFileMetadata) Packages() []string {
 	// Sort for consistent output
 	slices.Sort(pkgs)
 	return pkgs
+}
+
+func (ManifestGoFileMetadata) StripLeadingSlash(path string) string {
+	for len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	return path
 }
 
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {

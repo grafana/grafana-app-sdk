@@ -1,0 +1,27 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type SearchTestkinds struct {
+	Items []V3SearchTestkindsItems `json:"items"`
+	Total int64                    `json:"total"`
+}
+
+// NewSearchTestkinds creates a new SearchTestkinds object.
+func NewSearchTestkinds() *SearchTestkinds {
+	return &SearchTestkinds{
+		Items: []V3SearchTestkindsItems{},
+	}
+}
+
+// +k8s:openapi-gen=true
+type V3SearchTestkindsItems struct {
+	Name  string  `json:"name"`
+	Score float64 `json:"score"`
+}
+
+// NewV3SearchTestkindsItems creates a new V3SearchTestkindsItems object.
+func NewV3SearchTestkindsItems() *V3SearchTestkindsItems {
+	return &V3SearchTestkindsItems{}
+}

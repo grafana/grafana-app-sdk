@@ -8,6 +8,7 @@ package groupbygroup
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -120,10 +121,12 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv3,
-					CustomRoutes: map[string]spec3.PathProps{
+					Routes: map[string]spec3.PathProps{
 						"/reconcile": {
 							Post: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
+
+									OperationId: "PostReconcile",
 
 									RequestBody: &spec3.RequestBody{
 										RequestBodyProps: spec3.RequestBodyProps{
@@ -154,12 +157,51 @@ var appManifestData = app.ManifestData{
 													}},
 											},
 										}},
+									Responses: &spec3.Responses{
+										ResponsesProps: spec3.ResponsesProps{
+											Default: &spec3.Response{
+												ResponseProps: spec3.ResponseProps{
+													Description: "Default OK response",
+													Content: map[string]*spec3.MediaType{
+														"application/json": {
+															MediaTypeProps: spec3.MediaTypeProps{
+																Schema: &spec.Schema{
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"object"},
+																		Properties: map[string]spec.Schema{
+																			"message": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"string"},
+																				},
+																			},
+																			"status": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"string"},
+																					Enum: []interface{}{
+																						"success",
+																						"failure",
+																					},
+																				},
+																			},
+																		},
+																		Required: []string{
+																			"status",
+																			"message",
+																		},
+																	}},
+															}},
+													},
+												},
+											},
+										}},
 								},
 							},
 						},
 						"/search": {
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
+
+									OperationId: "searchTestkinds",
 
 									Parameters: []*spec3.Parameter{
 
@@ -194,6 +236,40 @@ var appManifestData = app.ManifestData{
 											},
 										},
 									},
+
+									Responses: &spec3.Responses{
+										ResponsesProps: spec3.ResponsesProps{
+											Default: &spec3.Response{
+												ResponseProps: spec3.ResponseProps{
+													Description: "Default OK response",
+													Content: map[string]*spec3.MediaType{
+														"application/json": {
+															MediaTypeProps: spec3.MediaTypeProps{
+																Schema: &spec.Schema{
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"object"},
+																		Properties: map[string]spec.Schema{
+																			"items": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"array"},
+																				},
+																			},
+																			"total": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"integer"},
+																				},
+																			},
+																		},
+																		Required: []string{
+																			"items",
+																			"total",
+																		},
+																	}},
+															}},
+													},
+												},
+											},
+										}},
 								},
 							},
 						},
@@ -231,5 +307,22 @@ var kindVersionToGoType = map[string]resource.Kind{
 // If there is no association for the provided Kind and Version, exists will return false.
 func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exists bool) {
 	goType, exists = kindVersionToGoType[fmt.Sprintf("%s/%s", kind, version)]
+	return goType, exists
+}
+
+var customRouteToGoResponseType = map[string]any{
+	"v3|TestKind|reconcile|POST": v3.PostReconcile{},
+
+	"v3|TestKind|search|GET": v3.SearchTestkinds{},
+}
+
+// ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
+// kind may be empty for custom routes which are not kind subroutes. Leading slashes are removed from subroute paths.
+// If there is no association for the provided kind, version, custom route path, and method, exists will return false.
+func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	goType, exists = customRouteToGoResponseType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
 	return goType, exists
 }

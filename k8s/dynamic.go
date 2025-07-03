@@ -2,11 +2,13 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -129,12 +131,26 @@ func (d *DynamicPatcher) updatePreferred() error {
 	defer d.mux.Unlock()
 	preferred, err := d.discovery.ServerPreferredResources()
 	if err != nil {
-		return err
+		var statusErr *apierrors.StatusError
+		if errors.As(err, &statusErr) {
+			return statusErr
+		}
+		return fmt.Errorf("error getting preferred resources from discovery client: %w", err)
 	}
 	for _, pref := range preferred {
+		gv, err := schema.ParseGroupVersion(pref.GroupVersion)
+		if err != nil {
+			return err
+		}
 		for _, res := range pref.APIResources {
+			if res.Version == "" {
+				res.Version = gv.Version
+			}
+			if res.Group == "" {
+				res.Group = gv.Group
+			}
 			d.preferred[schema.GroupKind{
-				Group: res.Group,
+				Group: gv.Group,
 				Kind:  res.Kind,
 			}.String()] = res
 		}
