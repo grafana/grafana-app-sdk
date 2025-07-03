@@ -3,6 +3,7 @@ package gateway
 import (
 	"fmt"
 	"github.com/grafana/grafana-app-sdk/app"
+	codecgen "github.com/grafana/grafana-app-sdk/graphql/codegen"
 	"github.com/grafana/grafana-app-sdk/graphql/subgraph"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"log"
@@ -149,4 +150,54 @@ func AutoDiscovery(providers ...app.Provider) (*AppProviderRegistry, error) {
 	}
 
 	return registry, nil
+}
+
+// GetMeshStyleGateway returns a new MeshStyleGateway with all registered subgraphs
+func (r *AppProviderRegistry) GetMeshStyleGateway() *MeshStyleGateway {
+	// Create a new MeshStyleGateway
+	meshGateway := NewMeshStyleGateway(MeshGatewayConfig{})
+
+	// Register all GraphQL-capable providers with the mesh gateway
+	for name, provider := range r.providers {
+		if graphqlProvider, ok := provider.(subgraph.GraphQLSubgraphProvider); ok {
+			// Get the subgraph from the provider
+			sg, err := graphqlProvider.GetGraphQLSubgraph()
+			if err != nil {
+				log.Printf("Warning: Failed to get GraphQL subgraph from provider %s: %v", name, err)
+				continue
+			}
+
+			// Check if it's a CUE-aware subgraph
+			if cueAwareSg, ok := sg.(CUEAwareSubgraph); ok {
+				// Register with the mesh gateway
+				gv := sg.GetGroupVersion()
+				if err := meshGateway.RegisterSubgraph(gv, cueAwareSg); err != nil {
+					log.Printf("Warning: Failed to register subgraph for provider %s: %v", name, err)
+				}
+			} else {
+				// Create a wrapper for non-CUE-aware subgraphs
+				wrapper := &cueAwareSubgraphWrapper{
+					GraphQLSubgraph: sg,
+					relationships:   []codecgen.MeshRelationshipConfig{}, // Empty for now
+				}
+				gv := sg.GetGroupVersion()
+				if err := meshGateway.RegisterSubgraph(gv, wrapper); err != nil {
+					log.Printf("Warning: Failed to register wrapped subgraph for provider %s: %v", name, err)
+				}
+			}
+		}
+	}
+
+	return meshGateway
+}
+
+// cueAwareSubgraphWrapper wraps a regular GraphQLSubgraph to make it CUE-aware
+type cueAwareSubgraphWrapper struct {
+	subgraph.GraphQLSubgraph
+	relationships []codecgen.MeshRelationshipConfig
+}
+
+// GetRelationships implements the CUEAwareSubgraph interface
+func (w *cueAwareSubgraphWrapper) GetRelationships() []codecgen.MeshRelationshipConfig {
+	return w.relationships
 }
