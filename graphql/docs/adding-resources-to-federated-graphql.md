@@ -97,11 +97,25 @@ Before adding GraphQL support to your resource, ensure you have:
 - [ ] An app provider registered in the Grafana apps registry
 - [ ] REST storage implementation (typically a `legacyStorage` type)
 
-## Two Approaches for Adding GraphQL Support
+## Three Approaches for Adding GraphQL Support
 
-The modular GraphQL system offers two approaches for adding GraphQL support to your resources:
+The modular GraphQL system offers three approaches for adding GraphQL support to your resources:
 
-### Approach 1: Simple Handler (Recommended for Basic Resources)
+### Approach 1: App Platform Resources (apps.go Registry)
+
+This is the standard approach for App SDK-backed resources that are already registered in the `apps.go` registry.
+
+### Approach 2: Traditional APIs (apis.go Registry)
+
+For traditional Kubernetes-style APIs registered in the `apis.go` registry (like Dashboards, DataSources, etc.), use the **API Builder Extension** pattern.
+
+### Approach 3: Simple/Custom Handlers
+
+For both app platform and traditional APIs, you can customize the GraphQL implementation.
+
+## Approach 1: App Platform Resources (apps.go Registry)
+
+### Simple Handler (Recommended for Basic Resources)
 
 For simple resources that don't need complex GraphQL field mapping, use the `SimpleResourceHandler`:
 
@@ -160,7 +174,298 @@ func (p *MyAppProvider) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, e
 }
 ```
 
-### Approach 2: Custom Handler (For Complex Resources)
+## Approach 2: Traditional APIs (apis.go Registry)
+
+For traditional Kubernetes-style APIs that are registered in the `apis.go` registry (like Dashboards, DataSources, Folders, etc.), use the **API Builder Extension** pattern.
+
+### Overview
+
+Traditional APIs in the `apis.go` registry use the `APIGroupBuilder` interface. To add GraphQL support:
+
+1. **Extend the interface**: Implement `GraphQLCapableBuilder` on your existing API builder
+2. **Create storage adapter**: Bridge your existing k8s-style storage to GraphQL storage interface
+3. **Auto-discovery**: The system automatically discovers and registers GraphQL-capable builders
+
+### Step 1: Implement GraphQLCapableBuilder Interface
+
+```go
+// pkg/registry/apis/myapi/register.go
+
+// Ensure your existing API builder also implements GraphQLCapableBuilder
+var (
+    _ builder.APIGroupBuilder       = (*MyAPIBuilder)(nil)
+    _ builder.GraphQLCapableBuilder = (*MyAPIBuilder)(nil) // Add this line
+)
+
+// Add the GraphQL subgraph method to your existing API builder
+func (b *MyAPIBuilder) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, error) {
+    // Create storage adapter that bridges your existing storage to GraphQL
+    storageAdapter := NewMyAPIStorageAdapter(
+        b.legacyService,    // Your existing service
+        b.namespaceMapper,  // Namespace mapping function
+    )
+
+    // Create the GraphQL subgraph
+    subgraph, err := graphqlsubgraph.New(graphqlsubgraph.SubgraphConfig{
+        GroupVersion: b.resourceInfo.GroupVersion(),
+        Kinds:        []sdkresource.Kind{MyAPIResourceKind()},
+        StorageGetter: func(gvr schema.GroupVersionResource) graphqlsubgraph.Storage {
+            return storageAdapter
+        },
+    })
+    if err != nil {
+        return nil, fmt.Errorf("failed to create MyAPI GraphQL subgraph: %w", err)
+    }
+
+    return subgraph, nil
+}
+```
+
+### Step 2: Create Storage Adapter
+
+Create a storage adapter that bridges your existing k8s-style storage to the GraphQL storage interface:
+
+```go
+// pkg/registry/apis/myapi/graphql_storage.go
+package myapi
+
+import (
+    "context"
+    "fmt"
+
+    graphqlsubgraph "github.com/grafana/grafana-app-sdk/graphql/subgraph"
+    "github.com/grafana/grafana-app-sdk/resource"
+    myapiv1 "github.com/grafana/grafana/pkg/apis/myapi/v1alpha1"
+    "github.com/grafana/grafana/pkg/apimachinery/identity"
+    "github.com/grafana/grafana/pkg/services/apiserver/endpoints/request"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+    k8srequest "k8s.io/apiserver/pkg/endpoints/request"
+)
+
+type myAPIStorageAdapter struct {
+    legacyService   MyAPILegacyService  // Your existing service
+    namespaceMapper request.NamespaceMapper
+}
+
+func NewMyAPIStorageAdapter(
+    legacyService MyAPILegacyService,
+    namespaceMapper request.NamespaceMapper,
+) graphqlsubgraph.Storage {
+    return &myAPIStorageAdapter{
+        legacyService:   legacyService,
+        namespaceMapper: namespaceMapper,
+    }
+}
+
+// setupContextWithNamespace sets up the proper context with namespace information
+func (s *myAPIStorageAdapter) setupContextWithNamespace(ctx context.Context, namespace string) (context.Context, error) {
+    user, err := identity.GetRequester(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get user from context: %w", err)
+    }
+
+    orgID := user.GetOrgID()
+    if orgID <= 0 {
+        return nil, fmt.Errorf("invalid org ID: %d", orgID)
+    }
+
+    // Format the namespace using the namespace mapper
+    properNamespace := s.namespaceMapper(orgID)
+    ctx = k8srequest.WithNamespace(ctx, properNamespace)
+
+    return ctx, nil
+}
+
+// Get implements graphqlsubgraph.Storage
+func (s *myAPIStorageAdapter) Get(ctx context.Context, namespace, name string) (resource.Object, error) {
+    ctx, err := s.setupContextWithNamespace(ctx, namespace)
+    if err != nil {
+        return nil, err
+    }
+
+    // Get from your legacy service
+    item, err := s.legacyService.Get(ctx, name)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get resource: %w", err)
+    }
+
+    // 🚨 CRITICAL: Ensure TypeMeta is set for GraphQL to work
+    if item.TypeMeta.APIVersion == "" {
+        item.TypeMeta.APIVersion = myapiv1.MyResourceInfo.GroupVersion().String()
+    }
+    if item.TypeMeta.Kind == "" {
+        item.TypeMeta.Kind = "MyResource"
+    }
+
+    return resource.NewUnstructuredWrapper(s.toUnstructured(item)), nil
+}
+
+// List implements graphqlsubgraph.Storage
+func (s *myAPIStorageAdapter) List(ctx context.Context, namespace string, options graphqlsubgraph.ListOptions) (resource.ListObject, error) {
+    ctx, err := s.setupContextWithNamespace(ctx, namespace)
+    if err != nil {
+        return nil, err
+    }
+
+    // Get list from your legacy service
+    items, err := s.legacyService.List(ctx)
+    if err != nil {
+        return nil, fmt.Errorf("failed to list resources: %w", err)
+    }
+
+    // Convert to GraphQL format
+    resourceItems := make([]resource.Object, len(items))
+    for i, item := range items {
+        // 🚨 CRITICAL: Ensure TypeMeta is set for GraphQL to work
+        if item.TypeMeta.APIVersion == "" {
+            item.TypeMeta.APIVersion = myapiv1.MyResourceInfo.GroupVersion().String()
+        }
+        if item.TypeMeta.Kind == "" {
+            item.TypeMeta.Kind = "MyResource"
+        }
+
+        resourceItems[i] = resource.NewUnstructuredWrapper(s.toUnstructured(&item))
+    }
+
+    return &resource.UntypedList{
+        TypeMeta: metav1.TypeMeta{
+            APIVersion: myapiv1.MyResourceInfo.GroupVersion().String(),
+            Kind:       "MyResourceList",
+        },
+        Items: resourceItems,
+    }, nil
+}
+
+// Helper method to convert to unstructured format
+func (s *myAPIStorageAdapter) toUnstructured(item *myapiv1.MyResource) *unstructured.Unstructured {
+    obj := &unstructured.Unstructured{}
+    obj.SetUnstructuredContent(map[string]interface{}{
+        "apiVersion": myapiv1.MyResourceInfo.GroupVersion().String(),
+        "kind":       "MyResource",
+        "metadata": map[string]interface{}{
+            "name":              item.Name,
+            "namespace":         item.Namespace,
+            "uid":               string(item.UID),
+            "resourceVersion":   item.ResourceVersion,
+            "generation":        item.Generation,
+            "creationTimestamp": item.CreationTimestamp.Time.Format("2006-01-02T15:04:05Z"),
+            "labels":            item.Labels,
+        },
+        "spec": item.Spec, // Your resource's spec
+    })
+    return obj
+}
+
+// Create/Update/Delete implementations (usually not needed for read-only GraphQL)
+func (s *myAPIStorageAdapter) Create(ctx context.Context, namespace string, obj resource.Object) (resource.Object, error) {
+    return nil, fmt.Errorf("create not implemented via GraphQL")
+}
+
+func (s *myAPIStorageAdapter) Update(ctx context.Context, namespace, name string, obj resource.Object) (resource.Object, error) {
+    return nil, fmt.Errorf("update not implemented via GraphQL")
+}
+
+func (s *myAPIStorageAdapter) Delete(ctx context.Context, namespace, name string) error {
+    return fmt.Errorf("delete not implemented via GraphQL")
+}
+```
+
+### Step 3: Define Resource Kind
+
+```go
+// pkg/registry/apis/myapi/resource_kind.go (or add to existing file)
+package myapi
+
+import (
+    "github.com/grafana/grafana-app-sdk/resource"
+)
+
+func MyAPIResourceKind() resource.Kind {
+    schema := resource.NewSimpleSchema(
+        "myapi.grafana.app",
+        "v1alpha1",
+        &resource.UntypedObject{},
+        &resource.UntypedList{},
+        resource.WithKind("MyResource"),
+        resource.WithPlural("myresources"),
+        resource.WithScope(resource.NamespacedScope),
+    )
+
+    return resource.Kind{
+        Schema: schema,
+        Codecs: map[resource.KindEncoding]resource.Codec{
+            resource.KindEncodingJSON: resource.NewJSONCodec(),
+        },
+    }
+}
+```
+
+### Step 4: Auto-Discovery (No Additional Registration Needed!)
+
+The GraphQL system automatically discovers your API builder because it's already registered in `apis.go`. The auto-discovery mechanism:
+
+1. Scans all registered API builders in `apis.go`
+2. Checks if they implement `GraphQLCapableBuilder` interface
+3. Automatically calls `GetGraphQLSubgraph()` and includes them in the federated schema
+
+**No changes needed to `apis.go`** - your existing registration automatically works!
+
+### Special Case: Unified Access Across Multiple Providers
+
+Some APIs (like DataSources) have multiple plugin-specific providers. For these cases, you may want unified GraphQL access across all providers:
+
+```go
+// Only enable unified GraphQL on one provider to avoid conflicts
+var firstPluginForGraphQL bool = true
+
+for _, plugin := range plugins {
+    builder := NewMyAPIBuilder(plugin)
+
+    // Enable unified GraphQL support on the first plugin only
+    if firstPluginForGraphQL {
+        builder.enableUnifiedGraphQL = true
+        builder.unifiedService = service    // Service that can access ALL providers
+        builder.unifiedCache = cache
+        firstPluginForGraphQL = false
+    }
+
+    apiRegistrar.RegisterAPI(builder)
+}
+```
+
+Then in your `GetGraphQLSubgraph()` method:
+
+```go
+func (b *MyAPIBuilder) GetGraphQLSubgraph() (graphqlsubgraph.GraphQLSubgraph, error) {
+    // Only provide GraphQL if this builder has unified access enabled
+    if !b.enableUnifiedGraphQL {
+        return nil, fmt.Errorf("GraphQL not enabled on this builder")
+    }
+
+    // Use unified storage adapter that can access ALL providers
+    storageAdapter := NewUnifiedStorageAdapter(b.unifiedService, b.unifiedCache)
+    // ... rest of implementation
+}
+```
+
+This prevents multiple GraphQL subgraphs for the same logical resource while maintaining separate REST APIs for each provider.
+
+### Real-World Examples
+
+- **Dashboard API**: See `grafana/pkg/registry/apis/dashboard/` for complete implementation
+- **DataSource API**: See `grafana/pkg/registry/apis/datasource/` for unified multi-provider access pattern
+
+### Key Differences from App Platform Approach
+
+| App Platform (apps.go)                            | Traditional APIs (apis.go)                     |
+| ------------------------------------------------- | ---------------------------------------------- |
+| App providers implement `GraphQLSubgraphProvider` | API builders implement `GraphQLCapableBuilder` |
+| Uses App SDK storage directly                     | Requires storage adapter to bridge k8s storage |
+| Auto-discovered from apps registry                | Auto-discovered from APIs registry             |
+| CUE-defined resources                             | Traditional k8s API resources                  |
+
+### Custom Handler (For Complex Resources)
 
 For resources with complex GraphQL requirements (like playlists), create a dedicated handler:
 
@@ -411,18 +716,135 @@ Prevents expensive queries:
    - **Debug**: Check if `staticMetadata.Kind` is empty in your resource objects
    - **Fix**: Add proper `TypeMeta` to all resource objects in your storage adapter
 
-2. **"Unknown field" errors**: Check that your provider implements `GraphQLSubgraphProvider` and is properly registered
+2. **"Unknown field" errors**:
 
-3. **"No storage available" errors**: Verify your `storageGetter` function and `legacyStorageGetter` implementation
+   - **For App Platform**: Check that your provider implements `GraphQLSubgraphProvider` and is properly registered
+   - **For Traditional APIs**: Check that your API builder implements `GraphQLCapableBuilder`
+
+3. **"No storage available" errors**:
+
+   - **For App Platform**: Verify your `storageGetter` function and `legacyStorageGetter` implementation
+   - **For Traditional APIs**: Verify your storage adapter implements all required methods in `graphqlsubgraph.Storage`
 
 4. **Interface conversion errors**: Ensure your storage adapter implements all required methods
 
-5. **Missing fields in schema**: Check that your resource kinds are properly defined and returned by `GetKinds()`
+5. **Missing fields in schema**:
+
+   - **For App Platform**: Check that your resource kinds are properly defined and returned by `GetKinds()`
+   - **For Traditional APIs**: Check that your `MyAPIResourceKind()` function returns correct schema definition
 
 6. **Custom fields not appearing**:
+
    - **Cause**: Resource handler not being called during conversion
    - **Debug**: Verify `GetHandlerByKindName(kindName)` finds your handler
    - **Fix**: Ensure `TypeMeta.Kind` matches your handler's `GetResourceKind().Kind()`
+
+7. **Multiple subgraphs for same resource** (Traditional APIs):
+
+   - **Cause**: Multiple API builders providing GraphQL for the same logical resource
+   - **Fix**: Use unified access pattern - only enable GraphQL on one builder
+
+8. **Namespace/context errors** (Traditional APIs):
+   - **Cause**: Missing or incorrect namespace mapping
+   - **Debug**: Check that `setupContextWithNamespace()` is called and working
+   - **Fix**: Ensure proper `NamespaceMapper` implementation
+
+### Runtime Issues
+
+**9. "GraphQL not enabled on this DataSource builder" or similar provider errors**:
+
+- **Cause**: Auto-discovery logic not implemented in API server
+- **Debug**: Check if `globalGraphQLRegistry.RegisterProvider()` is being called during startup
+- **Fix**: Add the auto-discovery implementation to your API server service (see "Auto-Discovery Implementation Requirements" below)
+
+**10. `runtime error: invalid memory address or nil pointer dereference` in `createFederatedGateway`**:
+
+- **Cause**: Federation gateway not checking for nil subgraphs from providers
+- **Debug**: Check if the error occurs when calling `subgraph.GetGroupVersion()`
+- **Fix**: Add nil check in `createFederatedGateway` before calling methods on subgraph:
+
+```go
+// Skip providers that don't provide GraphQL support (return nil subgraph)
+if subgraph == nil {
+    continue
+}
+```
+
+**11. "Subgraph already registered" duplicate registration errors**:
+
+- **Cause**: Multiple providers trying to register the same GraphQL subgraph
+- **Debug**: Check if you have multiple builders for the same resource (e.g., multiple DataSource plugin builders)
+- **Fix**: Add duplicate detection to prevent multiple registrations:
+
+```go
+// Track registered group versions to avoid duplicates
+registeredGVs := make(map[string]bool)
+
+for _, provider := range graphqlProviders {
+    if subgraph, err := provider.GetGraphQLSubgraph(); err == nil && subgraph != nil {
+        gv := subgraph.GetGroupVersion()
+        gvKey := gv.String()
+
+        // Skip if this group version is already registered
+        if registeredGVs[gvKey] {
+            continue
+        }
+
+        globalGraphQLRegistry.RegisterProvider(provider)
+        registeredGVs[gvKey] = true
+    }
+}
+```
+
+**12. Wire dependency injection errors for `NamespaceMapper`**:
+
+- **Cause**: Missing provider for `github.com/grafana/grafana/pkg/services/apiserver/endpoints/request.NamespaceMapper`
+- **Debug**: Check wire error messages mentioning `NamespaceMapper`
+- **Fix**: Change storage adapter to accept `*setting.Cfg` instead and create mapper internally:
+
+```go
+// Instead of expecting NamespaceMapper as parameter
+func NewMyStorageAdapter(cfg *setting.Cfg, ...) Storage {
+    return &myStorageAdapter{
+        namespaceMapper: request.GetNamespaceMapper(cfg),
+        // ... other fields
+    }
+}
+```
+
+### Implementation Checklist
+
+When adding GraphQL support to Traditional APIs, ensure:
+
+- [ ] **Auto-discovery logic implemented** in API server service
+- [ ] **Nil subgraph checks** in `createFederatedGateway` function
+- [ ] **Duplicate registration prevention** in global registry
+- [ ] **Proper wire dependencies** for storage adapter
+- [ ] **TypeMeta set** in storage adapter (CRITICAL!)
+- [ ] **Integration tests** for GraphQL queries
+- [ ] **Documentation updated** with new fields and usage
+
+### Debug Commands for Runtime Issues
+
+```bash
+# 1. Check if GraphQL endpoint is accessible
+curl -X POST http://localhost:3000/apis/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ __schema { queryType { name } } }"}'
+
+# 2. Check for your resource fields in schema
+curl -X POST http://localhost:3000/apis/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ __schema { queryType { fields { name } } } }"}'
+
+# 3. Look for error patterns in logs
+grep -E "(GraphQL not enabled|nil pointer dereference|already registered)" /path/to/grafana.log
+
+# 4. Test specific resource queries
+curl -X POST http://localhost:3000/apis/graphql \
+  -H "Content-Type: application/json" \
+  -d '{"query": "{ datasourceconnections(namespace: \"default\") { items { metadata { name } } } }"}'
+```
 
 ### Debug Approaches
 
@@ -441,7 +863,7 @@ GraphQL issues typically fall into two categories:
    - Check if resource handlers are being called
    - Validate storage adapter implementation
 
-#### Debugging Commands
+#### Additional Debugging Commands
 
 ```bash
 # 1. Check schema has your fields
@@ -487,12 +909,26 @@ The GraphQL system includes extensive debug logging. Look for log messages prefi
 
 ### Verification Steps
 
+#### For App Platform Resources (apps.go):
+
 1. **Check REST API first**: Ensure `/apis/<group>/<version>/<resource>` works
 2. **Verify app provider registration**: Check that your provider appears in the apps registry
 3. **Test subgraph creation**: Verify `GetGraphQLSubgraph()` returns without errors
 4. **Inspect generated schema**: Use GraphQL introspection to see your fields
 5. **Test with real data**: Query actual resources, not just demo data
 6. **Verify TypeMeta**: Ensure all resource objects have proper Kind set
+
+#### For Traditional APIs (apis.go)
+
+1. **Check REST API first**: Ensure `/apis/<group>/<version>/<resource>` works
+2. **Verify API builder registration**: Check that your builder appears in the APIs registry
+3. **Verify GraphQLCapableBuilder**: Ensure your builder implements the interface correctly
+4. **Test storage adapter**: Verify your storage adapter bridges k8s storage to GraphQL storage
+5. **Check namespace mapping**: Ensure proper context setup with namespace information
+6. **Test subgraph creation**: Verify `GetGraphQLSubgraph()` returns without errors
+7. **Inspect generated schema**: Use GraphQL introspection to see your fields
+8. **Test with real data**: Query actual resources, not just demo data
+9. **Verify TypeMeta**: Ensure all resource objects have proper Kind set (CRITICAL!)
 
 ## Example: Complete Playlist Implementation
 
@@ -502,6 +938,132 @@ For reference, see the complete playlist implementation:
 - `grafana/pkg/registry/apps/playlist/graphql_storage.go` - Storage adapter
 - `grafana/pkg/registry/apps/apps.go` - Registry integration
 - `grafana/pkg/registry/apps/wireset.go` - Wire dependency injection
+
+## Auto-Discovery Implementation Requirements
+
+### For Traditional APIs (apis.go Registry)
+
+The GraphQL system includes auto-discovery for traditional APIs, but you must ensure the discovery logic is properly implemented in your API server. Here's the required implementation:
+
+#### Required Service Integration
+
+Add this code to your API server's service initialization (typically in `pkg/services/apiserver/service.go`):
+
+```go
+// During API server initialization, add GraphQL auto-discovery
+func (s *service) initializeBuilders(builders []builder.APIGroupBuilder) error {
+    // ... existing builder initialization code ...
+
+    // Discover and register GraphQL-capable builders with the global registry
+    // This enables GraphQL federation auto-discovery
+    discovery := builder.NewGraphQLDiscovery()
+    graphqlProviders := discovery.DiscoverFromBuilders(builders)
+
+    // Track registered group versions to avoid duplicates during discovery
+    registeredGVs := make(map[string]bool)
+
+    // Only register providers that actually provide a subgraph (non-nil return)
+    for _, provider := range graphqlProviders {
+        // Test if the provider actually provides a GraphQL subgraph
+        // This filters out builders that return nil (like non-unified DataSource builders)
+        if subgraph, err := provider.GetGraphQLSubgraph(); err == nil && subgraph != nil {
+            gv := subgraph.GetGroupVersion()
+            gvKey := gv.String()
+
+            // Skip if this group version is already registered
+            if registeredGVs[gvKey] {
+                continue
+            }
+
+            globalGraphQLRegistry.RegisterProvider(provider)
+            registeredGVs[gvKey] = true
+        }
+        // If error or nil subgraph, skip registration (no GraphQL support)
+    }
+
+    return nil
+}
+```
+
+#### Required Federation Gateway Updates
+
+Ensure your `createFederatedGateway` function properly handles nil subgraphs:
+
+```go
+func (s *service) createFederatedGateway(ctx context.Context) (*gateway.Gateway, error) {
+    // Get all registered GraphQL providers
+    graphqlProviders := globalGraphQLRegistry.GetProviders()
+
+    // Register each GraphQL provider's subgraph with the gateway
+    for _, provider := range graphqlProviders {
+        subgraph, err := provider.GetGraphQLSubgraph()
+        if err != nil {
+            return nil, fmt.Errorf("failed to get GraphQL subgraph from provider: %w", err)
+        }
+
+        // 🚨 CRITICAL: Skip providers that don't provide GraphQL support (return nil subgraph)
+        if subgraph == nil {
+            continue
+        }
+
+        // Get the group version from the subgraph
+        gv := subgraph.GetGroupVersion()
+
+        // Register the subgraph with the gateway
+        if err := gatewayBuilder.RegisterSubgraph(gv.String(), subgraph); err != nil {
+            return nil, fmt.Errorf("failed to register subgraph for group %s version %s: %w",
+                                 gv.Group, gv.Version, err)
+        }
+    }
+
+    return gatewayBuilder.Build()
+}
+```
+
+#### Global Registry Implementation
+
+You'll need a global registry to track GraphQL providers:
+
+```go
+// GraphQLProviderRegistry manages GraphQL subgraph providers
+type GraphQLProviderRegistry struct {
+    providers     []graphqlsubgraph.GraphQLSubgraphProvider
+    registeredGVs map[string]bool // Track registered group versions
+}
+
+// RegisterProvider adds a GraphQL subgraph provider to the registry
+// Includes duplicate detection to prevent registration conflicts
+func (r *GraphQLProviderRegistry) RegisterProvider(provider graphqlsubgraph.GraphQLSubgraphProvider) {
+    // Initialize the tracking map if needed
+    if r.registeredGVs == nil {
+        r.registeredGVs = make(map[string]bool)
+    }
+
+    // Test if provider actually provides a subgraph
+    if subgraph, err := provider.GetGraphQLSubgraph(); err == nil && subgraph != nil {
+        gv := subgraph.GetGroupVersion()
+        gvKey := gv.String()
+
+        // Skip duplicate registrations
+        if r.registeredGVs[gvKey] {
+            return
+        }
+
+        r.providers = append(r.providers, provider)
+        r.registeredGVs[gvKey] = true
+    }
+}
+
+// GetProviders returns all registered GraphQL providers
+func (r *GraphQLProviderRegistry) GetProviders() []graphqlsubgraph.GraphQLSubgraphProvider {
+    return r.providers
+}
+
+// Global registry instance
+var globalGraphQLRegistry = &GraphQLProviderRegistry{}
+```
+
+**Why This Is Required**: Without proper auto-discovery implementation, your GraphQL-capable builders won't be registered with the federation system, leading to "GraphQL not enabled" errors.
 
 ## Field Naming Convention
 
