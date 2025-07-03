@@ -155,8 +155,8 @@ var appManifestData = app.ManifestData{
                 Schema: &versionSchema{{.Kind}}{{$.ToPackageName $v.Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
-                },{{end}}{{ if .CustomRoutes }}
-                CustomRoutes: map[string]spec3.PathProps{ {{ range $path, $props := .CustomRoutes }}{{ if $props }}
+                },{{end}}{{ if .Routes }}
+                Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
                         Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
@@ -208,7 +208,7 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
     return goType, exists
 }
 
-var customRouteToGoResponseType = map[string]any { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .CustomRoutes }}{{ if $resp.Get }}
+var customRouteToGoResponseType = map[string]any { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if $resp.Get }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Get.OperationId }}{{ end }}{},{{end}}{{ if $resp.Post }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Post.OperationId }}{{ end }}{},{{end}}{{ if $resp.Put }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Put.OperationId }}{{ end }}{},{{end}}{{ if $resp.Patch }}

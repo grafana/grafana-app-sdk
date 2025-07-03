@@ -35,7 +35,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 	files := make(codejen.Files, 0)
 	for _, version := range appManifest.Versions() {
 		for _, kind := range version.Kinds() {
-			for cpath, methods := range kind.CustomRoutes {
+			for cpath, methods := range kind.Routes {
 				for method, route := range methods {
 					if route.Name == "" {
 						route.Name = defaultRouteName(method, cpath)

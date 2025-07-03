@@ -338,7 +338,7 @@
                                 "type": "object"
                             }
                         },
-                        "customRoutes": {
+                        "routes": {
                             "/reconcile": {
                                 "post": {
                                     "operationId": "PostReconcile",

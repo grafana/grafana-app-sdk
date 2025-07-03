@@ -220,10 +220,10 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 				continue
 			}
 			maps.Copy(res, oapi)
-			if len(manifestKind.CustomRoutes) > 0 {
+			if len(manifestKind.Routes) > 0 {
 				hasCustomRoutes = true
 				// Add the definitions and use the name as the reflect type name from the resolver, if it exists
-				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.CustomRoutes, defaultEtcdPathPrefix, callback))
+				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, defaultEtcdPathPrefix, callback))
 			}
 		}
 	}
@@ -260,7 +260,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			if _, ok := kind.Kind.ZeroValue().GetSubresource(string(resource.SubresourceStatus)); ok {
 				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, s)
 			}
-			for route, props := range kind.ManifestKind.CustomRoutes {
+			for route, props := range kind.ManifestKind.Routes {
 				if route == "" {
 					continue
 				}

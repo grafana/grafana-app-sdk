@@ -189,8 +189,9 @@ Kind: S={
 	selectableFields: [...string]
 	// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 	additionalPrinterColumns?: [...#AdditionalPrinterColumns]
-	// customRoutes is a map of path patterns to custom routes for this version.
-	customRoutes?: #CustomRouteCapability
+	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
+	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
+	routes?: #CustomRouteCapability
 
 	_computedGroupKind: S.machineName+"."+group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
 }
@@ -367,8 +368,8 @@ KindOld: S={
 			mutation:   #AdmissionCapability | *S.mutation
 			// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
-			// customRoutes is a map of path patterns to custom routes for this version.
-			customRoutes?: #CustomRouteCapability
+			// routes is a map of path patterns to custom routes for this version.
+			routes?: #CustomRouteCapability
 		}
 	}
 	machineName:       strings.ToLower(strings.Replace(S.kind, "-", "_", -1))

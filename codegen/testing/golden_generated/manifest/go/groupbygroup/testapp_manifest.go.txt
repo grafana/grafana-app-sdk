@@ -121,7 +121,7 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv3,
-					CustomRoutes: map[string]spec3.PathProps{
+					Routes: map[string]spec3.PathProps{
 						"/reconcile": {
 							Post: &spec3.Operation{
 								OperationProps: spec3.OperationProps{

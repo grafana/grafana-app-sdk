@@ -252,7 +252,7 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-              customRoutes:
+              routes:
                 /reconcile:
                     summary: ""
                     description: ""

@@ -270,7 +270,7 @@ func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Va
 				SelectableFields:         ver.SelectableFields,
 				AdditionalPrinterColumns: ver.AdditionalPrinterColumns,
 				Schema:                   ver.Schema,
-				CustomRoutes:             ver.CustomRoutes,
+				Routes:                   ver.Routes,
 			})
 			vers[ver.Version] = v
 		}
@@ -318,7 +318,7 @@ func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codege
 	}
 
 	// Parse custom routes
-	someKind.CustomRoutes, err = p.parseCustomRoutes(val.LookupPath(cue.MakePath(cue.Str("customRoutes"))))
+	someKind.Routes, err = p.parseCustomRoutes(val.LookupPath(cue.MakePath(cue.Str("routes"))))
 	if err != nil {
 		return nil, err
 	}
@@ -475,8 +475,8 @@ func (p *Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (code
 			return nil, v.Schema.Err()
 		}
 
-		customRoutesVal := val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("customRoutes")))
-		v.CustomRoutes, err = p.parseCustomRoutes(customRoutesVal)
+		customRoutesVal := val.LookupPath(cue.MakePath(cue.Str("versions"), cue.Str(k), cue.Str("routes")))
+		v.Routes, err = p.parseCustomRoutes(customRoutesVal)
 		if err != nil {
 			return nil, err
 		}

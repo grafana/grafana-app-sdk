@@ -104,7 +104,7 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 			Kinds: []app.ManifestVersionKind{{
 				Kind:   kind.Kind(),
 				Schema: sch1,
-				CustomRoutes: map[string]spec3.PathProps{
+				Routes: map[string]spec3.PathProps{
 					"/foo": {
 						Get: &spec3.Operation{
 							OperationProps: spec3.OperationProps{
@@ -167,7 +167,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 						Operations: []app.AdmissionOperation{app.AdmissionOperationAny},
 					},
 				},
-				CustomRoutes: map[string]spec3.PathProps{
+				Routes: map[string]spec3.PathProps{
 					"/foo": {
 						Get: &spec3.Operation{},
 					},

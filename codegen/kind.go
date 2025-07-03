@@ -119,7 +119,7 @@ type KindVersion struct {
 	Validation               KindAdmissionCapability           `json:"validation"`
 	Mutation                 KindAdmissionCapability           `json:"mutation"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
-	CustomRoutes             map[string]map[string]CustomRoute `json:"customRoutes"`
+	Routes                   map[string]map[string]CustomRoute `json:"routes"`
 }
 
 // AnyKind is a simple implementation of Kind

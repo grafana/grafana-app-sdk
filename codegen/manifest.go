@@ -75,7 +75,7 @@ func (m *SimpleManifest) Kinds() []Kind {
 				Validation:               kind.Validation,
 				Mutation:                 kind.Mutation,
 				AdditionalPrinterColumns: kind.AdditionalPrinterColumns,
-				CustomRoutes:             kind.CustomRoutes,
+				Routes:                   kind.Routes,
 			})
 			kinds[kind.Kind] = k
 		}
@@ -141,6 +141,6 @@ type VersionedKind struct {
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema       cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	CustomRoutes map[string]map[string]CustomRoute `json:"customRoutes"`
+	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	Routes map[string]map[string]CustomRoute `json:"routes"`
 }
