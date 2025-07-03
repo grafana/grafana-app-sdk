@@ -10,10 +10,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
+
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 
 	v1alpha1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 )
@@ -46,7 +47,7 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv1alpha1,
-					CustomRoutes: map[string]spec3.PathProps{
+					Routes: map[string]spec3.PathProps{
 						"/bar": {
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
@@ -151,6 +152,9 @@ var customRouteToGoResponseType = map[string]any{
 	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
 }
 
+// ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
+// kind may be empty for custom routes which are not kind subroutes. Leading slashes are removed from subroute paths.
+// If there is no association for the provided kind, version, custom route path, and method, exists will return false.
 func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
 	if len(path) > 0 && path[0] == '/' {
 		path = path[1:]

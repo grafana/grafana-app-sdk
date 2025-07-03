@@ -10,7 +10,7 @@ testKind: {
 			testField: string
 		}
 	}
-	customRoutes: {
+	routes: {
 		"/foo": {
 			"GET": {
 				response: {
