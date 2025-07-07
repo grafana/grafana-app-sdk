@@ -132,7 +132,17 @@ func (d *DynamicPatcher) updatePreferred() error {
 		return err
 	}
 	for _, pref := range preferred {
+		gv, err := schema.ParseGroupVersion(pref.GroupVersion)
+		if err != nil {
+			return err
+		}
 		for _, res := range pref.APIResources {
+			if res.Version == "" {
+				res.Version = gv.Version
+			}
+			if res.Group == "" {
+				res.Group = gv.Group
+			}
 			d.preferred[schema.GroupKind{
 				Group: res.Group,
 				Kind:  res.Kind,
