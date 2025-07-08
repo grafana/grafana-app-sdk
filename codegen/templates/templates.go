@@ -122,13 +122,14 @@ type SchemaMetadata struct {
 	Kind             string
 	Plural           string
 	Scope            string
-	SelectableFields []SchemaMetadataSeletableField
+	SelectableFields []SchemaMetadataSelectableField
 	FuncPrefix       string
 }
 
-type SchemaMetadataSeletableField struct {
+type SchemaMetadataSelectableField struct {
 	Field    string
 	Optional bool
+	Type     string
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
@@ -390,11 +391,12 @@ func WriteOperatorConfig(out io.Writer) error {
 }
 
 type ManifestGoFileMetadata struct {
-	Package         string
-	Repo            string
-	CodegenPath     string
-	KindsAreGrouped bool
-	ManifestData    app.ManifestData
+	Package              string
+	Repo                 string
+	CodegenPath          string
+	KindsAreGrouped      bool
+	ManifestData         app.ManifestData
+	CodegenManifestGroup string
 }
 
 func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
