@@ -11,6 +11,7 @@
             {
                 "kind": "CustomKind",
                 "scope": "Namespaced",
+                "plural": "CustomKinds",
                 "versions": [
                     {
                         "name": "v0-0",
@@ -198,20 +199,8 @@
                                                 "type": "object"
                                             },
                                             {
-                                                "properties": {
-                                                    "details": {
-                                                        "type": "object",
-                                                        "x-kubernetes-preserve-unknown-fields": true
-                                                    },
-                                                    "group": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "group",
-                                                    "details"
-                                                ],
-                                                "type": "object"
+                                                "type": "object",
+                                                "x-kubernetes-preserve-unknown-fields": true
                                             }
                                         ]
                                     }

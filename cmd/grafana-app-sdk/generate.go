@@ -43,6 +43,8 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
 	generateCmd.Flags().Bool("noschemasinmanifest", false, "Whether to exclude kind schemas from the generated app manifest. This flag exists to allow for codegen with recursive types in CUE until github.com/grafana/grafana-app-sdk/issues/460 is resolved.")
 	generateCmd.Flags().Lookup("noschemasinmanifest").NoOptDefVal = "true"
+	generateCmd.Flags().String("gomodule", "", `module name found in go.mod. If absent it will be inferred from ./go.mod`)
+	generateCmd.Flags().String("gomodgenpath", "", `This argument is used as a relative path for generated go code from the go module root. It only needs to be present if gogenpath is an absolute path, or is not a relative path from the go module root.`)
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -105,11 +107,32 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	goModule, err := cmd.Flags().GetString("gomodule")
+	if err != nil {
+		return err
+	}
+	goModGenPath, err := cmd.Flags().GetString("gomodgenpath")
+	if err != nil {
+		return err
+	}
+
+	if goModule == "" {
+		goModule, err = getGoModule("go.mod")
+		if err != nil {
+			return fmt.Errorf("unable to load go module from ./go.mod: %w. Use --gomodule to set a value", err)
+		}
+	}
+
+	if goModGenPath == "" {
+		goModGenPath = goGenPath
+	}
 
 	var files codejen.Files
 	switch format {
 	case FormatCUE:
 		files, err = generateKindsCue(os.DirFS(sourcePath), kindGenConfig{
+			GoModuleName:           goModule,
+			GoModuleGenBasePath:    goModGenPath,
 			GoGenBasePath:          goGenPath,
 			TSGenBasePath:          tsGenPath,
 			CRDEncoding:            encType,
@@ -158,6 +181,8 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 }
 
 type kindGenConfig struct {
+	GoModuleName           string
+	GoModuleGenBasePath    string
 	GoGenBasePath          string
 	TSGenBasePath          string
 	CRDEncoding            string
@@ -217,7 +242,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), cfg.ManifestIncludeSchemas), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.GroupKinds), selectors...)
 	if err != nil {
 		return nil, err
 	}

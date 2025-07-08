@@ -327,7 +327,15 @@ func TestConcurrentWatcher(t *testing.T) {
 		var errCount atomic.Int64
 		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
-		go cw.Run(t.Context())
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		runReturned := make(chan struct{})
+		go func() {
+			cw.Run(ctx)
+			close(runReturned)
+		}()
+
 		for i := 0; i < 90; i++ {
 			obj := schema.ZeroValue()
 			obj.SetName(strconv.Itoa(i))
@@ -340,6 +348,13 @@ func TestConcurrentWatcher(t *testing.T) {
 		time.Sleep(4 * time.Second)
 		assert.Equal(t, int64(90), mock.addAttempts.Load())
 		assert.Equal(t, int64(0), errCount.Load())
+
+		cancel()
+		select {
+		case <-runReturned:
+		case <-time.After(1 * time.Second):
+			t.Fatal("Run did not return in time")
+		}
 	})
 }
 

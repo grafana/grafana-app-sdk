@@ -15,7 +15,7 @@ no required module provides package github.com/grafana/grafana-plugin-sdk-go/bui
 make: *** [build/plugin-backend] Error 1
 ```
 
-Hang on, something isn't right. Well, we generated code, and build out boilerplate, but go doesn't know about any of the libraries our boilerplate and generated code need to import. You could run `go get` for all the go files, but our Makefile, again, has us covered:
+Hang on, something isn't right. We generated the code and built out the boilerplate, but Go doesn't know about any of the libraries that our boilerplate and generated code need to import. You could run `go get` for all the Go files manually, but our Makefile, once again, has us covered:
 ```shell
 make deps
 ```
@@ -172,18 +172,17 @@ If we click on the `grafana` tile to see what the error is, it shows us the logs
 logger=provisioning t=2025-01-30T16:53:00.36954668Z level=error msg="Failed to provision plugins" error="app provisioning error: plugin not installed: \"issuetrackerproject-app\""
 ```
 
-So this is just something we didn't do before we started our environment. While we built the plugin, we want to also deploy it to our local cluster. The local cluster can only read from `local/mounted-files`, so we need it there. Simple enough fix, we run
+So this is just something we didn't do before starting our environment. When we build the plugin, we also need to deploy it to the local cluster. Because the cluster can only read from `local/mounted-files`, the plugin must be copied there. The fix is simple: run `make local/deploy_plugin` (in a separate terminal window).
+
 ```shell
 $ make local/deploy_plugin 
 tilt disable grafana
 cp -R plugin/dist local/mounted-files/plugin/dist
 tilt enable grafana
 ```
-We can see that this stops the grafana deployment, copies our built plugin over into `local/mounted-files`, and then restarts the grafana deployment. 
-We have to stop and restart, because if a plugin is already deployed and running, we can't overwrite the binary, as it's in-use by grafana. 
-You can leave your local deployment running and make changes to your plugin this way, but just re-running a build and `make local/deploy_plugin`.
+The script stops the Grafana deployment, copies the built plugin into `local/mounted-files`, and then restarts the deployment. We have to stop and restart because, if a plugin is already deployed and running, we can’t overwrite the binary while Grafana is using it. You can keep your local deployment running and iterate on your plugin by simply rebuilding and running `make local/deploy_plugin` again.
 
-TODO: should this be part of the `make local/up` command?
+<!-- TODO: should this be part of the `make local/up` command? -->
 
 OK, now grafana is all green on the dashboard, so let's take a look at the operator. 
 If we click on the `issue-tracker-project` tile to learn more about the error, it shows us the event:
@@ -333,7 +332,10 @@ with the option to extend them for custom metadata.
 
 We can also see that the operator is monitoring adds/updates/deletes to our issues if we take a look at its logs, either through the Tilt console, or via kubectl:
 ```
+$ kubectl logs -l name=issuetrackerproject-app-operator
+...
 {"time":"2024-12-04T23:44:22.388481222Z","level":"DEBUG","msg":"Added resource","name":"test-issue","traceID":"cfffb1cf88e0370ad48a185b3a321881"}
+...
 ```
 
 If we delete the issue, we'll also see that delete show up in our operator:

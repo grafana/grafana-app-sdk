@@ -22,7 +22,7 @@ def decode(yaml):
     if r == None:
       continue
 
-    n = '%s:%s' % (name(r), r['kind'])
+    n = '%s:%s:%s' % (name(r), r['kind'], namespace(r))
     if n in names:
       continue
 

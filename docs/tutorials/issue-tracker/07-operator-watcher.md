@@ -2,9 +2,9 @@
 
 We actually already have some simple operator code generated for us by our `project add` command earlier, so instead of writing new code, let's just talk a bit about what the operator does, and ways of running it.
 
-By default, the operator is run as a separate container alongside your grafana deployment. For simple cases, where there will only be one instance of grafana running, it can be run as an embedded part of your plugin, but that comes with several caveats, namely, that it can't _start_ running until you browse to your plugin page in grafana itself. So, the ordinary use-case for the operator is as a separate deployment.
+By default, the operator is run as a separate container alongside your grafana deployment. For simple cases in which only one Grafana instance is running, the operator can be embedded in your plugin. However, this approach has several caveats — most notably, it can’t start until you navigate to your plugin’s page in Grafana. For this reason, the operator is ordinarily deployed as a separate service.
 
-The operator is a logical pattern which runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
+The operator is a logical pattern that runs one or more controllers. The typical use-case for a controller is the `operator.InformerController`, which holds:
 * One or more informers, which subscribe to events for a particular resource kind and namespace
 * One or more watchers, which consume events for particular kinds
 
@@ -46,11 +46,11 @@ func NewIssueWatcher() (*IssueWatcher, error) {
 ```
 So we have `IssueWatcher`, which implements `operator.ResourceWatcher`. The `Add`, `Update`, `Delete`, and `Sync` functions are all relatively self-explanatory, but let's examine the `Add` one just to be on the same page:
 ```go
-// Add handles add events for issue.Issue resources.
+// Add handles add events for issuev1.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
 	}
 
@@ -59,7 +59,7 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	return nil
 }
 ```
-Each method does a check to see if the provided `resource.Object` is of type `*issue.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
+Each method does a check to see if the provided `resource.Object` is of type `*issuev1.Issue` (it always should be, provided we attached this watcher to the correct `resource.Kind`). We then just log a line declaring what resource was added, which we saw when [testing our local deployment](05-local-deployment.md).
 
 So what else can we do in our watcher?
 
@@ -94,13 +94,13 @@ func NewIssueWatcher() (*IssueWatcher, error) {
 ```
 The code in `NewIssueWatcher` now creates a new `GaugeVec` named `issue_tracker_project_issue_watcher_issues` with a `status` label, allowing us to track issue counts by status. All we need to do now is update the gauge with the correct label on our different watcher methods:
 ```go
-// Add handles add events for issue.Issue resources.
+// Add handles add events for issuev1.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-add")
 	defer span.End()
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -111,19 +111,19 @@ func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	return nil
 }
 
-// Update handles update events for issue.Issue resources.
+// Update handles update events for issuev1.Issue resources.
 func (s *IssueWatcher) Update(ctx context.Context, rOld resource.Object, rNew resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-update")
 	defer span.End()
-	oldObject, ok := rOld.(*issue.Issue)
+	oldObject, ok := rOld.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rOld.GetStaticMetadata().Name, rOld.GetStaticMetadata().Namespace, rOld.GetStaticMetadata().Kind)
 	}
 
-	newObject, ok := rNew.(*issue.Issue)
+	newObject, ok := rNew.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rNew.GetStaticMetadata().Name, rNew.GetStaticMetadata().Namespace, rNew.GetStaticMetadata().Kind)
 	}
 
@@ -137,13 +137,13 @@ func (s *IssueWatcher) Update(ctx context.Context, rOld resource.Object, rNew re
 	return nil
 }
 
-// Delete handles delete events for issue.Issue resources.
+// Delete handles delete events for issuev1.Issue resources.
 func (s *IssueWatcher) Delete(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-delete")
 	defer span.End()
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -159,9 +159,9 @@ func (s *IssueWatcher) Delete(ctx context.Context, rObj resource.Object) error {
 func (s *IssueWatcher) Sync(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-sync")
 	defer span.End()
-	object, ok := rObj.(*issue.Issue)
+	object, ok := rObj.(*issuev1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issue.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -180,19 +180,20 @@ type Provider interface {
 	PrometheusCollectors() []prometheus.Collector
 }
 ```
-So, to conform with the best practices of the app-sdk, let's also implement this interface in our watcher, by adding that method:
+So, to conform with the best practices of the app-sdk, let's also implement this interface in our watcher by adding that method:
 ```go
 func (s *IssueWatcher) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{s.statsGauge}
 }
 ```
-Easy! Now, since we implemented that interface, the metrics will be automatically picked up by the app. 
+Easy! Now that we’ve implemented the interface, the app will automatically pick up the metrics.
+
 The operator runner then exposes the app's metrics via a `/metrics` endpoint, which the local setup automatically scrapes. 
 So if we re-build and re-deploy our operator, we'll start picking up that new metric in our local grafana.
 ```shell
 make build/operator && make local/push_operator
 ```
-Then restart the operator in your tilt console, and hop on over to [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) to find the metric. [this link](http://grafana.k3d.localhost:9999/explore?orgId=1&left=%7B%22datasource%22:%22grafana-prom-cortex%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22issue_tracker_project_issue_watcher_issues%22,%22range%22:true,%22instant%22:true,%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22grafana-prom-cortex%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-15m%22,%22to%22:%22now%22%7D%7D) will bring you right to the explore page for the metric, but feel free to play around with it yourself to get used to it, or build out a dashboard.
+Then restart the operator in your tilt console and hop on over to [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) to find the metric. [This link](http://grafana.k3d.localhost:9999/explore?orgId=1&left=%7B%22datasource%22:%22grafana-prom-cortex%22,%22queries%22:%5B%7B%22refId%22:%22A%22,%22expr%22:%22issue_tracker_project_issue_watcher_issues%22,%22range%22:true,%22instant%22:true,%22datasource%22:%7B%22type%22:%22prometheus%22,%22uid%22:%22grafana-prom-cortex%22%7D,%22editorMode%22:%22builder%22%7D%5D,%22range%22:%7B%22from%22:%22now-15m%22,%22to%22:%22now%22%7D%7D) will bring you right to the Explore page for the metric, but feel free to play around with it yourself to get used to it, or build out a dashboard.
 
 ![Example Grafana Dashboard with Issue Metrics](./images/grafana-watcher-dashboard.png)
 
@@ -225,7 +226,7 @@ Alright, let's put a store in our watcher:
 ```go
 type IssueWatcher struct {
 	statsGauge *prometheus.GaugeVec
-	issueStore *resource.TypedStore[*issue.Issue]
+	issueStore *resource.TypedStore[*issuev1.Issue]
 }
 
 func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, error) {
@@ -235,7 +236,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 		Namespace: "issue_tracker_project",
 		Help:      "Number of issues",
 	}, []string{"status"})
-	issueStore, err := resource.NewTypedStore[*issue.Issue](issue.Kind(), clientGenerator)
+	issueStore, err := resource.NewTypedStore[*issuev1.Issue](issuev1.Kind(), clientGenerator)
 	if err != nil {
 		return nil, fmt.Errorf("error creating issue TypedStore: %w", err)
 	}
@@ -245,7 +246,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 	}, nil
 }
 ```
-What is `resource.TypedStore`? It's a type which will let us interact with our `issue.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
+What is `resource.TypedStore`? It's a type which will let us interact with our `issuev1.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
 
 > [!IMPORTANT]
 > Note that updating the resource inside a watcher or reconciler event will trigger _another_ event based on the update. Updating a subresource (such as `status`) will not update the resource's `Generation` value, so if you use the opinionated logic (which `simple.Operator` wraps your watchers and reconcilers in) these events won't propagate to your watchers/reconcilers. If you don't use the opinionated logic, you'll need to be aware of and handle these subresource updates properly in your business logic.

@@ -4,6 +4,7 @@ set -e
 
 rootdir="$(git rev-parse --show-toplevel)"
 testdir="${rootdir}/codegen/testing/golden_generated"
+gomod="codegen-tests"
 
 echo "Regenerating golden test files from current codegen output"
 
@@ -13,29 +14,37 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --defpath="${testdir}/crd" \
   -t="${testdir}/typescript/versioned" \
   --grouping=group \
-  --manifest="customManifest"
+  --manifest="customManifest" \
+  --gomodule="${gomod}" \
+  --gomodgenpath="pkg/generated"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
   --defpath="${testdir}/crd" \
   -t="${testdir}/typescript/versioned" \
   --grouping=group \
-  --manifest="testManifest"
+  --manifest="testManifest" \
+  --gomodule="${gomod}" \
+  --gomodgenpath="pkg/generated"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
   --defpath="${testdir}/crd" \
   --defencoding=yaml \
   -t="${testdir}/typescript/versioned" \
   --grouping=group \
-  --manifest="customManifest"
+  --manifest="customManifest" \
+  --gomodule="${gomod}" \
+  --gomodgenpath="pkg/generated"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
   --defpath="${testdir}/crd" \
   --defencoding=yaml \
   -t="${testdir}/typescript/versioned" \
   --grouping=group \
-  --manifest="testManifest"
+  --manifest="testManifest" \
+  --gomodule="${gomod}" \
+  --gomodgenpath="pkg/generated"
 # Move the manifest files
-mv ${testdir}/go/groupbygroup/*.go "${testdir}/manifest/go/"
+mv ${testdir}/go/groupbygroup/*.go "${testdir}/manifest/go/groupbygroup"
 mv ${testdir}/crd/test-app-manifest.* "${testdir}/manifest/"
 mv ${testdir}/crd/custom-app-manifest.* "${testdir}/manifest/"
 # Group by kind (only customKind)
@@ -44,7 +53,10 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --defencoding="none" \
   -t="${testdir}/typescript/versioned" \
   --grouping=kind \
-  --manifest="customManifest"
+  --manifest="customManifest" \
+  --gomodule="${gomod}" \
+  --gomodgenpath="pkg/generated"
+mv ${testdir}/go/groupbykind/*.go "${testdir}/manifest/go/groupbykind"
 
 # Rename files to append .txt
 find "${testdir}" -depth -name "*.go" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;

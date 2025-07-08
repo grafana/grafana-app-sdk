@@ -11,6 +11,7 @@
             {
                 "kind": "TestKind",
                 "scope": "Namespaced",
+                "plural": "TestKinds",
                 "versions": [
                     {
                         "name": "v1",
@@ -381,6 +382,7 @@
             {
                 "kind": "TestKind2",
                 "scope": "Namespaced",
+                "plural": "TestKind2s",
                 "versions": [
                     {
                         "name": "v1",
