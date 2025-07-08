@@ -170,10 +170,11 @@ func (m *ManifestData) Kinds() []ManifestKind {
 // Deprecated: this is used only for the deprecated method ManifestData.Kinds()
 type ManifestKind struct {
 	// Kind is the name of the kind
-	Kind   string `json:"kind" yaml:"kind"`
-	Plural string `json:"plural" yaml:"plural"`
+	Kind string `json:"kind" yaml:"kind"`
 	// Scope if the scope of the kind, typically restricted to "Namespaced" or "Cluster"
 	Scope string `json:"scope" yaml:"scope"`
+	// Plural is the plural of the kind
+	Plural string `json:"plural" yaml:"plural"`
 	// Versions is the set of versions for the kind. This list should be ordered as a series of progressively later versions.
 	Versions []ManifestKindVersion `json:"versions" yaml:"versions"`
 	// Conversion is true if the app has a conversion capability for this kind
