@@ -74,7 +74,7 @@ func (o *Operator) HealthChecks() []health.Check {
 func (o *Operator) Run(ctx context.Context) error {
 	// TODO: operator should deal with scaling logic if possible.
 
-	errs := make(chan error)
+	errs := make(chan error, len(o.controllers))
 	derivedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
