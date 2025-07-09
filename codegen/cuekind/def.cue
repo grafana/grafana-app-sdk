@@ -426,7 +426,7 @@ ManifestOld: S={
 	kinds: [...{
 		group:         S.fullGroup
 		manifestGroup: S.group
-	} & Kind]
+	} & KindOld]
 	extraPermissions: {
 		accessKinds: [...#AccessKind]
 	}
