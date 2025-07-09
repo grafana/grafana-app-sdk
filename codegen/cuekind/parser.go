@@ -246,8 +246,9 @@ func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Va
 			if !ok {
 				v = &codegen.SimpleVersion{
 					Props: codegen.VersionProperties{
-						Name:   ver.Version,
-						Served: ver.Served,
+						Name:    ver.Version,
+						Served:  ver.Served,
+						Codegen: ver.Codegen,
 					},
 					AllKinds: make([]codegen.VersionedKind, 0),
 				}
@@ -265,7 +266,7 @@ func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Va
 				Mutation:                 props.Mutation,
 				Conversion:               props.Conversion,
 				ConversionWebhookProps:   props.ConversionWebhookProps,
-				Codegen:                  props.Codegen,
+				Codegen:                  ver.Codegen, // Version codegen is inherited from kind in kind-centric old style
 				Served:                   ver.Served,
 				SelectableFields:         ver.SelectableFields,
 				AdditionalPrinterColumns: ver.AdditionalPrinterColumns,
