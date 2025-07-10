@@ -244,14 +244,14 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			Operations: operations,
 		}
 	}
-	if len(vk.CustomRoutes) > 0 {
-		mver.CustomRoutes = make(map[string]spec3.PathProps)
-		for sourcePath, sourceMethodsMap := range vk.CustomRoutes {
+	if len(vk.Routes) > 0 {
+		mver.Routes = make(map[string]spec3.PathProps)
+		for sourcePath, sourceMethodsMap := range vk.Routes {
 			targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 			if err != nil {
 				return app.ManifestVersionKind{}, fmt.Errorf("custom routes error for path '%s': %w", sourcePath, err)
 			}
-			mver.CustomRoutes[sourcePath] = targetPathProps
+			mver.Routes[sourcePath] = targetPathProps
 		}
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
@@ -265,7 +265,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			Validation:               vk.Validation,
 			Mutation:                 vk.Mutation,
 			AdditionalPrinterColumns: vk.AdditionalPrinterColumns,
-			CustomRoutes:             vk.CustomRoutes,
+			Routes:                   vk.Routes,
 		}, vk.Kind, true)
 		if err != nil {
 			return app.ManifestVersionKind{}, err
@@ -331,6 +331,11 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			return spec3.PathProps{}, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
 
+		operationID := defaultRouteName(sourceMethod, sourcePath)
+		if sourceRoute.Name != "" {
+			operationID = sourceRoute.Name
+		}
+
 		targetOperation := &spec3.Operation{
 			OperationProps: spec3.OperationProps{
 				Summary:     "",
@@ -338,6 +343,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				Parameters:  targetParameters,
 				RequestBody: targetRequestBody,
 				Responses:   targetResponses,
+				OperationId: operationID,
 			},
 		}
 
