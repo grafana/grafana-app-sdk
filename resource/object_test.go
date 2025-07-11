@@ -220,3 +220,38 @@ func TestCopyObject(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyObjectIntoPointerCopy(t *testing.T) {
+	value := onlyCallOnce("test")
+	original := &testSpec{
+		Value: &value,
+	}
+
+	deepCopied := original.DeepCopy()
+
+	// points to different addresses
+	assert.True(t, original.Value != deepCopied.Value, "original address: %p, deepCopied address: %p", original.Value, deepCopied.Value)
+
+	original.Value.Consume()
+
+	assert.NotPanics(t, func() { deepCopied.Value.Consume() }, "if they point to different addresses, this should not panic")
+}
+
+type onlyCallOnce string
+
+func (s *onlyCallOnce) Consume() {
+	if *s == "" {
+		panic("consumed")
+	}
+	*s = ""
+}
+
+type testSpec struct {
+	Value *onlyCallOnce `json:"value,omitempty"`
+}
+
+func (s *testSpec) DeepCopy() *testSpec {
+	cpy := &testSpec{}
+	CopyObjectInto(cpy, s)
+	return cpy
+}

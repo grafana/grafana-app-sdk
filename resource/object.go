@@ -261,7 +261,9 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 			}
 			return copyReflectValueInto(dst.Elem(), src.Elem())
 		default:
-			dst.Set(src)
+			ptrCopy := reflect.New(src.Type().Elem()) // new pointer of the same _value type_ as src
+			ptrCopy.Elem().Set(src.Elem())            // copy the value src is pointing to
+			dst.Set(ptrCopy)
 		}
 	case reflect.Struct:
 		// Special case for time.Time:
