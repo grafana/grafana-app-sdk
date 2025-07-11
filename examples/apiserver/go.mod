@@ -8,7 +8,7 @@ replace github.com/grafana/grafana-app-sdk => ../../
 
 require (
 	github.com/grafana/grafana-app-sdk v0.0.0-00010101000000-000000000000
-	github.com/grafana/grafana-app-sdk/logging v0.39.2
+	github.com/grafana/grafana-app-sdk/logging v0.39.3
 	k8s.io/apimachinery v0.33.2
 	k8s.io/apiserver v0.33.2
 	k8s.io/client-go v0.33.2
@@ -91,7 +91,7 @@ require (
 	golang.org/x/exp v0.0.0-20240909161429-701f63a606c0 // indirect
 	golang.org/x/net v0.41.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
-	golang.org/x/sync v0.15.0 // indirect
+	golang.org/x/sync v0.16.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/term v0.32.0 // indirect
 	golang.org/x/text v0.26.0 // indirect

@@ -15,7 +15,7 @@ require (
 	github.com/getkin/kin-openapi v0.132.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
 	github.com/grafana/cog v0.0.36
-	github.com/grafana/grafana-app-sdk/logging v0.39.2
+	github.com/grafana/grafana-app-sdk/logging v0.39.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.22.0
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
@@ -28,7 +28,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.37.0
 	go.opentelemetry.io/otel/trace v1.37.0
 	go.uber.org/goleak v1.3.0
-	golang.org/x/sync v0.15.0
+	golang.org/x/sync v0.16.0
 	golang.org/x/tools v0.34.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
 	google.golang.org/grpc v1.73.0
