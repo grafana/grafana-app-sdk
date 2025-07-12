@@ -1,105 +1,39 @@
 package {{ .Package }}
 
-// This is our {{.Name}} definition, which contains metadata about the kind, and the kind's schema
-{{.FieldName}}: {
-	// Name is the human-readable name which is used for generated type names.
-	kind: "{{.Name}}"
-	// Scope determines the scope of the kind in the API server. It currently allows two values:
+// This is our {{.Name}} definition, which contains kind metadata. It is the same across all versions of the kind.
+{{.FieldName}}Kind: {
+    // Name is the human-readable name which is used for generated type names.
+    kind: "{{.Name}}"
+    // Scope determines the scope of the kind in the API server. It currently allows two values:
     // * Namespaced - resources for this kind are created inside namespaces
     // * Cluster - resource for this kind are always cluster-wide (this can be thought of as a "global" namespace)
     // If not present, this defaults to "Namespaced"
     scope: "Namespaced"
-	// [OPTIONAL]
-	// Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
-	// If not present, default values within the codegen trait are used.
-	// This is the global trait, and can be overridden by specifying values in the versions themselves.
-	codegen: {
-	    // [OPTIONAL]
-	    // ts contains TypeScript code generation properties for the kind
-		ts: {
-			// [OPTIONAL]
-			// enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
-			// Defaults to true if not present.
-			enabled: true
-		}
-		// [OPTIONAL]
-		// go contains go code generation properties for the kind
-		go: {
-			// [OPTIONAL]
-			// enabled indicates whether the CLI should generate back-end go code for the kind.
-			// Defaults to true if not present.
-			enabled: true
-		}
-	}
-	// [OPTIONAL]
-	// The human-readable plural form of the "name" field.
-	// Will default to <name>+"s" if not present.
-	pluralName: "{{.Name}}s"
-	// Current designates which version in `versions` is the current one. This impacts code generation.
-	current: "v1"
-	// Versions is a map of all versions names to the version's schema and other metadata (such as codegen data).
-	// Versions can be specified in a non-inlined manner at the root level by using:
-	// {{.FieldName}}: versions: <your_version_name>: { ...version contents... }
-	versions: {
-	    "v1": {
-	        version: "v1"
-	        // Schema is the actual schema for this version{{ if ne .Target "model" }}
-            // As an API server-expressable resource, the schema has a restricted format:
-            // {
-            //     spec: { ... }
-            //     status: { ... } // optional
-            //     metadata: { ... } // optional
-            // }
-            // `spec` must always be present, and is the schema for the object.
-            // `status` is optional, and should contain status or state information which is typically not user-editable
-            // (controlled by controllers/operators). The kind system adds some implicit status information which is
-            // common across all kinds, and becomes present in the unified lineage used for code generation and other tooling.
-            // `metadata` is optional, and should contain kind- or schema-specific metadata. The kind system adds
-            // an explicit set of common metadata which can be found in the definition file for a CUE kind at
-            // [https://github.com/grafana/grafana-app-sdk/blob/main/codegen/cuekind/def.cue]
-            // additional metadata fields cannot conflict with the common metadata field names
-	        {{end}}schema: {
-                {{ if eq .Target "model" }}// Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
-                // firstField: string
-                // secondField: int64
-                {{ else }}// spec is the schema of our resource. The spec should include all the user-ediable information for the kind.
-                spec: {
-                    // Example fields, make sure to use int32 or int64 types instead of int for Thema compatibility
-                    // firstField: string
-                    // secondField: int64
-                }
-                // status is where state and status information which may be used or updated by the operator or back-end should be placed
-                // If you do not have any such information, you do not need to include this field,
-                // however, as mentioned above, certain fields will be added by the kind system regardless.
-                //status: {
-                //	currentState: string
-                //}
-                // metadata if where kind- and schema-specific metadata goes. This is typically unused,
-                // as the kind system's common metadata is always part of `metadata` and covers most metadata use-cases.
-                //metadata: {
-                //	kindSpecificField: string
-                //}{{ end }}
-	        }
-	        // [OPTIONAL]
-	        // This setting will override `codegen` at the root level of the kind
-	        codegen: {
-                // [OPTIONAL]
-                // ts contains TypeScript code generation properties for the kind
-                ts: {
-                    // [OPTIONAL]
-                    // enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
-                    // Defaults to the kind's root-level codegen.ts.enabled if not present.
-                    enabled: true
-                }
-                // [OPTIONAL]
-                // go contains go code generation properties for the kind
-                go: {
-                    // [OPTIONAL]
-                    // enabled indicates whether the CLI should generate back-end go code for the kind.
-                    // Defaults to the kind's root-level codegen.go.enabled if not present.
-                    enabled: true
-                }
-	        }
-	    }
-	}
+    // [OPTIONAL]
+    // The human-readable plural form of the "name" field.
+    // Will default to <name>+"s" if not present.
+    pluralName: "{{.Name}}s"
+    // [OPTIONAL]
+    // Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
+    // If not present, default values within the codegen trait are used.
+    // If you wish to specify codegen per-version, put this section in the version's object
+    // (for example, {{.FieldName}}v1alpha1) instead.
+    codegen: {
+        // [OPTIONAL]
+        // ts contains TypeScript code generation properties for the kind
+        ts: {
+            // [OPTIONAL]
+            // enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+            // Defaults to true if not present.
+            enabled: true
+        }
+        // [OPTIONAL]
+        // go contains go code generation properties for the kind
+        go: {
+            // [OPTIONAL]
+            // enabled indicates whether the CLI should generate back-end go code for the kind.
+            // Defaults to true if not present.
+            enabled: true
+        }
+    }
 }

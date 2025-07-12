@@ -2,7 +2,7 @@
 
 Now that we have our kind and schema defined, we want to generate code from them that we can use. 
 To do this, we need to add the kind to our **manifest**. The manifest is information about our app, 
-including the kinds it provides. If we don't add our kind to the manifest, it isn't considered part of our app. 
+including the versions and kinds it provides. If we don't add our kind to the manifest, it isn't considered part of our app. 
 
 Our project init created a default manifest for us, found in `./kinds/manifest.cue`:
 ```cue
@@ -12,9 +12,18 @@ manifest: {
 	// appName is the unique name of your app. It is used to reference the app from other config objects,
 	// and to generate the group used by your app in the app platform API.
 	appName: "issue-tracker-project"
-	// kinds is the list of kinds that your app defines and manages. If your app deals with kinds defined/managed
-	// by another app, use permissions.accessKinds to allow your app access
-	kinds: []
+	// groupOverride can be used to specify a non-appName-based API group.
+	// By default, an app's API group is LOWER(REPLACE(appName, '-', '')).ext.grafana.com,
+	// but there are cases where this needs to be changed.
+	// Keep in mind that changing this after an app is deployed can cause problems with clients and/or kind data.
+	// groupOverride: foo.ext.grafana.app
+	
+	// versions is a map of versions supported by your app. Version names should follow the format "v<integer>" or
+	// "v<integer>(alpha|beta)<integer>". Each version contains the kinds your app manages for that version.
+	// If your app needs access to kinds managed by another app, use permissions.accessKinds to allow your app access.
+	versions: {
+	    "v1alpha1": v1alpha1
+	}
 	// extraPermissions contains any additional permissions your app may require to function.
 	// Your app will always have all permissions for each kind it manages (the items defined in 'kinds').
 	extraPermissions: {
@@ -29,12 +38,48 @@ manifest: {
 		]
 	}
 }
+
+// v1alpha1 is the v1alpha1 version of the app's API.
+// It includes kinds which the v1alpha1 API serves, and (future) custom routes served globally from the v1alpha1 version.
+v1alpha1: {
+    // kinds is the list of kinds served by this version
+    kinds: []
+    // [OPTIONAL]
+    // served indicates whether this particular version is served by the API server.
+    // served should be set to false before a version is removed from the manifest entirely.
+    // served defaults to true if not present.
+    served: true
+    // [OPTIONAL]
+    // Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
+    // If not present, default values within the codegen trait are used.
+    // If you wish to specify codegen per-version, put this section in the version's object
+    // (for example, <no value>v1alpha1) instead.
+    codegen: {
+        // [OPTIONAL]
+        // ts contains TypeScript code generation properties for the kind
+        ts: {
+            // [OPTIONAL]
+            // enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+            // Defaults to true if not present.
+            enabled: true
+        }
+        // [OPTIONAL]
+        // go contains go code generation properties for the kind
+        go: {
+            // [OPTIONAL]
+            // enabled indicates whether the CLI should generate back-end go code for the kind.
+            // Defaults to true if not present.
+            enabled: true
+        }
+    }
+}
 ```
 
 By default, the `appName` is the final part of our module path. We don't need to worry about `extraPermissions`, as our app doesn't need to work with any other apps' kinds. 
-However, right now, our `kinds` list is empty. To add our kind to the manifest, we just need to add the field name of our kind:
+`versions` is pre-populated with a `v1alpha1` version object, which has a `kinds` section. 
+However, right now, the `kinds` list is empty. To add our kind to the `v1alpha1` version in the manifest, we just need to add the field name of the `v1alpha1` version of our kind:
 ```cue
-kinds: [issue]
+kinds: [issuev1alpha1]
 ```
 
 > [!TIP]
@@ -47,16 +92,17 @@ make generate
 This command should output a list of all the files it writes:
 ```shell
 $ make generate
- * Writing file pkg/generated/issue/v1/issue_codec_gen.go
- * Writing file pkg/generated/issue/v1/issue_metadata_gen.go
- * Writing file pkg/generated/issue/v1/issue_object_gen.go
- * Writing file pkg/generated/issue/v1/issue_schema_gen.go
- * Writing file pkg/generated/issue/v1/issue_spec_gen.go
- * Writing file pkg/generated/issue/v1/issue_status_gen.go
- * Writing file plugin/src/generated/issue/v1/issue_object_gen.ts
- * Writing file plugin/src/generated/issue/v1/types.metadata.gen.ts
- * Writing file plugin/src/generated/issue/v1/types.spec.gen.ts
- * Writing file plugin/src/generated/issue/v1/types.status.gen.ts
+ * Writing file pkg/generated/issue/v1alpha1/constants.go
+ * Writing file pkg/generated/issue/v1alpha1/issue_codec_gen.go
+ * Writing file pkg/generated/issue/v1alpha1/issue_metadata_gen.go
+ * Writing file pkg/generated/issue/v1alpha1/issue_object_gen.go
+ * Writing file pkg/generated/issue/v1alpha1/issue_schema_gen.go
+ * Writing file pkg/generated/issue/v1alpha1/issue_spec_gen.go
+ * Writing file pkg/generated/issue/v1alpha1/issue_status_gen.go
+ * Writing file plugin/src/generated/issue/v1alpha1/issue_object_gen.ts
+ * Writing file plugin/src/generated/issue/v1alpha1/types.metadata.gen.ts
+ * Writing file plugin/src/generated/issue/v1alpha1/types.spec.gen.ts
+ * Writing file plugin/src/generated/issue/v1alpha1/types.status.gen.ts
  * Writing file definitions/issue.issuetrackerproject.ext.grafana.com.json
  * Writing file definitions/issue-tracker-project-manifest.json
  * Writing file pkg/generated/issuetrackerproject_manifest.go
@@ -65,7 +111,6 @@ That's a bunch of files written! Let's tree the directory to understand the stru
 ```shell
 $ tree .
 .
-├── Makefile
 ├── cmd
 │   └── operator
 ├── definitions
@@ -79,35 +124,38 @@ $ tree .
 │   ├── issue.cue
 │   └── manifest.cue
 ├── local
-│   ├── Tiltfile
 │   ├── additional
 │   ├── config.yaml
 │   ├── mounted-files
 │   │   └── plugin
-│   └── scripts
-│       ├── cluster.sh
-│       └── push_image.sh
+│   ├── scripts
+│   │   ├── cluster.sh
+│   │   └── push_image.sh
+│   └── Tiltfile
+├── Makefile
 ├── pkg
 │   └── generated
-│       ├── issuetrackerproject_manifest.go
-│       └── v1
-│           ├── issue_codec_gen.go
-│           ├── issue_metadata_gen.go
-│           ├── issue_object_gen.go
-│           ├── issue_schema_gen.go
-│           ├── issue_spec_gen.go
-│           └── issue_status_gen.go
+│       ├── issue
+│       │   └── v1alpha1
+│       │       ├── constants.go
+│       │       ├── issue_codec_gen.go
+│       │       ├── issue_metadata_gen.go
+│       │       ├── issue_object_gen.go
+│       │       ├── issue_schema_gen.go
+│       │       ├── issue_spec_gen.go
+│       │       └── issue_status_gen.go
+│       └── issuetrackerproject_manifest.go
 └── plugin
     └── src
         └── generated
             └── issue
-                └── v1
+                └── v1alpha1
                     ├── issue_object_gen.ts
                     ├── types.metadata.gen.ts
                     ├── types.spec.gen.ts
                     └── types.status.gen.ts
 
-21 directories, 23 files
+20 directories, 24 files
 ```
 
 All of our generated go code lives in `pkg/generated`, and all the generated TypeScript lives in `plugin/src/generated`. 
@@ -125,20 +173,20 @@ Let's take a closer look at the list of files:
 $ tree pkg/generated
 pkg/generated
 ├── issue
-│   └── v1
-│       ├── constants.go
-│       ├── issue_codec_gen.go
-│       ├── issue_metadata_gen.go
-│       ├── issue_object_gen.go
-│       ├── issue_schema_gen.go
-│       ├── issue_spec_gen.go
-│       └── issue_status_gen.go
+│   └── v1alpha1
+│       ├── constants.go
+│       ├── issue_codec_gen.go
+│       ├── issue_metadata_gen.go
+│       ├── issue_object_gen.go
+│       ├── issue_schema_gen.go
+│       ├── issue_spec_gen.go
+│       └── issue_status_gen.go
 └── issuetrackerproject_manifest.go
 
 3 directories, 8 files
 ```
 
-The exported go types from our kind's `v1` schema definition are `issue_spec_gen.go` and `issue_status_gen.go`. 
+The exported go types from our kind's `v1alpha1` schema definition are `issue_spec_gen.go` and `issue_status_gen.go`. 
 `issue_metadata_gen.go` exists for legacy reasons we won't touch on here. You'll note that `issue_status_gen.go` contain types and fields which we didn't define in our schema--that's because of the joined "default" status information. 
 If we had defined a `status` or `metadata` in our schema, those fields would _also_ be present in the generated types.
 
@@ -160,7 +208,7 @@ plugin
 └── src
     └── generated
         └── issue
-            └── v1
+            └── v1alpha1
                 ├── issue_object_gen.ts
                 ├── types.metadata.gen.ts
                 ├── types.spec.gen.ts

@@ -1,7 +1,8 @@
 package kinds
 
-// This is our issue definition, which contains metadata about the schema, and the schema itself, as a Lineage
-issue: {
+// This is our issue kind metadata, which we can re-use for each version that contains our issue kind,
+// even if they have differing schemas.
+issueKind: {
 	// Kind is the human-readable name which is used for generated type names.
 	kind: "Issue"
 	// [OPTIONAL]
@@ -13,8 +14,6 @@ issue: {
 	// "Namespaced" kinds have resources which live in specific namespaces, whereas
 	// "Cluster" kinds' resources all exist in a global namespace and cannot be localized to a single one.
 	scope: "Namespaced"
-	// Current is the current version of the Schema.
-	current: "v1"
 	// Codegen is an object which provides information to the codegen tooling about what sort of code you want generated.
 	codegen: {
 		// [OPTIONAL]
@@ -34,28 +33,27 @@ issue: {
 			enabled: true
 		}
 	}
-	// versions is a map of all supported versions of this Kind, with each key being the version name. 
-	versions: {
-		"v1": {
-			// Schema is the actual shape of the object. Each schema must have the form:
-			// {
-			//     metadata: { ... } // optional
-			//     spec: { ... }
-			//     status: { ... } // optional
-			// }
-			// The form of schemas is subject to change prior to v1.0, and is likely to include new restrictions on non-spec top-level fields.
-			schema: {
-				// spec is the schema of our resource.
-				// We could include `status` or `metadata` top-level fields here as well,
-				// but `status` is for state information, which we don't need to track,
-				// and `metadata` is for kind/schema-specific custom metadata in addition to the existing
-				// common metadata, and we don't need to track any specific custom metadata.
-				spec: {
-					title: string
-					description: string
-					status: string
-				}
-			}
+}
+
+// issuev1alpha1 is our version `v1alpha1` issue kind. We use the issueKind info, and add in the schema for the Issue kind for this specific version.
+issuev1alpha1: issueKind & {
+	// Schema is the actual shape of the object. Each schema must have the form:
+	// {
+	//     metadata: { ... } // optional
+	//     spec: { ... }
+	//     status: { ... } // optional
+	// }
+	// The form of schemas is subject to change prior to v1.0, and is likely to include new restrictions on non-spec top-level fields.
+	schema: {
+		// spec is the schema of our resource.
+		// We could include `status` or `metadata` top-level fields here as well,
+		// but `status` is for state information, which we don't need to track,
+		// and `metadata` is for kind/schema-specific custom metadata in addition to the existing
+		// common metadata, and we don't need to track any specific custom metadata.
+		spec: {
+			title: string
+			description: string
+			status: string
 		}
 	}
 }

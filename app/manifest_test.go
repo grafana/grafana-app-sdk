@@ -2,15 +2,114 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
+
+func TestManifestData_Validate(t *testing.T) {
+	tests := []struct {
+		name        string
+		data        ManifestData
+		expectedErr error
+	}{{
+		name: "valid (empty manifest)",
+		data: ManifestData{},
+	}, {
+		name: "plural mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "bars",
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'")),
+	}, {
+		name: "scope mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:  "Foo",
+					Scope: "Namespaced",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:  "Foo",
+					Scope: "Cluster",
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'")),
+	}, {
+		name: "conversion mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Conversion: true,
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Conversion: false,
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}, {
+		name: "plural, scope, and conversion mismatch",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Plural:     "foos",
+					Scope:      "Namespaced",
+					Conversion: true,
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:       "Foo",
+					Plural:     "bars",
+					Scope:      "Cluster",
+					Conversion: false,
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'"),
+			errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expectedErr, test.data.Validate())
+		})
+	}
+}
 
 func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 	gvk := schema.GroupVersionKind{
@@ -50,7 +149,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -74,7 +173,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.#foo": common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -88,7 +187,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 					},
 				},
 			},
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -117,7 +216,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec", "status"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -131,7 +230,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 					},
 				},
 			},
-			"test.grafana.app/v1.status": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooStatus": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -154,7 +253,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -173,7 +272,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -203,7 +302,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -281,7 +380,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		want: map[string]common.OpenAPIDefinition{
 			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec", "status"}),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.#foo": common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -291,7 +390,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 					},
 				},
 			},
-			"test.grafana.app/v1.#bar": common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo#bar": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -327,14 +426,14 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 					},
 				},
 			},
-			"test.grafana.app/v1.#foobar": common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo#foobar": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"string"},
 					},
 				},
 			},
-			"test.grafana.app/v1.spec": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -420,7 +519,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				},
 				Dependencies: []string{"test.grafana.app/v1.#bar", "test.grafana.app/v1.#foo", "test.grafana.app/v1.#foobar"},
 			},
-			"test.grafana.app/v1.status": common.OpenAPIDefinition{
+			"test.grafana.app/v1.FooStatus": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -437,7 +536,10 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			vs := VersionSchema{}
 			require.Nil(t, json.Unmarshal(test.schema, &vs))
-			res, err := vs.AsKubeOpenAPI(test.gvk, test.ref)
+			res, err := vs.AsKubeOpenAPI(test.gvk, test.ref, "test.grafana.app/v1")
+			for k, _ := range res {
+				fmt.Println(k)
+			}
 			if test.err != nil {
 				assert.Equal(t, test.err, err)
 			} else {
@@ -479,12 +581,14 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 		},
 		Dependencies: make([]string, 0),
 	}
+	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
 	for _, prop := range props {
-		kind.Dependencies = append(kind.Dependencies, fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, prop))
+		propName := gvk.Kind + strings.ToUpper(prop[:1]) + prop[1:]
+		kind.Dependencies = append(kind.Dependencies, fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, propName))
 		kind.Schema.Properties[prop] = spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Default: map[string]interface{}{},
-				Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, prop)),
+				Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, propName)),
 			},
 		}
 	}

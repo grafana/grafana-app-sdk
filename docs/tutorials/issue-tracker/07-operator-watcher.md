@@ -25,7 +25,7 @@ func New(cfg app.Config) (app.App, error) {
         // Trimmed
         ManagedKinds: []simple.AppManagedKind{
         {
-            Kind:    issuev1.Kind(),
+            Kind:    issuev1alpha1.Kind(),
             Watcher: issueWatcher,
         },
     },
@@ -48,9 +48,9 @@ So we have `IssueWatcher`, which implements `operator.ResourceWatcher`. The `Add
 ```go
 // Add handles add events for issuev1.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
-	object, ok := rObj.(*issuev1.Issue)
+	object, ok := rObj.(*issuev1alpha1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1alpha1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.StaticMetadata().Name, rObj.StaticMetadata().Namespace, rObj.StaticMetadata().Kind)
 	}
 
@@ -94,36 +94,37 @@ func NewIssueWatcher() (*IssueWatcher, error) {
 ```
 The code in `NewIssueWatcher` now creates a new `GaugeVec` named `issue_tracker_project_issue_watcher_issues` with a `status` label, allowing us to track issue counts by status. All we need to do now is update the gauge with the correct label on our different watcher methods:
 ```go
-// Add handles add events for issuev1.Issue resources.
+// Add handles add events for issuev1alpha1.Issue resources.
 func (s *IssueWatcher) Add(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-add")
 	defer span.End()
-	object, ok := rObj.(*issuev1.Issue)
+	object, ok := rObj.(*issuev1alpha1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1alpha1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
 	// Increase the gauge for the number of issues with the object's status
 	s.statsGauge.WithLabelValues(object.Spec.Status).Inc()
 
+	// TODO
 	logging.FromContext(ctx).Debug("Added resource", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 
-// Update handles update events for issuev1.Issue resources.
+// Update handles update events for issuev1alpha1.Issue resources.
 func (s *IssueWatcher) Update(ctx context.Context, rOld resource.Object, rNew resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-update")
 	defer span.End()
-	oldObject, ok := rOld.(*issuev1.Issue)
+	oldObject, ok := rOld.(*issuev1alpha1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1alpha1.Issue (name=%s, namespace=%s, kind=%s)",
 			rOld.GetStaticMetadata().Name, rOld.GetStaticMetadata().Namespace, rOld.GetStaticMetadata().Kind)
 	}
 
-	newObject, ok := rNew.(*issuev1.Issue)
+	newObject, ok := rNew.(*issuev1alpha1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1alpha1.Issue (name=%s, namespace=%s, kind=%s)",
 			rNew.GetStaticMetadata().Name, rNew.GetStaticMetadata().Namespace, rNew.GetStaticMetadata().Kind)
 	}
 
@@ -133,23 +134,25 @@ func (s *IssueWatcher) Update(ctx context.Context, rOld resource.Object, rNew re
 		s.statsGauge.WithLabelValues(newObject.Spec.Status).Inc()
 	}
 
+	// TODO
 	logging.FromContext(ctx).Debug("Updated resource", "name", oldObject.GetStaticMetadata().Identifier().Name)
 	return nil
 }
 
-// Delete handles delete events for issuev1.Issue resources.
+// Delete handles delete events for issuev1alpha1.Issue resources.
 func (s *IssueWatcher) Delete(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-delete")
 	defer span.End()
-	object, ok := rObj.(*issuev1.Issue)
+	object, ok := rObj.(*issuev1alpha1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1alpha1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
 	// Decrease the number of issues with the status of the deleted object
 	s.statsGauge.WithLabelValues(object.Spec.Status).Dec()
 
+	// TODO
 	logging.FromContext(ctx).Debug("Deleted resource", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
@@ -159,9 +162,9 @@ func (s *IssueWatcher) Delete(ctx context.Context, rObj resource.Object) error {
 func (s *IssueWatcher) Sync(ctx context.Context, rObj resource.Object) error {
 	ctx, span := otel.GetTracerProvider().Tracer("watcher").Start(ctx, "watcher-sync")
 	defer span.End()
-	object, ok := rObj.(*issuev1.Issue)
+	object, ok := rObj.(*issuev1alpha1.Issue)
 	if !ok {
-		return fmt.Errorf("provided object is not of type *issuev1.Issue (name=%s, namespace=%s, kind=%s)",
+		return fmt.Errorf("provided object is not of type *issuev1alpha1.Issue (name=%s, namespace=%s, kind=%s)",
 			rObj.GetStaticMetadata().Name, rObj.GetStaticMetadata().Namespace, rObj.GetStaticMetadata().Kind)
 	}
 
@@ -169,6 +172,7 @@ func (s *IssueWatcher) Sync(ctx context.Context, rObj resource.Object) error {
 	// but our gauge wouldn't have prior awareness of it.
 	s.statsGauge.WithLabelValues(object.Spec.Status).Inc()
 
+	// TODO
 	logging.FromContext(ctx).Debug("Possible resource update", "name", object.GetStaticMetadata().Identifier().Name)
 	return nil
 }
@@ -205,7 +209,7 @@ Good practice for an operator is that we use the `status` subresource to track o
 ```shell
 curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/cue/issue-v2.cue
 ```
-Here we update the kind v1 `schema` to include 
+Here we update the kind v1alpha1 `schema` to include 
 ```cue
 status: {
 	processedTimestamp: string & time.Time
@@ -226,7 +230,7 @@ Alright, let's put a store in our watcher:
 ```go
 type IssueWatcher struct {
 	statsGauge *prometheus.GaugeVec
-	issueStore *resource.TypedStore[*issuev1.Issue]
+	issueStore *resource.TypedStore[*issuev1alpha1.Issue]
 }
 
 func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, error) {
@@ -236,7 +240,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 		Namespace: "issue_tracker_project",
 		Help:      "Number of issues",
 	}, []string{"status"})
-	issueStore, err := resource.NewTypedStore[*issuev1.Issue](issuev1.Kind(), clientGenerator)
+	issueStore, err := resource.NewTypedStore[*issuev1alpha1.Issue](issuev1alpha1.Kind(), clientGenerator)
 	if err != nil {
 		return nil, fmt.Errorf("error creating issue TypedStore: %w", err)
 	}
@@ -291,27 +295,27 @@ make local/down && make local/up
 ```
 Now, if you make a new issue, you'll see the `status.processedTimestamp` get updated.
 ```shell
-echo '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Foo","description":"bar","status":"open"}}' | kubectl create -f -
+echo '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Foo","description":"bar","status":"open"}}' | kubectl create -f -
 ```
 ```
 % kubectl get issue test-issue -oyaml
-apiVersion: issuetrackerproject.ext.grafana.com/v1
+apiVersion: issuetrackerproject.ext.grafana.com/v1alpha1
 kind: Issue
 metadata:
-  creationTimestamp: "2024-12-05T00:52:46Z"
+  creationTimestamp: "2025-07-10T16:21:45Z"
   finalizers:
   - issue-tracker-project-issues-finalizer
   generation: 1
   name: test-issue
   namespace: default
-  resourceVersion: "3041"
-  uid: 8e47278a-da1e-48c6-af5d-2a6c68642cf8
+  resourceVersion: "2540"
+  uid: c48fdd01-8c2a-45c1-8cd3-0b9b17d2a617
 spec:
   description: bar
   status: open
   title: Foo
 status:
-  processedTimestamp: "2024-12-05T00:52:46.299978927Z"
+  processedTimestamp: "2025-07-10T16:21:45.473248501Z"
 ```
 Now whenever the watcher processes an Add, Update, or Sync, it'll update the `processedTimestamp`.
 

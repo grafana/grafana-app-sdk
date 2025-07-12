@@ -1,4 +1,4 @@
-import { Issue } from '../generated/issue/v1/issue_object_gen';
+import { Issue } from '../generated/issue/v1alpha1/issue_object_gen';
 import { BackendSrvRequest, getBackendSrv, FetchResponse } from '@grafana/runtime';
 import { lastValueFrom } from 'rxjs';
 
@@ -10,13 +10,13 @@ export class IssueClient {
     apiEndpoint: string
 
     constructor() {
-        this.apiEndpoint = '/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues';
+        this.apiEndpoint = '/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues';
     }
 
     async create(title: string, description: string): Promise<FetchResponse<Issue>> {
         let issue = {
             kind: 'Issue',
-            apiVersion: 'issuetrackerproject.ext.grafana.com/v1',
+            apiVersion: 'issuetrackerproject.ext.grafana.com/v1alpha1',
             spec: {
                 title: title,
                 description: description,

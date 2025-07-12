@@ -3,7 +3,12 @@ package app
 manifest: {
 	appName: "app-manifest"
 	groupOverride: "apps.grafana.com"
-	kinds: [appManifest]
+	versions: {
+		"v1alpha1": {
+			codegen: ts: enabled: false
+			kinds: [appManifestv1alpha1]
+		}
+	}
 	extraPermissions: {
 		accessKinds: [{
 			group: "apiextensions.k8s.io",
@@ -13,17 +18,15 @@ manifest: {
 	}
 }
 
-appManifest: {
+appManifestKind: {
 	kind: "AppManifest"
 	scope: "Cluster"
 	codegen: {
 		ts: enabled: false
 	}
-	current: "v1alpha1"
-	versions: {}
 }
 
-appManifest: versions: v1alpha1: {
+appManifestv1alpha1: appManifestKind & {
 	schema: {
 		#AdditionalPrinterColumns: {
 			// name is a human readable name for the column.
@@ -56,22 +59,37 @@ appManifest: versions: v1alpha1: {
 			validation?: #ValidationCapability
 			mutation?: #MutationCapability
 		}
-		#ManifestKindVersionSchema: {
+		#ManifestVersionKindSchema: {
 			[string]: _
 		}
-		#ManifestKindVersion: {
-			name: string
+		#ManifestVersionKind: {
+			// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
+			kind: string
+			// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+			plural?: string
+			// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
+			// Different values will result in an error or undefined behavior.
+			scope: *"Namespaced" | "Cluster"
 			admission?: #AdmissionCapabilities
-			schema: #ManifestKindVersionSchema
+			schema: #ManifestVersionKindSchema
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
+			// It may not prevent automatic conversion behavior between versions of the kind when set to false
+			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
+			// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
+			conversion?: bool | *false
 		}
-		#ManifestKind: {
-			kind: string
-			plural?: string
-			scope: string
-			conversion: bool
-			versions: [...#ManifestKindVersion]
+		#ManifestVersion: {
+			// Name is the version name string, such as "v1" or "v1alpha1"
+			name: string
+			// Served dictates whether this version is served by the API server.
+			// A version cannot be removed from a manifest until it is no longer served.
+			served?: bool | *true
+			// Kinds is a list of all the kinds served in this version.
+			// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
+			// or newly added (and didn't exist for older versions).
+			kinds: [...#ManifestVersionKind]
 		}
 		#KindPermission: {
 			group: string
@@ -93,7 +111,11 @@ appManifest: versions: v1alpha1: {
 		spec: {
 			appName: string
 			group: string
-			kinds: [...#ManifestKind]
+			// Versions is the list of versions for this manifest, in order.
+			versions: [...#ManifestVersion]
+			// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
+			// For CRDs, this also dictates which version is used for storage.
+			preferredVersion?: string
 			// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
 			// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
 			extraPermissions?: {

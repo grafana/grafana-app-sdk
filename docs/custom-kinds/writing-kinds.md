@@ -5,40 +5,36 @@ The preferred way of writing kinds for use with codegen provided by the `grafana
 > [!TIP]
 > You can generate a kind with descriptive comments of all fields with `grafana-app-sdk project kind add <KindName>`
 
-Defining a kind can be thought of as being split into two parts: the kind metadata, and the schemas for each version. A simple kind, without any versions (which makes it invalid, but it's a place to start) would look like this:
+Defining a kind can be thought of as being split into two parts: the kind metadata, and the schemas and other version-specific information for each version. 
+When writing a kind in CUE, it's good practice to split out the kind metadata, which is common across all versions, 
+and the version-specific information, so that the metadata can be re-used for each version of the kind.
+
+A simple kind, with a single version and without any schema information would look like:
 ```cue
-foo: {
+// fooKind is the kind metadata for Foo
+fooKind: {
     // kind is the kind name. It must be capitalized by convention
     kind: "Foo"
-    // Collection of all versions for the kind, as a map of version string => version details
-    versions: {}
 }
+
+// foov1 is the v1 version of the Foo kind.
+// It combines the kind metadata for Foo with version-specific information
+foov1: fooKind & {}
 ```
 
 > [!NOTE]  
 > For a kind to be expressed by your app and work with the codegen, it must be a part of your app's [**Manifest**](../app-manifest.md).
-> When using `grafana-app-sdk project kind add`, the newly-created kind is automatically added to your manifest.
+> When using `grafana-app-sdk project kind add`, the newly-created kind version is automatically added to your manifest 
+> (though additional versions for the kind will need to be added manually).
 
 ## Schemas
 
-To complete the kind, it needs a version and a schema for that version. These slot into the kind like so:
+To complete the kind, it needs a schema for its `v1` version:
 ```cue
-foo: {
-    // ... existing fields ...
-
-    // We have to specify the currentVersion, even if there's only one version
-    currentVersion: "v1"
-
-    // Collection of all versions for the kind, as a map of version string => version details
-    versions: {
-        // This is our "v1" version
-        "v1": {
-            // schema is the only required field for a version, and contains the schema for this version of the kind
-            schema: {
-                // ... schema goes here ...
-            }
-        }
-    }
+foov1: fooKind & {
+	schema: {
+		// TODO
+	}
 }
 ```
 
@@ -62,17 +58,11 @@ The `schema` of an API resource also has a few restrictions on it: there _MUST_ 
 
 With all that, let's complete our simple kind:
 ```cue
-foo: {
-    kind: "Foo"
-    currentVersion: "v1"
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    stringField: string
-                    intField: int64
-                }
-            }
+foov1: fooKind & {
+    schema: {
+        spec: {
+            stringField: string
+            intField: int64
         }
     }
 }
@@ -84,17 +74,15 @@ Our final CUE file looks like:
 ```cue
 package kinds
 
-foo: {
+fooKind: {
     kind: "Foo"
-    currentVersion: "v1"
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    stringField: string
-                    intField: int64
-                }
-            }
+}
+
+foov1: fooKind & {
+    schema: {
+        spec: {
+            stringField: string
+            intField: int64
         }
     }
 }
@@ -110,7 +98,11 @@ package kinds // Or the package you're using for your CUE
 
 manifest: {
 	appName: "my-app"
-	kinds: [foo] // This points to the kind `foo` we defined in our file
+	versions: {
+		"v1": {
+			kinds: [foov1] // This points to the kind `foov1` we defined in our file
+		}
+	}
 }
 ```
 Now you can run
@@ -165,35 +157,47 @@ codegen: {
     }
 }
 ```
-And can be overwritten at either the kind level, or the version level (version level will take precedence over the kind level declaration). For example, if we wanted to turn off front-end code from being generated for our kind, but keep it on for version `v2`, we could write a kind like this:
+And can be overwritten at either the kind level, or the version level. For example, if we wanted to turn off front-end code from being generated for `v1` of our kind, but keep it on for version `v2`, we could write a kind like this:
 ```cue
-myKind: {
-    kind: "MyKind"
-    current: "v2"
-    codegen: {
-        ts: enabled: false // Turn off front-end codegen for this kind
-    }
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    foo: string
-                }
-            }
-        }
-        "v2": {
-            schema: {
-                spec: {
-                    foo: string
-                    bar: int64
-                }
-            }
-            codegen: ts: enabled: true // Turn on front-end codegen for this version
+fooKind: {
+    kind: "Foo"
+}
+
+foov1: fooKind & {
+    schema: {
+        spec: {
+            foo: string
         }
     }
+    codegen: ts: enabled: false // Turn on front-end codegen for this version
+}
+
+foov2: fooKind & {
+    schema: {
+        spec: {
+            foo: string
+            bar: int64
+        }
+    }
+    codegen: ts: enabled: true // Turn on front-end codegen for this version. This defaults to `true`, so we can also leave this out
 }
 ```
 (Here we also introduce a convenience of CUE: nested struct fields in one line using the `:` separator. We also have a second entry in `versions` in our kind, for more details on multiple versions in a kind see [Managing Multiple Kind Versions](./managing-multiple-versions.md))
+
+Keep in mind you would also need to add `foov2` to your manifest, like so:
+```cue
+manifest: {
+	appName: "my-app"
+	versions: {
+		"v1": {
+			kinds: [foov1] 
+		}
+		"v2": {
+			kinds: [foov2] 
+		}
+	}
+}
+```
 
 ## Complex Schemas
 
@@ -271,16 +275,14 @@ package kinds
 
 import "time"
 
-foo: {
+fooKind: {
     kind: "Foo"
-    currentVersion: "v1"
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    timeField: string & time.Time
-                }
-            }
+}
+
+foov1: fooKind & {
+    schema: {
+        spec: {
+            timeField: string & time.Time
         }
     }
 }
@@ -297,28 +299,18 @@ You can define further, more complex validation and admission control via your o
 The `kind` format allows for configuring the `additionalPrinterColumns` parameter on a [CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns). The format is the same as a CRD, and you add this config as part of "version", next to the `schema`:
 
 ```cue
-myKind: {
-    kind: "MyKind"
-    current: "v1"
-[...]
-    versions: {
-        "v1": {
-            schema: {
-                spec: {
-                    foo: string
-                }
-            }
-            additionalPrinterColumns: [
-              {
-                name: "FOO"
-                type: "string"
-                jsonPath: ".spec.foo"
-              }
-            ]
-        }
-    }
+foov1: fooKind & {
+	schema: {
+		spec: {
+			foo: string
+		}
+	}
+	additionalPrinterColumns: [{
+		name: "FOO"
+		type: "string"
+		jsonPath: ".spec.foo"
+	}]
 }
-
 ```
 
 ### Examples

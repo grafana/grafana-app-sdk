@@ -7,14 +7,15 @@
     "spec": {
         "appName": "custom-app",
         "group": "customapp.ext.grafana.com",
-        "kinds": [
+        "versions": [
             {
-                "kind": "CustomKind",
-                "scope": "Namespaced",
-                "plural": "CustomKinds",
-                "versions": [
+                "name": "v0-0",
+                "served": true,
+                "kinds": [
                     {
-                        "name": "v0-0",
+                        "kind": "CustomKind",
+                        "plural": "CustomKinds",
+                        "scope": "Namespaced",
                         "schema": {
                             "spec": {
                                 "properties": {
@@ -76,10 +77,19 @@
                                 },
                                 "type": "object"
                             }
-                        }
-                    },
+                        },
+                        "conversion": false
+                    }
+                ]
+            },
+            {
+                "name": "v1-0",
+                "served": true,
+                "kinds": [
                     {
-                        "name": "v1-0",
+                        "kind": "CustomKind",
+                        "plural": "CustomKinds",
+                        "scope": "Namespaced",
                         "schema": {
                             "spec": {
                                 "properties": {
@@ -298,11 +308,12 @@
                                 "type": "object",
                                 "x-kubernetes-preserve-unknown-fields": true
                             }
-                        }
+                        },
+                        "conversion": false
                     }
-                ],
-                "conversion": false
+                ]
             }
-        ]
+        ],
+        "preferredVersion": ""
     }
 }

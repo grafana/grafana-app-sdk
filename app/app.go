@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
@@ -48,6 +49,8 @@ type CustomRouteRequest struct {
 	// For a subresource route, this is the subresource (for example, `bar` in the case of `test.grafana.app/v1/foos/foo/bar`).
 	// In the case of a non-subresource route, this will be the path section past the namespace (or version if the route is not namespaced).
 	Path string
+	// URL is the full URL object of the request, which can be used to extract query parameters, or host/protocol for redirects
+	URL *url.URL
 	// Method is the HTTP request method
 	Method string
 	// Headers contains the HTTP headers of the original request. Runners MAY remove or sanitize some headers.
