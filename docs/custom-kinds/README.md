@@ -7,9 +7,11 @@ A Kind is a concept [borrowed from Kubernetes](https://kubernetes.io/docs/concep
 A Kind is composed of several components:
 * A unique name (also, slightly confusingly, called Kind)
 * A Group it belongs to
-* One or more versions, and a schema for the `spec` and any subresources for each version
+* A Version, and a schema for the `spec` and any subresources for that version
 
 (a `spec` is essentially the body of the resource: for a resource like a grafana dashboard, it would be the panels. Subresources are additional payloads that are not considered part of the main body of the resource, but may be used by applications for their purposes. They are returned alongside the `spec` in reads, but must be updated via a separate call, and can have different RBAC associated with them. In kubernetes, `status` is considered a subresource).
+
+You may have multiple versions of a kind, and they should share the same name and other metadata attributes, and each version should be convertable to each other version.
 
 In a kubernetes-compatible API server, a kind is identified by the top-level attributes `kind` and `apiVersion` (where the `apiVersion` consists of the `group` and `version`--the group is used to identify the kind, and the version the specific schema). A kind is sometimes referenced as the Group and Kind combination (called GroupKind), or as the totality of Group, Kind, and Version (called GroupVersionKind, or GVK), which is the way to uniquely identify the schema of a resource.
 

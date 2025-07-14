@@ -8,13 +8,16 @@
   "spec": {
     "appName": "issue-tracker-project",
     "group": "issuetrackerproject.ext.grafana.com",
-    "kinds": [
+    "preferredVersion": "v1",
+    "versions": [
       {
-        "kind": "Issue",
-        "scope": "Namespaced",
-        "versions": [
+        "name": "v1",
+        "served": true,
+        "kinds": [
           {
-            "name": "v1",
+            "kind": "Issue",
+            "plural": "issues",
+            "scope": "Namespaced",
             "schema": {
               "spec": {
                 "description": "spec is the schema of our resource.\nWe could include `status` or `metadata` top-level fields here as well,\nbut `status` is for state information, which we don't need to track,\nand `metadata` is for kind/schema-specific custom metadata in addition to the existing\ncommon metadata, and we don't need to track any specific custom metadata.",
@@ -84,8 +87,7 @@
               }
             }
           }
-        ],
-        "conversion": false
+        ]
       }
     ]
   },

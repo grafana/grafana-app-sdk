@@ -3,33 +3,51 @@
 package v1alpha1
 
 // +k8s:openapi-gen=true
-type AppManifestManifestKind struct {
-	Kind       string                           `json:"kind"`
-	Plural     *string                          `json:"plural,omitempty"`
-	Scope      string                           `json:"scope"`
-	Conversion bool                             `json:"conversion"`
-	Versions   []AppManifestManifestKindVersion `json:"versions"`
+type AppManifestManifestVersion struct {
+	// Name is the version name string, such as "v1" or "v1alpha1"
+	Name string `json:"name"`
+	// Served dictates whether this version is served by the API server.
+	// A version cannot be removed from a manifest until it is no longer served.
+	Served *bool `json:"served,omitempty"`
+	// Kinds is a list of all the kinds served in this version.
+	// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
+	// or newly added (and didn't exist for older versions).
+	Kinds []AppManifestManifestVersionKind `json:"kinds"`
 }
 
-// NewAppManifestManifestKind creates a new AppManifestManifestKind object.
-func NewAppManifestManifestKind() *AppManifestManifestKind {
-	return &AppManifestManifestKind{
-		Versions: []AppManifestManifestKindVersion{},
+// NewAppManifestManifestVersion creates a new AppManifestManifestVersion object.
+func NewAppManifestManifestVersion() *AppManifestManifestVersion {
+	return &AppManifestManifestVersion{
+		Served: (func(input bool) *bool { return &input })(true),
+		Kinds:  []AppManifestManifestVersionKind{},
 	}
 }
 
 // +k8s:openapi-gen=true
-type AppManifestManifestKindVersion struct {
-	Name                     string                                `json:"name"`
+type AppManifestManifestVersionKind struct {
+	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
+	Kind string `json:"kind"`
+	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+	Plural *string `json:"plural,omitempty"`
+	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
+	// Different values will result in an error or undefined behavior.
+	Scope                    AppManifestManifestVersionKindScope   `json:"scope"`
 	Admission                *AppManifestAdmissionCapabilities     `json:"admission,omitempty"`
-	Schema                   AppManifestManifestKindVersionSchema  `json:"schema"`
+	Schema                   AppManifestManifestVersionKindSchema  `json:"schema"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
+	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
+	// It may not prevent automatic conversion behavior between versions of the kind when set to false
+	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
+	// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
+	Conversion *bool `json:"conversion,omitempty"`
 }
 
-// NewAppManifestManifestKindVersion creates a new AppManifestManifestKindVersion object.
-func NewAppManifestManifestKindVersion() *AppManifestManifestKindVersion {
-	return &AppManifestManifestKindVersion{}
+// NewAppManifestManifestVersionKind creates a new AppManifestManifestVersionKind object.
+func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
+	return &AppManifestManifestVersionKind{
+		Conversion: (func(input bool) *bool { return &input })(false),
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -79,7 +97,7 @@ func NewAppManifestMutationCapability() *AppManifestMutationCapability {
 }
 
 // +k8s:openapi-gen=true
-type AppManifestManifestKindVersionSchema map[string]interface{}
+type AppManifestManifestVersionKindSchema map[string]interface{}
 
 // +k8s:openapi-gen=true
 type AppManifestAdditionalPrinterColumns struct {
@@ -154,9 +172,13 @@ func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProper
 
 // +k8s:openapi-gen=true
 type AppManifestSpec struct {
-	AppName string                    `json:"appName"`
-	Group   string                    `json:"group"`
-	Kinds   []AppManifestManifestKind `json:"kinds"`
+	AppName string `json:"appName"`
+	Group   string `json:"group"`
+	// Versions is the list of versions for this manifest, in order.
+	Versions []AppManifestManifestVersion `json:"versions"`
+	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
+	// For CRDs, this also dictates which version is used for storage.
+	PreferredVersion *string `json:"preferredVersion,omitempty"`
 	// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
 	// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
 	ExtraPermissions *AppManifestV1alpha1SpecExtraPermissions `json:"extraPermissions,omitempty"`
@@ -175,7 +197,7 @@ type AppManifestSpec struct {
 // NewAppManifestSpec creates a new AppManifestSpec object.
 func NewAppManifestSpec() *AppManifestSpec {
 	return &AppManifestSpec{
-		Kinds:       []AppManifestManifestKind{},
+		Versions:    []AppManifestManifestVersion{},
 		DryRunKinds: (func(input bool) *bool { return &input })(false),
 	}
 }
@@ -192,3 +214,11 @@ func NewAppManifestV1alpha1SpecExtraPermissions() *AppManifestV1alpha1SpecExtraP
 		AccessKinds: []AppManifestKindPermission{},
 	}
 }
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindScope string
+
+const (
+	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
+	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
+)

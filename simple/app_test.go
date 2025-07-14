@@ -178,7 +178,7 @@ func TestApp_CallCustomRoute(t *testing.T) {
 			a, err := NewApp(AppConfig{
 				ManagedKinds: []AppManagedKind{{
 					Kind: kind,
-					CustomRoutes: AppCustomRouteHandlers{
+					Routes: AppCustomRouteHandlers{
 						AppCustomRoute{
 							Method: AppCustomRouteMethodGet,
 							Path:   "baz",

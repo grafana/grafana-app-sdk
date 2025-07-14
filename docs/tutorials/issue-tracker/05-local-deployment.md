@@ -175,6 +175,9 @@ logger=provisioning t=2025-01-30T16:53:00.36954668Z level=error msg="Failed to p
 So this is just something we didn't do before starting our environment. When we build the plugin, we also need to deploy it to the local cluster. Because the cluster can only read from `local/mounted-files`, the plugin must be copied there. The fix is simple: run `make local/deploy_plugin` (in a separate terminal window).
 
 ```shell
+make local/deploy_plugin 
+```
+```shell
 $ make local/deploy_plugin 
 tilt disable grafana
 cp -R plugin/dist local/mounted-files/plugin/dist
@@ -184,6 +187,10 @@ The script stops the Grafana deployment, copies the built plugin into `local/mou
 
 <!-- TODO: should this be part of the `make local/up` command? -->
 
+> [!NOTE]
+> If you still see a warning icon next to your grafana deployment and it restarts with the error `failed to create aggregator server: missing filename for serving cert`, 
+> you will want to follow the steps in [this issue](https://github.com/grafana/grafana-app-sdk/issues/826#issuecomment-2956357790) to update your `local/config.yaml`.
+
 OK, now grafana is all green on the dashboard, so let's take a look at the operator. 
 If we click on the `issue-tracker-project` tile to learn more about the error, it shows us the event:
 ```
@@ -191,6 +198,9 @@ If we click on the `issue-tracker-project` tile to learn more about the error, i
 ```
 
 k3d doesn't use the docker registry on your localhost, so we have to deploy it to the cluster. Luckily, that's very simple:
+```shell
+make local/push_operator
+```
 ```shell
 $ make local/push_operator 
 # Tag the docker image as part of localhost, which is what the generated k8s uses to avoid confusion with the real operator image
@@ -216,11 +226,12 @@ Though not recommended, you can deploy without using tilt, if you desire. Not us
 ### Interacting With Our Local Deployment
 
 Our grafana is now available at [grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999). 
-By default, the credentials to log in are `admin`/`admin`. You'll be prompted to change the password upon logging in. 
+By default, the credentials to log in are `admin`/`admin`. You'll be prompted to change the password upon logging in (though you can skip this). 
 Note that if you do, you'll need to modify the cURL commands used later in this tutorial. You can also click `Skip` to avoid updating the password. 
-Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, and we can interact with our backend APIs at [grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues](http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues).
+Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, 
+and we can now interact with our exposed API at [grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues](http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues).
 
-Right now, if I do a curl to our list endpoint, we'll get back a response with an empty list:
+Right now, if I do a curl to our plugin list endpoint, we'll get back a response with an empty list:
 ```shell
 curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues
 ```
@@ -231,9 +242,9 @@ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerpr
 $ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues | jq .
 {
   "kind": "IssueList",
-  "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+  "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
   "metadata": {
-    "resourceVersion": "1159"
+    "resourceVersion": "1552"
   },
   "items": []
 }
@@ -242,36 +253,36 @@ $ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetracker
 Our kinds are also available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
 Let's also list our issues that way:
 ```shell
-curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
 ```
 ```shell
-$ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+$ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
 {
-  "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+  "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
   "items": [],
   "kind": "IssueList",
   "metadata": {
     "continue": "",
-    "resourceVersion": "1159"
+    "resourceVersion": "1586"
   }
 }
 ```
 We can see the output is nearly identical, as the plugin backend is just a proxy to the API server. From this point, we could use the plugin backend or API server API, 
 but seeing as the plugin backend will eventually be phased out of the default path, let's use the API server here, and create an Issue:
 ```shell
-curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
 ```
 ```shell
-$ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1/namespaces/default/issues
+$ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
 {
-  "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+  "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
   "kind": "Issue",
   "metadata": {
-    "creationTimestamp": "2024-12-04T23:44:22Z",
+    "creationTimestamp": "2025-07-10T15:58:33Z",
     "generation": 1,
     "managedFields": [
       {
-        "apiVersion": "issuetrackerproject.ext.grafana.com/v1",
+        "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
         "fieldsType": "FieldsV1",
         "fieldsV1": {
           "f:spec": {
@@ -283,13 +294,13 @@ $ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Is
         },
         "manager": "curl",
         "operation": "Update",
-        "time": "2024-12-04T23:44:22Z"
+        "time": "2025-07-10T15:58:33Z"
       }
     ],
     "name": "test-issue",
     "namespace": "default",
-    "resourceVersion": "1408",
-    "uid": "c3c7c651-324f-41f0-8ddd-85daa25195d8"
+    "resourceVersion": "1620",
+    "uid": "adde103a-8413-4d9e-b749-91e9dc3fcfff"
   },
   "spec": {
     "description": "A test issue",
@@ -308,17 +319,17 @@ kubectl get issue test-issue -o yaml
 ```
 ```shell
 $ kubectl get issue test-issue -o yaml
-apiVersion: issuetrackerproject.ext.grafana.com/v1
+apiVersion: issuetrackerproject.ext.grafana.com/v1alpha1
 kind: Issue
 metadata:
-  creationTimestamp: "2024-12-04T23:44:22Z"
+  creationTimestamp: "2025-07-10T15:58:33Z"
   finalizers:
   - issue-tracker-project-issues-finalizer
   generation: 1
   name: test-issue
   namespace: default
-  resourceVersion: "1409"
-  uid: c3c7c651-324f-41f0-8ddd-85daa25195d8
+  resourceVersion: "1622"
+  uid: adde103a-8413-4d9e-b749-91e9dc3fcfff
 spec:
   description: A test issue
   status: open
