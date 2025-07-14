@@ -91,6 +91,8 @@ github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
 github.com/gorilla/mux v1.8.1/go.mod h1:AKf9I4AEqPTmMytcMc0KkNouC66V3BtZ4qD5fmWSiMQ=
 github.com/grafana/grafana-app-sdk v0.39.3 h1:+U0rpYuUakvLR4GsfrPGhsf1vNAfClDdRSjSdnrfqwg=
 github.com/grafana/grafana-app-sdk v0.39.3/go.mod h1:GqobfMAF5eeFwETrJ+jRO/pt4MmKIZkBCCWANWcUgpw=
+github.com/grafana/grafana-app-sdk v0.39.4 h1:OR37vguDrbE7s6ILk9UDZHThq7hjonzEJLIDKFP1QE0=
+github.com/grafana/grafana-app-sdk v0.39.4/go.mod h1:k8qtnKSLkQPwkB8fmfae/XahK2vyqViF4BbDo6sJe8w=
 github.com/grafana/grafana-app-sdk/logging v0.39.3 h1:mMrcYahnoRu7blKyL/ZVcgv7WCiI2CqxODYh8tBFUgY=
 github.com/grafana/grafana-app-sdk/logging v0.39.3/go.mod h1:otUD9XpJD7A5sCLb8mcs9hIXGdeV6lnhzVwe747g4RU=
 github.com/grafana/grafana-plugin-sdk-go v0.278.0 h1:5/rIYparLi02pofdaag8wnjspMMVNCi8cZhC4cdC3Ho=
@@ -309,6 +311,7 @@ golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e/go.mod h1:RxMgew5VJxzue5/jJ
 golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9/go.mod h1:RxMgew5VJxzue5/jJTE5uejpjVlOe/izrB70Jof72aM=
 golang.org/x/sync v0.15.0 h1:KWH3jNZsfyT6xfAfKiz6MRNmd46ByHDYaZ7KSkCtdW8=
 golang.org/x/sync v0.15.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
+golang.org/x/sync v0.16.0/go.mod h1:1dzgHSNfp02xaA81J2MS99Qcpr2w7fw1gpm99rleRqA=
 golang.org/x/sys v0.0.0-20190215142949-d0b11bdaac8a/go.mod h1:STP8DvDyc/dI5b8T5hshtkjS+E42TnysNCUPdjciGhY=
 golang.org/x/sys v0.0.0-20190412213103-97732733099d/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
 golang.org/x/sys v0.0.0-20191020152052-9984515f0562/go.mod h1:h1NjWce9XRLGQEsW7wpKNCjG9DtNlClVuFLEZdDNbEs=
