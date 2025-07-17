@@ -14,3 +14,4 @@ Minor version upgrades without a migration doc have no breaking changes or chang
 * [v0.27.x → v0.28.x](v0.28.md)
 * [v0.28+ → v0.30.x](v0.30.md)
 * [v0.30+ → v0.32.x](v0.32.md)
+* [v0.39+ → v0.40.x](v0.40.md)
