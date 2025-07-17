@@ -47,6 +47,15 @@ export const defaultType2 = (): Type2 => ({
 	details: {},
 });
 
+export interface RecursiveList {
+	val: string;
+	next?: RecursiveList;
+}
+
+export const defaultRecursiveList = (): RecursiveList => ({
+	val: "",
+});
+
 export interface Spec {
 	field1: string;
 	inner: InnerObject1;
@@ -58,6 +67,7 @@ export interface Spec {
 	i64: number;
 	boolField: boolean;
 	floatField: number;
+	linkedList: RecursiveList;
 }
 
 export const defaultSpec = (): Spec => ({
@@ -71,5 +81,6 @@ export const defaultSpec = (): Spec => ({
 	i64: 0,
 	boolField: false,
 	floatField: 0,
+	linkedList: defaultRecursiveList(),
 });
 

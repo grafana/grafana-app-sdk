@@ -167,6 +167,21 @@
                                         ],
                                         "type": "object"
                                     },
+                                    "linkedList": {
+                                        "properties": {
+                                            "next": {
+                                                "type": "object",
+                                                "x-kubernetes-preserve-unknown-fields": true
+                                            },
+                                            "val": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "val"
+                                        ],
+                                        "type": "object"
+                                    },
                                     "map": {
                                         "additionalProperties": {
                                             "properties": {
@@ -210,8 +225,20 @@
                                                 "type": "object"
                                             },
                                             {
-                                                "type": "object",
-                                                "x-kubernetes-preserve-unknown-fields": true
+                                                "properties": {
+                                                    "details": {
+                                                        "type": "object",
+                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                    },
+                                                    "group": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "group",
+                                                    "details"
+                                                ],
+                                                "type": "object"
                                             }
                                         ]
                                     }
@@ -226,7 +253,8 @@
                                     "i32",
                                     "i64",
                                     "boolField",
-                                    "floatField"
+                                    "floatField",
+                                    "linkedList"
                                 ],
                                 "type": "object"
                             },

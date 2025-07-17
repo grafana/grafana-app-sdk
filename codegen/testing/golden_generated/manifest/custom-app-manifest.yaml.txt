@@ -115,6 +115,16 @@ spec:
                                 - innerField3
                                 - innerField4
                             type: object
+                        linkedList:
+                            properties:
+                                next:
+                                    type: object
+                                    x-kubernetes-preserve-unknown-fields: true
+                                val:
+                                    type: string
+                            required:
+                                - val
+                            type: object
                         map:
                             additionalProperties:
                                 properties:
@@ -143,8 +153,16 @@ spec:
                                   required:
                                     - group
                                   type: object
-                                - type: object
-                                  x-kubernetes-preserve-unknown-fields: true
+                                - properties:
+                                    details:
+                                        type: object
+                                        x-kubernetes-preserve-unknown-fields: true
+                                    group:
+                                        type: string
+                                  required:
+                                    - group
+                                    - details
+                                  type: object
                     required:
                         - field1
                         - inner
@@ -156,6 +174,7 @@ spec:
                         - i64
                         - boolField
                         - floatField
+                        - linkedList
                     type: object
                 status:
                     properties:

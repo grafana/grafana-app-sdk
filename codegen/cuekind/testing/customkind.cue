@@ -45,6 +45,10 @@ customKind: {
 						[string]: _
 					}
 				}
+				#RecursiveList: {
+					val: string
+					next?: #RecursiveList
+				}
 				#UnionType: #Type1 | #Type2
 				spec: {
 					field1: string
@@ -59,6 +63,7 @@ customKind: {
 					i64:        int64 & >=123456
 					boolField:  bool | *false
 					floatField: float64
+					linkedList: #RecursiveList
 				}
 				status: {
 					statusField1: string

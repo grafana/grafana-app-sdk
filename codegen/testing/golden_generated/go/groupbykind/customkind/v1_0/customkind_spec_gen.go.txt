@@ -64,6 +64,17 @@ func NewType2() *Type2 {
 }
 
 // +k8s:openapi-gen=true
+type RecursiveList struct {
+	Val  string         `json:"val"`
+	Next *RecursiveList `json:"next,omitempty"`
+}
+
+// NewRecursiveList creates a new RecursiveList object.
+func NewRecursiveList() *RecursiveList {
+	return &RecursiveList{}
+}
+
+// +k8s:openapi-gen=true
 type Spec struct {
 	Field1     string           `json:"field1"`
 	Inner      InnerObject1     `json:"inner"`
@@ -75,14 +86,16 @@ type Spec struct {
 	I64        int64            `json:"i64"`
 	BoolField  bool             `json:"boolField"`
 	FloatField float64          `json:"floatField"`
+	LinkedList RecursiveList    `json:"linkedList"`
 }
 
 // NewSpec creates a new Spec object.
 func NewSpec() *Spec {
 	return &Spec{
-		Inner:     *NewInnerObject1(),
-		Map:       map[string]Type2{},
-		BoolField: false,
+		Inner:      *NewInnerObject1(),
+		Map:        map[string]Type2{},
+		BoolField:  false,
+		LinkedList: *NewRecursiveList(),
 	}
 }
 
