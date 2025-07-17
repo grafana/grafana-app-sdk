@@ -90,7 +90,7 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 }
 
 func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {
-	props, err := CUEToCRDOpenAPI(kv.Schema, kindName, kv.Version)
+	props, err := CUEToCRDOpenAPI(kv.Schema, kindName)
 	if err != nil {
 		return k8s.CustomResourceDefinitionSpecVersion{}, err
 	}
@@ -168,17 +168,9 @@ type customResourceDefinitionMetadata struct {
 	// TODO: other fields as necessary for codegen
 }
 
-type cueOpenAPIEncoded struct {
-	Components cueOpenAPIEncodedComponents `json:"components"`
-}
-
-type cueOpenAPIEncodedComponents struct {
-	Schemas map[string]any `json:"schemas"`
-}
-
 const extKubernetesPreserveUnknownFields = "x-kubernetes-preserve-unknown-fields"
 
-func CUEToCRDOpenAPI(v cue.Value, name, version string) (map[string]any, error) {
+func CUEToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 	defpath := cue.MakePath(cue.Def(name))
 	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
 	defsch := val.FillPath(defpath, v)
@@ -234,6 +226,7 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 	return resolveSchema(schema, components, visited)
 }
 
+//nolint:gocognit,funlen,gocritic
 func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
 	if schema == nil {
 		return nil, nil
