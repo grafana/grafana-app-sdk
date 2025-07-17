@@ -29,11 +29,11 @@ var (
 	manifest = app.NewEmbeddedManifest(app.ManifestData{
 		AppName: "example-app",
 		Group:   kind.Group(),
-		Kinds: []app.ManifestKind{{
-			Kind:  kind.Kind(),
-			Scope: string(kind.Scope()),
-			Versions: []app.ManifestKindVersion{{
-				Name: kind.Version(),
+		Versions: []app.ManifestVersion{{
+			Name: kind.Version(),
+			Kinds: []app.ManifestVersionKind{{
+				Kind:  kind.Kind(),
+				Scope: string(kind.Scope()),
 			}},
 		}},
 	})

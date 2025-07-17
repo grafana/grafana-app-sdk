@@ -8,6 +8,7 @@ package groupbygroup
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -23,28 +24,30 @@ var (
 	rawSchemaTestKindv1      = []byte(`{"spec":{"properties":{"stringField":{"type":"string"}},"required":["stringField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"]}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv1  app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKindv1, &versionSchemaTestKindv1)
+	rawSchemaTestKind2v1     = []byte(`{"spec":{"properties":{"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"]}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	versionSchemaTestKind2v1 app.VersionSchema
+	_                        = json.Unmarshal(rawSchemaTestKind2v1, &versionSchemaTestKind2v1)
 	rawSchemaTestKindv2      = []byte(`{"spec":{"properties":{"intField":{"type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"}},"required":["stringField","intField","timeField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"]}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv2  app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKindv2, &versionSchemaTestKindv2)
 	rawSchemaTestKindv3      = []byte(`{"spec":{"properties":{"boolField":{"type":"boolean"},"intField":{"type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"}},"required":["stringField","intField","timeField","boolField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"]}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv3  app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKindv3, &versionSchemaTestKindv3)
-	rawSchemaTestKind2v1     = []byte(`{"spec":{"properties":{"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"properties":{"additionalFields":{"description":"additionalFields is reserved for future use","type":"object","x-kubernetes-preserve-unknown-fields":true},"operatorStates":{"additionalProperties":{"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"description":"details contains any extra information that is operator-specific","type":"object","x-kubernetes-preserve-unknown-fields":true},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"]}},"required":["lastEvaluation","state"],"type":"object"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
-	versionSchemaTestKind2v1 app.VersionSchema
-	_                        = json.Unmarshal(rawSchemaTestKind2v1, &versionSchemaTestKind2v1)
 )
 
 var appManifestData = app.ManifestData{
 	AppName: "test-app",
 	Group:   "testapp.ext.grafana.com",
-	Kinds: []app.ManifestKind{
+	Versions: []app.ManifestVersion{
 		{
-			Kind:       "TestKind",
-			Scope:      "Namespaced",
-			Conversion: true,
-			Versions: []app.ManifestKindVersion{
+			Name:   "v1",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{
 				{
-					Name: "v1",
+					Kind:       "TestKind",
+					Plural:     "TestKinds",
+					Scope:      "Namespaced",
+					Conversion: true,
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{
@@ -57,7 +60,24 @@ var appManifestData = app.ManifestData{
 				},
 
 				{
-					Name: "v2",
+					Kind:       "TestKind2",
+					Plural:     "TestKind2s",
+					Scope:      "Namespaced",
+					Conversion: false,
+					Schema:     &versionSchemaTestKind2v1,
+				},
+			},
+		},
+
+		{
+			Name:   "v2",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{
+				{
+					Kind:       "TestKind",
+					Plural:     "TestKinds",
+					Scope:      "Namespaced",
+					Conversion: true,
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{
@@ -74,9 +94,18 @@ var appManifestData = app.ManifestData{
 					},
 					Schema: &versionSchemaTestKindv2,
 				},
+			},
+		},
 
+		{
+			Name:   "v3",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{
 				{
-					Name: "v3",
+					Kind:       "TestKind",
+					Plural:     "TestKinds",
+					Scope:      "Namespaced",
+					Conversion: true,
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{
@@ -92,10 +121,12 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv3,
-					CustomRoutes: map[string]spec3.PathProps{
+					Routes: map[string]spec3.PathProps{
 						"/reconcile": {
 							Post: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
+
+									OperationId: "PostReconcile",
 
 									RequestBody: &spec3.RequestBody{
 										RequestBodyProps: spec3.RequestBodyProps{
@@ -169,6 +200,8 @@ var appManifestData = app.ManifestData{
 						"/search": {
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
+
+									OperationId: "searchTestkinds",
 
 									Parameters: []*spec3.Parameter{
 
@@ -244,18 +277,6 @@ var appManifestData = app.ManifestData{
 				},
 			},
 		},
-
-		{
-			Kind:       "TestKind2",
-			Scope:      "Namespaced",
-			Conversion: false,
-			Versions: []app.ManifestKindVersion{
-				{
-					Name:   "v1",
-					Schema: &versionSchemaTestKind2v1,
-				},
-			},
-		},
 	},
 	Operator: &app.ManifestOperatorInfo{
 		URL: "https://foo.bar:8443",
@@ -277,14 +298,31 @@ func RemoteManifest() app.Manifest {
 
 var kindVersionToGoType = map[string]resource.Kind{
 	"TestKind/v1":  v1.TestKindKind(),
+	"TestKind2/v1": v1.TestKind2Kind(),
 	"TestKind/v2":  v2.TestKindKind(),
 	"TestKind/v3":  v3.TestKindKind(),
-	"TestKind2/v1": v1.TestKind2Kind(),
 }
 
 // ManifestGoTypeAssociator returns the associated resource.Kind instance for a given Kind and Version, if one exists.
 // If there is no association for the provided Kind and Version, exists will return false.
 func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exists bool) {
 	goType, exists = kindVersionToGoType[fmt.Sprintf("%s/%s", kind, version)]
+	return goType, exists
+}
+
+var customRouteToGoResponseType = map[string]any{
+	"v3|TestKind|reconcile|POST": v3.PostReconcile{},
+
+	"v3|TestKind|search|GET": v3.SearchTestkinds{},
+}
+
+// ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
+// kind may be empty for custom routes which are not kind subroutes. Leading slashes are removed from subroute paths.
+// If there is no association for the provided kind, version, custom route path, and method, exists will return false.
+func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	goType, exists = customRouteToGoResponseType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
 	return goType, exists
 }

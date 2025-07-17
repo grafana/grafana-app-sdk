@@ -5,7 +5,6 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -54,6 +53,16 @@ var projectAddKindCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
+var projectVersionCmd = &cobra.Command{
+	Use: "version",
+}
+
+var projectVersionAddCmd = &cobra.Command{
+	Use:          "add",
+	RunE:         projectVersionAdd,
+	SilenceUsage: true,
+}
+
 var projectLocalCmd = &cobra.Command{
 	Use: "local",
 }
@@ -78,13 +87,18 @@ func setupProjectCmd() {
 	projectAddComponentCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
 
+	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
+	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
+
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
 	projectCmd.AddCommand(projectKindCmd)
 	projectCmd.AddCommand(projectLocalCmd)
+	projectCmd.AddCommand(projectVersionCmd)
 
 	projectComponentCmd.AddCommand(projectAddComponentCmd)
 	projectKindCmd.AddCommand(projectAddKindCmd)
+	projectVersionCmd.AddCommand(projectVersionAddCmd)
 
 	projectLocalCmd.AddCommand(projectLocalInitCmd)
 	projectLocalCmd.AddCommand(projectLocalGenerateCmd)
@@ -265,7 +279,7 @@ func projectWriteGoModule(path, moduleName string, overwrite bool) (string, erro
 //nolint:revive,funlen
 func projectAddKind(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
-		fmt.Println(`Usage: grafana-app-sdk project add kind [options] <Human-Readable Kind Name>
+		fmt.Println(`Usage: grafana-app-sdk project kind add [options] <Human-Readable Kind Name>
 	example:
 		grafana-app-sdk project add kind "MyKind"`)
 		os.Exit(1)
@@ -296,16 +310,6 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	file, err := os.DirFS(sourcePath).Open("manifest.cue")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	manifestBytes, err := io.ReadAll(file)
-	if err != nil {
-		return err
-	}
-
 	for _, kindName := range args {
 		validName := regexp.MustCompile(`^([A-Z][a-zA-Z0-9]{0,61}[a-zA-Z0-9])$`)
 		if !validName.MatchString(kindName) {
@@ -319,45 +323,166 @@ func projectAddKind(cmd *cobra.Command, args []string) error {
 
 		fieldName := strings.ToLower(kindName[0:1]) + kindName[1:]
 
-		manifestBytes, err = addKindToManifestBytesCUE(manifestBytes, fieldName)
-		if err != nil {
-			return err
-		}
-
-		var templatePath string
+		var files codejen.Files
 		switch format {
 		case FormatCUE:
-			templatePath = "templates/kind.cue.tmpl"
+			srcPath := filepath.Join(path, sourcePath)
+			current, err := getManifestLatestVersion(srcPath)
+			if err != nil {
+				if err != errNoVersions {
+					return err
+				}
+				current = "v1alpha1"
+			}
+			files, err = projectAddKindCUE(srcPath, "manifest.cue", fieldName, kindName, current, pkg)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("unknown kind format '%s'", format)
 		}
 
-		kindTmpl, err := template.ParseFS(templates, templatePath)
+		for _, f := range files {
+			if !overwrite {
+				err = writeFileWithOverwriteConfirm(filepath.Join(path, sourcePath, f.RelativePath), f.Data)
+			} else {
+				err = writeFile(filepath.Join(path, sourcePath, f.RelativePath), f.Data)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+//nolint:revive
+func projectVersionAdd(cmd *cobra.Command, args []string) error {
+	if len(args) < 1 {
+		fmt.Println(`Usage: grafana-app-sdk project version add [options] <version name>
+	example:
+		grafana-app-sdk project version add "v2alpha1"`)
+		os.Exit(1)
+	}
+
+	// Flag arguments
+	// Path (optional)
+	path, err := cmd.Flags().GetString("path")
+	if err != nil {
+		return err
+	}
+
+	// Source files path (optional)
+	sourcePath, err := cmd.Flags().GetString(sourceFlag)
+	if err != nil {
+		return err
+	}
+
+	// Default overwrite
+	overwrite, err := cmd.Flags().GetBool("overwrite")
+	if err != nil {
+		return err
+	}
+
+	// Kind format
+	format, err := cmd.Flags().GetString(formatFlag)
+	if err != nil {
+		return err
+	}
+
+	current, err := getManifestLatestVersion(filepath.Join(path, sourcePath))
+	if err != nil {
+		return err
+	}
+
+	for _, versionName := range args {
+		validName := regexp.MustCompile(`^v([0-9]+)((alpha|beta)[0-9]+)?$`)
+		if !validName.MatchString(versionName) {
+			return fmt.Errorf("name '%s' is invalid, version names should adhere to regex `v[0-9]+((alpha|beta)[0-9]+)?`", versionName)
+		}
+
+		pkg := "kinds"
+		if len(sourcePath) > 0 {
+			pkg = filepath.Base(sourcePath)
+		}
+
+		kinds, err := getManifestKindsForVersion(pkg, current)
 		if err != nil {
 			return err
 		}
 
-		buf := &bytes.Buffer{}
-		err = kindTmpl.Execute(buf, map[string]string{
-			"FieldName": fieldName,
-			"Name":      kindName,
-			"Target":    "resource",
-			"Package":   pkg,
-		})
-		if err != nil {
-			return err
-		}
-		kindPath := filepath.Join(path, sourcePath, fmt.Sprintf("%s.cue", strings.ToLower(kindName)))
-		if !overwrite {
-			err = writeFileWithOverwriteConfirm(kindPath, buf.Bytes())
-		} else {
-			err = writeFile(kindPath, buf.Bytes())
-		}
-		if err != nil {
-			return err
+		for _, kind := range kinds {
+			fieldName := strings.ToLower(kind[0:1]) + kind[1:]
+
+			var files codejen.Files
+			switch format {
+			case FormatCUE:
+				files, err = projectAddKindCUE(filepath.Join(path, sourcePath), "manifest.cue", fieldName, kind, versionName, pkg)
+				if err != nil {
+					return err
+				}
+			default:
+				return fmt.Errorf("unknown kind format '%s'", format)
+			}
+
+			for _, f := range files {
+				if !overwrite {
+					err = writeFileWithOverwriteConfirm(filepath.Join(path, sourcePath, f.RelativePath), f.Data)
+				} else {
+					err = writeFile(filepath.Join(path, sourcePath, f.RelativePath), f.Data)
+				}
+				if err != nil {
+					return err
+				}
+			}
 		}
 	}
-	return writeFile(filepath.Join(path, sourcePath, "manifest.cue"), manifestBytes)
+	return nil
+}
+
+func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, pkg string) (codejen.Files, error) {
+	kindTmpl, err := template.ParseFS(templates, "templates/kind.cue.tmpl")
+	if err != nil {
+		return nil, err
+	}
+	kindVersionTmpl, err := template.ParseFS(templates, "templates/kindversion.cue.tmpl")
+	if err != nil {
+		return nil, err
+	}
+	data := map[string]string{
+		"FieldName": fieldName,
+		"Name":      kindName,
+		"Target":    "resource",
+		"Package":   pkg,
+		"Version":   version,
+	}
+
+	buf := &bytes.Buffer{}
+	err = kindTmpl.Execute(buf, data)
+	if err != nil {
+		return nil, err
+	}
+	files := make(codejen.Files, 2)
+	files[0] = codejen.File{
+		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
+		Data:         buf.Bytes(),
+	}
+	buf2 := &bytes.Buffer{}
+	err = kindVersionTmpl.Execute(buf2, data)
+	if err != nil {
+		return nil, err
+	}
+	files[1] = codejen.File{
+		RelativePath: fmt.Sprintf("%s_%s.cue", strings.ToLower(kindName), version),
+		Data:         buf2.Bytes(),
+	}
+
+	mFiles, err := addVersionedKindToManifestBytesCUE(srcPath, manifestFileName, version, fieldName+version)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, mFiles...)
+	return files, nil
 }
 
 //nolint:revive,funlen,gocyclo
@@ -424,11 +549,15 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(true, genOperatorState), os.DirFS(sourcePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
+			GenOperatorState: genOperatorState,
+		}), os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser(genOperatorState)
+		manifestParser = parser.ManifestParser(cuekind.ParseConfig{
+			GenOperatorState: genOperatorState,
+		})
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}

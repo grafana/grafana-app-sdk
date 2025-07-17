@@ -1,6 +1,8 @@
 # Managing Multiple Kind Versions
 
-There are two kinds of versions for a kind: a fixed version, such as `v1`, and a mutable, alpha or beta version, such as `v1alpha1`. When publishing a kind, be aware that you should never change the definition of a fixed version, as clients will rely on that kind version being constant when working with the API. For more details on kubernetes version conventions, see [Custom Resource Definitions Versions](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/).
+There are two kinds of versions for a kind: a fixed, **stable** version, such as `v1`, and a mutable, **unstable**, alpha or beta version, such as `v1alpha1`. 
+When publishing a kind, be aware that you should never change the definition (in a breaking way) of a stable version, as clients will rely on that kind version being constant when working with the API. 
+For more details on kubernetes version conventions, see [Custom Resource Definitions Versions](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/).
 
 ## Reconcilers & Multiple Versions
 
@@ -8,22 +10,51 @@ No matter how many versions you have, you should only have one watcher/reconcile
 
 ## Adding a New Version
 
-When you need to add a new version to a kind, it's rather simple in the standard CUE definition:
+Versions of a kind are managed in your app's manifest, with a list of versioned kinds existing for each version. 
+It is best practice to have an object in CUE for each version of your kind, which share a "kind metadata" object that contains 
+information such as the kind name, plural, scope, etc.
+
+If you already have this set up (this is the default setup when adding a kind with `grafana-app-sdk project kind add`), 
+adding a new version is just adding a new object, and adding a reference to that object in your manifest's `versions` object.
 ```cue
-{
-    // Existing kind information
-    versions: {
-        "v1": { // Current version
-            schema: {
-                // schema
-            } 
-        }
-        "v2": { // New version
-            schema: {
-                // new schema
-            }
-        }
-    }
+fooKind: {
+	kind: "Foo"
+	// other existing kind information
+}
+
+// existing v1 version
+foov1: fooKind & {
+	schema: {
+		// existing v1 schema
+	}
+}
+
+// new v2 version
+foov2: fooKind & {
+	schema: {
+		// new v2 schema
+	}
+}
+```
+
+Then adding that version to your manifest as well:
+```cue
+manifest: {
+	// existing manifest data
+	versions: {
+		"v1": v1 // existing v1
+		"v2": v2 // new v2
+	}
+}
+
+// existing v1 version
+v1: {
+	kinds: [foov1]
+}
+
+// new v2 version
+v2: {
+	kinds: [foov2]
 }
 ```
 
@@ -36,9 +67,9 @@ and in your app code (where the logic to handle the conversion actually lives).
 
 ## Manifest
 
-To add conversion to your manifest, you just need to specify in the kind that you support custom conversion logic with the `conversion` boolean, like so: 
+To add conversion to your manifest, you just need to specify in the kind that you support custom conversion logic with the `conversion` boolean in your kind metadata object, like so: 
 ```cue
-{
+fooKind: {
 	// Existing kind information
 	conversion: true
 }
@@ -92,24 +123,42 @@ type Converter interface {
 `k8s.RawKind` contains the raw (JSON) bytes of an object, and kind information (Group, Version, Kind). To implement `k8s.Converter` we need a function which can accept any version of our kind and return any version of our kind. When we register our converter in `simple.App`, we can generally assume that the input 
 `RawKind` will be of the Group and Kind we specify, and the output will also be of the Group and Kind we specify, so it's safe to error on anything unexpected. Let's put together a very simple converter for an object with two versions defined as:
 ```cue
-myKind: {
-    kind: "MyKind"
-    current: "v2"
-    conversion: true
-    conversionWebhookProps: url: "https://myapp.svc.cluster.local:6443/convert"
-    versions: {
-        "v1": { 
-            schema: {
-                foo: string
-            } 
-        }
-        "v2": { 
-            schema: {
-                foo: string
-                bar: string
-            }
-        }
-    }
+fooKind: {
+	kind: "MyKind"
+	conversion: true
+	
+}
+
+// existing v1 version
+foov1: fooKind & {
+	schema: {
+		spec: {
+			foo: string
+		}
+	}
+}
+
+// new v2 version
+foov2: fooKind & {
+	schema: {
+		spec: {
+			foo: string
+			bar: string
+		}
+	}
+}
+
+manifest: {
+	appName: "myApp"
+	versions: {
+		"v1": {
+			kinds: [foov1]
+		}
+		"v2": {
+			kinds: [foov2]
+		}
+	}
+	operatorURL: "https://myapp.svc.cluster.local:6443"
 }
 ```
 ```go

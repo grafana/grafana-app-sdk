@@ -1,0 +1,40 @@
+package {{.Package}}
+
+// This is the v1alpha1 version of the kind, which joins the kind metadata and
+// version-specific information for the kind, such as the schema
+{{.FieldName}}{{.Version}}: {{.FieldName}}Kind & {
+    // schema is the schema for this version of the kind
+    // As an API server-expressable resource, the schema has a restricted format:
+    // {
+    //     spec: { ... }
+    //     status: { ... } // optional
+    //     metadata: { ... } // optional
+    // }
+    // `spec` must always be present, and is the schema for the object.
+    // `status` is optional, and should contain status or state information which is typically not user-editable
+    // (controlled by controllers/operators). The kind system adds some implicit status information which is
+    // common across all kinds, and becomes present in the unified lineage used for code generation and other tooling.
+    // `metadata` is optional, and should contain kind- or schema-specific metadata. The kind system adds
+    // an explicit set of common metadata which can be found in the definition file for a CUE kind at
+    // [https://github.com/grafana/grafana-app-sdk/blob/main/codegen/cuekind/def.cue]
+    // additional metadata fields cannot conflict with the common metadata field names
+    schema: {
+        // spec is the schema of our resource. The spec should include all the user-editable information for the kind.
+        spec: {
+            // Example fields
+            firstField: string
+            secondField: int
+        }
+        // status is where state and status information which may be used or updated by the operator or back-end should be placed
+        // If you do not have any such information, you do not need to include this field,
+        // however, as mentioned above, certain fields will be added by the kind system regardless.
+        //status: {
+        //	currentState: string
+        //}
+        // metadata if where kind- and schema-specific metadata goes. This is converted into typed annotations
+        // with getters and setters by the code generation.
+        //metadata: {
+        //	kindSpecificField: string
+        //}
+    }
+}

@@ -64,15 +64,15 @@ Let's take a look at the tree to get a better picture of everything:
 ```shell
 $ tree -I "generated|definitions|kinds|local" .
 .
-├── Makefile
 ├── cmd
 │   └── operator
-│       ├── Dockerfile
 │       ├── config.go
+│       ├── Dockerfile
 │       ├── kubeconfig.go
 │       └── main.go
 ├── go.mod
 ├── go.sum
+├── Makefile
 ├── pkg
 │   ├── app
 │   │   └── app.go
@@ -87,22 +87,21 @@ $ tree -I "generated|definitions|kinds|local" .
 │       └── watcher_issue.go
 └── plugin
     ├── CHANGELOG.md
-    ├── LICENSE
-    ├── Magefile.go
-    ├── README.md
     ├── docker-compose.yaml
     ├── jest-setup.js
     ├── jest.config.js
+    ├── LICENSE
+    ├── Magefile.go
     ├── package.json
     ├── pkg
     │   └── main.go
     ├── playwright.config.ts
     ├── provisioning
     │   └── plugins
-    │       ├── README.md
-    │       └── apps.yaml
+    │       ├── apps.yaml
+    │       └── README.md
+    ├── README.md
     ├── src
-    │   ├── README.md
     │   ├── components
     │   │   ├── App
     │   │   │   ├── App.test.tsx
@@ -121,6 +120,7 @@ $ tree -I "generated|definitions|kinds|local" .
     │   │   ├── PageThree.tsx
     │   │   └── PageTwo.tsx
     │   ├── plugin.json
+    │   ├── README.md
     │   └── utils
     │       └── utils.routing.ts
     ├── tests
@@ -156,7 +156,7 @@ pkg/plugin
     ├── middleware.go
     └── retriever.go
 
-1 directory, 5 files
+2 directories, 5 files
 ```
 
 ### Secure JSON Data
@@ -166,6 +166,12 @@ The code in the `pkg/plugin/secure` package is focused around defining the shape
 For our purposes, we care about the secureJSONData because we're going to store the details on how to access our storage medium in there: since we're going to be using kubernetes to store our data, we'll have a kubeconfig embedded in the secure JSON data. In your own development, you may store things such as user keys for a third-party service in this data if the back-end needs to reach out to them.
 
 ### Plugin Router and Handlers
+
+> [!NOTE]
+> The backend (go) plugin code in your app is meant to serve as a proxy to the API server backend. 
+> This is legacy behavior that is still supported for a few specialized edge cases, 
+> but for most use-cases you will want to have your front-end talk directly to the grafana API server at 
+> `/apis/issuetrackerproject.ext.grafana.com/v1alpha1`, rather than via the `/api/plugins/issuetrackerproject-app/resources` endpoint
 
 The code in `pkg/plugin` is split into two files: 
 * `plugin.go`, which defines our `Plugin` type we'll run everything from, which embeds a router and defines routes.
@@ -286,22 +292,21 @@ A _lot_ of files were generated in `plugin`:
 $ tree plugin
 plugin
 ├── CHANGELOG.md
-├── LICENSE
-├── Magefile.go
-├── README.md
 ├── docker-compose.yaml
 ├── jest-setup.js
 ├── jest.config.js
+├── LICENSE
+├── Magefile.go
 ├── package.json
 ├── pkg
 │   └── main.go
 ├── playwright.config.ts
 ├── provisioning
 │   └── plugins
-│       ├── README.md
-│       └── apps.yaml
+│       ├── apps.yaml
+│       └── README.md
+├── README.md
 ├── src
-│   ├── README.md
 │   ├── components
 │   │   ├── App
 │   │   │   ├── App.test.tsx
@@ -313,7 +318,7 @@ plugin
 │   ├── constants.ts
 │   ├── generated
 │   │   └── issue
-│   │       └── v1
+│   │       └── v1alpha1
 │   │           ├── issue_object_gen.ts
 │   │           ├── types.metadata.gen.ts
 │   │           ├── types.spec.gen.ts
@@ -327,6 +332,7 @@ plugin
 │   │   ├── PageThree.tsx
 │   │   └── PageTwo.tsx
 │   ├── plugin.json
+│   ├── README.md
 │   └── utils
 │       └── utils.routing.ts
 ├── tests

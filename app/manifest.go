@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
@@ -77,8 +78,11 @@ type ManifestData struct {
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.com"
 	Group string `json:"group" yaml:"group"`
-	// Kinds is a list of all Kinds maintained by this App
-	Kinds []ManifestKind `json:"kinds,omitempty" yaml:"kinds,omitempty"`
+	// Versions is a list of versions supported by this App
+	Versions []ManifestVersion `json:"versions" yaml:"versions"`
+	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
+	// For CRDs, this also dictates which version is used for storage.
+	PreferredVersion string `json:"preferredVersion" yaml:"preferredVersion"`
 	// Permissions is the extra permissions for non-owned kinds this app needs to operate its backend.
 	// It may be nil if no extra permissions are required.
 	ExtraPermissions *Permissions `json:"extraPermissions,omitempty" yaml:"extraPermissions,omitempty"`
@@ -89,7 +93,81 @@ type ManifestData struct {
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
 }
 
-// ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions
+func (m *ManifestData) IsEmpty() bool {
+	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
+}
+
+// Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
+func (m *ManifestData) Validate() error {
+	type kindData struct {
+		kind       string
+		plural     string
+		scope      string
+		conversion bool
+		version    string
+	}
+	var errs error
+	kinds := make(map[string]kindData)
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if k, ok := kinds[kind.Kind]; !ok {
+				k = kindData{
+					kind:       kind.Kind,
+					plural:     kind.Plural,
+					scope:      kind.Scope,
+					conversion: kind.Conversion,
+					version:    version.Name,
+				}
+				kinds[kind.Kind] = k
+			} else {
+				if k.plural != kind.Plural {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different plural in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.scope != kind.Scope {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different scope in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.conversion != kind.Conversion {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' conversion does not match in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+			}
+		}
+	}
+	return errs
+}
+
+// Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
+// Deprecated: this exists to support current workflows, and should not be used for new ones.
+func (m *ManifestData) Kinds() []ManifestKind {
+	kinds := make(map[string]ManifestKind)
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			k, ok := kinds[kind.Kind]
+			if !ok {
+				k = ManifestKind{
+					Kind:       kind.Kind,
+					Plural:     kind.Plural,
+					Scope:      kind.Scope,
+					Conversion: kind.Conversion,
+					Versions:   make([]ManifestKindVersion, 0),
+				}
+			}
+			k.Versions = append(k.Versions, ManifestKindVersion{
+				ManifestVersionKind: kind,
+				VersionName:         version.Name,
+			})
+			kinds[kind.Kind] = k
+		}
+	}
+	k := make([]ManifestKind, 0, len(kinds))
+	for _, kind := range kinds {
+		k = append(k, kind)
+	}
+	return k
+}
+
+// ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions.
+// The values for Kind, Plural, Scope, and Conversion are hoisted up from their namesakes in Versions entries
+// Deprecated: this is used only for the deprecated method ManifestData.Kinds()
 type ManifestKind struct {
 	// Kind is the name of the kind
 	Kind string `json:"kind" yaml:"kind"`
@@ -103,10 +181,37 @@ type ManifestKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 }
 
-// ManifestKindVersion contains details for a version of a kind in a Manifest
+// ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
+// Deprecated: this type if used only as part of the deprecated method ManifestData.Kinds()
 type ManifestKindVersion struct {
-	// Name is the version string name, such as "v1"
-	Name string `yaml:"name" json:"name"`
+	ManifestVersionKind `json:",inline" yaml:",inline"`
+	VersionName         string `json:"versionName" yaml:"versionName"`
+}
+
+type ManifestVersion struct {
+	// Name is the version name string, such as "v1" or "v1alpha1"
+	Name string `json:"name" yaml:"name"`
+	// Served dictates whether this version is served by the API server.
+	// A version cannot be removed from a manifest until it is no longer served.
+	Served bool `json:"served" yaml:"served"`
+	// Kinds is a list of all the kinds served in this version.
+	// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
+	// or newly added (and didn't exist for older versions).
+	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
+	// Routes is a map of path patterns to custom routes for this version.
+	// Routes should not conflict with the plural name of any kinds for this version.
+	Routes map[string]spec3.PathProps `json:"routes,omitempty" yaml:"routes,omitempty"`
+}
+
+// ManifestVersionKind contains details for a version of a kind in a Manifest
+type ManifestVersionKind struct {
+	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
+	Kind string `json:"kind" yaml:"kind"`
+	// Plural is the plural version of `kind`. This is optional and defaults to the kind + "s" if not present.
+	Plural string `json:"plural,omitempty" yaml:"plural,omitempty"`
+	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
+	// Different values will result in an error or undefined behavior.
+	Scope string `json:"scope" yaml:"scope"`
 	// Admission is the collection of admission capabilities for this version.
 	// If nil, no admission capabilities exist for the version.
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
@@ -115,8 +220,13 @@ type ManifestKindVersion struct {
 	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
 	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
-	// CustomRoutes is a map of of path patterns to custom routes for this version.
-	CustomRoutes map[string]spec3.PathProps `json:"customRoutes,omitempty" yaml:"customRoutes,omitempty"`
+	// Routes is a map of path patterns to custom routes for this kind to be used as custom subresource routes.
+	Routes map[string]spec3.PathProps `json:"routes,omitempty" yaml:"routes,omitempty"`
+	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
+	// It may not prevent automatic conversion behavior between versions of the kind when set to false
+	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
+	// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
+	Conversion bool `json:"conversion" yaml:"conversion"`
 }
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind
@@ -312,11 +422,11 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 }
 
 // AsKubeOpenAPI converts the schema into a map of reference string to common.OpenAPIDefinition objects, suitable for use with kubernetes API server code.
-// It uses the provided schema.GroupVersionKind for naming of the kind and for reference naming. The map output will look something like:
+// It uses the provided schema.GroupVersionKind and pkgPrefix for naming of the kind and for reference naming. The map output will look something like:
 //
-//	"<group>/<version>.<kind>": {...},
-//	"<group>/<version>.<kind>List": {...},
-//	"<group>/<version>.spec": {...}, // ...etc. for all other resources
+//	"<pkgPrefix>.<kind>": {...},
+//	"<pkgPrefix>.<kind>List": {...},
+//	"<pkgPrefix>.<kind>Spec": {...}, // ...etc. for all other resources
 //
 // If you wish to exclude a field from your kind's object, ensure that the field name begins with a `#`, which will be treated as a definition.
 // Definitions are included in the returned map as types, but are not included as fields (alongside "spec","status", etc.) in the kind object.
@@ -324,7 +434,7 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 // It will error if the underlying schema cannot be parsed as valid openAPI.
 //
 //nolint:funlen
-func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback) (map[string]common.OpenAPIDefinition, error) {
+func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback, pkgPrefix string) (map[string]common.OpenAPIDefinition, error) {
 	// Convert the kin-openapi to kube-openapi
 	oapi, err := v.AsOpenAPI3()
 	if err != nil {
@@ -366,11 +476,18 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		},
 		Dependencies: make([]string, 0),
 	}
+	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
-		key := fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, k)
-		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk)
+		// Name the schema as <pkgPrefix>.<Kind><schema>
+		// This ensures no conflicts when merging with other OpenAPI defs later
+		ucK := strings.ToUpper(k)
+		if len(k) > 1 {
+			ucK = strings.ToUpper(k[:1]) + k[1:]
+		}
+		key := fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
+		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk, pkgPrefix)
 		// sort dependencies for consistent output
 		slices.Sort(deps)
 		result[key] = common.OpenAPIDefinition{
@@ -394,9 +511,9 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	slices.Sort(kind.Dependencies)
 
 	// add the kind object to our result map
-	result[fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)] = kind
+	result[fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)] = kind
 	// add the kind list object to our result map (static object type based on the kind object)
-	result[fmt.Sprintf("%s/%s.%sList", gvk.Group, gvk.Version, gvk.Kind)] = common.OpenAPIDefinition{
+	result[fmt.Sprintf("%s.%sList", pkgPrefix, gvk.Kind)] = common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Type: []string{"object"},
@@ -416,7 +533,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
 										Default: map[string]any{},
-										Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)),
+										Ref:     ref(fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)),
 									},
 								},
 							},
@@ -427,7 +544,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
+			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
 	}
 
 	return result, nil
@@ -436,11 +553,11 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 // oapi3SchemaToKubeSchema converts a SchemaRef into a spec.Schema and its dependencies.
 // It requires a ReferenceCallback for creating any references, and uses the gvk to rename references as "<group>/<version>.<reference>"
 //
-//nolint:funlen
-func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind) (resSchema spec.Schema, dependencies []string) {
+//nolint:funlen,unparam
+func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind, pkgPrefix string) (resSchema spec.Schema, dependencies []string) {
 	if sch.Ref != "" {
 		// Reformat the ref to use the path derived from the GVK
-		schRef := fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
+		schRef := fmt.Sprintf("%s.%s", pkgPrefix, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
 		return spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Ref: ref(schRef),
@@ -501,7 +618,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 		}
 	}
 	if sch.Value.AdditionalProperties.Schema != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk, pkgPrefix)
 		resSchema.AdditionalProperties = &spec.SchemaOrBool{
 			Schema: &s,
 		}
@@ -522,7 +639,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AllOf != nil {
 		resSchema.AllOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.AllOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.AllOf = append(resSchema.AllOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -530,7 +647,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AnyOf != nil {
 		resSchema.AnyOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.AnyOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.AnyOf = append(resSchema.AnyOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -538,20 +655,20 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.OneOf != nil {
 		resSchema.OneOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.OneOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.OneOf = append(resSchema.OneOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
 	}
 	if sch.Value.Not != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.Not, ref, gvk)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.Not, ref, gvk, pkgPrefix)
 		resSchema.Not = &s
 		dependencies = updateDependencies(dependencies, deps)
 	}
 
 	// Items
 	if sch.Value.Items != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.Items, ref, gvk)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.Items, ref, gvk, pkgPrefix)
 		resSchema.Items = &spec.SchemaOrArray{
 			Schema: &s,
 		}
@@ -562,7 +679,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if len(sch.Value.Properties) > 0 {
 		resSchema.Properties = make(map[string]spec.Schema)
 		for k, v := range sch.Value.Properties {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
 			resSchema.Properties[k] = s
 			dependencies = updateDependencies(dependencies, deps)
 		}

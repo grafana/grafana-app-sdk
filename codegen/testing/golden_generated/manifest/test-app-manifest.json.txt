@@ -7,14 +7,15 @@
     "spec": {
         "appName": "test-app",
         "group": "testapp.ext.grafana.com",
-        "kinds": [
+        "versions": [
             {
-                "kind": "TestKind",
-                "scope": "Namespaced",
-                "plural": "TestKinds",
-                "versions": [
+                "name": "v1",
+                "served": true,
+                "kinds": [
                     {
-                        "name": "v1",
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -79,10 +80,82 @@
                                 },
                                 "type": "object"
                             }
-                        }
+                        },
+                        "conversion": true
                     },
                     {
-                        "name": "v2",
+                        "kind": "TestKind2",
+                        "plural": "TestKind2s",
+                        "scope": "Namespaced",
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "testField": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "testField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "conversion": false
+                    }
+                ]
+            },
+            {
+                "name": "v2",
+                "served": true,
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -162,10 +235,19 @@
                                 },
                                 "type": "object"
                             }
-                        }
-                    },
+                        },
+                        "conversion": true
+                    }
+                ]
+            },
+            {
+                "name": "v3",
+                "served": true,
+                "kinds": [
                     {
-                        "name": "v3",
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -250,9 +332,10 @@
                                 "type": "object"
                             }
                         },
-                        "customRoutes": {
+                        "routes": {
                             "/reconcile": {
                                 "post": {
+                                    "operationId": "PostReconcile",
                                     "requestBody": {
                                         "content": {
                                             "application/json": {
@@ -307,6 +390,7 @@
                             },
                             "/search": {
                                 "get": {
+                                    "operationId": "searchTestkinds",
                                     "parameters": [
                                         {
                                             "name": "limit",
@@ -374,80 +458,13 @@
                                     }
                                 }
                             }
-                        }
+                        },
+                        "conversion": true
                     }
-                ],
-                "conversion": true
-            },
-            {
-                "kind": "TestKind2",
-                "scope": "Namespaced",
-                "plural": "TestKind2s",
-                "versions": [
-                    {
-                        "name": "v1",
-                        "schema": {
-                            "spec": {
-                                "properties": {
-                                    "testField": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "testField"
-                                ],
-                                "type": "object"
-                            },
-                            "status": {
-                                "properties": {
-                                    "additionalFields": {
-                                        "description": "additionalFields is reserved for future use",
-                                        "type": "object",
-                                        "x-kubernetes-preserve-unknown-fields": true
-                                    },
-                                    "operatorStates": {
-                                        "additionalProperties": {
-                                            "properties": {
-                                                "descriptiveState": {
-                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                                    "type": "string"
-                                                },
-                                                "details": {
-                                                    "description": "details contains any extra information that is operator-specific",
-                                                    "type": "object",
-                                                    "x-kubernetes-preserve-unknown-fields": true
-                                                },
-                                                "lastEvaluation": {
-                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                                    "type": "string"
-                                                },
-                                                "state": {
-                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                                    "enum": [
-                                                        "success",
-                                                        "in_progress",
-                                                        "failed"
-                                                    ]
-                                                }
-                                            },
-                                            "required": [
-                                                "lastEvaluation",
-                                                "state"
-                                            ],
-                                            "type": "object"
-                                        },
-                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
-                                        "type": "object"
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        }
-                    }
-                ],
-                "conversion": false
+                ]
             }
         ],
+        "preferredVersion": "",
         "extraPermissions": {
             "accessKinds": [
                 {

@@ -45,6 +45,8 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.Flags().Lookup("noschemasinmanifest").NoOptDefVal = "true"
 	generateCmd.Flags().String("gomodule", "", `module name found in go.mod. If absent it will be inferred from ./go.mod`)
 	generateCmd.Flags().String("gomodgenpath", "", `This argument is used as a relative path for generated go code from the go module root. It only needs to be present if gogenpath is an absolute path, or is not a relative path from the go module root.`)
+	generateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
+	generateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -115,6 +117,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	useOldManifestKinds, err := cmd.Flags().GetBool("useoldmanifestkinds")
+	if err != nil {
+		return err
+	}
 
 	if goModule == "" {
 		goModule, err = getGoModule("go.mod")
@@ -140,6 +146,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			GroupKinds:             grouping == kindGroupingGroup,
 			ManifestIncludeSchemas: !noSchemasInManifest,
 			GenOperatorState:       genOperatorState,
+			UseOldManifestKinds:    useOldManifestKinds,
 		}, selector)
 		if err != nil {
 			return err
@@ -159,11 +166,12 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if postProcess {
 		if format == FormatCUE {
 			files, err = postGenerateFilesCue(os.DirFS(sourcePath), kindGenConfig{
-				GoGenBasePath: goGenPath,
-				TSGenBasePath: tsGenPath,
-				CRDEncoding:   encType,
-				CRDPath:       defPath,
-				GroupKinds:    grouping == kindGroupingGroup,
+				GoGenBasePath:       goGenPath,
+				TSGenBasePath:       tsGenPath,
+				CRDEncoding:         encType,
+				CRDPath:             defPath,
+				GroupKinds:          grouping == kindGroupingGroup,
+				UseOldManifestKinds: useOldManifestKinds,
 			}, selector)
 			if err != nil {
 				return err
@@ -190,6 +198,7 @@ type kindGenConfig struct {
 	GroupKinds             bool
 	ManifestIncludeSchemas bool
 	GenOperatorState       bool
+	UseOldManifestKinds    bool
 }
 
 //nolint:funlen,goconst
@@ -200,11 +209,17 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 	// Slightly hacky multiple generators as an intermediary while we move to a better system.
 	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
-	generatorForKinds, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, cfg.GenOperatorState), modFS)
+	generatorForKinds, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
+		GenOperatorState: cfg.GenOperatorState,
+		UseOldKinds:      cfg.UseOldManifestKinds,
+	}), modFS)
 	if err != nil {
 		return nil, err
 	}
-	generatorForManifest, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(cfg.GenOperatorState), modFS)
+	generatorForManifest, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(cuekind.ParseConfig{
+		GenOperatorState: cfg.GenOperatorState,
+		UseOldKinds:      cfg.UseOldManifestKinds,
+	}), modFS)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +302,10 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 	if err != nil {
 		return nil, err
 	}
-	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(true, cfg.GenOperatorState), modFS)
+	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
+		GenOperatorState: cfg.GenOperatorState,
+		UseOldKinds:      cfg.UseOldManifestKinds,
+	}), modFS)
 	if err != nil {
 		return nil, err
 	}

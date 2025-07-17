@@ -5,12 +5,13 @@ metadata:
 spec:
     appName: custom-app
     group: customapp.ext.grafana.com
-    kinds:
-        - kind: CustomKind
-          scope: Namespaced
-          plural: CustomKinds
-          versions:
-            - name: v0-0
+    versions:
+        - name: v0-0
+          served: true
+          kinds:
+            - kind: CustomKind
+              plural: CustomKinds
+              scope: Namespaced
               schema:
                 spec:
                     properties:
@@ -58,7 +59,13 @@ spec:
                                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
                             type: object
                     type: object
-            - name: v1-0
+              conversion: false
+        - name: v1-0
+          served: true
+          kinds:
+            - kind: CustomKind
+              plural: CustomKinds
+              scope: Namespaced
               schema:
                 spec:
                     properties:
@@ -216,4 +223,5 @@ spec:
                     required:
                         - statusField1
                     type: object
-          conversion: false
+              conversion: false
+    preferredVersion: ""

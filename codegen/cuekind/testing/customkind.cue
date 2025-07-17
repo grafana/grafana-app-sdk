@@ -4,12 +4,27 @@ import "time"
 
 customManifest: {
 	appName: "custom-app"
-	kinds: [customKind]
+	preferredVersion: "v1-0"
+	versions: {
+		"v0-0": custom_v0_0
+		"v1-0": custom_v1_0
+	}
+}
+
+custom_v0_0: {
+	kinds: [{
+			schema: customKind.versions["v0-0"].schema
+		} & customKind]
+}
+
+custom_v1_0: {
+	kinds: [{
+			schema: customKind.versions["v1-0"].schema
+		} & customKind]
 }
 
 customKind: {
 	kind:    "CustomKind"
-	current: "v1-0"
 	versions: {
 		"v0-0": {
 			schema: {
