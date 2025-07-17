@@ -42,6 +42,11 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"bar":{"type":"object","properties":{"baz":{"type":"string"}}},"foo":{"type":"object","additionalProperties":{"type":"object","$ref":"#/components/schemas/bar"}}}}}`),
 		outputJSON: []byte(`{"type":"object","additionalProperties":{"type":"object","properties":{"baz":{"type":"string"}}}}`),
+	}, {
+		name:       "simple additionalProperties",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"type":"object","properties":{"bar":{"type":"string"}},"additionalProperties":{}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"bar":{"type":"string"}},"x-kubernetes-preserve-unknown-fields":true}`),
 	}}
 
 	for _, test := range tests {

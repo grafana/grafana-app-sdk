@@ -83,7 +83,7 @@ customKind: {
 				status: {
 					statusField1: string
 					[string]:     _
-				}
+				} @cog(open=true)
 				metadata: {
 					customMetadataField: string
 					otherMetadataField:  string

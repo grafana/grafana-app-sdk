@@ -316,7 +316,9 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 				}
 				result.AdditionalProperties.Schema = openapi3.NewSchemaRef("", resolved)
 			}
-			if result.AdditionalProperties.Schema.Value != nil && result.AdditionalProperties.Schema.Value.Type.Is(openapi3.TypeObject) && len(result.AdditionalProperties.Schema.Value.Properties) == 0 {
+			// if the schema exists, there are no properties in it, and it's either an object or empty type ("additionalProperties":{"type":"object"} or "additionalProperties":{}),
+			// set kubernetes' x-kubernetes-preserve-unknown-fields to true and remove the additionalProperties section
+			if result.AdditionalProperties.Schema.Value != nil && len(result.AdditionalProperties.Schema.Value.Properties) == 0 && (result.AdditionalProperties.Schema.Value.Type.Is(openapi3.TypeObject) || result.AdditionalProperties.Schema.Value.Type == nil) {
 				result.AdditionalProperties.Has = nil
 				result.AdditionalProperties.Schema = nil
 				if result.Extensions == nil {
