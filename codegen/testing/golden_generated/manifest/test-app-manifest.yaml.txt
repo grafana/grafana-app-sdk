@@ -52,7 +52,6 @@ spec:
                                             - success
                                             - in_progress
                                             - failed
-                                        type: string
                                 required:
                                     - lastEvaluation
                                     - state
@@ -101,7 +100,6 @@ spec:
                                             - success
                                             - in_progress
                                             - failed
-                                        type: string
                                 required:
                                     - lastEvaluation
                                     - state
@@ -131,7 +129,6 @@ spec:
                 spec:
                     properties:
                         intField:
-                            format: int64
                             type: integer
                         stringField:
                             type: string
@@ -170,7 +167,6 @@ spec:
                                             - success
                                             - in_progress
                                             - failed
-                                        type: string
                                 required:
                                     - lastEvaluation
                                     - state
@@ -202,7 +198,6 @@ spec:
                         boolField:
                             type: boolean
                         intField:
-                            format: int64
                             type: integer
                         stringField:
                             type: string
@@ -242,7 +237,6 @@ spec:
                                             - success
                                             - in_progress
                                             - failed
-                                        type: string
                                 required:
                                     - lastEvaluation
                                     - state

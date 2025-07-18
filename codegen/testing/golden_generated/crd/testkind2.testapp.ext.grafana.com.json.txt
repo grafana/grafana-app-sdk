@@ -54,8 +54,7 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ],
-                                                    "type": "string"
+                                                    ]
                                                 }
                                             },
                                             "required": [
