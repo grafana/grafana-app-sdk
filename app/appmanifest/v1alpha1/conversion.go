@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	"maps"
 	"strings"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -62,8 +63,17 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			}
 			// Schema
 			if kind.Schema != nil {
+				toParse := make(map[string]any)
+				maps.Copy(toParse, kind.Schema)
+				// If this is a CRD schema, convert it into an OpenAPI components with the kind name as the only key
+				if _, ok := toParse["spec"]; ok {
+					toParse = map[string]any{
+						kind.Kind: toParse,
+					}
+				}
+
 				var err error
-				k.Schema, err = app.VersionSchemaFromMap(kind.Schema)
+				k.Schema, err = app.VersionSchemaFromMap(toParse)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
