@@ -36,18 +36,19 @@ var localEnvFiles embed.FS
 
 // localEnvConfig is the configuration object used for the generation of local dev env resources
 type localEnvConfig struct {
-	Port                      int                   `json:"port" yaml:"port"`
-	KubePort                  int                   `json:"kubePort" yaml:"kubePort"`
-	Datasources               []string              `json:"datasources" yaml:"datasources"`
-	DatasourceConfigs         []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
-	PluginJSON                map[string]any        `json:"pluginJson" yaml:"pluginJson"`
-	PluginSecureJSON          map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
-	OperatorImage             string                `json:"operatorImage" yaml:"operatorImage"`
-	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
-	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
-	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
-	GrafanaInstallPlugins     string                `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
-	GrafanaWithAnonymousAuth  bool                  `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
+	Port                      int                       `json:"port" yaml:"port"`
+	KubePort                  int                       `json:"kubePort" yaml:"kubePort"`
+	Datasources               []string                  `json:"datasources" yaml:"datasources"`
+	DatasourceConfigs         []dataSourceConfig        `json:"datasourceConfigs" yaml:"datasourceConfigs"`
+	PluginJSON                map[string]any            `json:"pluginJson" yaml:"pluginJson"`
+	PluginSecureJSON          map[string]any            `json:"pluginSecureJson" yaml:"pluginSecureJson"`
+	OperatorImage             string                    `json:"operatorImage" yaml:"operatorImage"`
+	Webhooks                  localEnvWebhookConfig     `json:"webhooks" yaml:"webhooks"`
+	GenerateGrafanaDeployment bool                      `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
+	GrafanaImage              string                    `json:"grafanaImage" yaml:"grafanaImage"`
+	GrafanaInstallPlugins     string                    `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
+	GrafanaWithAnonymousAuth  bool                      `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
+	AdditionalVolumeMounts    []additionalMountedVolume `json:"additionalVolumeMounts" yaml:"additionalVolumeMounts"`
 }
 
 type dataSourceConfig struct {
@@ -66,6 +67,11 @@ type localEnvWebhookConfig struct {
 	Validating bool `json:"validating" yaml:"validating"`
 	Converting bool `json:"converting" yaml:"converting"`
 	Port       int  `json:"port" yaml:"port"`
+}
+
+type additionalMountedVolume struct {
+	SourcePath string `json:"sourcePath" yaml:"sourcePath"`
+	MountPath  string `json:"mountPath" yaml:"mountPath"`
 }
 
 func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
@@ -302,10 +308,21 @@ func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	additionalVolumes := make([]additionalMountedVolume, 0)
+	for _, v := range config.AdditionalVolumeMounts {
+		if len(v.SourcePath) > 1 && v.SourcePath[0] != '/' {
+			if v.SourcePath[0:2] == "./" {
+				v.SourcePath = v.SourcePath[2:]
+			}
+			v.SourcePath = filepath.Join(projectRoot, v.SourcePath)
+		}
+		additionalVolumes = append(additionalVolumes, v)
+	}
 	buf := &bytes.Buffer{}
-	err = k3dConfigTmpl.Execute(buf, map[string]string{
-		"ProjectRoot": projectRoot,
-		"BindPort":    strconv.Itoa(config.Port),
+	err = k3dConfigTmpl.Execute(buf, map[string]any{
+		"ProjectRoot":       projectRoot,
+		"BindPort":          strconv.Itoa(config.Port),
+		"AdditionalVolumes": additionalVolumes,
 	})
 	return buf.Bytes(), err
 }
