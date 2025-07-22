@@ -197,7 +197,7 @@ func CUEToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 	// Delete the "metadata" property
 	delete(converted.Properties, "metadata")
 	// Convert to JSON and then into a map
-	j, err := json.MarshalIndent(converted.Properties, "", "  ")
+	j, err := json.Marshal(converted.Properties)
 	if err != nil {
 		return nil, err
 	}
@@ -260,9 +260,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 
 		// Create a new visited map for this branch to avoid false positives in parallel branches
 		branchVisited := make(map[string]bool)
-		for k, v := range visited {
-			branchVisited[k] = v
-		}
+		maps.Copy(branchVisited, visited)
 
 		// Resolve the referenced schema
 		resolved, err := resolveSchema(refSchema, components, branchVisited)
@@ -300,6 +298,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 		Nullable:             schema.Value.Nullable,
 		ReadOnly:             schema.Value.ReadOnly,
 		WriteOnly:            schema.Value.WriteOnly,
+		Extensions:           schema.Value.Extensions,
 		AllOf:                make([]*openapi3.SchemaRef, 0),
 		OneOf:                make([]*openapi3.SchemaRef, 0),
 		AnyOf:                make([]*openapi3.SchemaRef, 0),
