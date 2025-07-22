@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -245,6 +246,12 @@ func (c *Client) SubresourceRequest(ctx context.Context, identifier resource.Ide
 	if c.schema.Scope() == resource.ClusterScope && identifier.Namespace != resource.NamespaceAll {
 		return nil, fmt.Errorf("cannot watch resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
 			resource.ClusterScope, identifier.Namespace, resource.NamespaceAll)
+	}
+	if opts.Path == "" {
+		return nil, errors.New("subresource Path is required")
+	}
+	if opts.Verb == "" {
+		return nil, errors.New("request Verb is required")
 	}
 	return c.client.customRouteRequest(ctx, identifier.Namespace, c.schema.Plural(), identifier.Name, opts)
 }
