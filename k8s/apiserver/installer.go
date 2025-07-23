@@ -250,8 +250,8 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	}
 
 	for gv, kinds := range kindsByGV {
+		storage := map[string]rest.Storage{}
 		for _, kind := range kinds {
-			storage := map[string]rest.Storage{}
 			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
 			if err != nil {
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
