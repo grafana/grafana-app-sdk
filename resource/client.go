@@ -3,6 +3,7 @@ package resource
 import (
 	"context"
 	"io"
+	"net/http"
 	"net/url"
 )
 
@@ -160,11 +161,18 @@ type WatchEvent struct {
 	Object Object
 }
 
+// CustomRouteRequestOptions contains the options for a custom route request
 type CustomRouteRequestOptions struct {
-	Path  string
-	Verb  string
-	Body  io.ReadCloser
+	// Path is the path of the custom route, from the base of the resource or namespace/api version
+	Path string
+	// Verb is the HTTP verb to use for the request
+	Verb string
+	// Body is the request body to supply. If nil, no body will be supplied in the request
+	Body io.ReadCloser
+	// Query is a set of UTL query parameters to supply in the request
 	Query url.Values
+	// Headers is the set of headers to pass in the request, in addition to any headers set by the client
+	Headers http.Header
 }
 
 // Client is any object which interfaces with schema Objects.

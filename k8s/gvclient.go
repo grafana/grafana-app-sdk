@@ -460,6 +460,9 @@ func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, 
 			req = req.Param(k, vv)
 		}
 	}
+	for k, v := range request.Headers {
+		req = req.SetHeader(k, v...)
+	}
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
