@@ -127,3 +127,9 @@ func (c *TypedClient[T, L]) Patch(ctx context.Context, id Identifier, req PatchR
 func (c *TypedClient[T, L]) Delete(ctx context.Context, id Identifier, opts DeleteOptions) error {
 	return c.cli.Delete(ctx, id, opts)
 }
+
+// SubresourceRequest makes a request to a resource's subresource path using the provided verb.
+// It returns the raw bytes of the response, or an error if the request returns an error.
+func (c *TypedClient[T, L]) SubresourceRequest(ctx context.Context, id Identifier, opts CustomRouteRequestOptions) ([]byte, error) {
+	return c.cli.SubresourceRequest(ctx, id, opts)
+}

@@ -2,6 +2,9 @@ package resource
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/url"
 )
 
 const NamespaceAll = ""
@@ -158,6 +161,20 @@ type WatchEvent struct {
 	Object Object
 }
 
+// CustomRouteRequestOptions contains the options for a custom route request
+type CustomRouteRequestOptions struct {
+	// Path is the path of the custom route, from the base of the resource or namespace/api version
+	Path string
+	// Verb is the HTTP verb to use for the request
+	Verb string
+	// Body is the request body to supply. If nil, no body will be supplied in the request
+	Body io.ReadCloser
+	// Query is a set of UTL query parameters to supply in the request
+	Query url.Values
+	// Headers is the set of headers to pass in the request, in addition to any headers set by the client
+	Headers http.Header
+}
+
 // Client is any object which interfaces with schema Objects.
 // A single client should work on a per-Schema basis,
 // where each instance of a client operates on a specific (group, version, kind).
@@ -202,6 +219,10 @@ type Client interface {
 
 	// Watch makes a watch request to the provided namespace, and returns an object which implements WatchResponse
 	Watch(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error)
+
+	// SubresourceRequest makes a request to a resource's subresource path using the provided verb.
+	// It returns the raw bytes of the response, or an error if the request returns an error.
+	SubresourceRequest(ctx context.Context, identifier Identifier, req CustomRouteRequestOptions) ([]byte, error)
 }
 
 // SchemalessClient is a Schema-agnostic version of the Client interface.

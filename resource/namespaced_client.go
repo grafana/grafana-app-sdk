@@ -66,3 +66,12 @@ func (c *NamespacedClient[T, L]) Delete(ctx context.Context, uid string, opts De
 		Name:      uid,
 	}, opts)
 }
+
+// SubresourceRequest makes a request to a resource's subresource path using the provided verb.
+// It returns the raw bytes of the response, or an error if the request returns an error.
+func (c *NamespacedClient[T, L]) SubresourceRequest(ctx context.Context, uid string, opts CustomRouteRequestOptions) ([]byte, error) {
+	return c.cli.SubresourceRequest(ctx, Identifier{
+		Namespace: c.namespace,
+		Name:      uid,
+	}, opts)
+}
