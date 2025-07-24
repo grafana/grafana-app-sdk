@@ -30,6 +30,11 @@
         "server:*"
       ],
       "volume": "{{.ProjectRoot}}/local/mounted-files:/tmp/k3d/mounted-files"
-    }
+    }{{ range .AdditionalVolumes }},{
+      "nodeFilters": [
+        "server:*"
+      ],
+      "volume": "{{.SourcePath}}:{{.MountPath}}"
+    }{{ end }}
   ]
 }
