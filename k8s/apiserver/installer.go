@@ -242,7 +242,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			return fmt.Errorf("failed to add to scheme: %w", err)
 		}
 	}
-	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(group, r.scheme, metav1.ParameterCodec, r.codecs)
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(group, r.scheme, runtime.NewParameterCodec(r.scheme), r.codecs)
 
 	kindsByGV, err := r.getKindsByGroupVersion()
 	if err != nil {
