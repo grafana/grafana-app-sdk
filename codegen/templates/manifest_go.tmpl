@@ -37,11 +37,13 @@ SchemaProps: spec.SchemaProps{
 
 {{ define "parameter" }}
 { {{ if .Name }}
-    Name: "{{.Name}}",{{ end }}{{ if .In }}
-    In: "{{.In}}",{{ end }}{{ if .Description }}
-    Description: "{{.Description}}",{{ end }}{{ if .Required }}
-    Required: {{.Required}},{{ end }}{{ if .Schema }}
-    Schema: &spec.Schema{ {{ template "schema" .Schema }}
+    ParameterProps: spec3.ParameterProps{
+        Name: "{{.Name}}",{{ end }}{{ if .In }}
+        In: "{{.In}}",{{ end }}{{ if .Description }}
+        Description: "{{.Description}}",{{ end }}{{ if .Required }}
+        Required: {{.Required}},{{ end }}{{ if .Schema }}
+        Schema: &spec.Schema{ {{ template "schema" .Schema }}
+        },
     },{{ end }}
 },{{ end }}
 
@@ -230,3 +232,32 @@ func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (g
     return goType, exists
 }
 
+var customRouteToGoParamsType = map[string]runtime.Object { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": &{{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Post $resp.Post.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Post.OperationId }}{{ end }}{},{{end}}{{ if $resp.Put }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Put.OperationId }}{{ end }}{},{{end}}{{ if $resp.Patch }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PATCH": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Patch.OperationId }}{{ end }}{},{{end}}{{ if $resp.Delete }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|DELETE": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{{ end }}{},{{end}}{{ if $resp.Head }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|HEAD": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Head.OperationId }}{{ end }}{},{{end}}{{ if $resp.Options }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|OPTIONS": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Options.OperationId }}{{ end }}{},{{end}}
+    {{ end }}{{ end }}{{ end }}
+}
+
+func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goType runtime.Object, exists bool) {
+    if len(path) > 0 && path[0] == '/' {
+        path = path[1:]
+    }
+    goType, exists = customRouteToGoParamsType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
+    return goType, exists
+}
+
+type GoTypeAssociator struct {}
+func (g *GoTypeAssociator) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
+    return ManifestGoTypeAssociator(kind, version)
+}
+func (g *GoTypeAssociator) CustomRouteReturnGoType(kind, version, path, verb string) (goType any, exists bool) {
+    return ManifestCustomRouteResponsesAssociator(kind, version, path, verb)
+}
+func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
+    return ManifestCustomRouteQueryAssociator(kind, version, path, verb)
+}
