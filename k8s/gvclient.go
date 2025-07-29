@@ -440,6 +440,49 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	return rawToListWithParser(raw, into, itemParser)
 }
 
+func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, plural, name string, request resource.CustomRouteRequestOptions) ([]byte, error) {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-custom-route")
+	defer span.End()
+	req := g.client.Verb(request.Verb)
+	if plural != "" {
+		req = req.Resource(plural).Name(name).SubResource(request.Path)
+	} else {
+		req = req.Resource(request.Path)
+	}
+	if namespace != "" {
+		req = req.Namespace(namespace)
+	}
+	if request.Body != nil {
+		req.Body(request.Body)
+	}
+	for k, v := range request.Query {
+		for _, vv := range v {
+			req = req.Param(k, vv)
+		}
+	}
+	for k, v := range request.Headers {
+		req = req.SetHeader(k, v...)
+	}
+	sc := 0
+	start := time.Now()
+	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, request.Verb, plural, request.Path)
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
+	g.incRequestCounter(sc, request.Verb, plural, request.Path)
+	if err != nil {
+		err = ParseKubernetesError(raw, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return raw, nil
+}
+
 //nolint:revive
 func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string,
 	exampleObject resource.Object, options resource.WatchOptions, codec resource.Codec) (*WatchResponse, error) {

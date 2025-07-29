@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -237,6 +238,22 @@ func (c *Client) Watch(ctx context.Context, namespace string, options resource.W
 			resource.ClusterScope, namespace, resource.NamespaceAll)
 	}
 	return c.client.watch(ctx, namespace, c.schema.Plural(), c.schema.ZeroValue(), options, c.codec)
+}
+
+// SubresourceRequest makes a request to an arbitrary subresource of the object identified by identifier.
+// Verb and Path should be included in the options.
+func (c *Client) SubresourceRequest(ctx context.Context, identifier resource.Identifier, opts resource.CustomRouteRequestOptions) ([]byte, error) {
+	if c.schema.Scope() == resource.ClusterScope && identifier.Namespace != resource.NamespaceAll {
+		return nil, fmt.Errorf("cannot watch resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
+			resource.ClusterScope, identifier.Namespace, resource.NamespaceAll)
+	}
+	if opts.Path == "" {
+		return nil, errors.New("subresource Path is required")
+	}
+	if opts.Verb == "" {
+		return nil, errors.New("request Verb is required")
+	}
+	return c.client.customRouteRequest(ctx, identifier.Namespace, c.schema.Plural(), identifier.Name, opts)
 }
 
 // Metrics returns the prometheus collectors used by this Client for registration with a prometheus exporter
