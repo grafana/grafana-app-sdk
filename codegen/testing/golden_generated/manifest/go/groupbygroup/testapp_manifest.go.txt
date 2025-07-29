@@ -285,6 +285,19 @@ var appManifestData = app.ManifestData{
 			},
 		},
 	},
+	ExtraPermissions: &app.Permissions{
+		AccessKinds: []app.KindPermission{
+			{
+				Group:    "foo.bar",
+				Resource: "foos",
+				Actions: []app.KindPermissionAction{
+					"get",
+					"list",
+					"watch",
+				},
+			},
+		},
+	},
 	Operator: &app.ManifestOperatorInfo{
 		URL: "https://foo.bar:8443",
 		Webhooks: &app.ManifestOperatorWebhookProperties{

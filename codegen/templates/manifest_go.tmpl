@@ -180,7 +180,18 @@ var appManifestData = app.ManifestData{
             },
             {{ end }} },
         },
-        {{ end }} },{{ if .ManifestData.Operator }}
+        {{ end }} },{{ if .ManifestData.ExtraPermissions }}
+        ExtraPermissions: &app.Permissions{
+            AccessKinds: []app.KindPermission{ {{ range .ManifestData.ExtraPermissions.AccessKinds }} 
+                {
+                    Group: "{{ .Group }}",
+                    Resource: "{{ .Resource }}",
+                    Actions: []app.KindPermissionAction{ {{ range .Actions }} 
+                        "{{ . }}",{{ end }}
+                    },
+                },{{ end }} 
+            },
+        },{{ end }}{{ if .ManifestData.Operator }}
     Operator: &app.ManifestOperatorInfo{
         URL: "{{.ManifestData.Operator.URL}}", {{ if .ManifestData.Operator.Webhooks }}
         Webhooks: &app.ManifestOperatorWebhookProperties{
