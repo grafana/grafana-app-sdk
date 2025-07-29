@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/grafana/codejen"
+	"golang.org/x/tools/imports"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -31,9 +32,30 @@ func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen
 			if !kind.Codegen.Go.Enabled {
 				continue
 			}
+			prefix := exportField(kind.Kind)
+			if r.GroupByKind {
+				prefix = ""
+			}
+			subresources := make([]templates.GoResourceClientSubresource, 0)
+			it, err := kind.Schema.Fields()
+			if err != nil {
+				return nil, err
+			}
+			for it.Next() {
+				sr := it.Selector().String()
+				if sr == "metadata" || sr == "spec" { //nolint:goconst
+					continue
+				}
+				subresources = append(subresources, templates.GoResourceClientSubresource{
+					FieldName:   exportField(sr),
+					Subresource: sr,
+				})
+			}
 			md := templates.GoResourceClientMetadata{
 				PackageName:  ToPackageName(version.Name()),
 				KindName:     exportField(kind.Kind),
+				KindPrefix:   prefix,
+				Subresources: subresources,
 				CustomRoutes: make([]templates.GoResourceClientCustomRoute, 0),
 			}
 			for cpath, methods := range kind.Routes {
@@ -52,11 +74,17 @@ func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen
 			}
 
 			b := bytes.Buffer{}
-			err := templates.WriteGoResourceClient(md, &b)
+			err = templates.WriteGoResourceClient(md, &b)
 			if err != nil {
 				return nil, err
 			}
 			formatted, err := format.Source(b.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			formatted, err = imports.Process("", formatted, &imports.Options{
+				Comments: true,
+			})
 			if err != nil {
 				return nil, err
 			}

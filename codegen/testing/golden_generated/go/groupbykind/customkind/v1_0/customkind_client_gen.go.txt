@@ -1,13 +1,7 @@
 package v1_0
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,12 +13,12 @@ type CustomKindClient struct {
 
 func NewCustomKindClient(client resource.Client) *CustomKindClient {
 	return &CustomKindClient{
-		client: resource.NewTypedClient[*CustomKind, *CustomKindList](client, CustomKindKind()),
+		client: resource.NewTypedClient[*CustomKind, *CustomKindList](client, Kind()),
 	}
 }
 
 func NewCustomKindClientFromGenerator(generator resource.ClientGenerator) (*CustomKindClient, error) {
-	c, err := generator.ClientFor(CustomKindKind())
+	c, err := generator.ClientFor(Kind())
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +64,7 @@ func (c *CustomKindClient) ListAll(ctx context.Context, namespace string, opts r
 func (c *CustomKindClient) Create(ctx context.Context, obj *CustomKind, opts resource.CreateOptions) (*CustomKind, error) {
 	// Make sure apiVersion and kind are set
 	obj.APIVersion = GroupVersion.Identifier()
-	obj.Kind = CustomKindKind().Kind()
+	obj.Kind = Kind().Kind()
 	return c.client.Create(ctx, obj, opts)
 }
 
@@ -82,10 +76,10 @@ func (c *CustomKindClient) Patch(ctx context.Context, identifier resource.Identi
 	return c.client.Patch(ctx, identifier, req, opts)
 }
 
-func (c *CustomKindClient) UpdateStatus(ctx context.Context, newStatus CustomKindStatus, opts resource.UpdateOptions) (*CustomKind, error) {
+func (c *CustomKindClient) UpdateStatus(ctx context.Context, newStatus Status, opts resource.UpdateOptions) (*CustomKind, error) {
 	return c.client.Update(ctx, &CustomKind{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       CustomKindKind().Kind(),
+			Kind:       Kind().Kind(),
 			APIVersion: GroupVersion.Identifier(),
 		},
 		ObjectMeta: metav1.ObjectMeta{

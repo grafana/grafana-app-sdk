@@ -561,7 +561,8 @@ func WriteConstantsFile(metadata ConstantsMetadata, out io.Writer) error {
 type GoResourceClientMetadata struct {
 	PackageName  string
 	KindName     string
-	Subresources []string
+	KindPrefix   string
+	Subresources []GoResourceClientSubresource
 	CustomRoutes []GoResourceClientCustomRoute
 }
 
@@ -579,9 +580,16 @@ type GoResourceClientParamValues struct {
 	FieldName string
 }
 
+type GoResourceClientSubresource struct {
+	FieldName   string
+	Subresource string
+}
+
 func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) error {
 	// sort custom route data for consistent output
-	slices.Sort(metadata.Subresources)
+	slices.SortFunc(metadata.Subresources, func(a, b GoResourceClientSubresource) int {
+		return strings.Compare(a.Subresource, b.Subresource)
+	})
 	slices.SortFunc(metadata.CustomRoutes, func(a, b GoResourceClientCustomRoute) int {
 		return strings.Compare(fmt.Sprintf("%s|%s", a.Path, a.Method), fmt.Sprintf("%s|%s", b.Path, b.Method))
 	})

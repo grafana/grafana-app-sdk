@@ -19,12 +19,12 @@ type {{.KindName}}Client struct {
 
 func New{{.KindName}}Client(client resource.Client) *{{.KindName}}Client {
 	return &{{.KindName}}Client{
-		client: resource.NewTypedClient[*{{.KindName}}, *{{.KindName}}List](client, {{.KindName}}Kind()),
+		client: resource.NewTypedClient[*{{.KindName}}, *{{.KindName}}List](client, {{.KindPrefix}}Kind()),
 	}
 }
 
 func New{{.KindName}}ClientFromGenerator(generator resource.ClientGenerator) (*{{.KindName}}Client, error) {
-	c, err := generator.ClientFor({{.KindName}}Kind())
+	c, err := generator.ClientFor({{.KindPrefix}}Kind())
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (c *{{.KindName}}Client) ListAll(ctx context.Context, namespace string, opt
 func (c *{{.KindName}}Client) Create(ctx context.Context, obj *{{.KindName}}, opts resource.CreateOptions) (*{{.KindName}}, error) {
 	// Make sure apiVersion and kind are set
 	obj.APIVersion = GroupVersion.Identifier()
-	obj.Kind = {{.KindName}}Kind().Kind()
+	obj.Kind = {{.KindPrefix}}Kind().Kind()
 	return c.client.Create(ctx, obj, opts)
 }
 
@@ -81,22 +81,22 @@ func (c *{{.KindName}}Client) Update(ctx context.Context, obj *{{.KindName}}, op
 func (c *{{.KindName}}Client) Patch(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, opts resource.PatchOptions) (*{{.KindName}}, error) {
 	return c.client.Patch(ctx, identifier, req, opts)
 }
-
-func (c *{{.KindName}}Client) UpdateStatus(ctx context.Context, newStatus {{.KindName}}Status, opts resource.UpdateOptions) (*{{.KindName}}, error) {
-	return c.client.Update(ctx, &{{.KindName}}{
+{{ range .Subresources }}
+func (c *{{$.KindName}}Client) Update{{ .FieldName }}(ctx context.Context, newStatus {{$.KindPrefix}}Status, opts resource.UpdateOptions) (*{{$.KindName}}, error) {
+	return c.client.Update(ctx, &{{$.KindName}}{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       {{.KindName}}Kind().Kind(),
+			Kind:       {{$.KindPrefix}}Kind().Kind(),
 			APIVersion: GroupVersion.Identifier(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			ResourceVersion: opts.ResourceVersion,
 		},
-		Status: newStatus,
+		{{ .FieldName }}: newStatus,
 	}, resource.UpdateOptions{
-		Subresource:     "status",
+		Subresource:     "{{ .Subresource }}",
 		ResourceVersion: opts.ResourceVersion,
 	})
-}
+}{{ end }}
 
 func (c *{{.KindName}}Client) Delete(ctx context.Context, identifier resource.Identifier, opts resource.DeleteOptions) error {
 	return c.client.Delete(ctx, identifier, opts)
