@@ -944,18 +944,19 @@ func (g *mockClientGenerator) ClientFor(s Kind) (Client, error) {
 }
 
 type mockClient struct {
-	GetFunc        func(ctx context.Context, identifier Identifier) (Object, error)
-	GetIntoFunc    func(ctx context.Context, identifier Identifier, into Object) error
-	CreateFunc     func(ctx context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error)
-	CreateIntoFunc func(ctx context.Context, identifier Identifier, obj Object, options CreateOptions, into Object) error
-	UpdateFunc     func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error)
-	UpdateIntoFunc func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error
-	PatchFunc      func(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions) (Object, error)
-	PatchIntoFunc  func(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions, into Object) error
-	DeleteFunc     func(ctx context.Context, identifier Identifier, options DeleteOptions) error
-	ListFunc       func(ctx context.Context, namespace string, options ListOptions) (ListObject, error)
-	ListIntoFunc   func(ctx context.Context, namespace string, options ListOptions, into ListObject) error
-	WatchFunc      func(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error)
+	GetFunc                func(ctx context.Context, identifier Identifier) (Object, error)
+	GetIntoFunc            func(ctx context.Context, identifier Identifier, into Object) error
+	CreateFunc             func(ctx context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error)
+	CreateIntoFunc         func(ctx context.Context, identifier Identifier, obj Object, options CreateOptions, into Object) error
+	UpdateFunc             func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error)
+	UpdateIntoFunc         func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error
+	PatchFunc              func(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions) (Object, error)
+	PatchIntoFunc          func(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions, into Object) error
+	DeleteFunc             func(ctx context.Context, identifier Identifier, options DeleteOptions) error
+	ListFunc               func(ctx context.Context, namespace string, options ListOptions) (ListObject, error)
+	ListIntoFunc           func(ctx context.Context, namespace string, options ListOptions, into ListObject) error
+	WatchFunc              func(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error)
+	SubresourceRequestFunc func(ctx context.Context, identifier Identifier, options CustomRouteRequestOptions) ([]byte, error)
 }
 
 func (c *mockClient) Get(ctx context.Context, identifier Identifier) (Object, error) {
@@ -1027,6 +1028,12 @@ func (c *mockClient) ListInto(ctx context.Context, namespace string, options Lis
 func (c *mockClient) Watch(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error) {
 	if c.WatchFunc != nil {
 		return c.WatchFunc(ctx, namespace, options)
+	}
+	return nil, nil
+}
+func (c *mockClient) SubresourceRequest(ctx context.Context, identifier Identifier, options CustomRouteRequestOptions) ([]byte, error) {
+	if c.SubresourceRequestFunc != nil {
+		return c.SubresourceRequestFunc(ctx, identifier, options)
 	}
 	return nil, nil
 }

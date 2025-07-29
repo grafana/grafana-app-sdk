@@ -242,7 +242,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			return fmt.Errorf("failed to add to scheme: %w", err)
 		}
 	}
-	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(group, r.scheme, metav1.ParameterCodec, r.codecs)
+	apiGroupInfo := genericapiserver.NewDefaultAPIGroupInfo(group, r.scheme, runtime.NewParameterCodec(r.scheme), r.codecs)
 
 	kindsByGV, err := r.getKindsByGroupVersion()
 	if err != nil {
@@ -250,8 +250,8 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	}
 
 	for gv, kinds := range kindsByGV {
+		storage := map[string]rest.Storage{}
 		for _, kind := range kinds {
-			storage := map[string]rest.Storage{}
 			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
 			if err != nil {
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
