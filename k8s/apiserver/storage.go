@@ -76,56 +76,56 @@ func matchKind(label labels.Selector, field fields.Selector) storage.SelectionPr
 	}
 }
 
-func newRegistryStatusStoreForKind(scheme *runtime.Scheme, kind resource.Kind, specStore *genericregistry.Store) *statusREST {
+func newRegistryStatusStoreForKind(scheme *runtime.Scheme, kind resource.Kind, specStore *genericregistry.Store) *StatusREST {
 	strategy := newStatusStrategy(scheme, kind.GroupVersionKind().GroupVersion())
 	return newStatusREST(specStore, strategy)
 }
 
 // NewStatusREST makes a RESTStorage for status that has more limited options.
 // It is based on the original REST so that we can share the same underlying store
-func newStatusREST(store *genericregistry.Store, strategy rest.UpdateResetFieldsStrategy) *statusREST {
+func newStatusREST(store *genericregistry.Store, strategy rest.UpdateResetFieldsStrategy) *StatusREST {
 	statusStore := *store
 	statusStore.CreateStrategy = nil
 	statusStore.DeleteStrategy = nil
 	statusStore.UpdateStrategy = strategy
 	statusStore.ResetFieldsStrategy = strategy
-	return &statusREST{store: &statusStore}
+	return &StatusREST{Store: &statusStore}
 }
 
-// statusREST implements the REST endpoint for changing the status of an DataPlaneService.
-type statusREST struct {
-	store *genericregistry.Store
+// StatusREST implements the REST endpoint for changing the status of a resource.
+type StatusREST struct {
+	Store *genericregistry.Store
 }
 
 var (
-	_ rest.Patcher = (*statusREST)(nil)
-	_ rest.Storage = (*statusREST)(nil)
+	_ rest.Patcher = (*StatusREST)(nil)
+	_ rest.Storage = (*StatusREST)(nil)
 )
 
-// New creates a new DataPlaneService object.
-func (r *statusREST) New() runtime.Object {
-	return r.store.NewFunc()
+// New creates a new runtime.Object.
+func (r *StatusREST) New() runtime.Object {
+	return r.Store.NewFunc()
 }
 
 // Destroy cleans up resources on shutdown.
-func (*statusREST) Destroy() {
+func (*StatusREST) Destroy() {
 	// Given that underlying store is shared with REST,
 	// we don't destroy it here explicitly.
 }
 
 // Get retrieves the object from the storage. It is required to support Patch.
-func (r *statusREST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
-	return r.store.Get(ctx, name, options)
+func (r *StatusREST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
+	return r.Store.Get(ctx, name, options)
 }
 
 // Update alters the status subset of an object.
-func (r *statusREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, _ bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
+func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, _ bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
 	// We are explicitly setting forceAllowCreate to false in the call to the underlying storage because
 	// subresources should never allow create on update.
-	return r.store.Update(ctx, name, objInfo, createValidation, updateValidation, false, options)
+	return r.Store.Update(ctx, name, objInfo, createValidation, updateValidation, false, options)
 }
 
 // GetResetFields implements rest.ResetFieldsStrategy
-func (r *statusREST) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
-	return r.store.GetResetFields()
+func (r *StatusREST) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
+	return r.Store.GetResetFields()
 }
