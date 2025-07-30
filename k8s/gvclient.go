@@ -264,6 +264,7 @@ func (g *groupVersionClient) updateSubresource(
 ) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-update-subresource")
 	defer span.End()
+	logger := logging.FromContext(ctx).With("operation", "put", "subresource", subresource, "name", obj.GetName(), "namespace", obj.GetNamespace())
 	addLabels(obj, map[string]string{
 		versionLabel: g.version,
 	})
@@ -283,6 +284,7 @@ func (g *groupVersionClient) updateSubresource(
 	if opts.DryRun {
 		req = req.Param("dryRun", "All")
 	}
+	logger.With("url", req.URL()).Info("executing PUT request", "body", buf.String())
 
 	sc := 0
 	start := time.Now()
@@ -306,6 +308,7 @@ func (g *groupVersionClient) updateSubresource(
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
 		return err
 	}
+	logger.Info("Received successful response", "body", string(raw))
 	return nil
 }
 
@@ -321,6 +324,7 @@ func (g *groupVersionClient) patch(
 ) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-patch")
 	defer span.End()
+	logger := logging.FromContext(ctx).With("operation", "put", "subresource", opts.Subresource, "name", identifier.Name, "namespace", identifier.Namespace)
 	patchBytes, err := marshalJSONPatch(patch)
 	if err != nil {
 		return err
@@ -338,6 +342,7 @@ func (g *groupVersionClient) patch(
 	if opts.DryRun {
 		req = req.Param("dryRun", "All")
 	}
+	logger.With("url", req.URL()).Info("executing PATCH request", "body", string(patchBytes))
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
@@ -360,6 +365,7 @@ func (g *groupVersionClient) patch(
 		span.SetStatus(codes.Error, fmt.Sprintf("unable to convert kubernetes response to resource: %s", err.Error()))
 		return err
 	}
+	logger.Info("Received successful response", "body", string(raw))
 	return nil
 }
 
