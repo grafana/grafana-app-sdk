@@ -2,7 +2,6 @@ package apiserver
 
 import (
 	"context"
-	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,12 +18,14 @@ import (
 type strategy struct {
 	ObjectTyper runtime.ObjectTyper
 	kind        resource.Kind
+	namer       names.NameGenerator
 }
 
 func newStrategy(scheme *runtime.Scheme, kind resource.Kind) *strategy {
 	return &strategy{
 		ObjectTyper: scheme,
 		kind:        kind,
+		namer:       names.SimpleNameGenerator,
 	}
 }
 
@@ -41,8 +42,8 @@ func (s *strategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	return fields
 }
 
-func (*strategy) GenerateName(base string) string {
-	return fmt.Sprintf("%s-", base)
+func (s *strategy) GenerateName(base string) string {
+	return s.namer.GenerateName(base)
 }
 
 func (*strategy) PrepareForCreate(_ context.Context, _ runtime.Object) {
