@@ -125,25 +125,31 @@ type AppConfig struct {
 }
 
 // InformerSupplier is a function which creates an operator.Informer for a kind, given a ClientGenerator and ListWatchOptions
-type InformerSupplier func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error)
+type InformerSupplier func(
+	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
+) (operator.Informer, error)
 
 // DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer
-var DefaultInformerSupplier = func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error) {
+var DefaultInformerSupplier = func(
+	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
+) (operator.Informer, error) {
 	client, err := clients.ClientFor(kind)
 	if err != nil {
 		return nil, err
 	}
-	return operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
-		ListWatchOptions: options,
-	})
+	return operator.NewKubernetesBasedInformer(kind, client, options)
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
 type AppInformerConfig struct {
-	ErrorHandler       func(context.Context, error)
-	RetryPolicy        operator.RetryPolicy
+	// InformerOptions are the options for the informer.
+	InformerOptions operator.InformerOptions
+	// RetryPolicy is the policy for retrying events.
+	RetryPolicy operator.RetryPolicy
+	// RetryDequeuePolicy is the policy for dequeuing events.
 	RetryDequeuePolicy operator.RetryDequeuePolicy
-	FinalizerSupplier  operator.FinalizerSupplier
+	// FinalizerSupplier is used to generate the finalizer for the kind.
+	FinalizerSupplier operator.FinalizerSupplier
 	// InProgressFinalizerSupplier is used to generate the "in-progress" finalizer used by opinionated adds,
 	// before the "normal" finalizer (provided by FinalizerSupplier) is applied when the add completes successfully.
 	// By default, this is "<app name>-wip"
@@ -239,8 +245,8 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 	}
-	if config.InformerConfig.ErrorHandler != nil {
-		a.informerController.ErrorHandler = config.InformerConfig.ErrorHandler
+	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
+		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
 	}
 	if config.InformerConfig.RetryPolicy != nil {
 		a.informerController.RetryPolicy = config.InformerConfig.RetryPolicy
@@ -373,11 +379,15 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if infSupplier == nil {
 			infSupplier = DefaultInformerSupplier
 		}
-		inf, err := infSupplier(kind.Kind, a.clientGenerator, operator.ListWatchOptions{
+
+		opts := a.cfg.InformerConfig.InformerOptions
+		opts.ListWatchOptions = operator.ListWatchOptions{
 			Namespace:      kind.ReconcileOptions.Namespace,
 			LabelFilters:   kind.ReconcileOptions.LabelFilters,
 			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
-		})
+		}
+
+		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
 		if err != nil {
 			return err
 		}
