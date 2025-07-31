@@ -250,11 +250,11 @@ func NewApp(config AppConfig) (*App, error) {
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
 	}
-	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, discoveryRefresh)
+	/*p, err := k8s.NewDynamicPatcher(&config.KubeConfig, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}
-	a.patcher = p
+	a.patcher = p*/
 	for _, kind := range config.ManagedKinds {
 		err := a.manageKind(kind)
 		if err != nil {
@@ -383,9 +383,13 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 			return fmt.Errorf("could not add informer to controller: %v", err)
 		}
 		if kind.Reconciler != nil {
+			patchClient, err := a.clientGenerator.ClientFor(kind.Kind)
+			if err != nil {
+				return fmt.Errorf("error getting client for kind %s: %w", kind.Kind.Kind(), err)
+			}
 			reconciler := kind.Reconciler
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedReconciler(&watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, a.getFinalizer(kind.Kind))
+				op, err := operator.NewOpinionatedReconciler(patchClient, a.getFinalizer(kind.Kind))
 				if err != nil {
 					return err
 				}
@@ -400,7 +404,11 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
 			if !kind.ReconcileOptions.UsePlain {
-				op, err := operator.NewOpinionatedWatcher(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
+				patchClient, err := a.clientGenerator.ClientFor(kind.Kind)
+				if err != nil {
+					return fmt.Errorf("error getting client for kind %s: %w", kind.Kind.Kind(), err)
+				}
+				op, err := operator.NewOpinionatedWatcher(kind.Kind, patchClient, operator.OpinionatedWatcherConfig{
 					Finalizer:           a.getFinalizer,
 					InProgressFinalizer: a.getInProgressFinalizer,
 				})
