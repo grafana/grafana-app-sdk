@@ -31,7 +31,7 @@ type KubernetesBasedInformer struct {
 	schema                resource.Kind
 	runContext            context.Context
 	eventTimeout          time.Duration
-	errorHandler          func(context.Context, error)
+	errorHandlerFn        func(context.Context, error)
 	healthCheckName       string
 }
 
@@ -41,12 +41,9 @@ type InformerOptions struct {
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
-	// Changes to this value after Run() is called will not take effect.
+	// Changes to this value after run() is called will not take effect.
 	// An empty value will disable cache resyncs.
 	CacheResyncInterval time.Duration
-	// MaxConcurrentWorkers is the maximum number of concurrent workers to run for the informer.
-	// This is only used by informers which support concurrent processing of events.
-	MaxConcurrentWorkers uint64
 	// EventTimeout is the timeout for an event to be processed.
 	// If an event is not processed within this timeout, it will be dropped.
 	// The timeout cannot be larger than the cache resync interval, if it is,
@@ -79,6 +76,12 @@ func NewKubernetesBasedInformer(
 		timeout = options.CacheResyncInterval
 	}
 
+	var errorHandler func(context.Context, error)
+	if options.ErrorHandler != nil {
+		errorHandler = options.ErrorHandler
+	} else {
+		errorHandler = DefaultErrorHandler
+	}
 	// Compute a unique name for the health check based on what the informer is watching
 	healthCheckName := fmt.Sprintf("informer-%s.%s/%s", sch.Plural(), sch.Group(), sch.Version())
 	if options.ListWatchOptions.Namespace != "" {
@@ -95,15 +98,10 @@ func NewKubernetesBasedInformer(
 		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}
 
-	errorHandler := DefaultErrorHandler
-	if options.ErrorHandler != nil {
-		errorHandler = options.ErrorHandler
-	}
-
 	return &KubernetesBasedInformer{
-		schema:       sch,
-		eventTimeout: timeout,
-		errorHandler: errorHandler,
+		schema:         sch,
+		eventTimeout:   timeout,
+		errorHandlerFn: errorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			NewListerWatcher(client, sch, options.ListWatchOptions),
 			nil,
@@ -179,6 +177,11 @@ func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, er
 	return toResourceObject(obj, k.schema)
 }
 
+func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
+	if k.errorHandlerFn != nil {
+		k.errorHandlerFn(ctx, err)
+	}
+}
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 	// Nil check
 	if obj == nil {
