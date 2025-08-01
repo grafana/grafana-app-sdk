@@ -94,6 +94,10 @@ func main() {
 	provider := simple.NewAppProvider(manifest, nil, func(cfg app.Config) (app.App, error) {
         return simple.NewApp(simple.AppConfig{
 			KubeConfig: cfg.KubeConfig,
+			InformerConfig: simple.AppInformerConfig{
+				// WatchListPageSize can also be configured at the app level
+				// WatchListPageSize: 1000, // Uncomment and set to a value > 0 to enable pagination
+			},
 			ManagedKinds: []simple.AppManagedKind{{
 				Kind: mymind.Kind(),
 				Reconciler: &reconciler,

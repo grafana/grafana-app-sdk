@@ -111,12 +111,13 @@ type App struct {
 
 // AppConfig is the configuration used by App
 type AppConfig struct {
-	Name           string
-	KubeConfig     rest.Config
-	InformerConfig AppInformerConfig
-	ManagedKinds   []AppManagedKind
-	UnmanagedKinds []AppUnmanagedKind
-	Converters     map[schema.GroupKind]Converter
+	Name            string
+	KubeConfig      rest.Config
+	ClientGenerator resource.ClientGenerator
+	InformerConfig  AppInformerConfig
+	ManagedKinds    []AppManagedKind
+	UnmanagedKinds  []AppUnmanagedKind
+	Converters      map[schema.GroupKind]Converter
 	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
 	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
 	// for sending finalizer add/remove patches to the latest version of the kind.
@@ -233,10 +234,17 @@ type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
+	var clientgen resource.ClientGenerator
+	if config.ClientGenerator != nil {
+		clientgen = config.ClientGenerator
+	} else {
+		clientgen = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
+	}
+
 	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
 		runner:             app.NewMultiRunner(),
-		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
+		clientGenerator:    clientgen,
 		kinds:              make(map[string]AppManagedKind),
 		gvrToGVK:           make(map[string]string),
 		internalKinds:      make(map[string]resource.Kind),
