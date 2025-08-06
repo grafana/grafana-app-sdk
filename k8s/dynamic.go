@@ -61,7 +61,7 @@ func (d *DynamicKindPatcher) Patch(ctx context.Context, identifier resource.Iden
 	return d.patcher.Patch(ctx, d.groupKind, identifier, patch, options)
 }
 
-func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, identifier resource.Identifier, patch resource.PatchRequest, _ resource.PatchOptions) (*resource.UnstructuredWrapper, error) {
+func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, identifier resource.Identifier, patch resource.PatchRequest, opts resource.PatchOptions) (*resource.UnstructuredWrapper, error) {
 	preferred, err := d.getPreferred(groupKind)
 	if err != nil {
 		return nil, err
@@ -76,14 +76,22 @@ func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, 
 		Version:  preferred.Version,
 		Resource: preferred.Name,
 	})
+	subresources := make([]string, 0)
+	if opts.Subresource != "" {
+		subresources = append(subresources, opts.Subresource)
+	}
+	patchOpts := metav1.PatchOptions{}
+	if opts.DryRun {
+		patchOpts.DryRun = []string{"All"}
+	}
 	if preferred.Namespaced {
-		resp, err := res.Namespace(identifier.Namespace).Patch(ctx, identifier.Name, types.JSONPatchType, data, metav1.PatchOptions{})
+		resp, err := res.Namespace(identifier.Namespace).Patch(ctx, identifier.Name, types.JSONPatchType, data, patchOpts, subresources...)
 		if err != nil {
 			return nil, err
 		}
 		return resource.NewUnstructuredWrapper(resp), nil
 	}
-	resp, err := res.Patch(ctx, identifier.Name, types.JSONPatchType, data, metav1.PatchOptions{})
+	resp, err := res.Patch(ctx, identifier.Name, types.JSONPatchType, data, patchOpts, subresources...)
 	if err != nil {
 		return nil, err
 	}
