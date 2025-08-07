@@ -91,7 +91,6 @@
                             "spec": {
                                 "properties": {
                                     "intField": {
-                                        "format": "int64",
                                         "type": "integer"
                                     },
                                     "stringField": {
@@ -185,7 +184,6 @@
                                         "type": "boolean"
                                     },
                                     "intField": {
-                                        "format": "int64",
                                         "type": "integer"
                                     },
                                     "stringField": {
