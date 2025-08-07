@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
@@ -39,9 +40,11 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 					}},
 				}},
 			}),
-		}, app.Config{}, func(kind, ver string) (resource.Kind, bool) {
-			return resource.Kind{}, false
-		}, nil)
+		}, app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return resource.Kind{}, false
+			},
+		})
 		require.Nil(t, err)
 		scheme := newScheme()
 		err = installer.AddToScheme(scheme)
@@ -60,9 +63,11 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 					}},
 				}},
 			}),
-		}, app.Config{}, func(kind, ver string) (resource.Kind, bool) {
-			return TestKind, true
-		}, nil)
+		}, app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return TestKind, true
+			},
+		})
 		require.Nil(t, err)
 		scheme := newScheme()
 		err = installer.AddToScheme(scheme)
@@ -143,9 +148,11 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 		Schema: fooSch,
 	}
 
-	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(k, v string) (resource.Kind, bool) {
-		return kind, true
-	}, nil)
+	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+		KindToGoTypeFunc: func(k, v string) (resource.Kind, bool) {
+			return kind, true
+		},
+	})
 	require.Nil(t, err)
 	scheme := newScheme()
 	require.Nil(t, installer.AddToScheme(scheme))
@@ -176,9 +183,11 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 		}},
 	}
 	t.Run("error adding to scheme", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(kind, ver string) (resource.Kind, bool) {
-			return TestKind, false
-		}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return TestKind, false
+			},
+		})
 		require.Nil(t, err)
 		err = installer.InstallAPIs(&MockGenericAPIServer{
 			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
@@ -191,9 +200,11 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 	})
 
 	t.Run("error getting groupversions", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(kind, ver string) (resource.Kind, bool) {
-			return TestKind, false
-		}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return TestKind, false
+			},
+		})
 		require.Nil(t, err)
 		installer.scheme = newScheme()
 		err = installer.InstallAPIs(&MockGenericAPIServer{
@@ -207,9 +218,11 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 	})
 
 	t.Run("error creating store", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, func(kind, ver string) (resource.Kind, bool) {
-			return TestKind, true
-		}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return TestKind, true
+			},
+		})
 		require.Nil(t, err)
 		err = installer.InstallAPIs(&MockGenericAPIServer{
 			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
@@ -224,7 +237,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 
 func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
 	t.Run("no admission control", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil)
 		require.Nil(t, err)
 		plugin := installer.AdmissionPlugin()
 		assert.Nil(t, plugin)
@@ -246,7 +259,7 @@ func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
 				}},
 			}},
 		}
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil)
 		require.Nil(t, err)
 		plugin := installer.AdmissionPlugin()
 		assert.NotNil(t, plugin)
@@ -273,7 +286,7 @@ func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
 				}},
 			}},
 		}
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil)
 		require.Nil(t, err)
 		plugin := installer.AdmissionPlugin()
 		assert.NotNil(t, plugin)
@@ -289,7 +302,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 	t.Run("error", func(t *testing.T) {
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, func(cfg app.Config) (app.App, error) {
 			return nil, errors.New("I AM ERROR")
-		}), app.Config{}, nil, nil)
+		}), app.Config{}, nil)
 		require.Nil(t, err)
 		err = installer.InitializeApp(clientrest.Config{})
 		assert.Equal(t, errors.New("I AM ERROR"), err)
@@ -298,7 +311,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 	t.Run("already initialized", func(t *testing.T) {
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, func(cfg app.Config) (app.App, error) {
 			return nil, errors.New("I AM ERROR")
-		}), app.Config{}, nil, nil)
+		}), app.Config{}, nil)
 		require.Nil(t, err)
 		installer.app = &MockApp{}
 		err = installer.InitializeApp(clientrest.Config{})
@@ -319,7 +332,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 			assert.Equal(t, rcfg, cfg.KubeConfig)
 			initCalled = true
 			return &MockApp{}, nil
-		}), app.Config{}, nil, nil)
+		}), app.Config{}, nil)
 		require.Nil(t, err)
 		err = installer.InitializeApp(rcfg)
 		require.Nil(t, err)
@@ -329,7 +342,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 
 func TestDefaultInstaller_App(t *testing.T) {
 	t.Run("uninitialized", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil)
 		require.Nil(t, err)
 		app, err := installer.App()
 		assert.Nil(t, app)
@@ -340,7 +353,7 @@ func TestDefaultInstaller_App(t *testing.T) {
 		mockApp := &MockApp{}
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, func(cfg app.Config) (app.App, error) {
 			return mockApp, nil
-		}), app.Config{}, nil, nil)
+		}), app.Config{}, nil)
 		require.Nil(t, err)
 		err = installer.InitializeApp(clientrest.Config{})
 		require.Nil(t, err)
@@ -403,7 +416,7 @@ func TestDefaultInstaller_GroupVersions(t *testing.T) {
 
 	for idx, test := range tests {
 		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
-			installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(test.manifest), nil, nil), app.Config{}, nil, nil)
+			installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(test.manifest), nil, nil), app.Config{}, nil)
 			require.Nil(t, err)
 			assert.Equal(t, test.expected, installer.GroupVersions())
 		})
@@ -420,7 +433,7 @@ func TestDefaultInstaller_ManifestData(t *testing.T) {
 			}},
 		}},
 	}
-	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(data), nil, nil), app.Config{}, nil, nil)
+	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(data), nil, nil), app.Config{}, nil)
 	require.Nil(t, err)
 	assert.Equal(t, &data, installer.ManifestData())
 }
@@ -434,4 +447,29 @@ func (m *MockGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.AP
 		return m.InstallAPIGroupFunc(apiGroupInfo)
 	}
 	return nil
+}
+
+type mockGoTypeResolver struct {
+	KindToGoTypeFunc            func(kind, version string) (goType resource.Kind, exists bool)
+	CustomRouteReturnGoTypeFunc func(kind, version, path, verb string) (goType any, exists bool)
+	CustomRouteQueryGoTypeFunc  func(kind, version, path, verb string) (goType runtime.Object, exists bool)
+}
+
+func (m *mockGoTypeResolver) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
+	if m.KindToGoTypeFunc != nil {
+		return m.KindToGoTypeFunc(kind, version)
+	}
+	return resource.Kind{}, false
+}
+func (m *mockGoTypeResolver) CustomRouteReturnGoType(kind, version, path, verb string) (goType any, exists bool) {
+	if m.CustomRouteReturnGoTypeFunc != nil {
+		return m.CustomRouteReturnGoTypeFunc(kind, version, path, verb)
+	}
+	return nil, false
+}
+func (m *mockGoTypeResolver) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
+	if m.CustomRouteQueryGoTypeFunc != nil {
+		return m.CustomRouteQueryGoTypeFunc(kind, version, path, verb)
+	}
+	return nil, false
 }

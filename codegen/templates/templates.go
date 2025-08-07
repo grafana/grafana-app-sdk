@@ -21,14 +21,16 @@ import (
 var templates embed.FS
 
 var (
-	templateResourceObject, _ = template.ParseFS(templates, "resourceobject.tmpl")
-	templateSchema, _         = template.ParseFS(templates, "schema.tmpl")
-	templateCodec, _          = template.ParseFS(templates, "codec.tmpl")
-	templateLineage, _        = template.ParseFS(templates, "lineage.tmpl")
-	templateThemaCodec, _     = template.ParseFS(templates, "themacodec.tmpl")
-	templateWrappedType, _    = template.ParseFS(templates, "wrappedtype.tmpl")
-	templateTSType, _         = template.ParseFS(templates, "tstype.tmpl")
-	templateConstants, _      = template.ParseFS(templates, "constants.tmpl")
+	templateResourceObject, _   = template.ParseFS(templates, "resourceobject.tmpl")
+	templateSchema, _           = template.ParseFS(templates, "schema.tmpl")
+	templateCodec, _            = template.ParseFS(templates, "codec.tmpl")
+	templateLineage, _          = template.ParseFS(templates, "lineage.tmpl")
+	templateThemaCodec, _       = template.ParseFS(templates, "themacodec.tmpl")
+	templateWrappedType, _      = template.ParseFS(templates, "wrappedtype.tmpl")
+	templateTSType, _           = template.ParseFS(templates, "tstype.tmpl")
+	templateConstants, _        = template.ParseFS(templates, "constants.tmpl")
+	templateGoResourceClient, _ = template.ParseFS(templates, "resourceclient.tmpl")
+	templateRuntimeObject, _    = template.ParseFS(templates, "runtimeobject.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -554,6 +556,59 @@ type ConstantsMetadata struct {
 
 func WriteConstantsFile(metadata ConstantsMetadata, out io.Writer) error {
 	return templateConstants.Execute(out, metadata)
+}
+
+type GoResourceClientMetadata struct {
+	PackageName  string
+	KindName     string
+	KindPrefix   string
+	Subresources []GoResourceClientSubresource
+	CustomRoutes []GoResourceClientCustomRoute
+}
+
+type GoResourceClientCustomRoute struct {
+	TypeName    string
+	Path        string
+	Method      string
+	HasParams   bool
+	HasBody     bool
+	ParamValues []GoResourceClientParamValues
+}
+
+type GoResourceClientParamValues struct {
+	Key       string
+	FieldName string
+}
+
+type GoResourceClientSubresource struct {
+	FieldName   string
+	Subresource string
+}
+
+func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) error {
+	// sort custom route data for consistent output
+	slices.SortFunc(metadata.Subresources, func(a, b GoResourceClientSubresource) int {
+		return strings.Compare(a.Subresource, b.Subresource)
+	})
+	slices.SortFunc(metadata.CustomRoutes, func(a, b GoResourceClientCustomRoute) int {
+		return strings.Compare(fmt.Sprintf("%s|%s", a.Path, a.Method), fmt.Sprintf("%s|%s", b.Path, b.Method))
+	})
+	for i := 0; i < len(metadata.CustomRoutes); i++ {
+		slices.SortFunc(metadata.CustomRoutes[i].ParamValues, func(a GoResourceClientParamValues, b GoResourceClientParamValues) int {
+			return strings.Compare(a.FieldName, b.FieldName)
+		})
+	}
+	return templateGoResourceClient.Execute(out, metadata)
+}
+
+type RuntimeObjectWrapperMetadata struct {
+	PackageName     string
+	WrapperTypeName string
+	TypeName        string
+}
+
+func WriteRuntimeObjectWrapper(metadata RuntimeObjectWrapperMetadata, out io.Writer) error {
+	return templateRuntimeObject.Execute(out, metadata)
 }
 
 // ToPackageName sanitizes an input into a deterministic allowed go package name.

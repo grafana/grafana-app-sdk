@@ -1,0 +1,136 @@
+package {{.PackageName}}
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+    "io"
+	"net/http"
+	"net/url"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
+type {{.KindName}}Client struct {
+	client *resource.TypedClient[*{{.KindName}}, *{{.KindName}}List]
+}
+
+func New{{.KindName}}Client(client resource.Client) *{{.KindName}}Client {
+	return &{{.KindName}}Client{
+		client: resource.NewTypedClient[*{{.KindName}}, *{{.KindName}}List](client, {{.KindPrefix}}Kind()),
+	}
+}
+
+func New{{.KindName}}ClientFromGenerator(generator resource.ClientGenerator) (*{{.KindName}}Client, error) {
+	c, err := generator.ClientFor({{.KindPrefix}}Kind())
+	if err != nil {
+		return nil, err
+	}
+	return New{{.KindName}}Client(c), nil
+}
+
+func (c *{{.KindName}}Client) Get(ctx context.Context, identifier resource.Identifier) (*{{.KindName}}, error) {
+	return c.client.Get(ctx, identifier)
+}
+
+func (c *{{.KindName}}Client) List(ctx context.Context, namespace string, opts resource.ListOptions) (*{{.KindName}}List, error) {
+	return c.client.List(ctx, namespace, opts)
+}
+
+func (c *{{.KindName}}Client) ListAll(ctx context.Context, namespace string, opts resource.ListOptions) (*{{.KindName}}List, error) {
+	resp, err := c.client.List(ctx, namespace, resource.ListOptions{
+		ResourceVersion: opts.ResourceVersion,
+		Limit:           opts.Limit,
+		LabelFilters:    opts.LabelFilters,
+		FieldSelectors:  opts.FieldSelectors,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for resp.GetContinue() != "" {
+		page, err := c.client.List(ctx, namespace, resource.ListOptions{
+			Continue:        resp.GetContinue(),
+			ResourceVersion: opts.ResourceVersion,
+			Limit:           opts.Limit,
+			LabelFilters:    opts.LabelFilters,
+			FieldSelectors:  opts.FieldSelectors,
+		})
+		if err != nil {
+			return nil, err
+		}
+		resp.SetContinue(page.GetContinue())
+		resp.SetResourceVersion(page.GetResourceVersion())
+		resp.SetItems(append(resp.GetItems(), page.GetItems()...))
+	}
+	return resp, nil
+}
+
+func (c *{{.KindName}}Client) Create(ctx context.Context, obj *{{.KindName}}, opts resource.CreateOptions) (*{{.KindName}}, error) {
+	// Make sure apiVersion and kind are set
+	obj.APIVersion = GroupVersion.Identifier()
+	obj.Kind = {{.KindPrefix}}Kind().Kind()
+	return c.client.Create(ctx, obj, opts)
+}
+
+func (c *{{.KindName}}Client) Update(ctx context.Context, obj *{{.KindName}}, opts resource.UpdateOptions) (*{{.KindName}}, error) {
+	return c.client.Update(ctx, obj, opts)
+}
+
+func (c *{{.KindName}}Client) Patch(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, opts resource.PatchOptions) (*{{.KindName}}, error) {
+	return c.client.Patch(ctx, identifier, req, opts)
+}
+{{ range .Subresources }}
+func (c *{{$.KindName}}Client) Update{{ .FieldName }}(ctx context.Context, newStatus {{$.KindPrefix}}Status, opts resource.UpdateOptions) (*{{$.KindName}}, error) {
+	return c.client.Update(ctx, &{{$.KindName}}{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       {{$.KindPrefix}}Kind().Kind(),
+			APIVersion: GroupVersion.Identifier(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			ResourceVersion: opts.ResourceVersion,
+		},
+		{{ .FieldName }}: newStatus,
+	}, resource.UpdateOptions{
+		Subresource:     "{{ .Subresource }}",
+		ResourceVersion: opts.ResourceVersion,
+	})
+}{{ end }}
+
+func (c *{{.KindName}}Client) Delete(ctx context.Context, identifier resource.Identifier, opts resource.DeleteOptions) error {
+	return c.client.Delete(ctx, identifier, opts)
+}
+
+{{ range .CustomRoutes }}
+type {{.TypeName}}Request struct { {{ if .HasParams }}
+    Params {{.TypeName}}RequestParams{{ end }}{{ if .HasBody }}
+	Body {{.TypeName}}RequestBody{{ end }}
+	Headers http.Header
+}
+
+func (c *{{$.KindName}}Client) {{.TypeName}}(ctx context.Context, identifier resource.Identifier, request {{.TypeName}}Request) (*{{.TypeName}}, error) { {{ if .HasParams }}
+	params := url.Values{}{{ range .ParamValues }}
+	params.Set("{{.Key}}", fmt.Sprintf("%v", request.Params.{{.FieldName}})){{ end }}{{ end }}{{ if .HasBody }}
+    body, err := json.Marshal(request.Body)
+    if err != nil {
+        return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
+    }{{ end }}
+	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
+		Path:    "{{.Path}}",
+		Verb:    "{{.Method}}",{{ if .HasParams }}
+        Query:   params,{{ end }}{{ if .HasBody }}
+        Body:    io.NopCloser(bytes.NewReader(body)),{{ end }}
+		Headers: request.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cast := {{.TypeName}}{}
+	err = json.Unmarshal(resp, &cast)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response bytes into {{.TypeName}}: %w", err)
+	}
+	return &cast, nil
+}
+{{ end }}

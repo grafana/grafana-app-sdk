@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
@@ -16,10 +17,13 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/grafana/grafana-app-sdk/simple"
 )
 
@@ -29,6 +33,18 @@ type BasicModel struct {
 }
 
 func NewApp(config app.Config) (app.App, error) {
+	client, err := v1alpha1.NewTestKindClientFromGenerator(k8s.NewClientRegistry(config.KubeConfig, k8s.ClientConfig{
+		MetricsConfig: metrics.DefaultConfig(""),
+		NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
+			fmt.Println("negotiator for ", kind)
+			return &k8s.KindNegotiatedSerializer{
+				Kind: kind,
+			}
+		},
+	}))
+	if err != nil {
+		return nil, err
+	}
 	return simple.NewApp(simple.AppConfig{
 		Name:       apis.LocalManifest().ManifestData.AppName,
 		KubeConfig: config.KubeConfig,
@@ -43,8 +59,14 @@ func NewApp(config app.Config) (app.App, error) {
 				},
 			},
 			Reconciler: &operator.TypedReconciler[*v1alpha1.TestKind]{
-				ReconcileFunc: func(_ context.Context, t operator.TypedReconcileRequest[*v1alpha1.TestKind]) (operator.ReconcileResult, error) {
+				ReconcileFunc: func(ctx context.Context, t operator.TypedReconcileRequest[*v1alpha1.TestKind]) (operator.ReconcileResult, error) {
 					fmt.Printf("Reconciled %s\n", t.Object.GetName()) //nolint:revive
+					// Example request to the subresource "/foo"
+					resp, err := client.GetFoo(ctx, t.Object.GetStaticMetadata().Identifier(), v1alpha1.GetFooRequest{})
+					if err != nil {
+						return operator.ReconcileResult{}, fmt.Errorf("error calling /foo subresource: %w", err)
+					}
+					logging.FromContext(ctx).Info("called subresource", "status", resp.Status)
 					return operator.ReconcileResult{}, nil
 				},
 			},
@@ -79,7 +101,7 @@ func main() {
 		ManifestData:   *apis.LocalManifest().ManifestData,
 		SpecificConfig: nil,
 	}
-	installer, err := apiserver.NewDefaultAppInstaller(provider, config, apis.ManifestGoTypeAssociator, apis.ManifestCustomRouteResponsesAssociator)
+	installer, err := apiserver.NewDefaultAppInstaller(provider, config, &apis.GoTypeAssociator{})
 	if err != nil {
 		panic(err)
 	}

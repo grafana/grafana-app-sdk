@@ -13,6 +13,14 @@ testKind: {
 	routes: {
 		"/foo": {
 			"GET": {
+				request: {
+					query: {
+						foo: string
+					}
+					body: {
+						bar: string
+					}
+				}
 				response: {
 					status: string
 				}
