@@ -45,6 +45,7 @@ spec:
                                                 - success
                                                 - in_progress
                                                 - failed
+                                            type: string
                                     required:
                                         - lastEvaluation
                                         - state
@@ -106,6 +107,7 @@ spec:
                                                 - success
                                                 - in_progress
                                                 - failed
+                                            type: string
                                     required:
                                         - lastEvaluation
                                         - state
@@ -174,6 +176,7 @@ spec:
                                                 - success
                                                 - in_progress
                                                 - failed
+                                            type: string
                                     required:
                                         - lastEvaluation
                                         - state

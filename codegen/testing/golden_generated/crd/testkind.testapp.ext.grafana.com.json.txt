@@ -54,7 +54,8 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
@@ -136,7 +137,8 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
@@ -229,7 +231,8 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
