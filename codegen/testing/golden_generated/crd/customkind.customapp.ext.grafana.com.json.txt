@@ -101,11 +101,11 @@
                                     "enum": {
                                         "default": "default",
                                         "enum": [
-                                            "default",
+                                            "val1",
                                             "val2",
                                             "val3",
                                             "val4",
-                                            "val1"
+                                            "default"
                                         ],
                                         "type": "string"
                                     },
@@ -113,16 +113,13 @@
                                         "type": "string"
                                     },
                                     "floatField": {
-                                        "format": "double",
                                         "type": "number"
                                     },
                                     "i32": {
                                         "maximum": 123456,
-                                        "minimum": -2147483648,
                                         "type": "integer"
                                     },
                                     "i64": {
-                                        "maximum": 9223372036854775807,
                                         "minimum": 123456,
                                         "type": "integer"
                                     },
@@ -172,6 +169,21 @@
                                         ],
                                         "type": "object"
                                     },
+                                    "linkedList": {
+                                        "properties": {
+                                            "next": {
+                                                "type": "object",
+                                                "x-kubernetes-preserve-unknown-fields": true
+                                            },
+                                            "val": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "val"
+                                        ],
+                                        "type": "object"
+                                    },
                                     "map": {
                                         "additionalProperties": {
                                             "properties": {
@@ -196,51 +208,41 @@
                                         "type": "string"
                                     },
                                     "union": {
-                                        "oneOf": [
+                                        "anyOf": [
                                             {
-                                                "allOf": [
-                                                    {
-                                                        "required": [
-                                                            "group"
-                                                        ]
+                                                "properties": {
+                                                    "group": {
+                                                        "type": "string"
                                                     },
-                                                    {
-                                                        "not": {
-                                                            "anyOf": [
-                                                                {
-                                                                    "required": [
-                                                                        "group",
-                                                                        "details"
-                                                                    ]
-                                                                }
-                                                            ]
-                                                        }
+                                                    "options": {
+                                                        "items": {
+                                                            "type": "string"
+                                                        },
+                                                        "type": "array"
                                                     }
-                                                ]
+                                                },
+                                                "required": [
+                                                    "group"
+                                                ],
+                                                "type": "object"
                                             },
                                             {
+                                                "properties": {
+                                                    "details": {
+                                                        "type": "object",
+                                                        "x-kubernetes-preserve-unknown-fields": true
+                                                    },
+                                                    "group": {
+                                                        "type": "string"
+                                                    }
+                                                },
                                                 "required": [
                                                     "group",
                                                     "details"
-                                                ]
+                                                ],
+                                                "type": "object"
                                             }
-                                        ],
-                                        "properties": {
-                                            "details": {
-                                                "type": "object",
-                                                "x-kubernetes-preserve-unknown-fields": true
-                                            },
-                                            "group": {
-                                                "type": "string"
-                                            },
-                                            "options": {
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "type": "array"
-                                            }
-                                        },
-                                        "type": "object"
+                                        ]
                                     }
                                 },
                                 "required": [
@@ -253,7 +255,8 @@
                                     "i32",
                                     "i64",
                                     "boolField",
-                                    "floatField"
+                                    "floatField",
+                                    "linkedList"
                                 ],
                                 "type": "object"
                             },

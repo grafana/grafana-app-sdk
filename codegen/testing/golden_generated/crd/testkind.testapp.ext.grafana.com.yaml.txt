@@ -69,7 +69,6 @@ spec:
                     spec:
                         properties:
                             intField:
-                                format: int64
                                 type: integer
                             stringField:
                                 type: string
@@ -138,7 +137,6 @@ spec:
                             boolField:
                                 type: boolean
                             intField:
-                                format: int64
                                 type: integer
                             stringField:
                                 type: string

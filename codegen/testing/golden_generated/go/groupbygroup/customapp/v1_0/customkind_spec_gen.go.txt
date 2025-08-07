@@ -64,6 +64,17 @@ func NewCustomKindType2() *CustomKindType2 {
 }
 
 // +k8s:openapi-gen=true
+type CustomKindRecursiveList struct {
+	Val  string                   `json:"val"`
+	Next *CustomKindRecursiveList `json:"next,omitempty"`
+}
+
+// NewCustomKindRecursiveList creates a new CustomKindRecursiveList object.
+func NewCustomKindRecursiveList() *CustomKindRecursiveList {
+	return &CustomKindRecursiveList{}
+}
+
+// +k8s:openapi-gen=true
 type CustomKindSpec struct {
 	Field1     string                     `json:"field1"`
 	Inner      CustomKindInnerObject1     `json:"inner"`
@@ -75,14 +86,16 @@ type CustomKindSpec struct {
 	I64        int64                      `json:"i64"`
 	BoolField  bool                       `json:"boolField"`
 	FloatField float64                    `json:"floatField"`
+	LinkedList CustomKindRecursiveList    `json:"linkedList"`
 }
 
 // NewCustomKindSpec creates a new CustomKindSpec object.
 func NewCustomKindSpec() *CustomKindSpec {
 	return &CustomKindSpec{
-		Inner:     *NewCustomKindInnerObject1(),
-		Map:       map[string]CustomKindType2{},
-		BoolField: false,
+		Inner:      *NewCustomKindInnerObject1(),
+		Map:        map[string]CustomKindType2{},
+		BoolField:  false,
+		LinkedList: *NewCustomKindRecursiveList(),
 	}
 }
 
