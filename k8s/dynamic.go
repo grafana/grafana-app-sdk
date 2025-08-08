@@ -57,6 +57,10 @@ type DynamicKindPatcher struct {
 	groupKind schema.GroupKind
 }
 
+func (d *DynamicKindPatcher) Get(ctx context.Context, identifier resource.Identifier) (*resource.UnstructuredWrapper, error) {
+	return d.patcher.Get(ctx, d.groupKind, identifier)
+}
+
 func (d *DynamicKindPatcher) Patch(ctx context.Context, identifier resource.Identifier, patch resource.PatchRequest, options resource.PatchOptions) (resource.Object, error) {
 	return d.patcher.Patch(ctx, d.groupKind, identifier, patch, options)
 }
@@ -87,13 +91,38 @@ func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, 
 	if preferred.Namespaced {
 		resp, err := res.Namespace(identifier.Namespace).Patch(ctx, identifier.Name, types.JSONPatchType, data, patchOpts, subresources...)
 		if err != nil {
-			return nil, err
+			return nil, d.parseError(err)
 		}
 		return resource.NewUnstructuredWrapper(resp), nil
 	}
 	resp, err := res.Patch(ctx, identifier.Name, types.JSONPatchType, data, patchOpts, subresources...)
 	if err != nil {
+		return nil, d.parseError(err)
+	}
+	return resource.NewUnstructuredWrapper(resp), nil
+}
+
+func (d *DynamicPatcher) Get(ctx context.Context, groupKind schema.GroupKind, identifier resource.Identifier) (*resource.UnstructuredWrapper, error) {
+	preferred, err := d.getPreferred(groupKind)
+	if err != nil {
 		return nil, err
+	}
+	logging.FromContext(ctx).Debug("patching with dynamic client", "group", groupKind.Group, "version", preferred.Version, "kind", groupKind.Kind, "plural", preferred.Name)
+	res := d.client.Resource(schema.GroupVersionResource{
+		Group:    preferred.Group,
+		Version:  preferred.Version,
+		Resource: preferred.Name,
+	})
+	if preferred.Namespaced {
+		resp, err := res.Namespace(identifier.Namespace).Get(ctx, identifier.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, d.parseError(err)
+		}
+		return resource.NewUnstructuredWrapper(resp), nil
+	}
+	resp, err := res.Get(ctx, identifier.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, d.parseError(err)
 	}
 	return resource.NewUnstructuredWrapper(resp), nil
 }
@@ -179,4 +208,12 @@ func (d *DynamicPatcher) updatePreferred() error {
 	}
 	d.lastUpdate = now()
 	return nil
+}
+
+func (*DynamicPatcher) parseError(err error) error {
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) {
+		return NewServerResponseError(statusErr, statusErr.Status().Code)
+	}
+	return err
 }
