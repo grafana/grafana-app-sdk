@@ -7,10 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestNewOpinionatedReconciler(t *testing.T) {
@@ -34,7 +35,9 @@ func TestNewOpinionatedReconciler(t *testing.T) {
 		op, err := NewOpinionatedReconciler(client, finalizer)
 		assert.Nil(t, err)
 		assert.Equal(t, finalizer, op.finalizer)
-		assert.Equal(t, client, op.client)
+		cast, ok := op.finalizerUpdater.(*finalizerUpdater)
+		require.True(t, ok)
+		assert.Equal(t, client, cast.client)
 	})
 
 	t.Run("finzlizer too long", func(t *testing.T) {
@@ -66,6 +69,10 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 						Path:      "/metadata/finalizers",
 						Operation: resource.PatchOpAdd,
 						Value:     []string{finalizer},
+					}, {
+						Path:      "/metadata/resourceVersion",
+						Operation: resource.PatchOpReplace,
+						Value:     object.GetResourceVersion(),
 					}},
 				}, request)
 				patchCalled = true
@@ -143,6 +150,10 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 						Path:      "/metadata/finalizers",
 						Operation: resource.PatchOpAdd,
 						Value:     []string{finalizer},
+					}, {
+						Path:      "/metadata/resourceVersion",
+						Operation: resource.PatchOpReplace,
+						Value:     object.GetResourceVersion(),
 					}},
 				}, request)
 				patchCalled = true
@@ -188,6 +199,10 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 						Path:      "/metadata/finalizers",
 						Operation: resource.PatchOpAdd,
 						Value:     []string{finalizer},
+					}, {
+						Path:      "/metadata/resourceVersion",
+						Operation: resource.PatchOpReplace,
+						Value:     object.GetResourceVersion(),
 					}},
 				}, request)
 				patchCalled = true
@@ -299,6 +314,10 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 						Path:      "/metadata/finalizers",
 						Operation: resource.PatchOpAdd,
 						Value:     []string{finalizer},
+					}, {
+						Path:      "/metadata/resourceVersion",
+						Operation: resource.PatchOpReplace,
+						Value:     object.GetResourceVersion(),
 					}},
 				}, request)
 				patchCalled = true
@@ -342,6 +361,10 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 						Path:      "/metadata/finalizers/0",
 						Operation: resource.PatchOpRemove,
 						Value:     nil,
+					}, {
+						Path:      "/metadata/resourceVersion",
+						Operation: resource.PatchOpReplace,
+						Value:     object.GetResourceVersion(),
 					}},
 				}, request)
 				patchCalled = true
@@ -427,6 +450,10 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 						Path:      "/metadata/finalizers/0",
 						Operation: resource.PatchOpRemove,
 						Value:     nil,
+					}, {
+						Path:      "/metadata/resourceVersion",
+						Operation: resource.PatchOpReplace,
+						Value:     object.GetResourceVersion(),
 					}},
 				}, request)
 				return patchErr

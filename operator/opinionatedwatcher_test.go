@@ -3,11 +3,14 @@ package operator
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -265,6 +268,36 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		assert.Contains(t, err.Error(), patchErr.Error())
 	})
 
+	t.Run("add finalizer patch RV mismatch", func(t *testing.T) {
+		obj := schema.ZeroValue()
+		attempts := 0
+		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+			attempts++
+			if attempts <= 2 {
+				return &apierrors.StatusError{
+					ErrStatus: metav1.Status{
+						Code: http.StatusConflict,
+					},
+				}
+			}
+			return nil
+		}
+		client.GetIntoFunc = func(ctx context.Context, i resource.Identifier, o resource.Object) error {
+			o.SetResourceVersion(strconv.Itoa(attempts))
+			return nil
+		}
+		addCalled := false
+		o.AddFunc = func(c context.Context, object resource.Object) error {
+			addCalled = true
+			return nil
+		}
+		err := o.Add(context.TODO(), obj)
+		assert.NoError(t, err)
+		assert.Equal(t, 4, attempts)                   // 3 attempts for the WIP finalizer, then 1 for the final finalizer
+		assert.Equal(t, "2", obj.GetResourceVersion()) // After the second attempt, we don't call GetInto anymore because the patch isn't rejected
+		assert.True(t, addCalled)
+	})
+
 	t.Run("add finalizer, second patch error", func(t *testing.T) {
 		obj := schema.ZeroValue()
 		patchErr := fmt.Errorf("SOY ERROR")
@@ -290,7 +323,7 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		obj := schema.ZeroValue()
 		req := 0
 		client.PatchIntoFunc = func(c context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-			assert.Len(t, request.Operations, 1)
+			assert.Len(t, request.Operations, 2) // The finalizer operation, and the RV check
 			if req == 0 {
 				assert.Equal(t, resource.PatchOpAdd, request.Operations[0].Operation)
 				assert.Equal(t, []string{o.addPendingFinalizer}, request.Operations[0].Value)
@@ -406,6 +439,39 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.Equal(t, patchErr, err)
 	})
 
+	t.Run("delete, patch RV mismatch", func(t *testing.T) {
+		obj := schema.ZeroValue()
+		dt := metav1.NewTime(time.Time{})
+		obj.SetDeletionTimestamp(&dt)
+		obj.SetFinalizers([]string{o.finalizer})
+		attempts := 0
+		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+			attempts++
+			if attempts <= 2 {
+				return &apierrors.StatusError{
+					ErrStatus: metav1.Status{
+						Code: http.StatusConflict,
+					},
+				}
+			}
+			return nil
+		}
+		client.GetIntoFunc = func(ctx context.Context, i resource.Identifier, o resource.Object) error {
+			o.SetResourceVersion(strconv.Itoa(attempts))
+			return nil
+		}
+		deleteCalled := false
+		o.DeleteFunc = func(c context.Context, object resource.Object) error {
+			deleteCalled = true
+			return nil
+		}
+		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
+		assert.NoError(t, err)
+		assert.Equal(t, 3, attempts)
+		assert.Equal(t, "2", obj.GetResourceVersion()) // After the second attempt, we don't call GetInto anymore because the patch isn't rejected
+		assert.True(t, deleteCalled)
+	})
+
 	t.Run("finalizer update event", func(t *testing.T) {
 		obj := schema.ZeroValue()
 		obj.SetFinalizers([]string{o.finalizer})
@@ -470,11 +536,19 @@ func TestOpinionatedWatcher_Delete(t *testing.T) {
 
 type mockPatchClient struct {
 	PatchIntoFunc func(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error
+	GetIntoFunc   func(context.Context, resource.Identifier, resource.Object) error
 }
 
 func (p *mockPatchClient) PatchInto(ctx context.Context, identifier resource.Identifier, patch resource.PatchRequest, options resource.PatchOptions, into resource.Object) error {
 	if p.PatchIntoFunc != nil {
 		return p.PatchIntoFunc(ctx, identifier, patch, options, into)
+	}
+	return nil
+}
+
+func (p *mockPatchClient) GetInto(ctx context.Context, identifier resource.Identifier, into resource.Object) error {
+	if p.GetIntoFunc != nil {
+		return p.GetIntoFunc(ctx, identifier, into)
 	}
 	return nil
 }

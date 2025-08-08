@@ -130,8 +130,8 @@ func NewOpinionatedReconciler(client PatchClient, finalizer string) (*Opinionate
 		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
 	}
 	return &OpinionatedReconciler{
-		finalizer: finalizer,
-		client:    client,
+		finalizer:        finalizer,
+		finalizerUpdater: newFinalizerUpdater(client),
 	}, nil
 }
 
@@ -139,9 +139,9 @@ func NewOpinionatedReconciler(client PatchClient, finalizer string) (*Opinionate
 // "resync" events on start-up when the reconciler has handled the "created" event on a previous run,
 // and ensures that "delete" events are not missed during reconciler down-time by using the finalizer.
 type OpinionatedReconciler struct {
-	Reconciler Reconciler
-	finalizer  string
-	client     PatchClient
+	Reconciler       Reconciler
+	finalizer        string
+	finalizerUpdater FinalizerUpdater
 }
 
 const (
@@ -187,13 +187,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 
 		// Attach the finalizer on success
 		logger.Debug("Downstream reconcile succeeded, adding finalizer", "finalizer", o.finalizer)
-		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-			Operations: []resource.PatchOperation{{
-				Operation: resource.PatchOpAdd,
-				Path:      "/metadata/finalizers",
-				Value:     []string{o.finalizer},
-			}},
-		}, resource.PatchOptions{}, request.Object)
+		patchErr := o.finalizerUpdater.AddFinalizer(ctx, request.Object, o.finalizer)
 		if patchErr != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
 			if resp.State == nil {
@@ -231,12 +225,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 			logger.Debug("Retry of an update which added a deletionTimestamp, downstream reconciler already successfully processed delete, need to retry removing the finalizer", "patchError", request.State[opinionatedReconcilerPatchRemoveStateKey])
 		}
 		logger.Debug("Removing finalizer from object", "finalizer", o.finalizer)
-		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-			Operations: []resource.PatchOperation{{
-				Operation: resource.PatchOpRemove,
-				Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(request.Object.GetFinalizers(), o.finalizer)),
-			}},
-		}, resource.PatchOptions{}, request.Object)
+		patchErr := o.finalizerUpdater.RemoveFinalizer(ctx, request.Object, o.finalizer)
 		if patchErr != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
 			if res.State == nil {
@@ -253,13 +242,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 	if request.Action == ReconcileActionUpdated && !slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		// Add the finalizer, don't delegate, let the reconcile action for adding the finalizer propagate down to avoid confusing extra reconciliations
 		logger.Debug("Missing finalizer in object, adding (this will trigger a new reconcile event)", "finalizer", o.finalizer)
-		patchErr := o.client.PatchInto(ctx, request.Object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-			Operations: []resource.PatchOperation{{
-				Operation: resource.PatchOpAdd,
-				Path:      "/metadata/finalizers",
-				Value:     []string{o.finalizer},
-			}},
-		}, resource.PatchOptions{}, request.Object)
+		patchErr := o.finalizerUpdater.AddFinalizer(ctx, request.Object, o.finalizer)
 		return ReconcileResult{}, patchErr
 	}
 	return o.wrappedReconcile(ctx, request)
