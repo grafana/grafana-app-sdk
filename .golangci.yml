@@ -6,6 +6,9 @@ issues:
   exclude-dirs:
     - test/
     - internal/deepmap/
+    # These are copied from k8s.io/client-go, and we don't want to lint them.
+    - k8s/client
+    - k8s/cache
   # Excluding specific linters per-path
   exclude-rules:
     - path: _test\.go

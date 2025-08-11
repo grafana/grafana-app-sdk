@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	customcache "github.com/grafana/grafana-app-sdk/k8s/cache"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -186,7 +187,13 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.startedLock.Lock()
 		defer c.startedLock.Unlock()
 
-		c.controller = newInformer(c.listerWatcher, c.objectType, c.opts.CacheResyncInterval, c, c.store, nil, c.opts.WatchListPageSize)
+		c.controller = newInformer(
+			c.listerWatcher,
+			c.objectType,
+			c.schema.GroupVersionKind().String(),
+			c.opts.CacheResyncInterval,
+			c,
+			c.store, nil, c.opts.WatchListPageSize)
 		c.started = true
 	}()
 
@@ -437,6 +444,7 @@ func toResourceEventHandlerFuncs(
 func newInformer(
 	lw cache.ListerWatcher,
 	objType runtime.Object,
+	objDesc string,
 	resyncPeriod time.Duration,
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
@@ -456,6 +464,7 @@ func newInformer(
 		Queue:             fifo,
 		ListerWatcher:     lw,
 		ObjectType:        objType,
+		ObjectDescription: objDesc,
 		FullResyncPeriod:  resyncPeriod,
 		WatchListPageSize: watchListPageSize,
 
@@ -466,7 +475,8 @@ func newInformer(
 			return errors.New("object given as Process argument is not Deltas")
 		},
 	}
-	return cache.New(cfg)
+
+	return customcache.NewController(cfg)
 }
 
 // processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,
