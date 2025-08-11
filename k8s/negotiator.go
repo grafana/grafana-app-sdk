@@ -35,9 +35,8 @@ func (*GenericNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerIn
 }
 
 // EncoderForVersion returns the `serializer` input
-func (*GenericNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder,
-	_ runtime.GroupVersioner) runtime.Encoder {
-	return serializer
+func (*GenericNegotiatedSerializer) EncoderForVersion(enc runtime.Encoder, _ runtime.GroupVersioner) runtime.Encoder {
+	return enc
 }
 
 // DecoderToVersion returns a GenericJSONDecoder
@@ -113,23 +112,23 @@ type KindNegotiatedSerializer struct {
 func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
 	supported := make([]runtime.SerializerInfo, 0)
 	for encoding, codec := range k.Kind.Codecs {
-		serializer := &CodecDecoder{
+		codec := &CodecDecoder{
 			SampleObject: k.Kind.ZeroValue(),
 			SampleList:   k.Kind.ZeroListValue(),
 			Codec:        codec,
 		}
 		info := runtime.SerializerInfo{
 			MediaType:  string(encoding),
-			Serializer: serializer,
+			Serializer: codec,
 		}
 
 		// Framer is used for the stream serializer
 		switch encoding {
 		case resource.KindEncodingJSON:
-			serializer.Decoder = json.Unmarshal
-			info.Serializer = serializer
+			codec.Decoder = json.Unmarshal
+			info.Serializer = codec
 			info.StreamSerializer = &runtime.StreamSerializerInfo{
-				Serializer: serializer,
+				Serializer: codec,
 				Framer:     jsonserializer.Framer,
 			}
 		case resource.KindEncodingYAML:
@@ -143,9 +142,8 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 }
 
 // EncoderForVersion returns the `serializer` input
-func (*KindNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder,
-	_ runtime.GroupVersioner) runtime.Encoder {
-	return serializer
+func (*KindNegotiatedSerializer) EncoderForVersion(enc runtime.Encoder, _ runtime.GroupVersioner) runtime.Encoder {
+	return enc
 }
 
 // DecoderToVersion returns a GenericJSONDecoder
