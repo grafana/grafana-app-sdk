@@ -83,6 +83,7 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	return &op, nil
 }
 
+// RunnerConfig contains configuration information for the Runner.
 type RunnerConfig struct {
 	// WebhookConfig contains configuration information for exposing k8s webhooks.
 	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
@@ -102,8 +103,9 @@ type RunnerConfig struct {
 type RunnerMetricsConfig struct {
 	metrics.ExporterConfig
 	MetricsServerConfig
-	Enabled   bool
-	Namespace string
+	Namespace        string
+	Enabled          bool
+	ProfilingEnabled bool
 }
 
 type RunnerWebhookConfig struct {
@@ -240,6 +242,11 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 		}
 
 		s.metricsServer.RegisterMetricsHandler(s.metricsExporter.HTTPHandler())
+	}
+
+	// Profiles
+	if s.config.MetricsConfig.ProfilingEnabled {
+		s.metricsServer.RegisterProfilingHandlers()
 	}
 
 	// Health

@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/k8s/client"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -61,13 +62,13 @@ func (c *ClientRegistry) ClientFor(sch resource.Kind) (resource.Client, error) {
 	if codec == nil {
 		return nil, fmt.Errorf("no codec for KindEncodingJSON")
 	}
-	client, err := c.getClient(sch)
+	cli, err := c.getClient(sch)
 	if err != nil {
 		return nil, err
 	}
 	return &Client{
 		client: &groupVersionClient{
-			client:           client,
+			client:           cli,
 			version:          sch.Version(),
 			config:           c.clientConfig,
 			requestDurations: c.requestDurations,
@@ -112,10 +113,10 @@ func (c *ClientRegistry) getClient(sch resource.Kind) (rest.Interface, error) {
 	if c.clientConfig.KubeConfigProvider != nil {
 		ccfg = c.clientConfig.KubeConfigProvider(sch, ccfg)
 	}
-	client, err := rest.RESTClientFor(&ccfg)
+	cli, err := client.RESTClientFor(&client.RESTConfig{Config: ccfg})
 	if err != nil {
 		return nil, err
 	}
-	c.clients[gvk] = client
-	return client, nil
+	c.clients[gvk] = cli
+	return cli, nil
 }

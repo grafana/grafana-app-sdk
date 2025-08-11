@@ -18,11 +18,15 @@ import (
 
 var _ Controller = &InformerController{}
 
+// ResourceAction is a string representing the action taken on a resource.
 type ResourceAction string
 
 const (
+	// ResourceActionCreate is the action of creating a resource.
 	ResourceActionCreate = ResourceAction("CREATE")
+	// ResourceActionUpdate is the action of updating a resource.
 	ResourceActionUpdate = ResourceAction("UPDATE")
+	// ResourceActionDelete is the action of deleting a resource.
 	ResourceActionDelete = ResourceAction("DELETE")
 )
 
@@ -352,7 +356,7 @@ func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
 	return collectors
 }
 
-// HealthChecks
+// HealthChecks returns the health checks for the informer controller, including informers, watchers, and reconcilers.
 func (c *InformerController) HealthChecks() []health.Check {
 	checks := make([]health.Check, 0)
 

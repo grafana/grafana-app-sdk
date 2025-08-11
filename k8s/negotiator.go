@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -33,9 +35,8 @@ func (*GenericNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerIn
 }
 
 // EncoderForVersion returns the `serializer` input
-func (*GenericNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder,
-	_ runtime.GroupVersioner) runtime.Encoder {
-	return serializer
+func (*GenericNegotiatedSerializer) EncoderForVersion(enc runtime.Encoder, _ runtime.GroupVersioner) runtime.Encoder {
+	return enc
 }
 
 // DecoderToVersion returns a GenericJSONDecoder
@@ -111,23 +112,23 @@ type KindNegotiatedSerializer struct {
 func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
 	supported := make([]runtime.SerializerInfo, 0)
 	for encoding, codec := range k.Kind.Codecs {
-		serializer := &CodecDecoder{
+		codec := &CodecDecoder{
 			SampleObject: k.Kind.ZeroValue(),
 			SampleList:   k.Kind.ZeroListValue(),
 			Codec:        codec,
 		}
 		info := runtime.SerializerInfo{
 			MediaType:  string(encoding),
-			Serializer: serializer,
+			Serializer: codec,
 		}
 
 		// Framer is used for the stream serializer
 		switch encoding {
 		case resource.KindEncodingJSON:
-			serializer.Decoder = json.Unmarshal
-			info.Serializer = serializer
+			codec.Decoder = json.Unmarshal
+			info.Serializer = codec
 			info.StreamSerializer = &runtime.StreamSerializerInfo{
-				Serializer: serializer,
+				Serializer: codec,
 				Framer:     jsonserializer.Framer,
 			}
 		case resource.KindEncodingYAML:
@@ -141,9 +142,8 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 }
 
 // EncoderForVersion returns the `serializer` input
-func (*KindNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder,
-	_ runtime.GroupVersioner) runtime.Encoder {
-	return serializer
+func (*KindNegotiatedSerializer) EncoderForVersion(enc runtime.Encoder, _ runtime.GroupVersioner) runtime.Encoder {
+	return enc
 }
 
 // DecoderToVersion returns a GenericJSONDecoder
@@ -268,4 +268,17 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 // Identifier returns "generic-json-decoder"
 func (*CodecDecoder) Identifier() runtime.Identifier {
 	return "codec-decoder"
+}
+
+// NewKubernetesNegotiatedSerializer creates a new NegotiatedSerializer,
+// based on the default Kubernetes client-go implementation.
+// The serializer will also be able to encode and decode built-in Kubernetes core v1 types.
+func NewKubernetesNegotiatedSerializer(kind resource.Kind) runtime.NegotiatedSerializer {
+	scheme := runtime.NewScheme()
+
+	// We ignore the error here because we know that the corev1 types are always available.
+	_ = corev1.AddToScheme(scheme) //nolint:errcheck
+
+	scheme.AddKnownTypes(kind.GroupVersionKind().GroupVersion(), kind.ZeroValue())
+	return serializer.NewCodecFactory(scheme).WithoutConversion()
 }
