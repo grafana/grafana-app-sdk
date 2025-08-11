@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	customcache "github.com/grafana/grafana-app-sdk/k8s/cache"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -463,7 +464,8 @@ func newInformer(
 			return errors.New("object given as Process argument is not Deltas")
 		},
 	}
-	return cache.New(cfg)
+
+	return customcache.NewController(cfg)
 }
 
 // processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,
