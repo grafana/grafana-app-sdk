@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
 
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -268,4 +270,17 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 // Identifier returns "generic-json-decoder"
 func (*CodecDecoder) Identifier() runtime.Identifier {
 	return "codec-decoder"
+}
+
+// NewKubernetesNegotiatedSerializer creates a new NegotiatedSerializer,
+// based on the default Kubernetes client-go implementation.
+// The serializer will also be able to encode and decode built-in Kubernetes core v1 types.
+func NewKubernetesNegotiatedSerializer(kind resource.Kind) runtime.NegotiatedSerializer {
+	scheme := runtime.NewScheme()
+
+	// We ignore the error here because we know that the corev1 types are always available.
+	_ = corev1.AddToScheme(scheme) //nolint:errcheck
+
+	scheme.AddKnownTypes(kind.GroupVersionKind().GroupVersion(), kind.ZeroValue())
+	return serializer.NewCodecFactory(scheme).WithoutConversion()
 }
