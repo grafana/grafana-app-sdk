@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -346,6 +347,7 @@ type yamlGenProperties struct {
 	GrafanaImage              string
 	GrafanaInstallPlugins     string
 	GrafanaAnonymousAuth      string
+	APIGroups                 map[string][]string // map of group -> list of supported versions
 }
 
 type yamlGenPropsCRD struct {
@@ -404,6 +406,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 		GrafanaImage:              config.GrafanaImage,
 		GrafanaInstallPlugins:     config.GrafanaInstallPlugins,
+		APIGroups:                 make(map[string][]string),
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
@@ -491,9 +494,16 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			return nil, props, err
 		}
 		versions := make([]string, 0)
+		groupVersions := make([]string, 0)
+		if v, ok := props.APIGroups[yml.Spec.Group]; ok {
+			groupVersions = v
+		}
 		for _, v := range yml.Spec.Versions {
 			if v.Served {
 				versions = append(versions, v.Name)
+				if !slices.Contains(groupVersions, v.Name) {
+					groupVersions = append(groupVersions, v.Name)
+				}
 			}
 		}
 		props.CRDs = append(props.CRDs, yamlGenPropsCRD{
@@ -502,6 +512,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			Group:             yml.Spec.Group,
 			Versions:          versions,
 		})
+		props.APIGroups[yml.Spec.Group] = groupVersions
 	}
 
 	// RBAC for CRDs
