@@ -79,6 +79,12 @@ appManifestv1alpha1: appManifestKind & {
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
 			// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
 			conversion?: bool | *false
+			// Routes is a map of subresource route path to spec3.PathProps description of the route. 
+			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future. 
+			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			routes?: {
+				[string]: _
+			}
 		}
 		#ManifestVersion: {
 			// Name is the version name string, such as "v1" or "v1alpha1"

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -111,6 +112,60 @@ func TestManifestData_Validate(t *testing.T) {
 	}
 }
 
+func TestVersionSchemaFromMap(t *testing.T) {
+	tests := []struct {
+		name        string
+		schema      map[string]any
+		kind        string
+		expectedMap map[string]any
+		expectedErr error
+	}{{
+		name:        "valid (empty map)",
+		schema:      map[string]any{},
+		kind:        "Foo",
+		expectedMap: map[string]any{},
+		expectedErr: nil,
+	}, {
+		name:        "CRD shape",
+		schema:      jsonToMap([]byte(`{"spec":{"properties":{"foo":"string"},"type":"object"}}`)),
+		kind:        "Bar",
+		expectedMap: jsonToMap([]byte(`{"Bar":{"type":"object","properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
+	}, {
+		name:        "Full CRD",
+		schema:      jsonToMap([]byte(`{"openAPIV3Schema":{"properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
+		kind:        "Foo",
+		expectedMap: jsonToMap([]byte(`{"Foo":{"type":"object","properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
+	}, {
+		name:        "OpenAPI without references",
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}}}`)),
+		kind:        "Bar",
+		expectedMap: jsonToMap([]byte(`{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}`)),
+	}, {
+		name:        "OpenAPI with references",
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar"{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}}}`)),
+		kind:        "Foo",
+		expectedMap: jsonToMap([]byte(`{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar"{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}`)),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sch, err := VersionSchemaFromMap(test.schema, test.kind)
+			if test.expectedErr == nil {
+				require.NoError(t, err)
+			} else {
+				assert.Equal(t, test.expectedErr, err)
+			}
+			assert.Equal(t, test.expectedMap, sch.AsMap())
+		})
+	}
+}
+
+func jsonToMap(data []byte) map[string]any {
+	m := make(map[string]any)
+	_ = json.Unmarshal(data, &m)
+	return m
+}
+
 func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 	gvk := schema.GroupVersionKind{
 		Group:   "test.grafana.app",
@@ -136,42 +191,72 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 		schema: []byte(`{}`),
 		gvk:    gvk,
 		ref:    ref,
-		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{}),
-			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-		},
-		err: nil,
+		err:    errors.New("unable to locate openAPI definition for kind Foo"),
 	}, {
-		name:   "spec",
+		name:   "spec (CRD-shape)",
 		schema: []byte(`{"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}`),
 		gvk:    gvk,
 		ref:    ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
-			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						Properties: map[string]spec.Schema{
-							"foo": {
-								SchemaProps: spec.SchemaProps{
-									Type: []string{"string"},
-								},
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
 							},
 						},
 					},
 				},
-			},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
 		},
 		err: nil,
 	}, {
-		name:   "dependencies",
+		name:   "spec (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+		err: nil,
+	}, {
+		name:   "dependencies (CRD-shape)",
 		schema: []byte(`{"#foo":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"},"bar":{"$ref":"#/components/schemas/#foo"}}}}`),
 		gvk:    gvk,
 		ref:    ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"bar": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("test.grafana.app/v1.Foo#foo"),
+							},
+						},
+					},
+				},
+			}, "test.grafana.app/v1.Foo#foo"),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
 			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
 				Schema: spec.Schema{
@@ -187,50 +272,32 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 					},
 				},
 			},
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						Properties: map[string]spec.Schema{
-							"foo": {
-								SchemaProps: spec.SchemaProps{
-									Type: []string{"string"},
-								},
-							},
-							"bar": {
-								SchemaProps: spec.SchemaProps{
-									Ref: ref("test.grafana.app/v1.#foo"),
-								},
-							},
-						},
-					},
-				},
-				Dependencies: []string{"test.grafana.app/v1.#foo"},
-			},
 		},
 	}, {
-		name:   "additional subresources",
-		schema: []byte(`{"status":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}`),
+		name:   "dependencies (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"#foo":{"type":"object","properties":{"foobar":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"foo":{"type":"string"},"bar":{"$ref":"#/components/schemas/#foo"}}}}}}}}`),
 		gvk:    gvk,
 		ref:    ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec", "status"}),
-			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						Properties: map[string]spec.Schema{
-							"foo": {
-								SchemaProps: spec.SchemaProps{
-									Type: []string{"string"},
-								},
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+						"bar": {
+							SchemaProps: spec.SchemaProps{
+								Ref: ref("test.grafana.app/v1.Foo#foo"),
 							},
 						},
 					},
 				},
-			},
-			"test.grafana.app/v1.FooStatus": common.OpenAPIDefinition{
+			}, "test.grafana.app/v1.Foo#foo"),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
 				Schema: spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Type: spec.StringOrArray{"object"},
@@ -246,45 +313,114 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 			},
 		},
 	}, {
-		name:   "freeform additionalProperties",
+		name:   "additional subresources (CRD-shape)",
+		schema: []byte(`{"status":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+				"status": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foobar": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "additional subresources (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"status":{"type":"object","properties":{"foobar":{"type":"string"}}},"spec":{"type":"object","properties":{"foo":{"type":"string"}}}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+				"status": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foobar": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "freeform additionalProperties (CRD-shape)",
 		schema: []byte(`{"spec":{"type":"object","additionalProperties":true}}`),
 		gvk:    gvk,
 		ref:    ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
-			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						AdditionalProperties: &spec.SchemaOrBool{
-							Allows: true,
-						},
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
 					},
 				},
-			},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
 		},
 	}, {
-		name:   "defined additionalProperties",
+		name:   "freeform additionalProperties (OpenAPI-shape)",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","additionalProperties":true}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "defined additionalProperties (CRD-shape)",
 		schema: []byte(`{"spec":{"type":"object","additionalProperties":{"type":"object","properties":{"foo":{"type":"string"}}}}}`),
 		gvk:    gvk,
 		ref:    ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
-			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						AdditionalProperties: &spec.SchemaOrBool{
-							Schema: &spec.Schema{
-								SchemaProps: spec.SchemaProps{
-									Type: spec.StringOrArray{"object"},
-									Properties: map[string]spec.Schema{
-										"foo": {
-											SchemaProps: spec.SchemaProps{
-												Type: []string{"string"},
-											},
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Schema: &spec.Schema{
+							SchemaProps: spec.SchemaProps{
+								Type: spec.StringOrArray{"object"},
+								Properties: map[string]spec.Schema{
+									"foo": {
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"string"},
 										},
 									},
 								},
@@ -292,93 +428,215 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 						},
 					},
 				},
-			},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
 		},
 	}, {
-		name:   "defined additionalProperties",
-		schema: []byte(`{"spec":{"type":"object","x-kubernetes-preserve-unknown-fields":true}}`),
+		name:   "defined additionalProperties (OpenAPI-shape)",
+		schema: []byte(`{"spec":{"type":"object","additionalProperties":{"type":"object","properties":{"foo":{"type":"string"}}}}}`),
 		gvk:    gvk,
 		ref:    ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec"}),
-			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						AdditionalProperties: &spec.SchemaOrBool{
-							Allows: true,
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Schema: &spec.Schema{
+							SchemaProps: spec.SchemaProps{
+								Type: spec.StringOrArray{"object"},
+								Properties: map[string]spec.Schema{
+									"foo": {
+										SchemaProps: spec.SchemaProps{
+											Type: []string{"string"},
+										},
+									},
+								},
+							},
 						},
 					},
 				},
-			},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+	}, {
+		name:   "defined additionalProperties",
+		schema: []byte(`{"components":{"schemas":{"Foo":{"properties":{"spec":{"type":"object","x-kubernetes-preserve-unknown-fields":true}}}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
 		},
 	}, {
 		name: "full complex schema",
 		schema: []byte(`{
-	"#foo":{
-		"type":"object",
-		"x-kubernetes-preserve-unknown-fields":true
-	},
-	"#bar":{
-		"type":"object",
-		"properties": {
-			"int": {
-				"type":"number",
-				"minimum": 5,
-				"maximum": 10,
-				"format": "integer"
+	"components":{
+		"schemas":{
+			"#foo":{
+				"type":"object",
+				"x-kubernetes-preserve-unknown-fields":true
 			},
-			"string": { "type":"string" },
-			"bool": { "type":"boolean", "default": true },
-			"float": { 
-				"type":"number",
-				"minimum": -0.5,
-				"maximum": 0.5,
-				"format": "decimal"
+			"#bar":{
+				"type":"object",
+				"properties": {
+					"int": {
+						"type":"number",
+						"minimum": 5,
+						"maximum": 10,
+						"format": "integer"
+					},
+					"string": { "type":"string" },
+					"bool": { "type":"boolean", "default": true },
+					"float": { 
+						"type":"number",
+						"minimum": -0.5,
+						"maximum": 0.5,
+						"format": "decimal"
+					}
+				}
+			},
+			"#foobar":{
+				"type":"string"
+			},
+			"Foo": {
+				"type": "object",
+				"properties": {
+					"spec":{
+						"type":"object",
+						"properties":{
+							"all": {
+								"allOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#bar"}]
+							},
+							"any": {
+								"anyOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#bar"},{"$ref":"#/components/schemas/#foobar"}]
+							},
+							"one": {
+								"oneOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#foobar"}]
+							},
+							"no": {
+								"not": {
+									"$ref": "#/components/schemas/#foo"
+								}
+							},
+							"array": {
+								"type":  "array",
+								"items": {
+									"type": "string"
+								}
+							},
+							"refarray": {
+								"type": "array",
+								"items": {
+									"$ref": "#/components/schemas/#foo"
+								}
+							}
+						}
+					},
+					"status":{"type":"object","x-kubernetes-preserve-unknown-fields":true}
+				}
 			}
 		}
-	},
-	"#foobar":{
-		"type":"string"
-	},
-	"spec":{
-		"type":"object",
-		"properties":{
-			"all": {
-				"allOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#bar"}]
-			},
-			"any": {
-				"anyOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#bar"},{"$ref":"#/components/schemas/#foobar"}]
-			},
-			"one": {
-				"oneOf": [{"$ref":"#/components/schemas/#foo"},{"$ref":"#/components/schemas/#foobar"}]
-			},
-			"no": {
-				"not": {
-					"$ref": "#/components/schemas/#foo"
-				}
-			},
-			"array": {
-				"type":  "array",
-				"items": {
-					"type": "string"
-				}
-			},
-			"refarray": {
-				"type": "array",
-				"items": {
-					"$ref": "#/components/schemas/#foo"
-				}
-			}
-		}
-	},
-	"status":{"type":"object","x-kubernetes-preserve-unknown-fields":true}
+	}
 }`),
 		gvk: gvk,
 		ref: ref,
 		want: map[string]common.OpenAPIDefinition{
-			"test.grafana.app/v1.Foo":     kubeOpenAPIKindWithProps(gvk, ref, []string{"spec", "status"}),
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"all": {
+							SchemaProps: spec.SchemaProps{
+								AllOf: []spec.Schema{{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#bar"),
+									},
+								}},
+							},
+						},
+						"any": {
+							SchemaProps: spec.SchemaProps{
+								AnyOf: []spec.Schema{{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#bar"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foobar"),
+									},
+								}},
+							},
+						},
+						"one": {
+							SchemaProps: spec.SchemaProps{
+								OneOf: []spec.Schema{{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								}, {
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foobar"),
+									},
+								}},
+							},
+						},
+						"no": {
+							SchemaProps: spec.SchemaProps{
+								Not: &spec.Schema{
+									SchemaProps: spec.SchemaProps{
+										Ref: ref("test.grafana.app/v1.Foo#foo"),
+									},
+								},
+							},
+						},
+						"array": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Type: spec.StringOrArray{"string"},
+										},
+									},
+								},
+							},
+						},
+						"refarray": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"array"},
+								Items: &spec.SchemaOrArray{
+									Schema: &spec.Schema{
+										SchemaProps: spec.SchemaProps{
+											Ref: ref("test.grafana.app/v1.Foo#foo"),
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"status": {
+					Type: spec.StringOrArray{"object"},
+					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
+					},
+				},
+			}, "test.grafana.app/v1.Foo#bar", "test.grafana.app/v1.Foo#foo", "test.grafana.app/v1.Foo#foobar"),
 			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
 			"test.grafana.app/v1.Foo#foo": common.OpenAPIDefinition{
 				Schema: spec.Schema{
@@ -433,113 +691,16 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 					},
 				},
 			},
-			"test.grafana.app/v1.FooSpec": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						Properties: map[string]spec.Schema{
-							"all": {
-								SchemaProps: spec.SchemaProps{
-									AllOf: []spec.Schema{{
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#foo"),
-										},
-									}, {
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#bar"),
-										},
-									}},
-								},
-							},
-							"any": {
-								SchemaProps: spec.SchemaProps{
-									AnyOf: []spec.Schema{{
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#foo"),
-										},
-									}, {
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#bar"),
-										},
-									}, {
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#foobar"),
-										},
-									}},
-								},
-							},
-							"one": {
-								SchemaProps: spec.SchemaProps{
-									OneOf: []spec.Schema{{
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#foo"),
-										},
-									}, {
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#foobar"),
-										},
-									}},
-								},
-							},
-							"no": {
-								SchemaProps: spec.SchemaProps{
-									Not: &spec.Schema{
-										SchemaProps: spec.SchemaProps{
-											Ref: ref("test.grafana.app/v1.#foo"),
-										},
-									},
-								},
-							},
-							"array": {
-								SchemaProps: spec.SchemaProps{
-									Type: []string{"array"},
-									Items: &spec.SchemaOrArray{
-										Schema: &spec.Schema{
-											SchemaProps: spec.SchemaProps{
-												Type: spec.StringOrArray{"string"},
-											},
-										},
-									},
-								},
-							},
-							"refarray": {
-								SchemaProps: spec.SchemaProps{
-									Type: []string{"array"},
-									Items: &spec.SchemaOrArray{
-										Schema: &spec.Schema{
-											SchemaProps: spec.SchemaProps{
-												Ref: ref("test.grafana.app/v1.#foo"),
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				Dependencies: []string{"test.grafana.app/v1.#bar", "test.grafana.app/v1.#foo", "test.grafana.app/v1.#foobar"},
-			},
-			"test.grafana.app/v1.FooStatus": common.OpenAPIDefinition{
-				Schema: spec.Schema{
-					SchemaProps: spec.SchemaProps{
-						Type: spec.StringOrArray{"object"},
-						AdditionalProperties: &spec.SchemaOrBool{
-							Allows: true,
-						},
-					},
-				},
-			},
 		},
 	}}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			vs := VersionSchema{}
-			require.Nil(t, json.Unmarshal(test.schema, &vs))
+			m := make(map[string]any)
+			require.Nil(t, json.Unmarshal(test.schema, &m))
+			vs, err := VersionSchemaFromMap(m, test.gvk.Kind)
+			require.Nil(t, err)
 			res, err := vs.AsKubeOpenAPI(test.gvk, test.ref, "test.grafana.app/v1")
-			for k, _ := range res {
-				fmt.Println(k)
-			}
 			if test.err != nil {
 				assert.Equal(t, test.err, err)
 			} else {
@@ -550,7 +711,56 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 	}
 }
 
-func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props []string) common.OpenAPIDefinition {
+func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props map[string]spec.SchemaProps, deps ...string) common.OpenAPIDefinition {
+	kind := common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Type: []string{"object"},
+				Properties: map[string]spec.Schema{
+					"kind": {
+						SchemaProps: spec.SchemaProps{
+							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"apiVersion": {
+						SchemaProps: spec.SchemaProps{
+							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+							Type:        []string{"string"},
+							Format:      "",
+						},
+					},
+					"metadata": {
+						SchemaProps: spec.SchemaProps{
+							Default: map[string]interface{}{},
+							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						},
+					},
+				},
+			},
+		},
+		Dependencies: make([]string, 0),
+	}
+	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+	for k, prop := range props {
+		kind.Schema.Properties[k] = spec.Schema{
+			SchemaProps: prop,
+		}
+		if prop.Ref.String() != "" {
+			kind.Dependencies = append(kind.Dependencies, prop.Ref.String())
+		}
+	}
+	for _, dep := range deps {
+		if slices.Contains(kind.Dependencies, dep) {
+			continue
+		}
+		kind.Dependencies = append(kind.Dependencies, dep)
+	}
+	return kind
+}
+
+func kubeOpenAPIKindWithDeps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props []string) common.OpenAPIDefinition {
 	kind := common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{

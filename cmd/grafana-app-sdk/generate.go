@@ -9,7 +9,7 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
@@ -47,6 +47,8 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.Flags().String("gomodgenpath", "", `This argument is used as a relative path for generated go code from the go module root. It only needs to be present if gogenpath is an absolute path, or is not a relative path from the go module root.`)
 	generateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
 	generateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
+	generateCmd.Flags().Bool("crdmanifest", false, "Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents. Use this flag to keep legacy behavior (CRD schemas in the manifest)")
+	generateCmd.Flags().Lookup("crdmanifest").NoOptDefVal = "true"
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -121,6 +123,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	crdCompatibleManifest, err := cmd.Flags().GetBool("crdmanifest")
+	if err != nil {
+		return err
+	}
 
 	if goModule == "" {
 		goModule, err = getGoModule("go.mod")
@@ -147,6 +153,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			ManifestIncludeSchemas: !noSchemasInManifest,
 			GenOperatorState:       genOperatorState,
 			UseOldManifestKinds:    useOldManifestKinds,
+			CRDCompatibleManifest:  crdCompatibleManifest,
 		}, selector)
 		if err != nil {
 			return err
@@ -199,6 +206,7 @@ type kindGenConfig struct {
 	ManifestIncludeSchemas bool
 	GenOperatorState       bool
 	UseOldManifestKinds    bool
+	CRDCompatibleManifest  bool
 }
 
 //nolint:funlen,goconst
@@ -275,7 +283,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 			encFunc = yaml.Marshal
 		}
 
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, cfg.ManifestIncludeSchemas), selectors...)
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.CRDEncoding, cfg.ManifestIncludeSchemas, cfg.CRDCompatibleManifest), selectors...)
 		if err != nil {
 			return nil, err
 		}

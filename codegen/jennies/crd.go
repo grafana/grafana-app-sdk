@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/k8s"
 )
@@ -170,6 +171,24 @@ type customResourceDefinitionMetadata struct {
 
 const extKubernetesPreserveUnknownFields = "x-kubernetes-preserve-unknown-fields"
 
+func CUEToOpenAPIBytes(v cue.Value, name string) ([]byte, error) {
+	defpath := cue.MakePath(cue.Def(name))
+	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
+	defsch := val.FillPath(defpath, v)
+	codegenPipeline := cog.TypesFromSchema().
+		CUEValue(name, defsch, cog.ForceEnvelope(name)).
+		GenerateOpenAPI(cog.OpenAPIGenerationConfig{})
+	files, err := codegenPipeline.Run(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	// should only be one file
+	if len(files) != 1 {
+		return nil, fmt.Errorf("expected one OpenAPI definition but got %d", len(files))
+	}
+	return files[0].Data, nil
+}
+
 func CUEToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 	defpath := cue.MakePath(cue.Def(name))
 	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
@@ -190,7 +209,7 @@ func CUEToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	converted, err := GetCRDOpenAPISchema(doc.Components, name)
+	converted, err := app.GetCRDOpenAPISchema(doc.Components, name)
 	if err != nil {
 		return nil, err
 	}

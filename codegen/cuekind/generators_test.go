@@ -9,7 +9,7 @@ import (
 	"github.com/grafana/codejen"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -126,7 +126,7 @@ func TestManifestGenerator(t *testing.T) {
 			GenOperatorState: true,
 		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGenerator(yaml.Marshal, "yaml", true).Generate(kinds...)
+		files, err := ManifestGenerator(yaml.Marshal, "yaml", true, true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
