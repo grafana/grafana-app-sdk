@@ -209,7 +209,6 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		r.scheme = scheme
 		r.codecs = serializer.NewCodecFactory(scheme)
 	}
-	fmt.Println(scheme)
 
 	return nil
 }

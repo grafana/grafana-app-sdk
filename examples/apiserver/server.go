@@ -36,7 +36,6 @@ func NewApp(config app.Config) (app.App, error) {
 	client, err := v1alpha1.NewTestKindClientFromGenerator(k8s.NewClientRegistry(config.KubeConfig, k8s.ClientConfig{
 		MetricsConfig: metrics.DefaultConfig(""),
 		NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
-			fmt.Println("negotiator for ", kind)
 			return &k8s.KindNegotiatedSerializer{
 				Kind: kind,
 			}
