@@ -599,3 +599,12 @@ func (w *watchPatcher) PatchInto(ctx context.Context, identifier resource.Identi
 	into.SetCommonMetadata(obj.GetCommonMetadata())
 	return nil
 }
+
+func (w *watchPatcher) GetInto(ctx context.Context, identifier resource.Identifier, into resource.Object) error {
+	obj, err := w.patcher.Get(ctx, identifier)
+	if err != nil {
+		return err
+	}
+	into.SetCommonMetadata(obj.GetCommonMetadata())
+	return nil
+}
