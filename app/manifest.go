@@ -455,7 +455,40 @@ func (v *VersionSchema) fixRaw() error {
 		return nil
 	}
 
+	// There's another way something might be CRD-shaped, and that's the contents of openAPIV3Schema.properties
+	// If the map contains `spec`, and none of the root objects have a `spec` property that references it,
+	// we can make the assumption that this is actually a CRD-shaped-object
 	if _, ok := v.raw["spec"]; ok {
+		for k, v := range v.raw {
+			if k == "spec" {
+				continue
+			}
+			cast, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			props, ok := cast["properties"]
+			if !ok {
+				continue
+			}
+			cast, ok = props.(map[string]any)
+			if !ok {
+				continue
+			}
+			spec, ok := cast["spec"]
+			if !ok {
+				continue
+			}
+			cast, ok = spec.(map[string]any)
+			if !ok {
+				continue
+			}
+			if ref, ok := cast["$ref"]; ok {
+				if cr, ok := ref.(string); ok && len(cr) > 5 && cr[len(cr)-5:] == "/spec" {
+					return nil // spec is referenced by another object's `spec`, this isn't a CRD
+				}
+			}
+		}
 		// This seems to be CRD-shaped, handle it like a CRD
 		kind := make(map[string]any)
 		props := make(map[string]any)
