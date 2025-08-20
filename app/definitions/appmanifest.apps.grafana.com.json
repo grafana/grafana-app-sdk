@@ -10,7 +10,7 @@
             {
                 "name": "v1alpha1",
                 "served": true,
-                "storage": true,
+                "storage": false,
                 "schema": {
                     "openAPIV3Schema": {
                         "properties": {
@@ -223,6 +223,338 @@
                                                             "kind",
                                                             "scope",
                                                             "schema"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "name": {
+                                                    "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
+                                                    "type": "string"
+                                                },
+                                                "served": {
+                                                    "default": true,
+                                                    "description": "Served dictates whether this version is served by the API server.\nA version cannot be removed from a manifest until it is no longer served.",
+                                                    "type": "boolean"
+                                                }
+                                            },
+                                            "required": [
+                                                "name",
+                                                "kinds"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "appName",
+                                    "group",
+                                    "versions"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "observedGeneration": {
+                                        "description": "ObservedGeneration is the last generation which has been applied by the controller.",
+                                        "type": "integer"
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    },
+                                    "resources": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "details": {
+                                                    "description": "details may contain specific information (such as error message(s)) on the reason for the status",
+                                                    "type": "string"
+                                                },
+                                                "status": {
+                                                    "enum": [
+                                                        "success",
+                                                        "failure"
+                                                    ]
+                                                }
+                                            },
+                                            "required": [
+                                                "status"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Resources contains the status of each resource type created or updated in the API server\nas a result of the AppManifest.",
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "resources"
+                                ],
+                                "type": "object"
+                            }
+                        },
+                        "required": [
+                            "spec"
+                        ],
+                        "type": "object"
+                    }
+                },
+                "subresources": {
+                    "status": {}
+                }
+            },
+            {
+                "name": "v1alpha2",
+                "served": true,
+                "storage": true,
+                "schema": {
+                    "openAPIV3Schema": {
+                        "properties": {
+                            "spec": {
+                                "properties": {
+                                    "appName": {
+                                        "type": "string"
+                                    },
+                                    "dryRunKinds": {
+                                        "default": false,
+                                        "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
+                                        "type": "boolean"
+                                    },
+                                    "extraPermissions": {
+                                        "description": "ExtraPermissions contains additional permissions needed for an app's backend component to operate.\nApps implicitly have all permissions for kinds they managed (defined in `kinds`).",
+                                        "properties": {
+                                            "accessKinds": {
+                                                "description": "accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps",
+                                                "items": {
+                                                    "properties": {
+                                                        "actions": {
+                                                            "items": {
+                                                                "type": "string"
+                                                            },
+                                                            "type": "array"
+                                                        },
+                                                        "group": {
+                                                            "type": "string"
+                                                        },
+                                                        "resource": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "group",
+                                                        "resource",
+                                                        "actions"
+                                                    ],
+                                                    "type": "object"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "required": [
+                                            "accessKinds"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "group": {
+                                        "type": "string"
+                                    },
+                                    "operator": {
+                                        "properties": {
+                                            "url": {
+                                                "description": "URL is the URL of the operator's HTTPS endpoint, including port if non-standard (443).\nIt should be a URL which the API server can access.",
+                                                "type": "string"
+                                            },
+                                            "webhooks": {
+                                                "properties": {
+                                                    "conversionPath": {
+                                                        "default": "/convert",
+                                                        "type": "string"
+                                                    },
+                                                    "mutationPath": {
+                                                        "default": "/mutate",
+                                                        "type": "string"
+                                                    },
+                                                    "validationPath": {
+                                                        "default": "/validate",
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "preferredVersion": {
+                                        "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
+                                        "type": "string"
+                                    },
+                                    "versions": {
+                                        "description": "Versions is the list of versions for this manifest, in order.",
+                                        "items": {
+                                            "properties": {
+                                                "kinds": {
+                                                    "description": "Kinds is a list of all the kinds served in this version.\nGenerally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)\nor newly added (and didn't exist for older versions).",
+                                                    "items": {
+                                                        "properties": {
+                                                            "additionalPrinterColumns": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "description": {
+                                                                            "description": "description is a human readable description of this column.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "format": {
+                                                                            "description": "format is an optional OpenAPI type definition for this column. The 'name' format is applied\nto the primary identifier column to assist in clients identifying column is the resource name.\nSee https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "jsonPath": {
+                                                                            "description": "jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against\neach custom resource to produce the value for this column.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "name": {
+                                                                            "description": "name is a human readable name for the column.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "priority": {
+                                                                            "description": "priority is an integer defining the relative importance of this column compared to others. Lower\nnumbers are considered higher priority. Columns that may be omitted in limited space scenarios\nshould be given a priority greater than 0.",
+                                                                            "type": "integer"
+                                                                        },
+                                                                        "type": {
+                                                                            "description": "type is an OpenAPI type definition for this column.\nSee https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.",
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "type",
+                                                                        "jsonPath"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
+                                                            "admission": {
+                                                                "properties": {
+                                                                    "mutation": {
+                                                                        "properties": {
+                                                                            "operations": {
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "CREATE",
+                                                                                        "UPDATE",
+                                                                                        "DELETE",
+                                                                                        "CONNECT",
+                                                                                        "*"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "operations"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    },
+                                                                    "validation": {
+                                                                        "properties": {
+                                                                            "operations": {
+                                                                                "items": {
+                                                                                    "enum": [
+                                                                                        "CREATE",
+                                                                                        "UPDATE",
+                                                                                        "DELETE",
+                                                                                        "CONNECT",
+                                                                                        "*"
+                                                                                    ]
+                                                                                },
+                                                                                "type": "array"
+                                                                            }
+                                                                        },
+                                                                        "required": [
+                                                                            "operations"
+                                                                        ],
+                                                                        "type": "object"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
+                                                            "conversion": {
+                                                                "default": false,
+                                                                "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
+                                                                "type": "boolean"
+                                                            },
+                                                            "kind": {
+                                                                "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
+                                                                "type": "string"
+                                                            },
+                                                            "plural": {
+                                                                "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
+                                                                "type": "string"
+                                                            },
+                                                            "routes": {
+                                                                "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
+                                                            },
+                                                            "schemas": {
+                                                                "description": "Schemas is the components.schemas section of an OpenAPI document describing this Kind.\nIt must contain a key named the same as the `kind` field of the Kind.\nOther fields may be present to be referenced by $ref tags in a schema,\nand references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.",
+                                                                "type": "object",
+                                                                "x-kubernetes-preserve-unknown-fields": true
+                                                            },
+                                                            "scope": {
+                                                                "default": "Namespaced",
+                                                                "description": "Scope dictates the scope of the kind. This field must be the same for all versions of the kind.\nDifferent values will result in an error or undefined behavior.",
+                                                                "enum": [
+                                                                    "Namespaced",
+                                                                    "Cluster"
+                                                                ]
+                                                            },
+                                                            "selectableFields": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "kind",
+                                                            "scope",
+                                                            "schemas"
                                                         ],
                                                         "type": "object"
                                                     },

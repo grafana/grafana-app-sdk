@@ -155,7 +155,7 @@ func TestVersionSchemaFromMap(t *testing.T) {
 			} else {
 				assert.Equal(t, test.expectedErr, err)
 			}
-			assert.Equal(t, test.expectedMap, sch.AsMap())
+			assert.Equal(t, test.expectedMap, sch.AsOpenAPI3SchemasMap())
 		})
 	}
 }

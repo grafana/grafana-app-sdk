@@ -511,8 +511,8 @@ func (v *VersionSchema) fixRaw() error {
 	return nil
 }
 
-// AsMap returns the schema as a map[string]any version of an openAPI components.schemas section
-func (v *VersionSchema) AsMap() map[string]any {
+// AsOpenAPI3SchemasMap returns the schema as a map[string]any version of an openAPI components.schemas section
+func (v *VersionSchema) AsOpenAPI3SchemasMap() map[string]any {
 	return v.raw
 }
 
@@ -541,7 +541,7 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 	full := map[string]any{
 		"openapi": "3.0.0",
 		"components": map[string]any{
-			"schemas": v.AsMap(),
+			"schemas": v.AsOpenAPI3SchemasMap(),
 		},
 	}
 	yml, err := yaml.Marshal(full)

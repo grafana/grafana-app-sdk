@@ -17,6 +17,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha1"
+	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 
@@ -54,19 +55,30 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 		// No kinds, make an assumption for the group name
 		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
 	}
-	spec, err := v1alpha1.SpecFromManifestData(*manifestData, m.CRDCompatible)
+
+	// Whether or not the schema is CRD-compatible determines which version of AppManifest to use.
+	// v1alpha1 has a `schema` section which is a CRD schema document.
+	// v1alpha2 has a `schemas` section which is an OpenAPI schemas document.
+	var manifestSpec any
+	apiVersion := v1alpha2.GroupVersion
+	if m.CRDCompatible {
+		manifestSpec, err = v1alpha1.SpecFromManifestData(*manifestData)
+		apiVersion = v1alpha1.GroupVersion
+	} else {
+		manifestSpec, err = v1alpha2.SpecFromManifestData(*manifestData)
+	}
 	if err != nil {
 		return nil, err
 	}
 
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = "apps.grafana.com/v1alpha1"
+	output["apiVersion"] = apiVersion.String()
 	output["kind"] = "AppManifest"
 	output["metadata"] = map[string]string{
 		"name": manifestData.AppName,
 	}
-	output["spec"] = spec
+	output["spec"] = manifestSpec
 
 	files := make(codejen.Files, 0)
 	out, err := m.Encoder(output)
