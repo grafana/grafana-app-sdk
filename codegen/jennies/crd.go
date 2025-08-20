@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net/url"
 	"strings"
 
@@ -91,7 +90,7 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 }
 
 func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {
-	props, err := CUEToCRDOpenAPI(kv.Schema, kindName)
+	props, err := cueToCRDOpenAPI(kv.Schema, kindName)
 	if err != nil {
 		return k8s.CustomResourceDefinitionSpecVersion{}, err
 	}
@@ -169,9 +168,7 @@ type customResourceDefinitionMetadata struct {
 	// TODO: other fields as necessary for codegen
 }
 
-const extKubernetesPreserveUnknownFields = "x-kubernetes-preserve-unknown-fields"
-
-func CUEToOpenAPIBytes(v cue.Value, name string) ([]byte, error) {
+func cueToOpenAPIBytes(v cue.Value, name string) ([]byte, error) {
 	defpath := cue.MakePath(cue.Def(name))
 	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
 	defsch := val.FillPath(defpath, v)
@@ -189,7 +186,8 @@ func CUEToOpenAPIBytes(v cue.Value, name string) ([]byte, error) {
 	return files[0].Data, nil
 }
 
-func CUEToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
+// TODO: once the CRD jenny uses a manifest, we can use the same process as the manifest jenny
+func cueToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 	defpath := cue.MakePath(cue.Def(name))
 	val := v.Context().CompileString(fmt.Sprintf("#%s: _", name))
 	defsch := val.FillPath(defpath, v)
@@ -226,191 +224,4 @@ func CUEToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 		return nil, err
 	}
 	return m, nil
-}
-
-// GetCRDOpenAPISchema takes a Components object and a schema name, resolves all $ref references
-// and handles recursive references by converting them to objects with x-kubernetes-preserve-unknown-fields set to true.
-// It returns the resolved schema and any error encountered.
-func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*openapi3.Schema, error) {
-	if components == nil || components.Schemas == nil {
-		return nil, fmt.Errorf("invalid components or schemas")
-	}
-
-	schema := components.Schemas[schemaName]
-	if schema == nil {
-		return nil, fmt.Errorf("schema %s not found", schemaName)
-	}
-
-	visited := make(map[string]bool)
-	return resolveSchema(schema, components, visited)
-}
-
-//nolint:gocognit,funlen,gocritic
-func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
-	if schema == nil {
-		return nil, nil
-	}
-	// copy visisted so referencing something in multiple places doesn't look like a cycle,
-	// it's only a cycle if we visit it multiple times while recursing down
-	visited := make(map[string]bool)
-	maps.Copy(visited, visitedBefore)
-
-	// If this is a reference, resolve it
-	if schema.Ref != "" {
-		refName := getRefName(schema.Ref)
-
-		// Check if we've seen this reference before
-		if visited[refName] {
-			// We've found a cycle, return object with x-kubernetes-preserve-unknown-fields
-			return &openapi3.Schema{
-				Type:       &openapi3.Types{openapi3.TypeObject},
-				Extensions: map[string]any{extKubernetesPreserveUnknownFields: true},
-			}, nil
-		}
-
-		// Mark this reference as visited
-		visited[refName] = true
-
-		// Get the referenced schema
-		refSchema := components.Schemas[refName]
-		if refSchema == nil {
-			return nil, fmt.Errorf("referenced schema %s not found", refName)
-		}
-
-		// Create a new visited map for this branch to avoid false positives in parallel branches
-		branchVisited := make(map[string]bool)
-		for k, v := range visited {
-			branchVisited[k] = v
-		}
-
-		// Resolve the referenced schema
-		resolved, err := resolveSchema(refSchema, components, branchVisited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve reference %s: %w", refName, err)
-		}
-
-		return resolved, nil
-	}
-
-	// Create a new schema to avoid modifying the original
-	result := &openapi3.Schema{
-		Type:                 schema.Value.Type,
-		Format:               schema.Value.Format,
-		Description:          schema.Value.Description,
-		Default:              schema.Value.Default,
-		Example:              schema.Value.Example,
-		ExclusiveMin:         schema.Value.ExclusiveMin,
-		ExclusiveMax:         schema.Value.ExclusiveMax,
-		Min:                  schema.Value.Min,
-		Max:                  schema.Value.Max,
-		MultipleOf:           schema.Value.MultipleOf,
-		MinLength:            schema.Value.MinLength,
-		MaxLength:            schema.Value.MaxLength,
-		Pattern:              schema.Value.Pattern,
-		MinItems:             schema.Value.MinItems,
-		MaxItems:             schema.Value.MaxItems,
-		UniqueItems:          schema.Value.UniqueItems,
-		MinProps:             schema.Value.MinProps,
-		MaxProps:             schema.Value.MaxProps,
-		Required:             schema.Value.Required,
-		Enum:                 schema.Value.Enum,
-		Title:                schema.Value.Title,
-		AdditionalProperties: schema.Value.AdditionalProperties,
-		Nullable:             schema.Value.Nullable,
-		ReadOnly:             schema.Value.ReadOnly,
-		WriteOnly:            schema.Value.WriteOnly,
-		AllOf:                make([]*openapi3.SchemaRef, 0),
-		OneOf:                make([]*openapi3.SchemaRef, 0),
-		AnyOf:                make([]*openapi3.SchemaRef, 0),
-	}
-
-	// Fix additionalProperties being an empty object for what kubernetes CRD's expect (using the `x-kubernetes-preserve-unknown-fields` extension)
-	if result.AdditionalProperties.Has != nil || result.AdditionalProperties.Schema != nil {
-		if result.AdditionalProperties.Schema != nil {
-			// If there's a schema, resolve references and check if we need to transform this into a plain object with x-kubernetes-preserve-unknown-fields: true
-			if result.AdditionalProperties.Schema.Ref != "" {
-				resolved, err := resolveSchema(result.AdditionalProperties.Schema, components, visited)
-				if err != nil {
-					return nil, err
-				}
-				result.AdditionalProperties.Schema = openapi3.NewSchemaRef("", resolved)
-			}
-			// if the schema exists, there are no properties in it, and it's either an object or empty type ("additionalProperties":{"type":"object"} or "additionalProperties":{}),
-			// set kubernetes' x-kubernetes-preserve-unknown-fields to true and remove the additionalProperties section
-			if result.AdditionalProperties.Schema.Value != nil && len(result.AdditionalProperties.Schema.Value.Properties) == 0 && (result.AdditionalProperties.Schema.Value.Type.Is(openapi3.TypeObject) || result.AdditionalProperties.Schema.Value.Type == nil) {
-				result.AdditionalProperties.Has = nil
-				result.AdditionalProperties.Schema = nil
-				if result.Extensions == nil {
-					result.Extensions = make(map[string]any)
-				}
-				result.Extensions[extKubernetesPreserveUnknownFields] = true
-			}
-		} else if *result.AdditionalProperties.Has {
-			// If AdditionalProperties.Schema is nil, then remove AdditionalProperties and set x-kubernetes-preserve-unknown-fields to true
-			result.AdditionalProperties.Has = nil
-			result.AdditionalProperties.Schema = nil
-			if result.Extensions == nil {
-				result.Extensions = make(map[string]any)
-			}
-			result.Extensions[extKubernetesPreserveUnknownFields] = true
-		} else {
-			result.AdditionalProperties.Has = nil
-		}
-	}
-
-	// Resolve properties for objects
-	if schema.Value.Properties != nil {
-		result.Properties = make(map[string]*openapi3.SchemaRef)
-		for name, prop := range schema.Value.Properties {
-			resolved, err := resolveSchema(prop, components, visited)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve property %s: %w", name, err)
-			}
-			result.Properties[name] = openapi3.NewSchemaRef("", resolved)
-		}
-	}
-
-	// Resolve items for arrays
-	if schema.Value.Items != nil {
-		resolved, err := resolveSchema(schema.Value.Items, components, visited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve array items: %w", err)
-		}
-		result.Items = openapi3.NewSchemaRef("", resolved)
-	}
-
-	// Resolve AllOf schemas
-	for _, s := range schema.Value.AllOf {
-		resolved, err := resolveSchema(s, components, visited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve allOf schema: %w", err)
-		}
-		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", resolved))
-	}
-
-	// Resolve OneOf schemas
-	for _, s := range schema.Value.OneOf {
-		resolved, err := resolveSchema(s, components, visited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
-		}
-		result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", resolved))
-	}
-
-	// Resolve AnyOf schemas
-	for _, s := range schema.Value.AnyOf {
-		resolved, err := resolveSchema(s, components, visited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve anyOf schema: %w", err)
-		}
-		result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", resolved))
-	}
-
-	return result, nil
-}
-
-// getRefName extracts the schema name from a $ref string
-func getRefName(ref string) string {
-	parts := strings.Split(ref, "/")
-	return parts[len(parts)-1]
 }

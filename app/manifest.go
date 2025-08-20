@@ -407,6 +407,7 @@ func (v *VersionSchema) MarshalYAML() (any, error) {
 }
 
 // fixRaw turns a full OpenAPI document map[string]any in raw into a set of schemas (if required)
+// nolint:gocognit,funlen
 func (v *VersionSchema) fixRaw() error {
 	if components, ok := v.raw["components"]; ok {
 		cast, ok := components.(map[string]any)
@@ -475,11 +476,11 @@ func (v *VersionSchema) fixRaw() error {
 			if !ok {
 				continue
 			}
-			spec, ok := cast["spec"]
+			spc, ok := cast["spec"]
 			if !ok {
 				continue
 			}
-			cast, ok = spec.(map[string]any)
+			cast, ok = spc.(map[string]any)
 			if !ok {
 				continue
 			}
@@ -607,13 +608,13 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	var kindSchema *openapi3.SchemaRef
 	kindSchemaKey := ""
 	for k := range oapi.Schemas {
-		if strings.ToLower(k) == strings.ToLower(gvk.Kind) || k == parsedCRDSchemaKindName {
+		if strings.EqualFold(k, gvk.Kind) || k == parsedCRDSchemaKindName {
 			kindSchema = oapi.Schemas[k]
 			kindSchemaKey = k
 			break
 		}
 		parts := strings.Split(k, ".")
-		if len(parts) > 1 && strings.ToLower(parts[len(parts)-1]) == strings.ToLower(gvk.Kind) {
+		if len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], gvk.Kind) {
 			kindSchema = oapi.Schemas[k]
 			kindSchemaKey = k
 			break
@@ -621,10 +622,6 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	}
 	if kindSchema == nil {
 		return nil, fmt.Errorf("unable to locate openAPI definition for kind %s", gvk.Kind)
-	}
-	if kindSchema.Ref != "" {
-		fmt.Println("uh oh, ", kindSchema.Ref)
-		// TODO: Resolve
 	}
 	if len(kindSchema.Value.AllOf) > 0 || len(kindSchema.Value.AnyOf) > 0 || len(kindSchema.Value.OneOf) > 0 || kindSchema.Value.Not != nil {
 		return nil, fmt.Errorf("anyOf, allOf, oneOf, and not are unsupported for the kind's root schema (kind %s)", gvk.Kind)
@@ -699,18 +696,6 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			Schema:       sch,
 			Dependencies: deps,
 		}
-		// If the key begins with a #, it's definition and should not be included in the kind object
-		/*if len(k) > 0 && k[0] == '#' {
-			continue
-		}
-		// Add the entry as a dependency in the kind object, and add it as a subresource
-		kind.Dependencies = append(kind.Dependencies, key)
-		kind.Schema.Properties[k] = spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Default: map[string]any{},
-				Ref:     ref(key),
-			},
-		}*/
 	}
 	// sort dependencies for consistent output
 	slices.Sort(kind.Dependencies)
@@ -896,15 +881,6 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	return resSchema, dependencies
 }
 
-func replaceRefs(schema *openapi3.SchemaRef, replaceFunc func(string) string) {
-	if schema.Ref != "" {
-		schema.Ref = replaceFunc(schema.Ref)
-	}
-	if schema.Value != nil {
-
-	}
-}
-
 // updateDependencies adds each entry in toAdd to the dependencies slice if absent, and returns the updated slice
 func updateDependencies(dependencies []string, toAdd []string) []string {
 	for _, dep := range toAdd {
@@ -932,24 +908,24 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 		return nil, fmt.Errorf("invalid components or schemas")
 	}
 
-	schema := components.Schemas[schemaName]
-	if schema == nil {
+	sch := components.Schemas[schemaName]
+	if sch == nil {
 		return nil, fmt.Errorf("schema %s not found", schemaName)
 	}
 	// remove the 'metadata','kind', and 'apiVersion' properties
-	if schema.Value != nil {
-		delete(schema.Value.Properties, "metadata")
-		delete(schema.Value.Properties, "kind")
-		delete(schema.Value.Properties, "apiVersion")
+	if sch.Value != nil {
+		delete(sch.Value.Properties, "metadata")
+		delete(sch.Value.Properties, "kind")
+		delete(sch.Value.Properties, "apiVersion")
 	}
 
 	visited := make(map[string]bool)
-	return resolveSchema(schema, components, visited)
+	return resolveSchema(sch, components, visited)
 }
 
 //nolint:gocognit,funlen,gocritic
-func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
-	if schema == nil {
+func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
+	if sch == nil {
 		return nil, nil
 	}
 	// copy visisted so referencing something in multiple places doesn't look like a cycle,
@@ -958,8 +934,8 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 	maps.Copy(visited, visitedBefore)
 
 	// If this is a reference, resolve it
-	if schema.Ref != "" {
-		refName := getRefName(schema.Ref)
+	if sch.Ref != "" {
+		refName := getRefName(sch.Ref)
 
 		// Check if we've seen this reference before
 		if visited[refName] {
@@ -996,31 +972,31 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 
 	// Create a new schema to avoid modifying the original
 	result := &openapi3.Schema{
-		Type:                 schema.Value.Type,
-		Format:               schema.Value.Format,
-		Description:          schema.Value.Description,
-		Default:              schema.Value.Default,
-		Example:              schema.Value.Example,
-		ExclusiveMin:         schema.Value.ExclusiveMin,
-		ExclusiveMax:         schema.Value.ExclusiveMax,
-		Min:                  schema.Value.Min,
-		Max:                  schema.Value.Max,
-		MultipleOf:           schema.Value.MultipleOf,
-		MinLength:            schema.Value.MinLength,
-		MaxLength:            schema.Value.MaxLength,
-		Pattern:              schema.Value.Pattern,
-		MinItems:             schema.Value.MinItems,
-		MaxItems:             schema.Value.MaxItems,
-		UniqueItems:          schema.Value.UniqueItems,
-		MinProps:             schema.Value.MinProps,
-		MaxProps:             schema.Value.MaxProps,
-		Required:             schema.Value.Required,
-		Enum:                 schema.Value.Enum,
-		Title:                schema.Value.Title,
-		AdditionalProperties: schema.Value.AdditionalProperties,
-		Nullable:             schema.Value.Nullable,
-		ReadOnly:             schema.Value.ReadOnly,
-		WriteOnly:            schema.Value.WriteOnly,
+		Type:                 sch.Value.Type,
+		Format:               sch.Value.Format,
+		Description:          sch.Value.Description,
+		Default:              sch.Value.Default,
+		Example:              sch.Value.Example,
+		ExclusiveMin:         sch.Value.ExclusiveMin,
+		ExclusiveMax:         sch.Value.ExclusiveMax,
+		Min:                  sch.Value.Min,
+		Max:                  sch.Value.Max,
+		MultipleOf:           sch.Value.MultipleOf,
+		MinLength:            sch.Value.MinLength,
+		MaxLength:            sch.Value.MaxLength,
+		Pattern:              sch.Value.Pattern,
+		MinItems:             sch.Value.MinItems,
+		MaxItems:             sch.Value.MaxItems,
+		UniqueItems:          sch.Value.UniqueItems,
+		MinProps:             sch.Value.MinProps,
+		MaxProps:             sch.Value.MaxProps,
+		Required:             sch.Value.Required,
+		Enum:                 sch.Value.Enum,
+		Title:                sch.Value.Title,
+		AdditionalProperties: sch.Value.AdditionalProperties,
+		Nullable:             sch.Value.Nullable,
+		ReadOnly:             sch.Value.ReadOnly,
+		WriteOnly:            sch.Value.WriteOnly,
 		AllOf:                make([]*openapi3.SchemaRef, 0),
 		OneOf:                make([]*openapi3.SchemaRef, 0),
 		AnyOf:                make([]*openapi3.SchemaRef, 0),
@@ -1061,9 +1037,9 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 	}
 
 	// Resolve properties for objects
-	if schema.Value.Properties != nil {
+	if sch.Value.Properties != nil {
 		result.Properties = make(map[string]*openapi3.SchemaRef)
-		for name, prop := range schema.Value.Properties {
+		for name, prop := range sch.Value.Properties {
 			resolved, err := resolveSchema(prop, components, visited)
 			if err != nil {
 				return nil, fmt.Errorf("failed to resolve property %s: %w", name, err)
@@ -1073,8 +1049,8 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 	}
 
 	// Resolve items for arrays
-	if schema.Value.Items != nil {
-		resolved, err := resolveSchema(schema.Value.Items, components, visited)
+	if sch.Value.Items != nil {
+		resolved, err := resolveSchema(sch.Value.Items, components, visited)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve array items: %w", err)
 		}
@@ -1082,7 +1058,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 	}
 
 	// Resolve AllOf schemas
-	for _, s := range schema.Value.AllOf {
+	for _, s := range sch.Value.AllOf {
 		resolved, err := resolveSchema(s, components, visited)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve allOf schema: %w", err)
@@ -1091,7 +1067,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 	}
 
 	// Resolve OneOf schemas
-	for _, s := range schema.Value.OneOf {
+	for _, s := range sch.Value.OneOf {
 		resolved, err := resolveSchema(s, components, visited)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
@@ -1100,7 +1076,7 @@ func resolveSchema(schema *openapi3.SchemaRef, components *openapi3.Components, 
 	}
 
 	// Resolve AnyOf schemas
-	for _, s := range schema.Value.AnyOf {
+	for _, s := range sch.Value.AnyOf {
 		resolved, err := resolveSchema(s, components, visited)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve anyOf schema: %w", err)

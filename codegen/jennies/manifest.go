@@ -238,7 +238,7 @@ type simpleOpenAPIDoc struct {
 	} `json:"components" yaml:"components"`
 }
 
-//nolint:revive
+//nolint:revive,funlen,unparam
 func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
 	mver := app.ManifestVersionKind{
 		Kind:       vk.Kind,
@@ -286,7 +286,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		// for the object in the resulting OpenAPI document.
 		// As a hack for making sure the top-level fields include `x-kubernetes-preserve-unknown-fields: true`,
 		// we also convert the whole object to OpenAPI and check for additionalProperties
-		oapiBytes, err := CUEToOpenAPIBytes(vk.Schema, vk.Kind)
+		oapiBytes, err := cueToOpenAPIBytes(vk.Schema, vk.Kind)
 		if err != nil {
 			return app.ManifestVersionKind{}, err
 		}
@@ -308,7 +308,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			if field == "metadata" || field == "apiVersion" || field == "kind" {
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
-			oapiBytes, err := CUEToOpenAPIBytes(it.Value(), field)
+			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
 			if err != nil {
 				return app.ManifestVersionKind{}, err
 			}

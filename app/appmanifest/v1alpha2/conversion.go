@@ -11,9 +11,9 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 )
 
-// ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
+// ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha2)
 // to the generic app.ManifestData type for usage with an app.Manifest.
-// nolint:gocognit,funlen
+// nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
 		AppName:  s.AppName,
@@ -163,6 +163,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	return data, data.Validate()
 }
 
+// SpecFromManifestData is a function which converts an instance of app.ManifestData
+// to this specific version of the AppManifestSpec (v1alpha1).
+// nolint:gocognit,funlen
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	spec := AppManifestSpec{
 		AppName:  data.AppName,

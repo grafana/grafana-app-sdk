@@ -13,7 +13,7 @@ import (
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
 // to the generic app.ManifestData type for usage with an app.Manifest.
-// nolint:gocognit,funlen
+// nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
 		AppName:  s.AppName,
@@ -171,6 +171,10 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	return data, data.Validate()
 }
 
+// SpecFromManifestData is a function which converts an instance of app.ManifestData
+// to this specific version of the AppManifestSpec (v1alpha1). This conversion may lose data contained in the app.ManifestData
+// instance as v1alpha1 is an older version of the AppManifest kind.
+// nolint:gocognit,funlen
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	spec := AppManifestSpec{
 		AppName:  data.AppName,

@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 	"testing"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -711,6 +711,62 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 	}
 }
 
+func TestGetCRDOpenAPISchema(t *testing.T) {
+	tests := []struct {
+		name          string
+		schemaName    string
+		jsonData      []byte
+		outputJSON    []byte
+		expectedError error
+	}{{
+		name:          "empty document",
+		schemaName:    "foo",
+		jsonData:      []byte(`{}`),
+		expectedError: fmt.Errorf("invalid components or schemas"),
+	}, {
+		name:          "missing schema",
+		schemaName:    "foo",
+		jsonData:      []byte(`{"components":{"schemas":{}}}`),
+		expectedError: fmt.Errorf("schema foo not found"),
+	}, {
+		name:       "recursive schema",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"item":{"type":"object","properties":{"val":{"type":"string"},"next":{"type":"object","$ref":"#/components/schemas/item"}}},"foo":{"type":"object","properties":{"linked":{"type":"object","$ref":"#/components/schemas/item"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"linked":{"type":"object","properties":{"val":{"type":"string"},"next":{"type":"object","x-kubernetes-preserve-unknown-fields":true}}}}}`),
+	}, {
+		name:       "additionalProperties replaced",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"type":"object","additionalProperties":{"type":"object"}}}}}`),
+		outputJSON: []byte(`{"type":"object","x-kubernetes-preserve-unknown-fields":true}`),
+	}, {
+		name:       "additionalProperties resolved",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"bar":{"type":"object","properties":{"baz":{"type":"string"}}},"foo":{"type":"object","additionalProperties":{"type":"object","$ref":"#/components/schemas/bar"}}}}}`),
+		outputJSON: []byte(`{"type":"object","additionalProperties":{"type":"object","properties":{"baz":{"type":"string"}}}}`),
+	}, {
+		name:       "simple additionalProperties",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"type":"object","properties":{"bar":{"type":"string"}},"additionalProperties":{}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"bar":{"type":"string"}},"x-kubernetes-preserve-unknown-fields":true}`),
+	}}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			doc, err := openapi3.NewLoader().LoadFromData(test.jsonData)
+			assert.NoError(t, err)
+			output, err := GetCRDOpenAPISchema(doc.Components, test.schemaName)
+			if test.expectedError != nil {
+				assert.Equal(t, test.expectedError, err)
+			} else {
+				require.NoError(t, err)
+				m, err := json.MarshalIndent(output, "", "  ")
+				require.NoError(t, err)
+				assert.JSONEq(t, string(test.outputJSON), string(m))
+			}
+		})
+	}
+}
+
 func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props map[string]spec.SchemaProps, deps ...string) common.OpenAPIDefinition {
 	kind := common.OpenAPIDefinition{
 		Schema: spec.Schema{
@@ -756,51 +812,6 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 			continue
 		}
 		kind.Dependencies = append(kind.Dependencies, dep)
-	}
-	return kind
-}
-
-func kubeOpenAPIKindWithDeps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props []string) common.OpenAPIDefinition {
-	kind := common.OpenAPIDefinition{
-		Schema: spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Type: []string{"object"},
-				Properties: map[string]spec.Schema{
-					"kind": {
-						SchemaProps: spec.SchemaProps{
-							Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"apiVersion": {
-						SchemaProps: spec.SchemaProps{
-							Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-							Type:        []string{"string"},
-							Format:      "",
-						},
-					},
-					"metadata": {
-						SchemaProps: spec.SchemaProps{
-							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
-						},
-					},
-				},
-			},
-		},
-		Dependencies: make([]string, 0),
-	}
-	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
-	for _, prop := range props {
-		propName := gvk.Kind + strings.ToUpper(prop[:1]) + prop[1:]
-		kind.Dependencies = append(kind.Dependencies, fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, propName))
-		kind.Schema.Properties[prop] = spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Default: map[string]interface{}{},
-				Ref:     ref(fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, propName)),
-			},
-		}
 	}
 	return kind
 }
