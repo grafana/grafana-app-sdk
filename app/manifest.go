@@ -200,7 +200,12 @@ type ManifestVersion struct {
 	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
 	// Routes is a map of path patterns to custom routes for this version.
 	// Routes should not conflict with the plural name of any kinds for this version.
-	Routes map[string]spec3.PathProps `json:"routes,omitempty" yaml:"routes,omitempty"`
+	Routes ManifestVersionRoutes `json:"routes,omitempty" yaml:"routes,omitempty"`
+}
+
+type ManifestVersionRoutes struct {
+	Namespaced map[string]spec3.PathProps `json:"namespaced,omitempty" yaml:"namespaced,omitempty"`
+	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`
 }
 
 // ManifestVersionKind contains details for a version of a kind in a Manifest

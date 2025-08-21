@@ -42,7 +42,7 @@ var (
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
 
-	templateManifestGoFile, _ = template.ParseFS(templates, "manifest_go.tmpl")
+	templateManifestGoFile, terr = template.ParseFS(templates, "manifest_go.tmpl")
 )
 
 var (
@@ -483,6 +483,7 @@ func (ManifestGoFileMetadata) StripLeadingSlash(path string) string {
 }
 
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
+	fmt.Println(terr)
 	return templateManifestGoFile.Execute(out, metadata)
 }
 

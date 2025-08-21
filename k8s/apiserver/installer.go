@@ -9,12 +9,14 @@ import (
 	"maps"
 	"net/http"
 	"net/url"
+	"path"
 	"reflect"
 	"regexp"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/emicklei/go-restful/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
@@ -54,7 +56,7 @@ type AppInstaller interface {
 	// GetOpenAPIDefinitions gets a map of OpenAPI definitions for use with kubernetes OpenAPI
 	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
 	// InstallAPIs installs the API endpoints to an API server
-	InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
+	InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
 	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
 	// If the App does not provide admission control, it should return nil
 	AdmissionPlugin() admission.Factory
@@ -223,8 +225,14 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if len(manifestKind.Routes) > 0 {
 				hasCustomRoutes = true
 				// Add the definitions and use the name as the reflect type name from the resolver, if it exists
-				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, defaultEtcdPathPrefix, callback))
+				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, "", defaultEtcdPathPrefix, callback))
 			}
+		}
+		if len(v.Routes.Namespaced) > 0 {
+			maps.Copy(res, r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback))
+		}
+		if len(v.Routes.Cluster) > 0 {
+			maps.Copy(res, r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback))
 		}
 	}
 	if hasCustomRoutes {
@@ -233,7 +241,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
-func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
+func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
 		r.scheme = newScheme()
@@ -305,7 +313,85 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 		}
 	}
 
-	return server.InstallAPIGroup(&apiGroupInfo)
+	err = server.InstallAPIGroup(&apiGroupInfo)
+	// version custom routes
+	for _, ws := range server.Handler.GoRestfulContainer.RegisteredWebServices() {
+		for _, ver := range r.ManifestData().Versions {
+			if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
+				for rpath, route := range ver.Routes.Namespaced {
+					r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
+				}
+				for rpath, route := range ver.Routes.Cluster {
+					r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.ClusterScope)
+				}
+			}
+		}
+	}
+	return err
+}
+
+func (r *defaultInstaller) registerResourceRoute(ws *restful.WebService, gv schema.GroupVersion, rpath string, props spec3.PathProps, scope resource.SchemaScope) {
+	if props.Get != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Get, scope, "GET")
+	}
+}
+
+func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService, gv schema.GroupVersion, rpath string, op *spec3.Operation, scope resource.SchemaScope, method string) error {
+	lookup := rpath
+	if scope == resource.NamespacedScope {
+		lookup = path.Join("<namespace>", rpath)
+	}
+	responseType, ok := r.customRouteResolver("", gv.Version, lookup, method)
+	if !ok {
+		// TODO: this actually causes a panic, need some kind of basic object here that's also in the OpenAPI
+		responseType = nil
+	}
+	fullpath := rpath
+	if scope == resource.NamespacedScope {
+		fullpath = path.Join("namespaces", "{namespace}", rpath)
+	}
+	var builder *restful.RouteBuilder
+	switch strings.ToLower(method) {
+	case "get":
+		builder = ws.GET(fullpath)
+	default:
+		return fmt.Errorf("unsupported method %s", method)
+	}
+	ws.Route(builder.Operation(strings.ToLower(method)+op.OperationId).To(func(req *restful.Request, resp *restful.Response) {
+		a, err := r.App()
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(resp).Encode(metav1.Status{
+				Status:  metav1.StatusFailure,
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+			})
+		}
+		identifier := resource.FullIdentifier{
+			Group:   r.appConfig.ManifestData.Group,
+			Version: gv.Version,
+		}
+		if scope == resource.NamespacedScope {
+			identifier.Namespace = req.PathParameters()["namespace"]
+		}
+		err = a.CallCustomRoute(req.Request.Context(), resp, &app.CustomRouteRequest{
+			ResourceIdentifier: identifier,
+			Path:               rpath,
+			URL:                req.Request.URL,
+			Method:             http.MethodGet,
+			Headers:            req.Request.Header,
+			Body:               req.Request.Body,
+		})
+		if err != nil {
+			resp.WriteHeader(http.StatusInternalServerError)
+			_ = json.NewEncoder(resp).Encode(metav1.Status{
+				Status:  metav1.StatusFailure,
+				Code:    http.StatusInternalServerError,
+				Message: err.Error(),
+			})
+		}
+	}).Returns(200, "OK", responseType))
+	return nil
 }
 
 func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
@@ -408,35 +494,38 @@ func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error
 	return runtime.DecodeInto(r.codecs.UniversalDecoder(bResourceObj.GroupVersionKind().GroupVersion()), res.Raw, bObj)
 }
 
-func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, routes map[string]spec3.PathProps, defaultPkgPrefix string, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
+func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, routes map[string]spec3.PathProps, routePathPrefix string, defaultPkgPrefix string, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	defs := make(map[string]common.OpenAPIDefinition)
-	for path, pathProps := range routes {
+	for rpath, pathProps := range routes {
+		if routePathPrefix != "" {
+			rpath = path.Join(routePathPrefix, rpath)
+		}
 		if pathProps.Get != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "GET", pathProps.Get, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "GET", pathProps.Get, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Post != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "POST", pathProps.Post, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "POST", pathProps.Post, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Put != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "PUT", pathProps.Put, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "PUT", pathProps.Put, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Patch != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "PATCH", pathProps.Patch, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "PATCH", pathProps.Patch, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Delete != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "DELETE", pathProps.Delete, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "DELETE", pathProps.Delete, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Head != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "HEAD", pathProps.Head, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "HEAD", pathProps.Head, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Options != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, path, "OPTIONS", pathProps.Options, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "OPTIONS", pathProps.Options, r.customRouteResolver, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 	}

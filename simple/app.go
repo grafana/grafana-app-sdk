@@ -117,6 +117,9 @@ type AppConfig struct {
 	ManagedKinds   []AppManagedKind
 	UnmanagedKinds []AppUnmanagedKind
 	Converters     map[schema.GroupKind]Converter
+	// VersionedCustomRoutes is a map of version string => custom route handlers for
+	// custom routes attached at the version level rather than attached to a specific kind
+	VersionedCustomRoutes map[string]AppVersionRouteHandlers
 	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
 	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
 	// for sending finalizer add/remove patches to the latest version of the kind.
@@ -219,9 +222,17 @@ type AppCustomRoute struct {
 	Path   string
 }
 
+type AppVersionRoute struct {
+	Namespaced bool
+	Path       string
+	Method     AppCustomRouteMethod
+}
+
 type AppCustomRouteHandler func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error
 
 type AppCustomRouteHandlers map[AppCustomRoute]AppCustomRouteHandler
+
+type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 
 // NewApp creates a new instance of App, managing the kinds provided in AppConfig.ManagedKinds.
 // AppConfig MUST contain a valid KubeConfig to be valid.
@@ -267,6 +278,21 @@ func NewApp(config AppConfig) (*App, error) {
 		err := a.watchKind(kind)
 		if err != nil {
 			return nil, err
+		}
+	}
+	for version, routeHandlers := range config.VersionedCustomRoutes {
+		for info, handler := range routeHandlers {
+			scope := resource.NamespacedScope
+			if !info.Namespaced {
+				scope = resource.ClusterScope
+			}
+			key := a.customRouteHandlerKey(schema.GroupVersionKind{
+				Version: version,
+			}, string(info.Method), info.Path, scope)
+			if _, ok := a.customRoutes[key]; ok {
+				return nil, fmt.Errorf("custom route '%s %s' already exists for version %s", info.Method, info.Path, version)
+			}
+			a.customRoutes[key] = handler
 		}
 	}
 	for gk, converter := range config.Converters {
@@ -347,7 +373,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 		if handler == nil {
 			return fmt.Errorf("custom route cannot have a nil handler")
 		}
-		key := a.customRouteHandlerKey(&kind.Kind, string(route.Method), route.Path, kind.Kind.Scope())
+		key := a.customRouteHandlerKey(kind.Kind.GroupVersionKind(), string(route.Method), route.Path, kind.Kind.Scope())
 		if _, ok := a.customRoutes[key]; ok {
 			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
 		}
@@ -510,7 +536,9 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		if req.ResourceIdentifier.Namespace == "" {
 			scope = resource.ClusterScope
 		}
-		if handler, ok := a.customRoutes[a.customRouteHandlerKey(nil, req.Method, req.Path, scope)]; ok {
+		if handler, ok := a.customRoutes[a.customRouteHandlerKey(schema.GroupVersionKind{
+			Version: req.ResourceIdentifier.Version,
+		}, req.Method, req.Path, scope)]; ok {
 			return handler(ctx, writer, req)
 		}
 	}
@@ -523,7 +551,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		// TODO: still return the not found, or just return NotImplemented?
 		return app.ErrCustomRouteNotFound
 	}
-	if handler, ok := a.customRoutes[a.customRouteHandlerKey(&k.Kind, req.Method, req.Path, k.Kind.Scope())]; ok {
+	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope())]; ok {
 		return handler(ctx, writer, req)
 	}
 	return app.ErrCustomRouteNotFound
@@ -549,14 +577,11 @@ func (a *App) getInProgressFinalizer(sch resource.Schema) string {
 	return fmt.Sprintf("%s-wip", sch.Plural())
 }
 
-func (*App) customRouteHandlerKey(kind *resource.Kind, method string, path string, scope resource.SchemaScope) string {
+func (*App) customRouteHandlerKey(gvk schema.GroupVersionKind, method string, path string, scope resource.SchemaScope) string {
 	if len(path) > 0 && path[0] == '/' {
 		path = path[1:]
 	}
-	if kind == nil {
-		return fmt.Sprintf("%s/%s/%s", scope, path, method)
-	}
-	return fmt.Sprintf("%s/%s/%s/%s/%s/%s", kind.Scope(), kind.Group(), kind.Version(), kind.Kind(), strings.ToUpper(method), path)
+	return fmt.Sprintf("%s|%s|%s|%s|%s|%s", scope, gvk.Group, gvk.Version, gvk.Kind, strings.ToUpper(method), path)
 }
 
 type syncWatcher interface {

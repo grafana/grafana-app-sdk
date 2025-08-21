@@ -58,4 +58,23 @@ v1alpha1: {
             enabled: true
         }
     }
+    routes: namespaced: {
+    	"/foobar": {
+    		"GET": {
+    			response: {
+    				foo: string
+    			}
+    		}
+    	}
+    }
+    routes: cluster: {
+    	"/foobar": {
+    		"GET": {
+    			name: "clustergetfoobar"
+    			response: {
+    				bar: string
+    			}
+    		}
+    	}
+    }
 }

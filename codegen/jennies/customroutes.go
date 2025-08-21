@@ -3,6 +3,7 @@ package jennies
 import (
 	"fmt"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -40,7 +41,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 					if route.Name == "" {
 						route.Name = defaultRouteName(method, cpath)
 					}
-					generated, err := c.generateCustomRouteKind(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), kind.MachineName, route)
+					generated, err := c.generateCustomRouteKind(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), strings.ToLower(kind.MachineName), route)
 					if err != nil {
 						return nil, fmt.Errorf("failed to generate custom route types for route %s, kind %s: %w", route.Name, kind.Kind, err)
 					}
@@ -48,11 +49,35 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				}
 			}
 		}
+		for cpath, methods := range version.Routes().Namespaced {
+			for method, route := range methods {
+				if route.Name == "" {
+					route.Name = defaultRouteName(method, cpath)
+				}
+				generated, err := c.generateCustomRouteKind(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				if err != nil {
+					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
+				}
+				files = append(files, generated...)
+			}
+		}
+		for cpath, methods := range version.Routes().Cluster {
+			for method, route := range methods {
+				if route.Name == "" {
+					route.Name = defaultRouteName(method, cpath)
+				}
+				generated, err := c.generateCustomRouteKind(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				if err != nil {
+					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
+				}
+				files = append(files, generated...)
+			}
+		}
 	}
 	return files, nil
 }
 
-func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packageName string, kindMachineName string, customRoute codegen.CustomRoute) (codejen.Files, error) {
+func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if !customRoute.Response.Schema.Exists() {
 		return nil, fmt.Errorf("custom route response is required")
@@ -68,9 +93,12 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packa
 	if err != nil {
 		return nil, err
 	}
+	if filenamePrefix != "" {
+		filenamePrefix = fmt.Sprintf("%s_", filenamePrefix)
+	}
 	files = append(files, codejen.File{
 		Data:         responseTypes,
-		RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
+		RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_types_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
 		From:         []codejen.NamedJenny{c},
 	})
 	return files, nil
