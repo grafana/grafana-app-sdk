@@ -417,6 +417,19 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		builder.Consumes(restful.MIME_JSON)
 		//builder.Reads(<body>)
 	}
+	if scope == resource.NamespacedScope {
+		builder = builder.Param(restful.PathParameter("namespace", "object name and auth scope, such as for teams and projects"))
+	}
+	for _, param := range op.Parameters {
+		switch param.In {
+		case "path":
+			builder = builder.Param(restful.PathParameter(param.Name, param.Description))
+		case "query":
+			builder = builder.Param(restful.QueryParameter(param.Name, param.Description))
+		case "header":
+			builder = builder.Param(restful.HeaderParameter(param.Name, param.Description))
+		}
+	}
 	ws.Route(builder.Operation(strings.ToLower(method)+op.OperationId).To(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
 		if err != nil {

@@ -170,6 +170,22 @@ var appManifestData = app.ManifestData{
 
 								OperationId: "GetFoobar",
 
+								Parameters: []*spec3.Parameter{
+
+									{
+										ParameterProps: spec3.ParameterProps{
+											Name:     "foo",
+											In:       "query",
+											Required: true,
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+													Type: []string{"string"},
+												},
+											},
+										},
+									},
+								},
+
 								Responses: &spec3.Responses{
 									ResponsesProps: spec3.ResponsesProps{
 										Default: &spec3.Response{

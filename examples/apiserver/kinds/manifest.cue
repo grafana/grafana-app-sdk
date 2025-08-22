@@ -64,6 +64,11 @@ v1alpha1: {
     			response: {
     				foo: string
     			}
+    			request: {
+    				query: {
+    					foo: string
+    				}
+    			}
     		}
     	}
     }
