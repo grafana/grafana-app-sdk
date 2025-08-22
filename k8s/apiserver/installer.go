@@ -79,6 +79,25 @@ type GenericAPIServer interface {
 	InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error
 }
 
+// GoTypeResolver is an interface which describes an object which catalogs the relationship between different aspects of an app
+// and its go types which need to be used by the API server.
+type GoTypeResolver interface {
+	// KindToGoType resolves a kind and version into a resource.Kind instance.
+	// group is not provided as a KindToGoType function is expected to exist on a per-group basis.
+	//nolint:revive
+	KindToGoType(kind, version string) (goType resource.Kind, exists bool)
+	// CustomRouteReturnGoType resolves the kind, version, path, and method into a go type which is returned
+	// from that custom route call. kind may be empty for resource routes.
+	// group is not provided as a CustomRouteReturnGoType function is expected to exist on a per-group basis.
+	//nolint:revive
+	CustomRouteReturnGoType(kind, version, path, verb string) (goType any, exists bool)
+	// CustomRouteQueryGoType resolves the kind, version, path, and method into a go type which is returned
+	// used for the query parameters of the route.
+	// group is not provided as a CustomRouteQueryGoType function is expected to exist on a per-group basis.
+	//nolint:revive
+	CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool)
+}
+
 var (
 	// ErrAppNotInitialized is returned if the app.App has not been initialized
 	ErrAppNotInitialized = errors.New("app not initialized")
@@ -89,10 +108,9 @@ var (
 var _ AppInstaller = (*defaultInstaller)(nil)
 
 type defaultInstaller struct {
-	appProvider         app.Provider
-	appConfig           app.Config
-	managedKindResolver ManagedKindResolver
-	customRouteResolver CustomRouteResponseResolver
+	appProvider app.Provider
+	appConfig   app.Config
+	resolver    GoTypeResolver
 
 	app    app.App
 	appMux sync.Mutex
@@ -103,12 +121,11 @@ type defaultInstaller struct {
 // NewDefaultAppInstaller creates a new AppInstaller with default behavior for an app.Provider and app.Config.
 //
 //nolint:revive
-func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, kindResolver ManagedKindResolver, customRouteResolver CustomRouteResponseResolver) (*defaultInstaller, error) {
+func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, resolver GoTypeResolver) (*defaultInstaller, error) {
 	installer := &defaultInstaller{
-		appProvider:         appProvider,
-		appConfig:           appConfig,
-		managedKindResolver: kindResolver,
-		customRouteResolver: customRouteResolver,
+		appProvider: appProvider,
+		appConfig:   appConfig,
+		resolver:    resolver,
 	}
 	if installer.appConfig.ManifestData.IsEmpty() {
 		// Fill in the manifest data from the Provider if we can
@@ -148,6 +165,14 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 				kindsByGroup[kind.Kind.Group()] = []resource.Kind{}
 			}
 			kindsByGroup[kind.Kind.Group()] = append(kindsByGroup[kind.Kind.Group()], kind.Kind)
+
+			for cpath, pathProps := range kind.ManifestKind.Routes {
+				if pathProps.Get != nil {
+					if t, exists := r.resolver.CustomRouteQueryGoType(kind.Kind.Kind(), gv.Version, cpath, "GET"); exists {
+						scheme.AddKnownTypes(gv, t)
+					}
+				}
+			}
 		}
 		scheme.AddUnversionedTypes(gv, &ResourceCallOptions{})
 		err = scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*ResourceCallOptions)(nil), func(a, b any, scope conversion.Scope) error {
@@ -199,7 +224,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	hasCustomRoutes := false
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
-			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)
+			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
 			if !ok {
 				continue
 			}
@@ -276,7 +301,7 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 					route = route[1:]
 				}
 				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), route)] = &SubresourceConnector{
-					Methods: spec3PropsToConnectorMethods(props, kind.Kind.Kind(), gv.Version, route, r.customRouteResolver),
+					Methods: spec3PropsToConnectorMethods(props, kind.Kind.Kind(), gv.Version, route, r.resolver.CustomRouteReturnGoType),
 					Route: CustomRoute{
 						Path: route,
 						Handler: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
@@ -359,7 +384,7 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 	if scope == resource.NamespacedScope {
 		lookup = path.Join("<namespace>", rpath)
 	}
-	responseType, ok := r.customRouteResolver("", gv.Version, lookup, method)
+	responseType, ok := r.resolver.CustomRouteReturnGoType("", gv.Version, lookup, method)
 	if !ok {
 		// TODO: this actually causes a panic, need some kind of basic object here that's also in the OpenAPI
 		responseType = nil
@@ -536,31 +561,31 @@ func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, rout
 			rpath = path.Join(routePathPrefix, rpath)
 		}
 		if pathProps.Get != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "GET", pathProps.Get, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "GET", pathProps.Get, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Post != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "POST", pathProps.Post, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "POST", pathProps.Post, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Put != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "PUT", pathProps.Put, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "PUT", pathProps.Put, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Patch != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "PATCH", pathProps.Patch, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "PATCH", pathProps.Patch, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Delete != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "DELETE", pathProps.Delete, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "DELETE", pathProps.Delete, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Head != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "HEAD", pathProps.Head, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "HEAD", pathProps.Head, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 		if pathProps.Options != nil {
-			key, val := r.getOperationOpenAPI(kind, ver, rpath, "OPTIONS", pathProps.Options, r.customRouteResolver, defaultPkgPrefix, callback)
+			key, val := r.getOperationOpenAPI(kind, ver, rpath, "OPTIONS", pathProps.Options, r.resolver.CustomRouteReturnGoType, defaultPkgPrefix, callback)
 			defs[key] = val
 		}
 	}
@@ -623,7 +648,7 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]K
 	for _, v := range r.appConfig.ManifestData.Versions {
 		for _, manifestKind := range v.Kinds {
 			gv := schema.GroupVersion{Group: group, Version: v.Name}
-			kind, ok := r.managedKindResolver(manifestKind.Kind, v.Name)
+			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
 			if !ok {
 				return nil, fmt.Errorf("failed to resolve kind %s", manifestKind.Kind)
 			}

@@ -1,6 +1,7 @@
 package jennies
 
 import (
+	"bytes"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 type CustomRouteGoTypesJenny struct {
@@ -41,7 +43,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 					if route.Name == "" {
 						route.Name = defaultRouteName(method, cpath)
 					}
-					generated, err := c.generateCustomRouteKind(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), strings.ToLower(kind.MachineName), route)
+					generated, err := c.generateCustomRouteKinds(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), strings.ToLower(kind.MachineName), route)
 					if err != nil {
 						return nil, fmt.Errorf("failed to generate custom route types for route %s, kind %s: %w", route.Name, kind.Kind, err)
 					}
@@ -54,7 +56,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				if route.Name == "" {
 					route.Name = defaultRouteName(method, cpath)
 				}
-				generated, err := c.generateCustomRouteKind(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
 				if err != nil {
 					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
 				}
@@ -66,7 +68,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				if route.Name == "" {
 					route.Name = defaultRouteName(method, cpath)
 				}
-				generated, err := c.generateCustomRouteKind(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
 				if err != nil {
 					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
 				}
@@ -77,7 +79,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 	return files, nil
 }
 
-func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute) (codejen.Files, error) {
+func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if !customRoute.Response.Schema.Exists() {
 		return nil, fmt.Errorf("custom route response is required")
@@ -101,6 +103,52 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKind(basePath string, packa
 		RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_types_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
 		From:         []codejen.NamedJenny{c},
 	})
+	requestTypeName := fmt.Sprintf("%sRequest", typeName)
+	requestParamsTypeName := fmt.Sprintf("%sParams", requestTypeName)
+	requestBodyTypeName := fmt.Sprintf("%sBody", requestTypeName)
+	if customRoute.Request.Query.Exists() {
+		requestQueryType, err := GoTypesFromCUE(customRoute.Request.Query, CUEGoConfig{
+			PackageName: packageName,
+			Name:        requestParamsTypeName,
+		}, 1)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			Data:         requestQueryType,
+			RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_request_params_types_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
+			From:         []codejen.NamedJenny{c},
+		})
+
+		requestQueryObjectType := bytes.Buffer{}
+		err = templates.WriteRuntimeObjectWrapper(templates.RuntimeObjectWrapperMetadata{
+			PackageName:     packageName,
+			WrapperTypeName: fmt.Sprintf("%sObject", requestParamsTypeName),
+			TypeName:        requestParamsTypeName,
+		}, &requestQueryObjectType)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			Data:         requestQueryObjectType.Bytes(),
+			RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_request_params_object_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
+			From:         []codejen.NamedJenny{c},
+		})
+	}
+	if customRoute.Request.Body.Exists() {
+		requestBodyType, err := GoTypesFromCUE(customRoute.Request.Body, CUEGoConfig{
+			PackageName: packageName,
+			Name:        requestBodyTypeName,
+		}, 1)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			Data:         requestBodyType,
+			RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_request_body_types_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
+			From:         []codejen.NamedJenny{c},
+		})
+	}
 	return files, nil
 }
 

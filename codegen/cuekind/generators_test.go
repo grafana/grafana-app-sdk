@@ -148,8 +148,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		files, err := ManifestGoGenerator("groupbygroup", true, "codegen-tests", "pkg/generated", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 3 -> manifest file, then the custom route types for reconcile and search in v3
-		require.Len(t, files, 3)
+		// 10 -> manifest file, then the custom route types+query+body for reconcile and search in v3, +1 client per version (3)
+		require.Len(t, files, 10, "should be 10 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			if file.RelativePath == "testapp_manifest.go" {
@@ -168,10 +168,16 @@ func TestManifestGoGenerator(t *testing.T) {
 		files, err := ManifestGoGenerator("groupbykind", true, "codegen-tests", "pkg/generated", false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 5 -> object, spec, metadata, status, schema
-		assert.Len(t, files, 1)
+		// 3 -> manifest, client v0_0, client v1_0
+		assert.Len(t, files, 3)
 		// Check content against the golden files
-		compareToGolden(t, files, "manifest/go/groupbykind")
+		for _, file := range files {
+			if file.RelativePath == "customapp_manifest.go" {
+				compareToGolden(t, codejen.Files{file}, "manifest/go/groupbykind")
+			} else {
+				compareToGolden(t, codejen.Files{file}, "go/groupbykind")
+			}
+		}
 	})
 }
 
