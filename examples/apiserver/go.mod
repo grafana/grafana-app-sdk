@@ -8,7 +8,7 @@ replace github.com/grafana/grafana-app-sdk => ../../
 
 require (
 	github.com/grafana/grafana-app-sdk v0.0.0-00010101000000-000000000000
-	github.com/grafana/grafana-app-sdk/logging v0.41.0
+	github.com/grafana/grafana-app-sdk/logging v0.41.1
 	k8s.io/apimachinery v0.33.4
 	k8s.io/apiserver v0.33.4
 	k8s.io/client-go v0.33.4
