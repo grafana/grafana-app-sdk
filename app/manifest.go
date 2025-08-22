@@ -353,20 +353,6 @@ func VersionSchemaFromMap(openAPISchema map[string]any, kindName string) (*Versi
 type VersionSchema struct {
 	// raw is the openAPI components.schemas section of an openAPI document, represented as a map[string]any
 	raw map[string]any
-	// serilizeAsCRD is a control flag for MarshalJSON/MarshalYAML to serialize as CRD-compatible JSON/YAML,
-	// instead of a standard OpenAPI scheme. It is used by higher-level marshaling.
-	// To be used, it should be set to the schema to serialize as a CRD
-	serilizeAsCRD string
-}
-
-// CRDMarshalable returns a copy of this VersionSchema which will marshal into CRD-compatible JSON/YAML for the provided kindName
-func (v *VersionSchema) CRDMarshalable(kindName string) *VersionSchema {
-	cpy := VersionSchema{
-		raw:           make(map[string]any),
-		serilizeAsCRD: kindName,
-	}
-	maps.Copy(cpy.raw, v.raw)
-	return &cpy
 }
 
 func (v *VersionSchema) UnmarshalJSON(data []byte) error {
@@ -379,13 +365,6 @@ func (v *VersionSchema) UnmarshalJSON(data []byte) error {
 }
 
 func (v *VersionSchema) MarshalJSON() ([]byte, error) {
-	if v.serilizeAsCRD != "" {
-		conv, err := v.AsCRDMap(v.serilizeAsCRD)
-		if err != nil {
-			return nil, err
-		}
-		return json.Marshal(conv)
-	}
 	return json.Marshal(v.raw)
 }
 
@@ -400,9 +379,6 @@ func (v *VersionSchema) UnmarshalYAML(unmarshal func(any) error) error {
 
 func (v *VersionSchema) MarshalYAML() (any, error) {
 	// MarshalYAML needs to return an object to the marshaler, not bytes like MarshalJSON
-	if v.serilizeAsCRD != "" {
-		return v.AsCRDMap(v.serilizeAsCRD)
-	}
 	return v.raw, nil
 }
 
@@ -427,6 +403,9 @@ func (v *VersionSchema) fixRaw() error {
 		return nil
 	}
 
+	// TODO: should we even accept CRD-shaped data when unmarshaling?
+	// The process for working with the manifest should go through one of the versioned types first, which
+	// will always use OpenAPI, and not call unmarshal directly.
 	if _, ok := v.raw["openAPIV3Schema"]; ok {
 		// CRD-like schema, we have to convert this into a set of "components",
 		// but we don't know the object name. In this case, we use "KIND" as the name,
