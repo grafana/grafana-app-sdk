@@ -334,6 +334,24 @@ func (r *defaultInstaller) registerResourceRoute(ws *restful.WebService, gv sche
 	if props.Get != nil {
 		r.registerResourceRouteOperation(ws, gv, rpath, props.Get, scope, "GET")
 	}
+	if props.Post != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Post, scope, "POST")
+	}
+	if props.Put != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Put, scope, "PUT")
+	}
+	if props.Patch != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Patch, scope, "PATCH")
+	}
+	if props.Delete != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Delete, scope, "DELETE")
+	}
+	if props.Head != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Head, scope, "HEAD")
+	}
+	if props.Options != nil {
+		r.registerResourceRouteOperation(ws, gv, rpath, props.Options, scope, "OPTIONS")
+	}
 }
 
 func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService, gv schema.GroupVersion, rpath string, op *spec3.Operation, scope resource.SchemaScope, method string) error {
@@ -354,8 +372,25 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 	switch strings.ToLower(method) {
 	case "get":
 		builder = ws.GET(fullpath)
+	case "post":
+		builder = ws.POST(fullpath)
+	case "put":
+		builder = ws.PUT(fullpath)
+	case "patch":
+		builder = ws.PATCH(fullpath)
+	case "delete":
+		builder = ws.DELETE(fullpath)
+	case "head":
+		builder = ws.HEAD(fullpath)
+	case "options":
+		builder = ws.OPTIONS(fullpath)
 	default:
 		return fmt.Errorf("unsupported method %s", method)
+	}
+	if op.RequestBody != nil {
+		// TODO
+		builder.Consumes(restful.MIME_JSON)
+		//builder.Reads(<body>)
 	}
 	ws.Route(builder.Operation(strings.ToLower(method)+op.OperationId).To(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
