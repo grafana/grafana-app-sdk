@@ -470,7 +470,7 @@ func TestApp_ManageKind(t *testing.T) {
 		expected := errors.New("I AM ERROR")
 		a, err := NewApp(AppConfig{
 			InformerConfig: AppInformerConfig{
-				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error) {
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
 					return nil, expected
 				},
 			},
@@ -492,10 +492,10 @@ func TestApp_ManageKind(t *testing.T) {
 		}
 		createTestApp(t, AppConfig{
 			InformerConfig: AppInformerConfig{
-				InformerSupplier: func(k resource.Kind, clients resource.ClientGenerator, opts operator.ListWatchOptions) (operator.Informer, error) {
+				InformerSupplier: func(k resource.Kind, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
 					supplierCalled = true
 					assert.Equal(t, kind, k)
-					assert.Equal(t, options, opts)
+					assert.Equal(t, options, opts.ListWatchOptions)
 					return &mockInformer{}, nil
 				},
 			},
