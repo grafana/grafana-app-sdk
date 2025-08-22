@@ -68,6 +68,9 @@ v1alpha1: {
     				query: {
     					foo: string
     				}
+    				body: {
+    					input: string
+    				}
     			}
     		}
     	}

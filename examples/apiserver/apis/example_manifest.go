@@ -185,7 +185,30 @@ var appManifestData = app.ManifestData{
 										},
 									},
 								},
+								RequestBody: &spec3.RequestBody{
+									RequestBodyProps: spec3.RequestBodyProps{
 
+										Required: true,
+										Content: map[string]*spec3.MediaType{
+											"application/json": {
+												MediaTypeProps: spec3.MediaTypeProps{
+													Schema: &spec.Schema{
+														SchemaProps: spec.SchemaProps{
+															Type: []string{"object"},
+															Properties: map[string]spec.Schema{
+																"input": {
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"string"},
+																	},
+																},
+															},
+															Required: []string{
+																"input",
+															},
+														}},
+												}},
+										},
+									}},
 								Responses: &spec3.Responses{
 									ResponsesProps: spec3.ResponsesProps{
 										Default: &spec3.Response{
@@ -313,7 +336,27 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
 	return goType, exists
 }
 
+var customRouteToGoRequestBodyType = map[string]any{
+
+	"v1alpha1|TestKind|foo|GET": &v1alpha1.GetFooRequestBody{},
+
+	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobarRequestBody{},
+}
+
+func ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb string) (goType any, exists bool) {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	goType, exists = customRouteToGoRequestBodyType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
+	return goType, exists
+	return nil, false
+}
+
 type GoTypeAssociator struct{}
+
+func NewGoTypeAssociator() *GoTypeAssociator {
+	return &GoTypeAssociator{}
+}
 
 func (g *GoTypeAssociator) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
 	return ManifestGoTypeAssociator(kind, version)
@@ -323,4 +366,7 @@ func (g *GoTypeAssociator) CustomRouteReturnGoType(kind, version, path, verb str
 }
 func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
 	return ManifestCustomRouteQueryAssociator(kind, version, path, verb)
+}
+func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
+	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
