@@ -272,7 +272,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 		res["github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject"] = common.OpenAPIDefinition{
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
-					Description: "ExternalNameFoo defines model for ExternalNameFoo.",
+					Description: "EmptyObject defines a model for a missing object type",
 					Type:        []string{"object"},
 				},
 			},
