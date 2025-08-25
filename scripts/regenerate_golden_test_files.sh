@@ -16,6 +16,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --grouping=group \
   --manifest="customManifest" \
   --gomodule="${gomod}" \
+  --crdmanifest \
   --gomodgenpath="pkg/generated"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
@@ -24,6 +25,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --grouping=group \
   --manifest="testManifest" \
   --gomodule="${gomod}" \
+  --crdmanifest \
   --gomodgenpath="pkg/generated"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
@@ -33,6 +35,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --grouping=group \
   --manifest="customManifest" \
   --gomodule="${gomod}" \
+  --crdmanifest \
   --gomodgenpath="pkg/generated"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
   -g="${testdir}/go/groupbygroup" \
@@ -42,6 +45,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --grouping=group \
   --manifest="testManifest" \
   --gomodule="${gomod}" \
+  --crdmanifest \
   --gomodgenpath="pkg/generated"
 # Move the manifest files
 mv ${testdir}/go/groupbygroup/*.go "${testdir}/manifest/go/groupbygroup"
@@ -55,6 +59,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --grouping=kind \
   --manifest="customManifest" \
   --gomodule="${gomod}" \
+  --crdmanifest \
   --gomodgenpath="pkg/generated"
 mv ${testdir}/go/groupbykind/*.go "${testdir}/manifest/go/groupbykind"
 

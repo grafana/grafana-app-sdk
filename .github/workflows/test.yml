@@ -75,10 +75,10 @@ jobs:
       - name: Generate code
         run: |
           cd codegen-tests
-          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=customManifest
-          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=testManifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=customManifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=testManifest
+          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=customManifest --crdmanifest
+          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=testManifest --crdmanifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=customManifest --crdmanifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=testManifest --crdmanifest
           sed -i 's/^package gen2/package groupbygroup/g' pkg/gen2/*.go
           sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/*.go
           diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
