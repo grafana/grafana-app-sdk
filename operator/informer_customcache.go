@@ -248,6 +248,9 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				ResourceVersionMatch: string(options.ResourceVersionMatch),
 				LabelFilters:         filterOptions.LabelFilters,
 				FieldSelectors:       filterOptions.FieldSelectors,
+				AllowWatchBookmarks:  options.AllowWatchBookmarks,
+				TimeoutSeconds:       options.TimeoutSeconds,
+				SendInitialEvents:    options.SendInitialEvents,
 			}
 			// TODO: can't defer the cancel call for the context, because it should only be canceled if the
 			// _caller_ of WatchFunc finishes with the WatchResponse before the timeout elapses...
