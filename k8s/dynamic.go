@@ -57,11 +57,15 @@ type DynamicKindPatcher struct {
 	groupKind schema.GroupKind
 }
 
+func (d *DynamicKindPatcher) Get(ctx context.Context, identifier resource.Identifier) (*resource.UnstructuredWrapper, error) {
+	return d.patcher.Get(ctx, d.groupKind, identifier)
+}
+
 func (d *DynamicKindPatcher) Patch(ctx context.Context, identifier resource.Identifier, patch resource.PatchRequest, options resource.PatchOptions) (resource.Object, error) {
 	return d.patcher.Patch(ctx, d.groupKind, identifier, patch, options)
 }
 
-func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, identifier resource.Identifier, patch resource.PatchRequest, _ resource.PatchOptions) (*resource.UnstructuredWrapper, error) {
+func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, identifier resource.Identifier, patch resource.PatchRequest, opts resource.PatchOptions) (*resource.UnstructuredWrapper, error) {
 	preferred, err := d.getPreferred(groupKind)
 	if err != nil {
 		return nil, err
@@ -76,16 +80,49 @@ func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, 
 		Version:  preferred.Version,
 		Resource: preferred.Name,
 	})
+	subresources := make([]string, 0)
+	if opts.Subresource != "" {
+		subresources = append(subresources, opts.Subresource)
+	}
+	patchOpts := metav1.PatchOptions{}
+	if opts.DryRun {
+		patchOpts.DryRun = []string{"All"}
+	}
 	if preferred.Namespaced {
-		resp, err := res.Namespace(identifier.Namespace).Patch(ctx, identifier.Name, types.JSONPatchType, data, metav1.PatchOptions{})
+		resp, err := res.Namespace(identifier.Namespace).Patch(ctx, identifier.Name, types.JSONPatchType, data, patchOpts, subresources...)
 		if err != nil {
-			return nil, err
+			return nil, d.parseError(err)
 		}
 		return resource.NewUnstructuredWrapper(resp), nil
 	}
-	resp, err := res.Patch(ctx, identifier.Name, types.JSONPatchType, data, metav1.PatchOptions{})
+	resp, err := res.Patch(ctx, identifier.Name, types.JSONPatchType, data, patchOpts, subresources...)
+	if err != nil {
+		return nil, d.parseError(err)
+	}
+	return resource.NewUnstructuredWrapper(resp), nil
+}
+
+func (d *DynamicPatcher) Get(ctx context.Context, groupKind schema.GroupKind, identifier resource.Identifier) (*resource.UnstructuredWrapper, error) {
+	preferred, err := d.getPreferred(groupKind)
 	if err != nil {
 		return nil, err
+	}
+	logging.FromContext(ctx).Debug("patching with dynamic client", "group", groupKind.Group, "version", preferred.Version, "kind", groupKind.Kind, "plural", preferred.Name)
+	res := d.client.Resource(schema.GroupVersionResource{
+		Group:    preferred.Group,
+		Version:  preferred.Version,
+		Resource: preferred.Name,
+	})
+	if preferred.Namespaced {
+		resp, err := res.Namespace(identifier.Namespace).Get(ctx, identifier.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, d.parseError(err)
+		}
+		return resource.NewUnstructuredWrapper(resp), nil
+	}
+	resp, err := res.Get(ctx, identifier.Name, metav1.GetOptions{})
+	if err != nil {
+		return nil, d.parseError(err)
 	}
 	return resource.NewUnstructuredWrapper(resp), nil
 }
@@ -131,11 +168,25 @@ func (d *DynamicPatcher) updatePreferred() error {
 	defer d.mux.Unlock()
 	preferred, err := d.discovery.ServerPreferredResources()
 	if err != nil {
-		var statusErr *apierrors.StatusError
-		if errors.As(err, &statusErr) {
-			return statusErr
+		// There are errors that are "partial" errors and still return results.
+		// In those cases, we should check into the error further rather than just returning.
+		// If there are no results, return the error we got
+		if len(preferred) == 0 {
+			var statusErr *apierrors.StatusError
+			if errors.As(err, &statusErr) {
+				return statusErr
+			}
+			return fmt.Errorf("error getting preferred resources from discovery client: %w", err)
 		}
-		return fmt.Errorf("error getting preferred resources from discovery client: %w", err)
+		if cast, ok := err.(*discovery.ErrGroupDiscoveryFailed); ok {
+			// Failed discovery for a number of groups. Log the failed groups
+			for group, gerr := range cast.Groups {
+				logging.DefaultLogger.Warn(fmt.Sprintf("discovery failed for GroupVersion %s", group.String()), "groupversion", group, "error", gerr)
+			}
+		} else {
+			// just log the error
+			logging.DefaultLogger.Warn("error getting preferred resources, returned partial results", "error", err)
+		}
 	}
 	for _, pref := range preferred {
 		gv, err := schema.ParseGroupVersion(pref.GroupVersion)
@@ -157,4 +208,12 @@ func (d *DynamicPatcher) updatePreferred() error {
 	}
 	d.lastUpdate = now()
 	return nil
+}
+
+func (*DynamicPatcher) parseError(err error) error {
+	var statusErr *apierrors.StatusError
+	if errors.As(err, &statusErr) {
+		return NewServerResponseError(statusErr, statusErr.Status().Code)
+	}
+	return err
 }

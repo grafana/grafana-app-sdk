@@ -40,3 +40,8 @@ grafanaImage: grafana/grafana-enterprise:main
 
 # Install plugins from other sources (URLS). See https://grafana.com/docs/grafana/latest/setup-grafana/configure-docker/#install-plugins-from-other-sources
 grafanaInstallPlugins: ""
+
+# You can mount additional volumes from the local disk (aside from the already-mounted ./local/mounted-files) by specifying them here
+additionalVolumeMounts:
+#  - sourcePath: "./local/other" # Paths starting with a ./ or no leading slash are relative to the project root. Start with / for an absolute path
+#    mountPath: "/tmp/k3d/other" # The destination volume path. Best practice is to use /tmp/k3d as the starting point. The default volume mount for ./local/mounted-files is /tmp/k3d/mounted-files

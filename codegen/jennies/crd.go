@@ -214,7 +214,7 @@ func cueToCRDOpenAPI(v cue.Value, name string) (map[string]any, error) {
 	// Delete the "metadata" property
 	delete(converted.Properties, "metadata")
 	// Convert to JSON and then into a map
-	j, err := json.MarshalIndent(converted.Properties, "", "  ")
+	j, err := json.Marshal(converted.Properties)
 	if err != nil {
 		return nil, err
 	}

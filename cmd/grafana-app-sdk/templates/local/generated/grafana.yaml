@@ -49,7 +49,7 @@ metadata:
     name: grafana
 data:
   apiservices.yaml: |
-    {{ range $.CRDs }}{{$crd := .}}{{range .Versions}}- group: {{$crd.Group}}
+    {{ range $group, $versions := $.APIGroups }}{{range $versions}}- group: {{$group}}
       version: {{.}}
       host: kubernetes.default.svc
       port: 443

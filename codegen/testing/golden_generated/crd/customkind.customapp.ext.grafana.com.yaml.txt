@@ -52,6 +52,7 @@ spec:
                       - success
                       - in_progress
                       - failed
+                      type: string
                   required:
                   - lastEvaluation
                   - state
@@ -85,6 +86,7 @@ spec:
                 - val3
                 - val4
                 - default
+                type: string
               field1:
                 type: string
               floatField:
@@ -217,6 +219,7 @@ spec:
                       - success
                       - in_progress
                       - failed
+                      type: string
                   required:
                   - lastEvaluation
                   - state

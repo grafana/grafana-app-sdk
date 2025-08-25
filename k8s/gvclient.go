@@ -50,6 +50,7 @@ func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identi
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes get request", "method", "GET", "url", request.URL().String())
 	start := time.Now()
 	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "GET", plural, "spec")
@@ -89,6 +90,7 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes get request", "method", "GET", "url", request.URL().String())
 	start := time.Now()
 	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
 	g.logRequestDuration(time.Since(start), sc, "GET", plural, "spec")
@@ -176,6 +178,7 @@ func (g *groupVersionClient) create(
 	if opts.DryRun {
 		request = request.Param("dryRun", "All")
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes create request", "method", "POST", "url", request.URL().String())
 
 	start := time.Now()
 	raw, err := request.Do(ctx).StatusCode(&sc).Raw()
@@ -229,6 +232,7 @@ func (g *groupVersionClient) update(
 	if opts.DryRun {
 		req = req.Param("dryRun", "All")
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes update request", "method", "PUT", "url", req.URL().String())
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
@@ -283,6 +287,7 @@ func (g *groupVersionClient) updateSubresource(
 	if opts.DryRun {
 		req = req.Param("dryRun", "All")
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes update subresource request", "method", "PUT", "url", req.URL().String())
 
 	sc := 0
 	start := time.Now()
@@ -338,6 +343,7 @@ func (g *groupVersionClient) patch(
 	if opts.DryRun {
 		req = req.Param("dryRun", "All")
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes patch request", "method", "PATCH", "url", req.URL().String())
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
@@ -380,6 +386,7 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 	if options.PropagationPolicy != "" {
 		request = request.Param("propagationPolicy", string(options.PropagationPolicy))
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes delete request", "method", "DELETE", "url", request.URL().String())
 	start := time.Now()
 	err := request.Do(ctx).StatusCode(&sc).Error()
 	g.logRequestDuration(time.Since(start), sc, "DELETE", plural, "spec")
@@ -420,6 +427,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	if options.ResourceVersion != "" {
 		req = req.Param("resourceVersion", options.ResourceVersion)
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes list request", "method", "GET", "url", req.URL().String())
 	sc := 0
 	start := time.Now()
 	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
@@ -438,6 +446,54 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 		return err
 	}
 	return rawToListWithParser(raw, into, itemParser)
+}
+
+func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, plural, name string, request resource.CustomRouteRequestOptions) ([]byte, error) {
+	ctx, span := GetTracer().Start(ctx, "kubernetes-custom-route")
+	defer span.End()
+	req := g.client.Verb(request.Verb)
+	if plural != "" {
+		sr := request.Path
+		for len(sr) > 0 && sr[0] == '/' {
+			sr = sr[1:]
+		}
+		req = req.Resource(plural).Name(name).SubResource(sr)
+	} else {
+		req = req.Resource(request.Path)
+	}
+	if namespace != "" {
+		req = req.Namespace(namespace)
+	}
+	if request.Body != nil {
+		req.Body(request.Body)
+	}
+	for k, v := range request.Query {
+		for _, vv := range v {
+			req = req.Param(k, vv)
+		}
+	}
+	for k, v := range request.Headers {
+		req = req.SetHeader(k, v...)
+	}
+	logging.FromContext(ctx).Debug("executing kubernetes custom route request", "method", request.Verb, "url", req.URL().String())
+	sc := 0
+	start := time.Now()
+	raw, err := req.Do(ctx).StatusCode(&sc).Raw()
+	g.logRequestDuration(time.Since(start), sc, request.Verb, plural, request.Path)
+	span.SetAttributes(
+		attribute.Int("http.response.status_code", sc),
+		attribute.String("http.request.method", http.MethodGet),
+		attribute.String("server.address", req.URL().Hostname()),
+		attribute.String("server.port", req.URL().Port()),
+		attribute.String("url.full", req.URL().String()),
+	)
+	g.incRequestCounter(sc, request.Verb, plural, request.Path)
+	if err != nil {
+		err = ParseKubernetesError(raw, sc, err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return raw, nil
 }
 
 //nolint:revive
@@ -460,6 +516,7 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	if options.ResourceVersion != "" {
 		req = req.Param("resourceVersion", options.ResourceVersion)
 	}
+	logging.FromContext(ctx).Debug("executing kubernetes watch request", "method", "GET", "url", req.URL().String())
 	resp, err := req.Watch(ctx)
 	if err != nil {
 		span.SetStatus(codes.Error, err.Error())

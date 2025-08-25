@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"text/template"
@@ -24,7 +25,7 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -36,18 +37,19 @@ var localEnvFiles embed.FS
 
 // localEnvConfig is the configuration object used for the generation of local dev env resources
 type localEnvConfig struct {
-	Port                      int                   `json:"port" yaml:"port"`
-	KubePort                  int                   `json:"kubePort" yaml:"kubePort"`
-	Datasources               []string              `json:"datasources" yaml:"datasources"`
-	DatasourceConfigs         []dataSourceConfig    `json:"datasourceConfigs" yaml:"datasourceConfigs"`
-	PluginJSON                map[string]any        `json:"pluginJson" yaml:"pluginJson"`
-	PluginSecureJSON          map[string]any        `json:"pluginSecureJson" yaml:"pluginSecureJson"`
-	OperatorImage             string                `json:"operatorImage" yaml:"operatorImage"`
-	Webhooks                  localEnvWebhookConfig `json:"webhooks" yaml:"webhooks"`
-	GenerateGrafanaDeployment bool                  `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
-	GrafanaImage              string                `json:"grafanaImage" yaml:"grafanaImage"`
-	GrafanaInstallPlugins     string                `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
-	GrafanaWithAnonymousAuth  bool                  `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
+	Port                      int                       `json:"port" yaml:"port"`
+	KubePort                  int                       `json:"kubePort" yaml:"kubePort"`
+	Datasources               []string                  `json:"datasources" yaml:"datasources"`
+	DatasourceConfigs         []dataSourceConfig        `json:"datasourceConfigs" yaml:"datasourceConfigs"`
+	PluginJSON                map[string]any            `json:"pluginJson" yaml:"pluginJson"`
+	PluginSecureJSON          map[string]any            `json:"pluginSecureJson" yaml:"pluginSecureJson"`
+	OperatorImage             string                    `json:"operatorImage" yaml:"operatorImage"`
+	Webhooks                  localEnvWebhookConfig     `json:"webhooks" yaml:"webhooks"`
+	GenerateGrafanaDeployment bool                      `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
+	GrafanaImage              string                    `json:"grafanaImage" yaml:"grafanaImage"`
+	GrafanaInstallPlugins     string                    `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
+	GrafanaWithAnonymousAuth  bool                      `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
+	AdditionalVolumeMounts    []additionalMountedVolume `json:"additionalVolumeMounts" yaml:"additionalVolumeMounts"`
 }
 
 type dataSourceConfig struct {
@@ -66,6 +68,11 @@ type localEnvWebhookConfig struct {
 	Validating bool `json:"validating" yaml:"validating"`
 	Converting bool `json:"converting" yaml:"converting"`
 	Port       int  `json:"port" yaml:"port"`
+}
+
+type additionalMountedVolume struct {
+	SourcePath string `json:"sourcePath" yaml:"sourcePath"`
+	MountPath  string `json:"mountPath" yaml:"mountPath"`
 }
 
 func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
@@ -302,10 +309,21 @@ func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
+	additionalVolumes := make([]additionalMountedVolume, 0)
+	for _, v := range config.AdditionalVolumeMounts {
+		if len(v.SourcePath) > 1 && v.SourcePath[0] != '/' {
+			if v.SourcePath[0:2] == "./" {
+				v.SourcePath = v.SourcePath[2:]
+			}
+			v.SourcePath = filepath.Join(projectRoot, v.SourcePath)
+		}
+		additionalVolumes = append(additionalVolumes, v)
+	}
 	buf := &bytes.Buffer{}
-	err = k3dConfigTmpl.Execute(buf, map[string]string{
-		"ProjectRoot": projectRoot,
-		"BindPort":    strconv.Itoa(config.Port),
+	err = k3dConfigTmpl.Execute(buf, map[string]any{
+		"ProjectRoot":       projectRoot,
+		"BindPort":          strconv.Itoa(config.Port),
+		"AdditionalVolumes": additionalVolumes,
 	})
 	return buf.Bytes(), err
 }
@@ -329,6 +347,7 @@ type yamlGenProperties struct {
 	GrafanaImage              string
 	GrafanaInstallPlugins     string
 	GrafanaAnonymousAuth      string
+	APIGroups                 map[string][]string // map of group -> list of supported versions
 }
 
 type yamlGenPropsCRD struct {
@@ -387,6 +406,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 		GrafanaImage:              config.GrafanaImage,
 		GrafanaInstallPlugins:     config.GrafanaInstallPlugins,
+		APIGroups:                 make(map[string][]string),
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
@@ -474,9 +494,16 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			return nil, props, err
 		}
 		versions := make([]string, 0)
+		groupVersions := make([]string, 0)
+		if v, ok := props.APIGroups[yml.Spec.Group]; ok {
+			groupVersions = v
+		}
 		for _, v := range yml.Spec.Versions {
 			if v.Served {
 				versions = append(versions, v.Name)
+				if !slices.Contains(groupVersions, v.Name) {
+					groupVersions = append(groupVersions, v.Name)
+				}
 			}
 		}
 		props.CRDs = append(props.CRDs, yamlGenPropsCRD{
@@ -485,6 +512,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			Group:             yml.Spec.Group,
 			Versions:          versions,
 		})
+		props.APIGroups[yml.Spec.Group] = groupVersions
 	}
 
 	// RBAC for CRDs

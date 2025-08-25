@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
@@ -19,7 +20,7 @@ import (
 )
 
 var (
-	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"]}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv1alpha1 app.VersionSchema
 	_                             = json.Unmarshal(rawSchemaTestKindv1alpha1, &versionSchemaTestKindv1alpha1)
 )
@@ -89,6 +90,45 @@ var appManifestData = app.ManifestData{
 
 									OperationId: "GetFoo",
 
+									Parameters: []*spec3.Parameter{
+
+										{
+											ParameterProps: spec3.ParameterProps{
+												Name:     "foo",
+												In:       "query",
+												Required: true,
+												Schema: &spec.Schema{
+													SchemaProps: spec.SchemaProps{
+														Type: []string{"string"},
+													},
+												},
+											},
+										},
+									},
+									RequestBody: &spec3.RequestBody{
+										RequestBodyProps: spec3.RequestBodyProps{
+
+											Required: true,
+											Content: map[string]*spec3.MediaType{
+												"application/json": {
+													MediaTypeProps: spec3.MediaTypeProps{
+														Schema: &spec.Schema{
+															SchemaProps: spec.SchemaProps{
+																Type: []string{"object"},
+																Properties: map[string]spec.Schema{
+																	"bar": {
+																		SchemaProps: spec.SchemaProps{
+																			Type: []string{"string"},
+																		},
+																	},
+																},
+																Required: []string{
+																	"bar",
+																},
+															}},
+													}},
+											},
+										}},
 									Responses: &spec3.Responses{
 										ResponsesProps: spec3.ResponsesProps{
 											Default: &spec3.Response{
@@ -160,4 +200,29 @@ func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (g
 	}
 	goType, exists = customRouteToGoResponseType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
 	return goType, exists
+}
+
+var customRouteToGoParamsType = map[string]runtime.Object{
+
+	"v1alpha1|TestKind|foo|GET": &v1alpha1.GetFooRequestParamsObject{},
+}
+
+func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goType runtime.Object, exists bool) {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	goType, exists = customRouteToGoParamsType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
+	return goType, exists
+}
+
+type GoTypeAssociator struct{}
+
+func (g *GoTypeAssociator) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
+	return ManifestGoTypeAssociator(kind, version)
+}
+func (g *GoTypeAssociator) CustomRouteReturnGoType(kind, version, path, verb string) (goType any, exists bool) {
+	return ManifestCustomRouteResponsesAssociator(kind, version, path, verb)
+}
+func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
+	return ManifestCustomRouteQueryAssociator(kind, version, path, verb)
 }
