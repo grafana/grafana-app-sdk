@@ -331,6 +331,9 @@ type ManifestOperatorWebhookProperties struct {
 	MutationPath   string `json:"mutationPath" yaml:"mutationPath"`
 }
 
+// VersionSchemaFromMap accepts an OpenAPI-shaped map[string]any, where the contents of the map are either a full openAPI document
+// with a components.schemas section, or just the components.schemas section of an openAPI document.
+// The schemas must contain a schema with a name which matches the kindName provided.
 func VersionSchemaFromMap(openAPISchema map[string]any, kindName string) (*VersionSchema, error) {
 	vs := &VersionSchema{
 		raw: openAPISchema,
@@ -340,6 +343,9 @@ func VersionSchemaFromMap(openAPISchema map[string]any, kindName string) (*Versi
 	if _, ok := vs.raw[parsedCRDSchemaKindName]; ok {
 		vs.raw[kindName] = vs.raw[parsedCRDSchemaKindName]
 		delete(vs.raw, parsedCRDSchemaKindName)
+	}
+	if _, ok := vs.raw[kindName]; !ok && len(vs.raw) > 0 {
+		return nil, fmt.Errorf("kind %q not found in map openAPI components", kindName)
 	}
 	return vs, err
 }

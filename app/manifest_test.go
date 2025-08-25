@@ -136,15 +136,20 @@ func TestVersionSchemaFromMap(t *testing.T) {
 		kind:        "Foo",
 		expectedMap: jsonToMap([]byte(`{"Foo":{"type":"object","properties":{"spec":{"properties":{"foo":"string"},"type":"object"}}}}`)),
 	}, {
-		name:        "OpenAPI without references",
+		name:        "OpenAPI without kind",
 		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}}}`)),
 		kind:        "Bar",
+		expectedErr: errors.New("kind \"Bar\" not found in map openAPI components"),
+	}, {
+		name:        "OpenAPI without references",
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}}}`)),
+		kind:        "Foo",
 		expectedMap: jsonToMap([]byte(`{"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"}}}}}}`)),
 	}, {
 		name:        "OpenAPI with references",
-		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar"{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}}}`)),
+		schema:      jsonToMap([]byte(`{"components":{"schemas":{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}}}`)),
 		kind:        "Foo",
-		expectedMap: jsonToMap([]byte(`{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar"{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}`)),
+		expectedMap: jsonToMap([]byte(`{"Bar":{"type":"object","properties":{"foo":{"type":"string"}}},"Foo":{"type":"object","properties":{"spec":{"type":"object","properties":{"bar":{"type":"string"},"ref":{"$ref":"#/components/schemas/Bar"}}}}}}`)),
 	}}
 
 	for _, test := range tests {
@@ -152,10 +157,10 @@ func TestVersionSchemaFromMap(t *testing.T) {
 			sch, err := VersionSchemaFromMap(test.schema, test.kind)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
+				assert.Equal(t, test.expectedMap, sch.AsOpenAPI3SchemasMap())
 			} else {
 				assert.Equal(t, test.expectedErr, err)
 			}
-			assert.Equal(t, test.expectedMap, sch.AsOpenAPI3SchemasMap())
 		})
 	}
 }
