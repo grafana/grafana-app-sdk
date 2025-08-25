@@ -259,14 +259,24 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			}
 		}
 		if len(v.Routes.Namespaced) > 0 {
+			hasCustomRoutes = true
 			maps.Copy(res, r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback))
 		}
 		if len(v.Routes.Cluster) > 0 {
+			hasCustomRoutes = true
 			maps.Copy(res, r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback))
 		}
 	}
 	if hasCustomRoutes {
 		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
+		res["github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject"] = common.OpenAPIDefinition{
+			Schema: spec.Schema{
+				SchemaProps: spec.SchemaProps{
+					Description: "ExternalNameFoo defines model for ExternalNameFoo.",
+					Type:        []string{"object"},
+				},
+			},
+		}
 	}
 	return res
 }
@@ -344,19 +354,33 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 	}
 
 	err = server.InstallAPIGroup(&apiGroupInfo)
+
 	// version custom routes
-	for _, ws := range server.Handler.GoRestfulContainer.RegisteredWebServices() {
-		for _, ver := range r.ManifestData().Versions {
-			if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
-				for rpath, route := range ver.Routes.Namespaced {
-					r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
-				}
-				for rpath, route := range ver.Routes.Cluster {
-					r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.ClusterScope)
+	hasResourceRoutes := false
+	for _, v := range r.ManifestData().Versions {
+		if len(v.Routes.Namespaced) > 0 || len(v.Routes.Cluster) > 0 {
+			hasResourceRoutes = true
+			break
+		}
+	}
+	if hasResourceRoutes {
+		if server.Handler == nil || server.Handler.GoRestfulContainer == nil {
+			return errors.New("could not register custom routes: server.Handler.GoRestfulContainer is nil")
+		}
+		for _, ws := range server.Handler.GoRestfulContainer.RegisteredWebServices() {
+			for _, ver := range r.ManifestData().Versions {
+				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
+					for rpath, route := range ver.Routes.Namespaced {
+						r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
+					}
+					for rpath, route := range ver.Routes.Cluster {
+						r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.ClusterScope)
+					}
 				}
 			}
 		}
 	}
+
 	return err
 }
 
@@ -391,8 +415,8 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 	}
 	responseType, ok := r.resolver.CustomRouteReturnGoType("", gv.Version, lookup, method)
 	if !ok {
-		// TODO: this actually causes a panic, need some kind of basic object here that's also in the OpenAPI
-		responseType = nil
+		// TODO: warn here?
+		responseType = &EmptyObject{}
 	}
 	fullpath := rpath
 	if scope == resource.NamespacedScope {
@@ -844,3 +868,5 @@ func newScheme() *runtime.Scheme {
 	scheme.AddUnversionedTypes(unversionedVersion, unversionedTypes...)
 	return scheme
 }
+
+type EmptyObject struct{}

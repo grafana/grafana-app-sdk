@@ -118,7 +118,8 @@ type AppConfig struct {
 	UnmanagedKinds []AppUnmanagedKind
 	Converters     map[schema.GroupKind]Converter
 	// VersionedCustomRoutes is a map of version string => custom route handlers for
-	// custom routes attached at the version level rather than attached to a specific kind
+	// custom routes attached at the version level rather than attached to a specific kind.
+	// Custom route paths for each version should not conflict with plural names of kinds for the version.
 	VersionedCustomRoutes map[string]AppVersionRouteHandlers
 	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
 	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
