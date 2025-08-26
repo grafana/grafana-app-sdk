@@ -12,7 +12,7 @@ require (
 	cuelang.org/go v0.11.0
 	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
 	github.com/cespare/xxhash/v2 v2.3.0
-	github.com/getkin/kin-openapi v0.132.0
+	github.com/getkin/kin-openapi v0.133.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
 	github.com/grafana/cog v0.0.38
 	github.com/grafana/grafana-app-sdk/logging v0.41.1
@@ -106,6 +106,7 @@ require (
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
+	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/yalue/merged_fs v1.3.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.21 // indirect
