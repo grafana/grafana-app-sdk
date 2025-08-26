@@ -234,11 +234,11 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 type simpleOpenAPIDoc struct {
 	Components struct {
-		Schemas map[string]any `json:"schemas" yaml:"schemas"`
+		Schemas map[string]map[string]any `json:"schemas" yaml:"schemas"`
 	} `json:"components" yaml:"components"`
 }
 
-//nolint:revive,funlen,unparam
+//nolint:revive,funlen,unparam,gocognit
 func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
 	mver := app.ManifestVersionKind{
 		Kind:       vk.Kind,
@@ -295,7 +295,17 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		if err != nil {
 			return app.ManifestVersionKind{}, err
 		}
-		kindProps := schemaProps.Components.Schemas[vk.Kind].(map[string]any)["properties"].(map[string]any)
+		if _, ok := schemaProps.Components.Schemas[vk.Kind]; !ok {
+			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' not found", vk.Kind)
+		}
+		uncastKindProps, ok := schemaProps.Components.Schemas[vk.Kind]["properties"]
+		if !ok {
+			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' does not contain a 'properties' key", vk.Kind)
+		}
+		kindProps, ok := uncastKindProps.(map[string]any)
+		if !ok {
+			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' properties is not a map", vk.Kind)
+		}
 
 		it, err := vk.Schema.Fields(cue.Optional(true))
 		if err != nil {
@@ -321,7 +331,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 				if entry, ok := kindProps[k]; ok {
 					p, ok := entry.(map[string]any)
 					if ok && p["additionalProperties"] != nil {
-						v.(map[string]any)["additionalProperties"] = p["additionalProperties"]
+						v["additionalProperties"] = p["additionalProperties"]
 					}
 				}
 				schemas[k] = v
