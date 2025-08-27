@@ -1,6 +1,6 @@
 // Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
-package v1alpha1
+package v1alpha2
 
 // +k8s:openapi-gen=true
 type AppManifestManifestVersion struct {
@@ -31,9 +31,13 @@ type AppManifestManifestVersionKind struct {
 	Plural *string `json:"plural,omitempty"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
-	Scope                    AppManifestManifestVersionKindScope   `json:"scope"`
-	Admission                *AppManifestAdmissionCapabilities     `json:"admission,omitempty"`
-	Schema                   AppManifestManifestVersionKindSchema  `json:"schema"`
+	Scope     AppManifestManifestVersionKindScope `json:"scope"`
+	Admission *AppManifestAdmissionCapabilities   `json:"admission,omitempty"`
+	// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
+	// It must contain a key named the same as the `kind` field of the Kind.
+	// Other fields may be present to be referenced by $ref tags in a schema,
+	// and references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.
+	Schemas                  map[string]interface{}                `json:"schemas"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
@@ -50,6 +54,7 @@ type AppManifestManifestVersionKind struct {
 // NewAppManifestManifestVersionKind creates a new AppManifestManifestVersionKind object.
 func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
 	return &AppManifestManifestVersionKind{
+		Schemas:    map[string]interface{}{},
 		Conversion: (func(input bool) *bool { return &input })(false),
 	}
 }
@@ -99,9 +104,6 @@ func NewAppManifestMutationCapability() *AppManifestMutationCapability {
 		Operations: []AppManifestAdmissionOperation{},
 	}
 }
-
-// +k8s:openapi-gen=true
-type AppManifestManifestVersionKindSchema map[string]interface{}
 
 // +k8s:openapi-gen=true
 type AppManifestAdditionalPrinterColumns struct {
@@ -185,7 +187,7 @@ type AppManifestSpec struct {
 	PreferredVersion *string `json:"preferredVersion,omitempty"`
 	// ExtraPermissions contains additional permissions needed for an app's backend component to operate.
 	// Apps implicitly have all permissions for kinds they managed (defined in `kinds`).
-	ExtraPermissions *AppManifestV1alpha1SpecExtraPermissions `json:"extraPermissions,omitempty"`
+	ExtraPermissions *AppManifestV1alpha2SpecExtraPermissions `json:"extraPermissions,omitempty"`
 	// DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,
 	// Or simply validate and report errors in status.resources.crds.
 	// If dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.
@@ -207,14 +209,14 @@ func NewAppManifestSpec() *AppManifestSpec {
 }
 
 // +k8s:openapi-gen=true
-type AppManifestV1alpha1SpecExtraPermissions struct {
+type AppManifestV1alpha2SpecExtraPermissions struct {
 	// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
 	AccessKinds []AppManifestKindPermission `json:"accessKinds"`
 }
 
-// NewAppManifestV1alpha1SpecExtraPermissions creates a new AppManifestV1alpha1SpecExtraPermissions object.
-func NewAppManifestV1alpha1SpecExtraPermissions() *AppManifestV1alpha1SpecExtraPermissions {
-	return &AppManifestV1alpha1SpecExtraPermissions{
+// NewAppManifestV1alpha2SpecExtraPermissions creates a new AppManifestV1alpha2SpecExtraPermissions object.
+func NewAppManifestV1alpha2SpecExtraPermissions() *AppManifestV1alpha2SpecExtraPermissions {
+	return &AppManifestV1alpha2SpecExtraPermissions{
 		AccessKinds: []AppManifestKindPermission{},
 	}
 }

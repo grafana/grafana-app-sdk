@@ -6,8 +6,13 @@ testKind: {
 	codegen: ts: enabled: false
 	validation: operations: ["CREATE","UPDATE"]
 	schema: {
+		#FooBar: {
+			foo: string
+			bar?: #FooBar
+		}
 		spec: {
 			testField: string
+			foobar?: #FooBar
 		}
 	}
 	routes: {

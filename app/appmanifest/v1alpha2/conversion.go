@@ -1,4 +1,4 @@
-package v1alpha1
+package v1alpha2
 
 import (
 	"encoding/json"
@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 )
 
-// ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha1)
+// ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha2)
 // to the generic app.ManifestData type for usage with an app.Manifest.
 // nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
@@ -88,23 +88,15 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				}
 			}
 			// Schema
-			if kind.Schema != nil {
-				// Make a copy of the map
-				kindSchema := make(map[string]any)
-				maps.Copy(kindSchema, kind.Schema)
+			if kind.Schemas != nil {
+				toParse := make(map[string]any)
+				maps.Copy(toParse, kind.Schemas)
+				if _, ok := toParse[kind.Kind]; !ok && len(toParse) > 0 {
+					return app.ManifestData{}, fmt.Errorf("schemas for %v must contain an entry named '%v'", kind.Kind, kind.Kind)
+				}
 
-				// v1alpha1 uses a CRD-like schema, so we convert this into an OpenAPI-like schema for the ManifestData
 				var err error
-				k.Schema, err = app.VersionSchemaFromMap(map[string]any{
-					"components": map[string]any{
-						"schemas": map[string]any{
-							kind.Kind: map[string]any{
-								"properties": kindSchema,
-								"type":       "object",
-							},
-						},
-					},
-				}, k.Kind)
+				k.Schema, err = app.VersionSchemaFromMap(toParse, k.Kind)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
@@ -172,8 +164,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 }
 
 // SpecFromManifestData is a function which converts an instance of app.ManifestData
-// to this specific version of the AppManifestSpec (v1alpha1). This conversion may lose data contained in the app.ManifestData
-// instance as v1alpha1 is an older version of the AppManifest kind.
+// to this specific version of the AppManifestSpec (v1alpha1).
 // nolint:gocognit,funlen
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	spec := AppManifestSpec{
@@ -195,15 +186,10 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			k := AppManifestManifestVersionKind{
 				Kind:             kind.Kind,
 				Scope:            AppManifestManifestVersionKindScope(kind.Scope),
+				Schemas:          kind.Schema.AsOpenAPI3SchemasMap(),
 				SelectableFields: kind.SelectableFields,
 				Conversion:       &kind.Conversion,
 			}
-			// Convert the ManifestData's Schema into CRD Schema for v1alpha1
-			sch, err := kind.Schema.AsCRDMap(k.Kind)
-			if err != nil {
-				return nil, fmt.Errorf("unable to convert %s/%s schema: %w", k.Kind, ver.Name, err)
-			}
-			k.Schema = sch
 			if kind.Plural != "" {
 				k.Plural = &kind.Plural
 			}
@@ -252,7 +238,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	}
 	// Permissions
 	if data.ExtraPermissions != nil && data.ExtraPermissions.AccessKinds != nil {
-		spec.ExtraPermissions = &AppManifestV1alpha1SpecExtraPermissions{
+		spec.ExtraPermissions = &AppManifestV1alpha2SpecExtraPermissions{
 			AccessKinds: make([]AppManifestKindPermission, len(data.ExtraPermissions.AccessKinds)),
 		}
 		for idx, access := range data.ExtraPermissions.AccessKinds {
