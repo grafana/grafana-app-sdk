@@ -516,6 +516,18 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	if options.ResourceVersion != "" {
 		req = req.Param("resourceVersion", options.ResourceVersion)
 	}
+	if options.ResourceVersionMatch != "" {
+		req = req.Param("resourceVersionMatch", options.ResourceVersionMatch)
+	}
+	if options.AllowWatchBookmarks {
+		req = req.Param("allowWatchBookmarks", "true")
+	}
+	if options.TimeoutSeconds != nil {
+		req = req.Param("timeoutSeconds", fmt.Sprintf("%d", *options.TimeoutSeconds))
+	}
+	if options.SendInitialEvents != nil {
+		req = req.Param("sendInitialEvents", strconv.FormatBool(*options.SendInitialEvents))
+	}
 	logging.FromContext(ctx).Debug("executing kubernetes watch request", "method", "GET", "url", req.URL().String())
 	resp, err := req.Watch(ctx)
 	if err != nil {

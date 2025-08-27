@@ -142,7 +142,11 @@ type WatchOptions struct {
 	// LabelFilters are a set of label filter strings applied to watched resources
 	LabelFilters []string
 	// FieldSelectors are a set of field selector strings applied to watched resources
-	FieldSelectors []string
+	FieldSelectors      []string
+	AllowWatchBookmarks bool
+	TimeoutSeconds      *int64
+	// SendInitialEvents is used by streaming ListWatch
+	SendInitialEvents *bool
 }
 
 // WatchResponse is an interface describing the response to a Client.Watch call
