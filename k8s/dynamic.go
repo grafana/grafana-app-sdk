@@ -2,11 +2,13 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"golang.org/x/sync/singleflight"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -129,7 +131,25 @@ func (d *DynamicPatcher) updatePreferred() error {
 	defer d.mux.Unlock()
 	preferred, err := d.discovery.ServerPreferredResources()
 	if err != nil {
-		return err
+		// There are errors that are "partial" errors and still return results.
+		// In those cases, we should check into the error further rather than just returning.
+		// If there are no results, return the error we got
+		if len(preferred) == 0 {
+			var statusErr *apierrors.StatusError
+			if errors.As(err, &statusErr) {
+				return statusErr
+			}
+			return fmt.Errorf("error getting preferred resources from discovery client: %w", err)
+		}
+		if cast, ok := err.(*discovery.ErrGroupDiscoveryFailed); ok {
+			// Failed discovery for a number of groups. Log the failed groups
+			for group, gerr := range cast.Groups {
+				logging.DefaultLogger.Warn(fmt.Sprintf("discovery failed for GroupVersion %s", group.String()), "groupversion", group, "error", gerr)
+			}
+		} else {
+			// just log the error
+			logging.DefaultLogger.Warn("error getting preferred resources, returned partial results", "error", err)
+		}
 	}
 	for _, pref := range preferred {
 		for _, res := range pref.APIResources {
