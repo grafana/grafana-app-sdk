@@ -245,6 +245,14 @@ Version: S={
 		manifestGroup: S.group
 		_codegen: S.codegen
 	} & Kind]
+	// routes is a map of path patterns to custom routes that will be exposed as resources for this version.
+	// entries here should not conflict with the plural names for any kinds for this version.
+	routes?: {
+		// namespaced is the map of namespaced custom routes (includes a namespace in the path)
+		namespaced: #CustomRouteCapability
+		// cluster is the map of cluster-scoped custom routes (no namespace in the path)
+		cluster: #CustomRouteCapability
+	}
 }
 
 #AccessKind: {

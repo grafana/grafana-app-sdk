@@ -128,6 +128,7 @@ spec:
           type: object
       scope: Namespaced
     name: v1
+    routes: {}
     served: true
   - kinds:
     - admission:
@@ -197,6 +198,7 @@ spec:
           type: object
       scope: Namespaced
     name: v2
+    routes: {}
     served: true
   - kinds:
     - admission:
@@ -349,4 +351,5 @@ spec:
           type: object
       scope: Namespaced
     name: v3
+    routes: {}
     served: true

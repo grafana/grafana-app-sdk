@@ -80,7 +80,8 @@
                         },
                         "conversion": false
                     }
-                ]
+                ],
+                "routes": {}
             },
             {
                 "name": "v1-0",
@@ -314,7 +315,8 @@
                         },
                         "conversion": false
                     }
-                ]
+                ],
+                "routes": {}
             }
         ],
         "preferredVersion": ""

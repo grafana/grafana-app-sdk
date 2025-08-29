@@ -148,7 +148,8 @@
                         },
                         "conversion": false
                     }
-                ]
+                ],
+                "routes": {}
             },
             {
                 "name": "v2",
@@ -241,7 +242,8 @@
                         },
                         "conversion": true
                     }
-                ]
+                ],
+                "routes": {}
             },
             {
                 "name": "v3",
@@ -465,7 +467,8 @@
                         },
                         "conversion": true
                     }
-                ]
+                ],
+                "routes": {}
             }
         ],
         "preferredVersion": "",

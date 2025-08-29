@@ -213,6 +213,17 @@ func (p *Parser) parseManifestVersions(manifest *codegen.SimpleManifest, val cue
 			}
 			version.AllKinds = append(version.AllKinds, *kind)
 		}
+		// custom routes
+		// Parse custom routes
+		version.CustomRoutes.Namespaced, err = p.parseCustomRoutes(ver.LookupPath(cue.MakePath(cue.Str("routes"), cue.Str("namespaced"))))
+		if err != nil {
+			return fmt.Errorf("could not parse namespaced routes: %w", err)
+		}
+		version.CustomRoutes.Cluster, err = p.parseCustomRoutes(ver.LookupPath(cue.MakePath(cue.Str("routes"), cue.Str("cluster"))))
+		if err != nil {
+			return fmt.Errorf("could not parse namespaced routes: %w", err)
+		}
+
 		manifest.AllVersions = append(manifest.AllVersions, version)
 	}
 

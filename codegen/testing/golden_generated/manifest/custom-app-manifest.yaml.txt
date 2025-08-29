@@ -62,6 +62,7 @@ spec:
           type: object
       scope: Namespaced
     name: v0-0
+    routes: {}
     served: true
   - kinds:
     - conversion: false
@@ -230,4 +231,5 @@ spec:
           x-kubernetes-preserve-unknown-fields: true
       scope: Namespaced
     name: v1-0
+    routes: {}
     served: true

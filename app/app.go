@@ -44,6 +44,7 @@ type CustomRouteRequest struct {
 	// version, and namespace (if applicable).
 	// ResourceIdentifier will contain all information the runner is able to provide.
 	// In practical terms, this often means that either Kind or Plural will be included, but both may not be present.
+	// For a non-subresource route, only Group, Version, and optionally Namespace (for namespaced routes) will be included.
 	ResourceIdentifier resource.FullIdentifier
 	// Path contains path information past the identifier information.
 	// For a subresource route, this is the subresource (for example, `bar` in the case of `test.grafana.app/v1/foos/foo/bar`).
