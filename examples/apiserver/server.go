@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -76,7 +77,17 @@ func NewApp(config app.Config) (app.App, error) {
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
 					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{Status: "ok"})
+					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "GETFoo",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      request.ResourceIdentifier.Name,
+							Namespace: request.ResourceIdentifier.Namespace,
+						},
+						GetFooBody: v1alpha1.GetFooBody{Status: "ok"},
+					})
 				}, {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "bar",

@@ -3,6 +3,10 @@ package jennies
 import (
 	"bytes"
 	"fmt"
+	"go/ast"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"path"
 	"regexp"
 	"strings"
@@ -59,10 +63,13 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	if !customRoute.Response.Schema.Exists() {
 		return nil, fmt.Errorf("custom route response is required")
 	}
+	// Response
 	typeName := exportField(customRoute.Name)
+	// Get any modifications which will need to be done to the generated code (currently just kubernetes metadata)
+	appendResponseBytes, appendResponseImports, bodyName := getCustomRouteAdditions(customRoute, typeName)
 	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
 		PackageName:                    packageName,
-		Name:                           toExportedFieldName(typeName),
+		Name:                           toExportedFieldName(bodyName),
 		NamePrefix:                     "", // TODO: not sure if we want this set
 		AddKubernetesOpenAPIGenComment: c.AddKubernetesCodegen,
 		AnyAsInterface:                 c.AnyAsInterface,
@@ -70,14 +77,23 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	if err != nil {
 		return nil, err
 	}
+	// Update the generated code based on the additions
+	responseTypes, err = appendToGoBytes(responseTypes, appendResponseBytes, appendResponseImports...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add kubernetes metadata to response type: %w", err)
+	}
 	files = append(files, codejen.File{
 		Data:         responseTypes,
 		RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
 		From:         []codejen.NamedJenny{c},
 	})
+
+	// Request
 	requestTypeName := fmt.Sprintf("%sRequest", typeName)
 	requestParamsTypeName := fmt.Sprintf("%sParams", requestTypeName)
 	requestBodyTypeName := fmt.Sprintf("%sBody", requestTypeName)
+
+	// Request Params
 	if customRoute.Request.Query.Exists() {
 		requestQueryType, err := GoTypesFromCUE(customRoute.Request.Query, CUEGoConfig{
 			PackageName: packageName,
@@ -107,6 +123,8 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 			From:         []codejen.NamedJenny{c},
 		})
 	}
+
+	// Request Body
 	if customRoute.Request.Body.Exists() {
 		requestBodyType, err := GoTypesFromCUE(customRoute.Request.Body, CUEGoConfig{
 			PackageName: packageName,
@@ -145,4 +163,80 @@ func toExportedFieldName(name string) string {
 		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
 	}
 	return strings.ToUpper(sanitized)
+}
+
+func getCustomRouteAdditions(customRoute codegen.CustomRoute, typeName string) (toAppend []byte, additionalImports []string, bodyName string) {
+	bodyName = typeName
+	additionalImports = make([]string, 0)
+	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
+		bodyName = typeName + "Body"
+		additionalImports = append(additionalImports, `metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`)
+		typeBytes := bytes.Buffer{}
+		typeBytes.WriteString(fmt.Sprintf("type %s struct {\n", typeName))
+		if customRoute.Response.Metadata.TypeMeta {
+			typeBytes.WriteString("\tmetav1.TypeMeta `json:\",inline\"`\n")
+
+		}
+		if customRoute.Response.Metadata.ObjectMeta {
+			typeBytes.WriteString("\tmetav1.ObjectMeta `json:\"metadata\"`\n")
+		}
+		if customRoute.Response.Metadata.ListMeta {
+			typeBytes.WriteString("\tmetav1.ListMeta `json:\"metadata\"`\n")
+		}
+		typeBytes.WriteString(fmt.Sprintf("\t%s `json:\",inline\"`\n}\n", bodyName))
+		typeBytes.WriteString(fmt.Sprintf("\nfunc New%s() *%s {\n\treturn &%s{}\n}\n", typeName, typeName, typeName))
+		toAppend = typeBytes.Bytes()
+	}
+	return toAppend, additionalImports, bodyName
+}
+
+func appendToGoBytes(existing []byte, toAppend []byte, additionalImports ...string) ([]byte, error) {
+	if len(toAppend) == 0 && len(additionalImports) == 0 {
+		return existing, nil
+	}
+	newContents := append(existing, toAppend...)
+	fset := token.NewFileSet() // A FileSet is needed for parsing
+	node, err := parser.ParseFile(fset, "", newContents, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	for _, imp := range additionalImports {
+		newImport := &ast.ImportSpec{
+			Path: &ast.BasicLit{
+				Kind:  token.STRING,
+				Value: imp,
+			},
+		}
+
+		// Find or create an import declaration and add the new import
+		foundImportDecl := false
+		for _, decl := range node.Decls {
+			genDecl, ok := decl.(*ast.GenDecl)
+			if !ok || genDecl.Tok != token.IMPORT {
+				continue
+			}
+			genDecl.Specs = append(genDecl.Specs, newImport)
+			foundImportDecl = true
+			break
+		}
+
+		if !foundImportDecl {
+			// Create a new import declaration if none exists
+			node.Decls = append([]ast.Decl{
+				&ast.GenDecl{
+					Tok:    token.IMPORT,
+					Lparen: token.Pos(1), // Dummy position
+					Specs:  []ast.Spec{newImport},
+					Rparen: token.Pos(1), // Dummy position
+				},
+			}, node.Decls...)
+		}
+	}
+
+	var buf bytes.Buffer
+	err = format.Node(&buf, fset, node)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }

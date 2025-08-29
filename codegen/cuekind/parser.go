@@ -526,6 +526,14 @@ func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[stri
 			if responseVal.Exists() && responseVal.Err() == nil {
 				responseSchema = responseVal
 			}
+			responseMetaVal := routeVal.LookupPath(cue.MakePath(cue.Str("responseMetadata")))
+			responseMeta := codegen.CustomRouteResponseMetadata{}
+			if responseMetaVal.Exists() && responseMetaVal.Err() == nil {
+				err = responseMetaVal.Decode(&responseMeta)
+				if err != nil {
+					return nil, fmt.Errorf("error decoding customRoutes response metadata for path '%s': %w", pathStr, err)
+				}
+			}
 
 			route := codegen.CustomRoute{
 				Request: codegen.CustomRouteRequest{
@@ -533,7 +541,8 @@ func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[stri
 					Body:  bodySchema,
 				},
 				Response: codegen.CustomRouteResponse{
-					Schema: responseSchema,
+					Schema:   responseSchema,
+					Metadata: responseMeta,
 				},
 			}
 			nameStrVal := routeVal.LookupPath(cue.MakePath(cue.Str("name").Optional()))
