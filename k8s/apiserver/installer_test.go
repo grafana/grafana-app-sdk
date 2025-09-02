@@ -94,7 +94,7 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 				},
 			},
 		},
-	})
+	}, TestKind.Kind())
 	fooSch := spec.Schema{
 		SchemaProps: spec.SchemaProps{
 			ID: "foo",

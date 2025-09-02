@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"math"
 	"slices"
 	"strings"
@@ -232,7 +233,32 @@ type ManifestVersionKind struct {
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
 	// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
 	Conversion bool `json:"conversion" yaml:"conversion"`
+
+	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 }
+
+type ManifestVersionKindAdditionalPrinterColumn struct {
+	// name is a human readable name for the column.
+	Name string `json:"name"`
+	// type is an OpenAPI type definition for this column.
+	// See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.
+	Type string `json:"type"`
+	// format is an optional OpenAPI type definition for this column. The 'name' format is applied
+	// to the primary identifier column to assist in clients identifying column is the resource name.
+	// See https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.
+	Format string `json:"format,omitempty"`
+	// description is a human readable description of this column.
+	Description string `json:"description,omitempty"`
+	// priority is an integer defining the relative importance of this column compared to others. Lower
+	// numbers are considered higher priority. Columns that may be omitted in limited space scenarios
+	// should be given a priority greater than 0.
+	Priority *int32 `json:"priority,omitempty"`
+	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
+	// each custom resource to produce the value for this column.
+	JSONPath string `json:"jsonPath"`
+}
+
+const parsedCRDSchemaKindName = "__KIND__"
 
 // AdmissionCapabilities is the collection of admission capabilities of a kind
 type AdmissionCapabilities struct {
@@ -310,11 +336,22 @@ type ManifestOperatorWebhookProperties struct {
 	MutationPath   string `json:"mutationPath" yaml:"mutationPath"`
 }
 
-func VersionSchemaFromMap(openAPISchema map[string]any) (*VersionSchema, error) {
+// VersionSchemaFromMap accepts an OpenAPI-shaped map[string]any, where the contents of the map are either a full openAPI document
+// with a components.schemas section, or just the components.schemas section of an openAPI document.
+// The schemas must contain a schema with a name which matches the kindName provided.
+func VersionSchemaFromMap(openAPISchema map[string]any, kindName string) (*VersionSchema, error) {
 	vs := &VersionSchema{
 		raw: openAPISchema,
 	}
 	err := vs.fixRaw()
+	// replace parsedCRDSchemaKindName with the kindName
+	if _, ok := vs.raw[parsedCRDSchemaKindName]; ok {
+		vs.raw[kindName] = vs.raw[parsedCRDSchemaKindName]
+		delete(vs.raw, parsedCRDSchemaKindName)
+	}
+	if _, ok := vs.raw[kindName]; !ok && len(vs.raw) > 0 {
+		return nil, fmt.Errorf("kind %q not found in map openAPI components", kindName)
+	}
 	return vs, err
 }
 
@@ -325,6 +362,7 @@ func VersionSchemaFromMap(openAPISchema map[string]any) (*VersionSchema, error) 
 // A Manifest VersionSchema does not contain a metadata object, as that is consistent between every app platform kind.
 // This is modeled after kubernetes' behavior for describing a CRD schema.
 type VersionSchema struct {
+	// raw is the openAPI components.schemas section of an openAPI document, represented as a map[string]any
 	raw map[string]any
 }
 
@@ -356,13 +394,33 @@ func (v *VersionSchema) MarshalYAML() (any, error) {
 }
 
 // fixRaw turns a full OpenAPI document map[string]any in raw into a set of schemas (if required)
+// nolint:gocognit,funlen
 func (v *VersionSchema) fixRaw() error {
-	if _, ok := v.raw["openapi"]; !ok {
-		// Not openAPI document, check if it's CRD-Like schema
-		if _, ok := v.raw["openAPIV3Schema"]; !ok {
-			// ok, no adjustments (that we know of) necessary
+	if components, ok := v.raw["components"]; ok {
+		cast, ok := components.(map[string]any)
+		if !ok {
+			return fmt.Errorf("'components' in an OpenAPI document must be an object")
+		}
+		s, ok := cast["schemas"]
+		if !ok {
+			v.raw = make(map[string]any)
 			return nil
 		}
+		schemas, ok := s.(map[string]any)
+		if !ok {
+			return fmt.Errorf("'components.schemas' in an OpenAPI document must be an object")
+		}
+		v.raw = schemas
+		return nil
+	}
+
+	// TODO: should we even accept CRD-shaped data when unmarshaling?
+	// The process for working with the manifest should go through one of the versioned types first, which
+	// will always use OpenAPI, and not call unmarshal directly.
+	if _, ok := v.raw["openAPIV3Schema"]; ok {
+		// CRD-like schema, we have to convert this into a set of "components",
+		// but we don't know the object name. In this case, we use "KIND" as the name,
+		// which can be corrected later if necessary.
 		oapi, ok := v.raw["openAPIV3Schema"].(map[string]any)
 		if !ok {
 			return fmt.Errorf("'openAPIV3Schema' must be an object")
@@ -379,31 +437,94 @@ func (v *VersionSchema) fixRaw() error {
 		for key, value := range castProps {
 			m[key] = value
 		}
-		v.raw = m
+		v.raw = map[string]any{
+			parsedCRDSchemaKindName: map[string]any{
+				"properties": m,
+				"type":       "object",
+			},
+		}
 		return nil
 	}
-	if c, ok := v.raw["components"]; ok {
-		cast, ok := c.(map[string]any)
-		if !ok {
-			return fmt.Errorf("'components' in an OpenAPI document must be an object")
+
+	// There's another way something might be CRD-shaped, and that's the contents of openAPIV3Schema.properties
+	// If the map contains `spec`, and none of the root objects have a `spec` property that references it,
+	// we can make the assumption that this is actually a CRD-shaped-object
+	if _, ok := v.raw["spec"]; ok {
+		for k, v := range v.raw {
+			if k == "spec" {
+				continue
+			}
+			cast, ok := v.(map[string]any)
+			if !ok {
+				continue
+			}
+			props, ok := cast["properties"]
+			if !ok {
+				continue
+			}
+			cast, ok = props.(map[string]any)
+			if !ok {
+				continue
+			}
+			spc, ok := cast["spec"]
+			if !ok {
+				continue
+			}
+			cast, ok = spc.(map[string]any)
+			if !ok {
+				continue
+			}
+			if ref, ok := cast["$ref"]; ok {
+				if cr, ok := ref.(string); ok && len(cr) > 5 && cr[len(cr)-5:] == "/spec" {
+					return nil // spec is referenced by another object's `spec`, this isn't a CRD
+				}
+			}
 		}
-		s, ok := cast["schemas"]
-		if !ok {
-			v.raw = make(map[string]any)
-			return nil
+		// This seems to be CRD-shaped, handle it like a CRD
+		kind := make(map[string]any)
+		props := make(map[string]any)
+		root := make(map[string]any)
+		kind["properties"] = props
+		kind["type"] = "object"
+		for k, v := range v.raw {
+			// If the field starts with #, it's a definition, lift it out of the object
+			if len(k) > 1 && k[0] == '#' {
+				root[k] = v
+				continue
+			}
+			props[k] = v
 		}
-		schemas, ok := s.(map[string]any)
-		if !ok {
-			return fmt.Errorf("'components.schemas' in an OpenAPI document must be an object")
+		v.raw = map[string]any{
+			parsedCRDSchemaKindName: kind,
 		}
-		v.raw["schemas"] = schemas
+		maps.Copy(v.raw, root)
 	}
 	return nil
 }
 
-// AsMap returns the schema as a map[string]any where each key is a top-level resource (ex. 'spec', 'status')
-func (v *VersionSchema) AsMap() map[string]any {
+// AsOpenAPI3SchemasMap returns the schema as a map[string]any version of an openAPI components.schemas section
+func (v *VersionSchema) AsOpenAPI3SchemasMap() map[string]any {
 	return v.raw
+}
+
+// AsCRDMap returns the schema as a map[string]any where each key is a top-level resource (ex. 'spec', 'status')
+// if the kindObjectName provided doesn't exist in the underlying raw openAPI schemas,
+// or the schema's references cannot be resolved into a single object, an error will be returned.
+func (v *VersionSchema) AsCRDMap(kindObjectName string) (map[string]any, error) {
+	sch, err := v.AsCRDOpenAPI3(kindObjectName)
+	if err != nil {
+		return nil, err
+	}
+	dest := make(map[string]any)
+	b, err := json.Marshal(sch.Properties)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling CRD OpenAPI Schema: %w", err)
+	}
+	err = json.Unmarshal(b, &dest)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling CRD OpenAPI bytes to map[string]any: %w", err)
+	}
+	return dest, nil
 }
 
 // AsOpenAPI3 returns an openapi3.Components instance which contains the schema elements
@@ -411,7 +532,7 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 	full := map[string]any{
 		"openapi": "3.0.0",
 		"components": map[string]any{
-			"schemas": v.AsMap(),
+			"schemas": v.AsOpenAPI3SchemasMap(),
 		},
 	}
 	yml, err := yaml.Marshal(full)
@@ -424,6 +545,25 @@ func (v *VersionSchema) AsOpenAPI3() (*openapi3.Components, error) {
 		return nil, err
 	}
 	return oT.Components, nil
+}
+
+// AsCRDOpenAPI3 returns an openapi3.Schema instances for a CRD for the kind.
+// References in the schema will be resolved and embedded, and recursive references
+// will be converted into empty objects with `x-kubernetes-preserve-unknown-fields: true`.
+// The root object for the CRD in the version components is specified by kindObjectName.
+// If kindObjectName does not exist in the list of schemas, an error will be returned.
+func (v *VersionSchema) AsCRDOpenAPI3(kindObjectName string) (*openapi3.Schema, error) {
+	components, err := v.AsOpenAPI3()
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := components.Schemas[kindObjectName]; !ok {
+		// Unfixed CRD schema parsed, the only way to get here is from parsing CRD schema directly with UnmarshalJSON
+		if _, ok := components.Schemas[parsedCRDSchemaKindName]; !ok {
+			return GetCRDOpenAPISchema(components, parsedCRDSchemaKindName)
+		}
+	}
+	return GetCRDOpenAPISchema(components, kindObjectName)
 }
 
 // AsKubeOpenAPI converts the schema into a map of reference string to common.OpenAPIDefinition objects, suitable for use with kubernetes API server code.
@@ -443,10 +583,51 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	// Convert the kin-openapi to kube-openapi
 	oapi, err := v.AsOpenAPI3()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error converting OpenAPI Schema: %w", err)
+	}
+	// Check if we have underlying CRD data that hasn't been appropriately labeled
+	if crd, ok := oapi.Schemas[parsedCRDSchemaKindName]; ok {
+		// If so, assume that the CRD data is the kind we're looking for
+		oapi.Schemas[gvk.Kind] = crd
+		delete(oapi.Schemas, parsedCRDSchemaKindName)
 	}
 	result := make(map[string]common.OpenAPIDefinition)
 
+	// Get the kind object, strip out the metadata field if present, and format it correctly for k8s
+	// The key for the kind could be the Kind, "<anystring>.<Kind>", or `parsedCRDSchemaKindName` ("__KIND__") (in edge cases)
+	var kindSchema *openapi3.SchemaRef
+	kindSchemaKey := ""
+	for k := range oapi.Schemas {
+		if strings.EqualFold(k, gvk.Kind) || k == parsedCRDSchemaKindName {
+			kindSchema = oapi.Schemas[k]
+			kindSchemaKey = k
+			break
+		}
+		parts := strings.Split(k, ".")
+		if len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], gvk.Kind) {
+			kindSchema = oapi.Schemas[k]
+			kindSchemaKey = k
+			break
+		}
+	}
+	if kindSchema == nil {
+		return nil, fmt.Errorf("unable to locate openAPI definition for kind %s", gvk.Kind)
+	}
+	if len(kindSchema.Value.AllOf) > 0 || len(kindSchema.Value.AnyOf) > 0 || len(kindSchema.Value.OneOf) > 0 || kindSchema.Value.Not != nil {
+		return nil, fmt.Errorf("anyOf, allOf, oneOf, and not are unsupported for the kind's root schema (kind %s)", gvk.Kind)
+	}
+	// Prefix all the refs the same way
+	// Name the schema as <pkgPrefix>.<Kind><schema>
+	// This ensures no conflicts when merging with other OpenAPI defs later
+	refKey := func(k string) string {
+		ucK := strings.ToUpper(k)
+		if len(k) > 1 {
+			ucK = strings.ToUpper(k[:1]) + k[1:]
+		}
+		return fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
+	}
+
+	// Construct the new kind based on this entry
 	kindProp := spec.Schema{
 		SchemaProps: spec.SchemaProps{
 			Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
@@ -482,34 +663,28 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		Dependencies: make([]string, 0),
 	}
 	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+	// Add the non-metadata properties
+	for k, v := range kindSchema.Value.Properties {
+		if k == "metadata" || k == "apiVersion" || k == "kind" {
+			continue
+		}
+		sch, deps := oapi3SchemaToKubeSchema(v, ref, gvk, refKey)
+		kind.Schema.Properties[k] = sch
+		kind.Dependencies = append(kind.Dependencies, deps...)
+	}
 
 	// For each schema, create an entry in the result
 	for k, s := range oapi.Schemas {
-		// Name the schema as <pkgPrefix>.<Kind><schema>
-		// This ensures no conflicts when merging with other OpenAPI defs later
-		ucK := strings.ToUpper(k)
-		if len(k) > 1 {
-			ucK = strings.ToUpper(k[:1]) + k[1:]
+		if k == kindSchemaKey {
+			continue
 		}
-		key := fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
-		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk, pkgPrefix)
+		key := refKey(k)
+		sch, deps := oapi3SchemaToKubeSchema(s, ref, gvk, refKey)
 		// sort dependencies for consistent output
 		slices.Sort(deps)
 		result[key] = common.OpenAPIDefinition{
 			Schema:       sch,
 			Dependencies: deps,
-		}
-		// If the key begins with a #, it's definition and should not be included in the kind object
-		if len(k) > 0 && k[0] == '#' {
-			continue
-		}
-		// Add the entry as a dependency in the kind object, and add it as a subresource
-		kind.Dependencies = append(kind.Dependencies, key)
-		kind.Schema.Properties[k] = spec.Schema{
-			SchemaProps: spec.SchemaProps{
-				Default: map[string]any{},
-				Ref:     ref(key),
-			},
 		}
 	}
 	// sort dependencies for consistent output
@@ -559,10 +734,10 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 // It requires a ReferenceCallback for creating any references, and uses the gvk to rename references as "<group>/<version>.<reference>"
 //
 //nolint:funlen,unparam
-func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind, pkgPrefix string) (resSchema spec.Schema, dependencies []string) {
+func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallback, gvk schema.GroupVersionKind, refReplacer func(string) string) (resSchema spec.Schema, dependencies []string) {
 	if sch.Ref != "" {
 		// Reformat the ref to use the path derived from the GVK
-		schRef := fmt.Sprintf("%s.%s", pkgPrefix, strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
+		schRef := refReplacer(strings.TrimPrefix(sch.Ref, "#/components/schemas/"))
 		return spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Ref: ref(schRef),
@@ -623,7 +798,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 		}
 	}
 	if sch.Value.AdditionalProperties.Schema != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk, pkgPrefix)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk, refReplacer)
 		resSchema.AdditionalProperties = &spec.SchemaOrBool{
 			Schema: &s,
 		}
@@ -644,7 +819,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AllOf != nil {
 		resSchema.AllOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.AllOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, refReplacer)
 			resSchema.AllOf = append(resSchema.AllOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -652,7 +827,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AnyOf != nil {
 		resSchema.AnyOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.AnyOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, refReplacer)
 			resSchema.AnyOf = append(resSchema.AnyOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -660,20 +835,20 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.OneOf != nil {
 		resSchema.OneOf = make([]spec.Schema, 0)
 		for _, v := range sch.Value.OneOf {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, refReplacer)
 			resSchema.OneOf = append(resSchema.OneOf, s)
 			dependencies = updateDependencies(dependencies, deps)
 		}
 	}
 	if sch.Value.Not != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.Not, ref, gvk, pkgPrefix)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.Not, ref, gvk, refReplacer)
 		resSchema.Not = &s
 		dependencies = updateDependencies(dependencies, deps)
 	}
 
 	// Items
 	if sch.Value.Items != nil {
-		s, deps := oapi3SchemaToKubeSchema(sch.Value.Items, ref, gvk, pkgPrefix)
+		s, deps := oapi3SchemaToKubeSchema(sch.Value.Items, ref, gvk, refReplacer)
 		resSchema.Items = &spec.SchemaOrArray{
 			Schema: &s,
 		}
@@ -684,7 +859,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if len(sch.Value.Properties) > 0 {
 		resSchema.Properties = make(map[string]spec.Schema)
 		for k, v := range sch.Value.Properties {
-			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, pkgPrefix)
+			s, deps := oapi3SchemaToKubeSchema(v, ref, gvk, refReplacer)
 			resSchema.Properties[k] = s
 			dependencies = updateDependencies(dependencies, deps)
 		}
@@ -711,4 +886,199 @@ func convertUint64(i uint64) int64 {
 		return math.MaxInt64
 	}
 	return int64(i)
+}
+
+const extKubernetesPreserveUnknownFields = "x-kubernetes-preserve-unknown-fields"
+
+// GetCRDOpenAPISchema takes a Components object and a schema name, resolves all $ref references
+// and handles recursive references by converting them to objects with x-kubernetes-preserve-unknown-fields set to true.
+// It returns the resolved schema and any error encountered.
+func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*openapi3.Schema, error) {
+	if components == nil || components.Schemas == nil {
+		return nil, fmt.Errorf("invalid components or schemas")
+	}
+
+	sch := components.Schemas[schemaName]
+	if sch == nil {
+		return nil, fmt.Errorf("schema %s not found", schemaName)
+	}
+	// remove the 'metadata','kind', and 'apiVersion' properties
+	if sch.Value != nil {
+		delete(sch.Value.Properties, "metadata")
+		delete(sch.Value.Properties, "kind")
+		delete(sch.Value.Properties, "apiVersion")
+	}
+
+	visited := make(map[string]bool)
+	return resolveSchema(sch, components, visited)
+}
+
+//nolint:gocognit,funlen,gocritic
+func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
+	if sch == nil {
+		return nil, nil
+	}
+	// copy visisted so referencing something in multiple places doesn't look like a cycle,
+	// it's only a cycle if we visit it multiple times while recursing down
+	visited := make(map[string]bool)
+	maps.Copy(visited, visitedBefore)
+
+	// If this is a reference, resolve it
+	if sch.Ref != "" {
+		refName := getRefName(sch.Ref)
+
+		// Check if we've seen this reference before
+		if visited[refName] {
+			// We've found a cycle, return object with x-kubernetes-preserve-unknown-fields
+			return &openapi3.Schema{
+				Type:       &openapi3.Types{openapi3.TypeObject},
+				Extensions: map[string]any{extKubernetesPreserveUnknownFields: true},
+			}, nil
+		}
+
+		// Mark this reference as visited
+		visited[refName] = true
+
+		// Get the referenced schema
+		refSchema := components.Schemas[refName]
+		if refSchema == nil {
+			return nil, fmt.Errorf("referenced schema %s not found", refName)
+		}
+
+		// Create a new visited map for this branch to avoid false positives in parallel branches
+		branchVisited := make(map[string]bool)
+		for k, v := range visited {
+			branchVisited[k] = v
+		}
+
+		// Resolve the referenced schema
+		resolved, err := resolveSchema(refSchema, components, branchVisited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve reference %s: %w", refName, err)
+		}
+
+		return resolved, nil
+	}
+
+	// Create a new schema to avoid modifying the original
+	result := &openapi3.Schema{
+		Type:                 sch.Value.Type,
+		Format:               sch.Value.Format,
+		Description:          sch.Value.Description,
+		Default:              sch.Value.Default,
+		Example:              sch.Value.Example,
+		ExclusiveMin:         sch.Value.ExclusiveMin,
+		ExclusiveMax:         sch.Value.ExclusiveMax,
+		Min:                  sch.Value.Min,
+		Max:                  sch.Value.Max,
+		MultipleOf:           sch.Value.MultipleOf,
+		MinLength:            sch.Value.MinLength,
+		MaxLength:            sch.Value.MaxLength,
+		Pattern:              sch.Value.Pattern,
+		MinItems:             sch.Value.MinItems,
+		MaxItems:             sch.Value.MaxItems,
+		UniqueItems:          sch.Value.UniqueItems,
+		MinProps:             sch.Value.MinProps,
+		MaxProps:             sch.Value.MaxProps,
+		Required:             sch.Value.Required,
+		Enum:                 sch.Value.Enum,
+		Title:                sch.Value.Title,
+		AdditionalProperties: sch.Value.AdditionalProperties,
+		Nullable:             sch.Value.Nullable,
+		ReadOnly:             sch.Value.ReadOnly,
+		WriteOnly:            sch.Value.WriteOnly,
+		AllOf:                make([]*openapi3.SchemaRef, 0),
+		OneOf:                make([]*openapi3.SchemaRef, 0),
+		AnyOf:                make([]*openapi3.SchemaRef, 0),
+	}
+
+	// Fix additionalProperties being an empty object for what kubernetes CRD's expect (using the `x-kubernetes-preserve-unknown-fields` extension)
+	if result.AdditionalProperties.Has != nil || result.AdditionalProperties.Schema != nil {
+		if result.AdditionalProperties.Schema != nil {
+			// If there's a schema, resolve references and check if we need to transform this into a plain object with x-kubernetes-preserve-unknown-fields: true
+			if result.AdditionalProperties.Schema.Ref != "" {
+				resolved, err := resolveSchema(result.AdditionalProperties.Schema, components, visited)
+				if err != nil {
+					return nil, err
+				}
+				result.AdditionalProperties.Schema = openapi3.NewSchemaRef("", resolved)
+			}
+			// if the schema exists, there are no properties in it, and it's either an object or empty type ("additionalProperties":{"type":"object"} or "additionalProperties":{}),
+			// set kubernetes' x-kubernetes-preserve-unknown-fields to true and remove the additionalProperties section
+			if result.AdditionalProperties.Schema.Value != nil && len(result.AdditionalProperties.Schema.Value.Properties) == 0 && (result.AdditionalProperties.Schema.Value.Type.Is(openapi3.TypeObject) || result.AdditionalProperties.Schema.Value.Type == nil) {
+				result.AdditionalProperties.Has = nil
+				result.AdditionalProperties.Schema = nil
+				if result.Extensions == nil {
+					result.Extensions = make(map[string]any)
+				}
+				result.Extensions[extKubernetesPreserveUnknownFields] = true
+			}
+		} else if *result.AdditionalProperties.Has {
+			// If AdditionalProperties.Schema is nil, then remove AdditionalProperties and set x-kubernetes-preserve-unknown-fields to true
+			result.AdditionalProperties.Has = nil
+			result.AdditionalProperties.Schema = nil
+			if result.Extensions == nil {
+				result.Extensions = make(map[string]any)
+			}
+			result.Extensions[extKubernetesPreserveUnknownFields] = true
+		} else {
+			result.AdditionalProperties.Has = nil
+		}
+	}
+
+	// Resolve properties for objects
+	if sch.Value.Properties != nil {
+		result.Properties = make(map[string]*openapi3.SchemaRef)
+		for name, prop := range sch.Value.Properties {
+			resolved, err := resolveSchema(prop, components, visited)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve property %s: %w", name, err)
+			}
+			result.Properties[name] = openapi3.NewSchemaRef("", resolved)
+		}
+	}
+
+	// Resolve items for arrays
+	if sch.Value.Items != nil {
+		resolved, err := resolveSchema(sch.Value.Items, components, visited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve array items: %w", err)
+		}
+		result.Items = openapi3.NewSchemaRef("", resolved)
+	}
+
+	// Resolve AllOf schemas
+	for _, s := range sch.Value.AllOf {
+		resolved, err := resolveSchema(s, components, visited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve allOf schema: %w", err)
+		}
+		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", resolved))
+	}
+
+	// Resolve OneOf schemas
+	for _, s := range sch.Value.OneOf {
+		resolved, err := resolveSchema(s, components, visited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
+		}
+		result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", resolved))
+	}
+
+	// Resolve AnyOf schemas
+	for _, s := range sch.Value.AnyOf {
+		resolved, err := resolveSchema(s, components, visited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve anyOf schema: %w", err)
+		}
+		result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", resolved))
+	}
+
+	return result, nil
+}
+
+// getRefName extracts the schema name from a $ref string
+func getRefName(ref string) string {
+	parts := strings.Split(ref, "/")
+	return parts[len(parts)-1]
 }

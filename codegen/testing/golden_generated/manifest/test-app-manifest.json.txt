@@ -338,6 +338,7 @@
                                 "type": "object"
                             }
                         },
+                        "conversion": true,
                         "routes": {
                             "/reconcile": {
                                 "post": {
@@ -464,14 +465,12 @@
                                     }
                                 }
                             }
-                        },
-                        "conversion": true
+                        }
                     }
                 ],
                 "routes": {}
             }
         ],
-        "preferredVersion": "",
         "extraPermissions": {
             "accessKinds": [
                 {

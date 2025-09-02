@@ -3,6 +3,7 @@ package jennies
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/format"
 	"slices"
@@ -15,6 +16,8 @@ import (
 	"k8s.io/kube-openapi/pkg/spec3"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha1"
+	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 
@@ -29,6 +32,7 @@ type ManifestGenerator struct {
 	Encoder        ManifestOutputEncoder
 	FileExtension  string
 	IncludeSchemas bool
+	CRDCompatible  bool
 }
 
 func (*ManifestGenerator) JennyName() string {
@@ -52,14 +56,29 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
 	}
 
+	// Whether or not the schema is CRD-compatible determines which version of AppManifest to use.
+	// v1alpha1 has a `schema` section which is a CRD schema document.
+	// v1alpha2 has a `schemas` section which is an OpenAPI schemas document.
+	var manifestSpec any
+	apiVersion := v1alpha2.GroupVersion
+	if m.CRDCompatible {
+		manifestSpec, err = v1alpha1.SpecFromManifestData(*manifestData)
+		apiVersion = v1alpha1.GroupVersion
+	} else {
+		manifestSpec, err = v1alpha2.SpecFromManifestData(*manifestData)
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = "apps.grafana.com/v1alpha1"
+	output["apiVersion"] = apiVersion.String()
 	output["kind"] = "AppManifest"
 	output["metadata"] = map[string]string{
 		"name": manifestData.AppName,
 	}
-	output["spec"] = manifestData
+	output["spec"] = manifestSpec
 
 	files := make(codejen.Files, 0)
 	out, err := m.Encoder(output)
@@ -234,7 +253,13 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	return &manifest, nil
 }
 
-//nolint:revive
+type simpleOpenAPIDoc struct {
+	Components struct {
+		Schemas map[string]map[string]any `json:"schemas" yaml:"schemas"`
+	} `json:"components" yaml:"components"`
+}
+
+//nolint:revive,funlen,unparam,gocognit
 func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
 	mver := app.ManifestVersionKind{
 		Kind:       vk.Kind,
@@ -277,21 +302,74 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
 	if includeSchema {
-		crd, err := KindVersionToCRDSpecVersion(codegen.KindVersion{
-			Version:                  version,
-			Schema:                   vk.Schema,
-			Codegen:                  vk.Codegen,
-			Served:                   vk.Served,
-			SelectableFields:         vk.SelectableFields,
-			Validation:               vk.Validation,
-			Mutation:                 vk.Mutation,
-			AdditionalPrinterColumns: vk.AdditionalPrinterColumns,
-			Routes:                   vk.Routes,
-		}, vk.Kind, true)
+		// Generate openAPI schemas for each non-definition field in the schema, then combine them into one OpenAPI document for the object
+		// If we attempt to generate openAPI for the entire schema, definitions will be included (and listed as required fields)
+		// for the object in the resulting OpenAPI document.
+		// As a hack for making sure the top-level fields include `x-kubernetes-preserve-unknown-fields: true`,
+		// we also convert the whole object to OpenAPI and check for additionalProperties
+		oapiBytes, err := cueToOpenAPIBytes(vk.Schema, vk.Kind)
 		if err != nil {
 			return app.ManifestVersionKind{}, err
 		}
-		mver.Schema, err = app.VersionSchemaFromMap(crd.Schema)
+		schemaProps := simpleOpenAPIDoc{}
+		err = json.Unmarshal(oapiBytes, &schemaProps)
+		if err != nil {
+			return app.ManifestVersionKind{}, err
+		}
+		if _, ok := schemaProps.Components.Schemas[vk.Kind]; !ok {
+			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' not found", vk.Kind)
+		}
+		uncastKindProps, ok := schemaProps.Components.Schemas[vk.Kind]["properties"]
+		if !ok {
+			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' does not contain a 'properties' key", vk.Kind)
+		}
+		kindProps, ok := uncastKindProps.(map[string]any)
+		if !ok {
+			return app.ManifestVersionKind{}, fmt.Errorf("schema for kind '%s' properties is not a map", vk.Kind)
+		}
+
+		it, err := vk.Schema.Fields(cue.Optional(true))
+		if err != nil {
+			return app.ManifestVersionKind{}, err // TODO: wrap error
+		}
+		schemas := make(map[string]any)
+		props := make(map[string]any)
+		for it.Next() {
+			field := it.Selector().String()
+			if field == "metadata" || field == "apiVersion" || field == "kind" {
+				continue // skip metadata (and apiVersion/kind if they exist)
+			}
+			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
+			if err != nil {
+				return app.ManifestVersionKind{}, err
+			}
+			oapiProps := simpleOpenAPIDoc{}
+			err = json.Unmarshal(oapiBytes, &oapiProps)
+			if err != nil {
+				return app.ManifestVersionKind{}, err
+			}
+			for k, v := range oapiProps.Components.Schemas {
+				if entry, ok := kindProps[k]; ok {
+					p, ok := entry.(map[string]any)
+					if ok && p["additionalProperties"] != nil {
+						v["additionalProperties"] = p["additionalProperties"]
+					}
+				}
+				schemas[k] = v
+			}
+			props[field] = map[string]any{
+				"$ref": "#/components/schemas/" + field,
+			}
+		}
+		schemas[vk.Kind] = map[string]any{
+			"properties": props,
+			"required":   []string{"spec"},
+		}
+		mver.Schema, err = app.VersionSchemaFromMap(map[string]any{
+			"components": map[string]any{
+				"schemas": schemas,
+			},
+		}, vk.Kind)
 		if err != nil {
 			return app.ManifestVersionKind{}, fmt.Errorf("version schema error: %w", err)
 		}

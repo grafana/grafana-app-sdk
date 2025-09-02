@@ -5,7 +5,6 @@ metadata:
 spec:
   appName: custom-app
   group: customapp.ext.grafana.com
-  preferredVersion: ""
   versions:
   - kinds:
     - conversion: false
