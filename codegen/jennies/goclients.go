@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"go/format"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/grafana/codejen"
 	"golang.org/x/tools/imports"
@@ -51,6 +53,10 @@ func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen
 					Subresource: sr,
 				})
 			}
+			// Sort for consistent output in the template
+			slices.SortFunc(subresources, func(a, b templates.GoResourceClientSubresource) int {
+				return strings.Compare(a.FieldName, b.FieldName)
+			})
 			md := templates.GoResourceClientMetadata{
 				PackageName:  ToPackageName(version.Name()),
 				KindName:     exportField(kind.Kind),
@@ -72,6 +78,9 @@ func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen
 					md.CustomRoutes = append(md.CustomRoutes, crmd)
 				}
 			}
+			slices.SortFunc(md.CustomRoutes, func(a, b templates.GoResourceClientCustomRoute) int {
+				return strings.Compare(a.TypeName, b.TypeName)
+			})
 
 			b := bytes.Buffer{}
 			err = templates.WriteGoResourceClient(md, &b)
