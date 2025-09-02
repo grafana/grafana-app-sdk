@@ -93,7 +93,7 @@ func NewApp(config app.Config) (app.App, error) {
 					Namespaced: true,
 					Path:       "foobar",
 					Method:     "GET",
-				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
 					return json.NewEncoder(writer).Encode(v1alpha1.GetFoobar{
 						Foo: "hello, world!",
 					})
@@ -102,7 +102,7 @@ func NewApp(config app.Config) (app.App, error) {
 					Namespaced: false,
 					Path:       "foobar",
 					Method:     "GET",
-				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
 					return json.NewEncoder(writer).Encode(v1alpha1.Clustergetfoobar{
 						Bar: "hello, world!",
 					})

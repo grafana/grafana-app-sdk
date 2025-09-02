@@ -45,7 +45,7 @@ type ManagedKindResolver func(kind, ver string) (resource.Kind, bool)
 // CustomRouteResponseResolver resolves the kind, version, path, and method into a go type which is returned
 // from that custom route call. kind may be empty for resource routes.
 // group is not provided as a CustomRouteResponseResolver function is expected to exist on a per-group basis.
-type CustomRouteResponseResolver func(kind, ver, path, method string) (any, bool)
+type CustomRouteResponseResolver func(kind, ver, routePath, method string) (any, bool)
 
 // AppInstaller represents an App which can be installed on a kubernetes API server.
 // It provides all the methods needed to configure and install an App onto an API server.
@@ -281,6 +281,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
+//nolint:gocognit,funlen
 func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
@@ -371,10 +372,16 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 			for _, ver := range r.ManifestData().Versions {
 				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
 					for rpath, route := range ver.Routes.Namespaced {
-						r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
+						err := r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
+						if err != nil {
+							return fmt.Errorf("failed to register namespaced custom route '%s' for version %s: %w", rpath, ver.Name, err)
+						}
 					}
 					for rpath, route := range ver.Routes.Cluster {
-						r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.ClusterScope)
+						err := r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.ClusterScope)
+						if err != nil {
+							return fmt.Errorf("failed to register cluster custom route '%s' for version %s: %w", rpath, ver.Name, err)
+						}
 					}
 				}
 			}
@@ -384,28 +391,43 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 	return err
 }
 
-func (r *defaultInstaller) registerResourceRoute(ws *restful.WebService, gv schema.GroupVersion, rpath string, props spec3.PathProps, scope resource.SchemaScope) {
+func (r *defaultInstaller) registerResourceRoute(ws *restful.WebService, gv schema.GroupVersion, rpath string, props spec3.PathProps, scope resource.SchemaScope) error {
 	if props.Get != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Get, scope, "GET")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Get, scope, "GET"); err != nil {
+			return err
+		}
 	}
 	if props.Post != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Post, scope, "POST")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Post, scope, "POST"); err != nil {
+			return err
+		}
 	}
 	if props.Put != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Put, scope, "PUT")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Put, scope, "PUT"); err != nil {
+			return err
+		}
 	}
 	if props.Patch != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Patch, scope, "PATCH")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Patch, scope, "PATCH"); err != nil {
+			return err
+		}
 	}
 	if props.Delete != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Delete, scope, "DELETE")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Delete, scope, "DELETE"); err != nil {
+			return err
+		}
 	}
 	if props.Head != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Head, scope, "HEAD")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Head, scope, "HEAD"); err != nil {
+			return err
+		}
 	}
 	if props.Options != nil {
-		r.registerResourceRouteOperation(ws, gv, rpath, props.Options, scope, "OPTIONS")
+		if err := r.registerResourceRouteOperation(ws, gv, rpath, props.Options, scope, "OPTIONS"); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService, gv schema.GroupVersion, rpath string, op *spec3.Operation, scope resource.SchemaScope, method string) error {
@@ -662,14 +684,14 @@ func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, rout
 	return defs
 }
 
-func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, path, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
 			return nil, false
 		}
 	}
-	goType, ok := resolver(kind, ver, path, method)
+	goType, ok := resolver(kind, ver, opPath, method)
 	if ok {
 		typ := reflect.TypeOf(goType)
 		typePath = typ.PkgPath() + "." + typ.Name()
@@ -681,7 +703,7 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, path, method str
 		} else {
 			ucFirstMethod = strings.ToUpper(method)
 		}
-		ucFirstPath := regexp.MustCompile("[^A-Za-z0-9]").ReplaceAllString(path, "")
+		ucFirstPath := regexp.MustCompile("[^A-Za-z0-9]").ReplaceAllString(opPath, "")
 		if len(ucFirstPath) > 1 {
 			ucFirstPath = strings.ToUpper(ucFirstPath[:1]) + ucFirstPath[1:]
 		} else {
@@ -707,14 +729,14 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, path, method str
 	}
 }
 
-func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, path, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
 			return nil, false
 		}
 	}
-	goType, ok := resolver(kind, ver, path, method)
+	goType, ok := resolver(kind, ver, opPath, method)
 	if ok {
 		typ := reflect.TypeOf(goType)
 		typePath = typ.PkgPath() + "." + typ.Name()
@@ -726,7 +748,7 @@ func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, path, method 
 		} else {
 			ucFirstMethod = strings.ToUpper(method)
 		}
-		ucFirstPath := regexp.MustCompile("[^A-Za-z0-9]").ReplaceAllString(path, "")
+		ucFirstPath := regexp.MustCompile("[^A-Za-z0-9]").ReplaceAllString(opPath, "")
 		if len(ucFirstPath) > 1 {
 			ucFirstPath = strings.ToUpper(ucFirstPath[:1]) + ucFirstPath[1:]
 		} else {
@@ -773,7 +795,7 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]K
 	return out, nil
 }
 
-func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, path string, resolver CustomRouteResponseResolver) map[string]SubresourceConnectorResponseObject {
+func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, routePath string, resolver CustomRouteResponseResolver) map[string]SubresourceConnectorResponseObject {
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
 			return nil, false
@@ -794,49 +816,49 @@ func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, path string,
 	}
 	methods := make(map[string]SubresourceConnectorResponseObject)
 	if props.Get != nil {
-		resp, _ := resolver(kind, ver, path, "GET")
+		resp, _ := resolver(kind, ver, routePath, "GET")
 		methods["GET"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Post != nil {
-		resp, _ := resolver(kind, ver, path, "POST")
+		resp, _ := resolver(kind, ver, routePath, "POST")
 		methods["POST"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Put != nil {
-		resp, _ := resolver(kind, ver, path, "PUT")
+		resp, _ := resolver(kind, ver, routePath, "PUT")
 		methods["PUT"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Patch != nil {
-		resp, _ := resolver(kind, ver, path, "PATCH")
+		resp, _ := resolver(kind, ver, routePath, "PATCH")
 		methods["PATCH"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Delete != nil {
-		resp, _ := resolver(kind, ver, path, "DELETE")
+		resp, _ := resolver(kind, ver, routePath, "DELETE")
 		methods["DELETE"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Head != nil {
-		resp, _ := resolver(kind, ver, path, "HEAD")
+		resp, _ := resolver(kind, ver, routePath, "HEAD")
 		methods["HEAD"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
 		}
 	}
 	if props.Options != nil {
-		resp, _ := resolver(kind, ver, path, "OPTIONS")
+		resp, _ := resolver(kind, ver, routePath, "OPTIONS")
 		methods["OPTIONS"] = SubresourceConnectorResponseObject{
 			Object:    resp,
 			MIMETypes: mimeTypes(props.Get),
