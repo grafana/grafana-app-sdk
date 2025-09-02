@@ -13,6 +13,9 @@ type AppManifestManifestVersion struct {
 	// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
 	// or newly added (and didn't exist for older versions).
 	Kinds []AppManifestManifestVersionKind `json:"kinds"`
+	// Routes is a section defining version-level custom resource routes.
+	// These routes are registered at the same level as kinds, and thus should not conflict with existing kinds.
+	Routes *AppManifestManifestVersionRoutes `json:"routes,omitempty"`
 }
 
 // NewAppManifestManifestVersion creates a new AppManifestManifestVersion object.
@@ -130,6 +133,23 @@ type AppManifestAdditionalPrinterColumns struct {
 // NewAppManifestAdditionalPrinterColumns creates a new AppManifestAdditionalPrinterColumns object.
 func NewAppManifestAdditionalPrinterColumns() *AppManifestAdditionalPrinterColumns {
 	return &AppManifestAdditionalPrinterColumns{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionRoutes struct {
+	// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
+	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+	Namespaced map[string]interface{} `json:"namespaced,omitempty"`
+	// Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.
+	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+	Cluster map[string]interface{} `json:"cluster,omitempty"`
+}
+
+// NewAppManifestManifestVersionRoutes creates a new AppManifestManifestVersionRoutes object.
+func NewAppManifestManifestVersionRoutes() *AppManifestManifestVersionRoutes {
+	return &AppManifestManifestVersionRoutes{}
 }
 
 // +k8s:openapi-gen=true
