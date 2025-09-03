@@ -496,7 +496,9 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 	out.Ref = in.Ref       // TODO: Ref has pointers inside of it
 	out.Schema = in.Schema // SchemaURL is an alias of string
 	out.Description = in.Description
-	out.Type = append(spec.StringOrArray{}, in.Type...)
+	if in.Type != nil {
+		out.Type = append(spec.StringOrArray{}, in.Type...)
+	}
 	out.Nullable = in.Nullable
 	out.Format = in.Format
 	out.Title = in.Title
@@ -515,8 +517,10 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 	out.Enum = in.Enum // TODO: this is type any, we should copy?
 	out.MaxProperties = copyPointerPrimitive(in.MaxProperties)
 	out.MinProperties = copyPointerPrimitive(in.MinProperties)
-	out.Required = make([]string, len(in.Required))
-	copy(out.Required, in.Required)
+	if in.Required != nil {
+		out.Required = make([]string, len(in.Required))
+		copy(out.Required, in.Required)
+	}
 	if in.Items != nil {
 		out.Items = &spec.SchemaOrArray{}
 		if in.Items.Schema != nil {
@@ -595,10 +599,14 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 		}
 	}
 	out.Example = in.Example // TODO: this is any
-	out.Extensions = spec.Extensions{}
-	maps.Copy(out.Extensions, in.Extensions)
-	out.ExtraProps = make(map[string]any)
-	maps.Copy(out.ExtraProps, in.ExtraProps)
+	if in.Extensions != nil {
+		out.Extensions = spec.Extensions{}
+		maps.Copy(out.Extensions, in.Extensions)
+	}
+	if in.ExtraProps != nil {
+		out.ExtraProps = make(map[string]any)
+		maps.Copy(out.ExtraProps, in.ExtraProps)
+	}
 	return out
 }
 
@@ -668,6 +676,9 @@ func (*defaultInstaller) getOperationOpenAPI(kind, ver, path, method string, ope
 				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta")
 			}
 		}
+	}
+	if len(dependencies) == 0 {
+		dependencies = nil // set dependencies to nil so it's omitted in the OpenAPIDefinition
 	}
 	return typePath, common.OpenAPIDefinition{
 		Schema:       typeSchema,
