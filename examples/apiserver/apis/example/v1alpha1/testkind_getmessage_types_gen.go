@@ -2,12 +2,25 @@
 
 package v1alpha1
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // +k8s:openapi-gen=true
-type GetMessage struct {
+type GetMessageBody struct {
 	Message string `json:"message"`
 }
 
-// NewGetMessage creates a new GetMessage object.
+// NewGetMessageBody creates a new GetMessageBody object.
+func NewGetMessageBody() *GetMessageBody {
+	return &GetMessageBody{}
+}
+
+type GetMessage struct {
+	metav1.TypeMeta `json:",inline"`
+	GetMessageBody  `json:",inline"`
+}
+
 func NewGetMessage() *GetMessage {
 	return &GetMessage{}
 }

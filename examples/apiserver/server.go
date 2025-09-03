@@ -75,11 +75,11 @@ func NewApp(config app.Config) (app.App, error) {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "foo",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
-					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					logging.FromContext(ctx).Info("called TestKind subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
 					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{
 						TypeMeta: metav1.TypeMeta{
-							Kind:       "GETFoo",
+							Kind:       "TestKind.Foo",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
 						},
 						ObjectMeta: metav1.ObjectMeta{
@@ -92,9 +92,17 @@ func NewApp(config app.Config) (app.App, error) {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "bar",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
-					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					logging.FromContext(ctx).Info("called TestKind subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{Message: "Hello, world!"})
+					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "TestKind.Message",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						GetMessageBody: v1alpha1.GetMessageBody{
+							Message: "Hello, world!",
+						},
+					})
 				},
 			},
 		}},

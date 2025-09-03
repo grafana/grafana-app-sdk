@@ -83,7 +83,7 @@ SchemaWithOperatorState: Schema & {
 }
 #CustomRouteResponse: _
 #CustomRouteResponseMetadata: {
-		typeMeta: bool | *false
+		typeMeta: bool | *true
 		listMeta: bool | *false
 		objectMeta: bool | *false
 }
@@ -93,7 +93,7 @@ SchemaWithOperatorState: Schema & {
     response: #CustomRouteResponse
     // responseMetadata allows codegen to include kubernetes metadata in the generated response object.
     // It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
-    responseMetadata?: #CustomRouteResponseMetadata
+    responseMetadata: #CustomRouteResponseMetadata
 }
 #CustomRoutePath: string
 #CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
