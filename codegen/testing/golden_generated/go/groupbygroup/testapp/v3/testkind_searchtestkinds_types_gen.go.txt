@@ -2,26 +2,39 @@
 
 package v3
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // +k8s:openapi-gen=true
-type SearchTestkinds struct {
-	Items []V3SearchTestkindsItems `json:"items"`
-	Total int64                    `json:"total"`
+type SearchTestkindsBody struct {
+	Items []V3SearchTestkindsBodyItems `json:"items"`
+	Total int64                        `json:"total"`
 }
 
-// NewSearchTestkinds creates a new SearchTestkinds object.
-func NewSearchTestkinds() *SearchTestkinds {
-	return &SearchTestkinds{
-		Items: []V3SearchTestkindsItems{},
+// NewSearchTestkindsBody creates a new SearchTestkindsBody object.
+func NewSearchTestkindsBody() *SearchTestkindsBody {
+	return &SearchTestkindsBody{
+		Items: []V3SearchTestkindsBodyItems{},
 	}
 }
 
 // +k8s:openapi-gen=true
-type V3SearchTestkindsItems struct {
+type V3SearchTestkindsBodyItems struct {
 	Name  string  `json:"name"`
 	Score float64 `json:"score"`
 }
 
-// NewV3SearchTestkindsItems creates a new V3SearchTestkindsItems object.
-func NewV3SearchTestkindsItems() *V3SearchTestkindsItems {
-	return &V3SearchTestkindsItems{}
+// NewV3SearchTestkindsBodyItems creates a new V3SearchTestkindsBodyItems object.
+func NewV3SearchTestkindsBodyItems() *V3SearchTestkindsBodyItems {
+	return &V3SearchTestkindsBodyItems{}
+}
+
+type SearchTestkinds struct {
+	metav1.TypeMeta     `json:",inline"`
+	SearchTestkindsBody `json:",inline"`
+}
+
+func NewSearchTestkinds() *SearchTestkinds {
+	return &SearchTestkinds{}
 }

@@ -2,21 +2,34 @@
 
 package v3
 
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)
+
 // +k8s:openapi-gen=true
-type PostReconcile struct {
-	Status  PostReconcileStatus `json:"status"`
-	Message string              `json:"message"`
+type PostReconcileBody struct {
+	Status  PostReconcileBodyStatus `json:"status"`
+	Message string                  `json:"message"`
 }
 
-// NewPostReconcile creates a new PostReconcile object.
+// NewPostReconcileBody creates a new PostReconcileBody object.
+func NewPostReconcileBody() *PostReconcileBody {
+	return &PostReconcileBody{}
+}
+
+// +k8s:openapi-gen=true
+type PostReconcileBodyStatus string
+
+const (
+	PostReconcileBodyStatusSuccess PostReconcileBodyStatus = "success"
+	PostReconcileBodyStatusFailure PostReconcileBodyStatus = "failure"
+)
+
+type PostReconcile struct {
+	metav1.TypeMeta   `json:",inline"`
+	PostReconcileBody `json:",inline"`
+}
+
 func NewPostReconcile() *PostReconcile {
 	return &PostReconcile{}
 }
-
-// +k8s:openapi-gen=true
-type PostReconcileStatus string
-
-const (
-	PostReconcileStatusSuccess PostReconcileStatus = "success"
-	PostReconcileStatusFailure PostReconcileStatus = "failure"
-)
