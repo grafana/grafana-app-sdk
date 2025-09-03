@@ -1,7 +1,8 @@
-package v1alpha1
+package v1alpha2
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,7 +25,6 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		err = json.Unmarshal(file, &v1alpha1)
 		require.Nil(t, err)
 		err = json.Unmarshal(file, &md)
-		require.Nil(t, err)
 		schFile, err := os.ReadFile(filepath.Join("testfiles", "schema-01.json"))
 		require.Nil(t, err)
 		m := make(map[string]any)
@@ -32,8 +32,24 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		require.Nil(t, err)
 		md.Versions[0].Kinds[0].Schema, err = app.VersionSchemaFromMap(m, md.Versions[0].Kinds[0].Kind)
 		require.Nil(t, err)
+		require.Nil(t, err)
 		v1md, err := v1alpha1.ToManifestData()
 		require.Nil(t, err)
 		assert.Equal(t, md, v1md)
+	})
+
+	t.Run("bad schema data", func(t *testing.T) {
+		v1alpha1 := AppManifestSpec{
+			Versions: []AppManifestManifestVersion{{
+				Kinds: []AppManifestManifestVersionKind{{
+					Kind: "Foo",
+					Schemas: map[string]interface{}{
+						"bar": "foo", // Bad OpenAPI document, conversion will fail when loading the openAPI
+					},
+				}},
+			}},
+		}
+		_, err := v1alpha1.ToManifestData()
+		assert.Equal(t, errors.New("schemas for Foo must contain an entry named 'Foo'"), err)
 	})
 }

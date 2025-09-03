@@ -49,7 +49,10 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 	defer cancel()
 	errs := make(chan error, len(m.Runners))
 	errsClosed := false
+	errsClosedMux := sync.Mutex{}
 	defer func() {
+		errsClosedMux.Lock()
+		defer errsClosedMux.Unlock()
 		errsClosed = true
 		close(errs)
 	}()
@@ -61,6 +64,8 @@ func (m *MultiRunner) Run(ctx context.Context) error {
 			err := r.Run(propagatedContext)
 			wg.Done()
 			if err != nil && !timedOut {
+				errsClosedMux.Lock()
+				defer errsClosedMux.Unlock()
 				if errsClosed {
 					logging.DefaultLogger.Warn("MultiRunner runner error encountered, but MultiRunner already completed", "error", err)
 					return
