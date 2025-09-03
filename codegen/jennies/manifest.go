@@ -512,70 +512,6 @@ func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
 	return requestBody, nil
 }
 
-var (
-	kindPropSchema = spec.Schema{
-		SchemaProps: spec.SchemaProps{
-			Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-			Type:        []string{"string"},
-			Format:      "",
-		},
-	}
-
-	apiVersionPropSchema = spec.Schema{
-		SchemaProps: spec.SchemaProps{
-			Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
-			Type:        []string{"string"},
-			Format:      "",
-		},
-	}
-
-	objectMetaPropSchema = spec.Schema{
-		SchemaProps: spec.SchemaProps{
-			Type: []string{"object"},
-			Properties: map[string]spec.Schema{
-				"namespace": {
-					SchemaProps: spec.SchemaProps{
-						Type: []string{"string"},
-					},
-				},
-				"name": {
-					SchemaProps: spec.SchemaProps{
-						Type: []string{"string"},
-					},
-				},
-			},
-		},
-		VendorExtensible: spec.VendorExtensible{
-			Extensions: spec.Extensions{
-				app.OpenAPIExtensionUsesKubernetesObjectMeta: true,
-			},
-		},
-	}
-
-	listMetaPropSchema = spec.Schema{
-		SchemaProps: spec.SchemaProps{
-			Type: []string{"object"},
-			Properties: map[string]spec.Schema{
-				"namespace": {
-					SchemaProps: spec.SchemaProps{
-						Type: []string{"string"},
-					},
-				},
-				"name": {
-					SchemaProps: spec.SchemaProps{
-						Type: []string{"string"},
-					},
-				},
-			},
-		},
-		VendorExtensible: spec.VendorExtensible{
-			Extensions: spec.Extensions{
-				app.OpenAPIExtensionUsesKubernetesListMeta: true,
-			},
-		},
-	}
-)
-
 func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRouteResponse) (*spec3.Responses, error) {
 	v := customRouteResponse.Schema
 	if !v.Exists() {
@@ -713,3 +649,78 @@ func cueSchemaToSpecSchemaProps(v cue.Value) (spec.SchemaProps, error) {
 
 	return props, nil
 }
+
+var (
+	kindPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+			Type:        []string{"string"},
+			Format:      "",
+		},
+	}
+
+	apiVersionPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+			Type:        []string{"string"},
+			Format:      "",
+		},
+	}
+
+	objectMetaPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Type: []string{"object"},
+			Properties: map[string]spec.Schema{
+				"namespace": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"name": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{
+				app.OpenAPIExtensionUsesKubernetesObjectMeta: true,
+			},
+		},
+	}
+
+	listMetaPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Type: []string{"object"},
+			Properties: map[string]spec.Schema{
+				"selfLink": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"resourceVersion": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"continue": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"remainingItemCount": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"integer"},
+					},
+				},
+			},
+			Required: []string{"selfLink", "resourceVersion", "continue"},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{
+				app.OpenAPIExtensionUsesKubernetesListMeta: true,
+			},
+		},
+	}
+)
