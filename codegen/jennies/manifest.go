@@ -4,6 +4,7 @@ package jennies
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/format"
 	"slices"
@@ -404,7 +405,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		if err != nil {
 			return spec3.PathProps{}, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		targetResponses, err := cueSchemaToResponses(sourceRoute.Response.Schema)
+		targetResponses, err := customRouteResponseToSpec3Responses(sourceRoute.Response)
 		if err != nil {
 			return spec3.PathProps{}, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
@@ -511,7 +512,72 @@ func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
 	return requestBody, nil
 }
 
-func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
+var (
+	kindPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+			Type:        []string{"string"},
+			Format:      "",
+		},
+	}
+
+	apiVersionPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+			Type:        []string{"string"},
+			Format:      "",
+		},
+	}
+
+	objectMetaPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Type: []string{"object"},
+			Properties: map[string]spec.Schema{
+				"namespace": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"name": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{
+				app.OpenAPIExtensionUsesKubernetesObjectMeta: true,
+			},
+		},
+	}
+
+	listMetaPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Type: []string{"object"},
+			Properties: map[string]spec.Schema{
+				"namespace": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"name": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{
+				app.OpenAPIExtensionUsesKubernetesListMeta: true,
+			},
+		},
+	}
+)
+
+func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRouteResponse) (*spec3.Responses, error) {
+	v := customRouteResponse.Schema
 	if !v.Exists() {
 		return nil, nil
 	}
@@ -522,6 +588,24 @@ func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
 	schemaProps, err := cueSchemaToSpecSchemaProps(v)
 	if err != nil {
 		return nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
+	}
+	if customRouteResponse.Metadata.TypeMeta {
+		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
+		schemaProps.Properties["kind"] = kindPropSchema
+		schemaProps.Required = append(schemaProps.Required, "apiVersion", "kind")
+	}
+	if customRouteResponse.Metadata.ObjectMeta {
+		if _, exists := schemaProps.Properties["metadata"]; exists {
+			return nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
+		}
+		schemaProps.Properties["metadata"] = objectMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, "metadata")
+	} else if customRouteResponse.Metadata.ListMeta {
+		if _, exists := schemaProps.Properties["metadata"]; exists {
+			return nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
+		}
+		schemaProps.Properties["metadata"] = listMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, "metadata")
 	}
 
 	response := spec3.Response{
@@ -534,6 +618,9 @@ func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
 					},
 				},
 			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{},
 		},
 	}
 

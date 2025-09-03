@@ -33,7 +33,12 @@ SchemaProps: spec.SchemaProps{
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
     },{{ end }}
-},{{ end }}
+},{{ if .Extensions }}
+VendorExtensible: spec.VendorExtensible{
+    Extensions: spec.Extensions{ {{ range $key, $val := .Extensions }}
+        "{{ $key }}": {{printf "%#v" $val}},{{ end }}
+    },
+},{{ end }}{{ end }}
 
 {{ define "parameter" }}
 { {{ if .Name }}

@@ -17,6 +17,12 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
+const (
+	OpenAPIExtensionPrefix                   = "x-grafana-app"
+	OpenAPIExtensionUsesKubernetesObjectMeta = OpenAPIExtensionPrefix + "-uses-kubernetes-object-metadata"
+	OpenAPIExtensionUsesKubernetesListMeta   = OpenAPIExtensionPrefix + "-uses-kubernetes-list-metadata"
+)
+
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
 func NewEmbeddedManifest(manifestData ManifestData) Manifest {
 	return Manifest{
