@@ -355,6 +355,9 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 	}
 
 	err = server.InstallAPIGroup(&apiGroupInfo)
+	if err != nil {
+		return err
+	}
 
 	// version custom routes
 	hasResourceRoutes := false

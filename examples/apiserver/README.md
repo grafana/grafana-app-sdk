@@ -67,11 +67,11 @@ curl -k -X DELETE https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/n
 
 Call custom resource routes:
 ```shell
-curl -k -X DELETE https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/foobar
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/foobar
 ```
 
 ```shell
-curl -k -X DELETE https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/foobar
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/foobar
 ```
 
 Get OpenAPI doc:
