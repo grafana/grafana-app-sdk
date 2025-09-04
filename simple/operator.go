@@ -234,14 +234,18 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
-		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.InformerOptions{
+		ListWatchOptions: operator.ListWatchOptions{
+			Namespace:      options.Namespace,
+			LabelFilters:   options.LabelFilters,
+			FieldSelectors: options.FieldSelectors,
+		},
 		CacheResyncInterval: o.cacheResyncInterval,
+		ErrorHandler:        o.ErrorHandler,
 	})
 	if err != nil {
 		return err
 	}
-	inf.ErrorHandler = o.ErrorHandler
 	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
@@ -279,14 +283,18 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 	if err != nil {
 		return err
 	}
-	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.KubernetesBasedInformerOptions{
-		ListWatchOptions:    operator.ListWatchOptions{Namespace: options.Namespace, LabelFilters: options.LabelFilters, FieldSelectors: options.FieldSelectors},
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, operator.InformerOptions{
+		ListWatchOptions: operator.ListWatchOptions{
+			Namespace:      options.Namespace,
+			LabelFilters:   options.LabelFilters,
+			FieldSelectors: options.FieldSelectors,
+		},
+		ErrorHandler:        o.ErrorHandler,
 		CacheResyncInterval: o.cacheResyncInterval,
 	})
 	if err != nil {
 		return err
 	}
-	inf.ErrorHandler = o.ErrorHandler
 	kindStr := o.label(kind, options)
 	err = o.controller.AddInformer(inf, kindStr)
 	if err != nil {
