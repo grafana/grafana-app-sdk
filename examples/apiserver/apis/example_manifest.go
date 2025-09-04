@@ -10,12 +10,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
-
-	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/resource"
 
 	v1alpha1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 )
@@ -172,12 +171,81 @@ var appManifestData = app.ManifestData{
 																				SchemaProps: spec.SchemaProps{
 																					Type: []string{"object"},
 																					Properties: map[string]spec.Schema{
+																						"annotations": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"object"},
+																							},
+																						},
+																						"creationTimestamp": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"string"},
+																								Format: "date-time",
+																							},
+																						},
+																						"deletionGracePeriodSeconds": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"integer"},
+																								Format: "int64",
+																							},
+																						},
+																						"deletionTimestamp": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"string"},
+																								Format: "date-time",
+																							},
+																						},
+																						"finalizers": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"array"},
+																							},
+																						},
+																						"generateName": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"generation": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"integer"},
+																								Format: "int64",
+																							},
+																						},
+																						"labels": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"object"},
+																							},
+																						},
+																						"managedFields": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"array"},
+																							},
+																						},
 																						"name": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"string"},
 																							},
 																						},
 																						"namespace": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"ownerReferences": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"array"},
+																							},
+																						},
+																						"resourceVersion": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"selfLink": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"uid": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"string"},
 																							},

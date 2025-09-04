@@ -172,19 +172,18 @@ func getCustomRouteAdditions(customRoute codegen.CustomRoute, typeName string) (
 		bodyName = typeName + "Body"
 		additionalImports = append(additionalImports, `metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`)
 		typeBytes := bytes.Buffer{}
-		typeBytes.WriteString(fmt.Sprintf("type %s struct {\n", typeName))
+		_, _ = typeBytes.WriteString(fmt.Sprintf("type %s struct {\n", typeName))
 		if customRoute.Response.Metadata.TypeMeta {
-			typeBytes.WriteString("\tmetav1.TypeMeta `json:\",inline\"`\n")
-
+			_, _ = typeBytes.WriteString("\tmetav1.TypeMeta `json:\",inline\"`\n")
 		}
 		if customRoute.Response.Metadata.ObjectMeta {
-			typeBytes.WriteString("\tmetav1.ObjectMeta `json:\"metadata\"`\n")
+			_, _ = typeBytes.WriteString("\tmetav1.ObjectMeta `json:\"metadata\"`\n")
 		}
 		if customRoute.Response.Metadata.ListMeta {
-			typeBytes.WriteString("\tmetav1.ListMeta `json:\"metadata\"`\n")
+			_, _ = typeBytes.WriteString("\tmetav1.ListMeta `json:\"metadata\"`\n")
 		}
-		typeBytes.WriteString(fmt.Sprintf("\t%s `json:\",inline\"`\n}\n", bodyName))
-		typeBytes.WriteString(fmt.Sprintf("\nfunc New%s() *%s {\n\treturn &%s{}\n}\n", typeName, typeName, typeName))
+		_, _ = typeBytes.WriteString(fmt.Sprintf("\t%s `json:\",inline\"`\n}\n", bodyName))
+		_, _ = typeBytes.WriteString(fmt.Sprintf("\nfunc New%s() *%s {\n\treturn &%s{}\n}\n", typeName, typeName, typeName))
 		toAppend = typeBytes.Bytes()
 	}
 	return toAppend, additionalImports, bodyName
@@ -194,7 +193,12 @@ func appendToGoBytes(existing []byte, toAppend []byte, additionalImports ...stri
 	if len(toAppend) == 0 && len(additionalImports) == 0 {
 		return existing, nil
 	}
-	newContents := append(existing, toAppend...)
+	// combine existing and toAppend
+	newContents := make([]byte, len(existing)+len(toAppend))
+	copy(newContents, existing)
+	copy(newContents[len(existing):], toAppend)
+
+	// Parse the combined go code and add imports
 	fset := token.NewFileSet() // A FileSet is needed for parsing
 	node, err := parser.ParseFile(fset, "", newContents, parser.ParseComments)
 	if err != nil {

@@ -681,6 +681,183 @@ var (
 						Type: []string{"string"},
 					},
 				},
+				"generateName": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"resourceVersion": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"generation": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"integer"},
+						Format: "int64",
+					},
+				},
+				"uid": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"selfLink": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"creationTimestamp": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"string"},
+						Format: "date-time",
+					},
+				},
+				"deletionTimestamp": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"string"},
+						Format: "date-time",
+					},
+				},
+				"deletionGracePeriodSeconds": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"integer"},
+						Format: "int64",
+					},
+				},
+				"labels": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"object"},
+						AdditionalProperties: &spec.SchemaOrBool{
+							Allows: true,
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+				"annotations": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"object"},
+						AdditionalProperties: &spec.SchemaOrBool{
+							Allows: true,
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+				"ownerReferences": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"array"},
+						Items: &spec.SchemaOrArray{
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"object"},
+									Properties: map[string]spec.Schema{
+										"apiVersion": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"kind": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"name": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"uid": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"controller": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"boolean"},
+											},
+										},
+										"blockOwnerDeletion": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"boolean"},
+											},
+										},
+									},
+									Required: []string{"apiVersion", "kind", "name", "uid"},
+								},
+							},
+						},
+					},
+				},
+				"finalizers": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"array"},
+						Items: &spec.SchemaOrArray{
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+				"managedFields": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"array"},
+						Items: &spec.SchemaOrArray{
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"object"},
+									Properties: map[string]spec.Schema{
+										"manager": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"operation": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"apiVersion": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"time": {
+											SchemaProps: spec.SchemaProps{
+												Type:   []string{"string"},
+												Format: "date-time",
+											},
+										},
+										"fieldsType": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"fieldsV1": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"object"},
+											},
+										},
+										"subresource": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		VendorExtensible: spec.VendorExtensible{
@@ -715,7 +892,6 @@ var (
 					},
 				},
 			},
-			Required: []string{"selfLink", "resourceVersion", "continue"},
 		},
 		VendorExtensible: spec.VendorExtensible{
 			Extensions: spec.Extensions{
