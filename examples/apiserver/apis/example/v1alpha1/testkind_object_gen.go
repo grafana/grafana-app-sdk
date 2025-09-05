@@ -23,6 +23,8 @@ type TestKind struct {
 	Spec TestKindSpec `json:"spec" yaml:"spec"`
 
 	Status TestKindStatus `json:"status" yaml:"status"`
+
+	Mysubresource TestKindMysubresource `json:"mysubresource" yaml:"mysubresource"`
 }
 
 func (o *TestKind) GetSpec() any {
@@ -41,6 +43,8 @@ func (o *TestKind) SetSpec(spec any) error {
 func (o *TestKind) GetSubresources() map[string]any {
 	return map[string]any{
 		"status": o.Status,
+
+		"mysubresource": o.Mysubresource,
 	}
 }
 
@@ -48,6 +52,9 @@ func (o *TestKind) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
 		return o.Status, true
+
+	case "mysubresource":
+		return o.Mysubresource, true
 	default:
 		return nil, false
 	}
@@ -61,6 +68,14 @@ func (o *TestKind) SetSubresource(name string, value any) error {
 			return fmt.Errorf("cannot set status type %#v, not of type TestKindStatus", value)
 		}
 		o.Status = cast
+		return nil
+
+	case "mysubresource":
+		cast, ok := value.(TestKindMysubresource)
+		if !ok {
+			return fmt.Errorf("cannot set mysubresource type %#v, not of type TestKindMysubresource", value)
+		}
+		o.Mysubresource = cast
 		return nil
 	default:
 		return fmt.Errorf("subresource '%s' does not exist", name)
@@ -234,6 +249,7 @@ func (o *TestKind) DeepCopyInto(dst *TestKind) {
 	o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
 	o.Spec.DeepCopyInto(&dst.Spec)
 	o.Status.DeepCopyInto(&dst.Status)
+	o.Mysubresource.DeepCopyInto(&dst.Mysubresource)
 }
 
 // Interface compliance compile-time check
@@ -315,5 +331,17 @@ func (s *TestKindStatus) DeepCopy() *TestKindStatus {
 
 // DeepCopyInto deep copies TestKindStatus into another TestKindStatus object
 func (s *TestKindStatus) DeepCopyInto(dst *TestKindStatus) {
+	resource.CopyObjectInto(dst, s)
+}
+
+// DeepCopy creates a full deep copy of TestKindMysubresource
+func (s *TestKindMysubresource) DeepCopy() *TestKindMysubresource {
+	cpy := &TestKindMysubresource{}
+	s.DeepCopyInto(cpy)
+	return cpy
+}
+
+// DeepCopyInto deep copies TestKindMysubresource into another TestKindMysubresource object
+func (s *TestKindMysubresource) DeepCopyInto(dst *TestKindMysubresource) {
 	resource.CopyObjectInto(dst, s)
 }

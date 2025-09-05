@@ -14,6 +14,9 @@ testKind: {
 			testField: string
 			foobar?: #FooBar
 		}
+		mysubresource: {
+			extraValue: string
+		}
 	}
 	routes: {
 		"/foo": {
