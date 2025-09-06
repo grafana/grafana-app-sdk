@@ -149,7 +149,8 @@
                                                                                         "DELETE",
                                                                                         "CONNECT",
                                                                                         "*"
-                                                                                    ]
+                                                                                    ],
+                                                                                    "type": "string"
                                                                                 },
                                                                                 "type": "array"
                                                                             }
@@ -169,7 +170,8 @@
                                                                                         "DELETE",
                                                                                         "CONNECT",
                                                                                         "*"
-                                                                                    ]
+                                                                                    ],
+                                                                                    "type": "string"
                                                                                 },
                                                                                 "type": "array"
                                                                             }
@@ -210,7 +212,8 @@
                                                                 "enum": [
                                                                     "Namespaced",
                                                                     "Cluster"
-                                                                ]
+                                                                ],
+                                                                "type": "string"
                                                             },
                                                             "selectableFields": {
                                                                 "items": {
@@ -287,7 +290,8 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
@@ -310,7 +314,8 @@
                                                     "enum": [
                                                         "success",
                                                         "failure"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
@@ -480,7 +485,8 @@
                                                                                         "DELETE",
                                                                                         "CONNECT",
                                                                                         "*"
-                                                                                    ]
+                                                                                    ],
+                                                                                    "type": "string"
                                                                                 },
                                                                                 "type": "array"
                                                                             }
@@ -500,7 +506,8 @@
                                                                                         "DELETE",
                                                                                         "CONNECT",
                                                                                         "*"
-                                                                                    ]
+                                                                                    ],
+                                                                                    "type": "string"
                                                                                 },
                                                                                 "type": "array"
                                                                             }
@@ -542,7 +549,8 @@
                                                                 "enum": [
                                                                     "Namespaced",
                                                                     "Cluster"
-                                                                ]
+                                                                ],
+                                                                "type": "string"
                                                             },
                                                             "selectableFields": {
                                                                 "items": {
@@ -563,6 +571,21 @@
                                                 "name": {
                                                     "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
                                                     "type": "string"
+                                                },
+                                                "routes": {
+                                                    "properties": {
+                                                        "cluster": {
+                                                            "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                                            "type": "object",
+                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                        },
+                                                        "namespaced": {
+                                                            "description": "Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                                            "type": "object",
+                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                        }
+                                                    },
+                                                    "type": "object"
                                                 },
                                                 "served": {
                                                     "default": true,
@@ -619,7 +642,8 @@
                                                         "success",
                                                         "in_progress",
                                                         "failed"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
@@ -642,7 +666,8 @@
                                                     "enum": [
                                                         "success",
                                                         "failure"
-                                                    ]
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [

@@ -97,15 +97,22 @@ type VersionProperties struct {
 	Codegen KindCodegenProperties `json:"codegen"`
 }
 
+type VersionCustomRoutes struct {
+	Namespaced map[string]map[string]CustomRoute `json:"namespaced"`
+	Cluster    map[string]map[string]CustomRoute `json:"cluster"`
+}
+
 type Version interface {
 	Name() string
 	Properties() VersionProperties
 	Kinds() []VersionedKind
+	Routes() VersionCustomRoutes
 }
 
 type SimpleVersion struct {
-	Props    VersionProperties
-	AllKinds []VersionedKind
+	Props        VersionProperties
+	AllKinds     []VersionedKind
+	CustomRoutes VersionCustomRoutes
 }
 
 func (v *SimpleVersion) Name() string {
@@ -118,6 +125,10 @@ func (v *SimpleVersion) Properties() VersionProperties {
 
 func (v *SimpleVersion) Kinds() []VersionedKind {
 	return v.AllKinds
+}
+
+func (v *SimpleVersion) Routes() VersionCustomRoutes {
+	return v.CustomRoutes
 }
 
 type VersionedKind struct {
