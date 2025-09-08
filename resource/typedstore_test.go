@@ -190,6 +190,75 @@ func TestTypedStore_Update(t *testing.T) {
 	})
 }
 
+func TestTypedStore_UpdateFunction(t *testing.T) {
+	store, client := getTypedStoreTestSetup()
+	ctx := context.TODO()
+	existingObj := &TypedSpecStatusObject[string, string]{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace:       "ns",
+			Name:            "test",
+			ResourceVersion: "abc",
+		},
+		Spec: "bar",
+	}
+	id := Identifier{
+		Namespace: "ns",
+		Name:      "test",
+	}
+
+	t.Run("get error", func(t *testing.T) {
+		getErr := fmt.Errorf("I AM ERROR")
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			return nil, getErr
+		}
+		client.UpdateIntoFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
+			t.Fatalf("client update should not be called")
+			return nil
+		}
+		ret, err := store.UpdateFunction(ctx, id, func(o *TypedSpecStatusObject[string, string]) (*TypedSpecStatusObject[string, string], error) {
+			t.Fatalf("updateFunction should not be called")
+			return nil, nil
+		}, 0)
+		assert.Nil(t, ret)
+		assert.Equal(t, getErr, err)
+	})
+
+	t.Run("updateFunc error", func(t *testing.T) {
+		updateFuncErr := fmt.Errorf("I AM ERROR")
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			return existingObj, nil
+		}
+		client.UpdateIntoFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
+			t.Fatalf("client update should not be called")
+			return nil
+		}
+		ret, err := store.UpdateFunction(ctx, id, func(o *TypedSpecStatusObject[string, string]) (*TypedSpecStatusObject[string, string], error) {
+			return nil, updateFuncErr
+		}, 0)
+		assert.Nil(t, ret)
+		assert.Equal(t, updateFuncErr, err)
+	})
+
+	t.Run("no ResourceVersion after updateFunc", func(t *testing.T) {
+		client.GetFunc = func(c context.Context, identifier Identifier) (Object, error) {
+			return existingObj, nil
+		}
+		client.UpdateIntoFunc = func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
+			assert.Fail(t, "client update should not be called")
+			return nil
+		}
+		ret, err := store.UpdateFunction(ctx, id, func(o *TypedSpecStatusObject[string, string]) (*TypedSpecStatusObject[string, string], error) {
+			cpy := o.Copy().(*TypedSpecStatusObject[string, string])
+			cpy.SetResourceVersion("")
+			return cpy, nil
+		}, 0)
+		assert.Nil(t, ret)
+		assert.Equal(t, ErrMissingResourceVersion, err)
+	})
+
+	// TODO: other tests
+}
+
 func TestTypedStore_Upsert(t *testing.T) {
 	store, client := getTypedStoreTestSetup()
 	ctx := context.TODO()

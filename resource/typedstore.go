@@ -109,6 +109,48 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 	return t.cast(ret)
 }
 
+// UpdateFunction performs Get-and-Put logic to update an object, first getting the resource,
+// then performing updateFunc on it, and then updating the resource.
+// If the Update returns a 409/Conflict, this process is retried after some small jitter based on the configured retries.
+// If applying updateFunc results in an object with an empty ResourceVersion, ErrMissingResourceVersion will be returned.
+func (t *TypedStore[T]) UpdateFunction(ctx context.Context, identifier Identifier, updateFunc func(T) (T, error), maxRetries int) (T, error) {
+	obj, err := t.Get(ctx, identifier)
+	if err != nil {
+		var n T
+		return n, err
+	}
+	updated, err := updateFunc(obj)
+	if err != nil {
+		var n T
+		return n, err
+	}
+	if updated.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
+	err = t.Client().UpdateInto(ctx, identifier, updated, UpdateOptions{
+		ResourceVersion: updated.GetResourceVersion(),
+	}, updated)
+	retries := 0
+	for err != nil && apierrors.IsConflict(err) && retries <= maxRetries {
+		retries++
+		err = t.Client().GetInto(ctx, identifier, obj)
+		if err != nil {
+			var n T
+			return n, fmt.Errorf("error getting object after receiving conflict: %w", err)
+		}
+		updated, err = updateFunc(obj)
+		if err != nil {
+			var n T
+			return n, err
+		}
+		err = t.Client().UpdateInto(ctx, identifier, updated, UpdateOptions{
+			ResourceVersion: updated.GetResourceVersion(),
+		}, updated)
+	}
+	return updated, err
+}
+
 // Upsert updates an existing resource or creates a new one if none exists, and returns the new version.
 // Keep in mind that an Upsert will completely overwrite the object,
 // so nil or missing values will be removed, not ignored.
@@ -156,6 +198,50 @@ func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identi
 		return n, err
 	}
 	return t.cast(ret)
+}
+
+// UpdateSubresourceFunction performs Get-and-Put logic to update an object, first getting the resource,
+// then performing updateFunc on it, and then updating the subresource.
+// If the UpdateSubresource returns a 409/Conflict, this process is retried after some small jitter based on the configured retries.
+// If applying updateFunc results in an object with an empty ResourceVersion, ErrMissingResourceVersion will be returned.
+func (t *TypedStore[T]) UpdateSubresourceFunction(ctx context.Context, identifier Identifier, updateFunc func(T) (T, error), subresource string, maxRetries int) (T, error) {
+	obj, err := t.Get(ctx, identifier)
+	if err != nil {
+		var n T
+		return n, err
+	}
+	updated, err := updateFunc(obj)
+	if err != nil {
+		var n T
+		return n, err
+	}
+	if updated.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
+	err = t.Client().UpdateInto(ctx, identifier, updated, UpdateOptions{
+		ResourceVersion: updated.GetResourceVersion(),
+		Subresource:     subresource,
+	}, updated)
+	retries := 0
+	for err != nil && apierrors.IsConflict(err) && retries <= maxRetries {
+		retries++
+		err = t.Client().GetInto(ctx, identifier, obj)
+		if err != nil {
+			var n T
+			return n, fmt.Errorf("error getting object after receiving conflict: %w", err)
+		}
+		updated, err = updateFunc(obj)
+		if err != nil {
+			var n T
+			return n, err
+		}
+		err = t.Client().UpdateInto(ctx, identifier, updated, UpdateOptions{
+			ResourceVersion: updated.GetResourceVersion(),
+			Subresource:     subresource,
+		}, updated)
+	}
+	return updated, err
 }
 
 // Delete deletes a resource with the provided identifier
