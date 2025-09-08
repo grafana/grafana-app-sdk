@@ -129,7 +129,8 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 			return patchErr
 		}
 		err := o.Add(context.TODO(), obj)
-		assert.Equal(t, patchErr, err)
+		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers/0", Operation: resource.PatchOpRemove}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
+		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("deleted, pending us, delete error", func(t *testing.T) {
@@ -436,7 +437,8 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 			return patchErr
 		}
 		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
-		assert.Equal(t, patchErr, err)
+		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers/0", Operation: resource.PatchOpRemove}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
+		assert.Equal(t, expectedErr, err)
 	})
 
 	t.Run("delete, patch RV mismatch", func(t *testing.T) {
