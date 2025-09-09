@@ -611,6 +611,9 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addCalls++
+				if addCalls >= 3 {
+					t.Fatal("Add should only be retried once based on the RetryPolicy")
+				}
 				wg.Done()
 				return errors.New("I AM ERROR")
 			},
@@ -618,6 +621,9 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddReconciler(&SimpleReconciler{
 			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 				reconcileCalls++
+				if reconcileCalls >= 3 {
+					t.Fatal("Reconcile should only be retried once based on the RetryPolicy")
+				}
 				wg.Done()
 				return ReconcileResult{}, errors.New("ICH BIN ERROR")
 			},
