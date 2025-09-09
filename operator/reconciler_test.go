@@ -359,9 +359,9 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
-						Path:      "/metadata/finalizers/0",
-						Operation: resource.PatchOpRemove,
-						Value:     nil,
+						Path:      "/metadata/finalizers",
+						Operation: resource.PatchOpReplace,
+						Value:     []string{},
 					}, {
 						Path:      "/metadata/resourceVersion",
 						Operation: resource.PatchOpReplace,
@@ -448,9 +448,9 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, req.Object.GetStaticMetadata().Identifier(), identifier)
 				assert.Equal(t, resource.PatchRequest{
 					Operations: []resource.PatchOperation{{
-						Path:      "/metadata/finalizers/0",
-						Operation: resource.PatchOpRemove,
-						Value:     nil,
+						Path:      "/metadata/finalizers",
+						Operation: resource.PatchOpReplace,
+						Value:     []string{},
 					}, {
 						Path:      "/metadata/resourceVersion",
 						Operation: resource.PatchOpReplace,
@@ -467,7 +467,7 @@ func TestOpinionatedReconciler_Reconcile(t *testing.T) {
 			},
 		}
 		res, err := op.Reconcile(ctx, req)
-		expectedPatchErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers/0", Operation: resource.PatchOpRemove}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: req.Object.GetResourceVersion()}}})
+		expectedPatchErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers", Operation: resource.PatchOpReplace, Value: []string{}}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: req.Object.GetResourceVersion()}}})
 		assert.Equal(t, ReconcileResult{
 			State: map[string]any{
 				opinionatedReconcilerPatchRemoveStateKey: expectedPatchErr,
