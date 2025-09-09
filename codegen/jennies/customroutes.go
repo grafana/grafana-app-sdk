@@ -170,7 +170,7 @@ func getCustomRouteAdditions(customRoute codegen.CustomRoute, typeName string) (
 	additionalImports = make([]string, 0)
 	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
 		bodyName = typeName + "Body"
-		additionalImports = append(additionalImports, `metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`)
+		additionalImports = append(additionalImports, `metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"`, `"k8s.io/apimachinery/pkg/runtime"`, `"github.com/grafana/grafana-app-sdk/resource"`)
 		typeBytes := bytes.Buffer{}
 		_, _ = typeBytes.WriteString(fmt.Sprintf("type %s struct {\n", typeName))
 		if customRoute.Response.Metadata.TypeMeta {
@@ -184,9 +184,30 @@ func getCustomRouteAdditions(customRoute codegen.CustomRoute, typeName string) (
 		}
 		_, _ = typeBytes.WriteString(fmt.Sprintf("\t%s `json:\",inline\"`\n}\n", bodyName))
 		_, _ = typeBytes.WriteString(fmt.Sprintf("\nfunc New%s() *%s {\n\treturn &%s{}\n}\n", typeName, typeName, typeName))
+		_, _ = typeBytes.Write(getCustomRouteResponseDeepCopyCode(customRoute, typeName, bodyName))
 		toAppend = typeBytes.Bytes()
 	}
 	return toAppend, additionalImports, bodyName
+}
+
+func getCustomRouteResponseDeepCopyCode(customRoute codegen.CustomRoute, typeName string, bodyName string) []byte {
+	if typeName == bodyName || !customRoute.Response.Metadata.TypeMeta {
+		return []byte{}
+	}
+	buf := bytes.Buffer{}
+	_, _ = buf.WriteString(fmt.Sprintf("\nfunc (b *%s) DeepCopyInto(dst *%s) {\n\tresource.CopyObjectInto(dst, b)\n}\n", bodyName, bodyName))
+	_, _ = buf.WriteString(fmt.Sprintf("\nfunc (o *%s) DeepCopyObject() runtime.Object {\n\tdst := New%s()\n\to.DeepCopyInto(dst)\n\treturn dst\n}\n", typeName, typeName))
+	_, _ = buf.WriteString(fmt.Sprintf("\nfunc (o *%s) DeepCopyInto(dst *%s) {\n", typeName, typeName))
+	if customRoute.Response.Metadata.TypeMeta {
+		_, _ = buf.WriteString(fmt.Sprintf("\tdst.TypeMeta.APIVersion = o.TypeMeta.APIVersion\n\tdst.TypeMeta.Kind = o.TypeMeta.Kind\n"))
+	}
+	if customRoute.Response.Metadata.ObjectMeta {
+		_, _ = buf.WriteString(fmt.Sprintf("\to.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)\n"))
+	} else if customRoute.Response.Metadata.ListMeta {
+		_, _ = buf.WriteString(fmt.Sprintf("\to.ListMeta.DeepCopyInto(&dst.ListMeta)\n"))
+	}
+	_, _ = buf.WriteString(fmt.Sprintf("\to.%s.DeepCopyInto(&dst.%s)\n}\n\nvar _ runtime.Object = &%s{}\n", bodyName, bodyName, typeName))
+	return buf.Bytes()
 }
 
 func appendToGoBytes(existing []byte, toAppend []byte, additionalImports ...string) ([]byte, error) {
@@ -231,7 +252,7 @@ func appendToGoBytes(existing []byte, toAppend []byte, additionalImports ...stri
 					Tok:    token.IMPORT,
 					Lparen: token.Pos(1), // Dummy position
 					Specs:  []ast.Spec{newImport},
-					Rparen: token.Pos(1), // Dummy position
+					//Rparen: token.Pos(1), // Dummy position
 				},
 			}, node.Decls...)
 		}
