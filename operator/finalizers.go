@@ -152,26 +152,44 @@ func (o *finalizerUpdater) RemoveFinalizer(ctx context.Context, object resource.
 }
 
 func (o *finalizerUpdater) doRemoveFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
-	finalizers := object.GetFinalizers()
-	if !slices.Contains(finalizers, finalizer) {
-		// Finalizer already removed
+	var (
+		finalizers = make([]string, 0, len(object.GetFinalizers()))
+		found      = false
+	)
+
+	for _, f := range object.GetFinalizers() {
+		if f == finalizer {
+			found = true
+			continue
+		}
+
+		finalizers = append(finalizers, f)
+	}
+
+	if !found {
 		return nil
 	}
 
 	req := resource.PatchRequest{
-		Operations: []resource.PatchOperation{{
-			Operation: resource.PatchOpRemove,
-			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, finalizer)),
-		}, {
-			Operation: resource.PatchOpReplace,
-			Path:      "/metadata/resourceVersion",
-			Value:     object.GetResourceVersion(),
-		}},
+		Operations: []resource.PatchOperation{
+			{
+				Operation: resource.PatchOpReplace,
+				Path:      "/metadata/finalizers",
+				Value:     finalizers,
+			}, {
+				Operation: resource.PatchOpReplace,
+				Path:      "/metadata/resourceVersion",
+				Value:     object.GetResourceVersion(),
+			},
+		},
 	}
-	err := o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), req, resource.PatchOptions{}, object)
-	if err != nil {
+
+	if err := o.client.PatchInto(
+		ctx, object.GetStaticMetadata().Identifier(), req, resource.PatchOptions{}, object,
+	); err != nil {
 		return NewFinalizerOperationError(err, req)
 	}
+
 	return nil
 }
 
