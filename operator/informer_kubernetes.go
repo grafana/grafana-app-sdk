@@ -40,6 +40,10 @@ type KubernetesBasedInformerOptions struct {
 	// This is distinct from a full resync, as no information is fetched from the API server.
 	// An empty value will disable cache resyncs.
 	CacheResyncInterval time.Duration
+	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
+	// rather than waiting for the informer to finish with its initial list sync.
+	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
+	HealthCheckIgnoreSync bool
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
@@ -76,7 +80,8 @@ func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, optio
 			cache.Indexers{
 				cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 			}),
-		healthCheckName: healthCheckName,
+		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
+		healthCheckName:       healthCheckName,
 	}, nil
 }
 
