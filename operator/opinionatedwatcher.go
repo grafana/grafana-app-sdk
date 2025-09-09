@@ -2,13 +2,11 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"math/rand"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/codes"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -146,6 +144,8 @@ func (o *OpinionatedWatcher) Wrap(watcher ResourceWatcher, syncToAdd bool) { // 
 // Subsequent calls to Add will check the finalizer list and call SyncFunc if the finalizer is already attached,
 // or if ObjectMetadata.DeletionTimestamp is non-nil, they will call DeleteFunc and remove the finalizer
 // (the finalizer prevents the resource from being hard deleted until it is removed).
+//
+//nolint:funlen
 func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) error {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-add")
 	defer span.End()
@@ -185,6 +185,11 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.finalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				var chk FinalizerError
+				if errors.As(err, &chk) {
+					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+				}
+				logger.Error("error removing finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 				return err
 			}
 		}
@@ -193,6 +198,11 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				var chk FinalizerError
+				if errors.As(err, &chk) {
+					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+				}
+				logger.Error("error removing in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 				return err
 			}
 		}
@@ -216,6 +226,11 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				var chk FinalizerError
+				if errors.As(err, &chk) {
+					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+				}
+				logger.Error("error removing in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 				return err
 			}
 		}
@@ -229,8 +244,14 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	err := o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
-		return fmt.Errorf("error adding finalizer: %w", err)
+		var chk FinalizerError
+		if errors.As(err, &chk) {
+			logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+		}
+		logger.Error("error adding in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
+		return fmt.Errorf("error adding in-progress finalizer: %w", err)
 	}
+
 	err = o.addFunc(ctx, object)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
@@ -241,6 +262,12 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	logger.Debug("Successful Add call, adding finalizer and removing in-progress one", "finalizer", o.finalizer, "currentFinalizers", finalizers)
 	err = o.finalizerUpdater.ReplaceFinalizer(ctx, object, o.addPendingFinalizer, o.finalizer)
 	if err != nil {
+		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
+		var chk FinalizerError
+		if errors.As(err, &chk) {
+			logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+		}
+		logger.Error("error adding finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
 		return fmt.Errorf("error adding finalizer: %w", err)
 	}
 	return nil
@@ -251,6 +278,8 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 // If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
 // and the object's finalizer will be removed to allow kubernetes to hard delete it.
 // Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+//
+//nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedWatcher-update")
 	defer span.End()
@@ -287,6 +316,11 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		err = o.finalizerUpdater.ReplaceFinalizer(ctx, tgt, o.addPendingFinalizer, o.finalizer)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
+			var chk FinalizerError
+			if errors.As(err, &chk) {
+				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+			}
+			logger.Error("error adding finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 			return fmt.Errorf("error adding finalizer: %w", err)
 		}
 	}
@@ -314,6 +348,11 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, tgt, o.finalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				var chk FinalizerError
+				if errors.As(err, &chk) {
+					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+				}
+				logger.Error("error removing finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 				return err
 			}
 		}
@@ -322,6 +361,11 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, tgt, o.addPendingFinalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
+				var chk FinalizerError
+				if errors.As(err, &chk) {
+					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+				}
+				logger.Error("error removing in-progress finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 				return err
 			}
 		}
@@ -387,159 +431,6 @@ func (o *OpinionatedWatcher) syncFunc(ctx context.Context, object resource.Objec
 	}
 	// TODO: log?
 	return nil
-}
-
-type finalizerUpdater struct {
-	client PatchClient
-}
-
-func newFinalizerUpdater(client PatchClient) *finalizerUpdater {
-	return &finalizerUpdater{
-		client: client,
-	}
-}
-
-func (o *finalizerUpdater) AddFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
-	err := o.doAddFinalizer(ctx, object, finalizer)
-	attempts := 0
-	// If we run into a conflict, retry a few times
-	for err != nil && apierrors.IsConflict(err) && attempts < 3 {
-		logging.FromContext(ctx).Debug("conflict adding finalizer, retrying after small delay", "finalizer", finalizer)
-		// Simple wait in case we've got multiple operators working on this
-		time.Sleep(time.Second*time.Duration(attempts) + o.jitter(time.Millisecond, 500))
-		// Try again with an updated object
-		err = o.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), object)
-		if err != nil {
-			return fmt.Errorf("unable to get updated object to add finalizer: %w", err)
-		}
-		err = o.doAddFinalizer(ctx, object, finalizer)
-		attempts++
-	}
-	return err
-}
-
-func (o *finalizerUpdater) doAddFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
-	finalizers := object.GetFinalizers()
-	if slices.Contains(finalizers, finalizer) {
-		// Finalizer already added
-		return nil
-	}
-
-	if len(finalizers) > 0 {
-		return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-			Operations: []resource.PatchOperation{{
-				Operation: resource.PatchOpAdd,
-				Path:      "/metadata/finalizers/-",
-				Value:     finalizer,
-			}, {
-				Operation: resource.PatchOpReplace,
-				Path:      "/metadata/resourceVersion",
-				Value:     object.GetResourceVersion(),
-			}},
-		}, resource.PatchOptions{}, object)
-	}
-	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-		Operations: []resource.PatchOperation{{
-			Operation: resource.PatchOpAdd,
-			Path:      "/metadata/finalizers",
-			Value:     []string{finalizer},
-		}, {
-			Operation: resource.PatchOpReplace,
-			Path:      "/metadata/resourceVersion",
-			Value:     object.GetResourceVersion(),
-		}},
-	}, resource.PatchOptions{}, object)
-}
-
-func (o *finalizerUpdater) ReplaceFinalizer(ctx context.Context, object resource.Object, toReplace, replaceWith string) error {
-	err := o.doReplaceFinalizer(ctx, object, toReplace, replaceWith)
-	attempts := 0
-	// If we run into a conflict, retry a few times
-	for err != nil && apierrors.IsConflict(err) && attempts < 3 {
-		logging.FromContext(ctx).Debug("conflict replacing finalizer, retrying after small delay", "toReplace", toReplace, "replaceWith", replaceWith)
-		// Simple wait in case we've got multiple operators working on this
-		time.Sleep(time.Second*time.Duration(attempts) + o.jitter(time.Millisecond, 500))
-		// Try again with an updated object
-		err = o.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), object)
-		if err != nil {
-			return fmt.Errorf("unable to get updated object to add finalizer: %w", err)
-		}
-		err = o.doReplaceFinalizer(ctx, object, toReplace, replaceWith)
-		attempts++
-	}
-	return err
-}
-
-func (o *finalizerUpdater) doReplaceFinalizer(ctx context.Context, object resource.Object, toReplace, replaceWith string) error {
-	finalizers := object.GetFinalizers()
-	if slices.Contains(finalizers, replaceWith) {
-		// Finalizer already added, check if toReplace is already removed (and remove it if it's still present)
-		if slices.Contains(finalizers, toReplace) {
-			return o.doRemoveFinalizer(ctx, object, toReplace)
-		}
-		return nil
-	}
-	if !slices.Contains(finalizers, toReplace) {
-		// toReplace already removed, just add replaceWith
-		return o.doAddFinalizer(ctx, object, toReplace)
-	}
-
-	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-		Operations: []resource.PatchOperation{{
-			Operation: resource.PatchOpReplace,
-			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, toReplace)),
-			Value:     replaceWith,
-		}, {
-			Operation: resource.PatchOpReplace,
-			Path:      "/metadata/resourceVersion",
-			Value:     object.GetResourceVersion(),
-		}},
-	}, resource.PatchOptions{}, object)
-}
-
-func (o *finalizerUpdater) RemoveFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
-	err := o.doRemoveFinalizer(ctx, object, finalizer)
-	attempts := 0
-	// If we run into a conflict, retry a few times
-	for err != nil && apierrors.IsConflict(err) && attempts < 3 {
-		logging.FromContext(ctx).Debug("conflict removing finalizer, retrying after small delay", "finalizer", finalizer)
-		// Simple wait in case we've got multiple operators working on this
-		time.Sleep(time.Second*time.Duration(attempts) + o.jitter(time.Millisecond, 500))
-		// Try again with an updated object
-		err = o.client.GetInto(ctx, object.GetStaticMetadata().Identifier(), object)
-		if err != nil {
-			return fmt.Errorf("unable to get updated object to add finalizer: %w", err)
-		}
-		err = o.doRemoveFinalizer(ctx, object, finalizer)
-		attempts++
-	}
-	return err
-}
-
-func (o *finalizerUpdater) doRemoveFinalizer(ctx context.Context, object resource.Object, finalizer string) error {
-	finalizers := object.GetFinalizers()
-	if !slices.Contains(finalizers, finalizer) {
-		// Finalizer already removed
-		return nil
-	}
-
-	return o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), resource.PatchRequest{
-		Operations: []resource.PatchOperation{{
-			Operation: resource.PatchOpRemove,
-			Path:      fmt.Sprintf("/metadata/finalizers/%d", slices.Index(finalizers, finalizer)),
-		}, {
-			Operation: resource.PatchOpReplace,
-			Path:      "/metadata/resourceVersion",
-			Value:     object.GetResourceVersion(),
-		}},
-	}, resource.PatchOptions{}, object)
-}
-
-// gosec linter gets mad about math/rand, but we don't need secure random for time jitter
-//
-//nolint:gosec,revive
-func (*finalizerUpdater) jitter(unit time.Duration, max int) time.Duration {
-	return time.Duration(rand.Intn(max)) * unit
 }
 
 func (*OpinionatedWatcher) getFinalizers(object resource.Object) []string {

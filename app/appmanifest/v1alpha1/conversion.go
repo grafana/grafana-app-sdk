@@ -199,11 +199,13 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Conversion:       &kind.Conversion,
 			}
 			// Convert the ManifestData's Schema into CRD Schema for v1alpha1
-			sch, err := kind.Schema.AsCRDMap(k.Kind)
-			if err != nil {
-				return nil, fmt.Errorf("unable to convert %s/%s schema: %w", k.Kind, ver.Name, err)
+			if kind.Schema != nil {
+				sch, err := kind.Schema.AsCRDMap(k.Kind)
+				if err != nil {
+					return nil, fmt.Errorf("unable to convert %s/%s schema: %w", k.Kind, ver.Name, err)
+				}
+				k.Schema = sch
 			}
-			k.Schema = sch
 			if kind.Plural != "" {
 				k.Plural = &kind.Plural
 			}
