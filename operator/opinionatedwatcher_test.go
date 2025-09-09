@@ -125,11 +125,11 @@ func TestOpinionatedWatcher_Add(t *testing.T) {
 		obj.SetFinalizers([]string{o.finalizer})
 		patchErr := fmt.Errorf("I AM ERROR")
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-			assert.Equal(t, resource.PatchOpRemove, request.Operations[0].Operation)
+			assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
 			return patchErr
 		}
 		err := o.Add(context.TODO(), obj)
-		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers/0", Operation: resource.PatchOpRemove}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
+		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers", Operation: resource.PatchOpReplace, Value: []string{}}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
 		assert.Equal(t, expectedErr, err)
 	})
 
@@ -433,11 +433,11 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		}
 		patchErr := fmt.Errorf("ICH BIN ERROR")
 		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
-			assert.Equal(t, resource.PatchOpRemove, request.Operations[0].Operation)
+			assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
 			return patchErr
 		}
 		err := o.Update(context.TODO(), schema.ZeroValue(), obj)
-		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers/0", Operation: resource.PatchOpRemove}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
+		expectedErr := NewFinalizerOperationError(patchErr, resource.PatchRequest{Operations: []resource.PatchOperation{{Path: "/metadata/finalizers", Operation: resource.PatchOpReplace, Value: []string{}}, {Path: "/metadata/resourceVersion", Operation: resource.PatchOpReplace, Value: obj.GetResourceVersion()}}})
 		assert.Equal(t, expectedErr, err)
 	})
 
