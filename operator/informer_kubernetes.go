@@ -4,23 +4,33 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-var _ Informer = &KubernetesBasedInformer{}
+var (
+	_ Informer     = &KubernetesBasedInformer{}
+	_ health.Check = &KubernetesBasedInformer{}
+)
 
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
 // and works most optimally with a client that has a Watch response that implements KubernetesCompatibleWatch.
 type KubernetesBasedInformer struct {
 	ErrorHandler        func(context.Context, error)
 	SharedIndexInformer cache.SharedIndexInformer
-	schema              resource.Kind
-	runContext          context.Context
+	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
+	// rather than waiting for the informer to finish with its initial list sync.
+	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
+	HealthCheckIgnoreSync bool
+	schema                resource.Kind
+	runContext            context.Context
+	healthCheckName       string
 }
 
 type KubernetesBasedInformerOptions struct {
@@ -30,6 +40,10 @@ type KubernetesBasedInformerOptions struct {
 	// This is distinct from a full resync, as no information is fetched from the API server.
 	// An empty value will disable cache resyncs.
 	CacheResyncInterval time.Duration
+	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
+	// rather than waiting for the informer to finish with its initial list sync.
+	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
+	HealthCheckIgnoreSync bool
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
@@ -38,6 +52,22 @@ func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, optio
 	*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
+	}
+
+	// Compute a unique name for the health check based on what the informer is watching
+	healthCheckName := fmt.Sprintf("informer-%s.%s/%s", sch.Plural(), sch.Group(), sch.Version())
+	if options.ListWatchOptions.Namespace != "" {
+		healthCheckName = fmt.Sprintf("%s/namespaces/%s", healthCheckName, options.ListWatchOptions.Namespace)
+	}
+	if len(options.ListWatchOptions.LabelFilters) > 0 || len(options.ListWatchOptions.FieldSelectors) > 0 {
+		params := make([]string, 0)
+		if len(options.ListWatchOptions.LabelFilters) > 0 {
+			params = append(params, fmt.Sprintf("labelSelector=%s", strings.Join(options.ListWatchOptions.LabelFilters, ",")))
+		}
+		if len(options.ListWatchOptions.FieldSelectors) > 0 {
+			params = append(params, fmt.Sprintf("fieldSelector=%s", strings.Join(options.ListWatchOptions.FieldSelectors, ",")))
+		}
+		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}
 
 	return &KubernetesBasedInformer{
@@ -50,6 +80,8 @@ func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, optio
 			cache.Indexers{
 				cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
 			}),
+		HealthCheckIgnoreSync: options.HealthCheckIgnoreSync,
+		healthCheckName:       healthCheckName,
 	}, nil
 }
 
@@ -84,6 +116,22 @@ func (k *KubernetesBasedInformer) Run(ctx context.Context) error {
 // Schema returns the resource.Schema this informer is set up for
 func (k *KubernetesBasedInformer) Schema() resource.Schema {
 	return k.schema
+}
+
+func (k *KubernetesBasedInformer) HealthCheck(context.Context) error {
+	if !k.SharedIndexInformer.HasSynced() && !k.HealthCheckIgnoreSync {
+		return fmt.Errorf("informer has not synced")
+	}
+
+	if k.SharedIndexInformer.IsStopped() {
+		return fmt.Errorf("informer is stopped")
+	}
+
+	return nil
+}
+
+func (k *KubernetesBasedInformer) HealthCheckName() string {
+	return k.healthCheckName
 }
 
 func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
