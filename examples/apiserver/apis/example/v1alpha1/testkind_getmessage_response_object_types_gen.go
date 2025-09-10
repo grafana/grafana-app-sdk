@@ -3,22 +3,12 @@
 package v1alpha1
 
 import (
+	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	// +k8s:openapi-gen=true
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type GetMessageBody struct {
-	Message string `json:"message"`
-}
-
-// NewGetMessageBody creates a new GetMessageBody object.
-func NewGetMessageBody() *GetMessageBody {
-	return &GetMessageBody{}
-}
-
+// +k8s:openapi-gen=true
 type GetMessage struct {
 	metav1.TypeMeta `json:",inline"`
 	GetMessageBody  `json:",inline"`
@@ -28,8 +18,8 @@ func NewGetMessage() *GetMessage {
 	return &GetMessage{}
 }
 
-func (b *GetMessageBody) DeepCopyInto(dst *GetMessageBody) {
-	resource.CopyObjectInto(dst, b)
+func (t *GetMessageBody) DeepCopyInto(dst *GetMessageBody) {
+	_ = resource.CopyObjectInto(dst, t)
 }
 
 func (o *GetMessage) DeepCopyObject() runtime.Object {
@@ -44,4 +34,4 @@ func (o *GetMessage) DeepCopyInto(dst *GetMessage) {
 	o.GetMessageBody.DeepCopyInto(&dst.GetMessageBody)
 }
 
-var _ runtime.Object = &GetMessage{}
+var _ runtime.Object = NewGetMessage()

@@ -3,22 +3,12 @@
 package v1alpha1
 
 import (
+	"github.com/grafana/grafana-app-sdk/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-
-	// +k8s:openapi-gen=true
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type GetFooBody struct {
-	Status string `json:"status"`
-}
-
-// NewGetFooBody creates a new GetFooBody object.
-func NewGetFooBody() *GetFooBody {
-	return &GetFooBody{}
-}
-
+// +k8s:openapi-gen=true
 type GetFoo struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
@@ -29,8 +19,8 @@ func NewGetFoo() *GetFoo {
 	return &GetFoo{}
 }
 
-func (b *GetFooBody) DeepCopyInto(dst *GetFooBody) {
-	resource.CopyObjectInto(dst, b)
+func (t *GetFooBody) DeepCopyInto(dst *GetFooBody) {
+	_ = resource.CopyObjectInto(dst, t)
 }
 
 func (o *GetFoo) DeepCopyObject() runtime.Object {
@@ -46,4 +36,4 @@ func (o *GetFoo) DeepCopyInto(dst *GetFoo) {
 	o.GetFooBody.DeepCopyInto(&dst.GetFooBody)
 }
 
-var _ runtime.Object = &GetFoo{}
+var _ runtime.Object = NewGetFoo()
