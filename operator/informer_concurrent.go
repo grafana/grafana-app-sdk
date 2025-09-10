@@ -3,9 +3,14 @@ package operator
 import (
 	"context"
 	"sync"
+
+	"github.com/grafana/grafana-app-sdk/health"
 )
 
-var _ Informer = &ConcurrentInformer{}
+var (
+	_ Informer       = &ConcurrentInformer{}
+	_ health.Checker = &ConcurrentInformer{}
+)
 
 // ConcurrentInformer implements the Informer interface, wrapping another Informer implementation
 // to provide concurrent handling of events.
@@ -84,4 +89,15 @@ func (ci *ConcurrentInformer) Run(ctx context.Context) error {
 	ci.mtx.RUnlock()
 
 	return ci.informer.Run(ctx)
+}
+
+func (ci *ConcurrentInformer) HealthChecks() []health.Check {
+	checks := make([]health.Check, 0)
+	if cast, ok := ci.informer.(health.Check); ok {
+		checks = append(checks, cast)
+	}
+	if cast, ok := ci.informer.(health.Checker); ok {
+		checks = append(checks, cast.HealthChecks()...)
+	}
+	return checks
 }
