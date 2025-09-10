@@ -49,9 +49,9 @@ func TestUpdateObject(t *testing.T) {
 			GetFunc: func(context.Context, Identifier) (Object, error) {
 				return nil, getErr
 			},
-		}, Identifier{}, func(obj *Object, isRetry bool) error {
+		}, Identifier{}, func(obj Object, isRetry bool) (Object, error) {
 			t.Fatalf("should not call updateFunc")
-			return nil
+			return nil, nil
 		}, UpdateOptions{})
 		assert.Nil(t, resp)
 		assert.EqualError(t, err, getErr.Error())
@@ -67,9 +67,9 @@ func TestUpdateObject(t *testing.T) {
 				t.Fatalf("should not call UpdateInto")
 				return nil
 			},
-		}, Identifier{}, func(obj *Object, isRetry bool) error {
-			assert.Equal(t, getObj, *obj)
-			return funcErr
+		}, Identifier{}, func(obj Object, isRetry bool) (Object, error) {
+			assert.Equal(t, getObj, obj)
+			return nil, funcErr
 		}, UpdateOptions{})
 		assert.Nil(t, resp)
 		assert.EqualError(t, err, funcErr.Error())
@@ -84,10 +84,10 @@ func TestUpdateObject(t *testing.T) {
 				t.Fatalf("should not call UpdateInto")
 				return nil
 			},
-		}, Identifier{}, func(obj **UntypedObject, isRetry bool) error {
-			assert.Equal(t, getObj, *obj)
-			(*obj).SetResourceVersion("")
-			return nil
+		}, Identifier{}, func(obj *UntypedObject, isRetry bool) (*UntypedObject, error) {
+			assert.Equal(t, getObj, obj)
+			obj.SetResourceVersion("")
+			return obj, nil
 		}, UpdateOptions{})
 		assert.Nil(t, resp)
 		assert.Equal(t, ErrMissingResourceVersion, err)
@@ -107,13 +107,13 @@ func TestUpdateObject(t *testing.T) {
 				assert.Equal(t, "bar2", obj.GetLabels()["foo"])
 				return updateErr
 			},
-		}, Identifier{}, func(obj **UntypedObject, isRetry bool) error {
+		}, Identifier{}, func(obj *UntypedObject, isRetry bool) (*UntypedObject, error) {
 			updateFuncCalls++
-			assert.Equal(t, getObj, *obj)
-			(*obj).SetLabels(map[string]string{
+			assert.Equal(t, getObj, obj)
+			obj.SetLabels(map[string]string{
 				"foo": "bar2",
 			})
-			return nil
+			return obj, nil
 		}, UpdateOptions{})
 		assert.Nil(t, resp)
 		assert.EqualError(t, err, updateErr.Error())
@@ -129,20 +129,23 @@ func TestUpdateObject(t *testing.T) {
 			GetFunc: func(context.Context, Identifier) (Object, error) {
 				return getObj, nil
 			},
+			GetIntoFunc: func(ctx context.Context, identifier Identifier, into Object) error {
+				return nil
+			},
 			UpdateIntoFunc: func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
 				updateIntoCalls++
 				assert.Equal(t, getObj, obj)
 				assert.Equal(t, "bar2", obj.GetLabels()["foo"])
 				return updateErr
 			},
-		}, Identifier{}, func(obj **UntypedObject, isRetry bool) error {
+		}, Identifier{}, func(obj *UntypedObject, isRetry bool) (*UntypedObject, error) {
 			assert.Equal(t, updateFuncCalls > 0, isRetry)
 			updateFuncCalls++
-			assert.Equal(t, getObj, *obj)
-			(*obj).SetLabels(map[string]string{
+			assert.Equal(t, getObj, obj)
+			obj.SetLabels(map[string]string{
 				"foo": "bar2",
 			})
-			return nil
+			return obj, nil
 		}, UpdateOptions{})
 		assert.Nil(t, resp)
 		assert.Equal(t, updateErr, err)
@@ -152,17 +155,29 @@ func TestUpdateObject(t *testing.T) {
 	t.Run("update 409, success on retry", func(t *testing.T) {
 		updateErr := apierrors.NewConflict(schema.GroupResource{}, "name", errors.New("I AM ERROR"))
 		getObj := getObject("foo")
+		getIntoObj := getObject("foo2")
 		updatedObj := getObject("bar")
+		funcObj := getObject("foobar")
+		funcObj.SetLabels(map[string]string{"foo": "bar"})
 		updateIntoCalls := 0
 		updateFuncCalls := 0
+		getCalls := 0
+		getIntoCalls := 0
 		resp, err := UpdateObject(ctx, &mockClient{
 			GetFunc: func(context.Context, Identifier) (Object, error) {
+				getCalls++
 				return getObj, nil
+			},
+			GetIntoFunc: func(ctx context.Context, identifier Identifier, into Object) error {
+				getIntoCalls++
+				codec := NewJSONCodec()
+				buf := &bytes.Buffer{}
+				codec.Write(buf, getIntoObj)
+				return codec.Read(buf, into)
 			},
 			UpdateIntoFunc: func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
 				updateIntoCalls++
-				assert.Equal(t, getObj, obj)
-				assert.Equal(t, "bar2", obj.GetLabels()["foo"])
+				assert.Equal(t, funcObj, obj)
 				if updateIntoCalls == 2 {
 					codec := NewJSONCodec()
 					buf := &bytes.Buffer{}
@@ -171,14 +186,15 @@ func TestUpdateObject(t *testing.T) {
 				}
 				return updateErr
 			},
-		}, Identifier{}, func(obj **UntypedObject, isRetry bool) error {
+		}, Identifier{}, func(obj *UntypedObject, isRetry bool) (*UntypedObject, error) {
 			assert.Equal(t, updateFuncCalls > 0, isRetry)
+			if updateFuncCalls == 0 {
+				assert.Equal(t, getObj, obj)
+			} else {
+				assert.Equal(t, getIntoObj, obj)
+			}
 			updateFuncCalls++
-			assert.Equal(t, getObj, *obj)
-			(*obj).SetLabels(map[string]string{
-				"foo": "bar2",
-			})
-			return nil
+			return funcObj, nil
 		}, UpdateOptions{})
 		assert.Equal(t, updatedObj, resp)
 		assert.NoError(t, err)
@@ -187,12 +203,23 @@ func TestUpdateObject(t *testing.T) {
 	})
 	t.Run("success", func(t *testing.T) {
 		getObj := getObject("foo")
+		getIntoObj := getObject("foo2")
 		updatedObj := getObject("bar")
 		updateIntoCalls := 0
 		updateFuncCalls := 0
+		getCalls := 0
+		getIntoCalls := 0
 		resp, err := UpdateObject(ctx, &mockClient{
 			GetFunc: func(context.Context, Identifier) (Object, error) {
+				getCalls++
 				return getObj, nil
+			},
+			GetIntoFunc: func(ctx context.Context, identifier Identifier, into Object) error {
+				getIntoCalls++
+				codec := NewJSONCodec()
+				buf := &bytes.Buffer{}
+				codec.Write(buf, getIntoObj)
+				return codec.Read(buf, into)
 			},
 			UpdateIntoFunc: func(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
 				updateIntoCalls++
@@ -201,14 +228,18 @@ func TestUpdateObject(t *testing.T) {
 				codec.Write(buf, updatedObj)
 				return codec.Read(buf, into)
 			},
-		}, Identifier{}, func(obj **UntypedObject, isRetry bool) error {
+		}, Identifier{}, func(obj *UntypedObject, isRetry bool) (*UntypedObject, error) {
 			assert.Equal(t, updateFuncCalls > 0, isRetry)
+			if updateFuncCalls == 0 {
+				assert.Equal(t, getObj, obj)
+			} else {
+				assert.Equal(t, getIntoObj, obj)
+			}
 			updateFuncCalls++
-			assert.Equal(t, getObj, *obj)
-			(*obj).SetLabels(map[string]string{
+			obj.SetLabels(map[string]string{
 				"foo": "bar2",
 			})
-			return nil
+			return obj, nil
 		}, UpdateOptions{})
 		assert.Equal(t, updatedObj, resp)
 		assert.NoError(t, err)
