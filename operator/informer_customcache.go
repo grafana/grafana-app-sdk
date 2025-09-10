@@ -24,6 +24,22 @@ import (
 
 var _ Informer = &CustomCacheInformer{}
 
+const processorBufferSize = 1024
+
+// CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
+type CustomCacheInformer struct {
+	started       bool
+	startedLock   sync.Mutex
+	store         cache.Store
+	controller    cache.Controller
+	listerWatcher cache.ListerWatcher
+	opts          CustomCacheInformerOptions
+	objectType    resource.Object
+	processor     *informerProcessor
+	schema        resource.Kind
+	runContext    context.Context
+}
+
 // MemcachedInformerOptions are the options for the MemcachedInformer.
 type MemcachedInformerOptions struct {
 	CustomCacheInformerOptions
@@ -53,25 +69,33 @@ func NewMemcachedInformer(
 	), nil
 }
 
-// CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
-type CustomCacheInformer struct {
-	started       bool
-	startedLock   sync.Mutex
-	store         cache.Store
-	controller    cache.Controller
-	listerWatcher cache.ListerWatcher
-	opts          CustomCacheInformerOptions
-	objectType    resource.Object
-	processor     *informerProcessor
-	schema        resource.Kind
-	runContext    context.Context
-}
+// NewDefaultCustomCacheInformer creates a new CustomCacheInformer which uses an in-memory cache as its custom cache.
+// This is analogous to calling NewCustomCacheInformer with a cache.NewIndexer as the store, using the default in-memory cache options.
+// To set additional cache options, use NewCustomCacheInformer and create your own cache.Store.
+func NewDefaultCustomCacheInformer(
+	kind resource.Kind, client ListWatchClient, opts CustomCacheInformerOptions,
+) *CustomCacheInformer {
+	// Create a default in-memory cache with standard indexing
+	store := cache.NewIndexer(cache.DeletionHandlingMetaNamespaceKeyFunc, cache.Indexers{
+		cache.NamespaceIndex: cache.MetaNamespaceIndexFunc,
+	})
 
-const processorBufferSize = 1024
+	return NewCustomCacheInformer(
+		store, NewListerWatcher(client, kind, opts.ListWatchOptions), kind, opts,
+	)
+}
 
 // CustomCacheInformerOptions are the options for the CustomCacheInformer.
 type CustomCacheInformerOptions struct {
 	InformerOptions
+	// WatchListPageSize is the requested chunk size of initial and resync watch lists.
+	// If unset, for consistent reads (RV="") or reads that opt-into arbitrarily old data
+	// (RV="0") it will default to pager.PageSize, for the rest (RV != "" && RV != "0")
+	// it will turn off pagination to allow serving them from watch cache.
+	// NOTE: It should be used carefully as paginated lists are always served directly from
+	// etcd, which is significantly less efficient and may lead to serious performance and
+	// scalability problems.
+	WatchListPageSize int64
 	// ProcessorBufferSize is the size of the buffer for the informer processor.
 	// This is the number of events that can be buffered before the processor is blocked.
 	// An empty value will use the default of 1024.
@@ -162,7 +186,7 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.startedLock.Lock()
 		defer c.startedLock.Unlock()
 
-		c.controller = newInformer(c.listerWatcher, c.objectType, c.opts.CacheResyncInterval, c, c.store, nil)
+		c.controller = newInformer(c.listerWatcher, c.objectType, c.opts.CacheResyncInterval, c, c.store, nil, c.opts.WatchListPageSize)
 		c.started = true
 	}()
 
@@ -417,6 +441,7 @@ func newInformer(
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
 	transformer cache.TransformFunc,
+	watchListPageSize int64,
 ) cache.Controller {
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
@@ -428,10 +453,11 @@ func newInformer(
 	})
 
 	cfg := &cache.Config{
-		Queue:            fifo,
-		ListerWatcher:    lw,
-		ObjectType:       objType,
-		FullResyncPeriod: resyncPeriod,
+		Queue:             fifo,
+		ListerWatcher:     lw,
+		ObjectType:        objType,
+		FullResyncPeriod:  resyncPeriod,
+		WatchListPageSize: watchListPageSize,
 
 		Process: func(obj any, isInInitialList bool) error {
 			if deltas, ok := obj.(cache.Deltas); ok {

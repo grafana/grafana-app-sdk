@@ -126,11 +126,17 @@ func NewApp(config app.Config) (app.App, error) {
 
 	// Create the app with the reconciler
 	return simple.NewApp(simple.AppConfig{
-		Name:       "simple-reconciler-app",
-		KubeConfig: config.KubeConfig,
+		Name:           "simple-reconciler-app",
+		KubeConfig:     config.KubeConfig,
+		InformerConfig: simple.AppInformerConfig{
+			// WatchListPageSize can be configured to control the chunk size of initial and resync watch lists.
+			// This should be used carefully as paginated lists are always served directly from etcd,
+			// which is significantly less efficient and may lead to serious performance and scalability problems.
+			// WatchListPageSize: 1000, // Uncomment and set to a value > 0 to enable pagination
+		},
 		ManagedKinds: []simple.AppManagedKind{{
-			Kind:    kind,
-			Watcher: watcher,
+			Kind:             kind,
+			Watcher:          watcher,
 			ReconcileOptions: simple.BasicReconcileOptions{
 				// FIXME: Uncomment this line to turn off the opinionated logic
 				// UsePlain: true, // UsePlain = true turns off the opinionated logic.
