@@ -78,6 +78,12 @@ func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
 		if err != nil {
 			return nil, err
 		}
+
+		// Check for edge case that results in CRDs that may not work with discovery, but should still be allowed to work.
+		// If there is only one version, storage must always be true.
+		if len(kind.Versions()) == 1 {
+			v.Storage = true
+		}
 		resource.Spec.Versions = append(resource.Spec.Versions, v)
 	}
 
