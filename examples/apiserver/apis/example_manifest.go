@@ -349,7 +349,6 @@ func ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb string) 
 	}
 	goType, exists = customRouteToGoRequestBodyType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
 	return goType, exists
-	return nil, false
 }
 
 type GoTypeAssociator struct{}
