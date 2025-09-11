@@ -212,9 +212,11 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			k := AppManifestManifestVersionKind{
 				Kind:             kind.Kind,
 				Scope:            AppManifestManifestVersionKindScope(kind.Scope),
-				Schemas:          kind.Schema.AsOpenAPI3SchemasMap(),
 				SelectableFields: kind.SelectableFields,
 				Conversion:       &kind.Conversion,
+			}
+			if kind.Schema != nil {
+				k.Schemas = kind.Schema.AsOpenAPI3SchemasMap()
 			}
 			if kind.Plural != "" {
 				k.Plural = &kind.Plural

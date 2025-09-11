@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/http/pprof"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -53,6 +54,14 @@ func (s *MetricsServer) RegisterHealthChecks(checks ...health.Check) {
 
 func (s *MetricsServer) RegisterMetricsHandler(handler http.Handler) {
 	s.mux.Handle("/metrics", handler)
+}
+
+func (s *MetricsServer) RegisterProfilingHandlers() {
+	s.mux.HandleFunc("/debug/pprof/", pprof.Index)
+	s.mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+	s.mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	s.mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	s.mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
 }
 
 func (s *MetricsServer) registerHealthHandlers() {
