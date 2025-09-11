@@ -56,7 +56,7 @@ type AppInstaller interface {
 	// GetOpenAPIDefinitions gets a map of OpenAPI definitions for use with kubernetes OpenAPI
 	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
 	// InstallAPIs installs the API endpoints to an API server
-	InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
+	InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
 	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
 	// If the App does not provide admission control, it should return nil
 	AdmissionPlugin() admission.Factory
@@ -77,6 +77,31 @@ type AppInstaller interface {
 type GenericAPIServer interface {
 	// InstallAPIGroup installs the provided APIGroupInfo onto the API Server
 	InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	// RegisteredWebServices returns a list of pointers to currently-installed restful.WebService instances
+	RegisteredWebServices() []*restful.WebService
+}
+
+var _ GenericAPIServer = &KubernetesGenericAPIServer{}
+
+// KubernetesGenericAPIServer implements GenericAPIServer for a kubernetes *server.GenericAPIServer
+type KubernetesGenericAPIServer struct {
+	*genericapiserver.GenericAPIServer
+}
+
+// NewKubernetesGenericAPIServer creates a new KubernetesGenericAPIServer wrapping the provided *server.GenericAPIServer
+func NewKubernetesGenericAPIServer(apiserver *genericapiserver.GenericAPIServer) *KubernetesGenericAPIServer {
+	return &KubernetesGenericAPIServer{
+		GenericAPIServer: apiserver,
+	}
+}
+
+// RegisteredWebServices returns the result of the underlying apiserver's Handler.GoRestfulContainer.RegisteredWebServices(),
+// or nil if either Handler or Handler.GoRestfulContainer is nil
+func (k *KubernetesGenericAPIServer) RegisteredWebServices() []*restful.WebService {
+	if k.Handler != nil && k.Handler.GoRestfulContainer != nil {
+		return k.Handler.GoRestfulContainer.RegisteredWebServices()
+	}
+	return nil
 }
 
 // GoTypeResolver is an interface which describes an object which catalogs the relationship between different aspects of an app
@@ -282,7 +307,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 }
 
 //nolint:gocognit,funlen
-func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
+func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
 		r.scheme = newScheme()
@@ -368,10 +393,11 @@ func (r *defaultInstaller) InstallAPIs(server *genericapiserver.GenericAPIServer
 		}
 	}
 	if hasResourceRoutes {
-		if server.Handler == nil || server.Handler.GoRestfulContainer == nil {
-			return errors.New("could not register custom routes: server.Handler.GoRestfulContainer is nil")
+		webServices := server.RegisteredWebServices()
+		if webServices == nil {
+			return errors.New("could not register custom routes: server.RegisteredWebServices() is nil")
 		}
-		for _, ws := range server.Handler.GoRestfulContainer.RegisteredWebServices() {
+		for _, ws := range webServices {
 			for _, ver := range r.ManifestData().Versions {
 				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
 					for rpath, route := range ver.Routes.Namespaced {
