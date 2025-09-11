@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -155,7 +156,7 @@ const (
 //   - If the action is an Update, and the DeletionTimestamp is non-nil, remove the OpinionatedReconciler's finalizer, and do not delegate (the subsequent Delete will be delegated)
 //   - If the action is an Update, and the OpinionatedReconciler's finalizer is missing (and DeletionTimestamp is nil), add the finalizer, and do not delegate (the subsequent update action will delegate)
 //
-//nolint:funlen
+//nolint:funlen,gocognit
 func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
 	ctx, span := GetTracer().Start(ctx, "OpinionatedReconciler-reconcile")
 	defer span.End()
@@ -194,6 +195,11 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 				resp.State = make(map[string]any)
 			}
 			resp.State[opinionatedReconcilerPatchAddStateKey] = patchErr
+			var chk FinalizerError
+			if errors.As(patchErr, &chk) {
+				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+			}
+			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
 		}
 		return resp, patchErr
 	}
@@ -232,6 +238,11 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 				res.State = make(map[string]any)
 			}
 			res.State[opinionatedReconcilerPatchRemoveStateKey] = patchErr
+			var chk FinalizerError
+			if errors.As(patchErr, &chk) {
+				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+			}
+			logger.Error("error removing finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
 		}
 		return res, patchErr
 	}
@@ -243,6 +254,13 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 		// Add the finalizer, don't delegate, let the reconcile action for adding the finalizer propagate down to avoid confusing extra reconciliations
 		logger.Debug("Missing finalizer in object, adding (this will trigger a new reconcile event)", "finalizer", o.finalizer)
 		patchErr := o.finalizerUpdater.AddFinalizer(ctx, request.Object, o.finalizer)
+		if patchErr != nil {
+			var chk FinalizerError
+			if errors.As(patchErr, &chk) {
+				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+			}
+			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
+		}
 		return ReconcileResult{}, patchErr
 	}
 	return o.wrappedReconcile(ctx, request)
