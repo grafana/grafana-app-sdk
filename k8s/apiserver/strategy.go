@@ -202,21 +202,23 @@ type genericSubresourceStrategy struct {
 	gv          schema.GroupVersion
 	subresource string
 	resetFields []string
+	namespaced  bool
 }
 
 // NewSubresourceStrategy creates a new genericStatusStrategy.
-func newSubresourceStrategy(typer runtime.ObjectTyper, gv schema.GroupVersion, subresource string, resetFields []string) *genericSubresourceStrategy {
+func newSubresourceStrategy(typer runtime.ObjectTyper, gv schema.GroupVersion, subresource string, resetFields []string, namespaced bool) *genericSubresourceStrategy {
 	return &genericSubresourceStrategy{
 		ObjectTyper:   typer,
 		NameGenerator: names.SimpleNameGenerator,
 		gv:            gv,
 		subresource:   subresource,
 		resetFields:   resetFields,
+		namespaced:    namespaced,
 	}
 }
 
-func (*genericSubresourceStrategy) NamespaceScoped() bool {
-	return true
+func (g *genericSubresourceStrategy) NamespaceScoped() bool {
+	return g.namespaced
 }
 
 func (g *genericSubresourceStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {

@@ -140,11 +140,11 @@ func newSubresourceREST(store *genericregistry.Store, scheme *runtime.Scheme, ki
 		}
 		resetFields = append(resetFields, k)
 	}
-	return newSubresourceRESTWithResetFields(store, scheme, kind.GroupVersionKind().GroupVersion(), subresource, resetFields)
+	return newSubresourceRESTWithResetFields(store, scheme, kind.GroupVersionKind().GroupVersion(), subresource, resetFields, kind.Scope() != resource.ClusterScope)
 }
 
-func newSubresourceRESTWithResetFields(store *genericregistry.Store, typer runtime.ObjectTyper, gv schema.GroupVersion, subresource string, resetFields []string) *SubresourceREST {
-	return newSubresourceRESTWithStrategy(store, newSubresourceStrategy(typer, gv, subresource, resetFields))
+func newSubresourceRESTWithResetFields(store *genericregistry.Store, typer runtime.ObjectTyper, gv schema.GroupVersion, subresource string, resetFields []string, namespaced bool) *SubresourceREST {
+	return newSubresourceRESTWithStrategy(store, newSubresourceStrategy(typer, gv, subresource, resetFields, namespaced))
 }
 
 func newSubresourceRESTWithStrategy(store *genericregistry.Store, strategy rest.UpdateResetFieldsStrategy) *SubresourceREST {
