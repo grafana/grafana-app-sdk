@@ -322,7 +322,7 @@ func TestTypedStore_UpdateSubresource(t *testing.T) {
 		client.UpdateFunc = func(c context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 			assert.Equal(t, ctx, c)
 			assert.Equal(t, updateObj, obj)
-			assert.Equal(t, "", options.ResourceVersion)
+			assert.Equal(t, updateObj.ResourceVersion, options.ResourceVersion)
 			assert.Equal(t, string(SubresourceStatus), options.Subresource)
 			return retObj, nil
 		}
