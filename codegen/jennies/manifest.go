@@ -520,6 +520,9 @@ func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRoute
 	if err := v.Err(); err != nil {
 		return nil, fmt.Errorf("input CUE value for response has error: %w", err)
 	}
+	if !customRouteResponse.Metadata.TypeMeta && (customRouteResponse.Metadata.ListMeta || customRouteResponse.Metadata.ObjectMeta) {
+		return nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
+	}
 
 	schemaProps, err := cueSchemaToSpecSchemaProps(v)
 	if err != nil {

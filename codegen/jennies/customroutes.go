@@ -127,6 +127,9 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 }
 
 func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, kindMachineName, fileBasePath string) (codejen.Files, error) {
+	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
+		return nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
+	}
 	files := make(codejen.Files, 0)
 	bodyName := typeName
 	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
