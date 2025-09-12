@@ -76,17 +76,18 @@ func NewRecursiveList() *RecursiveList {
 
 // +k8s:openapi-gen=true
 type Spec struct {
-	Field1     string           `json:"field1"`
-	Inner      InnerObject1     `json:"inner"`
-	Union      UnionType        `json:"union"`
-	Map        map[string]Type2 `json:"map"`
-	Timestamp  time.Time        `json:"timestamp"`
-	Enum       SpecEnum         `json:"enum"`
-	I32        int32            `json:"i32"`
-	I64        int64            `json:"i64"`
-	BoolField  bool             `json:"boolField"`
-	FloatField float64          `json:"floatField"`
-	LinkedList RecursiveList    `json:"linkedList"`
+	Field1       string           `json:"field1"`
+	Inner        InnerObject1     `json:"inner"`
+	Union        UnionType        `json:"union"`
+	Map          map[string]Type2 `json:"map"`
+	Timestamp    time.Time        `json:"timestamp"`
+	Enum         SpecEnum         `json:"enum"`
+	I32          int32            `json:"i32"`
+	I64          int64            `json:"i64"`
+	BoolField    bool             `json:"boolField"`
+	FloatField   float64          `json:"floatField"`
+	LinkedList   RecursiveList    `json:"linkedList"`
+	ExclusiveInt uint64           `json:"exclusiveInt"`
 }
 
 // NewSpec creates a new Spec object.

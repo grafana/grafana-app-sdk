@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apiserver/pkg/authentication/user"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -581,12 +583,14 @@ var TestKind = resource.Kind{
 }
 
 type MockApp struct {
-	ValidateFunc        func(ctx context.Context, request *app.AdmissionRequest) error
-	MutateFunc          func(ctx context.Context, request *app.AdmissionRequest) (*app.MutatingResponse, error)
-	ConvertFunc         func(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error)
-	CallCustomRouteFunc func(ctx context.Context, responseWriter app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error
-	ManagedKindsFunc    func() []resource.Kind
-	RunnerFunc          func() app.Runnable
+	ValidateFunc             func(ctx context.Context, request *app.AdmissionRequest) error
+	MutateFunc               func(ctx context.Context, request *app.AdmissionRequest) (*app.MutatingResponse, error)
+	ConvertFunc              func(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error)
+	CallCustomRouteFunc      func(ctx context.Context, responseWriter app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error
+	ManagedKindsFunc         func() []resource.Kind
+	RunnerFunc               func() app.Runnable
+	HealthChecksFunc         func() []health.Check
+	PrometheusCollectorsFunc func() []prometheus.Collector
 }
 
 func (m *MockApp) Validate(ctx context.Context, request *app.AdmissionRequest) error {
@@ -627,6 +631,20 @@ func (m *MockApp) ManagedKinds() []resource.Kind {
 func (m *MockApp) Runner() app.Runnable {
 	if m.RunnerFunc != nil {
 		return m.RunnerFunc()
+	}
+	return nil
+}
+
+func (m *MockApp) HealthChecks() []health.Check {
+	if m.HealthChecksFunc != nil {
+		return m.HealthChecksFunc()
+	}
+	return nil
+}
+
+func (m *MockApp) PrometheusCollectors() []prometheus.Collector {
+	if m.PrometheusCollectorsFunc != nil {
+		return m.PrometheusCollectorsFunc()
 	}
 	return nil
 }
