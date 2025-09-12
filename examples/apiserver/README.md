@@ -70,3 +70,17 @@ Delete `foo`:
 ```shell
 curl -k -X DELETE https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo
 ```
+
+Call custom resource routes:
+```shell
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/foobar
+```
+
+```shell
+curl -k https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/foobar
+```
+
+Get OpenAPI doc:
+```shell
+curl -k https://127.0.0.1:6443/openapi/v2
+```
