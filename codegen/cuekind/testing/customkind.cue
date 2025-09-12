@@ -79,6 +79,7 @@ customKind: {
 					boolField:  bool | *false
 					floatField: float64
 					linkedList: #RecursiveList
+					exclusiveInt: int & < 100 & > 10
 				}
 				status: {
 					statusField1: string

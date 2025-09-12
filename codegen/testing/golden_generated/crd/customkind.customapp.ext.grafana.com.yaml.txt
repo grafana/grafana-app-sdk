@@ -87,6 +87,12 @@ spec:
                 - val4
                 - default
                 type: string
+              exclusiveInt:
+                exclusiveMaximum: true
+                exclusiveMinimum: true
+                maximum: 100
+                minimum: 10
+                type: integer
               field1:
                 type: string
               floatField:
@@ -189,6 +195,7 @@ spec:
             - boolField
             - floatField
             - linkedList
+            - exclusiveInt
             type: object
           status:
             properties:

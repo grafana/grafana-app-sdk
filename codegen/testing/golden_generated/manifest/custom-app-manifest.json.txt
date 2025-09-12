@@ -108,6 +108,13 @@
                                         ],
                                         "type": "string"
                                     },
+                                    "exclusiveInt": {
+                                        "exclusiveMaximum": true,
+                                        "exclusiveMinimum": true,
+                                        "maximum": 100,
+                                        "minimum": 10,
+                                        "type": "integer"
+                                    },
                                     "field1": {
                                         "type": "string"
                                     },
@@ -255,7 +262,8 @@
                                     "i64",
                                     "boolField",
                                     "floatField",
-                                    "linkedList"
+                                    "linkedList",
+                                    "exclusiveInt"
                                 ],
                                 "type": "object"
                             },
