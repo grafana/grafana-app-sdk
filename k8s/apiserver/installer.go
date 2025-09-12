@@ -331,8 +331,14 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
 			}
 			storage[kind.Kind.Plural()] = s
-			if _, ok := kind.Kind.ZeroValue().GetSubresource(string(resource.SubresourceStatus)); ok {
-				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, s)
+			// Loop through all subresources and set up storage
+			for sr := range kind.Kind.ZeroValue().GetSubresources() {
+				// Use *StatusREST for the status subresource for backwards compatibility with grafana
+				if sr == string(resource.SubresourceStatus) {
+					storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, s)
+					continue
+				}
+				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), sr)] = newSubresourceREST(s, r.scheme, kind.Kind, sr)
 			}
 			for route, props := range kind.ManifestKind.Routes {
 				if route == "" {

@@ -461,10 +461,7 @@ func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Co
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
 func (a *App) PrometheusCollectors() []prometheus.Collector {
-	collectors := make([]prometheus.Collector, 0)
-	collectors = append(collectors, a.collectors...)
-	collectors = append(collectors, a.runner.PrometheusCollectors()...)
-	return collectors
+	return a.collectors
 }
 
 func (a *App) HealthChecks() []health.Check {

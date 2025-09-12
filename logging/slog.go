@@ -2,11 +2,82 @@ package logging
 
 import (
 	"context"
-
+	"fmt"
+	"io"
 	"log/slog"
 
 	"go.opentelemetry.io/otel/trace"
+	"k8s.io/klog/v2"
 )
+
+// Format is a the output format of the logger.
+// Supported formats are JSON and Text.
+type Format string
+
+const (
+	// FormatJSON is the JSON format for the logger.
+	FormatJSON Format = "json"
+	// FormatText is the text format for the logger.
+	FormatText Format = "text"
+)
+
+// Level is a slog.Level, shadowed for convenience.
+type Level = slog.Level
+
+// Options is a set of options for the default logger.
+type Options struct {
+	// Format is the output format of the logger.
+	// If not set, the default is FormatText.
+	Format Format
+	// Level is the log level of the logger.
+	// If not set, the default is LevelInfo.
+	Level Level
+
+	// HandlerOptions is the options for the slog.Handler.
+	// If not set, the default is slog.HandlerOptions{Level: LevelInfo}.
+	HandlerOptions slog.HandlerOptions
+}
+
+// DefaultOptions is the default options for the default logger.
+var DefaultOptions = Options{
+	Format: FormatText,
+	Level:  slog.LevelInfo,
+}
+
+// InitializerDefaultLogger sets the default logger for all SDK logging.
+// It will use slog for logging messages and also set the klog logger to the same slog.Logger.
+// This function is not thread-safe, and should only be called once during initialization.
+func InitializerDefaultLogger(sink io.Writer, opts Options) error {
+	var handler slog.Handler
+
+	format := opts.Format
+	if format == "" {
+		format = FormatText
+	}
+
+	level := opts.Level
+	if level == 0 {
+		level = slog.LevelInfo
+	}
+
+	hopts := opts.HandlerOptions
+	hopts.Level = level
+
+	switch format {
+	case FormatJSON:
+		handler = slog.NewJSONHandler(sink, &hopts)
+	case FormatText:
+		handler = slog.NewTextHandler(sink, &hopts)
+	default:
+		return fmt.Errorf("invalid format: %s, supported formats are %s and %s", format, FormatJSON, FormatText)
+	}
+
+	logger := NewSLogLogger(handler)
+	DefaultLogger = logger
+	klog.SetSlogLogger(logger.Logger)
+
+	return nil
+}
 
 // TraceIDKey is the key used by loggers for the trace ID field in key/value pairs.
 // It is set as a variable rather than a constant so that it can be changed by users at startup.

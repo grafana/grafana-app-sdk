@@ -68,6 +68,7 @@ export interface Spec {
 	boolField: boolean;
 	floatField: number;
 	linkedList: RecursiveList;
+	exclusiveInt: number;
 }
 
 export const defaultSpec = (): Spec => ({
@@ -82,5 +83,6 @@ export const defaultSpec = (): Spec => ({
 	boolField: false,
 	floatField: 0,
 	linkedList: defaultRecursiveList(),
+	exclusiveInt: 0,
 });
 
