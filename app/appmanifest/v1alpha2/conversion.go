@@ -116,6 +116,32 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			v.Kinds[kidx] = k
 		}
 
+		// Routes
+		if version.Routes != nil {
+			if len(version.Routes.Namespaced) > 0 {
+				v.Routes.Namespaced = make(map[string]spec3.PathProps)
+				marshaled, err := json.Marshal(version.Routes.Namespaced)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+				err = json.Unmarshal(marshaled, &version.Routes.Namespaced)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+			}
+			if len(version.Routes.Cluster) > 0 {
+				v.Routes.Cluster = make(map[string]spec3.PathProps)
+				marshaled, err := json.Marshal(version.Routes.Cluster)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+				err = json.Unmarshal(marshaled, &version.Routes.Cluster)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+			}
+		}
+
 		data.Versions[idx] = v
 	}
 	if s.PreferredVersion != nil {
@@ -235,6 +261,22 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				}
 			}
 			ver.Kinds = append(ver.Kinds, k)
+		}
+		// Routes
+		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 {
+			ver.Routes = NewAppManifestManifestVersionRoutes()
+			if len(version.Routes.Namespaced) > 0 {
+				ver.Routes.Namespaced = make(map[string]any)
+				for path := range version.Routes.Namespaced {
+					ver.Routes.Namespaced[path] = version.Routes.Namespaced[path]
+				}
+			}
+			if len(version.Routes.Cluster) > 0 {
+				ver.Routes.Cluster = make(map[string]any)
+				for path := range version.Routes.Cluster {
+					ver.Routes.Cluster[path] = version.Routes.Cluster[path]
+				}
+			}
 		}
 		spec.Versions = append(spec.Versions, ver)
 	}

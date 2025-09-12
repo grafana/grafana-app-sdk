@@ -184,6 +184,46 @@ var appManifestData = app.ManifestData{
                 },{{end}}
             },
             {{ end }} },
+            Routes: app.ManifestVersionRoutes{
+                Namespaced: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Namespaced }}{{ if $props }}
+                    "{{$path}}": { {{ if $props.Summary }}
+                        Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
+                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+                        Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
+                            {{ template "parameter" . }}{{ end }}
+                        },{{ end }}{{ if $props.Get }}
+                        Get: &spec3.Operation{ {{ template "operation" $props.Get }}
+                        },{{ end }}{{ if $props.Post }}
+                        Post: &spec3.Operation{ {{ template "operation" $props.Post }}
+                        },{{ end }}{{ if $props.Put }}
+                        Put: &spec3.Operation{ {{ template "operation" $props.Put }}
+                        },{{ end }}{{ if $props.Delete }}
+                        Delete: &spec3.Operation{ {{ template "operation" $props.Delete }}
+                        },{{ end }}{{ if $props.Patch }}
+                        Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
+                        },{{ end }}
+                    },{{ end }}{{ end }}
+                },
+                Cluster: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Cluster }}{{ if $props }}
+                    "{{$path}}": { {{ if $props.Summary }}
+                        Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
+                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+                        Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
+                            {{ template "parameter" . }}{{ end }}
+                        },{{ end }}{{ if $props.Get }}
+                        Get: &spec3.Operation{ {{ template "operation" $props.Get }}
+                        },{{ end }}{{ if $props.Post }}
+                        Post: &spec3.Operation{ {{ template "operation" $props.Post }}
+                        },{{ end }}{{ if $props.Put }}
+                        Put: &spec3.Operation{ {{ template "operation" $props.Put }}
+                        },{{ end }}{{ if $props.Delete }}
+                        Delete: &spec3.Operation{ {{ template "operation" $props.Delete }}
+                        },{{ end }}{{ if $props.Patch }}
+                        Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
+                        },{{ end }}
+                    },{{ end }}{{ end }}
+                },
+            },
         },
         {{ end }} },{{ if .ManifestData.ExtraPermissions }}
         ExtraPermissions: &app.Permissions{
@@ -234,12 +274,28 @@ var customRouteToGoResponseType = map[string]any { {{ range .ManifestData.Versio
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|DELETE": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{{ end }}{},{{end}}{{ if $resp.Head }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|HEAD": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Head.OperationId }}{{ end }}{},{{end}}{{ if $resp.Options }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|OPTIONS": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Options.OperationId }}{{ end }}{},{{end}}
-    {{ end }}{{ end }}{{ end }}
+    {{ end }}{{ end }}{{ range $path, $resp := .Routes.Namespaced }}{{ if $resp.Get }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|GET": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}{},{{ end }}{{ if $resp.Post }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|POST": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}{},{{ end }}{{ if $resp.Put }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|PUT": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}{},{{ end }}{{ if $resp.Patch }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|PATCH": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}{},{{ end }}{{ if $resp.Delete }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|DELETE": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{},{{ end }}{{ if $resp.Head }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|HEAD": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}{},{{ end }}{{ if $resp.Options }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|OPTIONS": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}{},{{ end }}{{ end }}{{ range $path, $resp := .Routes.Cluster }}{{ if $resp.Get }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|GET": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}{},{{ end }}{{ if $resp.Post }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|POST": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}{},{{ end }}{{ if $resp.Put }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|PUT": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}{},{{ end }}{{ if $resp.Patch }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|PATCH": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}{},{{ end }}{{ if $resp.Delete }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|DELETE": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{},{{ end }}{{ if $resp.Head }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|HEAD": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}{},{{ end }}{{ if $resp.Options }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|OPTIONS": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}{},{{ end }}{{ end }}
+    {{ end }}
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
 // kind may be empty for custom routes which are not kind subroutes. Leading slashes are removed from subroute paths.
 // If there is no association for the provided kind, version, custom route path, and method, exists will return false.
+// Resource routes (those without a kind) should prefix their route with "<namespace>/" if the route is namespaced (otherwise the route is assumed to be cluster-scope)
 func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
     if len(path) > 0 && path[0] == '/' {
         path = path[1:]
@@ -250,12 +306,12 @@ func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (g
 
 var customRouteToGoParamsType = map[string]runtime.Object { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.Parameters }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": &{{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Post $resp.Post.Parameters }}
-    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Post.OperationId }}{{ end }}{},{{end}}{{ if $resp.Put }}
-    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Put.OperationId }}{{ end }}{},{{end}}{{ if $resp.Patch }}
-    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PATCH": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Patch.OperationId }}{{ end }}{},{{end}}{{ if $resp.Delete }}
-    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|DELETE": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Delete.OperationId }}{{ end }}{},{{end}}{{ if $resp.Head }}
-    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|HEAD": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Head.OperationId }}{{ end }}{},{{end}}{{ if $resp.Options }}
-    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|OPTIONS": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Options.OperationId }}{{ end }}{},{{end}}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Put $resp.Put.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Patch $resp.Patch.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PATCH": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Patch.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Delete $resp.Delete.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|DELETE": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Delete.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Head $resp.Head.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|HEAD": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Head.OperationId }}RequestParamsObject{{ end }}{},{{end}}{{ if and $resp.Options $resp.Options.Parameters }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|OPTIONS": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}RequestParamsObject{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Options.OperationId }}RequestParamsObject{{ end }}{},{{end}}
     {{ end }}{{ end }}{{ end }}
 }
 
@@ -267,7 +323,46 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
     return goType, exists
 }
 
+var customRouteToGoRequestBodyType = map[string]any { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": &{{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestBody{{ end }}{},{{end}}{{ if and $resp.Post $resp.Post.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestBody{{ end }}{},{{end}}{{ if and $resp.Put $resp.Put.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestBody{{ end }}{},{{end}}{{ if and $resp.Patch $resp.Patch.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PATCH": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Patch.OperationId }}RequestBody{{ end }}{},{{end}}{{ if and $resp.Delete $resp.Delete.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|DELETE": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Delete.OperationId }}RequestBody{{ end }}{},{{end}}{{ if and $resp.Head $resp.Head.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|HEAD": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Head.OperationId }}RequestBody{{ end }}{},{{end}}{{ if and $resp.Options $resp.Options.RequestBody }}
+    "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|OPTIONS": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}RequestBody{{ else }}{{ $.KindToPackageName $k.Kind }}{{ $.ToPackageName $v.Name }}.{{ $.ExportedFieldName $resp.Options.OperationId }}RequestBody{{ end }}{},{{end}}
+    {{ end }}{{ end }}{{ range $path, $resp := .Routes.Namespaced }}{{ if and $resp.Get $resp.Get.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|GET": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Post $resp.Post.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|POST": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Put $resp.Put.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|PUT": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Patch $resp.Patch.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|PATCH": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Delete $resp.Delete.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|DELETE": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Head $resp.Head.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|HEAD": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Options $resp.Options.RequestBody }}
+    "{{ $v.Name}}||<namespace>/{{ $.StripLeadingSlash $path }}|OPTIONS": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}RequestBody{},{{ end }}{{ end }}{{ range $path, $resp := .Routes.Cluster }}{{ if and $resp.Get $resp.Get.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|GET": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Post $resp.Post.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|POST": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Put $resp.Put.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|PUT": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Patch $resp.Patch.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|PATCH": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Patch.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Delete $resp.Delete.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|DELETE": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Delete.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Head $resp.Head.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|HEAD": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Head.OperationId }}RequestBody{},{{ end }}{{ if and $resp.Options $resp.Options.RequestBody }}
+    "{{ $v.Name}}||{{ $.StripLeadingSlash $path }}|OPTIONS": {{ $.ToPackageName $v.Name}}.{{ $.ExportedFieldName $resp.Options.OperationId }}RequestBody{},{{ end }}{{ end }}
+    {{ end }}
+}
+
+func ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb string) (goType any, exists bool) {
+    if len(path) > 0 && path[0] == '/' {
+        path = path[1:]
+    }
+    goType, exists = customRouteToGoRequestBodyType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
+    return goType, exists
+}
+
 type GoTypeAssociator struct {}
+
+func NewGoTypeAssociator() *GoTypeAssociator {
+    return &GoTypeAssociator{}
+}
+
 func (g *GoTypeAssociator) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
     return ManifestGoTypeAssociator(kind, version)
 }
@@ -276,4 +371,7 @@ func (g *GoTypeAssociator) CustomRouteReturnGoType(kind, version, path, verb str
 }
 func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
     return ManifestCustomRouteQueryAssociator(kind, version, path, verb)
+}
+func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
+    return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }

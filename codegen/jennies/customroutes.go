@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/format"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -44,7 +45,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 					if route.Name == "" {
 						route.Name = defaultRouteName(method, cpath)
 					}
-					generated, err := c.generateCustomRouteKinds(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), kind.MachineName, route)
+					generated, err := c.generateCustomRouteKinds(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), strings.ToLower(kind.MachineName), route)
 					if err != nil {
 						return nil, fmt.Errorf("failed to generate custom route types for route %s, kind %s: %w", route.Name, kind.Kind, err)
 					}
@@ -52,11 +53,35 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				}
 			}
 		}
+		for cpath, methods := range version.Routes().Namespaced {
+			for method, route := range methods {
+				if route.Name == "" {
+					route.Name = defaultRouteName(method, cpath)
+				}
+				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				if err != nil {
+					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
+				}
+				files = append(files, generated...)
+			}
+		}
+		for cpath, methods := range version.Routes().Cluster {
+			for method, route := range methods {
+				if route.Name == "" {
+					route.Name = defaultRouteName(method, cpath)
+				}
+				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				if err != nil {
+					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
+				}
+				files = append(files, generated...)
+			}
+		}
 	}
 	return files, nil
 }
 
-func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, kindMachineName string, customRoute codegen.CustomRoute) (codejen.Files, error) {
+func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if !customRoute.Response.Schema.Exists() {
 		return nil, fmt.Errorf("custom route response is required")
@@ -64,9 +89,12 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
 		return nil, fmt.Errorf("custom route response metadata must have TypeMeta if ListMeta or ObjectMeta are present")
 	}
+	if filenamePrefix != "" {
+		filenamePrefix = fmt.Sprintf("%s_", filenamePrefix)
+	}
 	// Response
 	typeName := exportField(customRoute.Name)
-	responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, kindMachineName, basePath)
+	responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +116,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 		}
 		files = append(files, codejen.File{
 			Data:         requestQueryType,
-			RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_request_params_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
+			RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_request_params_types_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
 			From:         []codejen.NamedJenny{c},
 		})
 
@@ -103,7 +131,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 		}
 		files = append(files, codejen.File{
 			Data:         requestQueryObjectType.Bytes(),
-			RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_request_params_object_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
+			RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_request_params_object_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
 			From:         []codejen.NamedJenny{c},
 		})
 	}
@@ -119,14 +147,14 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 		}
 		files = append(files, codejen.File{
 			Data:         requestBodyType,
-			RelativePath: fmt.Sprintf(path.Join(basePath, "%s_%s_request_body_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
+			RelativePath: fmt.Sprintf(path.Join(basePath, "%s%s_request_body_types_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name)),
 			From:         []codejen.NamedJenny{c},
 		})
 	}
 	return files, nil
 }
 
-func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, kindMachineName, fileBasePath string) (codejen.Files, error) {
+func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, filenamePrefix, fileBasePath string) (codejen.Files, error) {
 	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
 		return nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
@@ -155,7 +183,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	}
 	files = append(files, codejen.File{
 		Data:         formattedResponseTypes,
-		RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s_%s_response_%stypes_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name), body),
+		RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s%s_response_%stypes_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name), body),
 		From:         []codejen.NamedJenny{c},
 	})
 	if customRoute.Response.Metadata.TypeMeta {
@@ -178,7 +206,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s_%s_response_object_types_gen.go"), strings.ToLower(kindMachineName), strings.ToLower(customRoute.Name)),
+			RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s_%s_response_object_types_gen.go"), strings.ToLower(filenamePrefix), strings.ToLower(customRoute.Name)),
 			From:         []codejen.NamedJenny{c},
 		})
 	}

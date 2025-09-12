@@ -196,6 +196,27 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 			ver.Kinds[i] = mvkind
 		}
+		// routes
+		if len(version.Routes().Namespaced) > 0 {
+			ver.Routes.Namespaced = make(map[string]spec3.PathProps)
+			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
+				targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+				if err != nil {
+					return nil, fmt.Errorf("custom routes error for namespaced path '%s' on version %s: %w", sourcePath, version.Name(), err)
+				}
+				ver.Routes.Namespaced[sourcePath] = targetPathProps
+			}
+		}
+		if len(version.Routes().Cluster) > 0 {
+			ver.Routes.Cluster = make(map[string]spec3.PathProps)
+			for sourcePath, sourceMethodsMap := range version.Routes().Cluster {
+				targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+				if err != nil {
+					return nil, fmt.Errorf("custom routes error for cluster path '%s' on version %s: %w", sourcePath, version.Name(), err)
+				}
+				ver.Routes.Cluster[sourcePath] = targetPathProps
+			}
+		}
 		manifest.Versions = append(manifest.Versions, ver)
 	}
 

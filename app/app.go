@@ -10,6 +10,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
+	"github.com/grafana/grafana-app-sdk/health"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -44,6 +46,7 @@ type CustomRouteRequest struct {
 	// version, and namespace (if applicable).
 	// ResourceIdentifier will contain all information the runner is able to provide.
 	// In practical terms, this often means that either Kind or Plural will be included, but both may not be present.
+	// For a non-subresource route, only Group, Version, and optionally Namespace (for namespaced routes) will be included.
 	ResourceIdentifier resource.FullIdentifier
 	// Path contains path information past the identifier information.
 	// For a subresource route, this is the subresource (for example, `bar` in the case of `test.grafana.app/v1/foos/foo/bar`).
@@ -116,6 +119,8 @@ type MutatingResponse resource.MutatingResponse
 // Pre-built implementations of App exist in the simple package, but any type which implements App
 // should be capable of being run by an app wrapper.
 type App interface {
+	metrics.Provider
+	health.Checker
 	// Validate validates the incoming request, and returns an error if validation fails
 	Validate(ctx context.Context, request *AdmissionRequest) error
 	// Mutate runs mutation on the incoming request, responding with a MutatingResponse on success, or an error on failure

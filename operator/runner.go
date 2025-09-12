@@ -236,8 +236,11 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 
 	// Metrics
 	if s.metricsExporter != nil {
-		err = s.metricsExporter.RegisterCollectors(runner.PrometheusCollectors()...)
-		if err != nil {
+		if err := s.metricsExporter.RegisterCollectors(runner.PrometheusCollectors()...); err != nil {
+			return err
+		}
+
+		if err := s.metricsExporter.RegisterCollectors(a.PrometheusCollectors()...); err != nil {
 			return err
 		}
 
@@ -252,6 +255,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	// Health
 	s.metricsServer.RegisterHealthChecks(s)
 	s.metricsServer.RegisterHealthChecks(runner.HealthChecks()...)
+	s.metricsServer.RegisterHealthChecks(a.HealthChecks()...)
 	runner.AddRunnable(s.metricsServerRunner)
 
 	return runner.Run(ctx)

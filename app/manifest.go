@@ -116,7 +116,14 @@ func (m *ManifestData) Validate() error {
 	var errs error
 	kinds := make(map[string]kindData)
 	for _, version := range m.Versions {
+		namespacedRoutes := make(map[string]struct{})
+		clusterRoutes := make(map[string]struct{})
 		for _, kind := range version.Kinds {
+			if kind.Scope == "Cluster" {
+				clusterRoutes[strings.ToLower(kind.Plural)] = struct{}{}
+			} else {
+				namespacedRoutes[strings.ToLower(kind.Plural)] = struct{}{}
+			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
 					kind:       kind.Kind,
@@ -136,6 +143,18 @@ func (m *ManifestData) Validate() error {
 				if k.conversion != kind.Conversion {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' conversion does not match in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
+			}
+		}
+		for rpath := range version.Routes.Namespaced {
+			key := strings.Trim(strings.ToLower(rpath), "/")
+			if _, ok := namespacedRoutes[key]; ok {
+				errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
+			}
+		}
+		for rpath := range version.Routes.Cluster {
+			key := strings.Trim(strings.ToLower(rpath), "/")
+			if _, ok := clusterRoutes[key]; ok {
+				errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
 			}
 		}
 	}
@@ -207,7 +226,12 @@ type ManifestVersion struct {
 	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
 	// Routes is a map of path patterns to custom routes for this version.
 	// Routes should not conflict with the plural name of any kinds for this version.
-	Routes map[string]spec3.PathProps `json:"routes,omitempty" yaml:"routes,omitempty"`
+	Routes ManifestVersionRoutes `json:"routes,omitempty" yaml:"routes,omitempty"`
+}
+
+type ManifestVersionRoutes struct {
+	Namespaced map[string]spec3.PathProps `json:"namespaced,omitempty" yaml:"namespaced,omitempty"`
+	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`
 }
 
 // ManifestVersionKind contains details for a version of a kind in a Manifest
