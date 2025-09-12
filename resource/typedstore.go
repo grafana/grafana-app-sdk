@@ -148,8 +148,13 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 // and only that subresource will be updated in the storage system.
 func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier,
 	subresource SubresourceName, obj Object) (T, error) {
+	if obj.GetResourceVersion() == "" {
+		var n T
+		return n, ErrMissingResourceVersion
+	}
 	ret, err := t.client.Update(ctx, identifier, obj, UpdateOptions{
-		Subresource: string(subresource),
+		Subresource:     string(subresource),
+		ResourceVersion: obj.GetResourceVersion(),
 	})
 	if err != nil {
 		var n T
