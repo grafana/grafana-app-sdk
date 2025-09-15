@@ -76,7 +76,7 @@ func (c *TestKind2Client) Patch(ctx context.Context, identifier resource.Identif
 	return c.client.Patch(ctx, identifier, req, opts)
 }
 
-func (c *TestKind2Client) UpdateStatus(ctx context.Context, newStatus TestKind2Status, opts resource.UpdateOptions) (*TestKind2, error) {
+func (c *TestKind2Client) UpdateStatus(ctx context.Context, identifier resource.Identifier, newStatus TestKind2Status, opts resource.UpdateOptions) (*TestKind2, error) {
 	return c.client.Update(ctx, &TestKind2{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       TestKind2Kind().Kind(),
@@ -84,6 +84,8 @@ func (c *TestKind2Client) UpdateStatus(ctx context.Context, newStatus TestKind2S
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			ResourceVersion: opts.ResourceVersion,
+			Namespace:       identifier.Namespace,
+			Name:            identifier.Name,
 		},
 		Status: newStatus,
 	}, resource.UpdateOptions{
