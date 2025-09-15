@@ -87,6 +87,28 @@ func NewApp(config app.Config) (app.App, error) {
 				},
 			},
 		}},
+		VersionedCustomRoutes: map[string]simple.AppVersionRouteHandlers{
+			"v1alpha1": {
+				{
+					Namespaced: true,
+					Path:       "foobar",
+					Method:     "GET",
+				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+					return json.NewEncoder(writer).Encode(v1alpha1.GetFoobar{
+						Foo: "hello, world!",
+					})
+				},
+				{
+					Namespaced: false,
+					Path:       "foobar",
+					Method:     "GET",
+				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+					return json.NewEncoder(writer).Encode(v1alpha1.Clustergetfoobar{
+						Bar: "hello, world!",
+					})
+				},
+			},
+		},
 	})
 }
 

@@ -82,7 +82,7 @@ func (c *{{.KindName}}Client) Patch(ctx context.Context, identifier resource.Ide
 	return c.client.Patch(ctx, identifier, req, opts)
 }
 {{ range .Subresources }}
-func (c *{{$.KindName}}Client) Update{{ .FieldName }}(ctx context.Context, newStatus {{$.KindPrefix}}Status, opts resource.UpdateOptions) (*{{$.KindName}}, error) {
+func (c *{{$.KindName}}Client) Update{{ .FieldName }}(ctx context.Context, identifier resource.Identifier, new{{ .FieldName }} {{$.KindPrefix}}{{ .FieldName }}, opts resource.UpdateOptions) (*{{$.KindName}}, error) {
 	return c.client.Update(ctx, &{{$.KindName}}{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       {{$.KindPrefix}}Kind().Kind(),
@@ -90,8 +90,10 @@ func (c *{{$.KindName}}Client) Update{{ .FieldName }}(ctx context.Context, newSt
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			ResourceVersion: opts.ResourceVersion,
+			Namespace: identifier.Namespace,
+			Name: identifier.Name,
 		},
-		{{ .FieldName }}: newStatus,
+		{{ .FieldName }}: new{{ .FieldName }},
 	}, resource.UpdateOptions{
 		Subresource:     "{{ .Subresource }}",
 		ResourceVersion: opts.ResourceVersion,

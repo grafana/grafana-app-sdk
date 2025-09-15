@@ -76,7 +76,7 @@ func (c *CustomKindClient) Patch(ctx context.Context, identifier resource.Identi
 	return c.client.Patch(ctx, identifier, req, opts)
 }
 
-func (c *CustomKindClient) UpdateStatus(ctx context.Context, newStatus Status, opts resource.UpdateOptions) (*CustomKind, error) {
+func (c *CustomKindClient) UpdateStatus(ctx context.Context, identifier resource.Identifier, newStatus Status, opts resource.UpdateOptions) (*CustomKind, error) {
 	return c.client.Update(ctx, &CustomKind{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       Kind().Kind(),
@@ -84,6 +84,8 @@ func (c *CustomKindClient) UpdateStatus(ctx context.Context, newStatus Status, o
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			ResourceVersion: opts.ResourceVersion,
+			Namespace:       identifier.Namespace,
+			Name:            identifier.Name,
 		},
 		Status: newStatus,
 	}, resource.UpdateOptions{

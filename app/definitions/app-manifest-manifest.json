@@ -16,7 +16,7 @@
                         "kind": "AppManifest",
                         "plural": "AppManifests",
                         "scope": "Cluster",
-                        "schema": {
+                        "schemas": {
                             "AdditionalPrinterColumns": {
                                 "additionalProperties": false,
                                 "properties": {
@@ -71,7 +71,8 @@
                                     "DELETE",
                                     "CONNECT",
                                     "*"
-                                ]
+                                ],
+                                "type": "string"
                             },
                             "AppManifest": {
                                 "properties": {
@@ -97,7 +98,8 @@
                                         "enum": [
                                             "success",
                                             "failure"
-                                        ]
+                                        ],
+                                        "type": "string"
                                     }
                                 },
                                 "required": [
@@ -196,7 +198,8 @@
                                         "enum": [
                                             "Namespaced",
                                             "Cluster"
-                                        ]
+                                        ],
+                                        "type": "string"
                                     },
                                     "selectableFields": {
                                         "items": {
@@ -273,7 +276,8 @@
                                             "success",
                                             "in_progress",
                                             "failed"
-                                        ]
+                                        ],
+                                        "type": "string"
                                     }
                                 },
                                 "required": [
@@ -417,7 +421,7 @@
                         "kind": "AppManifest",
                         "plural": "AppManifests",
                         "scope": "Cluster",
-                        "schema": {
+                        "schemas": {
                             "AdditionalPrinterColumns": {
                                 "additionalProperties": false,
                                 "properties": {
@@ -472,7 +476,8 @@
                                     "DELETE",
                                     "CONNECT",
                                     "*"
-                                ]
+                                ],
+                                "type": "string"
                             },
                             "AppManifest": {
                                 "properties": {
@@ -498,7 +503,8 @@
                                         "enum": [
                                             "success",
                                             "failure"
-                                        ]
+                                        ],
+                                        "type": "string"
                                     }
                                 },
                                 "required": [
@@ -542,6 +548,10 @@
                                     "name": {
                                         "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
                                         "type": "string"
+                                    },
+                                    "routes": {
+                                        "$ref": "#/components/schemas/ManifestVersionRoutes",
+                                        "description": "Routes is a section defining version-level custom resource routes.\nThese routes are registered at the same level as kinds, and thus should not conflict with existing kinds."
                                     },
                                     "served": {
                                         "default": true,
@@ -602,7 +612,8 @@
                                         "enum": [
                                             "Namespaced",
                                             "Cluster"
-                                        ]
+                                        ],
+                                        "type": "string"
                                     },
                                     "selectableFields": {
                                         "items": {
@@ -616,6 +627,28 @@
                                     "scope",
                                     "schemas"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionRoutes": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "cluster": {
+                                        "additionalProperties": {
+                                            "additionalProperties": {},
+                                            "type": "object"
+                                        },
+                                        "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                        "type": "object"
+                                    },
+                                    "namespaced": {
+                                        "additionalProperties": {
+                                            "additionalProperties": {},
+                                            "type": "object"
+                                        },
+                                        "description": "Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                        "type": "object"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "MutationCapability": {
@@ -672,7 +705,8 @@
                                             "success",
                                             "in_progress",
                                             "failed"
-                                        ]
+                                        ],
+                                        "type": "string"
                                     }
                                 },
                                 "required": [

@@ -20,7 +20,7 @@ import (
 )
 
 var (
-	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"mysubresource":{"$ref":"#/components/schemas/mysubresource"},"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"mysubresource":{"additionalProperties":false,"properties":{"extraValue":{"type":"string"}},"required":["extraValue"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv1alpha1 app.VersionSchema
 	_                             = json.Unmarshal(rawSchemaTestKindv1alpha1, &versionSchemaTestKindv1alpha1)
 )
@@ -162,6 +162,123 @@ var appManifestData = app.ManifestData{
 					},
 				},
 			},
+			Routes: app.ManifestVersionRoutes{
+				Namespaced: map[string]spec3.PathProps{
+					"/foobar": {
+						Get: &spec3.Operation{
+							OperationProps: spec3.OperationProps{
+
+								OperationId: "GetFoobar",
+
+								Parameters: []*spec3.Parameter{
+
+									{
+										ParameterProps: spec3.ParameterProps{
+											Name:     "foo",
+											In:       "query",
+											Required: true,
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+													Type: []string{"string"},
+												},
+											},
+										},
+									},
+								},
+								RequestBody: &spec3.RequestBody{
+									RequestBodyProps: spec3.RequestBodyProps{
+
+										Required: true,
+										Content: map[string]*spec3.MediaType{
+											"application/json": {
+												MediaTypeProps: spec3.MediaTypeProps{
+													Schema: &spec.Schema{
+														SchemaProps: spec.SchemaProps{
+															Type: []string{"object"},
+															Properties: map[string]spec.Schema{
+																"input": {
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"string"},
+																	},
+																},
+															},
+															Required: []string{
+																"input",
+															},
+														}},
+												}},
+										},
+									}},
+								Responses: &spec3.Responses{
+									ResponsesProps: spec3.ResponsesProps{
+										Default: &spec3.Response{
+											ResponseProps: spec3.ResponseProps{
+												Description: "Default OK response",
+												Content: map[string]*spec3.MediaType{
+													"application/json": {
+														MediaTypeProps: spec3.MediaTypeProps{
+															Schema: &spec.Schema{
+																SchemaProps: spec.SchemaProps{
+																	Type: []string{"object"},
+																	Properties: map[string]spec.Schema{
+																		"foo": {
+																			SchemaProps: spec.SchemaProps{
+																				Type: []string{"string"},
+																			},
+																		},
+																	},
+																	Required: []string{
+																		"foo",
+																	},
+																}},
+														}},
+												},
+											},
+										},
+									}},
+							},
+						},
+					},
+				},
+				Cluster: map[string]spec3.PathProps{
+					"/foobar": {
+						Get: &spec3.Operation{
+							OperationProps: spec3.OperationProps{
+
+								OperationId: "clustergetfoobar",
+
+								Responses: &spec3.Responses{
+									ResponsesProps: spec3.ResponsesProps{
+										Default: &spec3.Response{
+											ResponseProps: spec3.ResponseProps{
+												Description: "Default OK response",
+												Content: map[string]*spec3.MediaType{
+													"application/json": {
+														MediaTypeProps: spec3.MediaTypeProps{
+															Schema: &spec.Schema{
+																SchemaProps: spec.SchemaProps{
+																	Type: []string{"object"},
+																	Properties: map[string]spec.Schema{
+																		"bar": {
+																			SchemaProps: spec.SchemaProps{
+																				Type: []string{"string"},
+																			},
+																		},
+																	},
+																	Required: []string{
+																		"bar",
+																	},
+																}},
+														}},
+												},
+											},
+										},
+									}},
+							},
+						},
+					},
+				},
+			},
 		},
 	},
 }
@@ -189,11 +306,15 @@ var customRouteToGoResponseType = map[string]any{
 	"v1alpha1|TestKind|bar|GET": v1alpha1.GetMessage{},
 
 	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
+
+	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobar{},
+	"v1alpha1||foobar|GET":             v1alpha1.Clustergetfoobar{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
 // kind may be empty for custom routes which are not kind subroutes. Leading slashes are removed from subroute paths.
 // If there is no association for the provided kind, version, custom route path, and method, exists will return false.
+// Resource routes (those without a kind) should prefix their route with "<namespace>/" if the route is namespaced (otherwise the route is assumed to be cluster-scope)
 func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (goType any, exists bool) {
 	if len(path) > 0 && path[0] == '/' {
 		path = path[1:]
@@ -215,7 +336,26 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
 	return goType, exists
 }
 
+var customRouteToGoRequestBodyType = map[string]any{
+
+	"v1alpha1|TestKind|foo|GET": &v1alpha1.GetFooRequestBody{},
+
+	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobarRequestBody{},
+}
+
+func ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb string) (goType any, exists bool) {
+	if len(path) > 0 && path[0] == '/' {
+		path = path[1:]
+	}
+	goType, exists = customRouteToGoRequestBodyType[fmt.Sprintf("%s|%s|%s|%s", version, kind, path, strings.ToUpper(verb))]
+	return goType, exists
+}
+
 type GoTypeAssociator struct{}
+
+func NewGoTypeAssociator() *GoTypeAssociator {
+	return &GoTypeAssociator{}
+}
 
 func (g *GoTypeAssociator) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
 	return ManifestGoTypeAssociator(kind, version)
@@ -225,4 +365,7 @@ func (g *GoTypeAssociator) CustomRouteReturnGoType(kind, version, path, verb str
 }
 func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
 	return ManifestCustomRouteQueryAssociator(kind, version, path, verb)
+}
+func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
+	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
