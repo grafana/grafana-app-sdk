@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"fmt"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -189,5 +190,101 @@ func (*genericStatusStrategy) ValidateUpdate(_ context.Context, _, _ runtime.Obj
 
 // WarningsOnUpdate returns warnings for the given update.
 func (*genericStatusStrategy) WarningsOnUpdate(_ context.Context, _, _ runtime.Object) []string {
+	return nil
+}
+
+// genericStatusStrategy allows for writing objects with status fields, however may not create them.
+// It ignores spec and metadata fields, and does not allow for updates outside of the subresource field.
+type genericSubresourceStrategy struct {
+	runtime.ObjectTyper
+	names.NameGenerator
+
+	gv          schema.GroupVersion
+	subresource string
+	resetFields []string
+	namespaced  bool
+}
+
+// NewSubresourceStrategy creates a new genericStatusStrategy.
+func newSubresourceStrategy(typer runtime.ObjectTyper, gv schema.GroupVersion, subresource string, resetFields []string, namespaced bool) *genericSubresourceStrategy {
+	return &genericSubresourceStrategy{
+		ObjectTyper:   typer,
+		NameGenerator: names.SimpleNameGenerator,
+		gv:            gv,
+		subresource:   subresource,
+		resetFields:   resetFields,
+		namespaced:    namespaced,
+	}
+}
+
+func (g *genericSubresourceStrategy) NamespaceScoped() bool {
+	return g.namespaced
+}
+
+func (g *genericSubresourceStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
+	paths := make([]fieldpath.Path, 0)
+	for _, path := range g.resetFields {
+		paths = append(paths, fieldpath.MakePathOrDie(path))
+	}
+	fields := map[fieldpath.APIVersion]*fieldpath.Set{
+		fieldpath.APIVersion(g.gv.String()): fieldpath.NewSet(paths...),
+	}
+
+	return fields
+}
+
+func (g *genericSubresourceStrategy) PrepareForUpdate(ctx context.Context, obj, old runtime.Object) {
+	if obj == nil || old == nil {
+		return
+	}
+	oldObj, ok1 := old.(resource.Object)
+	newObj, ok2 := obj.(resource.Object)
+	if !ok1 || !ok2 {
+		logging.FromContext(ctx).Error("Status PrepareForUpdate called with non-resource.Object object")
+		return
+	}
+	newObj.SetAnnotations(oldObj.GetAnnotations())
+	newObj.SetLabels(oldObj.GetLabels())
+	newObj.SetFinalizers(oldObj.GetFinalizers())
+	newObj.SetOwnerReferences(oldObj.GetOwnerReferences())
+	// TODO: we shouldn't have to do this, right? It's not being done in OSS grafana, but we lose the spec otherwise here...
+	err := newObj.SetSpec(oldObj.GetSpec())
+	if err != nil {
+		logging.FromContext(ctx).Error("Status PrepareForUpdate set spec error", "error", err)
+	}
+	// set other subresources
+	for _, sr := range g.resetFields {
+		if sr == "metadata" || sr == "spec" {
+			continue
+		}
+		oldSubresource, ok := oldObj.GetSubresource(sr)
+		if ok {
+			err := newObj.SetSubresource(sr, oldSubresource)
+			if err != nil {
+				logging.FromContext(ctx).Error(fmt.Sprintf("Subresource %s PrepareForUpdate set %s error", g.subresource, sr), "error", err)
+			}
+		}
+	}
+}
+
+func (*genericSubresourceStrategy) AllowCreateOnUpdate() bool {
+	return false
+}
+
+func (*genericSubresourceStrategy) AllowUnconditionalUpdate() bool {
+	return false
+}
+
+// Canonicalize normalizes the object after validation.
+func (*genericSubresourceStrategy) Canonicalize(_ runtime.Object) {
+}
+
+// ValidateUpdate validates an update of genericStatusStrategy.
+func (*genericSubresourceStrategy) ValidateUpdate(_ context.Context, _, _ runtime.Object) field.ErrorList {
+	return field.ErrorList{}
+}
+
+// WarningsOnUpdate returns warnings for the given update.
+func (*genericSubresourceStrategy) WarningsOnUpdate(_ context.Context, _, _ runtime.Object) []string {
 	return nil
 }

@@ -91,7 +91,7 @@ func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*generic
 		return nil, err
 	}
 	for _, installer := range c.installers {
-		err = installer.InstallAPIs(server, c.Generic.RESTOptionsGetter)
+		err = installer.InstallAPIs(NewKubernetesGenericAPIServer(server), c.Generic.RESTOptionsGetter)
 		if err != nil {
 			return nil, err
 		}

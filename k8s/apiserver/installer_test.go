@@ -147,6 +147,14 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 	expected["/registry/grafana.app.GetFoo"] = common.OpenAPIDefinition{
 		Schema: fooSch,
 	}
+	expected["github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject"] = common.OpenAPIDefinition{
+		Schema: spec.Schema{
+			SchemaProps: spec.SchemaProps{
+				Description: "EmptyObject defines a model for a missing object type",
+				Type:        []string{"object"},
+			},
+		},
+	}
 
 	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
 		KindToGoTypeFunc: func(k, v string) (resource.Kind, bool) {
@@ -182,6 +190,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 			}},
 		}},
 	}
+
 	t.Run("error adding to scheme", func(t *testing.T) {
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
 			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
@@ -189,12 +198,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 			},
 		})
 		require.Nil(t, err)
-		err = installer.InstallAPIs(&MockGenericAPIServer{
-			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
-				assert.Fail(t, "should not be called")
-				return errors.New("I AM ERROR")
-			},
-		}, nil)
+		err = installer.InstallAPIs(nil, nil)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, "failed to add to scheme: failed to get kinds by group version: failed to resolve kind Test")
 	})
@@ -207,12 +211,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 		})
 		require.Nil(t, err)
 		installer.scheme = newScheme()
-		err = installer.InstallAPIs(&MockGenericAPIServer{
-			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
-				assert.Fail(t, "should not be called")
-				return errors.New("I AM ERROR")
-			},
-		}, nil)
+		err = installer.InstallAPIs(nil, nil)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, "failed to get kinds by group version: failed to resolve kind Test")
 	})
@@ -224,12 +223,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 			},
 		})
 		require.Nil(t, err)
-		err = installer.InstallAPIs(&MockGenericAPIServer{
-			InstallAPIGroupFunc: func(_ *genericapiserver.APIGroupInfo) error {
-				assert.Fail(t, "should not be called")
-				return errors.New("I AM ERROR")
-			},
-		}, nil)
+		err = installer.InstallAPIs(nil, nil)
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, "failed to create store for kind Test: failed completing storage options for Test: options for tests.test.ext.grafana.app must have RESTOptions set")
 	})
@@ -450,9 +444,10 @@ func (m *MockGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.AP
 }
 
 type mockGoTypeResolver struct {
-	KindToGoTypeFunc            func(kind, version string) (goType resource.Kind, exists bool)
-	CustomRouteReturnGoTypeFunc func(kind, version, path, verb string) (goType any, exists bool)
-	CustomRouteQueryGoTypeFunc  func(kind, version, path, verb string) (goType runtime.Object, exists bool)
+	KindToGoTypeFunc                 func(kind, version string) (goType resource.Kind, exists bool)
+	CustomRouteReturnGoTypeFunc      func(kind, version, path, verb string) (goType any, exists bool)
+	CustomRouteQueryGoTypeFunc       func(kind, version, path, verb string) (goType runtime.Object, exists bool)
+	CustomRouteRequestBodyGoTypeFunc func(kind, version, path, verb string) (goType any, exists bool)
 }
 
 func (m *mockGoTypeResolver) KindToGoType(kind, version string) (goType resource.Kind, exists bool) {
@@ -470,6 +465,12 @@ func (m *mockGoTypeResolver) CustomRouteReturnGoType(kind, version, path, verb s
 func (m *mockGoTypeResolver) CustomRouteQueryGoType(kind, version, path, verb string) (goType runtime.Object, exists bool) {
 	if m.CustomRouteQueryGoTypeFunc != nil {
 		return m.CustomRouteQueryGoTypeFunc(kind, version, path, verb)
+	}
+	return nil, false
+}
+func (m *mockGoTypeResolver) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
+	if m.CustomRouteRequestBodyGoTypeFunc != nil {
+		return m.CustomRouteRequestBodyGoTypeFunc(kind, version, path, verb)
 	}
 	return nil, false
 }

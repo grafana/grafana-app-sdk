@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
+	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
@@ -103,6 +104,38 @@ func TestManifestData_Validate(t *testing.T) {
 			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
 			errors.New("kind 'Foo' has a different scope in versions 'v1' and 'v2'"),
 			errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
+	}, {
+		name: "conflicting routes and kinds",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+				}, {
+					Kind:   "Foobar",
+					Plural: "foobars",
+					Scope:  "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos": spec3.PathProps{},
+						"/bars": spec3.PathProps{},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"/foobars": spec3.PathProps{},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
+			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
 	}}
 
 	for _, test := range tests {

@@ -67,6 +67,20 @@ appManifestv1alpha2: appManifestKind & {
 				[string]: _
 			}
 		}
+		#ManifestVersionRoutes: {
+			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
+			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			namespaced?: {
+				[string]: _
+			}
+			// Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.
+			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
+			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			cluster?: {
+				[string]: _
+			}
+		}
 		#ManifestVersion: {
 			// Name is the version name string, such as "v1" or "v1alpha1"
 			name: string
@@ -77,6 +91,9 @@ appManifestv1alpha2: appManifestKind & {
 			// Generally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)
 			// or newly added (and didn't exist for older versions).
 			kinds: [...#ManifestVersionKind]
+			// Routes is a section defining version-level custom resource routes.
+			// These routes are registered at the same level as kinds, and thus should not conflict with existing kinds.
+			routes?: #ManifestVersionRoutes
 		}
 		#KindPermission: {
 			group: string
