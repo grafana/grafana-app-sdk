@@ -10,7 +10,7 @@ For more information, see the [Asynchronous Business Logic section in Platform C
 Both reconcilers and watchers are used for the [reconciliation process](./application-design/platform-concepts.md#asynchronous-business-logic). 
 Whether you use one or the other is down to preference, and use-case. 
 Both reconcilers and watchers are powered by the same informer design within an `InformerController`, with just slightly different handling logic. 
-They both have an `Opinionated` variant that can wrap the interface as well.
+They both have an `Opinionated` variant that can wrap the interface as well. Note: if using the `Opinionated` variant, it will add a [finalizer](https://kubernetes.io/docs/concepts/overview/working-with-objects/finalizers/) to the resource you are watching. If you are watching a resource not created by your app, please reach out to the owners prior to proceeding with this approach.
 
 The major difference between a `Reconciler` and a `Watcher` is that a `Reconciler` has a single function, `Reconcile`, which is called for every event for a kind, while a `Watcher` has a function for each event type (`Add`, `Update`, `Delete`). There are more minor differences in how these events are handled as well:
 * A `Reconciler` can return a response with an explicit "retry after this time period" message, while a `Watcher` will only return success/fail (`nil` or `error`).
