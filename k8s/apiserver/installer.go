@@ -795,7 +795,7 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method s
 	}
 }
 
-func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {

@@ -206,7 +206,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s_%s_response_object_types_gen.go"), strings.ToLower(filenamePrefix), strings.ToLower(customRoute.Name)),
+			RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s%s_response_object_types_gen.go"), strings.ToLower(filenamePrefix), strings.ToLower(customRoute.Name)),
 			From:         []codejen.NamedJenny{c},
 		})
 	}

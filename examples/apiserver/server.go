@@ -33,6 +33,7 @@ type BasicModel struct {
 	String string `json:"stringField"`
 }
 
+//nolint:funlen
 func NewApp(config app.Config) (app.App, error) {
 	client, err := v1alpha1.NewTestKindClientFromGenerator(k8s.NewClientRegistry(config.KubeConfig, k8s.ClientConfig{
 		MetricsConfig: metrics.DefaultConfig(""),
@@ -114,7 +115,13 @@ func NewApp(config app.Config) (app.App, error) {
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
 					return json.NewEncoder(writer).Encode(v1alpha1.GetFoobar{
-						Foo: "hello, world!",
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "NamespacedFoobar",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						GetFoobarBody: v1alpha1.GetFoobarBody{
+							Foo: "hello, world!",
+						},
 					})
 				},
 				{
@@ -123,7 +130,13 @@ func NewApp(config app.Config) (app.App, error) {
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
 					return json.NewEncoder(writer).Encode(v1alpha1.Clustergetfoobar{
-						Bar: "hello, world!",
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "ClusterFoobar",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						ClustergetfoobarBody: v1alpha1.ClustergetfoobarBody{
+							Bar: "hello, world!",
+						},
 					})
 				},
 			},
