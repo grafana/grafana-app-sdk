@@ -189,7 +189,20 @@ type AppUnmanagedKind struct {
 	// Watcher is an optional Watcher to run for this Kind.
 	Watcher operator.ResourceWatcher
 	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
-	ReconcileOptions BasicReconcileOptions
+	ReconcileOptions UnmanagedKindReconcileOptions
+}
+
+type UnmanagedKindReconcileOptions struct {
+	// Namespace is the namespace to use in the ListWatch request
+	Namespace string
+	// LabelFilters are any label filters to apply to the ListWatch request
+	LabelFilters []string
+	// FieldSelectors are any field selector filters to apply to the ListWatch request
+	FieldSelectors []string
+	// UseOpinionated should be set to true to wrap the Watcher or Reconciler in its opinionated variant.
+	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
+	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
+	UseOpinionated bool
 }
 
 // BasicReconcileOptions are settings for the ListWatch and informer setup for a reconciliation loop
@@ -382,10 +395,15 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		return a.watchKind(AppUnmanagedKind{
-			Kind:             kind.Kind,
-			Reconciler:       kind.Reconciler,
-			Watcher:          kind.Watcher,
-			ReconcileOptions: kind.ReconcileOptions,
+			Kind:       kind.Kind,
+			Reconciler: kind.Reconciler,
+			Watcher:    kind.Watcher,
+			ReconcileOptions: UnmanagedKindReconcileOptions{
+				Namespace:      kind.ReconcileOptions.Namespace,
+				LabelFilters:   kind.ReconcileOptions.LabelFilters,
+				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+				UseOpinionated: !kind.ReconcileOptions.UsePlain,
+			},
 		})
 	}
 	return nil
@@ -414,7 +432,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		}
 		if kind.Reconciler != nil {
 			reconciler := kind.Reconciler
-			if !kind.ReconcileOptions.UsePlain {
+			if kind.ReconcileOptions.UseOpinionated {
 				op, err := operator.NewOpinionatedReconciler(&watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, a.getFinalizer(kind.Kind))
 				if err != nil {
 					return err
@@ -429,7 +447,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 		}
 		if kind.Watcher != nil {
 			watcher := kind.Watcher
-			if !kind.ReconcileOptions.UsePlain {
+			if kind.ReconcileOptions.UseOpinionated {
 				op, err := operator.NewOpinionatedWatcher(kind.Kind, &watchPatcher{a.patcher.ForKind(kind.Kind.GroupVersionKind().GroupKind())}, operator.OpinionatedWatcherConfig{
 					Finalizer:           a.getFinalizer,
 					InProgressFinalizer: a.getInProgressFinalizer,
