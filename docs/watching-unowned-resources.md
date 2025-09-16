@@ -195,7 +195,7 @@ set `UseOpinionated` to `true` in the `AppUnamanagedKind.ReconcileOptions`.
 Please note that the Opinionated variants add finalizers to the watched resource as part of their function, 
 so you will not only need appropriate permissions to update the Kind, but also as finalizers block deletion of the resource, 
 if you ever _stop_ watching the Kind, you must remove all of your finalizers to allow the app that manages the Kind 
-to fully process deletes. It is good practice to reach out to the team that maintains that Kind before 
+to fully process deletes. Before you do this, reach out to the team that maintains that Kind before 
 using the opinionated variants on an Unmanaged Kind.
 
 ### Permissions
