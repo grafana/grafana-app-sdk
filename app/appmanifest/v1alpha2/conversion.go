@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 )
@@ -124,7 +125,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &version.Routes.Namespaced)
+				err = json.Unmarshal(marshaled, &v.Routes.Namespaced)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
@@ -135,7 +136,18 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &version.Routes.Cluster)
+				err = json.Unmarshal(marshaled, &v.Routes.Cluster)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+			}
+			if len(version.Routes.Schemas) > 0 {
+				v.Routes.Schemas = make(map[string]spec.Schema)
+				marshaled, err := json.Marshal(version.Routes.Schemas)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+				err = json.Unmarshal(marshaled, &v.Routes.Schemas)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
@@ -275,6 +287,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				ver.Routes.Cluster = make(map[string]any)
 				for path := range version.Routes.Cluster {
 					ver.Routes.Cluster[path] = version.Routes.Cluster[path]
+				}
+			}
+			if len(version.Routes.Schemas) > 0 {
+				ver.Routes.Schemas = make(map[string]any)
+				for path := range version.Routes.Schemas {
+					ver.Routes.Schemas[path] = version.Routes.Schemas[path]
 				}
 			}
 		}

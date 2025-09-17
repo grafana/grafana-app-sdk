@@ -29,6 +29,11 @@ SchemaProps: spec.SchemaProps{
     Properties: map[string]spec.Schema{ {{ range $key, $prop := .Properties }}
         "{{$key}}": { {{ template "schema" $prop }}
         },{{ end }}
+    },{{ end }}{{ if .AdditionalProperties }}
+    AdditionalProperties: &spec.SchemaOrBool{ {{ if .AdditionalProperties.Schema }}
+        Schema: &spec.Schema{ {{ template "schema" .AdditionalProperties.Schema.SchemaProps }}
+        },{{ else }}
+        Allows: {{ .AdditionalProperties.Allows }},{{ end }}
     },{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
@@ -218,6 +223,10 @@ var appManifestData = app.ManifestData{
                         Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
                         },{{ end }}
                     },{{ end }}{{ end }}
+                },
+                Schemas: map[string]spec.Schema{ {{ range $refName, $schema := .Routes.Schemas }}
+                    "{{ $refName }}": { {{ template "schema" $schema.SchemaProps }}
+                    },{{ end }}
                 },
             },
         },

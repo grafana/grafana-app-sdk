@@ -80,7 +80,13 @@ v1alpha1: {
     		"GET": {
     			name: "clustergetfoobar"
     			response: {
+    				#Extra: {
+    					foo: string
+    				}
     				bar: string
+    				extra: {
+    					[string]: #Extra
+    				}
     			}
     		}
     	}

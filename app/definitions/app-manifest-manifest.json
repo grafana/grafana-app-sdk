@@ -647,6 +647,14 @@
                                         },
                                         "description": "Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
+                                    },
+                                    "schemas": {
+                                        "additionalProperties": {
+                                            "additionalProperties": {},
+                                            "type": "object"
+                                        },
+                                        "description": "Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.\nIf route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
+                                        "type": "object"
                                     }
                                 },
                                 "type": "object"

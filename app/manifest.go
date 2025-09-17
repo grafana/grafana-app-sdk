@@ -226,6 +226,8 @@ type ManifestVersion struct {
 type ManifestVersionRoutes struct {
 	Namespaced map[string]spec3.PathProps `json:"namespaced,omitempty" yaml:"namespaced,omitempty"`
 	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`
+	// Schemas is the map of #/components/schemas references used by requests and responses in Namespaced and Cluster.
+	Schemas map[string]spec.Schema `json:"schemas,omitempty" yaml:"schemas,omitempty"`
 }
 
 // ManifestVersionKind contains details for a version of a kind in a Manifest
