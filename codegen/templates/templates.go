@@ -602,9 +602,13 @@ func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) err
 }
 
 type RuntimeObjectWrapperMetadata struct {
-	PackageName     string
-	WrapperTypeName string
-	TypeName        string
+	PackageName               string
+	WrapperTypeName           string
+	TypeName                  string
+	HasObjectMeta             bool
+	HasListMeta               bool
+	AddDeepCopyForTypeName    bool
+	KubernetesCodegenComments bool
 }
 
 func WriteRuntimeObjectWrapper(metadata RuntimeObjectWrapperMetadata, out io.Writer) error {

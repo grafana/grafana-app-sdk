@@ -98,7 +98,14 @@ type CustomRouteRequest struct {
 
 // CustomRouteResponse represents the response part of a custom route definition.
 type CustomRouteResponse struct {
-	Schema cue.Value `json:"schema,omitempty"`
+	Schema   cue.Value                   `json:"schema,omitempty"`
+	Metadata CustomRouteResponseMetadata `json:"metadata,omitempty"`
+}
+
+type CustomRouteResponseMetadata struct {
+	TypeMeta   bool `json:"typeMeta"`
+	ListMeta   bool `json:"listMeta"`
+	ObjectMeta bool `json:"objectMeta"`
 }
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.

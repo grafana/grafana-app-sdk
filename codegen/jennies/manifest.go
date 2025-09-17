@@ -4,6 +4,7 @@ package jennies
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go/format"
 	"slices"
@@ -425,7 +426,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		if err != nil {
 			return spec3.PathProps{}, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		targetResponses, err := cueSchemaToResponses(sourceRoute.Response.Schema)
+		targetResponses, err := customRouteResponseToSpec3Responses(sourceRoute.Response)
 		if err != nil {
 			return spec3.PathProps{}, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
@@ -532,17 +533,39 @@ func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
 	return requestBody, nil
 }
 
-func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
+func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRouteResponse) (*spec3.Responses, error) {
+	v := customRouteResponse.Schema
 	if !v.Exists() {
 		return nil, nil
 	}
 	if err := v.Err(); err != nil {
 		return nil, fmt.Errorf("input CUE value for response has error: %w", err)
 	}
+	if !customRouteResponse.Metadata.TypeMeta && (customRouteResponse.Metadata.ListMeta || customRouteResponse.Metadata.ObjectMeta) {
+		return nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
+	}
 
 	schemaProps, err := cueSchemaToSpecSchemaProps(v)
 	if err != nil {
 		return nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
+	}
+	if customRouteResponse.Metadata.TypeMeta {
+		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
+		schemaProps.Properties["kind"] = kindPropSchema
+		schemaProps.Required = append(schemaProps.Required, "apiVersion", "kind")
+	}
+	if customRouteResponse.Metadata.ObjectMeta {
+		if _, exists := schemaProps.Properties["metadata"]; exists {
+			return nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
+		}
+		schemaProps.Properties["metadata"] = objectMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, "metadata")
+	} else if customRouteResponse.Metadata.ListMeta {
+		if _, exists := schemaProps.Properties["metadata"]; exists {
+			return nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
+		}
+		schemaProps.Properties["metadata"] = listMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, "metadata")
 	}
 
 	response := spec3.Response{
@@ -555,6 +578,9 @@ func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
 					},
 				},
 			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{},
 		},
 	}
 
@@ -647,3 +673,254 @@ func cueSchemaToSpecSchemaProps(v cue.Value) (spec.SchemaProps, error) {
 
 	return props, nil
 }
+
+var (
+	kindPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+			Type:        []string{"string"},
+			Format:      "",
+		},
+	}
+
+	apiVersionPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+			Type:        []string{"string"},
+			Format:      "",
+		},
+	}
+
+	objectMetaPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Type: []string{"object"},
+			Properties: map[string]spec.Schema{
+				"namespace": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"name": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"generateName": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"resourceVersion": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"generation": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"integer"},
+						Format: "int64",
+					},
+				},
+				"uid": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"selfLink": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"creationTimestamp": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"string"},
+						Format: "date-time",
+					},
+				},
+				"deletionTimestamp": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"string"},
+						Format: "date-time",
+					},
+				},
+				"deletionGracePeriodSeconds": {
+					SchemaProps: spec.SchemaProps{
+						Type:   []string{"integer"},
+						Format: "int64",
+					},
+				},
+				"labels": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"object"},
+						AdditionalProperties: &spec.SchemaOrBool{
+							Allows: true,
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+				"annotations": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"object"},
+						AdditionalProperties: &spec.SchemaOrBool{
+							Allows: true,
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+				"ownerReferences": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"array"},
+						Items: &spec.SchemaOrArray{
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"object"},
+									Properties: map[string]spec.Schema{
+										"apiVersion": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"kind": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"name": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"uid": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"controller": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"boolean"},
+											},
+										},
+										"blockOwnerDeletion": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"boolean"},
+											},
+										},
+									},
+									Required: []string{"apiVersion", "kind", "name", "uid"},
+								},
+							},
+						},
+					},
+				},
+				"finalizers": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"array"},
+						Items: &spec.SchemaOrArray{
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"string"},
+								},
+							},
+						},
+					},
+				},
+				"managedFields": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"array"},
+						Items: &spec.SchemaOrArray{
+							Schema: &spec.Schema{
+								SchemaProps: spec.SchemaProps{
+									Type: []string{"object"},
+									Properties: map[string]spec.Schema{
+										"manager": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"operation": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"apiVersion": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"time": {
+											SchemaProps: spec.SchemaProps{
+												Type:   []string{"string"},
+												Format: "date-time",
+											},
+										},
+										"fieldsType": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+										"fieldsV1": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"object"},
+											},
+										},
+										"subresource": {
+											SchemaProps: spec.SchemaProps{
+												Type: []string{"string"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{
+				app.OpenAPIExtensionUsesKubernetesObjectMeta: true,
+			},
+		},
+	}
+
+	listMetaPropSchema = spec.Schema{
+		SchemaProps: spec.SchemaProps{
+			Type: []string{"object"},
+			Properties: map[string]spec.Schema{
+				"selfLink": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"resourceVersion": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"continue": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"string"},
+					},
+				},
+				"remainingItemCount": {
+					SchemaProps: spec.SchemaProps{
+						Type: []string{"integer"},
+					},
+				},
+			},
+		},
+		VendorExtensible: spec.VendorExtensible{
+			Extensions: spec.Extensions{
+				app.OpenAPIExtensionUsesKubernetesListMeta: true,
+			},
+		},
+	}
+)

@@ -32,6 +32,10 @@ testKind: {
 				response: {
 					status: string
 				}
+				responseMetadata: {
+					typeMeta: true
+					objectMeta: true
+				}
 			}
 		}
 		"/bar": {
