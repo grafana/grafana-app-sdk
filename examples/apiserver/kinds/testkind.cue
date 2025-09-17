@@ -42,5 +42,18 @@ testKind: {
 				}
 			}
 		}
+		"/recurse": {
+			"GET": {
+				name: "GetRecursiveResponse"
+				response: {
+					#RecursiveType: {
+						message: string
+						next?: #RecursiveType
+					}
+					message: string
+					next?: #RecursiveType
+				}
+			}
+		}
 	}
 }

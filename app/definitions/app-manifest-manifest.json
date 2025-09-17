@@ -603,7 +603,7 @@
                                             "additionalProperties": {},
                                             "type": "object"
                                         },
-                                        "description": "Schemas is the components.schemas section of an OpenAPI document describing this Kind.\nIt must contain a key named the same as the `kind` field of the Kind.\nOther fields may be present to be referenced by $ref tags in a schema,\nand references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.",
+                                        "description": "Schemas is the components.schemas section of an OpenAPI document describing this Kind.\nIt must contain a key named the same as the `kind` field of the Kind.\nOther fields may be present to be referenced by $ref tags in a schema,\nand references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.\nIf route responses in the `routes` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
                                         "type": "object"
                                     },
                                     "scope": {

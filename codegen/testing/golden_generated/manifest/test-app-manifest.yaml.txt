@@ -218,6 +218,7 @@ spec:
               content:
                 application/json:
                   schema:
+                    additionalProperties: false
                     properties:
                       force:
                         default: false
@@ -233,6 +234,7 @@ spec:
                 content:
                   application/json:
                     schema:
+                      additionalProperties: false
                       properties:
                         message:
                           type: string
@@ -270,9 +272,11 @@ spec:
                 content:
                   application/json:
                     schema:
+                      additionalProperties: false
                       properties:
                         items:
                           items:
+                            additionalProperties: false
                             properties:
                               name:
                                 type: string

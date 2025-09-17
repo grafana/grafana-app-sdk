@@ -40,6 +40,8 @@ type AppManifestManifestVersionKind struct {
 	// It must contain a key named the same as the `kind` field of the Kind.
 	// Other fields may be present to be referenced by $ref tags in a schema,
 	// and references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.
+	// If route responses in the `routes` section reference a definition in '#/components/schemas',
+	// that schema definition must exist in this section.
 	Schemas                  map[string]interface{}                `json:"schemas"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`

@@ -199,7 +199,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		if len(version.Routes().Namespaced) > 0 {
 			ver.Routes.Namespaced = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
-				targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+				targetPathProps, _, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap) // TODO: additional schemas
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for namespaced path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
@@ -209,7 +209,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		if len(version.Routes().Cluster) > 0 {
 			ver.Routes.Cluster = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Cluster {
-				targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+				targetPathProps, _, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap) // TODO: additional schemas
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for cluster path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
@@ -253,9 +253,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	return &manifest, nil
 }
 
-type simpleOpenAPIDoc struct {
+type simpleOpenAPIDoc[T any] struct {
 	Components struct {
-		Schemas map[string]map[string]any `json:"schemas" yaml:"schemas"`
+		Schemas map[string]T `json:"schemas" yaml:"schemas"`
 	} `json:"components" yaml:"components"`
 }
 
@@ -290,10 +290,13 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			Operations: operations,
 		}
 	}
+	additionalSchemas := make(map[string]spec.SchemaProps)
 	if len(vk.Routes) > 0 {
 		mver.Routes = make(map[string]spec3.PathProps)
 		for sourcePath, sourceMethodsMap := range vk.Routes {
-			targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+			var targetPathProps spec3.PathProps
+			var err error
+			targetPathProps, additionalSchemas, err = buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 			if err != nil {
 				return app.ManifestVersionKind{}, fmt.Errorf("custom routes error for path '%s': %w", sourcePath, err)
 			}
@@ -311,7 +314,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		if err != nil {
 			return app.ManifestVersionKind{}, err
 		}
-		schemaProps := simpleOpenAPIDoc{}
+		schemaProps := simpleOpenAPIDoc[map[string]any]{}
 		err = json.Unmarshal(oapiBytes, &schemaProps)
 		if err != nil {
 			return app.ManifestVersionKind{}, err
@@ -333,6 +336,11 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			return app.ManifestVersionKind{}, err // TODO: wrap error
 		}
 		schemas := make(map[string]any)
+		// Additional Schemas from custom routes
+		for key, val := range additionalSchemas {
+			schemas[key] = val
+		}
+		// Schemas from the kind schema
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
@@ -343,7 +351,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			if err != nil {
 				return app.ManifestVersionKind{}, err
 			}
-			oapiProps := simpleOpenAPIDoc{}
+			oapiProps := simpleOpenAPIDoc[map[string]any]{}
 			err = json.Unmarshal(oapiBytes, &oapiProps)
 			if err != nil {
 				return app.ManifestVersionKind{}, err
@@ -409,25 +417,32 @@ func toKindPermissionActions(actions []string) []app.KindPermissionAction {
 	return a
 }
 
-func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]codegen.CustomRoute) (spec3.PathProps, error) {
+func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]codegen.CustomRoute) (spec3.PathProps, map[string]spec.SchemaProps, error) {
 	targetPathProps := spec3.PathProps{}
+	additionalSchemas := make(map[string]spec.SchemaProps)
 	for sourceMethod, sourceRoute := range sourceMethodsMap {
 		upperMethod := strings.ToUpper(sourceMethod)
 		if !slices.Contains([]string{"GET", "POST", "PUT", "DELETE", "PATCH"}, upperMethod) {
-			return spec3.PathProps{}, fmt.Errorf("unhandled HTTP method '%s' defined for custom route path '%s'", sourceMethod, sourcePath)
+			return spec3.PathProps{}, nil, fmt.Errorf("unhandled HTTP method '%s' defined for custom route path '%s'", sourceMethod, sourcePath)
 		}
 
 		targetParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
 		if err != nil {
-			return spec3.PathProps{}, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		targetRequestBody, err := cueSchemaToRequestBody(sourceRoute.Request.Body)
+		targetRequestBody, additional, err := cueSchemaToRequestBody(sourceRoute.Request.Body)
 		if err != nil {
-			return spec3.PathProps{}, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		targetResponses, err := cueSchemaToResponses(sourceRoute.Response.Schema)
+		for k, v := range additional {
+			additionalSchemas[k] = v
+		}
+		targetResponses, additional, err := cueSchemaToResponses(sourceRoute.Response.Schema)
 		if err != nil {
-			return spec3.PathProps{}, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
+		}
+		for k, v := range additional {
+			additionalSchemas[k] = v
 		}
 
 		operationID := defaultRouteName(sourceMethod, sourcePath)
@@ -459,7 +474,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			targetPathProps.Patch = targetOperation
 		}
 	}
-	return targetPathProps, nil
+	return targetPathProps, additionalSchemas, nil
 }
 
 func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
@@ -470,7 +485,7 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 		return nil, fmt.Errorf("input CUE value for query params has error: %w", err)
 	}
 
-	schemaProps, err := cueSchemaToSpecSchemaProps(v)
+	schemaProps, _, err := cueSchemaToSpecSchemaProps(v)
 	if err != nil {
 		return nil, fmt.Errorf("error converting query param CUE schema to OpenAPI props: %w", err)
 	}
@@ -503,17 +518,17 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 	return parameters, nil
 }
 
-func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
+func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, map[string]spec.SchemaProps, error) {
 	if !v.Exists() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err := v.Err(); err != nil {
-		return nil, fmt.Errorf("input CUE value for request body has error: %w", err)
+		return nil, nil, fmt.Errorf("input CUE value for request body has error: %w", err)
 	}
 
-	schemaProps, err := cueSchemaToSpecSchemaProps(v)
+	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(v)
 	if err != nil {
-		return nil, fmt.Errorf("error converting request body CUE schema to OpenAPI props: %w", err)
+		return nil, nil, fmt.Errorf("error converting request body CUE schema to OpenAPI props: %w", err)
 	}
 
 	requestBody := &spec3.RequestBody{
@@ -529,20 +544,20 @@ func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
 			},
 		},
 	}
-	return requestBody, nil
+	return requestBody, additionalSchemas, nil
 }
 
-func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
+func cueSchemaToResponses(v cue.Value) (*spec3.Responses, map[string]spec.SchemaProps, error) {
 	if !v.Exists() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err := v.Err(); err != nil {
-		return nil, fmt.Errorf("input CUE value for response has error: %w", err)
+		return nil, nil, fmt.Errorf("input CUE value for response has error: %w", err)
 	}
 
-	schemaProps, err := cueSchemaToSpecSchemaProps(v)
+	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(v)
 	if err != nil {
-		return nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
+		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
 
 	response := spec3.Response{
@@ -563,7 +578,7 @@ func cueSchemaToResponses(v cue.Value) (*spec3.Responses, error) {
 			Default: &response,
 		},
 	}
-	return responses, nil
+	return responses, additionalSchemas, nil
 }
 
 func findSchemaFallback(val cue.Value) (cue.Value, error) {
@@ -597,7 +612,26 @@ func findSchemaFallback(val cue.Value) (cue.Value, error) {
 	return schemas[0], nil
 }
 
-func cueSchemaToSpecSchemaProps(v cue.Value) (spec.SchemaProps, error) {
+func cueSchemaToSpecSchemaProps(v cue.Value) (spec.SchemaProps, map[string]spec.SchemaProps, error) {
+	kindKey := "__APPSDKKIND__"
+	oapiBytes, err := cueToOpenAPIBytes(v, kindKey)
+	if err != nil {
+		return spec.SchemaProps{}, nil, err
+	}
+	schemaProps := simpleOpenAPIDoc[spec.SchemaProps]{}
+	err = json.Unmarshal(oapiBytes, &schemaProps)
+	if err != nil {
+		return spec.SchemaProps{}, nil, err
+	}
+	if _, ok := schemaProps.Components.Schemas[kindKey]; !ok {
+		return spec.SchemaProps{}, nil, fmt.Errorf("schema for kind '%s' not found", kindKey)
+	}
+	response := schemaProps.Components.Schemas[kindKey]
+	delete(schemaProps.Components.Schemas, kindKey)
+	return response, schemaProps.Components.Schemas, nil
+}
+
+func cueSchemaToSpecSchemaPropsOld(v cue.Value) (spec.SchemaProps, error) {
 	if !v.Exists() {
 		return spec.SchemaProps{}, nil
 	}

@@ -49,6 +49,8 @@ appManifestv1alpha2: appManifestKind & {
 			// It must contain a key named the same as the `kind` field of the Kind.
 			// Other fields may be present to be referenced by $ref tags in a schema,
 			// and references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.
+			// If route responses in the `routes` section reference a definition in '#/components/schemas', 
+			// that schema definition must exist in this section.
 			schemas: #ManifestVersionKindSchema & {
 				// The schema must contain an object for the kind. All other top-level fields can be referenced by the kind schema
 				[S.kind]: _

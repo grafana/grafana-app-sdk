@@ -32,7 +32,8 @@ SchemaProps: spec.SchemaProps{
     },{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
-    },{{ end }}
+    },{{ end }}{{ if (refString .Ref) }}
+    Ref: spec.MustCreateRef("{{ .Ref | refString }}"),{{ end }}
 },{{ end }}
 
 {{ define "parameter" }}
