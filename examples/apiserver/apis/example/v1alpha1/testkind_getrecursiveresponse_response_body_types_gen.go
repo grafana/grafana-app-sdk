@@ -14,12 +14,12 @@ func NewVersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType() *VersionsV
 }
 
 // +k8s:openapi-gen=true
-type GetRecursiveResponse struct {
+type GetRecursiveResponseBody struct {
 	Message string                                                       `json:"message"`
 	Next    *VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType `json:"next,omitempty"`
 }
 
-// NewGetRecursiveResponse creates a new GetRecursiveResponse object.
-func NewGetRecursiveResponse() *GetRecursiveResponse {
-	return &GetRecursiveResponse{}
+// NewGetRecursiveResponseBody creates a new GetRecursiveResponseBody object.
+func NewGetRecursiveResponseBody() *GetRecursiveResponseBody {
+	return &GetRecursiveResponseBody{}
 }

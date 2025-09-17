@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -32,6 +33,7 @@ type BasicModel struct {
 	String string `json:"stringField"`
 }
 
+//nolint:funlen
 func NewApp(config app.Config) (app.App, error) {
 	client, err := v1alpha1.NewTestKindClientFromGenerator(k8s.NewClientRegistry(config.KubeConfig, k8s.ClientConfig{
 		MetricsConfig: metrics.DefaultConfig(""),
@@ -74,16 +76,34 @@ func NewApp(config app.Config) (app.App, error) {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "foo",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
-					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					logging.FromContext(ctx).Info("called TestKind subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{Status: "ok"})
+					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "TestKind.Foo",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						ObjectMeta: metav1.ObjectMeta{
+							Name:      request.ResourceIdentifier.Name,
+							Namespace: request.ResourceIdentifier.Namespace,
+						},
+						GetFooBody: v1alpha1.GetFooBody{Status: "ok"},
+					})
 				}, {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "bar",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
-					logging.FromContext(ctx).Info("called foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					logging.FromContext(ctx).Info("called TestKind subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{Message: "Hello, world!"})
+					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "TestKind.Message",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						GetMessageBody: v1alpha1.GetMessageBody{
+							Message: "Hello, world!",
+						},
+					})
 				},
 			},
 		}},
@@ -95,7 +115,13 @@ func NewApp(config app.Config) (app.App, error) {
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
 					return json.NewEncoder(writer).Encode(v1alpha1.GetFoobar{
-						Foo: "hello, world!",
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "NamespacedFoobar",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						GetFoobarBody: v1alpha1.GetFoobarBody{
+							Foo: "hello, world!",
+						},
 					})
 				},
 				{
@@ -104,7 +130,13 @@ func NewApp(config app.Config) (app.App, error) {
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
 					return json.NewEncoder(writer).Encode(v1alpha1.Clustergetfoobar{
-						Bar: "hello, world!",
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "ClusterFoobar",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						ClustergetfoobarBody: v1alpha1.ClustergetfoobarBody{
+							Bar: "hello, world!",
+						},
 					})
 				},
 			},

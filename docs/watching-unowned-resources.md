@@ -186,6 +186,18 @@ You can still use `ManagedKinds` alongside `UnmanagedKinds` when building your a
 It's important to not add an other app's kinds to your own `ManagedKinds` list, as then the App's `ManagedKinds()` method 
 won't match up with the kinds declared in your app's Manifest, and `app.ValidateManifest` will fail.
 
+### Opinionated Watchers/Reconcilers
+
+By default, adding a Watcher or Reconciler for an unmanaged kind does not use the Opinionated variant of that 
+Watcher/Reconciler. If you wish to use the Opinionated variant (same behavior as a Managed Kind), 
+set `UseOpinionated` to `true` in the `AppUnamanagedKind.ReconcileOptions`. 
+
+Please note that the Opinionated variants add finalizers to the watched resource as part of their function, 
+so you will not only need appropriate permissions to update the Kind, but also as finalizers block deletion of the resource, 
+if you ever _stop_ watching the Kind, you must remove all of your finalizers to allow the app that manages the Kind 
+to fully process deletes. Before you do this, reach out to the team that maintains that Kind before 
+using the opinionated variants on an Unmanaged Kind.
+
 ### Permissions
 
 You'll need to make sure your app has permission to list and watch the other app's kind(s) you're using. 

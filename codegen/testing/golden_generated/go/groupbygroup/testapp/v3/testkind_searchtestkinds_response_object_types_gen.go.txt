@@ -1,0 +1,37 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+import (
+	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// +k8s:openapi-gen=true
+type SearchTestkinds struct {
+	metav1.TypeMeta     `json:",inline"`
+	SearchTestkindsBody `json:",inline"`
+}
+
+func NewSearchTestkinds() *SearchTestkinds {
+	return &SearchTestkinds{}
+}
+
+func (t *SearchTestkindsBody) DeepCopyInto(dst *SearchTestkindsBody) {
+	_ = resource.CopyObjectInto(dst, t)
+}
+
+func (o *SearchTestkinds) DeepCopyObject() runtime.Object {
+	dst := NewSearchTestkinds()
+	o.DeepCopyInto(dst)
+	return dst
+}
+
+func (o *SearchTestkinds) DeepCopyInto(dst *SearchTestkinds) {
+	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = o.TypeMeta.Kind
+	o.SearchTestkindsBody.DeepCopyInto(&dst.SearchTestkindsBody)
+}
+
+var _ runtime.Object = NewSearchTestkinds()

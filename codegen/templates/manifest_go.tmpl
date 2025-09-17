@@ -31,7 +31,7 @@ SchemaProps: spec.SchemaProps{
         },{{ end }}
     },{{ end }}{{ if .AdditionalProperties }}
     AdditionalProperties: &spec.SchemaOrBool{ {{ if .AdditionalProperties.Schema }}
-        Schema: &spec.Schema{ {{ template "schema" .AdditionalProperties.Schema.SchemaProps }}
+        Schema: &spec.Schema{ {{ template "schema" .AdditionalProperties.Schema }}
         },{{ else }}
         Allows: {{ .AdditionalProperties.Allows }},{{ end }}
     },{{ end }}{{ if .Required }}
@@ -39,7 +39,12 @@ SchemaProps: spec.SchemaProps{
         "{{.}}",{{ end }}
     },{{ end }}{{ if (refString .Ref) }}
     Ref: spec.MustCreateRef("{{ .Ref | refString }}"),{{ end }}
-},{{ end }}
+},{{ if .Extensions }}
+VendorExtensible: spec.VendorExtensible{
+    Extensions: spec.Extensions{ {{ range $key, $val := .Extensions }}
+        "{{ $key }}": {{printf "%#v" $val}},{{ end }}
+    },
+},{{ end }}{{ end }}
 
 {{ define "parameter" }}
 { {{ if .Name }}
@@ -225,7 +230,7 @@ var appManifestData = app.ManifestData{
                     },{{ end }}{{ end }}
                 },
                 Schemas: map[string]spec.Schema{ {{ range $refName, $schema := .Routes.Schemas }}
-                    "{{ $refName }}": { {{ template "schema" $schema.SchemaProps }}
+                    "{{ $refName }}": { {{ template "schema" $schema }}
                     },{{ end }}
                 },
             },

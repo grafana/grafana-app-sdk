@@ -2,10 +2,6 @@
 
 package v3
 
-import (
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-)
-
 // +k8s:openapi-gen=true
 type SearchTestkindsBody struct {
 	Items []V3SearchTestkindsBodyItems `json:"items"`
@@ -28,13 +24,4 @@ type V3SearchTestkindsBodyItems struct {
 // NewV3SearchTestkindsBodyItems creates a new V3SearchTestkindsBodyItems object.
 func NewV3SearchTestkindsBodyItems() *V3SearchTestkindsBodyItems {
 	return &V3SearchTestkindsBodyItems{}
-}
-
-type SearchTestkinds struct {
-	metav1.TypeMeta     `json:",inline"`
-	SearchTestkindsBody `json:",inline"`
-}
-
-func NewSearchTestkinds() *SearchTestkinds {
-	return &SearchTestkinds{}
 }

@@ -96,6 +96,7 @@ testKind: {
 							status: "success" | "failure"
 							message: string
 						}
+						responseMetadata: typeMeta: false
 					}
 				}
 				"/search": {

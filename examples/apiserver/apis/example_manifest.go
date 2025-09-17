@@ -10,12 +10,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
-
-	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/resource"
 
 	v1alpha1 "github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 )
@@ -67,6 +66,18 @@ var appManifestData = app.ManifestData{
 																	SchemaProps: spec.SchemaProps{
 																		Type: []string{"object"},
 																		Properties: map[string]spec.Schema{
+																			"apiVersion": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+																				},
+																			},
+																			"kind": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+																				},
+																			},
 																			"message": {
 																				SchemaProps: spec.SchemaProps{
 																					Type: []string{"string"},
@@ -78,6 +89,8 @@ var appManifestData = app.ManifestData{
 																		},
 																		Required: []string{
 																			"message",
+																			"apiVersion",
+																			"kind",
 																		},
 																	}},
 															}},
@@ -148,6 +161,123 @@ var appManifestData = app.ManifestData{
 																	SchemaProps: spec.SchemaProps{
 																		Type: []string{"object"},
 																		Properties: map[string]spec.Schema{
+																			"apiVersion": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+																				},
+																			},
+																			"kind": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+																				},
+																			},
+																			"metadata": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"object"},
+																					Properties: map[string]spec.Schema{
+																						"annotations": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"object"},
+																								AdditionalProperties: &spec.SchemaOrBool{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"string"},
+																										},
+																									},
+																								},
+																							},
+																						},
+																						"creationTimestamp": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"string"},
+																								Format: "date-time",
+																							},
+																						},
+																						"deletionGracePeriodSeconds": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"integer"},
+																								Format: "int64",
+																							},
+																						},
+																						"deletionTimestamp": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"string"},
+																								Format: "date-time",
+																							},
+																						},
+																						"finalizers": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"array"},
+																							},
+																						},
+																						"generateName": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"generation": {
+																							SchemaProps: spec.SchemaProps{
+																								Type:   []string{"integer"},
+																								Format: "int64",
+																							},
+																						},
+																						"labels": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"object"},
+																								AdditionalProperties: &spec.SchemaOrBool{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"string"},
+																										},
+																									},
+																								},
+																							},
+																						},
+																						"managedFields": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"array"},
+																							},
+																						},
+																						"name": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"namespace": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"ownerReferences": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"array"},
+																							},
+																						},
+																						"resourceVersion": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"selfLink": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																						"uid": {
+																							SchemaProps: spec.SchemaProps{
+																								Type: []string{"string"},
+																							},
+																						},
+																					},
+																				},
+																				VendorExtensible: spec.VendorExtensible{
+																					Extensions: spec.Extensions{
+																						"x-grafana-app-uses-kubernetes-object-metadata": true,
+																					},
+																				},
+																			},
 																			"status": {
 																				SchemaProps: spec.SchemaProps{
 																					Type: []string{"string"},
@@ -159,6 +289,9 @@ var appManifestData = app.ManifestData{
 																		},
 																		Required: []string{
 																			"status",
+																			"apiVersion",
+																			"kind",
+																			"metadata",
 																		},
 																	}},
 															}},
@@ -187,6 +320,18 @@ var appManifestData = app.ManifestData{
 																	SchemaProps: spec.SchemaProps{
 																		Type: []string{"object"},
 																		Properties: map[string]spec.Schema{
+																			"apiVersion": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+																				},
+																			},
+																			"kind": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+																				},
+																			},
 																			"message": {
 																				SchemaProps: spec.SchemaProps{
 																					Type: []string{"string"},
@@ -204,6 +349,8 @@ var appManifestData = app.ManifestData{
 																		},
 																		Required: []string{
 																			"message",
+																			"apiVersion",
+																			"kind",
 																		},
 																	}},
 															}},
@@ -279,9 +426,21 @@ var appManifestData = app.ManifestData{
 																SchemaProps: spec.SchemaProps{
 																	Type: []string{"object"},
 																	Properties: map[string]spec.Schema{
+																		"apiVersion": {
+																			SchemaProps: spec.SchemaProps{
+																				Type:        []string{"string"},
+																				Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+																			},
+																		},
 																		"foo": {
 																			SchemaProps: spec.SchemaProps{
 																				Type: []string{"string"},
+																			},
+																		},
+																		"kind": {
+																			SchemaProps: spec.SchemaProps{
+																				Type:        []string{"string"},
+																				Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 																			},
 																		},
 																	},
@@ -290,6 +449,8 @@ var appManifestData = app.ManifestData{
 																	},
 																	Required: []string{
 																		"foo",
+																		"apiVersion",
+																		"kind",
 																	},
 																}},
 														}},
@@ -320,6 +481,12 @@ var appManifestData = app.ManifestData{
 																SchemaProps: spec.SchemaProps{
 																	Type: []string{"object"},
 																	Properties: map[string]spec.Schema{
+																		"apiVersion": {
+																			SchemaProps: spec.SchemaProps{
+																				Type:        []string{"string"},
+																				Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+																			},
+																		},
 																		"bar": {
 																			SchemaProps: spec.SchemaProps{
 																				Type: []string{"string"},
@@ -338,6 +505,12 @@ var appManifestData = app.ManifestData{
 																				},
 																			},
 																		},
+																		"kind": {
+																			SchemaProps: spec.SchemaProps{
+																				Type:        []string{"string"},
+																				Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+																			},
+																		},
 																	},
 																	AdditionalProperties: &spec.SchemaOrBool{
 																		Allows: false,
@@ -345,6 +518,8 @@ var appManifestData = app.ManifestData{
 																	Required: []string{
 																		"bar",
 																		"extra",
+																		"apiVersion",
+																		"kind",
 																	},
 																}},
 														}},

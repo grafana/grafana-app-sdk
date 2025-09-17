@@ -719,7 +719,7 @@ func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, rout
 	return defs
 }
 
-func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
@@ -751,7 +751,8 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method s
 		if len(operation.Responses.Default.Content) > 0 {
 			for key, val := range operation.Responses.Default.Content {
 				if val.Schema != nil {
-					typeSchema = *val.Schema
+					// Copy the schema since we may make alterations
+					typeSchema = copySpecSchema(val.Schema)
 				}
 				if key == "application/json" {
 					break
@@ -759,8 +760,38 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method s
 			}
 		}
 	}
+	dependencies := make([]string, 0)
+	// Check for x-grafana-app extensions that dictate that the metadata field is a kubernetes metadata object,
+	// and should be replaced with the canonical definition like we do with kinds.
+	if metadataProp, ok := typeSchema.Properties["metadata"]; ok {
+		if usesObjectMeta, ok := metadataProp.Extensions[app.OpenAPIExtensionUsesKubernetesObjectMeta]; ok {
+			if cast, ok := usesObjectMeta.(bool); ok && cast {
+				typeSchema.Properties["metadata"] = spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Default: map[string]any{},
+						Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+					},
+				}
+				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+			}
+		} else if usesListMeta, ok := metadataProp.Extensions[app.OpenAPIExtensionUsesKubernetesListMeta]; ok {
+			if cast, ok := usesListMeta.(bool); ok && cast {
+				typeSchema.Properties["metadata"] = spec.Schema{
+					SchemaProps: spec.SchemaProps{
+						Default: map[string]any{},
+						Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+					},
+				}
+				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta")
+			}
+		}
+	}
+	if len(dependencies) == 0 {
+		dependencies = nil // set dependencies to nil so it's omitted in the OpenAPIDefinition
+	}
 	return typePath, common.OpenAPIDefinition{
-		Schema: typeSchema,
+		Schema:       typeSchema,
+		Dependencies: dependencies,
 	}
 }
 
@@ -924,6 +955,148 @@ func newScheme() *runtime.Scheme {
 	metav1.AddToGroupVersion(scheme, schema.GroupVersion{Group: "", Version: "v1"})
 	scheme.AddUnversionedTypes(unversionedVersion, unversionedTypes...)
 	return scheme
+}
+
+func copyPointerPrimitive[T any](f *T) *T {
+	if f == nil {
+		return nil
+	}
+	cpy := *f
+	return &cpy
+}
+
+func copySpecSchemaArray(in []spec.Schema) []spec.Schema {
+	if in == nil {
+		return nil
+	}
+	out := make([]spec.Schema, len(in))
+	for i := range in {
+		out[i] = copySpecSchema(&in[i])
+	}
+	return out
+}
+
+//nolint:funlen
+func copySpecSchema(in *spec.Schema) spec.Schema {
+	out := spec.Schema{}
+	if in == nil {
+		return out
+	}
+	out.ID = in.ID
+	out.Ref = in.Ref       // TODO: Ref has pointers inside of it
+	out.Schema = in.Schema // SchemaURL is an alias of string
+	out.Description = in.Description
+	if in.Type != nil {
+		out.Type = append(spec.StringOrArray{}, in.Type...)
+	}
+	out.Nullable = in.Nullable
+	out.Format = in.Format
+	out.Title = in.Title
+	out.Default = in.Default // TODO: this is any, should we make a copy of this?
+	out.Maximum = copyPointerPrimitive(in.Maximum)
+	out.ExclusiveMaximum = in.ExclusiveMaximum
+	out.Minimum = copyPointerPrimitive(in.Minimum)
+	out.ExclusiveMinimum = in.ExclusiveMinimum
+	out.MaxLength = copyPointerPrimitive(in.MaxLength)
+	out.MinLength = copyPointerPrimitive(in.MinLength)
+	out.Pattern = in.Pattern
+	out.MaxItems = copyPointerPrimitive(in.MaxItems)
+	out.MinItems = copyPointerPrimitive(in.MinItems)
+	out.UniqueItems = in.UniqueItems
+	out.MultipleOf = copyPointerPrimitive(in.MultipleOf)
+	out.Enum = in.Enum // TODO: this is type any, we should copy?
+	out.MaxProperties = copyPointerPrimitive(in.MaxProperties)
+	out.MinProperties = copyPointerPrimitive(in.MinProperties)
+	if in.Required != nil {
+		out.Required = make([]string, len(in.Required))
+		copy(out.Required, in.Required)
+	}
+	if in.Items != nil {
+		out.Items = &spec.SchemaOrArray{}
+		if in.Items.Schema != nil {
+			schemaCopy := copySpecSchema(in.Items.Schema)
+			out.Items.Schema = &schemaCopy
+		}
+		if len(in.Items.Schemas) > 0 {
+			out.Items.Schemas = copySpecSchemaArray(in.Items.Schemas)
+		}
+	}
+	out.AllOf = copySpecSchemaArray(in.AllOf)
+	out.OneOf = copySpecSchemaArray(in.OneOf)
+	out.AnyOf = copySpecSchemaArray(in.AnyOf)
+	if in.Not != nil {
+		cpy := copySpecSchema(in.Not)
+		out.Not = &cpy
+	}
+	if in.Properties != nil {
+		out.Properties = make(map[string]spec.Schema)
+		for k, v := range in.Properties {
+			out.Properties[k] = copySpecSchema(&v)
+		}
+	}
+	if in.AdditionalProperties != nil {
+		out.AdditionalProperties = &spec.SchemaOrBool{
+			Allows: in.AdditionalProperties.Allows,
+		}
+		if in.AdditionalProperties.Schema != nil {
+			schemaCopy := copySpecSchema(in.AdditionalProperties.Schema)
+			in.AdditionalProperties.Schema = &schemaCopy
+		}
+	}
+	if in.PatternProperties != nil {
+		out.PatternProperties = make(map[string]spec.Schema)
+		for k, v := range in.PatternProperties {
+			out.Properties[k] = copySpecSchema(&v)
+		}
+	}
+	if in.Dependencies != nil {
+		out.Dependencies = make(spec.Dependencies)
+		for k, v := range in.Dependencies {
+			val := spec.SchemaOrStringArray{}
+			if v.Schema != nil {
+				schemaCopy := copySpecSchema(v.Schema)
+				val.Schema = &schemaCopy
+			}
+			if len(v.Property) > 0 {
+				val.Property = make([]string, len(v.Property))
+				copy(val.Property, v.Property)
+			}
+			out.Dependencies[k] = val
+		}
+	}
+	if in.AdditionalItems != nil {
+		out.AdditionalItems = &spec.SchemaOrBool{
+			Allows: in.AdditionalItems.Allows,
+		}
+		if in.AdditionalItems.Schema != nil {
+			schemaCopy := copySpecSchema(in.AdditionalItems.Schema)
+			in.AdditionalItems.Schema = &schemaCopy
+		}
+	}
+	if in.Definitions != nil {
+		out.Definitions = make(map[string]spec.Schema)
+		for k, v := range in.Definitions {
+			out.Definitions[k] = copySpecSchema(&v)
+		}
+	}
+	out.Discriminator = in.Discriminator
+	out.ReadOnly = in.ReadOnly
+	if in.ExternalDocs != nil {
+		out.ExternalDocs = &spec.ExternalDocumentation{
+			Description: in.ExternalDocs.Description,
+			URL:         in.ExternalDocs.URL,
+		}
+	}
+	out.Example = in.Example // TODO: this is any
+	if in.Extensions != nil {
+		out.Extensions = spec.Extensions{}
+		maps.Copy(out.Extensions, in.Extensions)
+	}
+	if in.ExtraProps != nil {
+		out.ExtraProps = make(map[string]any)
+		maps.Copy(out.ExtraProps, in.ExtraProps)
+	}
+	return out
 }
 
 type EmptyObject struct{}

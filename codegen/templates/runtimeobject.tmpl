@@ -1,3 +1,5 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
 package {{ .PackageName }}
 
 import (
@@ -5,12 +7,38 @@ import (
     metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
-
+{{ if .KubernetesCodegenComments }}
+// +k8s:openapi-gen=true{{ end }}
 type {{ .WrapperTypeName }} struct {
-    metav1.TypeMeta
-    {{ .TypeName }}
+    metav1.TypeMeta `json:",inline"`{{ if .HasObjectMeta }}
+    metav1.ObjectMeta `json:"metadata"`{{ else if .HasListMeta }}
+    metav1.ListMeta `json:"metadata"`{{ end }}
+    {{ .TypeName }} `json:",inline"`
 }
+
+func New{{ .WrapperTypeName }}() *{{ .WrapperTypeName }} {
+    return &{{ .WrapperTypeName }}{}
+}{{ if .AddDeepCopyForTypeName }}
+
+func (t *{{ .TypeName }}) DeepCopyInto(dst *{{ .TypeName }}) {
+    _ = resource.CopyObjectInto(dst, t)
+}
+{{ end }}
 
 func (o *{{ .WrapperTypeName }}) DeepCopyObject() runtime.Object {
-    return resource.CopyObject(o)
+    dst := New{{ .WrapperTypeName }}()
+    o.DeepCopyInto(dst)
+    return dst
 }
+
+func (o *{{ .WrapperTypeName }}) DeepCopyInto(dst *{{ .WrapperTypeName }}) {
+    dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+    dst.TypeMeta.Kind = o.TypeMeta.Kind{{ if .HasObjectMeta }}
+    o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta){{ else if .HasListMeta }}
+    o.ListMeta.DeepCopyInto(&dst.ListMeta){{ end }}{{ if .AddDeepCopyForTypeName }}
+    o.{{ .TypeName }}.DeepCopyInto(&dst.{{ .TypeName }}){{ else }}
+    dst{{ .TypeName }} := {{ .TypeName }}{}
+    _ = resource.CopyObjectInto(&dst{{ .TypeName }}, &o.{{ .TypeName }}){{ end }}
+}
+
+var _ runtime.Object = New{{ .WrapperTypeName }}()

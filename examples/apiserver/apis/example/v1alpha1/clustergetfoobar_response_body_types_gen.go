@@ -13,14 +13,14 @@ func NewVersionsV1alpha1RoutesClusterFoobarGETResponseExtra() *VersionsV1alpha1R
 }
 
 // +k8s:openapi-gen=true
-type Clustergetfoobar struct {
+type ClustergetfoobarBody struct {
 	Bar   string                                                         `json:"bar"`
 	Extra map[string]VersionsV1alpha1RoutesClusterFoobarGETResponseExtra `json:"extra"`
 }
 
-// NewClustergetfoobar creates a new Clustergetfoobar object.
-func NewClustergetfoobar() *Clustergetfoobar {
-	return &Clustergetfoobar{
+// NewClustergetfoobarBody creates a new ClustergetfoobarBody object.
+func NewClustergetfoobarBody() *ClustergetfoobarBody {
+	return &ClustergetfoobarBody{
 		Extra: map[string]VersionsV1alpha1RoutesClusterFoobarGETResponseExtra{},
 	}
 }
