@@ -42,6 +42,9 @@ type InformerOptions struct {
 	// This is distinct from a full resync, as no information is fetched from the API server.
 	// Changes to this value after run() is called will not take effect.
 	CacheResyncInterval time.Duration
+	// MaxConcurrentWorkers is the maximum number of concurrent workers to run for the informer.
+	// This is only used by informers which support concurrent processing of events.
+	MaxConcurrentWorkers uint64
 	// EventTimeout is the timeout for an event to be processed.
 	// If an event is not processed within this timeout, it will be dropped.
 	// The timeout cannot be larger than the cache resync interval, if it is,

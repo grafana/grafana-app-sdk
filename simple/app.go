@@ -141,20 +141,16 @@ var DefaultInformerSupplier = func(
 	if err != nil {
 		return nil, err
 	}
-	return operator.NewKubernetesBasedInformer(kind, client, options)
-}
 
-func InformerSupplierWithConcurrentWorkers(supplier InformerSupplier, maxConcurrentWorkers uint64, errorHandler func(context.Context, error)) InformerSupplier {
-	return func(kind resource.Kind, clients resource.ClientGenerator, options operator.ListWatchOptions) (operator.Informer, error) {
-		inf, err := supplier(kind, clients, options)
-		if err != nil {
-			return nil, err
-		}
-		return operator.NewConcurrentInformer(inf, operator.ConcurrentInformerOptions{
-			MaxConcurrentWorkers: maxConcurrentWorkers,
-			ErrorHandler:         errorHandler,
-		})
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
+	if err != nil {
+		return nil, err
 	}
+
+	return operator.NewConcurrentInformer(inf, operator.ConcurrentInformerOptions{
+		MaxConcurrentWorkers: options.MaxConcurrentWorkers,
+		ErrorHandler:         options.ErrorHandler,
+	})
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
@@ -435,7 +431,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		infSupplier := a.cfg.InformerConfig.InformerSupplier
 		if infSupplier == nil {
-			infSupplier = InformerSupplierWithConcurrentWorkers(DefaultInformerSupplier, 10, a.cfg.InformerConfig.ErrorHandler)
+			infSupplier = DefaultInformerSupplier
 		}
 
 		opts := a.cfg.InformerConfig.InformerOptions
