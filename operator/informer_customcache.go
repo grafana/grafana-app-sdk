@@ -53,21 +53,7 @@ func NewMemcachedInformer(
 	), nil
 }
 
-// CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
-type CustomCacheInformer struct {
-	started       bool
-	startedLock   sync.Mutex
-	store         cache.Store
-	controller    cache.Controller
-	listerWatcher cache.ListerWatcher
-	opts          CustomCacheInformerOptions
-	objectType    resource.Object
-	processor     *informerProcessor
-	schema        resource.Kind
-	runContext    context.Context
-}
-
-const processorBufferSize = 1024
+const defaultProcessorBufferSize = 1024
 
 // CustomCacheInformerOptions are the options for the CustomCacheInformer.
 type CustomCacheInformerOptions struct {
@@ -78,39 +64,65 @@ type CustomCacheInformerOptions struct {
 	ProcessorBufferSize int
 }
 
+// CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
+type CustomCacheInformer struct {
+	started             bool
+	startedLock         sync.Mutex
+	store               cache.Store
+	controller          cache.Controller
+	listerWatcher       cache.ListerWatcher
+	objectType          resource.Object
+	processor           *informerProcessor
+	schema              resource.Kind
+	runContext          context.Context
+	processorBufferSize int
+	cacheResyncInterval time.Duration
+	eventTimeout        time.Duration
+	errorHandler        func(context.Context, error)
+}
+
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
 // To use ListWatchOptions, use NewListerWatcher to get a cache.ListerWatcher.
 func NewCustomCacheInformer(
 	store cache.Store, lw cache.ListerWatcher, kind resource.Kind, opts CustomCacheInformerOptions,
 ) *CustomCacheInformer {
-	if opts.ProcessorBufferSize == 0 {
-		opts.ProcessorBufferSize = processorBufferSize
-	}
-
-	if opts.EventTimeout > 0 {
-		opts.EventTimeout = opts.CacheResyncInterval
-	}
-
-	if opts.CacheResyncInterval > 0 && opts.EventTimeout > opts.CacheResyncInterval {
-		opts.EventTimeout = opts.CacheResyncInterval
-	}
-
-	if opts.ErrorHandler == nil {
-		opts.ErrorHandler = func(ctx context.Context, err error) {
-			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
-		}
-	}
-
-	return &CustomCacheInformer{
+	inf := &CustomCacheInformer{
 		store:         store,
 		listerWatcher: lw,
 		// TODO: objectType being set doesn't allow for a generic untyped object to be passed
 		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
 		// objectType:    kind.ZeroValue(),
-		processor: newInformerProcessor(),
-		schema:    kind,
-		opts:      opts,
+		processor:           newInformerProcessor(),
+		schema:              kind,
+		processorBufferSize: defaultProcessorBufferSize,
+		errorHandler: func(ctx context.Context, err error) {
+			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
+		},
 	}
+
+	if opts.ProcessorBufferSize > 0 {
+		inf.processorBufferSize = opts.ProcessorBufferSize
+	}
+
+	if opts.CacheResyncInterval > 0 {
+		inf.cacheResyncInterval = opts.CacheResyncInterval
+	}
+
+	if opts.EventTimeout > 0 {
+		inf.eventTimeout = opts.EventTimeout
+
+		// Make sure the event timeout is below the cache resync interval,
+		// otherwise we run the risk of a handler being overwhelmed by events.
+		if inf.cacheResyncInterval > 0 {
+			inf.eventTimeout = min(inf.eventTimeout, inf.cacheResyncInterval)
+		}
+	}
+
+	if opts.ErrorHandler != nil {
+		inf.errorHandler = opts.ErrorHandler
+	}
+
+	return inf
 }
 
 // PrometheusCollectors returns a list of prometheus collectors used by the informer and its objects (such as the cache).
@@ -127,18 +139,19 @@ func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
 		newInformerProcessorListener(
 			toResourceEventHandlerFuncs(
 				handler, c.toResourceObject, c.errorHandler, func() (context.Context, context.CancelFunc) {
+					ctx := context.Background()
 					if c.runContext != nil {
-						return c.runContext, func() {}
+						ctx = c.runContext
 					}
 
-					if c.opts.EventTimeout > 0 {
-						return context.WithTimeout(context.Background(), c.opts.EventTimeout)
+					if c.eventTimeout > 0 {
+						return context.WithTimeout(ctx, c.eventTimeout)
 					}
 
-					return context.WithCancel(context.Background())
+					return context.WithCancel(ctx)
 				},
 			),
-			processorBufferSize,
+			defaultProcessorBufferSize,
 		),
 	)
 	return nil
@@ -162,7 +175,7 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.startedLock.Lock()
 		defer c.startedLock.Unlock()
 
-		c.controller = newInformer(c.listerWatcher, c.objectType, c.opts.CacheResyncInterval, c, c.store, nil)
+		c.controller = newInformer(c.listerWatcher, c.objectType, c.cacheResyncInterval, c, c.store, nil)
 		c.started = true
 	}()
 
@@ -240,14 +253,6 @@ func (c *CustomCacheInformer) OnDelete(obj any) {
 
 func (c *CustomCacheInformer) toResourceObject(obj any) (resource.Object, error) {
 	return toResourceObject(obj, c.schema)
-}
-
-func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
-	if c.opts.ErrorHandler == nil {
-		return
-	}
-
-	c.opts.ErrorHandler(ctx, err)
 }
 
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.

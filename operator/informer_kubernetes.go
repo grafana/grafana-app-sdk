@@ -40,7 +40,8 @@ type InformerOptions struct {
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
-	// Changes to this value after run() is called will not take effect.
+	// Changes to this value after Run() is called will not take effect.
+	// An empty value will disable cache resyncs.
 	CacheResyncInterval time.Duration
 	// MaxConcurrentWorkers is the maximum number of concurrent workers to run for the informer.
 	// This is only used by informers which support concurrent processing of events.
