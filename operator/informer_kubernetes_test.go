@@ -14,7 +14,7 @@ func TestKubernetesBasedInformer_HealthCheckName(t *testing.T) {
 	tests := []struct {
 		name     string
 		kind     resource.Kind
-		opts     KubernetesBasedInformerOptions
+		opts     InformerOptions
 		expected string
 	}{{
 		name:     "simple",
@@ -23,7 +23,7 @@ func TestKubernetesBasedInformer_HealthCheckName(t *testing.T) {
 	}, {
 		name: "labels",
 		kind: untypedKind,
-		opts: KubernetesBasedInformerOptions{
+		opts: InformerOptions{
 			ListWatchOptions: ListWatchOptions{
 				LabelFilters: []string{"foz=baz", "a=b"},
 			},
@@ -32,7 +32,7 @@ func TestKubernetesBasedInformer_HealthCheckName(t *testing.T) {
 	}, {
 		name: "fieldSelectors",
 		kind: untypedKind,
-		opts: KubernetesBasedInformerOptions{
+		opts: InformerOptions{
 			ListWatchOptions: ListWatchOptions{
 				FieldSelectors: []string{"bar=foo", "b=a"},
 			},
@@ -41,7 +41,7 @@ func TestKubernetesBasedInformer_HealthCheckName(t *testing.T) {
 	}, {
 		name: "labels and fieldSelectors",
 		kind: untypedKind,
-		opts: KubernetesBasedInformerOptions{
+		opts: InformerOptions{
 			ListWatchOptions: ListWatchOptions{
 				LabelFilters:   []string{"foz=baz", "a=b"},
 				FieldSelectors: []string{"bar=foo", "b=a"},
