@@ -30,7 +30,7 @@ type KubernetesBasedInformer struct {
 	schema                resource.Kind
 	runContext            context.Context
 	eventTimeout          time.Duration
-	errorHandlerFn        func(context.Context, error)
+	errorHandler          func(context.Context, error)
 	healthCheckName       string
 }
 
@@ -78,13 +78,6 @@ func NewKubernetesBasedInformer(
 		timeout = options.CacheResyncInterval
 	}
 
-	var errorHandler func(context.Context, error)
-	if options.ErrorHandler != nil {
-		errorHandler = options.ErrorHandler
-	} else {
-		errorHandler = DefaultErrorHandler
-	}
-
 	// Compute a unique name for the health check based on what the informer is watching
 	healthCheckName := fmt.Sprintf("informer-%s.%s/%s", sch.Plural(), sch.Group(), sch.Version())
 	if options.ListWatchOptions.Namespace != "" {
@@ -101,10 +94,15 @@ func NewKubernetesBasedInformer(
 		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}
 
+	errorHandler := DefaultErrorHandler
+	if options.ErrorHandler != nil {
+		errorHandler = options.ErrorHandler
+	}
+
 	return &KubernetesBasedInformer{
-		schema:         sch,
-		eventTimeout:   timeout,
-		errorHandlerFn: errorHandler,
+		schema:       sch,
+		eventTimeout: timeout,
+		errorHandler: errorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			NewListerWatcher(client, sch, options.ListWatchOptions),
 			nil,
@@ -178,12 +176,6 @@ func (k *KubernetesBasedInformer) HealthCheckName() string {
 
 func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
 	return toResourceObject(obj, k.schema)
-}
-
-func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
-	if k.errorHandlerFn != nil {
-		k.errorHandlerFn(ctx, err)
-	}
 }
 
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
