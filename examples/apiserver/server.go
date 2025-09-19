@@ -195,6 +195,7 @@ func NewTestKindConverter() *TestKindConverter {
 	return &TestKindConverter{}
 }
 
+//nolint:funlen
 func (*TestKindConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
 	srcGVK := schema.FromAPIVersionAndKind(obj.APIVersion, obj.Kind)
 	dstGVK := schema.FromAPIVersionAndKind(targetAPIVersion, v1alpha1.TestKindKind().Kind())
