@@ -4,6 +4,18 @@ testKind: {
 	kind: "TestKind"
 	plural: "testkinds"
 	codegen: ts: enabled: false
+	conversion: true
+}
+
+testKindv0alpha1: testKind & {
+	schema: {
+		spec: {
+			testField: int
+		}
+	}
+}
+
+testKindv1alpha1: testKind & {
 	validation: operations: ["CREATE","UPDATE"]
 	schema: {
 		#FooBar: {

@@ -29,6 +29,7 @@ func (*GenericNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerIn
 			Serializer: &GenericJSONDecoder{},
 			Framer:     jsonserializer.Framer,
 		},
+		Serializer: &GenericJSONDecoder{},
 	}}
 }
 
