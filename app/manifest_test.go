@@ -806,6 +806,10 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 }
 
 func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceCallback, props map[string]spec.SchemaProps, deps ...string) common.OpenAPIDefinition {
+	required := []string{"kind", "apiVersion", "metadata"}
+	if _, ok := props["spec"]; ok {
+		required = append(required, "spec")
+	}
 	kind := common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
@@ -832,6 +836,7 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 						},
 					},
 				},
+				Required: required,
 			},
 		},
 		Dependencies: make([]string, 0),
