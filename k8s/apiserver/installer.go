@@ -183,12 +183,22 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	internalKinds := map[string]resource.Kind{}
 	kindsByGroup := map[string][]resource.Kind{}
 	groupVersions := make([]schema.GroupVersion, 0)
+	kindVersionPriorities := make(map[string][]string)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
+			priorities, ok := kindVersionPriorities[kind.Kind.Kind()]
+			if !ok {
+				priorities = make([]string, 0)
+			}
+			priorities = append(priorities, gv.Version)
+			kindVersionPriorities[kind.Kind.Kind()] = priorities
+
 			scheme.AddKnownTypeWithName(kind.Kind.GroupVersionKind(), kind.Kind.ZeroValue())
 			scheme.AddKnownTypeWithName(gv.WithKind(kind.Kind.Kind()+"List"), kind.Kind.ZeroListValue())
 			metav1.AddToGroupVersion(scheme, kind.Kind.GroupVersionKind().GroupVersion())
-			if _, ok := internalKinds[kind.Kind.Kind()]; !ok {
+			// Ensure that the internal kind uses the preferred version if possible,
+			// but otherwise make sure it always has _something_ set
+			if _, ok := internalKinds[kind.Kind.Kind()]; !ok || r.appConfig.ManifestData.PreferredVersion == gv.Version {
 				internalKinds[kind.Kind.Kind()] = kind.Kind
 			}
 			if _, ok := kindsByGroup[kind.Kind.Group()]; !ok {
@@ -220,17 +230,26 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		scheme.AddKnownTypeWithName(internalGv.WithKind(internalKind.Kind()+"List"), internalKind.ZeroListValue())
 
 		for _, kind := range kindsByGroup[internalKind.Group()] {
-			if err = scheme.AddConversionFunc(kind.ZeroValue(), internalKind.ZeroValue(), r.conversionHandler); err != nil {
+			if kind.Kind() != internalKind.Kind() {
+				continue
+			}
+			if err = scheme.AddConversionFunc(kind.ZeroValue(), internalKind.ZeroValue(), r.conversionHandlerFunc(kind.GroupVersionKind(), internalKind.GroupVersionKind())); err != nil {
 				return fmt.Errorf("could not add conversion func for kind %s: %w", internalKind.Kind(), err)
 			}
-			if err = scheme.AddConversionFunc(internalKind.ZeroValue(), kind.ZeroValue(), r.conversionHandler); err != nil {
+			if err = scheme.AddConversionFunc(internalKind.ZeroValue(), kind.ZeroValue(), r.conversionHandlerFunc(internalKind.GroupVersionKind(), kind.GroupVersionKind())); err != nil {
 				return fmt.Errorf("could not add conversion func for kind %s: %w", internalKind.Kind(), err)
 			}
 		}
 	}
 
 	sort.Slice(groupVersions, func(i, j int) bool {
-		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) < 0
+		if groupVersions[i].Version == r.appConfig.ManifestData.PreferredVersion {
+			return true
+		}
+		if groupVersions[j].Version == r.appConfig.ManifestData.PreferredVersion {
+			return false
+		}
+		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) > 0
 	})
 	if err = scheme.SetVersionPriority(groupVersions...); err != nil {
 		return fmt.Errorf("failed to set version priority: %w", err)
@@ -610,47 +629,55 @@ func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 	return groupVersions
 }
 
-func (r *defaultInstaller) conversionHandler(a, b any, _ conversion.Scope) error {
-	if r.app == nil {
-		return fmt.Errorf("app is not initialized")
-	}
-	if r.scheme == nil {
-		return fmt.Errorf("scheme is not initialized")
-	}
-	aResourceObj, ok := a.(resource.Object)
-	if !ok {
-		return fmt.Errorf("object (%T) is not a resource.Object", a)
-	}
-	bResourceObj, ok := b.(resource.Object)
-	if !ok {
-		return fmt.Errorf("object (%T) is not a resource.Object", b)
-	}
+// conversionHandlerFunc returns a function that will convert resources of type src to dst.
+// Since the objects passed to the conversion function don't contain any information,
+// this is the way to handle this without using reflection and associating the kind go types to the GVK necessary.
+// If this doesn't work in some edge cases in the future, we could also build a map of reflect.Type -> resource.Kind when
+// registering resources in the scheme.
+func (r *defaultInstaller) conversionHandlerFunc(src, dst schema.GroupVersionKind) func(a, b any, _ conversion.Scope) error {
+	return func(a, b any, _ conversion.Scope) error {
+		fmt.Printf("converting from %s to %s\n", src, dst)
+		if r.app == nil {
+			return fmt.Errorf("app is not initialized")
+		}
+		if r.scheme == nil {
+			return fmt.Errorf("scheme is not initialized")
+		}
+		aResourceObj, ok := a.(resource.Object)
+		if !ok {
+			return fmt.Errorf("object (%T) is not a resource.Object", a)
+		}
+		bResourceObj, ok := b.(resource.Object)
+		if !ok {
+			return fmt.Errorf("object (%T) is not a resource.Object", b)
+		}
 
-	rawInput, err := runtime.Encode(r.codecs.LegacyCodec(aResourceObj.GroupVersionKind().GroupVersion()), aResourceObj)
-	if err != nil {
-		return fmt.Errorf("failed to encode object %s: %w", aResourceObj.GetName(), err)
-	}
+		rawInput, err := runtime.Encode(r.codecs.LegacyCodec(aResourceObj.GroupVersionKind().GroupVersion()), aResourceObj)
+		if err != nil {
+			return fmt.Errorf("failed to encode object %s: %w", aResourceObj.GetName(), err)
+		}
 
-	req := app.ConversionRequest{
-		SourceGVK: aResourceObj.GroupVersionKind(),
-		TargetGVK: bResourceObj.GroupVersionKind(),
-		Raw: app.RawObject{
-			Raw:      rawInput,
-			Object:   aResourceObj,
-			Encoding: resource.KindEncodingJSON,
-		},
-	}
-	res, err := r.app.Convert(context.Background(), req)
-	if err != nil {
-		return fmt.Errorf("failed to convert object %s from %s to %s: %w", aResourceObj.GetName(), req.SourceGVK, req.TargetGVK, err)
-	}
+		req := app.ConversionRequest{
+			SourceGVK: src,
+			TargetGVK: dst,
+			Raw: app.RawObject{
+				Raw:      rawInput,
+				Object:   aResourceObj,
+				Encoding: resource.KindEncodingJSON,
+			},
+		}
+		res, err := r.app.Convert(context.Background(), req)
+		if err != nil {
+			return fmt.Errorf("failed to convert object %s from %s to %s: %w", aResourceObj.GetName(), req.SourceGVK, req.TargetGVK, err)
+		}
 
-	bObj, ok := b.(runtime.Object)
-	if !ok {
-		return fmt.Errorf("object (%T) is not a runtime.Object", b)
-	}
+		bObj, ok := b.(runtime.Object)
+		if !ok {
+			return fmt.Errorf("object (%T) is not a runtime.Object", b)
+		}
 
-	return runtime.DecodeInto(r.codecs.UniversalDecoder(bResourceObj.GroupVersionKind().GroupVersion()), res.Raw, bObj)
+		return runtime.DecodeInto(r.codecs.UniversalDecoder(bResourceObj.GroupVersionKind().GroupVersion()), res.Raw, bObj)
+	}
 }
 
 func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, routes map[string]spec3.PathProps, routePathPrefix string, defaultPkgPrefix string, callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
