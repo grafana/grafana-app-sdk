@@ -636,7 +636,6 @@ func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 // registering resources in the scheme.
 func (r *defaultInstaller) conversionHandlerFunc(src, dst schema.GroupVersionKind) func(a, b any, _ conversion.Scope) error {
 	return func(a, b any, _ conversion.Scope) error {
-		fmt.Printf("converting from %s to %s\n", src, dst)
 		if r.app == nil {
 			return fmt.Errorf("app is not initialized")
 		}
