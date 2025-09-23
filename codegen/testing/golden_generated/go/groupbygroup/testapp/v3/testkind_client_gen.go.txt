@@ -104,12 +104,12 @@ func (c *TestKindClient) Delete(ctx context.Context, identifier resource.Identif
 	return c.client.Delete(ctx, identifier, opts)
 }
 
-type PostReconcileRequest struct {
-	Body    PostReconcileRequestBody
+type CreateReconcileRequest struct {
+	Body    CreateReconcileRequestBody
 	Headers http.Header
 }
 
-func (c *TestKindClient) PostReconcile(ctx context.Context, identifier resource.Identifier, request PostReconcileRequest) (*PostReconcile, error) {
+func (c *TestKindClient) CreateReconcile(ctx context.Context, identifier resource.Identifier, request CreateReconcileRequest) (*CreateReconcile, error) {
 	body, err := json.Marshal(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
@@ -123,20 +123,20 @@ func (c *TestKindClient) PostReconcile(ctx context.Context, identifier resource.
 	if err != nil {
 		return nil, err
 	}
-	cast := PostReconcile{}
+	cast := CreateReconcile{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into PostReconcile: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into CreateReconcile: %w", err)
 	}
 	return &cast, nil
 }
 
-type SearchTestkindsRequest struct {
-	Params  SearchTestkindsRequestParams
+type GetTestKindSearchResultRequest struct {
+	Params  GetTestKindSearchResultRequestParams
 	Headers http.Header
 }
 
-func (c *TestKindClient) SearchTestkinds(ctx context.Context, identifier resource.Identifier, request SearchTestkindsRequest) (*SearchTestkinds, error) {
+func (c *TestKindClient) GetTestKindSearchResult(ctx context.Context, identifier resource.Identifier, request GetTestKindSearchResultRequest) (*GetTestKindSearchResult, error) {
 	params := url.Values{}
 	params.Set("q", fmt.Sprintf("%v", request.Params.Q))
 	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
@@ -148,10 +148,10 @@ func (c *TestKindClient) SearchTestkinds(ctx context.Context, identifier resourc
 	if err != nil {
 		return nil, err
 	}
-	cast := SearchTestkinds{}
+	cast := GetTestKindSearchResult{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into SearchTestkinds: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into GetTestKindSearchResult: %w", err)
 	}
 	return &cast, nil
 }

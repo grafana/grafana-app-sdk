@@ -2,15 +2,15 @@
 
 package v3
 
-type SearchTestkindsRequestParams struct {
+type GetTestKindSearchResultRequestParams struct {
 	Q      string `json:"q"`
 	Limit  *int64 `json:"limit,omitempty"`
 	Offset *int64 `json:"offset,omitempty"`
 }
 
-// NewSearchTestkindsRequestParams creates a new SearchTestkindsRequestParams object.
-func NewSearchTestkindsRequestParams() *SearchTestkindsRequestParams {
-	return &SearchTestkindsRequestParams{
+// NewGetTestKindSearchResultRequestParams creates a new GetTestKindSearchResultRequestParams object.
+func NewGetTestKindSearchResultRequestParams() *GetTestKindSearchResultRequestParams {
+	return &GetTestKindSearchResultRequestParams{
 		Limit:  (func(input int64) *int64 { return &input })(10),
 		Offset: (func(input int64) *int64 { return &input })(0),
 	}

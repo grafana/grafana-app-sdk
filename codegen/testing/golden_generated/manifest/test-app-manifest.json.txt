@@ -340,7 +340,7 @@
                         "routes": {
                             "/reconcile": {
                                 "post": {
-                                    "operationId": "PostReconcile",
+                                    "operationId": "createReconcile",
                                     "requestBody": {
                                         "content": {
                                             "application/json": {
@@ -395,7 +395,7 @@
                             },
                             "/search": {
                                 "get": {
-                                    "operationId": "searchTestkinds",
+                                    "operationId": "getTestKindSearchResult",
                                     "parameters": [
                                         {
                                             "name": "limit",

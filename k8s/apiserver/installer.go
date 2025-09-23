@@ -535,7 +535,8 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			builder = builder.Param(restful.HeaderParameter(param.Name, param.Description))
 		}
 	}
-	ws.Route(builder.Operation(strings.ToLower(method)+op.OperationId).To(func(req *restful.Request, resp *restful.Response) {
+
+	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
 		if err != nil {
 			resp.WriteHeader(http.StatusInternalServerError)
@@ -570,6 +571,44 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		}
 	}).Returns(200, "OK", responseType))
 	return nil
+}
+
+var allowedK8sVerbs = []string{
+	"get", "log", "read", "replace", "patch", "delete", "deletecollection", "watch", "connect", "proxy", "list", "create", "patch",
+}
+
+func prefixRouteIDWithK8sVerbIfNotPresent(operationID string, method string) string {
+	for _, verb := range allowedK8sVerbs {
+		if len(operationID) > len(verb) && operationID[:len(verb)] == verb {
+			return operationID
+		}
+	}
+	return fmt.Sprintf("%s%s", k8sVerbFromHTTPMethod(method), operationID)
+}
+
+//nolint:goconst
+func k8sVerbFromHTTPMethod(method string) string {
+	// Allowed verbs are "get", "log", "read", "replace", "patch", "delete", "deletecollection", "watch", "connect", "proxy", "list", "create", "patch"
+	// We infer the simplest verb, as a more descriptive one will need to be used manually when naming in the CUE
+	switch strings.ToUpper(method) {
+	case http.MethodGet:
+		return "get"
+	case http.MethodPost:
+		return "create"
+	case http.MethodPut:
+		return "replace"
+	case http.MethodPatch:
+		return "patch"
+	case http.MethodDelete:
+		return "delete"
+	case http.MethodConnect:
+		return "connect"
+	case http.MethodOptions: // No real equivalent to options and head
+		return "connect"
+	case http.MethodHead:
+		return "connect"
+	}
+	return ""
 }
 
 func (r *defaultInstaller) AdmissionPlugin() admission.Factory {

@@ -88,7 +88,7 @@ SchemaWithOperatorState: Schema & {
 		objectMeta: bool | *false
 }
 #CustomRoute: {
-		name?: =~ "^([A-Za-z])+([A-Za-z0-9]*)$"
+		name?: =~ "^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
     request: #CustomRouteRequest
     response: #CustomRouteResponse
     // responseMetadata allows codegen to include kubernetes metadata in the generated response object.

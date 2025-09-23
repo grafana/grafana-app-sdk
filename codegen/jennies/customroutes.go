@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"net/http"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -214,10 +215,6 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 }
 
 func defaultRouteName(method string, route string) string {
-	ucFirstMethod := strings.ToUpper(method)
-	if len(method) > 1 {
-		ucFirstMethod = ucFirstMethod[:1] + strings.ToLower(method[1:])
-	}
 	for len(route) > 1 && route[0] == '/' {
 		route = route[1:]
 	}
@@ -225,7 +222,32 @@ func defaultRouteName(method string, route string) string {
 	if len(route) > 1 {
 		ucFirstPath = ucFirstPath[:1] + route[1:]
 	}
-	return fmt.Sprintf("%s%s", ucFirstMethod, regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
+	return fmt.Sprintf("%s%s", k8sVerbFromHTTPMethod(method), regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
+}
+
+//nolint:goconst
+func k8sVerbFromHTTPMethod(method string) string {
+	// Allowed verbs are "get", "log", "read", "replace", "patch", "delete", "deletecollection", "watch", "connect", "proxy", "list", "create", "patch"
+	// We infer the simplest verb, as a more descriptive one will need to be used manually when naming in the CUE
+	switch method {
+	case http.MethodGet:
+		return "get"
+	case http.MethodPost:
+		return "create"
+	case http.MethodPut:
+		return "replace"
+	case http.MethodPatch:
+		return "patch"
+	case http.MethodDelete:
+		return "delete"
+	case http.MethodConnect:
+		return "connect"
+	case http.MethodOptions: // No real equivalent to options and head
+		return "connect"
+	case http.MethodHead:
+		return "connect"
+	}
+	return ""
 }
 
 func toExportedFieldName(name string) string {

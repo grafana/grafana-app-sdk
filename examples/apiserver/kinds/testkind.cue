@@ -52,7 +52,7 @@ testKindv1alpha1: testKind & {
 		}
 		"/bar": {
 			"GET": {
-				name: "GetMessage"
+				name: "getMessage"
 				response: {
 					message: string
 				}

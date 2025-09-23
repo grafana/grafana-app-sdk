@@ -136,7 +136,7 @@ var appManifestData = app.ManifestData{
 							Post: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "PostReconcile",
+									OperationId: "createReconcile",
 
 									RequestBody: &spec3.RequestBody{
 										RequestBodyProps: spec3.RequestBodyProps{
@@ -211,7 +211,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "searchTestkinds",
+									OperationId: "getTestKindSearchResult",
 
 									Parameters: []*spec3.Parameter{
 
@@ -359,9 +359,9 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
 
 var customRouteToGoResponseType = map[string]any{
 
-	"v3|TestKind|reconcile|POST": v3.PostReconcile{},
+	"v3|TestKind|reconcile|POST": v3.CreateReconcile{},
 
-	"v3|TestKind|search|GET": v3.SearchTestkinds{},
+	"v3|TestKind|search|GET": v3.GetTestKindSearchResult{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
@@ -378,7 +378,7 @@ func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (g
 
 var customRouteToGoParamsType = map[string]runtime.Object{
 
-	"v3|TestKind|search|GET": &v3.SearchTestkindsRequestParamsObject{},
+	"v3|TestKind|search|GET": &v3.GetTestKindSearchResultRequestParamsObject{},
 }
 
 func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goType runtime.Object, exists bool) {
@@ -391,7 +391,7 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
 
 var customRouteToGoRequestBodyType = map[string]any{
 
-	"v3|TestKind|reconcile|POST": v3.PostReconcileRequestBody{},
+	"v3|TestKind|reconcile|POST": v3.CreateReconcileRequestBody{},
 }
 
 func ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb string) (goType any, exists bool) {

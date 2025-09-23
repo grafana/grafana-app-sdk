@@ -101,7 +101,7 @@ testKind: {
 				}
 				"/search": {
 					GET: {
-						name: "searchTestkinds"
+						name: "getTestKindSearchResult"
 						request: {
 							query: {
 								q: string

@@ -1,0 +1,33 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+import (
+    "github.com/grafana/grafana-app-sdk/resource"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+type GetTestKindSearchResultRequestParamsObject struct {
+    metav1.TypeMeta `json:",inline"`
+    GetTestKindSearchResultRequestParams `json:",inline"`
+}
+
+func NewGetTestKindSearchResultRequestParamsObject() *GetTestKindSearchResultRequestParamsObject {
+    return &GetTestKindSearchResultRequestParamsObject{}
+}
+
+func (o *GetTestKindSearchResultRequestParamsObject) DeepCopyObject() runtime.Object {
+    dst := NewGetTestKindSearchResultRequestParamsObject()
+    o.DeepCopyInto(dst)
+    return dst
+}
+
+func (o *GetTestKindSearchResultRequestParamsObject) DeepCopyInto(dst *GetTestKindSearchResultRequestParamsObject) {
+    dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+    dst.TypeMeta.Kind = o.TypeMeta.Kind
+    dstGetTestKindSearchResultRequestParams := GetTestKindSearchResultRequestParams{}
+    _ = resource.CopyObjectInto(&dstGetTestKindSearchResultRequestParams, &o.GetTestKindSearchResultRequestParams)
+}
+
+var _ runtime.Object = NewGetTestKindSearchResultRequestParamsObject()
