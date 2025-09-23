@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	"k8s.io/client-go/rest"
@@ -17,6 +21,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis"
+	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v0alpha1"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
@@ -107,6 +112,12 @@ func NewApp(config app.Config) (app.App, error) {
 				},
 			},
 		}},
+		Converters: map[schema.GroupKind]simple.Converter{
+			{
+				Group: config.ManifestData.Group,
+				Kind:  v1alpha1.TestKindKind().Kind(),
+			}: NewTestKindConverter(),
+		},
 		VersionedCustomRoutes: map[string]simple.AppVersionRouteHandlers{
 			"v1alpha1": {
 				{
@@ -174,4 +185,112 @@ func main() {
 	cmd := server.NewCommandStartServer(ctx, opts)
 	code := cli.Run(cmd)
 	os.Exit(code)
+}
+
+var _ simple.Converter = NewTestKindConverter()
+
+type TestKindConverter struct{}
+
+func NewTestKindConverter() *TestKindConverter {
+	return &TestKindConverter{}
+}
+
+//nolint:funlen
+func (*TestKindConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
+	srcGVK := schema.FromAPIVersionAndKind(obj.APIVersion, obj.Kind)
+	dstGVK := schema.FromAPIVersionAndKind(targetAPIVersion, v1alpha1.TestKindKind().Kind())
+	if srcGVK.Group != v1alpha1.APIGroup {
+		// This should never happen, but check just in case
+		return nil, fmt.Errorf("wrong group to convert example.grafana.app, got %s", srcGVK.Group)
+	}
+	if srcGVK.Kind != v1alpha1.TestKindKind().Kind() {
+		// This should also never happen, but check just in case
+		return nil, fmt.Errorf("wrong kind to convert Example, got %s", srcGVK.Kind)
+	}
+	if srcGVK == dstGVK {
+		// This should never happen, but if it does no conversion is necessary, we can return the input
+		return obj.Raw, nil
+	}
+
+	// Check source version
+	switch srcGVK.Version {
+	case v0alpha1.APIVersion:
+		srcKind := v0alpha1.TestKindKind()
+		uncastSrcObj, err := srcKind.Read(bytes.NewReader(obj.Raw), resource.KindEncodingJSON)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse JSON bytes into %s: %w", srcGVK.String(), err)
+		}
+		srcObj, ok := uncastSrcObj.(*v0alpha1.TestKind)
+		if !ok {
+			return nil, errors.New("read object was not of type *v0alpha1.Example")
+		}
+		switch dstGVK.Version {
+		case v1alpha1.APIVersion:
+			dstObj := &v1alpha1.TestKind{}
+			// Set Type metadata
+			dstObj.SetGroupVersionKind(dstGVK)
+			// Copy Object metadata
+			srcObj.ObjectMeta.DeepCopyInto(&dstObj.ObjectMeta)
+			// Copy spec and status
+			dstObj.Spec.TestField = strconv.Itoa(int(srcObj.Spec.TestField))
+			dstObj.Status.AdditionalFields = srcObj.Status.AdditionalFields
+			if srcObj.Status.OperatorStates != nil {
+				dstObj.Status.OperatorStates = make(map[string]v1alpha1.TestKindstatusOperatorState)
+				for k, v := range srcObj.Status.OperatorStates {
+					dstObj.Status.OperatorStates[k] = v1alpha1.TestKindstatusOperatorState{
+						LastEvaluation:   v.LastEvaluation,
+						State:            v1alpha1.TestKindStatusOperatorStateState(v.State),
+						DescriptiveState: v.DescriptiveState,
+						Details:          v.Details,
+					}
+				}
+			}
+			dstKind := v1alpha1.TestKindKind()
+			buf := &bytes.Buffer{}
+			err := dstKind.Write(dstObj, buf, resource.KindEncodingJSON)
+			return buf.Bytes(), err
+		default:
+			return nil, fmt.Errorf("unknown target version %s", dstGVK.Version)
+		}
+	case v1alpha1.APIVersion:
+		srcKind := v1alpha1.TestKindKind()
+		uncastSrcObj, err := srcKind.Read(bytes.NewReader(obj.Raw), resource.KindEncodingJSON)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse JSON bytes into %s: %w", srcGVK.String(), err)
+		}
+		srcObj, ok := uncastSrcObj.(*v1alpha1.TestKind)
+		if !ok {
+			return nil, errors.New("read object was not of type *v1alpha1.Example")
+		}
+		switch dstGVK.Version {
+		case v0alpha1.APIVersion:
+			dstObj := &v0alpha1.TestKind{}
+			// Set Type metadata
+			dstObj.SetGroupVersionKind(dstGVK)
+			// Copy Object metadata
+			srcObj.ObjectMeta.DeepCopyInto(&dstObj.ObjectMeta)
+			// Copy spec and status
+			castInt, _ := strconv.Atoi(srcObj.Spec.TestField) // Lossy backwards conversion
+			dstObj.Spec.TestField = int64(castInt)
+			dstObj.Status.AdditionalFields = srcObj.Status.AdditionalFields
+			if srcObj.Status.OperatorStates != nil {
+				dstObj.Status.OperatorStates = make(map[string]v0alpha1.TestKindstatusOperatorState)
+				for k, v := range srcObj.Status.OperatorStates {
+					dstObj.Status.OperatorStates[k] = v0alpha1.TestKindstatusOperatorState{
+						LastEvaluation:   v.LastEvaluation,
+						State:            v0alpha1.TestKindStatusOperatorStateState(v.State),
+						DescriptiveState: v.DescriptiveState,
+						Details:          v.Details,
+					}
+				}
+			}
+			dstKind := v0alpha1.TestKindKind()
+			buf := &bytes.Buffer{}
+			err := dstKind.Write(dstObj, buf, resource.KindEncodingJSON)
+			return buf.Bytes(), err
+		default:
+			return nil, fmt.Errorf("unknown target version %s", dstGVK.Version)
+		}
+	}
+	return nil, fmt.Errorf("unknown source version %s", srcGVK.Version)
 }

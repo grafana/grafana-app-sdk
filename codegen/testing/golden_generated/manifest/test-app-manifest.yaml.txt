@@ -19,6 +19,7 @@ spec:
       conversionPath: /convert
       mutationPath: /mutate
       validationPath: /validate
+  preferredVersion: v1
   versions:
   - kinds:
     - admission:
