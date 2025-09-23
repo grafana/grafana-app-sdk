@@ -683,6 +683,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 						},
 					},
 				},
+				Required: []string{"kind", "apiVersion", "metadata"},
 			},
 		},
 		Dependencies: make([]string, 0),
@@ -696,6 +697,9 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		sch, deps := oapi3SchemaToKubeSchema(v, ref, gvk, refKey)
 		kind.Schema.Properties[k] = sch
 		kind.Dependencies = append(kind.Dependencies, deps...)
+		if k == "spec" {
+			kind.Schema.Required = append(kind.Schema.Required, k)
+		}
 	}
 
 	// For each schema, create an entry in the result
