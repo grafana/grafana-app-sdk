@@ -65,6 +65,7 @@ v1alpha1: {
     		"GET": {
     			response: {
     				foo: string
+    				shared: #SharedType
     			}
     			request: {
     				query: {
@@ -72,6 +73,7 @@ v1alpha1: {
     				}
     				body: {
     					input: string
+    					shared: #SharedType
     				}
     			}
     		}
@@ -87,4 +89,9 @@ v1alpha1: {
     		}
     	}
     }
+}
+
+// Test type for go naming conflicts
+#SharedType: {
+	bar: string
 }

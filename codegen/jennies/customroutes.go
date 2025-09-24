@@ -104,13 +104,13 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	// Request
 	requestTypeName := fmt.Sprintf("%sRequest", typeName)
 	requestParamsTypeName := fmt.Sprintf("%sParams", requestTypeName)
-	requestBodyTypeName := fmt.Sprintf("%sBody", requestTypeName)
 
 	// Request Params
 	if customRoute.Request.Query.Exists() {
 		requestQueryType, err := GoTypesFromCUE(customRoute.Request.Query, CUEGoConfig{
 			PackageName: packageName,
-			Name:        requestParamsTypeName,
+			Name:        "Params",
+			NamePrefix:  requestTypeName,
 		}, 1)
 		if err != nil {
 			return nil, err
@@ -141,7 +141,8 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	if customRoute.Request.Body.Exists() {
 		requestBodyType, err := GoTypesFromCUE(customRoute.Request.Body, CUEGoConfig{
 			PackageName: packageName,
-			Name:        requestBodyTypeName,
+			Name:        "Body",
+			NamePrefix:  requestTypeName,
 		}, 1)
 		if err != nil {
 			return nil, err
