@@ -22,7 +22,6 @@ var (
 // KubernetesBasedInformer is a k8s apimachinery-based informer. It wraps a k8s cache.SharedIndexInformer,
 // and works most optimally with a client that has a Watch response that implements KubernetesCompatibleWatch.
 type KubernetesBasedInformer struct {
-	ErrorHandler        func(context.Context, error)
 	SharedIndexInformer cache.SharedIndexInformer
 	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
 	// rather than waiting for the informer to finish with its initial list sync.
@@ -30,16 +29,32 @@ type KubernetesBasedInformer struct {
 	HealthCheckIgnoreSync bool
 	schema                resource.Kind
 	runContext            context.Context
+	eventTimeout          time.Duration
+	errorHandler          func(context.Context, error)
 	healthCheckName       string
 }
 
-type KubernetesBasedInformerOptions struct {
+// InformerOptions are generic options for all Informer implementations.
+type InformerOptions struct {
 	// ListWatchOptions are the options for filtering the watch based on namespace and other compatible filters.
 	ListWatchOptions ListWatchOptions
 	// CacheResyncInterval is the interval at which the informer will emit CacheResync events for all resources in the cache.
 	// This is distinct from a full resync, as no information is fetched from the API server.
+	// Changes to this value after Run() is called will not take effect.
 	// An empty value will disable cache resyncs.
 	CacheResyncInterval time.Duration
+	// MaxConcurrentWorkers is the maximum number of concurrent workers to run for the informer.
+	// This is only used by informers which support concurrent processing of events.
+	MaxConcurrentWorkers uint64
+	// EventTimeout is the timeout for an event to be processed.
+	// If an event is not processed within this timeout, it will be dropped.
+	// The timeout cannot be larger than the cache resync interval, if it is,
+	// the cache resync interval will be used instead.
+	// An empty value will disable event timeouts.
+	EventTimeout time.Duration
+	// ErrorHandler is called if the informer encounters an error which does not stop the informer from running,
+	// but may stop it from processing a given event.
+	ErrorHandler func(context.Context, error)
 	// HealthCheckIgnoreSync will set the KubernetesBasedInformer HealthCheck to return ok once the informer is started,
 	// rather than waiting for the informer to finish with its initial list sync.
 	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
@@ -48,10 +63,19 @@ type KubernetesBasedInformerOptions struct {
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
 // using the ListWatchClient provided to do its List and Watch requests applying provided labelFilters if it is not empty.
-func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, options KubernetesBasedInformerOptions) (
-	*KubernetesBasedInformer, error) {
+func NewKubernetesBasedInformer(
+	sch resource.Kind, client ListWatchClient, options InformerOptions,
+) (*KubernetesBasedInformer, error) {
 	if client == nil {
 		return nil, fmt.Errorf("client cannot be nil")
+	}
+
+	var timeout time.Duration
+	if options.EventTimeout > 0 {
+		timeout = options.EventTimeout
+	}
+	if options.CacheResyncInterval > 0 && options.CacheResyncInterval < timeout {
+		timeout = options.CacheResyncInterval
 	}
 
 	// Compute a unique name for the health check based on what the informer is watching
@@ -70,9 +94,15 @@ func NewKubernetesBasedInformer(sch resource.Kind, client ListWatchClient, optio
 		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}
 
+	errorHandler := DefaultErrorHandler
+	if options.ErrorHandler != nil {
+		errorHandler = options.ErrorHandler
+	}
+
 	return &KubernetesBasedInformer{
 		schema:       sch,
-		ErrorHandler: DefaultErrorHandler,
+		eventTimeout: timeout,
+		errorHandler: errorHandler,
 		SharedIndexInformer: cache.NewSharedIndexInformer(
 			NewListerWatcher(client, sch, options.ListWatchOptions),
 			nil,
@@ -93,12 +123,22 @@ func (k *KubernetesBasedInformer) AddEventHandler(handler ResourceWatcher) error
 	// TODO: AddEventHandler returns the registration handle which should be supplied to RemoveEventHandler
 	// but we don't currently call the latter. We should add RemoveEventHandler to the informer API
 	// and let controller call it when appropriate.
-	_, err := k.SharedIndexInformer.AddEventHandler(toResourceEventHandlerFuncs(handler, k.toResourceObject, k.errorHandler, func() context.Context {
-		if k.runContext != nil {
-			return k.runContext
-		}
-		return context.Background()
-	}))
+	_, err := k.SharedIndexInformer.AddEventHandler(
+		toResourceEventHandlerFuncs(
+			handler, k.toResourceObject, k.errorHandler,
+			func() (context.Context, context.CancelFunc) {
+				if k.runContext != nil {
+					return k.runContext, func() {}
+				}
+
+				if k.eventTimeout > 0 {
+					return context.WithTimeout(context.Background(), k.eventTimeout)
+				}
+
+				return context.WithCancel(context.Background())
+			},
+		),
+	)
 
 	return err
 }
@@ -136,12 +176,6 @@ func (k *KubernetesBasedInformer) HealthCheckName() string {
 
 func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
 	return toResourceObject(obj, k.schema)
-}
-
-func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
-	if k.ErrorHandler != nil {
-		k.ErrorHandler(ctx, err)
-	}
 }
 
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
@@ -201,18 +235,24 @@ type watchWrapper struct {
 	ch    chan watch.Event
 }
 
-func (w *watchWrapper) start() {
-	for e := range w.watch.WatchEvents() {
-		w.ch <- watch.Event{
-			Type:   watch.EventType(e.EventType),
-			Object: e.Object,
+func (w *watchWrapper) run(ctx context.Context) {
+	defer close(w.ch)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case e := <-w.watch.WatchEvents():
+			w.ch <- watch.Event{
+				Type:   watch.EventType(e.EventType),
+				Object: e.Object,
+			}
 		}
 	}
 }
 
 func (w *watchWrapper) Stop() {
 	w.watch.Stop()
-	close(w.ch)
 }
 
 func (w *watchWrapper) ResultChan() <-chan watch.Event {

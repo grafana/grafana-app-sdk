@@ -29,7 +29,7 @@ func TestCustomCacheInformer_Run(t *testing.T) {
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 				return nil, fmt.Errorf("I AM ERROR")
 			},
-		}, untypedKind)
+		}, untypedKind, CustomCacheInformerOptions{})
 		ctx, cancel := context.WithCancel(context.Background())
 		stopped := false
 		go func() {
@@ -54,7 +54,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 				events: events,
 			}, nil
 		},
-	}, untypedKind)
+	}, untypedKind, CustomCacheInformerOptions{})
 	addObj := &resource.UntypedObject{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:       "default",
@@ -134,7 +134,7 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 				events: events,
 			}, nil
 		},
-	}, untypedKind)
+	}, untypedKind, CustomCacheInformerOptions{})
 	numHandlers := 100
 	addWG := sync.WaitGroup{}
 	updateWG := sync.WaitGroup{}
@@ -199,7 +199,7 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 				events: events,
 			}, nil
 		},
-	}, untypedKind)
+	}, untypedKind, CustomCacheInformerOptions{})
 	wg := sync.WaitGroup{}
 	inf.AddEventHandler(&SimpleWatcher{
 		AddFunc: func(ctx context.Context, object resource.Object) error {

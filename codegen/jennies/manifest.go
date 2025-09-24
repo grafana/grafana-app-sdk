@@ -160,9 +160,10 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 //nolint:revive,gocognit
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
-		AppName:  m.Properties().AppName,
-		Group:    m.Properties().FullGroup,
-		Versions: make([]app.ManifestVersion, 0),
+		AppName:          m.Properties().AppName,
+		Group:            m.Properties().FullGroup,
+		Versions:         make([]app.ManifestVersion, 0),
+		PreferredVersion: m.Properties().PreferredVersion,
 	}
 
 	manifest.AppName = m.Name()

@@ -482,6 +482,7 @@
                 ]
             }
         ],
+        "preferredVersion": "v1",
         "extraPermissions": {
             "accessKinds": [
                 {

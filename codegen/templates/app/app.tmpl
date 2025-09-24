@@ -1,11 +1,9 @@
 package {{.PackageName}}
 
 import (
-    "context"
     "fmt"
 
 	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/simple"
 
 	generated "{{.Repo}}/{{.CodegenPath}}"
@@ -28,12 +26,6 @@ func New(cfg app.Config) (app.App, error) {
 	config := simple.AppConfig{
 		Name:           "{{.ProjectName}}",
 		KubeConfig:     cfg.KubeConfig,
-		InformerConfig: simple.AppInformerConfig{
-		    ErrorHandler: func(ctx context.Context, err error) {
-                // FIXME: add your own error handling here
-                logging.FromContext(ctx).With("error",err).Error("Informer processing error")
-            },
-		},
 		ManagedKinds: []simple.AppManagedKind{ {{ range $key, $val := .GVToKindAll }}{{ range $val }}
 		    {
 		        Kind: {{if $.KindsAreGrouped }}{{$.ToPackageNameVariable ($key.String)}}.{{.Kind}}Kind(){{else}}{{ $.ToPackageName .MachineName }}{{ $.ToPackageName $key.Version}}.Kind(){{end}}, {{ if eq $key.Version .Current }}

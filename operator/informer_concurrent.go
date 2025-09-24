@@ -27,6 +27,7 @@ type ConcurrentInformer struct {
 	mtx sync.RWMutex
 }
 
+// ConcurrentInformerOptions are options for the ConcurrentInformer.
 type ConcurrentInformerOptions struct {
 	// ErrorHandler is a user-specified error handling function. If left nil, DefaultErrorHandler will be used.
 	ErrorHandler func(context.Context, error)
@@ -44,12 +45,12 @@ func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 		errorHandler:         DefaultErrorHandler,
 		informer:             inf,
 		watchers:             make([]*concurrentWatcher, 0),
-		maxConcurrentWorkers: 1,
+		maxConcurrentWorkers: 10,
 	}
 	if opts.ErrorHandler != nil {
 		ci.errorHandler = opts.ErrorHandler
 	}
-	if opts.MaxConcurrentWorkers > 1 {
+	if opts.MaxConcurrentWorkers > 0 {
 		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
 	}
 

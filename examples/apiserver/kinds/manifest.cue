@@ -8,8 +8,10 @@ manifest: {
 	// "v<integer>(alpha|beta)<integer>". Each version contains the kinds your app manages for that version.
 	// If your app needs access to kinds managed by another app, use permissions.accessKinds to allow your app access.
 	versions: {
+			"v0alpha1": {kinds:[testKindv0alpha1]}
 	    "v1alpha1": v1alpha1
 	}
+	preferredVersion: "v1alpha1"
 	// extraPermissions contains any additional permissions your app may require to function.
 	// Your app will always have all permissions for each kind it manages (the items defined in 'kinds').
 	extraPermissions: {
@@ -29,7 +31,7 @@ manifest: {
 // It includes kinds which the v1alpha1 API serves, and (future) custom routes served globally from the v1alpha1 version.
 v1alpha1: {
     // kinds is the list of kinds served by this version
-    kinds: [testKind]
+    kinds: [testKindv1alpha1]
     // [OPTIONAL]
     // served indicates whether this particular version is served by the API server.
     // served should be set to false before a version is removed from the manifest entirely.
