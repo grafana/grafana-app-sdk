@@ -75,7 +75,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "GetMessage",
+									OperationId: "getMessage",
 
 									Responses: &spec3.Responses{
 										ResponsesProps: spec3.ResponsesProps{
@@ -125,7 +125,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "GetFoo",
+									OperationId: "getFoo",
 
 									Parameters: []*spec3.Parameter{
 
@@ -311,7 +311,7 @@ var appManifestData = app.ManifestData{
 						Get: &spec3.Operation{
 							OperationProps: spec3.OperationProps{
 
-								OperationId: "GetFoobar",
+								OperationId: "getFoobar",
 
 								Parameters: []*spec3.Parameter{
 
@@ -434,7 +434,7 @@ var appManifestData = app.ManifestData{
 						Get: &spec3.Operation{
 							OperationProps: spec3.OperationProps{
 
-								OperationId: "clustergetfoobar",
+								OperationId: "getClusterFoobar",
 
 								Responses: &spec3.Responses{
 									ResponsesProps: spec3.ResponsesProps{
@@ -513,7 +513,7 @@ var customRouteToGoResponseType = map[string]any{
 	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
 
 	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobar{},
-	"v1alpha1||foobar|GET":             v1alpha1.Clustergetfoobar{},
+	"v1alpha1||foobar|GET":             v1alpha1.GetClusterFoobar{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.

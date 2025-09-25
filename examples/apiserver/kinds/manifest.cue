@@ -82,7 +82,7 @@ v1alpha1: {
     routes: cluster: {
     	"/foobar": {
     		"GET": {
-    			name: "clustergetfoobar"
+    			name: "getClusterFoobar"
     			response: {
     				bar: string
     			}

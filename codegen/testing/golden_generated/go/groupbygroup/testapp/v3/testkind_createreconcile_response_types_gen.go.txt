@@ -1,0 +1,22 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type CreateReconcile struct {
+	Status  CreateReconcileStatus `json:"status"`
+	Message string                `json:"message"`
+}
+
+// NewCreateReconcile creates a new CreateReconcile object.
+func NewCreateReconcile() *CreateReconcile {
+	return &CreateReconcile{}
+}
+
+// +k8s:openapi-gen=true
+type CreateReconcileStatus string
+
+const (
+	CreateReconcileStatusSuccess CreateReconcileStatus = "success"
+	CreateReconcileStatusFailure CreateReconcileStatus = "failure"
+)
