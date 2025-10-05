@@ -29,7 +29,7 @@ func TestKind_GroupVersionKind(t *testing.T) {
 	require.Equal(t, gvk, Kind{
 		Schema: k.Schema,
 		Codecs: k.Codecs,
-	}.GroupVersionResource(), "GVK does not require pointer")
+	}.GroupVersionKind(), "GVK does not require pointer")
 }
 
 func TestKind_GroupVersionResource(t *testing.T) {
