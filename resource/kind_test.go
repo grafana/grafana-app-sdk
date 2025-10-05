@@ -25,6 +25,11 @@ func TestKind_GroupVersionKind(t *testing.T) {
 		Version: k.Schema.Version(),
 		Kind:    k.Schema.Kind(),
 	}, gvk)
+
+	require.Equal(t, gvk, Kind{
+		Schema: k.Schema,
+		Codecs: k.Codecs,
+	}.GroupVersionResource(), "GVK does not require pointer")
 }
 
 func TestKind_GroupVersionResource(t *testing.T) {
@@ -40,6 +45,11 @@ func TestKind_GroupVersionResource(t *testing.T) {
 		Version:  k.Schema.Version(),
 		Resource: k.Schema.Plural(),
 	}, gvr)
+
+	require.Equal(t, gvr, Kind{
+		Schema: k.Schema,
+		Codecs: k.Codecs,
+	}.GroupVersionResource(), "GVR does not require pointer")
 }
 
 func TestJSONCodec_Read(t *testing.T) {

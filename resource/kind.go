@@ -72,7 +72,7 @@ func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
 }
 
 // GroupVersionKind is a convenience method that assembles a schema.GroupVersionKind from Group(), Version(), and Kind()
-func (k *Kind) GroupVersionKind() schema.GroupVersionKind {
+func (k Kind) GroupVersionKind() schema.GroupVersionKind {
 	if k.Schema == nil {
 		return schema.GroupVersionKind{}
 	}
@@ -84,7 +84,7 @@ func (k *Kind) GroupVersionKind() schema.GroupVersionKind {
 }
 
 // GroupVersionResource is a convenience method that assembles a schema.GroupVersionResource from Group(), Version(), and Plural()
-func (k *Kind) GroupVersionResource() schema.GroupVersionResource {
+func (k Kind) GroupVersionResource() schema.GroupVersionResource {
 	if k.Schema == nil {
 		return schema.GroupVersionResource{}
 	}
