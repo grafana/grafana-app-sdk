@@ -491,8 +491,6 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			targetPathProps.Patch = targetOperation
 		}
 	}
-	j, _ := json.Marshal(targetPathProps)
-	fmt.Println(string(j))
 	return targetPathProps, additionalSchemas, nil
 }
 
@@ -671,23 +669,26 @@ func cueSchemaToSpecSchemaProps(v cue.Value, refPrefix string) (spec.SchemaProps
 		return spec.SchemaProps{}, nil, fmt.Errorf("schema for kind '%s' not found", kindKey)
 	}
 	schemas := make(map[string]spec.SchemaProps)
-	response := prefixReferences(schemaProps.Components.Schemas[kindKey], refPrefix)
+	response := prefixReferences(schemaProps.Components.Schemas[kindKey], refPrefix, schemaProps.Components.Schemas)
 	delete(schemaProps.Components.Schemas, kindKey)
 	for k, val := range schemaProps.Components.Schemas {
-		schemas[k] = prefixReferences(val, refPrefix)
+		schemas[k] = prefixReferences(val, refPrefix, schemaProps.Components.Schemas)
 	}
 	return response, schemas, nil
 }
 
-func prefixReferences(sch spec.SchemaProps, prefix string) spec.SchemaProps {
+func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[string]spec.SchemaProps) spec.SchemaProps {
 	if sch.Ref.String() != "" {
 		ref := sch.Ref.String()
 		parts := strings.Split(ref, "/")
-		parts[len(parts)-1] = prefix + parts[len(parts)-1]
+		// References to root types don't get prefixed
+		if _, ok := rootSchemas[parts[len(parts)-1]]; !ok {
+			parts[len(parts)-1] = prefix + parts[len(parts)-1]
+		}
 		sch.Ref = spec.MustCreateRef(strings.Join(parts, "/"))
 	}
 	for key, props := range sch.Properties {
-		props.SchemaProps = prefixReferences(props.SchemaProps, key)
+		props.SchemaProps = prefixReferences(props.SchemaProps, key, rootSchemas)
 		sch.Properties[key] = props
 	}
 	return sch

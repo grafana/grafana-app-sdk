@@ -275,6 +275,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
 			if !ok {
+				fmt.Printf("Resolver failed to look up version=%s, kind=%s. This will impact kind availability\n", v.Name, manifestKind.Kind)
 				continue
 			}
 			if r.scheme == nil {

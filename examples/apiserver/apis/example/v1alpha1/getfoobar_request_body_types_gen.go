@@ -2,6 +2,7 @@
 
 package v1alpha1
 
+// Test type for go naming conflicts
 type GetFoobarRequestSharedType struct {
 	Bar string `json:"bar"`
 }

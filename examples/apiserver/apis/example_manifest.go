@@ -24,7 +24,7 @@ var (
 	rawSchemaTestKindv0alpha1     = []byte(`{"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"testField":{"type":"integer"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv0alpha1 app.VersionSchema
 	_                             = json.Unmarshal(rawSchemaTestKindv0alpha1, &versionSchemaTestKindv0alpha1)
-	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"RecursiveType":{"type":"object","required":["message"],"properties":{"message":{"type":"string"},"next":{"$ref":"#/components/schemas/nextRecursiveType"}},"additionalProperties":false},"TestKind":{"properties":{"mysubresource":{"$ref":"#/components/schemas/mysubresource"},"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"mysubresource":{"additionalProperties":false,"properties":{"extraValue":{"type":"string"}},"required":["extraValue"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"RecursiveType":{"type":"object","required":["message"],"properties":{"message":{"type":"string"},"next":{"$ref":"#/components/schemas/RecursiveType"}},"additionalProperties":false},"TestKind":{"properties":{"mysubresource":{"$ref":"#/components/schemas/mysubresource"},"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"mysubresource":{"additionalProperties":false,"properties":{"extraValue":{"type":"string"}},"required":["extraValue"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv1alpha1 app.VersionSchema
 	_                             = json.Unmarshal(rawSchemaTestKindv1alpha1, &versionSchemaTestKindv1alpha1)
 )
@@ -330,7 +330,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "GetRecursiveResponse",
+									OperationId: "getRecursiveResponse",
 
 									Responses: &spec3.Responses{
 										ResponsesProps: spec3.ResponsesProps{
@@ -364,7 +364,7 @@ var appManifestData = app.ManifestData{
 																			"next": {
 																				SchemaProps: spec.SchemaProps{
 
-																					Ref: spec.MustCreateRef("#/components/schemas/nextRecursiveType"),
+																					Ref: spec.MustCreateRef("#/components/schemas/RecursiveType"),
 																				},
 																			},
 																		},
@@ -429,17 +429,8 @@ var appManifestData = app.ManifestData{
 																},
 																"shared": {
 																	SchemaProps: spec.SchemaProps{
-																		Type: []string{"object"},
-																		Properties: map[string]spec.Schema{
-																			"bar": {
-																				SchemaProps: spec.SchemaProps{
-																					Type: []string{"string"},
-																				},
-																			},
-																		},
-																		Required: []string{
-																			"bar",
-																		},
+
+																		Ref: spec.MustCreateRef("#/components/schemas/SharedType"),
 																	},
 																},
 															},
@@ -485,17 +476,8 @@ var appManifestData = app.ManifestData{
 																		},
 																		"shared": {
 																			SchemaProps: spec.SchemaProps{
-																				Type: []string{"object"},
-																				Properties: map[string]spec.Schema{
-																					"bar": {
-																						SchemaProps: spec.SchemaProps{
-																							Type: []string{"string"},
-																						},
-																					},
-																				},
-																				Required: []string{
-																					"bar",
-																				},
+
+																				Ref: spec.MustCreateRef("#/components/schemas/SharedType"),
 																			},
 																		},
 																	},
@@ -603,6 +585,25 @@ var appManifestData = app.ManifestData{
 							},
 							Required: []string{
 								"foo",
+							},
+						},
+					},
+					"SharedType": {
+						SchemaProps: spec.SchemaProps{
+							Type:        []string{"object"},
+							Description: "Test type for go naming conflicts",
+							Properties: map[string]spec.Schema{
+								"bar": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"string"},
+									},
+								},
+							},
+							AdditionalProperties: &spec.SchemaOrBool{
+								Allows: false,
+							},
+							Required: []string{
+								"bar",
 							},
 						},
 					},

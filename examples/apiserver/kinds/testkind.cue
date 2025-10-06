@@ -60,7 +60,7 @@ testKindv1alpha1: testKind & {
 		}
 		"/recurse": {
 			"GET": {
-				name: "GetRecursiveResponse"
+				name: "getRecursiveResponse"
 				response: {
 					#RecursiveType: {
 						message: string

@@ -2,6 +2,7 @@
 
 package v1alpha1
 
+// Test type for go naming conflicts
 // +k8s:openapi-gen=true
 type SharedType struct {
 	Bar string `json:"bar"`
