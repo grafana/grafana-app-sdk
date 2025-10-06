@@ -669,10 +669,10 @@ func cueSchemaToSpecSchemaProps(v cue.Value, refPrefix string) (spec.SchemaProps
 		return spec.SchemaProps{}, nil, fmt.Errorf("schema for kind '%s' not found", kindKey)
 	}
 	schemas := make(map[string]spec.SchemaProps)
-	response := prefixReferences(schemaProps.Components.Schemas[kindKey], refPrefix, schemaProps.Components.Schemas)
+	response := prefixReferences(schemaProps.Components.Schemas[kindKey], refPrefix, schemas)
 	delete(schemaProps.Components.Schemas, kindKey)
 	for k, val := range schemaProps.Components.Schemas {
-		schemas[k] = prefixReferences(val, refPrefix, schemaProps.Components.Schemas)
+		schemas[fmt.Sprintf("%s%s", refPrefix, k)] = prefixReferences(val, refPrefix, schemas)
 	}
 	return response, schemas, nil
 }
@@ -681,14 +681,14 @@ func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[strin
 	if sch.Ref.String() != "" {
 		ref := sch.Ref.String()
 		parts := strings.Split(ref, "/")
-		// References to root types don't get prefixed
+		// References to types that already exist aren't prefixed
 		if _, ok := rootSchemas[parts[len(parts)-1]]; !ok {
 			parts[len(parts)-1] = prefix + parts[len(parts)-1]
 		}
 		sch.Ref = spec.MustCreateRef(strings.Join(parts, "/"))
 	}
 	for key, props := range sch.Properties {
-		props.SchemaProps = prefixReferences(props.SchemaProps, key, rootSchemas)
+		props.SchemaProps = prefixReferences(props.SchemaProps, prefix, rootSchemas)
 		sch.Properties[key] = props
 	}
 	return sch
