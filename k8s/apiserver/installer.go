@@ -535,7 +535,8 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			builder = builder.Param(restful.HeaderParameter(param.Name, param.Description))
 		}
 	}
-	ws.Route(builder.Operation(strings.ToLower(method)+op.OperationId).To(func(req *restful.Request, resp *restful.Response) {
+
+	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
 		if err != nil {
 			resp.WriteHeader(http.StatusInternalServerError)
@@ -570,6 +571,30 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		}
 	}).Returns(200, "OK", responseType))
 	return nil
+}
+
+var allowedK8sVerbs = []string{
+	"get", "log", "read", "replace", "patch", "delete", "deletecollection", "watch", "connect", "proxy", "list", "create", "patch",
+}
+
+var httpMethodToK8sVerb = map[string]string{
+	http.MethodGet:     "get",
+	http.MethodPost:    "create",
+	http.MethodPut:     "replace",
+	http.MethodPatch:   "patch",
+	http.MethodDelete:  "delete",
+	http.MethodConnect: "connect",
+	http.MethodOptions: "connect", // No real equivalent to options and head
+	http.MethodHead:    "connect",
+}
+
+func prefixRouteIDWithK8sVerbIfNotPresent(operationID string, method string) string {
+	for _, verb := range allowedK8sVerbs {
+		if len(operationID) > len(verb) && operationID[:len(verb)] == verb {
+			return operationID
+		}
+	}
+	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], operationID)
 }
 
 func (r *defaultInstaller) AdmissionPlugin() admission.Factory {

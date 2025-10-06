@@ -1,0 +1,15 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+type CreateReconcileRequestBody struct {
+	Force  bool    `json:"force"`
+	Reason *string `json:"reason,omitempty"`
+}
+
+// NewCreateReconcileRequestBody creates a new CreateReconcileRequestBody object.
+func NewCreateReconcileRequestBody() *CreateReconcileRequestBody {
+	return &CreateReconcileRequestBody{
+		Force: false,
+	}
+}

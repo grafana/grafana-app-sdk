@@ -76,7 +76,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "GetMessage",
+									OperationId: "getMessage",
 
 									Responses: &spec3.Responses{
 										ResponsesProps: spec3.ResponsesProps{
@@ -129,7 +129,7 @@ var appManifestData = app.ManifestData{
 							Get: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "GetFoo",
+									OperationId: "getFoo",
 
 									Parameters: []*spec3.Parameter{
 
@@ -394,7 +394,7 @@ var appManifestData = app.ManifestData{
 						Get: &spec3.Operation{
 							OperationProps: spec3.OperationProps{
 
-								OperationId: "GetFoobar",
+								OperationId: "getFoobar",
 
 								Parameters: []*spec3.Parameter{
 
@@ -427,12 +427,28 @@ var appManifestData = app.ManifestData{
 																		Type: []string{"string"},
 																	},
 																},
+																"shared": {
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"object"},
+																		Properties: map[string]spec.Schema{
+																			"bar": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"string"},
+																				},
+																			},
+																		},
+																		Required: []string{
+																			"bar",
+																		},
+																	},
+																},
 															},
 															AdditionalProperties: &spec.SchemaOrBool{
 																Allows: false,
 															},
 															Required: []string{
 																"input",
+																"shared",
 															},
 														}},
 												}},
@@ -467,12 +483,28 @@ var appManifestData = app.ManifestData{
 																				Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
 																			},
 																		},
+																		"shared": {
+																			SchemaProps: spec.SchemaProps{
+																				Type: []string{"object"},
+																				Properties: map[string]spec.Schema{
+																					"bar": {
+																						SchemaProps: spec.SchemaProps{
+																							Type: []string{"string"},
+																						},
+																					},
+																				},
+																				Required: []string{
+																					"bar",
+																				},
+																			},
+																		},
 																	},
 																	AdditionalProperties: &spec.SchemaOrBool{
 																		Allows: false,
 																	},
 																	Required: []string{
 																		"foo",
+																		"shared",
 																		"apiVersion",
 																		"kind",
 																	},
@@ -491,7 +523,7 @@ var appManifestData = app.ManifestData{
 						Get: &spec3.Operation{
 							OperationProps: spec3.OperationProps{
 
-								OperationId: "clustergetfoobar",
+								OperationId: "getClusterFoobar",
 
 								Responses: &spec3.Responses{
 									ResponsesProps: spec3.ResponsesProps{
@@ -609,7 +641,7 @@ var customRouteToGoResponseType = map[string]any{
 	"v1alpha1|TestKind|recurse|GET": v1alpha1.GetRecursiveResponse{},
 
 	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobar{},
-	"v1alpha1||foobar|GET":             v1alpha1.Clustergetfoobar{},
+	"v1alpha1||foobar|GET":             v1alpha1.GetClusterFoobar{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.

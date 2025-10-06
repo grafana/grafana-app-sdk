@@ -140,12 +140,12 @@ func NewApp(config app.Config) (app.App, error) {
 					Path:       "foobar",
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
-					return json.NewEncoder(writer).Encode(v1alpha1.Clustergetfoobar{
+					return json.NewEncoder(writer).Encode(v1alpha1.GetClusterFoobar{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "ClusterFoobar",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
 						},
-						ClustergetfoobarBody: v1alpha1.ClustergetfoobarBody{
+						GetClusterFoobarBody: v1alpha1.GetClusterFoobarBody{
 							Bar: "hello, world!",
 						},
 					})

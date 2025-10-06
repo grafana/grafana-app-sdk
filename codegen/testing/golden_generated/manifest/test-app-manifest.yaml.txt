@@ -214,7 +214,7 @@ spec:
       routes:
         /reconcile:
           post:
-            operationId: PostReconcile
+            operationId: createReconcile
             requestBody:
               content:
                 application/json:
@@ -251,7 +251,7 @@ spec:
                 description: Default OK response
         /search:
           get:
-            operationId: searchTestkinds
+            operationId: getTestKindSearchResult
             parameters:
             - in: query
               name: limit

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"net/http"
 	"path"
 	"path/filepath"
 	"regexp"
@@ -103,13 +104,13 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	// Request
 	requestTypeName := fmt.Sprintf("%sRequest", typeName)
 	requestParamsTypeName := fmt.Sprintf("%sParams", requestTypeName)
-	requestBodyTypeName := fmt.Sprintf("%sBody", requestTypeName)
 
 	// Request Params
 	if customRoute.Request.Query.Exists() {
 		requestQueryType, err := GoTypesFromCUE(customRoute.Request.Query, CUEGoConfig{
 			PackageName: packageName,
-			Name:        requestParamsTypeName,
+			Name:        "Params",
+			NamePrefix:  requestTypeName,
 		}, 1)
 		if err != nil {
 			return nil, err
@@ -140,7 +141,8 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	if customRoute.Request.Body.Exists() {
 		requestBodyType, err := GoTypesFromCUE(customRoute.Request.Body, CUEGoConfig{
 			PackageName: packageName,
-			Name:        requestBodyTypeName,
+			Name:        "Body",
+			NamePrefix:  requestTypeName,
 		}, 1)
 		if err != nil {
 			return nil, err
@@ -213,11 +215,18 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	return files, nil
 }
 
+var httpMethodToK8sVerb = map[string]string{
+	http.MethodGet:     "get",
+	http.MethodPost:    "create",
+	http.MethodPut:     "replace",
+	http.MethodPatch:   "patch",
+	http.MethodDelete:  "delete",
+	http.MethodConnect: "connect",
+	http.MethodOptions: "connect", // No real equivalent to options and head
+	http.MethodHead:    "connect",
+}
+
 func defaultRouteName(method string, route string) string {
-	ucFirstMethod := strings.ToUpper(method)
-	if len(method) > 1 {
-		ucFirstMethod = ucFirstMethod[:1] + strings.ToLower(method[1:])
-	}
 	for len(route) > 1 && route[0] == '/' {
 		route = route[1:]
 	}
@@ -225,7 +234,7 @@ func defaultRouteName(method string, route string) string {
 	if len(route) > 1 {
 		ucFirstPath = ucFirstPath[:1] + route[1:]
 	}
-	return fmt.Sprintf("%s%s", ucFirstMethod, regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
+	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
 }
 
 func toExportedFieldName(name string) string {
