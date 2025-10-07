@@ -157,7 +157,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive,gocognit
+//nolint:revive,gocognit,funlen
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
@@ -621,37 +621,6 @@ func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRoute
 		},
 	}
 	return responses, additionalSchemas, nil
-}
-
-func findSchemaFallback(val cue.Value) (cue.Value, error) {
-	if _, err := val.LookupPath(cue.MakePath(cue.Str("type"))).String(); err == nil {
-		return val, nil
-	}
-
-	schemasPath := cue.MakePath(cue.Str("components"), cue.Str("schemas"))
-	schemasVal := val.LookupPath(schemasPath)
-	if !schemasVal.Exists() {
-		return cue.Value{}, fmt.Errorf("no valid schema found")
-	}
-
-	it, err := schemasVal.Fields()
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("error iterating schemas: %w", err)
-	}
-
-	var schemas []cue.Value
-	for it.Next() {
-		schemas = append(schemas, it.Value())
-	}
-
-	if len(schemas) == 0 {
-		return cue.Value{}, fmt.Errorf("no schemas found")
-	}
-	if len(schemas) > 1 {
-		return cue.Value{}, fmt.Errorf("multiple schemas found, expected single schema")
-	}
-
-	return schemas[0], nil
 }
 
 func cueSchemaToSpecSchemaProps(v cue.Value, refPrefix string) (spec.SchemaProps, map[string]spec.SchemaProps, error) {

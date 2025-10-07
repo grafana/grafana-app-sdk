@@ -593,6 +593,19 @@ func (v *VersionSchema) AsCRDOpenAPI3(kindObjectName string) (*openapi3.Schema, 
 	return GetCRDOpenAPISchema(components, kindObjectName)
 }
 
+// KubeOpenAPIReferenceReplacerFunc is used to prefix references in a schema, so that they won't conflict
+// with other references in the set of all schemas for a version. It will update a reference key to be
+// <pkgPrefix>.<kind><ref>
+func KubeOpenAPIReferenceReplacerFunc(pkgPrefix string, gvk schema.GroupVersionKind) func(string) string {
+	return func(k string) string {
+		ucK := strings.ToUpper(k)
+		if len(k) > 1 {
+			ucK = strings.ToUpper(k[:1]) + k[1:]
+		}
+		return fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
+	}
+}
+
 // AsKubeOpenAPI converts the schema into a map of reference string to common.OpenAPIDefinition objects, suitable for use with kubernetes API server code.
 // It uses the provided schema.GroupVersionKind and pkgPrefix for naming of the kind and for reference naming. The map output will look something like:
 //
@@ -646,13 +659,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 	// Prefix all the refs the same way
 	// Name the schema as <pkgPrefix>.<Kind><schema>
 	// This ensures no conflicts when merging with other OpenAPI defs later
-	refKey := func(k string) string {
-		ucK := strings.ToUpper(k)
-		if len(k) > 1 {
-			ucK = strings.ToUpper(k[:1]) + k[1:]
-		}
-		return fmt.Sprintf("%s.%s%s", pkgPrefix, gvk.Kind, ucK)
-	}
+	refKey := KubeOpenAPIReferenceReplacerFunc(pkgPrefix, gvk)
 
 	// Construct the new kind based on this entry
 	kindProp := spec.Schema{

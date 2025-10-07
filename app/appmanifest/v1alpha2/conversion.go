@@ -205,13 +205,13 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 // to this specific version of the AppManifestSpec (v1alpha1).
 // nolint:gocognit,funlen
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
-	spec := AppManifestSpec{
+	manifestSpec := AppManifestSpec{
 		AppName:  data.AppName,
 		Group:    data.Group,
 		Versions: make([]AppManifestManifestVersion, 0),
 	}
 	if data.PreferredVersion != "" {
-		spec.PreferredVersion = &data.PreferredVersion
+		manifestSpec.PreferredVersion = &data.PreferredVersion
 	}
 	// Versions
 	for _, version := range data.Versions {
@@ -296,11 +296,11 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				}
 			}
 		}
-		spec.Versions = append(spec.Versions, ver)
+		manifestSpec.Versions = append(manifestSpec.Versions, ver)
 	}
 	// Permissions
 	if data.ExtraPermissions != nil && data.ExtraPermissions.AccessKinds != nil {
-		spec.ExtraPermissions = &AppManifestV1alpha2SpecExtraPermissions{
+		manifestSpec.ExtraPermissions = &AppManifestV1alpha2SpecExtraPermissions{
 			AccessKinds: make([]AppManifestKindPermission, len(data.ExtraPermissions.AccessKinds)),
 		}
 		for idx, access := range data.ExtraPermissions.AccessKinds {
@@ -312,21 +312,21 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			for aidx, action := range access.Actions {
 				perm.Actions[aidx] = string(action)
 			}
-			spec.ExtraPermissions.AccessKinds[idx] = perm
+			manifestSpec.ExtraPermissions.AccessKinds[idx] = perm
 		}
 	}
 	// Operator Info
 	if data.Operator != nil {
-		spec.Operator = &AppManifestOperatorInfo{
+		manifestSpec.Operator = &AppManifestOperatorInfo{
 			Url: &data.Operator.URL,
 		}
 		if data.Operator.Webhooks != nil {
-			spec.Operator.Webhooks = &AppManifestOperatorWebhookProperties{
+			manifestSpec.Operator.Webhooks = &AppManifestOperatorWebhookProperties{
 				ConversionPath: &data.Operator.Webhooks.ConversionPath,
 				ValidationPath: &data.Operator.Webhooks.ValidationPath,
 				MutationPath:   &data.Operator.Webhooks.MutationPath,
 			}
 		}
 	}
-	return &spec, nil
+	return &manifestSpec, nil
 }

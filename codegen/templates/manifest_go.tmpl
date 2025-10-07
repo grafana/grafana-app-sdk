@@ -29,12 +29,12 @@ SchemaProps: spec.SchemaProps{
     Properties: map[string]spec.Schema{ {{ range $key, $prop := .Properties }}
         "{{$key}}": { {{ template "schema" $prop }}
         },{{ end }}
-    },{{ end }}{{ if .AdditionalProperties }}
+    },{{ end }}{{ if .AdditionalProperties }}{{ if or .AdditionalProperties.Schema .AdditionalProperties.Allows }}
     AdditionalProperties: &spec.SchemaOrBool{ {{ if .AdditionalProperties.Schema }}
         Schema: &spec.Schema{ {{ template "schema" .AdditionalProperties.Schema }}
         },{{ else }}
         Allows: {{ .AdditionalProperties.Allows }},{{ end }}
-    },{{ end }}{{ if .Required }}
+    },{{ end }}{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
     },{{ end }}{{ if (refString .Ref) }}

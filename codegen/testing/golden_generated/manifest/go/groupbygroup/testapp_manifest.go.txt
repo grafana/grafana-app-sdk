@@ -162,9 +162,6 @@ var appManifestData = app.ManifestData{
 																		},
 																	},
 																},
-																AdditionalProperties: &spec.SchemaOrBool{
-																	Allows: false,
-																},
 																Required: []string{
 																	"force",
 																},
@@ -198,9 +195,6 @@ var appManifestData = app.ManifestData{
 																					},
 																				},
 																			},
-																		},
-																		AdditionalProperties: &spec.SchemaOrBool{
-																			Allows: false,
 																		},
 																		Required: []string{
 																			"status",
@@ -295,9 +289,6 @@ var appManifestData = app.ManifestData{
 																					Type: []string{"integer"},
 																				},
 																			},
-																		},
-																		AdditionalProperties: &spec.SchemaOrBool{
-																			Allows: false,
 																		},
 																		Required: []string{
 																			"items",
