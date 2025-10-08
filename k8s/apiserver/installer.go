@@ -213,6 +213,15 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 					}
 				}
 			}
+
+			// Register field selectors
+			err := scheme.AddFieldLabelConversionFunc(
+				kind.Kind.GroupVersionKind(),
+				fieldLabelConversionFuncForKind(kind.Kind),
+			)
+			if err != nil {
+				return err
+			}
 		}
 		scheme.AddUnversionedTypes(gv, &ResourceCallOptions{})
 		err = scheme.AddGeneratedConversionFunc((*url.Values)(nil), (*ResourceCallOptions)(nil), func(a, b any, scope conversion.Scope) error {
@@ -1151,3 +1160,20 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 }
 
 type EmptyObject struct{}
+
+func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value string) (string, string, error) {
+	return func(label, value string) (string, string, error) {
+		if label == "metadata.name" || (kind.Scope() != resource.ClusterScope && label == "metadata.namespace") {
+			return label, value, nil
+		}
+		fields := kind.SelectableFields()
+		for _, field := range fields {
+			// Allow either dot-prefixed or no prefix for the selector
+			if field.FieldSelector == label || strings.TrimPrefix(field.FieldSelector, ".") == label {
+				// match function trims the dot prefix, so make sure we're using the one without it
+				return strings.TrimPrefix(field.FieldSelector, "."), value, nil
+			}
+		}
+		return "", "", fmt.Errorf("field label not supported for %s: %s", kind.GroupVersionKind(), label)
+	}
+}

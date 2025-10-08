@@ -70,6 +70,9 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv1alpha1,
+					SelectableFields: []string{
+						".spec.testField",
+					},
 					Routes: map[string]spec3.PathProps{
 						"/bar": {
 							Get: &spec3.Operation{

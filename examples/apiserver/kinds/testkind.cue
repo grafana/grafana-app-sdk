@@ -17,6 +17,7 @@ testKindv0alpha1: testKind & {
 
 testKindv1alpha1: testKind & {
 	validation: operations: ["CREATE","UPDATE"]
+	selectableFields: [".spec.testField"]
 	schema: {
 		#FooBar: {
 			foo: string
