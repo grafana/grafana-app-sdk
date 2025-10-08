@@ -202,7 +202,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		if len(version.Routes().Namespaced) > 0 {
 			ver.Routes.Namespaced = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
-				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap) // TODO: additional schemas
+				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for namespaced path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
@@ -215,7 +215,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		if len(version.Routes().Cluster) > 0 {
 			ver.Routes.Cluster = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Cluster {
-				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap) // TODO: additional schemas
+				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for cluster path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
@@ -659,6 +659,9 @@ func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[strin
 	for key, props := range sch.Properties {
 		props.SchemaProps = prefixReferences(props.SchemaProps, prefix, rootSchemas)
 		sch.Properties[key] = props
+	}
+	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
+		sch.AdditionalProperties.Schema.SchemaProps = prefixReferences(sch.AdditionalProperties.Schema.SchemaProps, prefix, rootSchemas)
 	}
 	return sch
 }

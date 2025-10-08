@@ -875,25 +875,39 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 
 func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref common.ReferenceCallback, replaceFunc func(string) string) []string {
 	deps := make([]string, 0)
+	if sch.Ref.String() != "" {
+		rf := strings.TrimPrefix(sch.Ref.String(), "#/components/schemas/")
+		sch.Ref = ref(replaceFunc(rf))
+		deps = append(deps, replaceFunc(rf))
+		return deps
+	}
 	for key, prop := range sch.Properties {
 		if prop.Ref.String() != "" {
 			// Remove leading "#/components/schemas/"
-			rf := prop.Ref.String()
-			if strings.HasPrefix(rf, "#/components/schemas/") {
-				rf = rf[len("#/components/schemas/"):]
-			}
+			rf := strings.TrimPrefix(prop.Ref.String(), "#/components/schemas/")
 			prop.Ref = ref(replaceFunc(rf))
 			sch.Properties[key] = prop
 			deps = append(deps, replaceFunc(rf))
 			continue
 		}
+		if prop.AdditionalProperties != nil && prop.AdditionalProperties.Schema != nil {
+			d := r.replaceReferencesInSchema(prop.AdditionalProperties.Schema, ref, replaceFunc)
+			sch.Properties[key] = prop
+			deps = append(deps, d...)
+			continue
+		}
 		if len(prop.Properties) > 0 {
 			for k, v := range prop.Properties {
-				r.replaceReferencesInSchema(&v, ref, replaceFunc)
+				d := r.replaceReferencesInSchema(&v, ref, replaceFunc)
 				prop.Properties[k] = v
+				deps = append(deps, d...)
 			}
 			sch.Properties[key] = prop
 		}
+	}
+	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
+		d := r.replaceReferencesInSchema(sch.AdditionalProperties.Schema, ref, replaceFunc)
+		deps = append(deps, d...)
 	}
 	return deps
 }
@@ -1150,7 +1164,7 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 		}
 		if in.AdditionalProperties.Schema != nil {
 			schemaCopy := copySpecSchema(in.AdditionalProperties.Schema)
-			in.AdditionalProperties.Schema = &schemaCopy
+			out.AdditionalProperties.Schema = &schemaCopy
 		}
 	}
 	if in.PatternProperties != nil {
@@ -1180,7 +1194,7 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 		}
 		if in.AdditionalItems.Schema != nil {
 			schemaCopy := copySpecSchema(in.AdditionalItems.Schema)
-			in.AdditionalItems.Schema = &schemaCopy
+			out.AdditionalItems.Schema = &schemaCopy
 		}
 	}
 	if in.Definitions != nil {

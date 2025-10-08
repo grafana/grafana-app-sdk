@@ -519,7 +519,7 @@ var appManifestData = app.ManifestData{
 																					Schema: &spec.Schema{
 																						SchemaProps: spec.SchemaProps{
 
-																							Ref: spec.MustCreateRef("#/components/schemas/Extra"),
+																							Ref: spec.MustCreateRef("#/components/schemas/getClusterFoobarExtra"),
 																						},
 																					},
 																				},
