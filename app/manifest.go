@@ -949,7 +949,7 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 //     where the root schema contains all fields in `allOf` and `anyOf`, and `allOf` and `anyOf` are used in `required` discrimintation instead,
 //     so as to pass CRD validation logic [seen here](https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apiserver/schema/validation.go#L309)
 //
-//nolint:gocognit,funlen,gocritic
+//nolint:gocognit,funlen,gocritic,gocyclo
 func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
 	if sch == nil {
 		return nil, nil
@@ -1086,7 +1086,9 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		result.Items = openapi3.NewSchemaRef("", resolved)
 	}
 
-	// AllOf, OneOf, and AnyOf need to resolve the schema into a structural one
+	// AllOf, OneOf, and AnyOf need to resolve the schema into a structural one, based on requirements in
+	// https://kubernetes.io/blog/2019/06/20/crd-structural-schema/, to pass apiextensions validations
+	// https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apiserver/schema/validation.go#L309
 
 	// Resolve AllOf schemas
 	for _, s := range sch.Value.AllOf {
@@ -1096,41 +1098,57 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		}
 
 		// Add the required fields to AllOf, rather than the whole schema
-		result.AnyOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
 			Required: resolved.Required,
 		}))
 		resolved.Required = nil
 
 		// merge schema into existing schema, sans "required" section
-		_, err = mergeSchemas(result, resolved)
+		err = mergeSchemas(result, resolved)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
 		}
-
-		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", resolved))
 	}
 
 	// Resolve OneOf schemas
-	for _, s := range sch.Value.OneOf {
-		resolved, err := resolveSchema(s, components, visited)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
+	if len(sch.Value.OneOf) > 0 {
+		allRequired := make([]string, 0)
+		for _, s := range sch.Value.OneOf {
+			allRequired = append(allRequired, s.Value.Required...)
 		}
+		for _, s := range sch.Value.OneOf {
+			resolved, err := resolveSchema(s, components, visited)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
+			}
 
-		// Add the required fields to OneOf, rather than the whole schema
-		// TODO: handle 'not' in required set to exclude other objects
-		result.AnyOf = append(result.OneOf, openapi3.NewSchemaRef("", &openapi3.Schema{
-			Required: resolved.Required,
-		}))
-		resolved.Required = nil
+			// Add the required fields to OneOf, rather than the whole schema
+			notReq := make([]*openapi3.SchemaRef, 0)
+			for _, v := range allRequired {
+				if _, has := resolved.Properties[v]; !has {
+					notReq = append(notReq, openapi3.NewSchemaRef("", &openapi3.Schema{
+						Required: []string{v},
+					}))
+				}
+			}
+			oneOf := openapi3.Schema{
+				Required: resolved.Required,
+			}
+			if len(notReq) > 0 {
+				oneOf.Not = openapi3.NewSchemaRef("", &openapi3.Schema{
+					AnyOf: notReq,
+				})
+			}
 
-		// merge schema into existing schema, sans "required" section
-		_, err = mergeSchemas(result, resolved)
-		if err != nil {
-			return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
+			result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", &oneOf))
+			resolved.Required = nil
+
+			// merge schema into existing schema, sans "required" section
+			err = mergeSchemas(result, resolved)
+			if err != nil {
+				return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
+			}
 		}
-
-		result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", resolved))
 	}
 
 	// Resolve AnyOf schemas
@@ -1147,7 +1165,7 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		resolved.Required = nil
 
 		// merge schema into existing schema, sans "required" section
-		_, err = mergeSchemas(result, resolved)
+		err = mergeSchemas(result, resolved)
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
 		}
@@ -1156,16 +1174,8 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 	return result, nil
 }
 
-type schemaMergeDiff struct {
-	AOnly []string
-	BOnly []string
-}
-
-func mergeSchemas(mergeInto, toMerge *openapi3.Schema) (*schemaMergeDiff, error) {
-	diff := schemaMergeDiff{
-		AOnly: make([]string, 0),
-		BOnly: make([]string, 0),
-	}
+// mergeSchemas is a naive merge of two schemas, and does not ensure schema validity post-merge
+func mergeSchemas(mergeInto, toMerge *openapi3.Schema) error {
 	if mergeInto.Type == nil {
 		mergeInto.Type = toMerge.Type
 	} else {
@@ -1178,13 +1188,31 @@ func mergeSchemas(mergeInto, toMerge *openapi3.Schema) (*schemaMergeDiff, error)
 	}
 
 	if len(toMerge.Extensions) > 0 && mergeInto.Extensions == nil {
-		mergeInto.Extensions = make(map[string]interface{})
+		mergeInto.Extensions = make(map[string]any)
 	}
 	for key, val := range toMerge.Extensions {
 		if present, ok := mergeInto.Extensions[key]; ok && present != val {
-			return nil, fmt.Errorf("extension mismatch for key %s with value %s (existing value %s)", key, val, present)
+			return fmt.Errorf("extension mismatch for key %s with value %s (existing value %s)", key, val, present)
 		}
 		mergeInto.Extensions[key] = val
+	}
+
+	if toMerge.AdditionalProperties.Has != nil || toMerge.AdditionalProperties.Schema != nil {
+		if mergeInto.AdditionalProperties.Schema == nil {
+			mergeInto.AdditionalProperties.Schema = toMerge.AdditionalProperties.Schema
+		} else if toMerge.AdditionalProperties.Schema != nil {
+			err := mergeSchemas(mergeInto.AdditionalProperties.Schema.Value, toMerge.AdditionalProperties.Schema.Value)
+			if err != nil {
+				return fmt.Errorf("failed to merge additionalProperties schema: %w", err)
+			}
+		}
+		if mergeInto.AdditionalProperties.Has == nil {
+			mergeInto.AdditionalProperties.Has = toMerge.AdditionalProperties.Has
+		} else if toMerge.AdditionalProperties.Has != nil {
+			if !*mergeInto.AdditionalProperties.Has && *toMerge.AdditionalProperties.Has {
+				mergeInto.AdditionalProperties.Has = toMerge.AdditionalProperties.Has
+			}
+		}
 	}
 
 	if len(toMerge.Properties) > 0 && mergeInto.Properties == nil {
@@ -1200,24 +1228,30 @@ func mergeSchemas(mergeInto, toMerge *openapi3.Schema) (*schemaMergeDiff, error)
 
 		// If equal types, attempt a merge
 		if slices.Equal(*present.Value.Type, *val.Value.Type) {
-			_, err := mergeSchemas(present.Value, val.Value)
+			err := mergeSchemas(present.Value, val.Value)
 			if err != nil {
-				return nil, fmt.Errorf("failed to merge properties key %s: %w", key, err)
+				return fmt.Errorf("failed to merge properties key %s: %w", key, err)
 			}
 			mergeInto.Properties[key] = present
-			// TODO: handle diff
 			continue
 		}
 
 		// Otherwise, error (though this can probably be merged in some cases?)
-		return nil, fmt.Errorf("property %s already defined", key)
+		return fmt.Errorf("property %s already defined", key)
 	}
 
 	if toMerge.Items != nil {
-		// TODO
+		if mergeInto.Items != nil {
+			err := mergeSchemas(mergeInto.Items.Value, toMerge.Items.Value)
+			if err != nil {
+				return fmt.Errorf("failed to merge items: %w", err)
+			}
+		} else {
+			mergeInto.Items = toMerge.Items
+		}
 	}
 
-	return &diff, nil
+	return nil
 }
 
 // getRefName extracts the schema name from a $ref string

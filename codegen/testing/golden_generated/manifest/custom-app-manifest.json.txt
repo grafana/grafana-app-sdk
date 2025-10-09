@@ -216,39 +216,33 @@
                                     "union": {
                                         "anyOf": [
                                             {
-                                                "properties": {
-                                                    "group": {
-                                                        "type": "string"
-                                                    },
-                                                    "options": {
-                                                        "items": {
-                                                            "type": "string"
-                                                        },
-                                                        "type": "array"
-                                                    }
-                                                },
                                                 "required": [
                                                     "group"
-                                                ],
-                                                "type": "object"
+                                                ]
                                             },
                                             {
-                                                "properties": {
-                                                    "details": {
-                                                        "type": "object",
-                                                        "x-kubernetes-preserve-unknown-fields": true
-                                                    },
-                                                    "group": {
-                                                        "type": "string"
-                                                    }
-                                                },
                                                 "required": [
                                                     "group",
                                                     "details"
-                                                ],
-                                                "type": "object"
+                                                ]
                                             }
-                                        ]
+                                        ],
+                                        "properties": {
+                                            "details": {
+                                                "type": "object",
+                                                "x-kubernetes-preserve-unknown-fields": true
+                                            },
+                                            "group": {
+                                                "type": "string"
+                                            },
+                                            "options": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "type": "object"
                                     }
                                 },
                                 "required": [

@@ -163,26 +163,22 @@ spec:
                 type: string
               union:
                 anyOf:
-                - properties:
-                    group:
-                      type: string
-                    options:
-                      items:
-                        type: string
-                      type: array
-                  required:
+                - required:
                   - group
-                  type: object
-                - properties:
-                    details:
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    group:
-                      type: string
-                  required:
+                - required:
                   - group
                   - details
-                  type: object
+                properties:
+                  details:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  group:
+                    type: string
+                  options:
+                    items:
+                      type: string
+                    type: array
+                type: object
             required:
             - field1
             - inner
