@@ -83,30 +83,6 @@ func getAttrsFunc(kind resource.Kind) func(obj runtime.Object) (labels.Set, fiel
 	}
 }
 
-//nolint:unused
-func genericGetAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
-	resourceObj, ok := obj.(resource.Object)
-	if !ok {
-		return nil, nil, fmt.Errorf("object (%T) is not a resource.Object", obj)
-	}
-	m := metav1.ObjectMeta{
-		Name:                       resourceObj.GetName(),
-		Namespace:                  resourceObj.GetNamespace(),
-		Labels:                     resourceObj.GetLabels(),
-		Annotations:                resourceObj.GetAnnotations(),
-		OwnerReferences:            resourceObj.GetOwnerReferences(),
-		Finalizers:                 resourceObj.GetFinalizers(),
-		ResourceVersion:            resourceObj.GetResourceVersion(),
-		UID:                        resourceObj.GetUID(),
-		Generation:                 resourceObj.GetGeneration(),
-		CreationTimestamp:          resourceObj.GetCreationTimestamp(),
-		DeletionTimestamp:          resourceObj.GetDeletionTimestamp(),
-		DeletionGracePeriodSeconds: resourceObj.GetDeletionGracePeriodSeconds(),
-		ManagedFields:              resourceObj.GetManagedFields(),
-	}
-	return labels.Set(m.Labels), generic.ObjectMetaFieldsSet(&m, true), nil
-}
-
 func matchKindFunc(kind resource.Kind) func(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
 	return func(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
 		return storage.SelectionPredicate{
@@ -114,15 +90,6 @@ func matchKindFunc(kind resource.Kind) func(label labels.Selector, field fields.
 			Field:    field,
 			GetAttrs: getAttrsFunc(kind),
 		}
-	}
-}
-
-//nolint:unused
-func genericMatchKind(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
-	return storage.SelectionPredicate{
-		Label:    label,
-		Field:    field,
-		GetAttrs: genericGetAttrs,
 	}
 }
 
