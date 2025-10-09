@@ -298,7 +298,7 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				AllowWatchBookmarks:  options.AllowWatchBookmarks,
 				TimeoutSeconds:       options.TimeoutSeconds,
 				SendInitialEvents:    options.SendInitialEvents,
-				DecoderWorkers:       filterOptions.DecoderWorkers,
+				ParserWorkers:        filterOptions.ParserWorkers,
 				EventBufferSize:      filterOptions.EventBufferSize,
 				WorkerBufferSize:     filterOptions.WorkerBufferSize,
 			}

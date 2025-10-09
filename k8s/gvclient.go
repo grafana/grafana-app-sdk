@@ -559,7 +559,7 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 		watch:             resp,
 		ch:                make(chan resource.WatchEvent, channelBufferSize),
 		stopCh:            make(chan struct{}),
-		decoderWorkers:    options.DecoderWorkers,
+		parserWorkers:     options.ParserWorkers,
 		workerBufferSize:  workerBufferSize,
 		plural:            plural,
 		totalWatchObjects: g.totalWatchObjects,
@@ -599,7 +599,7 @@ type WatchResponse struct {
 	codec             resource.Codec
 	started           bool
 	startMux          sync.Mutex
-	decoderWorkers    int
+	parserWorkers     int
 	workerBufferSize  int
 	plural            string
 	totalWatchObjects *prometheus.CounterVec
@@ -607,13 +607,13 @@ type WatchResponse struct {
 
 //nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
-	// Use concurrent decoding if configured
-	if w.decoderWorkers > 1 {
+	// Use concurrent parsing if configured
+	if w.parserWorkers > 1 {
 		w.startConcurrent()
 		return
 	}
 
-	// Default synchronous decoding
+	// Default synchronous parsing
 	for {
 		select {
 		case evt := <-w.watch.ResultChan():
@@ -623,7 +623,7 @@ func (w *WatchResponse) start() {
 				}
 				break
 			}
-			obj := w.decodeEvent(evt)
+			obj := w.eventToObject(evt)
 			if obj != nil {
 				w.ch <- resource.WatchEvent{
 					EventType: string(evt.Type),
@@ -636,44 +636,44 @@ func (w *WatchResponse) start() {
 	}
 }
 
-// decodeEvent decodes a watch event object into a resource.Object
-func (w *WatchResponse) decodeEvent(evt watch.Event) resource.Object {
+// eventToObject converts a watch event object into a resource.Object
+func (w *WatchResponse) eventToObject(evt watch.Event) resource.Object {
 	if evt.Object == nil {
 		return nil
 	}
 
 	var obj resource.Object
-	var decodeStatus string
+	var parseStatus string
 
 	defer func() {
 		// Record metrics if available
 		if w.totalWatchObjects != nil {
 			concurrent := "false"
-			if w.decoderWorkers > 1 {
+			if w.parserWorkers > 1 {
 				concurrent = "true"
 			}
-			w.totalWatchObjects.WithLabelValues(w.plural, string(evt.Type), concurrent, decodeStatus).Inc()
+			w.totalWatchObjects.WithLabelValues(w.plural, string(evt.Type), concurrent, parseStatus).Inc()
 		}
 	}()
 
 	if cast, ok := evt.Object.(resource.Object); ok {
 		obj = cast
-		decodeStatus = "success"
+		parseStatus = "success"
 	} else if cast, ok := evt.Object.(intoObject); ok {
 		obj = w.ex.Copy()
 		err := cast.Into(obj, w.codec)
 		if err != nil {
 			// TODO: hmm
 			if logging.DefaultLogger != nil {
-				logging.DefaultLogger.Error("Failed to decode watch event object", "error", err)
+				logging.DefaultLogger.Error("Failed to parse watch event object", "error", err)
 			}
-			decodeStatus = "error"
+			parseStatus = "error"
 			return nil
 		}
-		decodeStatus = "success"
+		parseStatus = "success"
 	} else if cast, ok := evt.Object.(wrappedObject); ok {
 		obj = cast.ResourceObject()
-		decodeStatus = "success"
+		parseStatus = "success"
 	} else {
 		// TODO: hmm
 		if logging.DefaultLogger != nil {
@@ -681,25 +681,25 @@ func (w *WatchResponse) decodeEvent(evt watch.Event) resource.Object {
 				"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
 				"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
 		}
-		decodeStatus = "error"
+		parseStatus = "error"
 		return nil
 	}
 	return obj
 }
 
-// rawWatchEvent is an internal type for passing undecoded watch events to decoder workers
+// rawWatchEvent is an internal type for passing unparsed watch events to parser workers
 type rawWatchEvent struct {
 	eventType watch.EventType
 	object    runtime.Object
 }
 
-// startConcurrent implements concurrent decoding using worker pools.
+// startConcurrent implements concurrent parsing using worker pools.
 // This maintains per-object ordering (events for the same object are processed in order)
 // but does NOT guarantee global ordering across different objects.
 func (w *WatchResponse) startConcurrent() {
-	numWorkers := w.decoderWorkers
+	numWorkers := w.parserWorkers
 
-	// Create channels for distributing work to decoder workers
+	// Create channels for distributing work to parser workers
 	// Use buffered channels to allow some queueing per worker
 	workerChannels := make([]chan rawWatchEvent, numWorkers)
 	for i := range numWorkers {
@@ -709,18 +709,18 @@ func (w *WatchResponse) startConcurrent() {
 	// WaitGroup to track worker lifecycle
 	var wg sync.WaitGroup
 
-	// Start decoder workers - each worker decodes and sends directly to output
+	// Start parser workers - each worker parses and sends directly to output
 	for i := range numWorkers {
 		wg.Add(1)
 		go func(workerID int, inputCh <-chan rawWatchEvent) {
 			defer wg.Done()
 			for raw := range inputCh {
-				// Decode the event
+				// Parse the event
 				evt := watch.Event{
 					Type:   raw.eventType,
 					Object: raw.object,
 				}
-				obj := w.decodeEvent(evt)
+				obj := w.eventToObject(evt)
 				if obj != nil {
 					// Use select to avoid blocking if stop is called
 					select {

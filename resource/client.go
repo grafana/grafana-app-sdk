@@ -147,14 +147,14 @@ type WatchOptions struct {
 	TimeoutSeconds      *int64
 	// SendInitialEvents is used by streaming ListWatch
 	SendInitialEvents *bool
-	// DecoderWorkers is the number of concurrent workers to use for decoding watch events.
-	// This is useful when the API server streams objects faster than they can be decoded (e.g., with WatchList).
-	// A value of 0 or 1 will use synchronous decoding (default behavior).
-	// Values > 1 will spawn that many workers to decode events concurrently.
-	// When using concurrent decoding, events are distributed to workers using a hash of the object's
+	// ParserWorkers is the number of concurrent workers to use for parsing watch events.
+	// This is useful when the API server streams objects faster than they can be parsed (e.g., with WatchList).
+	// A value of 0 or 1 will use synchronous parsing (default behavior).
+	// Values > 1 will spawn that many workers to parse events concurrently.
+	// When using concurrent parsing, events are distributed to workers using a hash of the object's
 	// namespace and name to ensure per-object ordering is maintained.
-	DecoderWorkers int
-	// WorkerBufferSize determines the buffer size for each decoder worker's input channel.
+	ParserWorkers int
+	// WorkerBufferSize determines the buffer size for each parser worker's input channel.
 	// This controls how many events can be queued per worker before the distributor blocks.
 	// Only positive values are accepted, 0 or negative values will use the default of 10.
 	// Larger values allow more buffering but increase memory usage.

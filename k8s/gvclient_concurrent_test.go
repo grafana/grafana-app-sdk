@@ -20,7 +20,7 @@ import (
 type testCodec struct{}
 
 func (testCodec) Read(r io.Reader, into resource.Object) error {
-	// For testing, just return nil - we're testing the concurrency, not the decoding
+	// For testing, just return nil - we're testing the concurrency, not the parsing
 	return nil
 }
 
@@ -28,8 +28,8 @@ func (testCodec) Write(w io.Writer, obj resource.Object) error {
 	return nil
 }
 
-// TestWatchResponse_ConcurrentDecoding tests that concurrent decoding works correctly
-func TestWatchResponse_ConcurrentDecoding(t *testing.T) {
+// TestWatchResponse_ConcurrentParsing tests that concurrent parsing works correctly
+func TestWatchResponse_ConcurrentParsing(t *testing.T) {
 	// Create a mock watch interface
 	mockWatch := &mockWatchInterface{
 		resultChan: make(chan watch.Event, 100),
@@ -43,14 +43,14 @@ func TestWatchResponse_ConcurrentDecoding(t *testing.T) {
 		},
 	}
 
-	// Create WatchResponse with concurrent decoding
+	// Create WatchResponse with concurrent parsing
 	wr := &WatchResponse{
-		watch:          mockWatch,
-		ch:             make(chan resource.WatchEvent, 100),
-		stopCh:         make(chan struct{}),
-		ex:             exampleObj,
-		codec:          testCodec{},
-		decoderWorkers: 4,
+		watch:         mockWatch,
+		ch:            make(chan resource.WatchEvent, 100),
+		stopCh:        make(chan struct{}),
+		ex:            exampleObj,
+		codec:         testCodec{},
+		parserWorkers: 4,
 	}
 
 	// Start the watch response
@@ -100,8 +100,8 @@ func TestWatchResponse_ConcurrentDecoding(t *testing.T) {
 	wr.Stop()
 }
 
-// TestWatchResponse_ConcurrentDecoding_PerObjectOrdering tests that events for the same object maintain order
-func TestWatchResponse_ConcurrentDecoding_PerObjectOrdering(t *testing.T) {
+// TestWatchResponse_ConcurrentParsing_PerObjectOrdering tests that events for the same object maintain order
+func TestWatchResponse_ConcurrentParsing_PerObjectOrdering(t *testing.T) {
 	mockWatch := &mockWatchInterface{
 		resultChan: make(chan watch.Event, 100),
 	}
@@ -114,12 +114,12 @@ func TestWatchResponse_ConcurrentDecoding_PerObjectOrdering(t *testing.T) {
 	}
 
 	wr := &WatchResponse{
-		watch:          mockWatch,
-		ch:             make(chan resource.WatchEvent, 100),
-		stopCh:         make(chan struct{}),
-		ex:             exampleObj,
-		codec:          testCodec{},
-		decoderWorkers: 4,
+		watch:         mockWatch,
+		ch:            make(chan resource.WatchEvent, 100),
+		stopCh:        make(chan struct{}),
+		ex:            exampleObj,
+		codec:         testCodec{},
+		parserWorkers: 4,
 	}
 
 	go wr.start()
@@ -163,8 +163,8 @@ func TestWatchResponse_ConcurrentDecoding_PerObjectOrdering(t *testing.T) {
 	wr.Stop()
 }
 
-// TestWatchResponse_SyncDecoding tests that synchronous decoding still works (backwards compatibility)
-func TestWatchResponse_SyncDecoding(t *testing.T) {
+// TestWatchResponse_SyncParsing tests that synchronous parsing still works (backwards compatibility)
+func TestWatchResponse_SyncParsing(t *testing.T) {
 	mockWatch := &mockWatchInterface{
 		resultChan: make(chan watch.Event, 10),
 	}
@@ -176,14 +176,14 @@ func TestWatchResponse_SyncDecoding(t *testing.T) {
 		},
 	}
 
-	// Create WatchResponse WITHOUT concurrent decoding (decoderWorkers = 0)
+	// Create WatchResponse WITHOUT concurrent parsing (parserWorkers = 0)
 	wr := &WatchResponse{
-		watch:          mockWatch,
-		ch:             make(chan resource.WatchEvent, 10),
-		stopCh:         make(chan struct{}),
-		ex:             exampleObj,
-		codec:          testCodec{},
-		decoderWorkers: 0, // Synchronous
+		watch:         mockWatch,
+		ch:            make(chan resource.WatchEvent, 10),
+		stopCh:        make(chan struct{}),
+		ex:            exampleObj,
+		codec:         testCodec{},
+		parserWorkers: 0, // Synchronous
 	}
 
 	go wr.start()
@@ -218,8 +218,8 @@ func TestWatchResponse_SyncDecoding(t *testing.T) {
 	wr.Stop()
 }
 
-// TestWatchResponse_ConcurrentDecoding_StressTest tests concurrent decoding under load
-func TestWatchResponse_ConcurrentDecoding_StressTest(t *testing.T) {
+// TestWatchResponse_ConcurrentParsing_StressTest tests concurrent parsing under load
+func TestWatchResponse_ConcurrentParsing_StressTest(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping stress test in short mode")
 	}
@@ -236,12 +236,12 @@ func TestWatchResponse_ConcurrentDecoding_StressTest(t *testing.T) {
 	}
 
 	wr := &WatchResponse{
-		watch:          mockWatch,
-		ch:             make(chan resource.WatchEvent, 1000),
-		stopCh:         make(chan struct{}),
-		ex:             exampleObj,
-		codec:          testCodec{},
-		decoderWorkers: 8,
+		watch:         mockWatch,
+		ch:            make(chan resource.WatchEvent, 1000),
+		stopCh:        make(chan struct{}),
+		ex:            exampleObj,
+		codec:         testCodec{},
+		parserWorkers: 8,
 	}
 
 	go wr.start()

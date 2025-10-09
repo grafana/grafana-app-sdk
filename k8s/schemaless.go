@@ -74,10 +74,10 @@ func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientCon
 			Help:      "Total number of kubernetes requests",
 		}, []string{"status_code", "verb", "kind", "subresource"}),
 		totalWatchObjects: prometheus.NewCounterVec(prometheus.CounterOpts{
-			Name:      "watch_objects_decoded_total",
+			Name:      "watch_objects_parsed_total",
 			Subsystem: "kubernetes_client",
 			Namespace: clientConfig.MetricsConfig.Namespace,
-			Help:      "Total number of watch event objects decoded",
+			Help:      "Total number of watch event objects parsed",
 		}, []string{"kind", "event_type", "concurrent", "status"}),
 	}
 }
