@@ -30,6 +30,9 @@ const (
 
 	// AnnotationPrefix is the prefix used in annotations which contain grafana kind metadata
 	AnnotationPrefix = "grafana.com/"
+
+	parseStatusSuccess = "success"
+	parseStatusError   = "error"
 )
 
 // groupVersionClient is the underlying client both Client and SchemalessClient use.
@@ -658,7 +661,7 @@ func (w *WatchResponse) eventToObject(evt watch.Event) resource.Object {
 
 	if cast, ok := evt.Object.(resource.Object); ok {
 		obj = cast
-		parseStatus = "success"
+		parseStatus = parseStatusSuccess
 	} else if cast, ok := evt.Object.(intoObject); ok {
 		obj = w.ex.Copy()
 		err := cast.Into(obj, w.codec)
@@ -667,13 +670,13 @@ func (w *WatchResponse) eventToObject(evt watch.Event) resource.Object {
 			if logging.DefaultLogger != nil {
 				logging.DefaultLogger.Error("Failed to parse watch event object", "error", err)
 			}
-			parseStatus = "error"
+			parseStatus = parseStatusError
 			return nil
 		}
-		parseStatus = "success"
+		parseStatus = parseStatusSuccess
 	} else if cast, ok := evt.Object.(wrappedObject); ok {
 		obj = cast.ResourceObject()
-		parseStatus = "success"
+		parseStatus = parseStatusSuccess
 	} else {
 		// TODO: hmm
 		if logging.DefaultLogger != nil {
@@ -681,7 +684,7 @@ func (w *WatchResponse) eventToObject(evt watch.Event) resource.Object {
 				"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
 				"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
 		}
-		parseStatus = "error"
+		parseStatus = parseStatusError
 		return nil
 	}
 	return obj
@@ -712,7 +715,7 @@ func (w *WatchResponse) startConcurrent() {
 	// Start parser workers - each worker parses and sends directly to output
 	for i := range numWorkers {
 		wg.Add(1)
-		go func(workerID int, inputCh <-chan rawWatchEvent) {
+		go func(inputCh <-chan rawWatchEvent) {
 			defer wg.Done()
 			for raw := range inputCh {
 				// Parse the event
@@ -733,7 +736,7 @@ func (w *WatchResponse) startConcurrent() {
 					}
 				}
 			}
-		}(i, workerChannels[i])
+		}(workerChannels[i])
 	}
 
 	// Goroutine to read from the kubernetes watch and distribute to workers
@@ -763,7 +766,7 @@ func (w *WatchResponse) startConcurrent() {
 				}
 
 				// Distribute to workers based on object hash to maintain per-object ordering
-				workerIdx := w.hashObjectToWorker(evt.Object, numWorkers)
+				workerIdx := hashObjectToWorker(evt.Object, numWorkers)
 
 				// Use select to avoid blocking if stop is called
 				select {
@@ -781,7 +784,7 @@ func (w *WatchResponse) startConcurrent() {
 
 // hashObjectToWorker computes which worker should handle this object
 // Objects with the same namespace/name always go to the same worker
-func (w *WatchResponse) hashObjectToWorker(obj runtime.Object, numWorkers int) int {
+func hashObjectToWorker(obj runtime.Object, numWorkers int) int {
 	// Try to get namespace and name from the object
 	var key string
 
@@ -801,7 +804,8 @@ func (w *WatchResponse) hashObjectToWorker(obj runtime.Object, numWorkers int) i
 	h.Write([]byte(key))
 	hash := h.Sum64()
 
-	return int(hash % uint64(numWorkers))
+	// Ensure safe conversion: modulo guarantees result < numWorkers, which fits in int
+	return int(hash % uint64(numWorkers)) // #nosec G115
 }
 
 // Stop stops the translation channel between the kubernetes watch.Interface,
