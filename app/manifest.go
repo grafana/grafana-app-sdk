@@ -942,6 +942,13 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 	return resolveSchema(sch, components, visited)
 }
 
+// resolveSchema does three things:
+//  1. Resolves any references to be embedded in the schema itself
+//  2. Any resolutions that lead to recursion, it replaces with an empty object with `x-kubernetes-preserve-additionl-properties: true`
+//  3. Converts `allOf` and `anyOf` into CRD [structural schemas](https://kubernetes.io/blog/2019/06/20/crd-structural-schema/),
+//     where the root schema contains all fields in `allOf` and `anyOf`, and `allOf` and `anyOf` are used in `required` discrimintation instead,
+//     so as to pass CRD validation logic [seen here](https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apiserver/schema/validation.go#L309)
+//
 //nolint:gocognit,funlen,gocritic
 func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, visitedBefore map[string]bool) (*openapi3.Schema, error) {
 	if sch == nil {
@@ -1024,17 +1031,15 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 	// Fix additionalProperties being an empty object for what kubernetes CRD's expect (using the `x-kubernetes-preserve-unknown-fields` extension)
 	if result.AdditionalProperties.Has != nil || result.AdditionalProperties.Schema != nil {
 		if result.AdditionalProperties.Schema != nil {
-			// If there's a schema, resolve references and check if we need to transform this into a plain object with x-kubernetes-preserve-unknown-fields: true
-			if result.AdditionalProperties.Schema.Ref != "" {
-				resolved, err := resolveSchema(result.AdditionalProperties.Schema, components, visited)
-				if err != nil {
-					return nil, err
-				}
-				result.AdditionalProperties.Schema = openapi3.NewSchemaRef("", resolved)
+			resolved, err := resolveSchema(result.AdditionalProperties.Schema, components, visited)
+			if err != nil {
+				return nil, err
 			}
+			result.AdditionalProperties.Schema = openapi3.NewSchemaRef("", resolved)
+
 			// if the schema exists, there are no properties in it, and it's either an object or empty type ("additionalProperties":{"type":"object"} or "additionalProperties":{}),
 			// set kubernetes' x-kubernetes-preserve-unknown-fields to true and remove the additionalProperties section
-			if result.AdditionalProperties.Schema.Value != nil && len(result.AdditionalProperties.Schema.Value.Properties) == 0 && (result.AdditionalProperties.Schema.Value.Type.Is(openapi3.TypeObject) || result.AdditionalProperties.Schema.Value.Type == nil) {
+			if len(result.AdditionalProperties.Schema.Value.Properties) == 0 && (result.AdditionalProperties.Schema.Value.Type.Is(openapi3.TypeObject) || result.AdditionalProperties.Schema.Value.Type == nil) {
 				result.AdditionalProperties.Has = nil
 				result.AdditionalProperties.Schema = nil
 				if result.Extensions == nil {
@@ -1053,6 +1058,11 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		} else {
 			result.AdditionalProperties.Has = nil
 		}
+	}
+
+	// additionalProperties: false alongside properties is not allowed in CRDs
+	if result.AdditionalProperties.Has != nil && !*result.AdditionalProperties.Has && len(result.Properties) > 0 {
+		result.AdditionalProperties.Has = nil
 	}
 
 	// Resolve properties for objects
@@ -1076,12 +1086,27 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		result.Items = openapi3.NewSchemaRef("", resolved)
 	}
 
+	// AllOf, OneOf, and AnyOf need to resolve the schema into a structural one
+
 	// Resolve AllOf schemas
 	for _, s := range sch.Value.AllOf {
 		resolved, err := resolveSchema(s, components, visited)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve allOf schema: %w", err)
 		}
+
+		// Add the required fields to AllOf, rather than the whole schema
+		result.AnyOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+			Required: resolved.Required,
+		}))
+		resolved.Required = nil
+
+		// merge schema into existing schema, sans "required" section
+		_, err = mergeSchemas(result, resolved)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
+		}
+
 		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", resolved))
 	}
 
@@ -1091,6 +1116,20 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
 		}
+
+		// Add the required fields to OneOf, rather than the whole schema
+		// TODO: handle 'not' in required set to exclude other objects
+		result.AnyOf = append(result.OneOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+			Required: resolved.Required,
+		}))
+		resolved.Required = nil
+
+		// merge schema into existing schema, sans "required" section
+		_, err = mergeSchemas(result, resolved)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
+		}
+
 		result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", resolved))
 	}
 
@@ -1100,10 +1139,85 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve anyOf schema: %w", err)
 		}
-		result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", resolved))
+
+		// Add the required fields to AnyOf, rather than the whole schema
+		result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+			Required: resolved.Required,
+		}))
+		resolved.Required = nil
+
+		// merge schema into existing schema, sans "required" section
+		_, err = mergeSchemas(result, resolved)
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge anyOf schemas: %w", err)
+		}
 	}
 
 	return result, nil
+}
+
+type schemaMergeDiff struct {
+	AOnly []string
+	BOnly []string
+}
+
+func mergeSchemas(mergeInto, toMerge *openapi3.Schema) (*schemaMergeDiff, error) {
+	diff := schemaMergeDiff{
+		AOnly: make([]string, 0),
+		BOnly: make([]string, 0),
+	}
+	if mergeInto.Type == nil {
+		mergeInto.Type = toMerge.Type
+	} else {
+		for _, typ := range toMerge.Type.Slice() {
+			if len(*mergeInto.Type) == 0 || !mergeInto.Type.Permits(typ) {
+				newTypes := append(*mergeInto.Type, typ)
+				mergeInto.Type = &newTypes
+			}
+		}
+	}
+
+	if len(toMerge.Extensions) > 0 && mergeInto.Extensions == nil {
+		mergeInto.Extensions = make(map[string]interface{})
+	}
+	for key, val := range toMerge.Extensions {
+		if present, ok := mergeInto.Extensions[key]; ok && present != val {
+			return nil, fmt.Errorf("extension mismatch for key %s with value %s (existing value %s)", key, val, present)
+		}
+		mergeInto.Extensions[key] = val
+	}
+
+	if len(toMerge.Properties) > 0 && mergeInto.Properties == nil {
+		mergeInto.Properties = make(map[string]*openapi3.SchemaRef)
+	}
+	for key := range toMerge.Properties {
+		val := toMerge.Properties[key]
+		present, exists := mergeInto.Properties[key]
+		if !exists {
+			mergeInto.Properties[key] = val
+			continue
+		}
+
+		// If equal types, attempt a merge
+		if slices.Equal(*present.Value.Type, *val.Value.Type) {
+			_, err := mergeSchemas(present.Value, val.Value)
+			if err != nil {
+				return nil, fmt.Errorf("failed to merge properties key %s: %w", key, err)
+			}
+			mergeInto.Properties[key] = present
+			// TODO: handle diff
+			continue
+		}
+
+		// Otherwise, error (though this can probably be merged in some cases?)
+		return nil, fmt.Errorf("property %s already defined", key)
+	}
+
+	if toMerge.Items != nil {
+		// TODO
+	}
+
+	return &diff, nil
 }
 
 // getRefName extracts the schema name from a $ref string
