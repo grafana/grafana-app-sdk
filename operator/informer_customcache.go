@@ -290,7 +290,7 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				attribute.String("kind.version", sch.Version()),
 				attribute.String("namespace", filterOptions.Namespace),
 			)
-			opts := resource.WatchOptions{
+			watchOpts := resource.WatchOptions{
 				ResourceVersion:      options.ResourceVersion,
 				ResourceVersionMatch: string(options.ResourceVersionMatch),
 				LabelFilters:         filterOptions.LabelFilters,
@@ -298,8 +298,11 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				AllowWatchBookmarks:  options.AllowWatchBookmarks,
 				TimeoutSeconds:       options.TimeoutSeconds,
 				SendInitialEvents:    options.SendInitialEvents,
+				DecoderWorkers:       filterOptions.DecoderWorkers,
+				EventBufferSize:      filterOptions.EventBufferSize,
+				WorkerBufferSize:     filterOptions.WorkerBufferSize,
 			}
-			watchResp, err := client.Watch(ctx, filterOptions.Namespace, opts)
+			watchResp, err := client.Watch(ctx, filterOptions.Namespace, watchOpts)
 			if err != nil {
 				return nil, err
 			}

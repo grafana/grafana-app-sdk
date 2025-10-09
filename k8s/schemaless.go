@@ -39,8 +39,9 @@ type SchemalessClient struct {
 	mutex sync.Mutex
 
 	// prometheus collectors for the client
-	requestDurations *prometheus.HistogramVec
-	totalRequests    *prometheus.CounterVec
+	requestDurations  *prometheus.HistogramVec
+	totalRequests     *prometheus.CounterVec
+	totalWatchObjects *prometheus.CounterVec
 }
 
 // NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
@@ -72,6 +73,12 @@ func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientCon
 			Namespace: clientConfig.MetricsConfig.Namespace,
 			Help:      "Total number of kubernetes requests",
 		}, []string{"status_code", "verb", "kind", "subresource"}),
+		totalWatchObjects: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "watch_objects_decoded_total",
+			Subsystem: "kubernetes_client",
+			Namespace: clientConfig.MetricsConfig.Namespace,
+			Help:      "Total number of watch event objects decoded",
+		}, []string{"kind", "event_type", "concurrent", "status"}),
 	}
 }
 
@@ -224,7 +231,7 @@ func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullId
 // PrometheusCollectors returns the prometheus metric collectors used by this client to allow for registration
 func (s *SchemalessClient) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{
-		s.totalRequests, s.requestDurations,
+		s.totalRequests, s.requestDurations, s.totalWatchObjects,
 	}
 }
 
@@ -246,11 +253,12 @@ func (s *SchemalessClient) getClient(identifier resource.FullIdentifier) (*group
 		return nil, err
 	}
 	s.clients[gv.Identifier()] = &groupVersionClient{
-		client:           client,
-		version:          identifier.Version,
-		config:           s.clientConfig,
-		requestDurations: s.requestDurations,
-		totalRequests:    s.totalRequests,
+		client:            client,
+		version:           identifier.Version,
+		config:            s.clientConfig,
+		requestDurations:  s.requestDurations,
+		totalRequests:     s.totalRequests,
+		totalWatchObjects: s.totalWatchObjects,
 	}
 	return s.clients[gv.Identifier()], nil
 }
