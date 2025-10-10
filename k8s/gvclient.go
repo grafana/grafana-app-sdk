@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/fnv"
 	"net/http"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
@@ -28,17 +30,21 @@ const (
 
 	// AnnotationPrefix is the prefix used in annotations which contain grafana kind metadata
 	AnnotationPrefix = "grafana.com/"
+
+	parseStatusSuccess = "success"
+	parseStatusError   = "error"
 )
 
 // groupVersionClient is the underlying client both Client and SchemalessClient use.
 // GroupVersion is the unit with which kubernetes rest.Interface clients exist, so at minimum,
 // we require one rest.Interface for each unique GroupVersion.
 type groupVersionClient struct {
-	client           rest.Interface
-	version          string
-	config           ClientConfig
-	requestDurations *prometheus.HistogramVec
-	totalRequests    *prometheus.CounterVec
+	client            rest.Interface
+	version           string
+	config            ClientConfig
+	requestDurations  *prometheus.HistogramVec
+	totalRequests     *prometheus.CounterVec
+	totalWatchObjects *prometheus.CounterVec
 }
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
@@ -546,12 +552,20 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 	if channelBufferSize <= 0 {
 		channelBufferSize = 1
 	}
+	workerBufferSize := options.WorkerBufferSize
+	if workerBufferSize <= 0 {
+		workerBufferSize = 10
+	}
 	w := &WatchResponse{
-		ex:     exampleObject,
-		codec:  codec,
-		watch:  resp,
-		ch:     make(chan resource.WatchEvent, channelBufferSize),
-		stopCh: make(chan struct{}),
+		ex:                exampleObject,
+		codec:             codec,
+		watch:             resp,
+		ch:                make(chan resource.WatchEvent, channelBufferSize),
+		stopCh:            make(chan struct{}),
+		parserWorkers:     options.ParserWorkers,
+		workerBufferSize:  workerBufferSize,
+		plural:            plural,
+		totalWatchObjects: g.totalWatchObjects,
 	}
 	return w, nil
 }
@@ -574,24 +588,35 @@ func (g *groupVersionClient) logRequestDuration(dur time.Duration, statusCode in
 
 func (g *groupVersionClient) metrics() []prometheus.Collector {
 	return []prometheus.Collector{
-		g.totalRequests, g.requestDurations,
+		g.totalRequests, g.requestDurations, g.totalWatchObjects,
 	}
 }
 
 // WatchResponse wraps a kubernetes watch.Interface in order to implement resource.WatchResponse.
 // The underlying watch.Interface can be accessed with KubernetesWatch().
 type WatchResponse struct {
-	watch    watch.Interface
-	ch       chan resource.WatchEvent
-	stopCh   chan struct{}
-	ex       resource.Object
-	codec    resource.Codec
-	started  bool
-	startMux sync.Mutex
+	watch             watch.Interface
+	ch                chan resource.WatchEvent
+	stopCh            chan struct{}
+	ex                resource.Object
+	codec             resource.Codec
+	started           bool
+	startMux          sync.Mutex
+	parserWorkers     int
+	workerBufferSize  int
+	plural            string
+	totalWatchObjects *prometheus.CounterVec
 }
 
 //nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
+	// Use concurrent parsing if configured
+	if w.parserWorkers > 1 {
+		w.startConcurrent()
+		return
+	}
+
+	// Default synchronous parsing
 	for {
 		select {
 		case evt := <-w.watch.ResultChan():
@@ -601,35 +626,186 @@ func (w *WatchResponse) start() {
 				}
 				break
 			}
-			var obj resource.Object
-			if cast, ok := evt.Object.(resource.Object); ok {
-				obj = cast
-			} else if cast, ok := evt.Object.(intoObject); ok {
-				obj = w.ex.Copy()
-				err := cast.Into(obj, w.codec)
-				if err != nil {
-					// TODO: hmm
-					break
+			obj := w.eventToObject(evt)
+			if obj != nil {
+				w.ch <- resource.WatchEvent{
+					EventType: string(evt.Type),
+					Object:    obj,
 				}
-			} else if cast, ok := evt.Object.(wrappedObject); ok {
-				obj = cast.ResourceObject()
-			} else {
-				// TODO: hmm
-				if logging.DefaultLogger != nil {
-					logging.DefaultLogger.Error(
-						"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
-						"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
-				}
-			}
-			w.ch <- resource.WatchEvent{
-				EventType: string(evt.Type),
-				Object:    obj,
 			}
 		case <-w.stopCh:
-			close(w.stopCh)
 			return
 		}
 	}
+}
+
+// eventToObject converts a watch event object into a resource.Object
+func (w *WatchResponse) eventToObject(evt watch.Event) resource.Object {
+	if evt.Object == nil {
+		return nil
+	}
+
+	var obj resource.Object
+	var parseStatus string
+
+	defer func() {
+		// Record metrics if available
+		if w.totalWatchObjects != nil {
+			concurrent := "false"
+			if w.parserWorkers > 1 {
+				concurrent = "true"
+			}
+			w.totalWatchObjects.WithLabelValues(w.plural, string(evt.Type), concurrent, parseStatus).Inc()
+		}
+	}()
+
+	if cast, ok := evt.Object.(resource.Object); ok {
+		obj = cast
+		parseStatus = parseStatusSuccess
+	} else if cast, ok := evt.Object.(intoObject); ok {
+		obj = w.ex.Copy()
+		err := cast.Into(obj, w.codec)
+		if err != nil {
+			// TODO: hmm
+			if logging.DefaultLogger != nil {
+				logging.DefaultLogger.Error("Failed to parse watch event object", "error", err)
+			}
+			parseStatus = parseStatusError
+			return nil
+		}
+		parseStatus = parseStatusSuccess
+	} else if cast, ok := evt.Object.(wrappedObject); ok {
+		obj = cast.ResourceObject()
+		parseStatus = parseStatusSuccess
+	} else {
+		// TODO: hmm
+		if logging.DefaultLogger != nil {
+			logging.DefaultLogger.Error(
+				"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
+				"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
+		}
+		parseStatus = parseStatusError
+		return nil
+	}
+	return obj
+}
+
+// rawWatchEvent is an internal type for passing unparsed watch events to parser workers
+type rawWatchEvent struct {
+	eventType watch.EventType
+	object    runtime.Object
+}
+
+// startConcurrent implements concurrent parsing using worker pools.
+// This maintains per-object ordering (events for the same object are processed in order)
+// but does NOT guarantee global ordering across different objects.
+func (w *WatchResponse) startConcurrent() {
+	numWorkers := w.parserWorkers
+
+	// Create channels for distributing work to parser workers
+	// Use buffered channels to allow some queueing per worker
+	workerChannels := make([]chan rawWatchEvent, numWorkers)
+	for i := range numWorkers {
+		workerChannels[i] = make(chan rawWatchEvent, w.workerBufferSize)
+	}
+
+	// WaitGroup to track worker lifecycle
+	var wg sync.WaitGroup
+
+	// Start parser workers - each worker parses and sends directly to output
+	for i := range numWorkers {
+		wg.Add(1)
+		go func(inputCh <-chan rawWatchEvent) {
+			defer wg.Done()
+			for raw := range inputCh {
+				// Parse the event
+				evt := watch.Event{
+					Type:   raw.eventType,
+					Object: raw.object,
+				}
+				obj := w.eventToObject(evt)
+				if obj != nil {
+					// Use select to avoid blocking if stop is called
+					select {
+					case w.ch <- resource.WatchEvent{
+						EventType: string(raw.eventType),
+						Object:    obj,
+					}:
+					case <-w.stopCh:
+						return
+					}
+				}
+			}
+		}(workerChannels[i])
+	}
+
+	// Goroutine to read from the kubernetes watch and distribute to workers
+	go func() {
+		defer func() {
+			// Close all worker input channels when done
+			for _, ch := range workerChannels {
+				close(ch)
+			}
+			// Wait for all workers to finish processing
+			wg.Wait()
+		}()
+
+		for {
+			select {
+			case <-w.stopCh:
+				return
+			case evt, ok := <-w.watch.ResultChan():
+				if !ok {
+					return
+				}
+				if evt.Object == nil {
+					if logging.DefaultLogger != nil {
+						logging.DefaultLogger.Warn("Received nil object in watch event")
+					}
+					continue
+				}
+
+				// Distribute to workers based on object hash to maintain per-object ordering
+				workerIdx := hashObjectToWorker(evt.Object, numWorkers)
+
+				// Use select to avoid blocking if stop is called
+				select {
+				case workerChannels[workerIdx] <- rawWatchEvent{
+					eventType: evt.Type,
+					object:    evt.Object,
+				}:
+				case <-w.stopCh:
+					return
+				}
+			}
+		}
+	}()
+}
+
+// hashObjectToWorker computes which worker should handle this object
+// Objects with the same namespace/name always go to the same worker
+func hashObjectToWorker(obj runtime.Object, numWorkers int) int {
+	// Try to get namespace and name from the object
+	var key string
+
+	if robj, ok := obj.(resource.Object); ok {
+		key = robj.GetNamespace() + "/" + robj.GetName()
+	} else if meta, ok := obj.(interface {
+		GetNamespace() string
+		GetName() string
+	}); ok {
+		key = meta.GetNamespace() + "/" + meta.GetName()
+	} else {
+		// Fallback: convert to string
+		key = fmt.Sprintf("%v", obj)
+	}
+
+	h := fnv.New64a()
+	h.Write([]byte(key))
+	hash := h.Sum64()
+
+	// Ensure safe conversion: modulo guarantees result < numWorkers, which fits in int
+	return int(hash % uint64(numWorkers)) // #nosec G115
 }
 
 // Stop stops the translation channel between the kubernetes watch.Interface,

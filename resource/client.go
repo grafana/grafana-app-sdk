@@ -147,6 +147,18 @@ type WatchOptions struct {
 	TimeoutSeconds      *int64
 	// SendInitialEvents is used by streaming ListWatch
 	SendInitialEvents *bool
+	// ParserWorkers is the number of concurrent workers to use for parsing watch events.
+	// This is useful when the API server streams objects faster than they can be parsed (e.g., with WatchList).
+	// A value of 0 or 1 will use synchronous parsing (default behavior).
+	// Values > 1 will spawn that many workers to parse events concurrently.
+	// When using concurrent parsing, events are distributed to workers using a hash of the object's
+	// namespace and name to ensure per-object ordering is maintained.
+	ParserWorkers int
+	// WorkerBufferSize determines the buffer size for each parser worker's input channel.
+	// This controls how many events can be queued per worker before the distributor blocks.
+	// Only positive values are accepted, 0 or negative values will use the default of 10.
+	// Larger values allow more buffering but increase memory usage.
+	WorkerBufferSize int
 }
 
 // WatchResponse is an interface describing the response to a Client.Watch call
