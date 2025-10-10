@@ -357,7 +357,8 @@
                                                         "reason": {
                                                             "type": "string"
                                                         }
-                                                    }
+                                                    },
+                                                    "additionalProperties": false
                                                 }
                                             }
                                         },
@@ -385,7 +386,8 @@
                                                                     "failure"
                                                                 ]
                                                             }
-                                                        }
+                                                        },
+                                                        "additionalProperties": false
                                                     }
                                                 }
                                             }
@@ -455,7 +457,8 @@
                                                                         "score": {
                                                                             "type": "number"
                                                                         }
-                                                                    }
+                                                                    },
+                                                                    "additionalProperties": false
                                                                 }
                                                             },
                                                             "kind": {
@@ -465,7 +468,8 @@
                                                             "total": {
                                                                 "type": "integer"
                                                             }
-                                                        }
+                                                        },
+                                                        "additionalProperties": false
                                                     }
                                                 }
                                             }

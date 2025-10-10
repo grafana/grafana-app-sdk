@@ -40,6 +40,8 @@ type AppManifestManifestVersionKind struct {
 	// It must contain a key named the same as the `kind` field of the Kind.
 	// Other fields may be present to be referenced by $ref tags in a schema,
 	// and references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.
+	// If route responses in the `routes` section reference a definition in '#/components/schemas',
+	// that schema definition must exist in this section.
 	Schemas                  map[string]interface{}                `json:"schemas"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
@@ -145,6 +147,10 @@ type AppManifestManifestVersionRoutes struct {
 	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
 	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
 	Cluster map[string]interface{} `json:"cluster,omitempty"`
+	// Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.
+	// If route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',
+	// that schema definition must exist in this section.
+	Schemas map[string]interface{} `json:"schemas,omitempty"`
 }
 
 // NewAppManifestManifestVersionRoutes creates a new AppManifestManifestVersionRoutes object.
