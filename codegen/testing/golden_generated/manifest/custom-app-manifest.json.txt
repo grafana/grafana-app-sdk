@@ -214,7 +214,7 @@
                                         "type": "string"
                                     },
                                     "union": {
-                                        "anyOf": [
+                                        "oneOf": [
                                             {
                                                 "properties": {
                                                     "group": {
