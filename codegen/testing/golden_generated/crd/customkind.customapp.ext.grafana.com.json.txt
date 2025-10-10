@@ -215,8 +215,17 @@
                                         "type": "string"
                                     },
                                     "union": {
-                                        "anyOf": [
+                                        "oneOf": [
                                             {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "details"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
                                                 "required": [
                                                     "group"
                                                 ]

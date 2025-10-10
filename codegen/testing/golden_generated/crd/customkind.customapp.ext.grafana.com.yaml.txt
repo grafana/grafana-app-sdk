@@ -162,8 +162,12 @@ spec:
                 format: date-time
                 type: string
               union:
-                anyOf:
-                - required:
+                oneOf:
+                - not:
+                    anyOf:
+                    - required:
+                      - details
+                  required:
                   - group
                 - required:
                   - group
