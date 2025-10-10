@@ -90,8 +90,8 @@ github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 h1:JeSE6pjso5T
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674/go.mod h1:r4w70xmWCQKmi1ONH4KIaBptdivuRPyosB9RmPlGEwA=
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d h1:hrXbGJ5jgp6yNITzs5o+zXq0V5yT3siNJ+uM8LGwWKk=
 github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d/go.mod h1:zmwwM/DRyQB7pfuBjTWII3CWtxcXh8LTwAYGfDfpR6s=
-github.com/grafana/cog v0.0.41 h1:wszX7YmFkohvLgDy7VDU2XDFNghTdKFvz54zhq9Z+zU=
-github.com/grafana/cog v0.0.41/go.mod h1:TDunc7TYF7EfzjwFOlC5AkMe3To/U2KqyyG3QVvrF38=
+github.com/grafana/cog v0.0.43 h1:6EDzJVc8hbP3+AjPnRnAK6mKfyWgqLKbi/jmiStilFk=
+github.com/grafana/cog v0.0.43/go.mod h1:TDunc7TYF7EfzjwFOlC5AkMe3To/U2KqyyG3QVvrF38=
 github.com/grafana/grafana-app-sdk/logging v0.46.0 h1:JhQ+ZK5orcmM+dZ3YZdT9uCizJEFU2I6JBNUSFWvCC8=
 github.com/grafana/grafana-app-sdk/logging v0.46.0/go.mod h1:Gh/nBWnspK3oDNWtiM5qUF/fardHzOIEez+SPI3JeHA=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 h1:QGLs/O40yoNK9vmy4rhUGBVyMf1lISBGtXRpsu/Qu/o=
@@ -324,8 +324,8 @@ google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5 h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20250825161204-c5933d9347a5/go.mod h1:j3QtIyytwqGr1JUDtYXwtMXWPKsEa5LtzIFN1Wn5WvE=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250825161204-c5933d9347a5 h1:eaY8u2EuxbRv7c3NiGK0/NedzVsCcV6hDuU5qPX5EGE=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20250825161204-c5933d9347a5/go.mod h1:M4/wBTSeyLxupu3W3tJtOgB14jILAS/XWPSSa3TAlJc=
-google.golang.org/grpc v1.75.1 h1:/ODCNEuf9VghjgO3rqLcfg8fiOP0nSluljWFlDxELLI=
-google.golang.org/grpc v1.75.1/go.mod h1:JtPAzKiq4v1xcAB2hydNlWI2RnF85XXcV0mhKXr2ecQ=
+google.golang.org/grpc v1.76.0 h1:UnVkv1+uMLYXoIz6o7chp59WfQUYA2ex/BXQ9rHZu7A=
+google.golang.org/grpc v1.76.0/go.mod h1:Ju12QI8M6iQJtbcsV+awF5a4hfJMLi4X0JLo94ULZ6c=
 google.golang.org/protobuf v1.36.8 h1:xHScyCOEuuwZEc6UtSOvPbAT4zRh0xcNRYekJwfqyMc=
 google.golang.org/protobuf v1.36.8/go.mod h1:fuxRtAxBytpl4zzqUh6/eyUujkJdNiuEkXntxiD/uRU=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

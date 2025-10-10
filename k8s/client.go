@@ -69,8 +69,8 @@ func DefaultClientConfig() ClientConfig {
 // For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
 func (c *Client) List(ctx context.Context, namespace string, options resource.ListOptions) (
 	resource.ListObject, error) {
-	into := resource.UntypedList{}
-	err := c.client.list(ctx, namespace, c.schema.Plural(), &into, options, func(raw []byte) (resource.Object, error) {
+	into := c.schema.ZeroListValue()
+	err := c.client.list(ctx, namespace, c.schema.Plural(), into, options, func(raw []byte) (resource.Object, error) {
 		into := c.schema.ZeroValue()
 		err := c.codec.Read(bytes.NewReader(raw), into)
 		return into, err
@@ -78,7 +78,7 @@ func (c *Client) List(ctx context.Context, namespace string, options resource.Li
 	if err != nil {
 		return nil, err
 	}
-	return &into, err
+	return into, err
 }
 
 // ListInto lists resources in the provided namespace, and unmarshals the response into the provided resource.ListObject
