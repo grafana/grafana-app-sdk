@@ -169,7 +169,9 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 			c.schema.GroupVersionKind().String(),
 			c.opts.CacheResyncInterval,
 			c,
-			c.store, nil)
+			c.store,
+			nil,
+			c.opts.UseWatchList)
 		c.started = true
 	}()
 
@@ -425,6 +427,7 @@ func newInformer(
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
 	transformer cache.TransformFunc,
+	useWatchList *bool,
 ) cache.Controller {
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
@@ -450,7 +453,9 @@ func newInformer(
 		},
 	}
 
-	return customcache.NewController(cfg)
+	controller := customcache.NewController(cfg)
+	controller.UseWatchList = useWatchList
+	return controller
 }
 
 // processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,

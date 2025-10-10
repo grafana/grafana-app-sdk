@@ -39,6 +39,9 @@ type Controller struct {
 	clock          clock.Clock
 	reflector      *Reflector
 	reflectorMutex sync.RWMutex
+	// UseWatchList if turned on instructs the reflector to open a stream to bring data from the API server.
+	// If nil, defaults to the feature gate WatchListClient from client-go.
+	UseWatchList *bool
 }
 
 // NewController makes a new Controller from the given Config.
@@ -73,6 +76,7 @@ func (c *Controller) RunWithContext(ctx context.Context) {
 			MinWatchTimeout: c.config.MinWatchTimeout,
 			TypeDescription: c.config.ObjectDescription,
 			Clock:           c.clock,
+			UseWatchList:    c.UseWatchList,
 		},
 	)
 	r.ShouldResync = c.config.ShouldResync

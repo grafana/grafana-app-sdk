@@ -155,6 +155,17 @@ type ReflectorOptions struct {
 
 	// Clock allows tests to control time. If unset defaults to clock.RealClock{}
 	Clock clock.Clock
+
+	// UseWatchList if turned on instructs the reflector to open a stream to bring data from the API server.
+	// Streaming has the primary advantage of using fewer server's resources to fetch data.
+	//
+	// The old behaviour establishes a LIST request which gets data in chunks.
+	// Paginated list is less efficient and depending on the actual size of objects
+	// might result in an increased memory consumption of the APIServer.
+	//
+	// If nil, defaults to the feature gate WatchListClient from client-go.
+	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/3157-watch-list#design-details
+	UseWatchList *bool
 }
 
 // NewReflectorWithOptions creates a new Reflector object which will keep the
@@ -208,9 +219,12 @@ func NewReflectorWithOptions(
 		r.expectedGVK = getExpectedGVKFromObject(expectedType)
 	}
 
-	// don't overwrite UseWatchList if already set
-	// because the higher layers (e.g. storage/cacher) disabled it on purpose
-	if r.UseWatchList == nil {
+	// Use the provided UseWatchList option if set, otherwise default to feature gate
+	if options.UseWatchList != nil {
+		r.UseWatchList = options.UseWatchList
+	} else if r.UseWatchList == nil {
+		// don't overwrite UseWatchList if already set
+		// because the higher layers (e.g. storage/cacher) disabled it on purpose
 		r.UseWatchList = ptr.To(clientfeatures.FeatureGates().Enabled(clientfeatures.WatchListClient))
 	}
 

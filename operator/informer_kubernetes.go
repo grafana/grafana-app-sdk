@@ -56,6 +56,16 @@ type InformerOptions struct {
 	// rather than waiting for the informer to finish with its initial list sync.
 	// You may want to set this to `true` if you have a particularly long initial sync period and don't want readiness checks failing.
 	HealthCheckIgnoreSync bool
+	// UseWatchList if turned on instructs the reflector to open a stream to bring data from the API server.
+	// Streaming has the primary advantage of using fewer server's resources to fetch data.
+	//
+	// The old behavior establishes a LIST request which gets data in chunks.
+	// Paginated list is less efficient and depending on the actual size of objects
+	// might result in an increased memory consumption of the APIServer.
+	//
+	// If nil, defaults to the feature gate WatchListClient from client-go.
+	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/3157-watch-list#design-details
+	UseWatchList *bool
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
