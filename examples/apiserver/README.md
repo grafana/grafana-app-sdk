@@ -66,6 +66,11 @@ Attempt to create a TestKind named "notallowed" (forbidden by validation):
 curl -k -X POST -H "content-type: application/json" -d '{"apiVersion":"example.ext.grafana.com/v1alpha1","kind":"TestKind","metadata":{"name":"notallowed","namespace":"default"},"spec":{"testField":"foo"}}' https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds
 ```
 
+Select by the selectableField `.spec.testField`:
+```shell
+curl -k "https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds?fieldSelector=spec.testField=foo"
+```
+
 Delete `foo`:
 ```shell
 curl -k -X DELETE https://127.0.0.1:6443/apis/example.ext.grafana.com/v1alpha1/namespaces/default/testkinds/foo
