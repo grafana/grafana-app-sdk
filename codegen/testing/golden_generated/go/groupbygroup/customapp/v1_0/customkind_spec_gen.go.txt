@@ -95,6 +95,7 @@ func NewCustomKindSpec() *CustomKindSpec {
 	return &CustomKindSpec{
 		Inner:      *NewCustomKindInnerObject1(),
 		Map:        map[string]CustomKindType2{},
+		Enum:       CustomKindSpecEnumDefault,
 		BoolField:  false,
 		LinkedList: *NewCustomKindRecursiveList(),
 	}
