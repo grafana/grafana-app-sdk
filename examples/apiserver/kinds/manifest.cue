@@ -84,7 +84,13 @@ v1alpha1: {
     		"GET": {
     			name: "getClusterFoobar"
     			response: {
+    				#Extra: {
+    					foo: string
+    				}
     				bar: string
+    				extra: {
+    					[string]: #Extra
+    				}
     			}
     		}
     	}

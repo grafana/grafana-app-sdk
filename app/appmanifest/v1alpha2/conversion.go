@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 )
@@ -124,7 +125,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &version.Routes.Namespaced)
+				err = json.Unmarshal(marshaled, &v.Routes.Namespaced)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
@@ -135,7 +136,18 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &version.Routes.Cluster)
+				err = json.Unmarshal(marshaled, &v.Routes.Cluster)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+			}
+			if len(version.Routes.Schemas) > 0 {
+				v.Routes.Schemas = make(map[string]spec.Schema)
+				marshaled, err := json.Marshal(version.Routes.Schemas)
+				if err != nil {
+					return app.ManifestData{}, err
+				}
+				err = json.Unmarshal(marshaled, &v.Routes.Schemas)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
@@ -193,13 +205,13 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 // to this specific version of the AppManifestSpec (v1alpha1).
 // nolint:gocognit,funlen
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
-	spec := AppManifestSpec{
+	manifestSpec := AppManifestSpec{
 		AppName:  data.AppName,
 		Group:    data.Group,
 		Versions: make([]AppManifestManifestVersion, 0),
 	}
 	if data.PreferredVersion != "" {
-		spec.PreferredVersion = &data.PreferredVersion
+		manifestSpec.PreferredVersion = &data.PreferredVersion
 	}
 	// Versions
 	for _, version := range data.Versions {
@@ -277,12 +289,18 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					ver.Routes.Cluster[path] = version.Routes.Cluster[path]
 				}
 			}
+			if len(version.Routes.Schemas) > 0 {
+				ver.Routes.Schemas = make(map[string]any)
+				for path := range version.Routes.Schemas {
+					ver.Routes.Schemas[path] = version.Routes.Schemas[path]
+				}
+			}
 		}
-		spec.Versions = append(spec.Versions, ver)
+		manifestSpec.Versions = append(manifestSpec.Versions, ver)
 	}
 	// Permissions
 	if data.ExtraPermissions != nil && data.ExtraPermissions.AccessKinds != nil {
-		spec.ExtraPermissions = &AppManifestV1alpha2SpecExtraPermissions{
+		manifestSpec.ExtraPermissions = &AppManifestV1alpha2SpecExtraPermissions{
 			AccessKinds: make([]AppManifestKindPermission, len(data.ExtraPermissions.AccessKinds)),
 		}
 		for idx, access := range data.ExtraPermissions.AccessKinds {
@@ -294,21 +312,21 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			for aidx, action := range access.Actions {
 				perm.Actions[aidx] = string(action)
 			}
-			spec.ExtraPermissions.AccessKinds[idx] = perm
+			manifestSpec.ExtraPermissions.AccessKinds[idx] = perm
 		}
 	}
 	// Operator Info
 	if data.Operator != nil {
-		spec.Operator = &AppManifestOperatorInfo{
+		manifestSpec.Operator = &AppManifestOperatorInfo{
 			Url: &data.Operator.URL,
 		}
 		if data.Operator.Webhooks != nil {
-			spec.Operator.Webhooks = &AppManifestOperatorWebhookProperties{
+			manifestSpec.Operator.Webhooks = &AppManifestOperatorWebhookProperties{
 				ConversionPath: &data.Operator.Webhooks.ConversionPath,
 				ValidationPath: &data.Operator.Webhooks.ValidationPath,
 				MutationPath:   &data.Operator.Webhooks.MutationPath,
 			}
 		}
 	}
-	return &spec, nil
+	return &manifestSpec, nil
 }

@@ -81,7 +81,7 @@ func NewApp(config app.Config) (app.App, error) {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "foo",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
-					logging.FromContext(ctx).Info("called TestKind subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					logging.FromContext(ctx).Info("called TestKind /foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
 					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{
 						TypeMeta: metav1.TypeMeta{
@@ -98,7 +98,7 @@ func NewApp(config app.Config) (app.App, error) {
 					Method: simple.AppCustomRouteMethodGet,
 					Path:   "bar",
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
-					logging.FromContext(ctx).Info("called TestKind subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					logging.FromContext(ctx).Info("called TestKind /bar subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
 					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{
 						TypeMeta: metav1.TypeMeta{
@@ -107,6 +107,28 @@ func NewApp(config app.Config) (app.App, error) {
 						},
 						GetMessageBody: v1alpha1.GetMessageBody{
 							Message: "Hello, world!",
+						},
+					})
+				},
+				{
+					Method: simple.AppCustomRouteMethodGet,
+					Path:   "recurse",
+				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
+					logging.FromContext(ctx).Info("called TestKind /recurse subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
+					writer.WriteHeader(http.StatusOK)
+					return json.NewEncoder(writer).Encode(v1alpha1.GetRecursiveResponse{
+						TypeMeta: metav1.TypeMeta{
+							Kind:       "TestKind.Message",
+							APIVersion: config.ManifestData.Group + "/v1alpha1",
+						},
+						GetRecursiveResponseBody: v1alpha1.GetRecursiveResponseBody{
+							Message: "Hello, world!",
+							Next: &v1alpha1.VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType{
+								Message: "Hello again!",
+								Next: &v1alpha1.VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType{
+									Message: "Hello once more!",
+								},
+							},
 						},
 					})
 				},

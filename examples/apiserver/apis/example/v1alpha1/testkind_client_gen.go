@@ -172,3 +172,24 @@ func (c *TestKindClient) GetFoo(ctx context.Context, identifier resource.Identif
 	}
 	return &cast, nil
 }
+
+type GetRecursiveResponseRequest struct {
+	Headers http.Header
+}
+
+func (c *TestKindClient) GetRecursiveResponse(ctx context.Context, identifier resource.Identifier, request GetRecursiveResponseRequest) (*GetRecursiveResponse, error) {
+	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
+		Path:    "/recurse",
+		Verb:    "GET",
+		Headers: request.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cast := GetRecursiveResponse{}
+	err = json.Unmarshal(resp, &cast)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response bytes into GetRecursiveResponse: %w", err)
+	}
+	return &cast, nil
+}

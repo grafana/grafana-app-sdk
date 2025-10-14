@@ -59,5 +59,18 @@ testKindv1alpha1: testKind & {
 				}
 			}
 		}
+		"/recurse": {
+			"GET": {
+				name: "getRecursiveResponse"
+				response: {
+					#RecursiveType: {
+						message: string
+						next?: #RecursiveType
+					}
+					message: string
+					next?: #RecursiveType
+				}
+			}
+		}
 	}
 }
