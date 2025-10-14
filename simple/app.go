@@ -111,12 +111,15 @@ type App struct {
 
 // AppConfig is the configuration used by App
 type AppConfig struct {
-	Name           string
-	KubeConfig     rest.Config
-	InformerConfig AppInformerConfig
-	ManagedKinds   []AppManagedKind
-	UnmanagedKinds []AppUnmanagedKind
-	Converters     map[schema.GroupKind]Converter
+	Name       string
+	KubeConfig rest.Config
+	// ClientGenerator is the ClientGenerator to use when constructing informers.
+	// It is optional and will default to k8s.NewClientRegistry(KubeConfig, k8s.DefaultClientConfig()) if not present.
+	ClientGenerator resource.ClientGenerator
+	InformerConfig  AppInformerConfig
+	ManagedKinds    []AppManagedKind
+	UnmanagedKinds  []AppUnmanagedKind
+	Converters      map[schema.GroupKind]Converter
 	// VersionedCustomRoutes is a map of version string => custom route handlers for
 	// custom routes attached at the version level rather than attached to a specific kind.
 	// Custom route paths for each version should not conflict with plural names of kinds for the version.
@@ -267,10 +270,14 @@ type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
+	clients := config.ClientGenerator
+	if clients == nil {
+		k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
+	}
 	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
 		runner:             app.NewMultiRunner(),
-		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
+		clientGenerator:    clients,
 		kinds:              make(map[string]AppManagedKind),
 		gvrToGVK:           make(map[string]string),
 		internalKinds:      make(map[string]resource.Kind),
