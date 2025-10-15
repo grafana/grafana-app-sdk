@@ -154,7 +154,7 @@ func (u *UntypedObject) SetStaticMetadata(metadata StaticMetadata) {
 }
 
 // GetCommonMetadata returns CommonMetadata for the object
-// nolint:revive,staticcheck
+// nolint:revive,staticcheck,dupl
 func (u *UntypedObject) GetCommonMetadata() CommonMetadata {
 	var err error
 	dt := u.DeletionTimestamp

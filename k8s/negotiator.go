@@ -152,6 +152,42 @@ func (*KindNegotiatedSerializer) DecoderToVersion(d runtime.Decoder, _ runtime.G
 	return d
 }
 
+// DeferredNegotiatedSerializer deserializes only the metadata of the resource, relying on a downstream processor to complete the unmarshaling.
+// It uses *resource.PartialObject and *resource.TypedList[*resource.PartialObject] for its decoding types.
+//
+// DeferredNegotiatedSerializer is _Experimental_ and may be removed in a future release
+type DeferredNegotiatedSerializer struct{}
+
+// SupportedMediaTypes returns the JSON supported media type with a GenericJSONDecoder and kubernetes JSON Framer.
+func (*DeferredNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
+	serializer := &CodecDecoder{
+		SampleObject: &resource.PartialObject{},
+		SampleList:   &resource.TypedList[*resource.PartialObject]{},
+		Codec:        resource.NewPassthroughJSONCodec(),
+		Decoder:      json.Unmarshal,
+	}
+
+	return []runtime.SerializerInfo{{
+		MediaType:  string(resource.KindEncodingJSON),
+		Serializer: serializer,
+		StreamSerializer: &runtime.StreamSerializerInfo{
+			Serializer: serializer,
+			Framer:     jsonserializer.Framer,
+		},
+	}}
+}
+
+// EncoderForVersion returns the `serializer` input
+func (*DeferredNegotiatedSerializer) EncoderForVersion(serializer runtime.Encoder,
+	_ runtime.GroupVersioner) runtime.Encoder {
+	return serializer
+}
+
+// DecoderToVersion returns a GenericJSONDecoder
+func (*DeferredNegotiatedSerializer) DecoderToVersion(d runtime.Decoder, _ runtime.GroupVersioner) runtime.Decoder {
+	return d
+}
+
 // CodecDecoder implements runtime.Serializer and works with Untyped* objects to implement runtime.Object
 type CodecDecoder struct {
 	SampleObject resource.Object
