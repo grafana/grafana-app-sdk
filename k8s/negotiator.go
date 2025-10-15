@@ -153,11 +153,13 @@ func (*KindNegotiatedSerializer) DecoderToVersion(d runtime.Decoder, _ runtime.G
 }
 
 // DeferredNegotiatedSerializer deserializes only the metadata of the resource, relying on a downstream processor to complete the unmarshaling.
-// It uses *resource.PartialObject and *resource.TypedList[*resource.PartialObject] for its decoding types
+// It uses *resource.PartialObject and *resource.TypedList[*resource.PartialObject] for its decoding types.
+//
+// DeferredNegotiatedSerializer is _Experimental_ and may be removed in a future release
 type DeferredNegotiatedSerializer struct{}
 
 // SupportedMediaTypes returns the JSON supported media type with a GenericJSONDecoder and kubernetes JSON Framer.
-func (k *DeferredNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
+func (*DeferredNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
 	serializer := &CodecDecoder{
 		SampleObject: &resource.PartialObject{},
 		SampleList:   &resource.TypedList[*resource.PartialObject]{},

@@ -16,19 +16,12 @@ var _ Object = &PartialObject{}
 // PartialObject implements resource.Object but only actually contains metadata information, and the raw payload that was used for unmarshaling.
 // This is useful in accelerating the unmarshal process that is done serially with a NegotiatedSerializer in kubernetes watch requests,
 // but does consume more memory as the entire original payload is embedded to avoid needing to copy or attempt to understand the non-metadata fields.
+//
+// PartialObject is _Experimental_ and may be removed in a future release
 type PartialObject struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata"`
 	Raw               []byte `json:"-"`
-}
-
-func NewPartialObject(raw []byte, decoder func([]byte, any) error) (*PartialObject, error) {
-	p := PartialObject{}
-	if err := decoder(raw, &p); err != nil {
-		return nil, err
-	}
-	p.Raw = raw
-	return &p, nil
 }
 
 type metadataOnlyObject struct {
@@ -55,23 +48,23 @@ func (p *PartialObject) DeepCopyObject() runtime.Object {
 	return p.Copy()
 }
 
-func (p *PartialObject) GetSpec() any {
+func (*PartialObject) GetSpec() any {
 	return nil
 }
 
-func (p *PartialObject) SetSpec(a any) error {
+func (*PartialObject) SetSpec(any) error {
 	return fmt.Errorf("spec cannot be set on a PartialObject")
 }
 
-func (p *PartialObject) GetSubresources() map[string]any {
+func (*PartialObject) GetSubresources() map[string]any {
 	return map[string]any{}
 }
 
-func (p *PartialObject) GetSubresource(s string) (any, bool) {
+func (*PartialObject) GetSubresource(string) (any, bool) {
 	return nil, false
 }
 
-func (p *PartialObject) SetSubresource(key string, val any) error {
+func (*PartialObject) SetSubresource(string, any) error {
 	return fmt.Errorf("subresource cannot be set on a PartialObject")
 }
 
@@ -95,6 +88,9 @@ func (p *PartialObject) SetStaticMetadata(metadata StaticMetadata) {
 	})
 }
 
+// GetCommonMetadata returns CommonMetadata for the object
+//
+//nolint:dupl
 func (p *PartialObject) GetCommonMetadata() CommonMetadata {
 	var err error
 	dt := p.DeletionTimestamp
@@ -109,7 +105,7 @@ func (p *PartialObject) GetCommonMetadata() CommonMetadata {
 		strUpdt, ok := p.Annotations[AnnotationUpdateTimestamp]
 		if ok {
 			updt, err = time.Parse(time.RFC3339, strUpdt)
-			if err != nil {
+			if err != nil { //nolint:staticcheck,revive
 				// HMMMM
 			}
 		}
@@ -131,6 +127,9 @@ func (p *PartialObject) GetCommonMetadata() CommonMetadata {
 	}
 }
 
+// SetCommonMetadata sets CommonMetadata for the object
+//
+//nolint:dupl
 func (p *PartialObject) SetCommonMetadata(metadata CommonMetadata) {
 	p.UID = types.UID(metadata.UID)
 	p.ResourceVersion = metadata.ResourceVersion
