@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
-var ErrRunnerExitTimeout = fmt.Errorf("exit wait time exceeded waiting for Runners to complete")
+var ErrRunnerExitTimeout = errors.New("exit wait time exceeded waiting for Runners to complete")
 
 var RunnableCollectorDefaultErrorHandler = func(ctx context.Context, err error) bool {
 	logging.FromContext(ctx).Error("runner exited with error", "error", err)
@@ -284,7 +283,7 @@ func (d *DynamicMultiRunner) Run(ctx context.Context) error {
 	d.runMux.Lock()
 	if d.running {
 		d.runMux.Unlock()
-		return fmt.Errorf("already running")
+		return errors.New("already running")
 	}
 	d.running = true
 	d.errs = make(chan error)

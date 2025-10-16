@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -113,7 +114,7 @@ func (r *SubresourceConnector) Connect(ctx context.Context, id string, opts runt
 	// TODO: map instead?
 	info, ok := request.RequestInfoFrom(ctx)
 	if !ok {
-		return nil, fmt.Errorf("unable to retrieve request info from context")
+		return nil, errors.New("unable to retrieve request info from context")
 	}
 	identifier := resource.FullIdentifier{
 		Name:      info.Name,

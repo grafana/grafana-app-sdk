@@ -238,7 +238,7 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 		}
 		// find the type of the pointer, then copy that
 		typ := src.Type().Elem()
-		switch src.Type().Elem().Kind() {
+		switch src.Type().Elem().Kind() { //nolint:revive
 		case reflect.Struct:
 			if src.Elem().Type() == reflectTypeTime {
 				dst.Set(src)

@@ -67,7 +67,7 @@ func (*ResourceObjectGenerator) JennyName() string {
 func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	allVersions := kind.Versions()
-	for i := 0; i < len(allVersions); i++ {
+	for i := range len(allVersions) {
 		ver := allVersions[i]
 		b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
 		if err != nil {
@@ -135,7 +135,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 		return nil, err
 	}
 	for it.Next() {
-		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" { //nolint:goconst
 			continue
 		}
 		fieldName := exportField(it.Selector().String())
@@ -164,7 +164,7 @@ func goTypeFromCUEValue(value cue.Value) templates.CustomMetadataFieldGoType {
 	st := cueFmtState{}
 	value.Format(&st, 'v')
 	typeString := st.String()
-	if strings.Contains(typeString, "time.Time") {
+	if strings.Contains(typeString, "time.Time") { //nolint:revive
 		return templates.GoTypeTime
 	} else if strings.Contains(typeString, "int") {
 		return templates.GoTypeInt

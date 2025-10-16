@@ -2,7 +2,7 @@ package resource
 
 import (
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"time"
 
@@ -16,8 +16,7 @@ import (
 // This differs from JSONCodec in that it does not try to format the provided object into any particular shape.
 // It should be used for objects which do not adhere to having their contents in `spec`, as it does not force that shape
 // like JSONCodec does.
-type PassthroughJSONCodec struct {
-}
+type PassthroughJSONCodec struct{}
 
 // NewPassthroughJSONCodec returns a pointer to a new instance of PassthroughJSONCodec
 func NewPassthroughJSONCodec() *PassthroughJSONCodec {
@@ -207,7 +206,7 @@ func (*WrappedObject[T]) GetSpec() any {
 }
 
 func (*WrappedObject[T]) SetSpec(_ any) error {
-	return fmt.Errorf("no spec to set in wrapped object")
+	return errors.New("no spec to set in wrapped object")
 }
 
 func (*WrappedObject[T]) GetSubresources() map[string]any {
@@ -219,7 +218,7 @@ func (*WrappedObject[T]) GetSubresource(_ string) (any, bool) {
 }
 
 func (*WrappedObject[T]) SetSubresource(_ string, _ any) error {
-	return fmt.Errorf("cannot set subresource in wrapped object")
+	return errors.New("cannot set subresource in wrapped object")
 }
 
 func (o *WrappedObject[T]) GetStaticMetadata() StaticMetadata {

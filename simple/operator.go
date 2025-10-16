@@ -2,6 +2,7 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -34,7 +35,6 @@ type OperatorConfig struct {
 	// for sending finalizer add/remove patches to the latest version of the kind.
 	// This defaults to 10 minutes.
 	DiscoveryRefreshInterval time.Duration
-	HealthCheckInterval      time.Duration
 }
 
 // WebhookConfig is a configuration for exposed kubernetes webhooks for an Operator
@@ -83,11 +83,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 
 	if cfg.Port <= 0 {
 		cfg.Port = 9090
-		cfg.Metrics.MetricsServerConfig.Port = 9090
-	}
-
-	if cfg.Metrics.MetricsServerConfig.HealthCheckInterval <= 0 {
-		cfg.HealthCheckInterval = 1 * time.Minute
+		cfg.Metrics.Port = 9090
 	}
 
 	if cfg.Webhooks.Enabled {
@@ -318,7 +314,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 // using the provided ValidatingAdmissionController for the validation logic.
 func (o *Operator) ValidateKind(kind resource.Kind, controller resource.ValidatingAdmissionController) error {
 	if o.admission == nil {
-		return fmt.Errorf("webhooks are not enabled")
+		return errors.New("webhooks are not enabled")
 	}
 	o.admission.AddValidatingAdmissionController(controller, kind)
 	return nil
@@ -328,7 +324,7 @@ func (o *Operator) ValidateKind(kind resource.Kind, controller resource.Validati
 // using the provided MutatingAdmissionController for the mutation logic.
 func (o *Operator) MutateKind(kind resource.Kind, controller resource.MutatingAdmissionController) error {
 	if o.admission == nil {
-		return fmt.Errorf("webhooks are not enabled")
+		return errors.New("webhooks are not enabled")
 	}
 	o.admission.AddMutatingAdmissionController(controller, kind)
 	return nil
@@ -338,7 +334,7 @@ func (o *Operator) MutateKind(kind resource.Kind, controller resource.MutatingAd
 // using the provided k8s.Converter for the conversion logic.
 func (o *Operator) ConvertKind(gk metav1.GroupKind, converter k8s.Converter) error {
 	if o.admission == nil {
-		return fmt.Errorf("webhooks are not enabled")
+		return errors.New("webhooks are not enabled")
 	}
 	o.admission.AddConverter(converter, gk)
 	return nil

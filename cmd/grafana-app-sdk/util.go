@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -133,5 +134,5 @@ func getGoModule(goModPath string) (string, error) {
 		return mod.Module.Path, nil
 	}
 
-	return "", fmt.Errorf("unable to locate module in go.mod file")
+	return "", errors.New("unable to locate module in go.mod file")
 }

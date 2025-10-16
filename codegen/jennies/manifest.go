@@ -51,7 +51,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	if manifestData.Group == "" {
 		if len(manifestData.Versions) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
-			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
+			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
 		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
@@ -116,7 +116,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	if manifestData.Group == "" {
 		if len(manifestData.Versions) > 0 {
 			// API Resource kinds that have no group are not allowed, error at this point
-			return nil, fmt.Errorf("all APIResource kinds must have a non-empty group")
+			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
 		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
@@ -277,7 +277,7 @@ type simpleOpenAPIDoc[T any] struct {
 }
 
 //nolint:revive,funlen,unparam,gocognit
-func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) (app.ManifestVersionKind, error) {
 	mver := app.ManifestVersionKind{
 		Kind:       vk.Kind,
 		Plural:     vk.PluralName,
@@ -419,7 +419,7 @@ func sanitizeAdmissionOperations(operations []codegen.KindAdmissionCapabilityOpe
 			return nil, fmt.Errorf("invalid operation %q", op)
 		}
 		if translated == app.AdmissionOperationAny && len(operations) > 1 {
-			return nil, fmt.Errorf("cannot use any ('*') operation alongside named operations")
+			return nil, errors.New("cannot use any ('*') operation alongside named operations")
 		}
 		sanitized = append(sanitized, translated)
 	}
@@ -456,16 +456,12 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		for k, v := range additional {
-			additionalSchemas[k] = v
-		}
+		maps.Copy(additionalSchemas, additional)
 		targetResponses, additional, err := customRouteResponseToSpec3Responses(sourceRoute.Response, operationID)
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
-		for k, v := range additional {
-			additionalSchemas[k] = v
-		}
+		maps.Copy(additionalSchemas, additional)
 
 		targetOperation := &spec3.Operation{
 			OperationProps: spec3.OperationProps{
@@ -489,6 +485,8 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			targetPathProps.Delete = targetOperation
 		case "PATCH":
 			targetPathProps.Patch = targetOperation
+		default:
+			// Do nothing
 		}
 	}
 	return targetPathProps, additionalSchemas, nil
@@ -573,7 +571,7 @@ func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRoute
 		return nil, nil, fmt.Errorf("input CUE value for response has error: %w", err)
 	}
 	if !customRouteResponse.Metadata.TypeMeta && (customRouteResponse.Metadata.ListMeta || customRouteResponse.Metadata.ObjectMeta) {
-		return nil, nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
+		return nil, nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 
 	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(v, refPrefix)
