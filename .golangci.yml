@@ -51,6 +51,8 @@ linters:
       confidence: 0.8
       enable-all-rules: true
       rules:
+        # TODO: consider enabling these and figuring out the values and enabling these
+        # instead of using a bunch of other linters (e.g. gocognit, funlen, etc.)
         - name: cognitive-complexity
           disabled: true
         - name: argument-limit
@@ -69,12 +71,19 @@ linters:
           disabled: true
         - name: max-public-structs
           disabled: true
+        # TODO: this should be enabled, but we'll have to add package comments first.
+        # We should take care of that before 1.0.
         - name: package-comments
           disabled: true
+        # TODO: this is disabled because it complains about `inline` in JSON tags (albeit for a valid reason).
+        # See https://github.com/mgechev/revive/issues/520 for details.
         - name: struct-tag
           disabled: true
+        # TODO: this triggers a lot of false-positives, but might be useful in theory.
+        # Consider spending time on figuring the args.
         - name: add-constant
           disabled: true
+        # These linters are disabled "for good".
         - name: confusing-naming
           disabled: true
         - name: nested-structs
