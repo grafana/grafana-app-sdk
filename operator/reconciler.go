@@ -163,46 +163,6 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 	logger := logging.FromContext(ctx).With("action", ResourceActionFromReconcileAction(request.Action), "component", "OpinionatedReconciler", "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
 	logger.Debug("Reconcile request received")
 
-	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
-	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
-		logger.Debug("Object already has the correct finalizer, converting to a Resync event and propagating", "finalizer", o.finalizer)
-		request.Action = ReconcileActionResynced
-		return o.wrappedReconcile(ctx, request)
-	}
-	if request.Action == ReconcileActionCreated {
-		resp := ReconcileResult{}
-		if request.State == nil || request.State[opinionatedReconcilerPatchAddStateKey] == nil {
-			// Delegate
-			var err error
-			resp, err = o.wrappedReconcile(ctx, request)
-			if err != nil || resp.RequeueAfter != nil {
-				if resp.RequeueAfter != nil {
-					span.SetAttributes(attribute.String("reconcile.requeafter", resp.RequeueAfter.String()))
-				}
-				if err != nil {
-					span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
-				}
-				return resp, err
-			}
-		}
-
-		// Attach the finalizer on success
-		logger.Debug("Downstream reconcile succeeded, adding finalizer", "finalizer", o.finalizer)
-		patchErr := o.finalizerUpdater.AddFinalizer(ctx, request.Object, o.finalizer)
-		if patchErr != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
-			if resp.State == nil {
-				resp.State = make(map[string]any)
-			}
-			resp.State[opinionatedReconcilerPatchAddStateKey] = patchErr
-			var chk FinalizerError
-			if errors.As(patchErr, &chk) {
-				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
-			}
-			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
-		}
-		return resp, patchErr
-	}
 	// Ignore deleted actions, as we send them on updates where we need to remove our finalizer
 	// This needs to be checked before the "is deletionTimestamp non-nil and still has our finalizer",
 	// because after we remove the finalizer, a delete event comes through that still has the final finalizer to be removed from the list
@@ -210,6 +170,9 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 		logger.Debug("Not propagating delete event, as this is handled when deletionTimestamp is set to a non-nil value")
 		return ReconcileResult{}, nil
 	}
+	// Check if the object is deleted.
+	// If it's waiting on our finalizer, propagate as a DELETE event.
+	// If it's not, drop the event.
 	if request.Object.GetDeletionTimestamp() != nil && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		res := ReconcileResult{}
 		if request.State == nil || request.State[opinionatedReconcilerPatchRemoveStateKey] == nil {
@@ -249,6 +212,47 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 	if request.Object.GetDeletionTimestamp() != nil {
 		logger.Debug("Object has a deletionTimestamp but does not contain our finalizer, ignoring event as object delete has already been processed", "finalizer", o.finalizer, "deletionTimestamp", request.Object.GetDeletionTimestamp())
 		return ReconcileResult{}, nil
+	}
+
+	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
+	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
+		logger.Debug("Object already has the correct finalizer, converting to a Resync event and propagating", "finalizer", o.finalizer)
+		request.Action = ReconcileActionResynced
+		return o.wrappedReconcile(ctx, request)
+	}
+	if request.Action == ReconcileActionCreated {
+		resp := ReconcileResult{}
+		if request.State == nil || request.State[opinionatedReconcilerPatchAddStateKey] == nil {
+			// Delegate
+			var err error
+			resp, err = o.wrappedReconcile(ctx, request)
+			if err != nil || resp.RequeueAfter != nil {
+				if resp.RequeueAfter != nil {
+					span.SetAttributes(attribute.String("reconcile.requeafter", resp.RequeueAfter.String()))
+				}
+				if err != nil {
+					span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
+				}
+				return resp, err
+			}
+		}
+
+		// Attach the finalizer on success
+		logger.Debug("Downstream reconcile succeeded, adding finalizer", "finalizer", o.finalizer)
+		patchErr := o.finalizerUpdater.AddFinalizer(ctx, request.Object, o.finalizer)
+		if patchErr != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
+			if resp.State == nil {
+				resp.State = make(map[string]any)
+			}
+			resp.State[opinionatedReconcilerPatchAddStateKey] = patchErr
+			var chk FinalizerError
+			if errors.As(patchErr, &chk) {
+				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+			}
+			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
+		}
+		return resp, patchErr
 	}
 	if request.Action == ReconcileActionUpdated && !slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		// Add the finalizer, don't delegate, let the reconcile action for adding the finalizer propagate down to avoid confusing extra reconciliations
