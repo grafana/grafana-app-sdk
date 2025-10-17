@@ -61,6 +61,7 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 		if err != nil {
 			return err
 		}
+	default:
 	}
 
 	// Ensure default SDK resources and the required service name are set.

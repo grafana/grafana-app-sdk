@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -46,10 +47,10 @@ func newConcurrentWatcher(
 	watcher ResourceWatcher, initialPoolSize uint64, errorHandler func(context.Context, error),
 ) (*concurrentWatcher, error) {
 	if watcher == nil {
-		return nil, fmt.Errorf("resource watcher cannot be nil")
+		return nil, errors.New("resource watcher cannot be nil")
 	}
 	if initialPoolSize <= 0 {
-		return nil, fmt.Errorf("initial worker pool size needs to be greater than 0")
+		return nil, errors.New("initial worker pool size needs to be greater than 0")
 	}
 
 	cw := &concurrentWatcher{

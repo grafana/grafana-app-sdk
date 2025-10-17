@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -426,7 +427,7 @@ func (v *VersionSchema) fixRaw() error {
 	if components, ok := v.raw["components"]; ok {
 		cast, ok := components.(map[string]any)
 		if !ok {
-			return fmt.Errorf("'components' in an OpenAPI document must be an object")
+			return errors.New("'components' in an OpenAPI document must be an object")
 		}
 		s, ok := cast["schemas"]
 		if !ok {
@@ -435,7 +436,7 @@ func (v *VersionSchema) fixRaw() error {
 		}
 		schemas, ok := s.(map[string]any)
 		if !ok {
-			return fmt.Errorf("'components.schemas' in an OpenAPI document must be an object")
+			return errors.New("'components.schemas' in an OpenAPI document must be an object")
 		}
 		v.raw = schemas
 		return nil
@@ -450,20 +451,18 @@ func (v *VersionSchema) fixRaw() error {
 		// which can be corrected later if necessary.
 		oapi, ok := v.raw["openAPIV3Schema"].(map[string]any)
 		if !ok {
-			return fmt.Errorf("'openAPIV3Schema' must be an object")
+			return errors.New("'openAPIV3Schema' must be an object")
 		}
 		props, ok := oapi["properties"]
 		if !ok {
-			return fmt.Errorf("'openAPIV3Schema' must contain properties")
+			return errors.New("'openAPIV3Schema' must contain properties")
 		}
 		castProps, ok := props.(map[string]any)
 		if !ok {
-			return fmt.Errorf("'openAPIV3Schema' properties must be an object")
+			return errors.New("'openAPIV3Schema' properties must be an object")
 		}
 		m := make(map[string]any)
-		for key, value := range castProps {
-			m[key] = value
-		}
+		maps.Copy(m, castProps)
 		v.raw = map[string]any{
 			parsedCRDSchemaKindName: map[string]any{
 				"properties": m,
@@ -933,7 +932,7 @@ const extKubernetesPreserveUnknownFields = "x-kubernetes-preserve-unknown-fields
 // It returns the resolved schema and any error encountered.
 func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*openapi3.Schema, error) {
 	if components == nil || components.Schemas == nil {
-		return nil, fmt.Errorf("invalid components or schemas")
+		return nil, errors.New("invalid components or schemas")
 	}
 
 	sch := components.Schemas[schemaName]
@@ -992,9 +991,7 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 
 		// Create a new visited map for this branch to avoid false positives in parallel branches
 		branchVisited := make(map[string]bool)
-		for k, v := range visited {
-			branchVisited[k] = v
-		}
+		maps.Copy(branchVisited, visited)
 
 		// Resolve the referenced schema
 		resolved, err := resolveSchema(refSchema, components, branchVisited)

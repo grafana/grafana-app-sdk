@@ -122,10 +122,10 @@ func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 // set the `OpinionatedReconciler.Reconciler` value or use `OpinionatedReconciler.Wrap()`
 func NewOpinionatedReconciler(client PatchClient, finalizer string) (*OpinionatedReconciler, error) {
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 	if finalizer == "" {
-		return nil, fmt.Errorf("finalizer cannot be empty")
+		return nil, errors.New("finalizer cannot be empty")
 	}
 	if len(finalizer) > 63 {
 		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)

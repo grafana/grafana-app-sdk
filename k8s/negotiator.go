@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 
@@ -131,9 +132,10 @@ func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInf
 				Serializer: serializer,
 				Framer:     jsonserializer.Framer,
 			}
-		case resource.KindEncodingYAML:
+		default:
 			// TODO: YAML framer
-			//	framer = yamlserializer.Framer <- doesn't exist
+			// case resource.KindEncodingYAML:
+			// framer = yamlserializer.Framer <- doesn't exist
 		}
 		supported = append(supported, info)
 	}
@@ -263,7 +265,7 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 	if cast, ok := obj.(resource.Object); ok {
 		return c.Codec.Write(w, cast)
 	}
-	return fmt.Errorf("provided object is not a resource.Object")
+	return errors.New("provided object is not a resource.Object")
 }
 
 // Identifier returns "generic-json-decoder"

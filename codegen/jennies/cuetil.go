@@ -2,6 +2,7 @@ package jennies
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -98,7 +99,7 @@ func getASTFieldByLabel(n ast.Node, label string) (*ast.Field, error) {
 	case *ast.StructLit:
 		d = x.Elts
 	default:
-		return nil, fmt.Errorf("not an *ast.File or *ast.StructLit")
+		return nil, errors.New("not an *ast.File or *ast.StructLit")
 	}
 
 	for _, el := range d {

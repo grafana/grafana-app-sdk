@@ -24,7 +24,7 @@ func getManifestLatestVersion(manifestDir string) (string, error) {
 		ModuleRoot: manifestDir,
 	})
 	if len(inst) == 0 {
-		return "", fmt.Errorf("no data")
+		return "", errors.New("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
 	if root.Err() != nil {
@@ -62,7 +62,7 @@ func getManifestKindsForVersion(manifestDir, version string) ([]string, error) {
 		ModuleRoot: manifestDir,
 	})
 	if len(inst) == 0 {
-		return nil, fmt.Errorf("no data")
+		return nil, errors.New("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
 	if root.Err() != nil {
@@ -107,7 +107,7 @@ func addVersionedKindToManifestBytesCUE(manifestDir string, manifestFileName str
 		ModuleRoot: manifestDir,
 	})
 	if len(inst) == 0 {
-		return nil, fmt.Errorf("no data")
+		return nil, errors.New("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
 	if root.Err() != nil {
@@ -236,7 +236,7 @@ func addToFirstKindsSection(contents string, toAdd string) (string, error) {
 	expr := regexp.MustCompile(`(?m)^(\s*kinds\s*:)(.*)$`)
 	matches := expr.FindStringSubmatch(contents)
 	if len(matches) < 3 {
-		return "", fmt.Errorf("could not find kinds field")
+		return "", errors.New("could not find kinds field")
 	}
 	loc := expr.FindStringIndex(contents)
 	loc0 := loc[0] + len(matches[1])

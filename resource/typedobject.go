@@ -3,6 +3,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -24,15 +25,15 @@ var (
 // and arbitrary untyped subresources, similar to UntypedObject.
 // TODO: should this instead have _no_ subresources, rather than untyped ones?
 type TypedSpecObject[T any] struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
+	metav1.TypeMeta   `  json:",inline"`
+	metav1.ObjectMeta `  json:"metadata"`
 	Spec              T `json:"spec"`
 }
 
 func (t *TypedSpecObject[T]) GetStaticMetadata() StaticMetadata {
 	return StaticMetadata{
-		Name:      t.ObjectMeta.Name,
-		Namespace: t.ObjectMeta.Namespace,
+		Name:      t.Name,
+		Namespace: t.Namespace,
 		Group:     t.GroupVersionKind().Group,
 		Version:   t.GroupVersionKind().Version,
 		Kind:      t.GroupVersionKind().Kind,
@@ -123,7 +124,7 @@ func (t *TypedSpecObject[T]) GetSpec() any {
 func (t *TypedSpecObject[T]) SetSpec(spec any) error {
 	cast, ok := spec.(T)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	t.Spec = cast
 	return nil
@@ -138,7 +139,7 @@ func (*TypedSpecObject[T]) GetSubresource(_ string) (any, bool) {
 }
 
 func (*TypedSpecObject[T]) SetSubresource(_ string, _ any) error {
-	return fmt.Errorf("TypedSpecObject does not allow subresources")
+	return errors.New("TypedSpecObject does not allow subresources")
 }
 
 func (t *TypedSpecObject[T]) DeepCopyObject() runtime.Object {
@@ -166,16 +167,16 @@ func (t *TypedSpecObject[T]) Copy() Object {
 // TypedSpecStatusObject is an implementation of Object which has a typed Spec and Status subresource.
 // Other subresources are not encapsulated by this object implementation.
 type TypedSpecStatusObject[Spec, Status any] struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
+	metav1.TypeMeta   `       json:",inline"`
+	metav1.ObjectMeta `       json:"metadata"`
 	Spec              Spec   `json:"spec"`
 	Status            Status `json:"status"`
 }
 
 func (t *TypedSpecStatusObject[T, S]) GetStaticMetadata() StaticMetadata {
 	return StaticMetadata{
-		Name:      t.ObjectMeta.Name,
-		Namespace: t.ObjectMeta.Namespace,
+		Name:      t.Name,
+		Namespace: t.Namespace,
 		Group:     t.GroupVersionKind().Group,
 		Version:   t.GroupVersionKind().Version,
 		Kind:      t.GroupVersionKind().Kind,
@@ -266,7 +267,7 @@ func (t *TypedSpecStatusObject[T, S]) GetSpec() any {
 func (t *TypedSpecStatusObject[T, S]) SetSpec(spec any) error {
 	cast, ok := spec.(T)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	t.Spec = cast
 	return nil
@@ -289,7 +290,7 @@ func (t *TypedSpecStatusObject[T, S]) SetSubresource(key string, val any) error 
 	}
 	cast, ok := val.(S)
 	if !ok {
-		return fmt.Errorf("status value is not of the correct type")
+		return errors.New("status value is not of the correct type")
 	}
 	t.Status = cast
 	return nil
@@ -329,16 +330,16 @@ func (t *TypedSpecStatusObject[T, S]) Copy() Object {
 // as this type requires the use of more complex generic logic for JSON marshal/unmarshal and the Subresource methods
 // used in Object.
 type TypedObject[Spec, SubresourceCatalog any] struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata"`
+	metav1.TypeMeta   `                   json:",inline"`
+	metav1.ObjectMeta `                   json:"metadata"`
 	Spec              Spec               `json:"spec"`
 	Subresources      SubresourceCatalog `json:"-"`
 }
 
 func (t *TypedObject[Spec, Sub]) GetStaticMetadata() StaticMetadata {
 	return StaticMetadata{
-		Name:      t.ObjectMeta.Name,
-		Namespace: t.ObjectMeta.Namespace,
+		Name:      t.Name,
+		Namespace: t.Namespace,
 		Group:     t.GroupVersionKind().Group,
 		Version:   t.GroupVersionKind().Version,
 		Kind:      t.GroupVersionKind().Kind,
@@ -429,7 +430,7 @@ func (t *TypedObject[Spec, Sub]) GetSpec() any {
 func (t *TypedObject[Spec, Sub]) SetSpec(spec any) error {
 	cast, ok := spec.(Spec)
 	if !ok {
-		return fmt.Errorf("provided spec not convertible to Spec type")
+		return errors.New("provided spec not convertible to Spec type")
 	}
 	t.Spec = cast
 	return nil
@@ -488,11 +489,16 @@ func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
 		for i := 0; i < val.NumField(); i++ {
 			if getFieldName(typ.Field(i)) == key {
 				if typ.Field(i).Type != reflect.TypeOf(value) {
-					return fmt.Errorf("cannot assign value of type %s to subresource '%s' of type %s", reflect.TypeOf(value).String(), key, typ.Field(i).Type.String())
+					return fmt.Errorf(
+						"cannot assign value of type %s to subresource '%s' of type %s",
+						reflect.TypeOf(value).String(),
+						key,
+						typ.Field(i).Type.String(),
+					)
 				}
 				field := reflect.ValueOf(&t.Subresources).Elem().Field(i)
 				if !field.CanSet() {
-					return fmt.Errorf("cannot set value")
+					return errors.New("cannot set value")
 				}
 				field.Set(reflect.ValueOf(value))
 				return nil
@@ -503,14 +509,18 @@ func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
 			ok := false
 			t.Subresources, ok = reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())).Interface().(Sub)
 			if !ok {
-				return fmt.Errorf("subresource catalog is a nil map which could not be instantiated")
+				return errors.New("subresource catalog is a nil map which could not be instantiated")
 			}
 		}
 		if !reflect.TypeOf(key).AssignableTo(typ.Key()) {
 			return fmt.Errorf("subresource map has an unassignable key type of '%s'", typ.Key().String())
 		}
 		if !reflect.TypeOf(value).AssignableTo(typ.Elem()) {
-			return fmt.Errorf("subresource map requires a value of type '%s', provided value '%s' is not assignable", typ.Elem().String(), reflect.TypeOf(value))
+			return fmt.Errorf(
+				"subresource map requires a value of type '%s', provided value '%s' is not assignable",
+				typ.Elem().String(),
+				reflect.TypeOf(value),
+			)
 		}
 		val.SetMapIndex(reflect.ValueOf(key), reflect.ValueOf(value))
 		return nil
@@ -584,10 +594,10 @@ func (t *TypedObject[Spec, Sub]) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = json.Unmarshal(m["apiVersion"], &t.TypeMeta.APIVersion); err != nil {
+	if err = json.Unmarshal(m["apiVersion"], &t.APIVersion); err != nil {
 		return fmt.Errorf("error reading apiVersion: %w", err)
 	}
-	if err = json.Unmarshal(m["kind"], &t.TypeMeta.Kind); err != nil {
+	if err = json.Unmarshal(m["kind"], &t.Kind); err != nil {
 		return fmt.Errorf("error reading kind: %w", err)
 	}
 	if err = json.Unmarshal(m["metadata"], &t.ObjectMeta); err != nil {

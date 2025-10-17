@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -69,13 +70,13 @@ type WebhookServer struct {
 // (default controllers, schema-specific controllers) can be set post-initialization.
 func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	if config.Port < 1 || config.Port > 65536 {
-		return nil, fmt.Errorf("config.Port must be a valid port number (between 1 and 65536)")
+		return nil, errors.New("config.Port must be a valid port number (between 1 and 65536)")
 	}
 	if config.TLSConfig.CertPath == "" {
-		return nil, fmt.Errorf("config.TLSConfig.CertPath is required")
+		return nil, errors.New("config.TLSConfig.CertPath is required")
 	}
 	if config.TLSConfig.KeyPath == "" {
-		return nil, fmt.Errorf("config.TLSConfig.KeyPath is required")
+		return nil, errors.New("config.TLSConfig.KeyPath is required")
 	}
 
 	ws := WebhookServer{
@@ -218,7 +219,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	// If we didn't get a controller, return a failure
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		writer.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, "validating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)))
+		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "validating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)
 		logging.FromContext(req.Context()).Error("No controller", "error", err)
 		return
 	}
@@ -295,7 +296,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// If we didn't get a controller, return a failure
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		writer.Write([]byte(fmt.Sprintf(errStringNoAdmissionControllerDefined, "mutating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)))
+		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "mutating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)
 		return
 	}
 

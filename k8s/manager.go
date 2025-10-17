@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"reflect"
@@ -95,7 +96,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 				if options.NoErrorOnConflict {
 					return nil // Quietly exit
 				}
-				return fmt.Errorf("schema with identical kind, group, and version already registered")
+				return errors.New("schema with identical kind, group, and version already registered")
 			}
 			// Replace with the new version
 			existing.Spec.Versions[idx] = toVersion(schema)

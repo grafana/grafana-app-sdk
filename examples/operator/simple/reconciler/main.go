@@ -43,7 +43,7 @@ func main() {
 	kubeCfgFile := flag.String("kubecfg", "", "kube config path")
 	flag.Parse()
 	if kubeCfgFile == nil || *kubeCfgFile == "" {
-		fmt.Println("--kubecfg must be set to the path of your kubernetes config file")
+		_, _ = fmt.Println("--kubecfg must be set to the path of your kubernetes config file")
 		os.Exit(1)
 	}
 
@@ -106,7 +106,7 @@ type BasicModel struct {
 func NewApp(config app.Config) (app.App, error) {
 	// Set up the reconciler
 	reconciler := &simple.Reconciler{
-		ReconcileFunc: func(ctx context.Context, request operator.ReconcileRequest) (operator.ReconcileResult, error) {
+		ReconcileFunc: func(_ context.Context, request operator.ReconcileRequest) (operator.ReconcileResult, error) {
 			log.Printf(
 				"Reconciling object:\n\taction: %s\n\tobject: %v\n",
 				operator.ResourceActionFromReconcileAction(request.Action),

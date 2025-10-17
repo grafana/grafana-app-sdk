@@ -2,6 +2,7 @@ package jennies
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
 	"net/http"
@@ -85,10 +86,10 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if !customRoute.Response.Schema.Exists() {
-		return nil, fmt.Errorf("custom route response is required")
+		return nil, errors.New("custom route response is required")
 	}
 	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
-		return nil, fmt.Errorf("custom route response metadata must have TypeMeta if ListMeta or ObjectMeta are present")
+		return nil, errors.New("custom route response metadata must have TypeMeta if ListMeta or ObjectMeta are present")
 	}
 	if filenamePrefix != "" {
 		filenamePrefix = fmt.Sprintf("%s_", filenamePrefix)
@@ -158,7 +159,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 
 func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, filenamePrefix, fileBasePath string) (codejen.Files, error) {
 	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
-		return nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
+		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 	files := make(codejen.Files, 0)
 	bodyName := typeName

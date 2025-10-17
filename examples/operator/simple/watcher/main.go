@@ -43,7 +43,7 @@ func main() {
 	kubeCfgFile := flag.String("kubecfg", "", "kube config path")
 	flag.Parse()
 	if kubeCfgFile == nil || *kubeCfgFile == "" {
-		fmt.Println("--kubecfg must be set to the path of your kubernetes config file")
+		_, _ = fmt.Println("--kubecfg must be set to the path of your kubernetes config file")
 		os.Exit(1)
 	}
 
@@ -106,19 +106,19 @@ type BasicModel struct {
 func NewApp(config app.Config) (app.App, error) {
 	// Set up the watcher
 	watcher := &simple.Watcher{
-		AddFunc: func(ctx context.Context, object resource.Object) error {
+		AddFunc: func(_ context.Context, object resource.Object) error {
 			log.Printf("Added object: %v\n", object)
 			return nil
 		},
-		UpdateFunc: func(ctx context.Context, old, new resource.Object) error {
-			log.Printf("Updated object:\n\told: %v\n\tnew: %v\n", old, new)
+		UpdateFunc: func(_ context.Context, oldObj, newObj resource.Object) error {
+			log.Printf("Updated object:\n\told: %v\n\tnew: %v\n", oldObj, newObj)
 			return nil
 		},
-		DeleteFunc: func(ctx context.Context, object resource.Object) error {
+		DeleteFunc: func(_ context.Context, object resource.Object) error {
 			log.Printf("Deleted object: %v\n", object)
 			return nil
 		},
-		SyncFunc: func(ctx context.Context, object resource.Object) error {
+		SyncFunc: func(_ context.Context, object resource.Object) error {
 			log.Printf("Synced object: %v\n", object)
 			return nil
 		},
@@ -129,8 +129,8 @@ func NewApp(config app.Config) (app.App, error) {
 		Name:       "simple-reconciler-app",
 		KubeConfig: config.KubeConfig,
 		ManagedKinds: []simple.AppManagedKind{{
-			Kind:    kind,
-			Watcher: watcher,
+			Kind:             kind,
+			Watcher:          watcher,
 			ReconcileOptions: simple.BasicReconcileOptions{
 				// FIXME: Uncomment this line to turn off the opinionated logic
 				// UsePlain: true, // UsePlain = true turns off the opinionated logic.

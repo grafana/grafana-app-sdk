@@ -184,14 +184,14 @@ func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest
 	if a.GetObject() != nil {
 		obj, ok = a.GetObject().(resource.Object)
 		if !ok {
-			return nil, admission.NewForbidden(a, fmt.Errorf("object is not a resource.Object"))
+			return nil, admission.NewForbidden(a, errors.New("object is not a resource.Object"))
 		}
 	}
 
 	if a.GetOldObject() != nil {
 		oldObj, ok = a.GetOldObject().(resource.Object)
 		if !ok {
-			return nil, admission.NewForbidden(a, fmt.Errorf("oldObject is not a resource.Object"))
+			return nil, admission.NewForbidden(a, errors.New("oldObject is not a resource.Object"))
 		}
 	}
 

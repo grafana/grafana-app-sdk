@@ -62,17 +62,17 @@ func (t *TypedStore[T]) Add(ctx context.Context, obj T) (T, error) {
 	if t.sch.Scope() == ClusterScope {
 		if obj.GetNamespace() != "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() must be empty for cluster-scoped objects")
+			return n, errors.New("obj.GetNamespace() must be empty for cluster-scoped objects")
 		}
 	} else {
 		if obj.GetNamespace() == "" {
 			var n T
-			return n, fmt.Errorf("obj.GetNamespace() must not be empty")
+			return n, errors.New("obj.GetNamespace() must not be empty")
 		}
 	}
 	if obj.GetName() == "" {
 		var n T
-		return n, fmt.Errorf("obj.GetName() must not be empty")
+		return n, errors.New("obj.GetName() must not be empty")
 	}
 	ret, err := t.client.Create(ctx, Identifier{
 		Namespace: obj.GetNamespace(),
@@ -147,7 +147,8 @@ func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T
 // The provided obj parameter must have the specified subresource,
 // and only that subresource will be updated in the storage system.
 func (t *TypedStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier,
-	subresource SubresourceName, obj Object) (T, error) {
+	subresource SubresourceName, obj Object,
+) (T, error) {
 	if obj.GetResourceVersion() == "" {
 		var n T
 		return n, ErrMissingResourceVersion

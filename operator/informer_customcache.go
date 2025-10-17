@@ -3,7 +3,6 @@ package operator
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -164,7 +163,7 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 	defer utilruntime.HandleCrash()
 
 	if c.HasStarted() {
-		return fmt.Errorf("informer is already started")
+		return errors.New("informer is already started")
 	}
 	c.runContext = ctx
 	defer func() {
@@ -483,6 +482,7 @@ func processDeltas(
 				return err
 			}
 			handler.OnDelete(obj)
+		default:
 		}
 	}
 	return nil

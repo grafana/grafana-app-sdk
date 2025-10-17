@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -67,7 +68,7 @@ func NewKubernetesBasedInformer(
 	sch resource.Kind, client ListWatchClient, options InformerOptions,
 ) (*KubernetesBasedInformer, error) {
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 
 	var timeout time.Duration
@@ -160,11 +161,11 @@ func (k *KubernetesBasedInformer) Schema() resource.Schema {
 
 func (k *KubernetesBasedInformer) HealthCheck(context.Context) error {
 	if !k.SharedIndexInformer.HasSynced() && !k.HealthCheckIgnoreSync {
-		return fmt.Errorf("informer has not synced")
+		return errors.New("informer has not synced")
 	}
 
 	if k.SharedIndexInformer.IsStopped() {
-		return fmt.Errorf("informer is stopped")
+		return errors.New("informer is stopped")
 	}
 
 	return nil
@@ -181,7 +182,7 @@ func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, er
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 	// Nil check
 	if obj == nil {
-		return nil, fmt.Errorf("object cannot be nil")
+		return nil, errors.New("object cannot be nil")
 	}
 
 	// First, check if it's already a resource.Object
