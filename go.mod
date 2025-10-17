@@ -15,7 +15,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
-	github.com/grafana/cog v0.0.43
+	github.com/grafana/cog v0.0.44
 	github.com/grafana/grafana-app-sdk/logging v0.46.0
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.23.2

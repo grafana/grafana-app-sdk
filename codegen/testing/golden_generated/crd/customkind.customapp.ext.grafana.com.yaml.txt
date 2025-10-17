@@ -162,7 +162,7 @@ spec:
                 format: date-time
                 type: string
               union:
-                anyOf:
+                oneOf:
                 - properties:
                     group:
                       type: string
