@@ -12,6 +12,7 @@ import (
 	"text/template"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -21,6 +22,15 @@ import (
 var templates embed.FS
 
 var (
+	funcMap = template.FuncMap{
+		"list": func(items ...any) []any {
+			return items
+		},
+		"refString": func(ref spec.Ref) string {
+			return ref.String()
+		},
+	}
+
 	templateResourceObject, _   = template.ParseFS(templates, "resourceobject.tmpl")
 	templateSchema, _           = template.ParseFS(templates, "schema.tmpl")
 	templateCodec, _            = template.ParseFS(templates, "codec.tmpl")
@@ -44,7 +54,7 @@ var (
 	templateOperatorMain, _       = template.ParseFS(templates, "operator/main.tmpl")
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
 
-	templateManifestGoFile, _ = template.ParseFS(templates, "manifest_go.tmpl")
+	templateManifestGoFile, _ = template.New("manifest_go.tmpl").Funcs(funcMap).ParseFS(templates, "manifest_go.tmpl")
 )
 
 var (

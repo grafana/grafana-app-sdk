@@ -275,6 +275,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
 			if !ok {
+				fmt.Printf("Resolver failed to look up version=%s, kind=%s. This will impact kind availability\n", v.Name, manifestKind.Kind) //nolint:revive
 				continue
 			}
 			if r.scheme == nil {
@@ -302,13 +303,37 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, "", defaultEtcdPathPrefix, callback))
 			}
 		}
+		// TODO: improve this, it's a bit wonky
+		customRoutePkgPrefix := ""
 		if len(v.Routes.Namespaced) > 0 {
 			hasCustomRoutes = true
-			maps.Copy(res, r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback))
+			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback)
+			maps.Copy(res, entries)
+			for k := range entries {
+				parts := strings.Split(k, ".") // Everything before the . is the prefix
+				customRoutePkgPrefix = strings.Join(parts[:len(parts)-1], ".")
+				break
+			}
 		}
 		if len(v.Routes.Cluster) > 0 {
 			hasCustomRoutes = true
-			maps.Copy(res, r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback))
+			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback)
+			maps.Copy(res, entries)
+			for k := range entries {
+				parts := strings.Split(k, ".") // Everything before the . is the prefix
+				customRoutePkgPrefix = strings.Join(parts[:len(parts)-1], ".")
+				break
+			}
+		}
+		if len(v.Routes.Schemas) > 0 {
+			replFunc := app.KubeOpenAPIReferenceReplacerFunc(customRoutePkgPrefix, schema.GroupVersionKind{Group: r.appConfig.ManifestData.Group, Version: v.Name})
+			for key, sch := range v.Routes.Schemas {
+				deps := r.replaceReferencesInSchema(&sch, callback, replFunc)
+				res[replFunc(key)] = common.OpenAPIDefinition{
+					Schema:       sch,
+					Dependencies: deps,
+				}
+			}
 		}
 	}
 	if hasCustomRoutes {
@@ -770,7 +795,7 @@ func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, rout
 	return defs
 }
 
-func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
@@ -778,8 +803,10 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method s
 		}
 	}
 	goType, ok := resolver(kind, ver, opPath, method)
+	pkgPrefix := defaultPkgPrefix
 	if ok {
 		typ := reflect.TypeOf(goType)
+		pkgPrefix = typ.PkgPath()
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
@@ -811,7 +838,7 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method s
 			}
 		}
 	}
-	dependencies := make([]string, 0)
+	dependencies := r.replaceReferencesInSchema(&typeSchema, ref, app.KubeOpenAPIReferenceReplacerFunc(pkgPrefix, schema.GroupVersionKind{Kind: kind, Version: ver}))
 	// Check for x-grafana-app extensions that dictate that the metadata field is a kubernetes metadata object,
 	// and should be replaced with the canonical definition like we do with kinds.
 	if metadataProp, ok := typeSchema.Properties["metadata"]; ok {
@@ -846,8 +873,48 @@ func (*defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method s
 	}
 }
 
-func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, _ common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref common.ReferenceCallback, replaceFunc func(string) string) []string {
+	deps := make([]string, 0)
+	if sch.Ref.String() != "" {
+		rf := strings.TrimPrefix(sch.Ref.String(), "#/components/schemas/")
+		sch.Ref = ref(replaceFunc(rf))
+		deps = append(deps, replaceFunc(rf))
+		return deps
+	}
+	for key, prop := range sch.Properties {
+		if prop.Ref.String() != "" {
+			// Remove leading "#/components/schemas/"
+			rf := strings.TrimPrefix(prop.Ref.String(), "#/components/schemas/")
+			prop.Ref = ref(replaceFunc(rf))
+			sch.Properties[key] = prop
+			deps = append(deps, replaceFunc(rf))
+			continue
+		}
+		if prop.AdditionalProperties != nil && prop.AdditionalProperties.Schema != nil {
+			d := r.replaceReferencesInSchema(prop.AdditionalProperties.Schema, ref, replaceFunc)
+			sch.Properties[key] = prop
+			deps = append(deps, d...)
+			continue
+		}
+		if len(prop.Properties) > 0 {
+			for k, v := range prop.Properties {
+				d := r.replaceReferencesInSchema(&v, ref, replaceFunc)
+				prop.Properties[k] = v
+				deps = append(deps, d...)
+			}
+			sch.Properties[key] = prop
+		}
+	}
+	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
+		d := r.replaceReferencesInSchema(sch.AdditionalProperties.Schema, ref, replaceFunc)
+		deps = append(deps, d...)
+	}
+	return deps
+}
+
+func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
 	typePath := ""
+	pkgPrefix := defaultPkgPrefix
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
 			return nil, false
@@ -856,6 +923,7 @@ func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, metho
 	goType, ok := resolver(kind, ver, opPath, method)
 	if ok {
 		typ := reflect.TypeOf(goType)
+		pkgPrefix = typ.PkgPath()
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
@@ -878,7 +946,7 @@ func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, metho
 		if len(operation.RequestBody.Content) > 0 {
 			for key, val := range operation.RequestBody.Content {
 				if val.Schema != nil {
-					typeSchema = *val.Schema
+					typeSchema = copySpecSchema(val.Schema)
 				}
 				if key == "application/json" {
 					break
@@ -886,8 +954,13 @@ func (*defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, metho
 			}
 		}
 	}
+	dependencies := r.replaceReferencesInSchema(&typeSchema, ref, app.KubeOpenAPIReferenceReplacerFunc(pkgPrefix, schema.GroupVersionKind{Kind: kind, Version: ver}))
+	if len(dependencies) == 0 {
+		dependencies = nil
+	}
 	return typePath, common.OpenAPIDefinition{
-		Schema: typeSchema,
+		Schema:       typeSchema,
+		Dependencies: dependencies,
 	}
 }
 
@@ -1091,7 +1164,7 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 		}
 		if in.AdditionalProperties.Schema != nil {
 			schemaCopy := copySpecSchema(in.AdditionalProperties.Schema)
-			in.AdditionalProperties.Schema = &schemaCopy
+			out.AdditionalProperties.Schema = &schemaCopy
 		}
 	}
 	if in.PatternProperties != nil {
@@ -1121,7 +1194,7 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 		}
 		if in.AdditionalItems.Schema != nil {
 			schemaCopy := copySpecSchema(in.AdditionalItems.Schema)
-			in.AdditionalItems.Schema = &schemaCopy
+			out.AdditionalItems.Schema = &schemaCopy
 		}
 	}
 	if in.Definitions != nil {

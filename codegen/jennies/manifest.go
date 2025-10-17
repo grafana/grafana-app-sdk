@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"go/format"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -22,7 +23,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 
-	cueformat "cuelang.org/go/cue/format"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
@@ -157,7 +157,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive,gocognit
+//nolint:revive,gocognit,funlen
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
@@ -198,24 +198,39 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			ver.Kinds[i] = mvkind
 		}
 		// routes
+		routesAdditionalSchemas := make(map[string]spec.SchemaProps)
 		if len(version.Routes().Namespaced) > 0 {
 			ver.Routes.Namespaced = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
-				targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for namespaced path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
 				ver.Routes.Namespaced[sourcePath] = targetPathProps
+				if len(additional) > 0 {
+					maps.Copy(routesAdditionalSchemas, additional)
+				}
 			}
 		}
 		if len(version.Routes().Cluster) > 0 {
 			ver.Routes.Cluster = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Cluster {
-				targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for cluster path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
 				ver.Routes.Cluster[sourcePath] = targetPathProps
+				if len(additional) > 0 {
+					maps.Copy(routesAdditionalSchemas, additional)
+				}
+			}
+		}
+		if len(routesAdditionalSchemas) > 0 {
+			ver.Routes.Schemas = make(map[string]spec.Schema)
+			for key, val := range routesAdditionalSchemas {
+				ver.Routes.Schemas[key] = spec.Schema{
+					SchemaProps: val,
+				}
 			}
 		}
 		manifest.Versions = append(manifest.Versions, ver)
@@ -255,9 +270,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	return &manifest, nil
 }
 
-type simpleOpenAPIDoc struct {
+type simpleOpenAPIDoc[T any] struct {
 	Components struct {
-		Schemas map[string]map[string]any `json:"schemas" yaml:"schemas"`
+		Schemas map[string]T `json:"schemas" yaml:"schemas"`
 	} `json:"components" yaml:"components"`
 }
 
@@ -292,10 +307,13 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			Operations: operations,
 		}
 	}
+	additionalSchemas := make(map[string]spec.SchemaProps)
 	if len(vk.Routes) > 0 {
 		mver.Routes = make(map[string]spec3.PathProps)
 		for sourcePath, sourceMethodsMap := range vk.Routes {
-			targetPathProps, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+			var targetPathProps spec3.PathProps
+			var err error
+			targetPathProps, additionalSchemas, err = buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 			if err != nil {
 				return app.ManifestVersionKind{}, fmt.Errorf("custom routes error for path '%s': %w", sourcePath, err)
 			}
@@ -313,7 +331,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		if err != nil {
 			return app.ManifestVersionKind{}, err
 		}
-		schemaProps := simpleOpenAPIDoc{}
+		schemaProps := simpleOpenAPIDoc[map[string]any]{}
 		err = json.Unmarshal(oapiBytes, &schemaProps)
 		if err != nil {
 			return app.ManifestVersionKind{}, err
@@ -335,6 +353,11 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			return app.ManifestVersionKind{}, err // TODO: wrap error
 		}
 		schemas := make(map[string]any)
+		// Additional Schemas from custom routes
+		for key, val := range additionalSchemas {
+			schemas[key] = val
+		}
+		// Schemas from the kind schema
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
@@ -345,7 +368,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			if err != nil {
 				return app.ManifestVersionKind{}, err
 			}
-			oapiProps := simpleOpenAPIDoc{}
+			oapiProps := simpleOpenAPIDoc[map[string]any]{}
 			err = json.Unmarshal(oapiBytes, &oapiProps)
 			if err != nil {
 				return app.ManifestVersionKind{}, err
@@ -411,30 +434,37 @@ func toKindPermissionActions(actions []string) []app.KindPermissionAction {
 	return a
 }
 
-func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]codegen.CustomRoute) (spec3.PathProps, error) {
+func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]codegen.CustomRoute) (spec3.PathProps, map[string]spec.SchemaProps, error) {
 	targetPathProps := spec3.PathProps{}
+	additionalSchemas := make(map[string]spec.SchemaProps)
 	for sourceMethod, sourceRoute := range sourceMethodsMap {
 		upperMethod := strings.ToUpper(sourceMethod)
 		if !slices.Contains([]string{"GET", "POST", "PUT", "DELETE", "PATCH"}, upperMethod) {
-			return spec3.PathProps{}, fmt.Errorf("unhandled HTTP method '%s' defined for custom route path '%s'", sourceMethod, sourcePath)
-		}
-
-		targetParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
-		if err != nil {
-			return spec3.PathProps{}, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
-		}
-		targetRequestBody, err := cueSchemaToRequestBody(sourceRoute.Request.Body)
-		if err != nil {
-			return spec3.PathProps{}, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
-		}
-		targetResponses, err := customRouteResponseToSpec3Responses(sourceRoute.Response)
-		if err != nil {
-			return spec3.PathProps{}, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
+			return spec3.PathProps{}, nil, fmt.Errorf("unhandled HTTP method '%s' defined for custom route path '%s'", sourceMethod, sourcePath)
 		}
 
 		operationID := defaultRouteName(sourceMethod, sourcePath)
 		if sourceRoute.Name != "" {
 			operationID = sourceRoute.Name
+		}
+
+		targetParameters, err := cueSchemaToParameters(sourceRoute.Request.Query)
+		if err != nil {
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting query schema for %s %s: %w", sourceMethod, sourcePath, err)
+		}
+		targetRequestBody, additional, err := cueSchemaToRequestBody(sourceRoute.Request.Body, operationID)
+		if err != nil {
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
+		}
+		for k, v := range additional {
+			additionalSchemas[k] = v
+		}
+		targetResponses, additional, err := customRouteResponseToSpec3Responses(sourceRoute.Response, operationID)
+		if err != nil {
+			return spec3.PathProps{}, nil, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
+		}
+		for k, v := range additional {
+			additionalSchemas[k] = v
 		}
 
 		targetOperation := &spec3.Operation{
@@ -461,7 +491,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			targetPathProps.Patch = targetOperation
 		}
 	}
-	return targetPathProps, nil
+	return targetPathProps, additionalSchemas, nil
 }
 
 func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
@@ -472,7 +502,7 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 		return nil, fmt.Errorf("input CUE value for query params has error: %w", err)
 	}
 
-	schemaProps, err := cueSchemaToSpecSchemaProps(v)
+	schemaProps, _, err := cueSchemaToSpecSchemaProps(v, "")
 	if err != nil {
 		return nil, fmt.Errorf("error converting query param CUE schema to OpenAPI props: %w", err)
 	}
@@ -505,17 +535,17 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 	return parameters, nil
 }
 
-func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
+func cueSchemaToRequestBody(v cue.Value, refPrefix string) (*spec3.RequestBody, map[string]spec.SchemaProps, error) {
 	if !v.Exists() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err := v.Err(); err != nil {
-		return nil, fmt.Errorf("input CUE value for request body has error: %w", err)
+		return nil, nil, fmt.Errorf("input CUE value for request body has error: %w", err)
 	}
 
-	schemaProps, err := cueSchemaToSpecSchemaProps(v)
+	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(v, refPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("error converting request body CUE schema to OpenAPI props: %w", err)
+		return nil, nil, fmt.Errorf("error converting request body CUE schema to OpenAPI props: %w", err)
 	}
 
 	requestBody := &spec3.RequestBody{
@@ -531,24 +561,24 @@ func cueSchemaToRequestBody(v cue.Value) (*spec3.RequestBody, error) {
 			},
 		},
 	}
-	return requestBody, nil
+	return requestBody, additionalSchemas, nil
 }
 
-func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRouteResponse) (*spec3.Responses, error) {
+func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRouteResponse, refPrefix string) (*spec3.Responses, map[string]spec.SchemaProps, error) {
 	v := customRouteResponse.Schema
 	if !v.Exists() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err := v.Err(); err != nil {
-		return nil, fmt.Errorf("input CUE value for response has error: %w", err)
+		return nil, nil, fmt.Errorf("input CUE value for response has error: %w", err)
 	}
 	if !customRouteResponse.Metadata.TypeMeta && (customRouteResponse.Metadata.ListMeta || customRouteResponse.Metadata.ObjectMeta) {
-		return nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
+		return nil, nil, fmt.Errorf("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 
-	schemaProps, err := cueSchemaToSpecSchemaProps(v)
+	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(v, refPrefix)
 	if err != nil {
-		return nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
+		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
 	if customRouteResponse.Metadata.TypeMeta {
 		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
@@ -557,13 +587,13 @@ func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRoute
 	}
 	if customRouteResponse.Metadata.ObjectMeta {
 		if _, exists := schemaProps.Properties["metadata"]; exists {
-			return nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
+			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
 		}
 		schemaProps.Properties["metadata"] = objectMetaPropSchema
 		schemaProps.Required = append(schemaProps.Required, "metadata")
 	} else if customRouteResponse.Metadata.ListMeta {
 		if _, exists := schemaProps.Properties["metadata"]; exists {
-			return nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
+			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
 		}
 		schemaProps.Properties["metadata"] = listMetaPropSchema
 		schemaProps.Required = append(schemaProps.Required, "metadata")
@@ -590,89 +620,50 @@ func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRoute
 			Default: &response,
 		},
 	}
-	return responses, nil
+	return responses, additionalSchemas, nil
 }
 
-func findSchemaFallback(val cue.Value) (cue.Value, error) {
-	if _, err := val.LookupPath(cue.MakePath(cue.Str("type"))).String(); err == nil {
-		return val, nil
-	}
-
-	schemasPath := cue.MakePath(cue.Str("components"), cue.Str("schemas"))
-	schemasVal := val.LookupPath(schemasPath)
-	if !schemasVal.Exists() {
-		return cue.Value{}, fmt.Errorf("no valid schema found")
-	}
-
-	it, err := schemasVal.Fields()
+func cueSchemaToSpecSchemaProps(v cue.Value, refPrefix string) (spec.SchemaProps, map[string]spec.SchemaProps, error) {
+	kindKey := "__APPSDKKIND__"
+	oapiBytes, err := cueToOpenAPIBytes(v, kindKey)
 	if err != nil {
-		return cue.Value{}, fmt.Errorf("error iterating schemas: %w", err)
+		return spec.SchemaProps{}, nil, err
 	}
-
-	var schemas []cue.Value
-	for it.Next() {
-		schemas = append(schemas, it.Value())
+	schemaProps := simpleOpenAPIDoc[spec.SchemaProps]{}
+	err = json.Unmarshal(oapiBytes, &schemaProps)
+	if err != nil {
+		return spec.SchemaProps{}, nil, err
 	}
-
-	if len(schemas) == 0 {
-		return cue.Value{}, fmt.Errorf("no schemas found")
+	if _, ok := schemaProps.Components.Schemas[kindKey]; !ok {
+		return spec.SchemaProps{}, nil, fmt.Errorf("schema for kind '%s' not found", kindKey)
 	}
-	if len(schemas) > 1 {
-		return cue.Value{}, fmt.Errorf("multiple schemas found, expected single schema")
+	schemas := make(map[string]spec.SchemaProps)
+	response := prefixReferences(schemaProps.Components.Schemas[kindKey], refPrefix, schemas)
+	delete(schemaProps.Components.Schemas, kindKey)
+	for k, val := range schemaProps.Components.Schemas {
+		schemas[fmt.Sprintf("%s%s", refPrefix, k)] = prefixReferences(val, refPrefix, schemas)
 	}
-
-	return schemas[0], nil
+	return response, schemas, nil
 }
 
-func cueSchemaToSpecSchemaProps(v cue.Value) (spec.SchemaProps, error) {
-	if !v.Exists() {
-		return spec.SchemaProps{}, nil
-	}
-	if err := v.Err(); err != nil {
-		return spec.SchemaProps{}, fmt.Errorf("input CUE value has error: %w", err)
-	}
-
-	openapiAST, err := CUEValueToOpenAPI(v, CUEOpenAPIConfig{
-		Name:             "_generatedSchema",
-		ExpandReferences: true,
-	})
-	if err != nil {
-		return spec.SchemaProps{}, fmt.Errorf("error generating OpenAPI AST from CUE value: %w", err)
-	}
-
-	openapiCUEVal := v.Context().BuildFile(openapiAST)
-	if openapiCUEVal.Err() != nil {
-		astBytes, fmtErr := cueformat.Node(openapiAST)
-		var astStr string
-		if fmtErr != nil {
-			astStr = fmt.Sprintf(" (error formatting AST: %v)", fmtErr)
-		} else {
-			astStr = string(astBytes)
+func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[string]spec.SchemaProps) spec.SchemaProps {
+	if sch.Ref.String() != "" {
+		ref := sch.Ref.String()
+		parts := strings.Split(ref, "/")
+		// References to types that already exist aren't prefixed
+		if _, ok := rootSchemas[parts[len(parts)-1]]; !ok {
+			parts[len(parts)-1] = prefix + parts[len(parts)-1]
 		}
-		return spec.SchemaProps{}, fmt.Errorf("error building CUE value from OpenAPI AST: %w\nAST:\n%s", openapiCUEVal.Err(), astStr)
+		sch.Ref = spec.MustCreateRef(strings.Join(parts, "/"))
 	}
-
-	schemaPath := cue.MakePath(cue.Str("components"), cue.Str("schemas"), cue.Str("_generatedSchema"))
-	schemaVal := openapiCUEVal.LookupPath(schemaPath)
-
-	if !schemaVal.Exists() {
-		val, err := findSchemaFallback(openapiCUEVal)
-		if err != nil {
-			return spec.SchemaProps{}, fmt.Errorf("schema lookup failed: %w", err)
-		}
-		schemaVal = val
+	for key, props := range sch.Properties {
+		props.SchemaProps = prefixReferences(props.SchemaProps, prefix, rootSchemas)
+		sch.Properties[key] = props
 	}
-
-	if !schemaVal.Exists() || schemaVal.Err() != nil {
-		return spec.SchemaProps{}, fmt.Errorf("could not locate generated schema definition within OpenAPI CUE value: %v\nValue:\n%s", schemaVal.Err(), CUEValueToString(openapiCUEVal))
+	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
+		sch.AdditionalProperties.Schema.SchemaProps = prefixReferences(sch.AdditionalProperties.Schema.SchemaProps, prefix, rootSchemas)
 	}
-
-	var props spec.SchemaProps
-	if err := schemaVal.Decode(&props); err != nil {
-		return spec.SchemaProps{}, fmt.Errorf("error decoding schema CUE value into spec.SchemaProps: %w\nSchema Value:\n%s", err, CUEValueToString(schemaVal))
-	}
-
-	return props, nil
+	return sch
 }
 
 var (

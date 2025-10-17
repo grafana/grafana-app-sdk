@@ -29,10 +29,16 @@ SchemaProps: spec.SchemaProps{
     Properties: map[string]spec.Schema{ {{ range $key, $prop := .Properties }}
         "{{$key}}": { {{ template "schema" $prop }}
         },{{ end }}
-    },{{ end }}{{ if .Required }}
+    },{{ end }}{{ if .AdditionalProperties }}{{ if or .AdditionalProperties.Schema .AdditionalProperties.Allows }}
+    AdditionalProperties: &spec.SchemaOrBool{ {{ if .AdditionalProperties.Schema }}
+        Schema: &spec.Schema{ {{ template "schema" .AdditionalProperties.Schema }}
+        },{{ else }}
+        Allows: {{ .AdditionalProperties.Allows }},{{ end }}
+    },{{ end }}{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
-    },{{ end }}
+    },{{ end }}{{ if (refString .Ref) }}
+    Ref: spec.MustCreateRef("{{ .Ref | refString }}"),{{ end }}
 },{{ if .Extensions }}
 VendorExtensible: spec.VendorExtensible{
     Extensions: spec.Extensions{ {{ range $key, $val := .Extensions }}
@@ -223,6 +229,10 @@ var appManifestData = app.ManifestData{
                         Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
                         },{{ end }}
                     },{{ end }}{{ end }}
+                },
+                Schemas: map[string]spec.Schema{ {{ range $refName, $schema := .Routes.Schemas }}
+                    "{{ $refName }}": { {{ template "schema" $schema }}
+                    },{{ end }}
                 },
             },
         },

@@ -24,7 +24,7 @@ var (
 	rawSchemaTestKindv0alpha1     = []byte(`{"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"testField":{"type":"integer"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv0alpha1 app.VersionSchema
 	_                             = json.Unmarshal(rawSchemaTestKindv0alpha1, &versionSchemaTestKindv0alpha1)
-	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"mysubresource":{"$ref":"#/components/schemas/mysubresource"},"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"mysubresource":{"additionalProperties":false,"properties":{"extraValue":{"type":"string"}},"required":["extraValue"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	rawSchemaTestKindv1alpha1     = []byte(`{"FooBar":{"additionalProperties":false,"properties":{"bar":{"$ref":"#/components/schemas/FooBar"},"foo":{"type":"string"}},"required":["foo"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"mysubresource":{"$ref":"#/components/schemas/mysubresource"},"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"getRecursiveResponseRecursiveType":{"type":"object","required":["message"],"properties":{"message":{"type":"string"},"next":{"$ref":"#/components/schemas/getRecursiveResponseRecursiveType"}},"additionalProperties":false},"mysubresource":{"additionalProperties":false,"properties":{"extraValue":{"type":"string"}},"required":["extraValue"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"foobar":{"$ref":"#/components/schemas/FooBar"},"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv1alpha1 app.VersionSchema
 	_                             = json.Unmarshal(rawSchemaTestKindv1alpha1, &versionSchemaTestKindv1alpha1)
 )
@@ -49,6 +49,7 @@ var appManifestData = app.ManifestData{
 			Routes: app.ManifestVersionRoutes{
 				Namespaced: map[string]spec3.PathProps{},
 				Cluster:    map[string]spec3.PathProps{},
+				Schemas:    map[string]spec.Schema{},
 			},
 		},
 
@@ -197,6 +198,13 @@ var appManifestData = app.ManifestData{
 																						"annotations": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"object"},
+																								AdditionalProperties: &spec.SchemaOrBool{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"string"},
+																										},
+																									},
+																								},
 																							},
 																						},
 																						"creationTimestamp": {
@@ -236,6 +244,13 @@ var appManifestData = app.ManifestData{
 																						"labels": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"object"},
+																								AdditionalProperties: &spec.SchemaOrBool{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"string"},
+																										},
+																									},
+																								},
 																							},
 																						},
 																						"managedFields": {
@@ -302,6 +317,62 @@ var appManifestData = app.ManifestData{
 								},
 							},
 						},
+						"/recurse": {
+							Get: &spec3.Operation{
+								OperationProps: spec3.OperationProps{
+
+									OperationId: "getRecursiveResponse",
+
+									Responses: &spec3.Responses{
+										ResponsesProps: spec3.ResponsesProps{
+											Default: &spec3.Response{
+												ResponseProps: spec3.ResponseProps{
+													Description: "Default OK response",
+													Content: map[string]*spec3.MediaType{
+														"application/json": {
+															MediaTypeProps: spec3.MediaTypeProps{
+																Schema: &spec.Schema{
+																	SchemaProps: spec.SchemaProps{
+																		Type: []string{"object"},
+																		Properties: map[string]spec.Schema{
+																			"apiVersion": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+																				},
+																			},
+																			"kind": {
+																				SchemaProps: spec.SchemaProps{
+																					Type:        []string{"string"},
+																					Description: "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+																				},
+																			},
+																			"message": {
+																				SchemaProps: spec.SchemaProps{
+																					Type: []string{"string"},
+																				},
+																			},
+																			"next": {
+																				SchemaProps: spec.SchemaProps{
+
+																					Ref: spec.MustCreateRef("#/components/schemas/getRecursiveResponseRecursiveType"),
+																				},
+																			},
+																		},
+																		Required: []string{
+																			"message",
+																			"apiVersion",
+																			"kind",
+																		},
+																	}},
+															}},
+													},
+												},
+											},
+										}},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -346,17 +417,8 @@ var appManifestData = app.ManifestData{
 																},
 																"shared": {
 																	SchemaProps: spec.SchemaProps{
-																		Type: []string{"object"},
-																		Properties: map[string]spec.Schema{
-																			"bar": {
-																				SchemaProps: spec.SchemaProps{
-																					Type: []string{"string"},
-																				},
-																			},
-																		},
-																		Required: []string{
-																			"bar",
-																		},
+
+																		Ref: spec.MustCreateRef("#/components/schemas/getFoobarSharedType"),
 																	},
 																},
 															},
@@ -399,17 +461,8 @@ var appManifestData = app.ManifestData{
 																		},
 																		"shared": {
 																			SchemaProps: spec.SchemaProps{
-																				Type: []string{"object"},
-																				Properties: map[string]spec.Schema{
-																					"bar": {
-																						SchemaProps: spec.SchemaProps{
-																							Type: []string{"string"},
-																						},
-																					},
-																				},
-																				Required: []string{
-																					"bar",
-																				},
+
+																				Ref: spec.MustCreateRef("#/components/schemas/getFoobarSharedType"),
 																			},
 																		},
 																	},
@@ -459,6 +512,19 @@ var appManifestData = app.ManifestData{
 																				Type: []string{"string"},
 																			},
 																		},
+																		"extra": {
+																			SchemaProps: spec.SchemaProps{
+																				Type: []string{"object"},
+																				AdditionalProperties: &spec.SchemaOrBool{
+																					Schema: &spec.Schema{
+																						SchemaProps: spec.SchemaProps{
+
+																							Ref: spec.MustCreateRef("#/components/schemas/getClusterFoobarExtra"),
+																						},
+																					},
+																				},
+																			},
+																		},
 																		"kind": {
 																			SchemaProps: spec.SchemaProps{
 																				Type:        []string{"string"},
@@ -468,6 +534,7 @@ var appManifestData = app.ManifestData{
 																	},
 																	Required: []string{
 																		"bar",
+																		"extra",
 																		"apiVersion",
 																		"kind",
 																	},
@@ -477,6 +544,39 @@ var appManifestData = app.ManifestData{
 											},
 										},
 									}},
+							},
+						},
+					},
+				},
+				Schemas: map[string]spec.Schema{
+					"getClusterFoobarExtra": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							Properties: map[string]spec.Schema{
+								"foo": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"string"},
+									},
+								},
+							},
+							Required: []string{
+								"foo",
+							},
+						},
+					},
+					"getFoobarSharedType": {
+						SchemaProps: spec.SchemaProps{
+							Type:        []string{"object"},
+							Description: "Test type for go naming conflicts",
+							Properties: map[string]spec.Schema{
+								"bar": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"string"},
+									},
+								},
+							},
+							Required: []string{
+								"bar",
 							},
 						},
 					},
@@ -511,6 +611,8 @@ var customRouteToGoResponseType = map[string]any{
 	"v1alpha1|TestKind|bar|GET": v1alpha1.GetMessage{},
 
 	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
+
+	"v1alpha1|TestKind|recurse|GET": v1alpha1.GetRecursiveResponse{},
 
 	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobar{},
 	"v1alpha1||foobar|GET":             v1alpha1.GetClusterFoobar{},

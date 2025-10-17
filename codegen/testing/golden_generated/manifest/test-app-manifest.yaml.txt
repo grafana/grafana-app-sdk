@@ -219,6 +219,7 @@ spec:
               content:
                 application/json:
                   schema:
+                    additionalProperties: false
                     properties:
                       force:
                         default: false
@@ -234,6 +235,7 @@ spec:
                 content:
                   application/json:
                     schema:
+                      additionalProperties: false
                       properties:
                         message:
                           type: string
@@ -271,6 +273,7 @@ spec:
                 content:
                   application/json:
                     schema:
+                      additionalProperties: false
                       properties:
                         apiVersion:
                           description: 'APIVersion defines the versioned schema of
@@ -280,6 +283,7 @@ spec:
                           type: string
                         items:
                           items:
+                            additionalProperties: false
                             properties:
                               name:
                                 type: string
