@@ -272,7 +272,7 @@ type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 func NewApp(config AppConfig) (*App, error) {
 	clients := config.ClientGenerator
 	if clients == nil {
-		k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
+		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
 	}
 	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
