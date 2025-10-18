@@ -50,13 +50,22 @@ type ClientConfig struct {
 	// It is passed the Kind and existing rest.Config, and should return a valid rest.Config
 	// (returning the same rest.Config as the input is valid)
 	KubeConfigProvider func(kind resource.Kind, kubeConfig rest.Config) rest.Config
+
+	// EnableStreamErrorHandling wraps the HTTP transport to handle transient gRPC stream errors gracefully.
+	// When enabled, errors like "stream error:", "INTERNAL_ERROR", "connection reset", and "broken pipe"
+	// are converted to connection-like errors that trigger automatic reconnection rather than failing
+	// the watch permanently. This improves resilience of Kubernetes watch connections during transient
+	// network issues or server-side errors.
+	// Default: true (enabled for better reliability)
+	EnableStreamErrorHandling bool
 }
 
 // DefaultClientConfig returns a ClientConfig using defaults that assume you have used the SDK codegen tooling
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		CustomMetadataIsAnyType: false,
-		MetricsConfig:           metrics.DefaultConfig(""),
+		CustomMetadataIsAnyType:   false,
+		MetricsConfig:             metrics.DefaultConfig(""),
+		EnableStreamErrorHandling: true,
 		/* NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
 			return &KindNegotiatedSerializer{
 				Kind: kind,

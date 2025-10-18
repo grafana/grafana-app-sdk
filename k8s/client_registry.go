@@ -20,6 +20,11 @@ func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *Clie
 	kubeCconfig.NegotiatedSerializer = &GenericNegotiatedSerializer{}
 	kubeCconfig.UserAgent = rest.DefaultKubernetesUserAgent()
 
+	// Apply stream error handling if enabled
+	if clientConfig.EnableStreamErrorHandling {
+		WrapWithStreamErrorHandling(&kubeCconfig)
+	}
+
 	return &ClientRegistry{
 		clients:      make(map[schema.GroupVersionKind]rest.Interface),
 		cfg:          kubeCconfig,
