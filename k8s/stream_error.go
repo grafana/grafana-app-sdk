@@ -70,7 +70,7 @@ type streamErrorTransport struct {
 
 func (t *streamErrorTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	logger := logging.FromContext(req.Context()).With(
-		"url", req.URL.String(),
+		"path", req.URL.Path,
 		"method", req.Method,
 	)
 
