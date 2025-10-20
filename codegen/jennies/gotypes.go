@@ -127,7 +127,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 			PackageName:                    packageName,
 			Name:                           exportField(strings.Join(fieldName, "")),
 			NamePrefix:                     namePrefix,
-			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] == "metadata"),
+			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] != "metadata"),
 			AnyAsInterface:                 g.AnyAsInterface,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
 		if err != nil {
