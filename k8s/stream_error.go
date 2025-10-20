@@ -51,6 +51,11 @@ func isStreamError(err error) bool {
 		return true
 	}
 
+	// Check for HTTP/2 GOAWAY frames that cause watch connection failures
+	if strings.Contains(errStr, "GOAWAY") {
+		return true
+	}
+
 	// Check for other common connection-related errors
 	if strings.Contains(errStr, "INTERNAL_ERROR") ||
 		strings.Contains(errStr, "received from peer") ||

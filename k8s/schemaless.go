@@ -41,6 +41,8 @@ type SchemalessClient struct {
 	// prometheus collectors for the client
 	requestDurations *prometheus.HistogramVec
 	totalRequests    *prometheus.CounterVec
+	watchEventsTotal *prometheus.CounterVec
+	watchErrorsTotal *prometheus.CounterVec
 }
 
 // NewSchemalessClient creates a new SchemalessClient using the provided rest.Config and ClientConfig.
@@ -72,6 +74,18 @@ func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientCon
 			Namespace: clientConfig.MetricsConfig.Namespace,
 			Help:      "Total number of kubernetes requests",
 		}, []string{"status_code", "verb", "kind", "subresource"}),
+		watchEventsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "watch_events_total",
+			Subsystem: "kubernetes_client",
+			Namespace: clientConfig.MetricsConfig.Namespace,
+			Help:      "Total number of watch events received by type",
+		}, []string{"event_type", "kind"}),
+		watchErrorsTotal: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name:      "watch_errors_total",
+			Subsystem: "kubernetes_client",
+			Namespace: clientConfig.MetricsConfig.Namespace,
+			Help:      "Total number of watch event parsing/translation errors",
+		}, []string{"error_type", "kind"}),
 	}
 }
 
@@ -224,7 +238,7 @@ func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullId
 // PrometheusCollectors returns the prometheus metric collectors used by this client to allow for registration
 func (s *SchemalessClient) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{
-		s.totalRequests, s.requestDurations,
+		s.totalRequests, s.requestDurations, s.watchEventsTotal, s.watchErrorsTotal,
 	}
 }
 
@@ -251,6 +265,8 @@ func (s *SchemalessClient) getClient(identifier resource.FullIdentifier) (*group
 		config:           s.clientConfig,
 		requestDurations: s.requestDurations,
 		totalRequests:    s.totalRequests,
+		watchEventsTotal: s.watchEventsTotal,
+		watchErrorsTotal: s.watchErrorsTotal,
 	}
 	return s.clients[gv.Identifier()], nil
 }

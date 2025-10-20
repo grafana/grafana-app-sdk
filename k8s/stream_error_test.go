@@ -89,6 +89,11 @@ func TestIsStreamError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "GOAWAY frame",
+			err:      errors.New("http2: server sent GOAWAY and closed the connection"),
+			expected: true,
+		},
+		{
 			name:     "non-stream error",
 			err:      errors.New("some other error"),
 			expected: false,
