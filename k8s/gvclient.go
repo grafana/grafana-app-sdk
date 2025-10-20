@@ -39,6 +39,8 @@ type groupVersionClient struct {
 	config           ClientConfig
 	requestDurations *prometheus.HistogramVec
 	totalRequests    *prometheus.CounterVec
+	watchEventsTotal *prometheus.CounterVec
+	watchErrorsTotal *prometheus.CounterVec
 }
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
@@ -547,11 +549,16 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 		channelBufferSize = 1
 	}
 	w := &WatchResponse{
-		ex:     exampleObject,
-		codec:  codec,
-		watch:  resp,
-		ch:     make(chan resource.WatchEvent, channelBufferSize),
-		stopCh: make(chan struct{}),
+		ex:               exampleObject,
+		codec:            codec,
+		watch:            resp,
+		ch:               make(chan resource.WatchEvent, channelBufferSize),
+		stopCh:           make(chan struct{}),
+		ctx:              ctx,
+		namespace:        namespace,
+		plural:           plural,
+		watchEventsTotal: g.watchEventsTotal,
+		watchErrorsTotal: g.watchErrorsTotal,
 	}
 	return w, nil
 }
@@ -574,31 +581,42 @@ func (g *groupVersionClient) logRequestDuration(dur time.Duration, statusCode in
 
 func (g *groupVersionClient) metrics() []prometheus.Collector {
 	return []prometheus.Collector{
-		g.totalRequests, g.requestDurations,
+		g.totalRequests, g.requestDurations, g.watchEventsTotal, g.watchErrorsTotal,
 	}
 }
 
 // WatchResponse wraps a kubernetes watch.Interface in order to implement resource.WatchResponse.
 // The underlying watch.Interface can be accessed with KubernetesWatch().
 type WatchResponse struct {
-	watch    watch.Interface
-	ch       chan resource.WatchEvent
-	stopCh   chan struct{}
-	ex       resource.Object
-	codec    resource.Codec
-	started  bool
-	startMux sync.Mutex
+	watch            watch.Interface
+	ch               chan resource.WatchEvent
+	stopCh           chan struct{}
+	ex               resource.Object
+	codec            resource.Codec
+	started          bool
+	startMux         sync.Mutex
+	ctx              context.Context
+	namespace        string
+	plural           string
+	watchEventsTotal *prometheus.CounterVec
+	watchErrorsTotal *prometheus.CounterVec
 }
 
 //nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
+	logger := logging.FromContext(w.ctx).With(
+		"kind", w.plural,
+		"namespace", w.namespace,
+	)
+	logger.Debug("watch stream started")
+
 	for {
 		select {
 		case evt := <-w.watch.ResultChan():
 			if evt.Object == nil {
-				if logging.DefaultLogger != nil {
-					logging.DefaultLogger.Warn("Received nil object in watch event")
-				}
+				logger.Warn("received nil object in watch event",
+					"eventType", string(evt.Type))
+				w.incWatchErrorCounter("nil_object")
 				break
 			}
 			var obj resource.Object
@@ -608,24 +626,37 @@ func (w *WatchResponse) start() {
 				obj = w.ex.Copy()
 				err := cast.Into(obj, w.codec)
 				if err != nil {
-					// TODO: hmm
+					logger.Error("failed to translate watch event using Into() method",
+						"error", err,
+						"eventType", string(evt.Type),
+						"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
+					w.incWatchErrorCounter("translation_error")
 					break
 				}
 			} else if cast, ok := evt.Object.(wrappedObject); ok {
 				obj = cast.ResourceObject()
 			} else {
-				// TODO: hmm
-				if logging.DefaultLogger != nil {
-					logging.DefaultLogger.Error(
-						"Unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer.",
-						"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
-				}
+				logger.Error(
+					"unable to parse watch event object, does not implement resource.Object or have Into() or ResourceObject(). Please check your NegotiatedSerializer",
+					"eventType", string(evt.Type),
+					"groupVersionKind", evt.Object.GetObjectKind().GroupVersionKind().String())
+				w.incWatchErrorCounter("unparseable_object")
+				break
 			}
+
+			logger.Debug("received watch event",
+				"eventType", string(evt.Type),
+				"objectName", obj.GetName(),
+				"objectNamespace", obj.GetNamespace())
+
+			w.incWatchEventCounter(string(evt.Type))
+
 			w.ch <- resource.WatchEvent{
 				EventType: string(evt.Type),
 				Object:    obj,
 			}
 		case <-w.stopCh:
+			logger.Debug("watch stream stopped")
 			close(w.stopCh)
 			return
 		}
@@ -670,6 +701,20 @@ func (w *WatchResponse) KubernetesWatch() watch.Interface {
 		w.started = false
 	}
 	return w.watch
+}
+
+func (w *WatchResponse) incWatchEventCounter(eventType string) {
+	if w.watchEventsTotal == nil {
+		return
+	}
+	w.watchEventsTotal.WithLabelValues(eventType, w.plural).Inc()
+}
+
+func (w *WatchResponse) incWatchErrorCounter(errorType string) {
+	if w.watchErrorsTotal == nil {
+		return
+	}
+	w.watchErrorsTotal.WithLabelValues(errorType, w.plural).Inc()
 }
 
 func addLabels(obj resource.Object, labels map[string]string) {
