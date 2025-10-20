@@ -16,7 +16,7 @@ deps: $(VENDOR)
 
 .PHONY: lint
 lint:
-	golangci-lint run --max-same-issues=0 --max-issues-per-linter=0 --exclude-use-default=false
+	golangci-lint run --max-same-issues=0 --max-issues-per-linter=0
 
 .PHONY: test
 test:
