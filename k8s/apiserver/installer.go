@@ -583,7 +583,7 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			ResourceIdentifier: identifier,
 			Path:               rpath,
 			URL:                req.Request.URL,
-			Method:             http.MethodGet,
+			Method:             req.Request.Method,
 			Headers:            req.Request.Header,
 			Body:               req.Request.Body,
 		})
