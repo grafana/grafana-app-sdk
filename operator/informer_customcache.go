@@ -83,12 +83,16 @@ type CustomCacheInformer struct {
 func NewCustomCacheInformer(
 	store cache.Store, lw cache.ListerWatcher, kind resource.Kind, opts CustomCacheInformerOptions,
 ) *CustomCacheInformer {
-	if opts.ProcessorBufferSize == 0 {
+	if opts.ProcessorBufferSize <= 0 {
 		opts.ProcessorBufferSize = processorBufferSize
 	}
 
-	if opts.EventTimeout > 0 {
-		opts.EventTimeout = opts.CacheResyncInterval
+	if opts.CacheResyncInterval < 0 {
+		opts.CacheResyncInterval = 0
+	}
+
+	if opts.EventTimeout < 0 {
+		opts.EventTimeout = 0
 	}
 
 	if opts.CacheResyncInterval > 0 && opts.EventTimeout > opts.CacheResyncInterval {
