@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -174,7 +175,7 @@ func (s *SimpleStore[T]) Update(ctx context.Context, identifier Identifier, obj 
 func (s *SimpleStore[T]) UpdateSubresource(ctx context.Context, identifier Identifier, subresource SubresourceName,
 	obj any) (*TypedObject[T, MapSubresourceCatalog], error) {
 	if subresource == "" {
-		return nil, fmt.Errorf("subresource may not be empty")
+		return nil, errors.New("subresource may not be empty")
 	}
 	object := TypedObject[T, MapSubresourceCatalog]{
 		Subresources: MapSubresourceCatalog{
@@ -204,7 +205,7 @@ func (s *SimpleStore[T]) cast(obj Object) (*TypedObject[T, MapSubresourceCatalog
 	}
 	spec, ok := obj.GetSpec().(T)
 	if !ok {
-		return nil, fmt.Errorf("returned object could not be cast to store's type")
+		return nil, errors.New("returned object could not be cast to store's type")
 	}
 	apiVersion, kind := obj.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
 	return &TypedObject[T, MapSubresourceCatalog]{

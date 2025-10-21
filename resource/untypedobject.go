@@ -2,6 +2,7 @@ package resource
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -42,7 +43,7 @@ func (u *UntypedObject) GetSpec() any {
 func (u *UntypedObject) SetSpec(spec any) error {
 	cast, ok := spec.(map[string]any)
 	if !ok {
-		return fmt.Errorf("spec must be of type map[string]any")
+		return errors.New("spec must be of type map[string]any")
 	}
 	u.Spec = cast
 	return nil
@@ -93,10 +94,10 @@ func (u *UntypedObject) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = json.Unmarshal(m["apiVersion"], &u.TypeMeta.APIVersion); err != nil {
+	if err = json.Unmarshal(m["apiVersion"], &u.APIVersion); err != nil {
 		return fmt.Errorf("error reading apiVersion: %w", err)
 	}
-	if err = json.Unmarshal(m["kind"], &u.TypeMeta.Kind); err != nil {
+	if err = json.Unmarshal(m["kind"], &u.Kind); err != nil {
 		return fmt.Errorf("error reading kind: %w", err)
 	}
 	if err = json.Unmarshal(m["metadata"], &u.ObjectMeta); err != nil {
@@ -135,8 +136,8 @@ func (u *UntypedObject) MarshalJSON() ([]byte, error) {
 
 func (u *UntypedObject) GetStaticMetadata() StaticMetadata {
 	return StaticMetadata{
-		Name:      u.ObjectMeta.Name,
-		Namespace: u.ObjectMeta.Namespace,
+		Name:      u.Name,
+		Namespace: u.Namespace,
 		Group:     u.GroupVersionKind().Group,
 		Version:   u.GroupVersionKind().Version,
 		Kind:      u.GroupVersionKind().Kind,
@@ -263,7 +264,7 @@ func (u *UntypedList) Copy() ListObject {
 		TypeMeta: u.TypeMeta,
 		Items:    make([]Object, len(u.Items)),
 	}
-	u.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	u.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len(u.Items); i++ {
 		cpy.Items[i] = u.Items[i].Copy()
 	}

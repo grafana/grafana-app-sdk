@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -95,7 +96,7 @@ func NewSchemalessClientWithCodec(kubeConfig rest.Config, clientConfig ClientCon
 // The returned resource is marshaled into `into`.
 func (s *SchemalessClient) Get(ctx context.Context, identifier resource.FullIdentifier, into resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -112,10 +113,10 @@ func (s *SchemalessClient) Create(
 	ctx context.Context, id resource.FullIdentifier, obj resource.Object, opt resource.CreateOptions, out resource.Object,
 ) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if out == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(id)
 	if err != nil {
@@ -137,10 +138,10 @@ func (s *SchemalessClient) Create(
 func (s *SchemalessClient) Update(ctx context.Context, identifier resource.FullIdentifier, obj resource.Object,
 	options resource.UpdateOptions, into resource.Object) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -205,7 +206,7 @@ func (s *SchemalessClient) Delete(ctx context.Context, identifier resource.FullI
 func (s *SchemalessClient) List(ctx context.Context, identifier resource.FullIdentifier,
 	options resource.ListOptions, into resource.ListObject, exampleListItem resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {
@@ -226,7 +227,7 @@ func (s *SchemalessClient) List(ctx context.Context, identifier resource.FullIde
 func (s *SchemalessClient) Watch(ctx context.Context, identifier resource.FullIdentifier, options resource.WatchOptions,
 	exampleObject resource.Object) (resource.WatchResponse, error) {
 	if exampleObject == nil {
-		return nil, fmt.Errorf("exampleItem cannot be nil")
+		return nil, errors.New("exampleItem cannot be nil")
 	}
 	client, err := s.getClient(identifier)
 	if err != nil {

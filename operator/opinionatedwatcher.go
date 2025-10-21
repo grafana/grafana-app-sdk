@@ -88,10 +88,10 @@ type OpinionatedWatcherConfig struct {
 // NewOpinionatedWatcher sets up a new OpinionatedWatcher and returns a pointer to it.
 func NewOpinionatedWatcher(sch resource.Schema, client PatchClient, config OpinionatedWatcherConfig) (*OpinionatedWatcher, error) {
 	if sch == nil {
-		return nil, fmt.Errorf("schema cannot be nil")
+		return nil, errors.New("schema cannot be nil")
 	}
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 	supplier := config.Finalizer
 	if supplier == nil {
@@ -151,7 +151,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	defer span.End()
 	if object == nil {
 		span.SetStatus(codes.Error, "object cannot be nil")
-		return fmt.Errorf("object cannot be nil")
+		return errors.New("object cannot be nil")
 	}
 
 	logger := logging.FromContext(ctx).With("action", "add", "component", "OpinionatedWatcher", "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -285,10 +285,10 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	defer span.End()
 	// TODO: If old is nil, it _might_ be ok?
 	if src == nil {
-		return fmt.Errorf("old cannot be nil")
+		return errors.New("old cannot be nil")
 	}
 	if tgt == nil {
-		return fmt.Errorf("new cannot be nil")
+		return errors.New("new cannot be nil")
 	}
 
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
