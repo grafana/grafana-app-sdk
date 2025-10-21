@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	customcache "github.com/grafana/grafana-app-sdk/k8s/cache"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -161,7 +162,15 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.startedLock.Lock()
 		defer c.startedLock.Unlock()
 
-		c.controller = newInformer(c.listerWatcher, c.objectType, c.opts.CacheResyncInterval, c, c.store, nil)
+		c.controller = newInformer(
+			c.listerWatcher,
+			c.objectType,
+			c.schema.GroupVersionKind().String(),
+			c.opts.CacheResyncInterval,
+			c,
+			c.store,
+			nil,
+			c.opts.UseWatchList)
 		c.started = true
 	}()
 
@@ -412,10 +421,12 @@ func toResourceEventHandlerFuncs(
 func newInformer(
 	lw cache.ListerWatcher,
 	objType runtime.Object,
+	objDesc string,
 	resyncPeriod time.Duration,
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
 	transformer cache.TransformFunc,
+	useWatchList *bool,
 ) cache.Controller {
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
@@ -427,10 +438,11 @@ func newInformer(
 	})
 
 	cfg := &cache.Config{
-		Queue:            fifo,
-		ListerWatcher:    lw,
-		ObjectType:       objType,
-		FullResyncPeriod: resyncPeriod,
+		Queue:             fifo,
+		ListerWatcher:     lw,
+		ObjectType:        objType,
+		ObjectDescription: objDesc,
+		FullResyncPeriod:  resyncPeriod,
 
 		Process: func(obj any, isInInitialList bool) error {
 			if deltas, ok := obj.(cache.Deltas); ok {
@@ -439,7 +451,10 @@ func newInformer(
 			return errors.New("object given as Process argument is not Deltas")
 		},
 	}
-	return cache.New(cfg)
+
+	controller := customcache.NewController(cfg)
+	controller.UseWatchList = useWatchList
+	return controller
 }
 
 // processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,

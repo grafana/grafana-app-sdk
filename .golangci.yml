@@ -108,6 +108,8 @@ linters:
       - third_party$
       - builtin$
       - examples$
+      - k8s/client
+      - k8s/cache
 formatters:
   enable:
     - gofmt
@@ -124,3 +126,5 @@ formatters:
       - third_party$
       - builtin$
       - examples$
+      - k8s/client
+      - k8s/cache
