@@ -1,7 +1,7 @@
 package k8s
 
 import (
-	"fmt"
+	"errors"
 	"sync"
 	"time"
 
@@ -78,7 +78,7 @@ type ClientRegistry struct {
 func (c *ClientRegistry) ClientFor(sch resource.Kind) (resource.Client, error) {
 	codec := sch.Codec(resource.KindEncodingJSON)
 	if codec == nil {
-		return nil, fmt.Errorf("no codec for KindEncodingJSON")
+		return nil, errors.New("no codec for KindEncodingJSON")
 	}
 	client, err := c.getClient(sch)
 	if err != nil {

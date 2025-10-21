@@ -278,7 +278,7 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 	switch manifest.Location.Type {
 	case app.ManifestLocationEmbedded:
 		if manifest.ManifestData == nil {
-			return nil, fmt.Errorf("no ManifestData in Manifest")
+			return nil, errors.New("no ManifestData in Manifest")
 		}
 		data = *manifest.ManifestData
 	case app.ManifestLocationFilePath:
@@ -296,7 +296,8 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 		}
 	case app.ManifestLocationAPIServerResource:
 		// TODO: fetch from API server
-		return nil, fmt.Errorf("apiserver location not supported yet")
+		return nil, errors.New("apiserver location not supported yet")
+	default:
 	}
 	return &data, nil
 }
