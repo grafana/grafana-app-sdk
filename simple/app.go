@@ -145,7 +145,15 @@ var DefaultInformerSupplier = func(
 	if err != nil {
 		return nil, err
 	}
-	return operator.NewKubernetesBasedInformer(kind, client, options)
+
+	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
+	if err != nil {
+		return nil, err
+	}
+
+	return operator.NewConcurrentInformer(inf, operator.ConcurrentInformerOptions{
+		ErrorHandler: options.ErrorHandler,
+	})
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController
