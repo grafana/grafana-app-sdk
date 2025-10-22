@@ -700,6 +700,20 @@ func (w *WatchResponse) KubernetesWatch() watch.Interface {
 		w.stopCh <- struct{}{}
 		w.started = false
 	}
+
+	// If metrics are configured, wrap the watch to record metrics
+	if w.watchEventsTotal != nil {
+		return &metricsWatchWrapper{
+			underlying:       w.watch,
+			plural:           w.plural,
+			watchEventsTotal: w.watchEventsTotal,
+			watchErrorsTotal: w.watchErrorsTotal,
+			ctx:              w.ctx,
+			ch:               make(chan watch.Event, cap(w.ch)),
+			stopCh:           make(chan struct{}),
+		}
+	}
+
 	return w.watch
 }
 
@@ -711,6 +725,86 @@ func (w *WatchResponse) incWatchEventCounter(eventType string) {
 }
 
 func (w *WatchResponse) incWatchErrorCounter(errorType string) {
+	if w.watchErrorsTotal == nil {
+		return
+	}
+	w.watchErrorsTotal.WithLabelValues(errorType, w.plural).Inc()
+}
+
+// metricsWatchWrapper wraps a watch.Interface to transparently record metrics for watch events
+type metricsWatchWrapper struct {
+	underlying       watch.Interface
+	plural           string
+	watchEventsTotal *prometheus.CounterVec
+	watchErrorsTotal *prometheus.CounterVec
+	ctx              context.Context
+	ch               chan watch.Event
+	once             sync.Once
+	stopCh           chan struct{}
+}
+
+// Stop delegates to the underlying watch
+func (w *metricsWatchWrapper) Stop() {
+	w.underlying.Stop()
+	// Signal the goroutine to stop if it was started
+	select {
+	case w.stopCh <- struct{}{}:
+	default:
+	}
+}
+
+// ResultChan returns a channel that intercepts events and records metrics
+func (w *metricsWatchWrapper) ResultChan() <-chan watch.Event {
+	// Use sync.Once to ensure we only spawn the goroutine once
+	w.once.Do(func() {
+		go w.interceptEvents()
+	})
+	return w.ch
+}
+
+// interceptEvents reads from the underlying watch, records metrics, and forwards events
+func (w *metricsWatchWrapper) interceptEvents() {
+	defer close(w.ch)
+
+	logger := logging.FromContext(w.ctx).With("kind", w.plural)
+
+	underlyingCh := w.underlying.ResultChan()
+	for {
+		select {
+		case evt, ok := <-underlyingCh:
+			if !ok {
+				// Underlying channel closed
+				logger.Debug("underlying watch channel closed")
+				return
+			}
+
+			// Record event type metric
+			w.incWatchEventCounter(string(evt.Type))
+
+			// Check for nil object and record error if needed
+			if evt.Object == nil {
+				logger.Warn("received nil object in watch event", "eventType", string(evt.Type))
+				w.incWatchErrorCounter("nil_object")
+			}
+
+			// Forward event to wrapper's channel
+			w.ch <- evt
+
+		case <-w.stopCh:
+			logger.Debug("metrics watch wrapper stopped")
+			return
+		}
+	}
+}
+
+func (w *metricsWatchWrapper) incWatchEventCounter(eventType string) {
+	if w.watchEventsTotal == nil {
+		return
+	}
+	w.watchEventsTotal.WithLabelValues(eventType, w.plural).Inc()
+}
+
+func (w *metricsWatchWrapper) incWatchErrorCounter(errorType string) {
 	if w.watchErrorsTotal == nil {
 		return
 	}
