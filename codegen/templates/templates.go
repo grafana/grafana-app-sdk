@@ -155,8 +155,6 @@ func (SchemaMetadata) ToObjectPath(s string) string {
 		}
 		if len(part) > 0 {
 			part = strings.ToUpper(part[:1]) + part[1:]
-		} else {
-			part = strings.ToUpper(part)
 		}
 		parts = append(parts, part)
 	}
