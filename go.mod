@@ -10,7 +10,7 @@ retract (
 
 require (
 	cuelang.org/go v0.11.0
-	github.com/bradfitz/gomemcache v0.0.0-20230905024940-24af94b03874
+	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.133.0
