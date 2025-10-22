@@ -16,6 +16,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -74,7 +75,10 @@ func getAttrsFunc(kind resource.Kind) func(obj runtime.Object) (labels.Set, fiel
 		for _, selectableField := range kind.SelectableFields() {
 			val, err := selectableField.FieldValueFunc(resourceObj)
 			if err != nil {
-				return nil, nil, err
+				// TODO: better warning than using the default logger?
+				logging.DefaultLogger.Warn("failed to retrieve field value", "error", err, "group", kind.Group(), "version", kind.Version(), "kind", kind.Kind(), "field", selectableField.FieldSelector)
+				// Set the value to an empty string
+				val = ""
 			}
 			flds[strings.TrimPrefix(selectableField.FieldSelector, ".")] = val
 		}
