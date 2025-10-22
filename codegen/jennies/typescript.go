@@ -73,7 +73,7 @@ func (*TypeScriptResourceTypes) generateObjectFile(kind codegen.Kind, version *c
 		return nil, err
 	}
 	for it.Next() {
-		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+		if it.Selector().String() == "spec" || it.Selector().String() == "metadata" { //nolint:goconst
 			continue
 		}
 		metadata.Subresources = append(metadata.Subresources, templates.SubresourceMetadata{

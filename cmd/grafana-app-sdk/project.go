@@ -80,6 +80,7 @@ var projectLocalInitCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
+//nolint:goconst
 func setupProjectCmd() {
 	projectCmd.PersistentFlags().StringP("path", "p", "", "Path to project directory")
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
