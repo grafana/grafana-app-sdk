@@ -19,12 +19,10 @@ var (
                 cast, ok := o.(*{{$root.Kind}})
                 if !ok {
                     return "", fmt.Errorf("provided object must be of type *{{$root.Kind}}")
-                }
-                {{ range .OptionalFieldsInPath }}
+                }{{ range .OptionalFieldsInPath }}
                 if cast.{{$root.ToObjectPath .}} == nil {
                     return "", nil
-                }
-                {{ end }}
+                }{{ end }}
                 {{ if .Optional }}{{ if eq .Type "string" }}
                 return *cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
