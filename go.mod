@@ -14,7 +14,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.133.0
-	github.com/grafana/codejen v0.0.4-0.20230321061741-77f656893a3d
+	github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770
 	github.com/grafana/cog v0.0.44
 	github.com/grafana/grafana-app-sdk/logging v0.48.0
 	github.com/hashicorp/go-multierror v1.1.1
