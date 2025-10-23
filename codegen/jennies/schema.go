@@ -106,9 +106,8 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
 				}
 				fields = append(fields, templates.SchemaMetadataSelectableField{
-					Field:    s,
-					Optional: false,
-					Type:     typ,
+					Field: s,
+					Type:  typ,
 				})
 			} else if optional := val.LookupPath(cue.MakePath(cue.Str(field).Optional())); optional.Exists() {
 				typ, err := getCUEValueKindString(val, cue.MakePath(cue.Str(field).Optional()))
@@ -116,9 +115,9 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
 				}
 				fields = append(fields, templates.SchemaMetadataSelectableField{
-					Field:    s,
-					Optional: true,
-					Type:     typ,
+					Field:                s,
+					OptionalFieldsInPath: getOptionalFieldsInPath(ver.Schema, fieldPath),
+					Type:                 typ,
 				})
 			} else {
 				return nil, fmt.Errorf("invalid selectable field path: %s", fieldPath)
@@ -126,6 +125,27 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 		}
 	}
 	return fields, nil
+}
+
+// getOptionalFieldsInPath returns a list of all optional fields found along the provided fieldPath.
+// This is used to generate nil checks on optional fields ensuring safe access to the selectable field.
+func getOptionalFieldsInPath(schema cue.Value, fieldPath string) []string {
+	optionalFields := make([]string, 0)
+	currentPath := make([]string, 0)
+
+	for part := range strings.SplitSeq(fieldPath, ".") {
+		currentPath = append(currentPath, part)
+		cuePath := cue.MakePath(cue.Str(part))
+
+		if lookup := schema.LookupPath(cuePath); lookup.Exists() {
+			schema = lookup
+		} else if optional := schema.LookupPath(cuePath.Optional()); optional.Exists() {
+			schema = optional
+			optionalFields = append(optionalFields, strings.Join(currentPath, "."))
+		}
+	}
+
+	return optionalFields
 }
 
 func getCUEValueKindString(v cue.Value, path cue.Path) (string, error) {
