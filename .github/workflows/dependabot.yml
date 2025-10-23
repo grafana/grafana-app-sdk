@@ -24,7 +24,7 @@ jobs:
     steps:
     - name: Retrieve GitHub App secrets
       id: get-secrets
-      uses: grafana/shared-workflows/actions/get-vault-secrets@97c6f45f01d4bca8a3b1acfe397113ce88858a81
+      uses: grafana/shared-workflows/actions/get-vault-secrets@8b2a69527acf87ba0816bc842fbbc474ac9a3749
       with:
         repo_secrets: |
           APP_ID=grafana-go-workspace-bot:app-id
