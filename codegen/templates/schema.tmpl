@@ -5,8 +5,11 @@
 package {{.Package}}
 {{$sfl := len .SelectableFields}}
 import (
-    {{if gt $sfl 0}}"fmt"
+    {{if gt $sfl 0}}
+    "fmt"
+    "errors"
     {{end}}
+
     "github.com/grafana/grafana-app-sdk/resource"
 )
 {{$root:=.}}
@@ -18,11 +21,12 @@ var (
             FieldValueFunc: func(o resource.Object) (string, error) {
                 cast, ok := o.(*{{$root.Kind}})
                 if !ok {
-                    return "", fmt.Errorf("provided object must be of type *{{$root.Kind}}")
-                }{{ if .Optional }}
-                if cast.{{$root.ToObjectPath .Field}} == nil {
+                    return "", errors.New("provided object must be of type *{{$root.Kind}}")
+                }{{ range .OptionalFieldsInPath }}
+                if cast.{{$root.ToObjectPath .}} == nil {
                     return "", nil
-                }{{ if eq .Type "string" }}
+                }{{ end }}
+                {{ if .Optional }}{{ if eq .Type "string" }}
                 return *cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
                 return fmt.Sprintf("%v", *cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ else }}{{ if eq .Type "string" }}
