@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
@@ -15,6 +16,7 @@ import (
 	"k8s.io/apiserver/pkg/storage"
 	"sigs.k8s.io/structured-merge-diff/v6/fieldpath"
 
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -28,7 +30,7 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 		NewListFunc: func() runtime.Object {
 			return kind.ZeroListValue()
 		},
-		PredicateFunc:             matchKind,
+		PredicateFunc:             matchKindFunc(kind),
 		DefaultQualifiedResource:  kind.GroupVersionResource().GroupResource(),
 		SingularQualifiedResource: kind.GroupVersionResource().GroupResource(),
 
@@ -38,7 +40,7 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 		TableConvertor: rest.NewDefaultTableConvertor(kind.GroupVersionResource().GroupResource()),
 	}
 
-	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: getAttrs}
+	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: getAttrsFunc(kind)}
 	if err := store.CompleteWithOptions(options); err != nil {
 		return nil, fmt.Errorf("failed completing storage options for %s: %w", kind.Kind(), err)
 	}
@@ -46,34 +48,52 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 	return store, nil
 }
 
-func getAttrs(obj runtime.Object) (labels.Set, fields.Set, error) {
-	resourceObj, ok := obj.(resource.Object)
-	if !ok {
-		return nil, nil, fmt.Errorf("object (%T) is not a resource.Object", obj)
+func getAttrsFunc(kind resource.Kind) func(obj runtime.Object) (labels.Set, fields.Set, error) {
+	return func(obj runtime.Object) (labels.Set, fields.Set, error) {
+		resourceObj, ok := obj.(resource.Object)
+		if !ok {
+			return nil, nil, fmt.Errorf("object (%T) is not a resource.Object", obj)
+		}
+
+		m := metav1.ObjectMeta{
+			Name:                       resourceObj.GetName(),
+			Namespace:                  resourceObj.GetNamespace(),
+			Labels:                     resourceObj.GetLabels(),
+			Annotations:                resourceObj.GetAnnotations(),
+			OwnerReferences:            resourceObj.GetOwnerReferences(),
+			Finalizers:                 resourceObj.GetFinalizers(),
+			ResourceVersion:            resourceObj.GetResourceVersion(),
+			UID:                        resourceObj.GetUID(),
+			Generation:                 resourceObj.GetGeneration(),
+			CreationTimestamp:          resourceObj.GetCreationTimestamp(),
+			DeletionTimestamp:          resourceObj.GetDeletionTimestamp(),
+			DeletionGracePeriodSeconds: resourceObj.GetDeletionGracePeriodSeconds(),
+			ManagedFields:              resourceObj.GetManagedFields(),
+		}
+
+		flds := generic.ObjectMetaFieldsSet(&m, kind.Scope() != resource.ClusterScope)
+		for _, selectableField := range kind.SelectableFields() {
+			val, err := selectableField.FieldValueFunc(resourceObj)
+			if err != nil {
+				// TODO: better warning than using the default logger?
+				logging.DefaultLogger.Warn("failed to retrieve field value", "error", err, "group", kind.Group(), "version", kind.Version(), "kind", kind.Kind(), "field", selectableField.FieldSelector)
+				// Set the value to an empty string
+				val = ""
+			}
+			flds[strings.TrimPrefix(selectableField.FieldSelector, ".")] = val
+		}
+
+		return labels.Set(m.Labels), flds, nil
 	}
-	m := metav1.ObjectMeta{
-		Name:                       resourceObj.GetName(),
-		Namespace:                  resourceObj.GetNamespace(),
-		Labels:                     resourceObj.GetLabels(),
-		Annotations:                resourceObj.GetAnnotations(),
-		OwnerReferences:            resourceObj.GetOwnerReferences(),
-		Finalizers:                 resourceObj.GetFinalizers(),
-		ResourceVersion:            resourceObj.GetResourceVersion(),
-		UID:                        resourceObj.GetUID(),
-		Generation:                 resourceObj.GetGeneration(),
-		CreationTimestamp:          resourceObj.GetCreationTimestamp(),
-		DeletionTimestamp:          resourceObj.GetDeletionTimestamp(),
-		DeletionGracePeriodSeconds: resourceObj.GetDeletionGracePeriodSeconds(),
-		ManagedFields:              resourceObj.GetManagedFields(),
-	}
-	return labels.Set(m.Labels), generic.ObjectMetaFieldsSet(&m, true), nil
 }
 
-func matchKind(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
-	return storage.SelectionPredicate{
-		Label:    label,
-		Field:    field,
-		GetAttrs: getAttrs,
+func matchKindFunc(kind resource.Kind) func(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
+	return func(label labels.Selector, field fields.Selector) storage.SelectionPredicate {
+		return storage.SelectionPredicate{
+			Label:    label,
+			Field:    field,
+			GetAttrs: getAttrsFunc(kind),
+		}
 	}
 }
 
