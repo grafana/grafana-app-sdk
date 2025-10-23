@@ -140,8 +140,9 @@ type SchemaMetadata struct {
 
 type SchemaMetadataSelectableField struct {
 	Field                string
-	OptionalFieldsInPath []string
+	Optional             bool
 	Type                 string
+	OptionalFieldsInPath []string
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {

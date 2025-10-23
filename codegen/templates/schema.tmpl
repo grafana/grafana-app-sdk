@@ -20,13 +20,12 @@ var (
                 if !ok {
                     return "", fmt.Errorf("provided object must be of type *{{$root.Kind}}")
                 }
-                {{ if gt (len .OptionalFieldsInPath) 0 }}
                 {{ range .OptionalFieldsInPath }}
                 if cast.{{$root.ToObjectPath .}} == nil {
                     return "", nil
                 }
                 {{ end }}
-                {{ if eq .Type "string" }}
+                {{ if .Optional }}{{ if eq .Type "string" }}
                 return *cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
                 return fmt.Sprintf("%v", *cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ else }}{{ if eq .Type "string" }}

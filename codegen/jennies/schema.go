@@ -106,8 +106,10 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
 				}
 				fields = append(fields, templates.SchemaMetadataSelectableField{
-					Field: s,
-					Type:  typ,
+					Field:                s,
+					Optional:             false,
+					Type:                 typ,
+					OptionalFieldsInPath: getOptionalFieldsInPath(ver.Schema, fieldPath),
 				})
 			} else if optional := val.LookupPath(cue.MakePath(cue.Str(field).Optional())); optional.Exists() {
 				typ, err := getCUEValueKindString(val, cue.MakePath(cue.Str(field).Optional()))
@@ -116,8 +118,9 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 				}
 				fields = append(fields, templates.SchemaMetadataSelectableField{
 					Field:                s,
-					OptionalFieldsInPath: getOptionalFieldsInPath(ver.Schema, fieldPath),
+					Optional:             true,
 					Type:                 typ,
+					OptionalFieldsInPath: getOptionalFieldsInPath(ver.Schema, fieldPath),
 				})
 			} else {
 				return nil, fmt.Errorf("invalid selectable field path: %s", fieldPath)
