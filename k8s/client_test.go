@@ -8,8 +8,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync"
 	"testing"
+	"time"
 
+	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -17,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/util/flowcontrol"
 
@@ -924,4 +929,377 @@ func (r *mockRESTClient) APIVersion() schema.GroupVersion {
 		return r.APIVersionFunc()
 	}
 	return schema.GroupVersion{}
+}
+
+// mockWatch implements watch.Interface for testing
+type mockWatch struct {
+	ch       chan watch.Event
+	stopCh   chan struct{}
+	stopped  bool
+	stopMux  sync.Mutex
+}
+
+func newMockWatch() *mockWatch {
+	return &mockWatch{
+		ch:     make(chan watch.Event, 10),
+		stopCh: make(chan struct{}),
+	}
+}
+
+func (m *mockWatch) Stop() {
+	m.stopMux.Lock()
+	defer m.stopMux.Unlock()
+	if !m.stopped {
+		m.stopped = true
+		close(m.stopCh)
+		close(m.ch)
+	}
+}
+
+func (m *mockWatch) ResultChan() <-chan watch.Event {
+	return m.ch
+}
+
+func (m *mockWatch) sendEvent(evt watch.Event) {
+	m.stopMux.Lock()
+	defer m.stopMux.Unlock()
+	if !m.stopped {
+		m.ch <- evt
+	}
+}
+
+func TestMetricsWatchWrapper(t *testing.T) {
+	tests := []struct {
+		name                string
+		events              []watch.Event
+		expectEventCounts   map[string]int
+		expectErrorCounts   map[string]int
+	}{
+		{
+			name: "records ADDED event",
+			events: []watch.Event{
+				{Type: watch.Added, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records MODIFIED event",
+			events: []watch.Event{
+				{Type: watch.Modified, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"MODIFIED": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records DELETED event",
+			events: []watch.Event{
+				{Type: watch.Deleted, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"DELETED": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records BOOKMARK event",
+			events: []watch.Event{
+				{Type: watch.Bookmark, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"BOOKMARK": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records ERROR event",
+			events: []watch.Event{
+				{Type: watch.Error, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ERROR": 1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records nil object error",
+			events: []watch.Event{
+				{Type: watch.Added, Object: nil},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED": 1,
+			},
+			expectErrorCounts: map[string]int{
+				"nil_object": 1,
+			},
+		},
+		{
+			name: "records multiple events",
+			events: []watch.Event{
+				{Type: watch.Added, Object: getTestObject()},
+				{Type: watch.Modified, Object: getTestObject()},
+				{Type: watch.Deleted, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED":    1,
+				"MODIFIED": 1,
+				"DELETED":  1,
+			},
+			expectErrorCounts: map[string]int{},
+		},
+		{
+			name: "records mixed events and errors",
+			events: []watch.Event{
+				{Type: watch.Added, Object: getTestObject()},
+				{Type: watch.Modified, Object: nil},
+				{Type: watch.Deleted, Object: getTestObject()},
+			},
+			expectEventCounts: map[string]int{
+				"ADDED":    1,
+				"MODIFIED": 1,
+				"DELETED":  1,
+			},
+			expectErrorCounts: map[string]int{
+				"nil_object": 1,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock metrics
+			watchEventsTotal := prometheus.NewCounterVec(
+				prometheus.CounterOpts{Name: "test_watch_events_total"},
+				[]string{"event_type", "kind"},
+			)
+			watchErrorsTotal := prometheus.NewCounterVec(
+				prometheus.CounterOpts{Name: "test_watch_errors_total"},
+				[]string{"error_type", "kind"},
+			)
+
+			// Create mock watch
+			mockW := newMockWatch()
+
+			// Create wrapper
+			ctx := context.Background()
+			wrapper := &metricsWatchWrapper{
+				underlying:       mockW,
+				plural:           "tests",
+				watchEventsTotal: watchEventsTotal,
+				watchErrorsTotal: watchErrorsTotal,
+				ctx:              ctx,
+				ch:               make(chan watch.Event, 10),
+			}
+
+			// Start reading from ResultChan
+			resultCh := wrapper.ResultChan()
+
+			// Send events
+			go func() {
+				for _, evt := range tt.events {
+					mockW.sendEvent(evt)
+				}
+			}()
+
+			// Collect events
+			var receivedEvents []watch.Event
+			done := make(chan struct{})
+			go func() {
+				for i := 0; i < len(tt.events); i++ {
+					evt := <-resultCh
+					receivedEvents = append(receivedEvents, evt)
+				}
+				close(done)
+			}()
+
+			// Wait for events with timeout
+			select {
+			case <-done:
+			case <-time.After(1 * time.Second):
+				t.Fatal("timeout waiting for events")
+			}
+
+			// Stop the wrapper
+			wrapper.Stop()
+
+			// Verify event counts
+			assert.Equal(t, len(tt.events), len(receivedEvents), "should receive all events")
+
+			// Check metrics
+			for eventType, expectedCount := range tt.expectEventCounts {
+				metric, err := watchEventsTotal.GetMetricWithLabelValues(eventType, "tests")
+				require.NoError(t, err)
+				var m prometheus.Metric = metric
+				var pb dto.Metric
+				err = m.Write(&pb)
+				require.NoError(t, err)
+				actualCount := int(pb.GetCounter().GetValue())
+				assert.Equal(t, expectedCount, actualCount, "event count mismatch for type %s", eventType)
+			}
+
+			for errorType, expectedCount := range tt.expectErrorCounts {
+				metric, err := watchErrorsTotal.GetMetricWithLabelValues(errorType, "tests")
+				require.NoError(t, err)
+				var m prometheus.Metric = metric
+				var pb dto.Metric
+				err = m.Write(&pb)
+				require.NoError(t, err)
+				actualCount := int(pb.GetCounter().GetValue())
+				assert.Equal(t, expectedCount, actualCount, "error count mismatch for type %s", errorType)
+			}
+		})
+	}
+}
+
+func TestMetricsWatchWrapper_StopPropagation(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create wrapper
+	ctx := context.Background()
+	watchEventsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_watch_events_total"},
+		[]string{"event_type", "kind"},
+	)
+
+	wrapper := &metricsWatchWrapper{
+		underlying:       mockW,
+		plural:           "tests",
+		watchEventsTotal: watchEventsTotal,
+		ctx:              ctx,
+		ch:               make(chan watch.Event, 10),
+	}
+
+	// Call Stop on wrapper
+	wrapper.Stop()
+
+	// Verify underlying watch was stopped
+	assert.True(t, mockW.stopped, "underlying watch should be stopped")
+}
+
+func TestMetricsWatchWrapper_NoMetrics(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create wrapper without metrics
+	ctx := context.Background()
+	wrapper := &metricsWatchWrapper{
+		underlying:       mockW,
+		plural:           "tests",
+		watchEventsTotal: nil,
+		watchErrorsTotal: nil,
+		ctx:              ctx,
+		ch:               make(chan watch.Event, 10),
+	}
+
+	// Start reading from ResultChan
+	resultCh := wrapper.ResultChan()
+
+	// Send an event
+	go func() {
+		mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+	}()
+
+	// Should still receive event
+	select {
+	case evt := <-resultCh:
+		assert.Equal(t, watch.Added, evt.Type)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for event")
+	}
+
+	wrapper.Stop()
+}
+
+func TestWatchResponse_KubernetesWatch_WithMetrics(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create mock metrics
+	watchEventsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_watch_events_total"},
+		[]string{"event_type", "kind"},
+	)
+	watchErrorsTotal := prometheus.NewCounterVec(
+		prometheus.CounterOpts{Name: "test_watch_errors_total"},
+		[]string{"error_type", "kind"},
+	)
+
+	// Create WatchResponse with metrics
+	ctx := context.Background()
+	wr := &WatchResponse{
+		watch:            mockW,
+		ch:               make(chan resource.WatchEvent, 1),
+		stopCh:           make(chan struct{}),
+		ctx:              ctx,
+		plural:           "tests",
+		watchEventsTotal: watchEventsTotal,
+		watchErrorsTotal: watchErrorsTotal,
+	}
+
+	// Call KubernetesWatch()
+	k8sWatch := wr.KubernetesWatch()
+
+	// Should return a metricsWatchWrapper
+	wrapper, ok := k8sWatch.(*metricsWatchWrapper)
+	require.True(t, ok, "KubernetesWatch() should return metricsWatchWrapper when metrics configured")
+	assert.NotNil(t, wrapper.watchEventsTotal)
+	assert.NotNil(t, wrapper.watchErrorsTotal)
+	assert.Equal(t, "tests", wrapper.plural)
+
+	// Test that metrics are recorded
+	resultCh := k8sWatch.ResultChan()
+
+	// Send an event
+	go func() {
+		mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+	}()
+
+	// Receive event
+	select {
+	case evt := <-resultCh:
+		assert.Equal(t, watch.Added, evt.Type)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timeout waiting for event")
+	}
+
+	// Stop the watch
+	k8sWatch.Stop()
+
+	// Verify metrics were recorded
+	metric, err := watchEventsTotal.GetMetricWithLabelValues("ADDED", "tests")
+	require.NoError(t, err)
+	var m prometheus.Metric = metric
+	var pb dto.Metric
+	err = m.Write(&pb)
+	require.NoError(t, err)
+	actualCount := int(pb.GetCounter().GetValue())
+	assert.Equal(t, 1, actualCount, "should record ADDED event metric")
+}
+
+func TestWatchResponse_KubernetesWatch_WithoutMetrics(t *testing.T) {
+	// Create mock watch
+	mockW := newMockWatch()
+
+	// Create WatchResponse without metrics
+	ctx := context.Background()
+	wr := &WatchResponse{
+		watch:            mockW,
+		ch:               make(chan resource.WatchEvent, 1),
+		stopCh:           make(chan struct{}),
+		ctx:              ctx,
+		plural:           "tests",
+		watchEventsTotal: nil,
+		watchErrorsTotal: nil,
+	}
+
+	// Call KubernetesWatch()
+	k8sWatch := wr.KubernetesWatch()
+
+	// Should return the raw underlying watch (not wrapped)
+	assert.Equal(t, mockW, k8sWatch, "KubernetesWatch() should return raw watch when metrics not configured")
 }

@@ -50,13 +50,22 @@ type ClientConfig struct {
 	// It is passed the Kind and existing rest.Config, and should return a valid rest.Config
 	// (returning the same rest.Config as the input is valid)
 	KubeConfigProvider func(kind resource.Kind, kubeConfig rest.Config) rest.Config
+
+	// EnableStreamErrorHandling wraps the HTTP transport to handle transient gRPC stream errors gracefully.
+	// When enabled, errors like "stream error:", "INTERNAL_ERROR", "connection reset", and "broken pipe"
+	// are converted to connection-like errors that trigger automatic reconnection rather than failing
+	// the watch permanently. This improves resilience of Kubernetes watch connections during transient
+	// network issues or server-side errors.
+	// Default: true (enabled for better reliability)
+	EnableStreamErrorHandling bool
 }
 
 // DefaultClientConfig returns a ClientConfig using defaults that assume you have used the SDK codegen tooling
 func DefaultClientConfig() ClientConfig {
 	return ClientConfig{
-		CustomMetadataIsAnyType: false,
-		MetricsConfig:           metrics.DefaultConfig(""),
+		CustomMetadataIsAnyType:   false,
+		MetricsConfig:             metrics.DefaultConfig(""),
+		EnableStreamErrorHandling: true,
 		/* NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
 			return &KindNegotiatedSerializer{
 				Kind: kind,
@@ -110,7 +119,7 @@ func (c *Client) Get(ctx context.Context, identifier resource.Identifier) (resou
 // and marshals it into `into`
 func (c *Client) GetInto(ctx context.Context, identifier resource.Identifier, into resource.Object) error {
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	return c.client.get(ctx, identifier, c.schema.Plural(), into, c.codec)
 }
@@ -131,10 +140,10 @@ func (c *Client) CreateInto(
 	ctx context.Context, id resource.Identifier, obj resource.Object, opts resource.CreateOptions, into resource.Object,
 ) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	if c.schema.Scope() == resource.NamespacedScope && id.Namespace == resource.NamespaceAll {
 		return fmt.Errorf(
@@ -163,7 +172,7 @@ func (c *Client) CreateInto(
 func (c *Client) Update(ctx context.Context, identifier resource.Identifier, obj resource.Object,
 	options resource.UpdateOptions) (resource.Object, error) {
 	if obj == nil {
-		return nil, fmt.Errorf("obj cannot be nil")
+		return nil, errors.New("obj cannot be nil")
 	}
 	into := c.schema.ZeroValue()
 	err := c.UpdateInto(ctx, identifier, obj, options, into)
@@ -177,10 +186,10 @@ func (c *Client) Update(ctx context.Context, identifier resource.Identifier, obj
 func (c *Client) UpdateInto(ctx context.Context, identifier resource.Identifier, obj resource.Object,
 	options resource.UpdateOptions, into resource.Object) error {
 	if obj == nil {
-		return fmt.Errorf("obj cannot be nil")
+		return errors.New("obj cannot be nil")
 	}
 	if into == nil {
-		return fmt.Errorf("into cannot be nil")
+		return errors.New("into cannot be nil")
 	}
 	obj.SetStaticMetadata(resource.StaticMetadata{
 		Namespace: identifier.Namespace,
@@ -196,7 +205,7 @@ func (c *Client) UpdateInto(ctx context.Context, identifier resource.Identifier,
 			return err
 		}
 
-		obj.SetResourceVersion(existingMd.ObjectMeta.ResourceVersion)
+		obj.SetResourceVersion(existingMd.ResourceVersion)
 	} else {
 		obj.SetResourceVersion(options.ResourceVersion)
 	}

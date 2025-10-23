@@ -59,7 +59,7 @@ func NewApp(config app.Config) (app.App, error) {
 			Validator: &simple.Validator{
 				ValidateFunc: func(_ context.Context, request *app.AdmissionRequest) error {
 					if request.Object.GetName() == "notallowed" {
-						return fmt.Errorf("not allowed")
+						return errors.New("not allowed")
 					}
 					return nil
 				},
@@ -313,6 +313,8 @@ func (*TestKindConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]b
 		default:
 			return nil, fmt.Errorf("unknown target version %s", dstGVK.Version)
 		}
+	default:
+		// Do nothing
 	}
 	return nil, fmt.Errorf("unknown source version %s", srcGVK.Version)
 }

@@ -2,6 +2,7 @@ package simple
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -111,12 +112,15 @@ type App struct {
 
 // AppConfig is the configuration used by App
 type AppConfig struct {
-	Name           string
-	KubeConfig     rest.Config
-	InformerConfig AppInformerConfig
-	ManagedKinds   []AppManagedKind
-	UnmanagedKinds []AppUnmanagedKind
-	Converters     map[schema.GroupKind]Converter
+	Name       string
+	KubeConfig rest.Config
+	// ClientGenerator is the ClientGenerator to use when constructing informers.
+	// It is optional and will default to k8s.NewClientRegistry(KubeConfig, k8s.DefaultClientConfig()) if not present.
+	ClientGenerator resource.ClientGenerator
+	InformerConfig  AppInformerConfig
+	ManagedKinds    []AppManagedKind
+	UnmanagedKinds  []AppUnmanagedKind
+	Converters      map[schema.GroupKind]Converter
 	// VersionedCustomRoutes is a map of version string => custom route handlers for
 	// custom routes attached at the version level rather than attached to a specific kind.
 	// Custom route paths for each version should not conflict with plural names of kinds for the version.
@@ -267,10 +271,14 @@ type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
 func NewApp(config AppConfig) (*App, error) {
+	clients := config.ClientGenerator
+	if clients == nil {
+		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
+	}
 	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
 		runner:             app.NewMultiRunner(),
-		clientGenerator:    k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig()),
+		clientGenerator:    clients,
 		kinds:              make(map[string]AppManagedKind),
 		gvrToGVK:           make(map[string]string),
 		internalKinds:      make(map[string]resource.Kind),
@@ -394,13 +402,13 @@ func (a *App) manageKind(kind AppManagedKind) error {
 	// If there are custom routes, validate them
 	for route, handler := range kind.CustomRoutes {
 		if route.Method == "" {
-			return fmt.Errorf("custom route cannot have an empty method")
+			return errors.New("custom route cannot have an empty method")
 		}
 		if route.Path == "" {
-			return fmt.Errorf("custom route cannot have an empty path")
+			return errors.New("custom route cannot have an empty path")
 		}
 		if handler == nil {
-			return fmt.Errorf("custom route cannot have a nil handler")
+			return errors.New("custom route cannot have a nil handler")
 		}
 		key := a.customRouteHandlerKey(kind.Kind.GroupVersionKind(), string(route.Method), route.Path, kind.Kind.Scope())
 		if _, ok := a.customRoutes[key]; ok {
@@ -426,7 +434,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
 	if kind.Reconciler != nil && kind.Watcher != nil {
-		return fmt.Errorf("please provide either Watcher or Reconciler, not both")
+		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		infSupplier := a.cfg.InformerConfig.InformerSupplier

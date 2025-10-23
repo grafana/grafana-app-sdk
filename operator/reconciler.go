@@ -122,10 +122,10 @@ func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 // set the `OpinionatedReconciler.Reconciler` value or use `OpinionatedReconciler.Wrap()`
 func NewOpinionatedReconciler(client PatchClient, finalizer string) (*OpinionatedReconciler, error) {
 	if client == nil {
-		return nil, fmt.Errorf("client cannot be nil")
+		return nil, errors.New("client cannot be nil")
 	}
 	if finalizer == "" {
-		return nil, fmt.Errorf("finalizer cannot be empty")
+		return nil, errors.New("finalizer cannot be empty")
 	}
 	if len(finalizer) > 63 {
 		return nil, fmt.Errorf("finalizer length cannot exceed 63 chars: %s", finalizer)
@@ -162,6 +162,57 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 	defer span.End()
 	logger := logging.FromContext(ctx).With("action", ResourceActionFromReconcileAction(request.Action), "component", "OpinionatedReconciler", "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
 	logger.Debug("Reconcile request received")
+
+	// Ignore deleted actions, as we send them on updates where we need to remove our finalizer
+	// This needs to be checked before the "is deletionTimestamp non-nil and still has our finalizer",
+	// because after we remove the finalizer, a delete event comes through that still has the final finalizer to be removed from the list
+	if request.Action == ReconcileActionDeleted {
+		logger.Debug("Not propagating delete event, as this is handled when deletionTimestamp is set to a non-nil value")
+		return ReconcileResult{}, nil
+	}
+	// Check if the object is deleted.
+	// If it's waiting on our finalizer, propagate as a DELETE event.
+	// If it's not, drop the event.
+	if request.Object.GetDeletionTimestamp() != nil && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
+		res := ReconcileResult{}
+		if request.State == nil || request.State[opinionatedReconcilerPatchRemoveStateKey] == nil {
+			logger.Debug("Update added a deletionTimestamp, propagate this event as a delete", "deletionTimestamp", request.Object.GetDeletionTimestamp())
+			// Propagate as a delete, if the delete succeeds, remove the finalizer
+			request.Action = ReconcileActionDeleted
+			var err error
+			res, err = o.wrappedReconcile(ctx, request)
+			if err != nil || res.RequeueAfter != nil {
+				if res.RequeueAfter != nil {
+					span.SetAttributes(attribute.String("reconcile.requeafter", res.RequeueAfter.String()))
+				}
+				if err != nil {
+					span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
+				}
+				return res, err
+			}
+		} else {
+			logger.Debug("Retry of an update which added a deletionTimestamp, downstream reconciler already successfully processed delete, need to retry removing the finalizer", "patchError", request.State[opinionatedReconcilerPatchRemoveStateKey])
+		}
+		logger.Debug("Removing finalizer from object", "finalizer", o.finalizer)
+		patchErr := o.finalizerUpdater.RemoveFinalizer(ctx, request.Object, o.finalizer)
+		if patchErr != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
+			if res.State == nil {
+				res.State = make(map[string]any)
+			}
+			res.State[opinionatedReconcilerPatchRemoveStateKey] = patchErr
+			var chk FinalizerError
+			if errors.As(patchErr, &chk) {
+				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
+			}
+			logger.Error("error removing finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
+		}
+		return res, patchErr
+	}
+	if request.Object.GetDeletionTimestamp() != nil {
+		logger.Debug("Object has a deletionTimestamp but does not contain our finalizer, ignoring event as object delete has already been processed", "finalizer", o.finalizer, "deletionTimestamp", request.Object.GetDeletionTimestamp())
+		return ReconcileResult{}, nil
+	}
 
 	// Check if this action is a create, and the resource already has a finalizer. If so, make it a sync.
 	if request.Action == ReconcileActionCreated && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
@@ -202,53 +253,6 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
 		}
 		return resp, patchErr
-	}
-	// Ignore deleted actions, as we send them on updates where we need to remove our finalizer
-	// This needs to be checked before the "is deletionTimestamp non-nil and still has our finalizer",
-	// because after we remove the finalizer, a delete event comes through that still has the final finalizer to be removed from the list
-	if request.Action == ReconcileActionDeleted {
-		logger.Debug("Not propagating delete event, as this is handled when deletionTimestamp is set to a non-nil value")
-		return ReconcileResult{}, nil
-	}
-	if request.Object.GetDeletionTimestamp() != nil && slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
-		res := ReconcileResult{}
-		if request.State == nil || request.State[opinionatedReconcilerPatchRemoveStateKey] == nil {
-			logger.Debug("Update added a deletionTimestamp, propagate this event as a delete", "deletionTimestamp", request.Object.GetDeletionTimestamp())
-			// Propagate as a delete, if the delete succeeds, remove the finalizer
-			request.Action = ReconcileActionDeleted
-			var err error
-			res, err = o.wrappedReconcile(ctx, request)
-			if err != nil || res.RequeueAfter != nil {
-				if res.RequeueAfter != nil {
-					span.SetAttributes(attribute.String("reconcile.requeafter", res.RequeueAfter.String()))
-				}
-				if err != nil {
-					span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
-				}
-				return res, err
-			}
-		} else {
-			logger.Debug("Retry of an update which added a deletionTimestamp, downstream reconciler already successfully processed delete, need to retry removing the finalizer", "patchError", request.State[opinionatedReconcilerPatchRemoveStateKey])
-		}
-		logger.Debug("Removing finalizer from object", "finalizer", o.finalizer)
-		patchErr := o.finalizerUpdater.RemoveFinalizer(ctx, request.Object, o.finalizer)
-		if patchErr != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("error adding finalizer: %s", patchErr.Error()))
-			if res.State == nil {
-				res.State = make(map[string]any)
-			}
-			res.State[opinionatedReconcilerPatchRemoveStateKey] = patchErr
-			var chk FinalizerError
-			if errors.As(patchErr, &chk) {
-				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
-			}
-			logger.Error("error removing finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
-		}
-		return res, patchErr
-	}
-	if request.Object.GetDeletionTimestamp() != nil {
-		logger.Debug("Object has a deletionTimestamp but does not contain our finalizer, ignoring event as object delete has already been processed", "finalizer", o.finalizer, "deletionTimestamp", request.Object.GetDeletionTimestamp())
-		return ReconcileResult{}, nil
 	}
 	if request.Action == ReconcileActionUpdated && !slices.Contains(request.Object.GetFinalizers(), o.finalizer) {
 		// Add the finalizer, don't delegate, let the reconcile action for adding the finalizer propagate down to avoid confusing extra reconciliations

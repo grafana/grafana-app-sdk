@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -52,7 +53,7 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 	for idx, op := range patch.Operations {
 		// We don't allow a patch on the metadata object as a whole
 		if op.Path == "/metadata" {
-			return nil, fmt.Errorf("cannot patch entire metadata object")
+			return nil, errors.New("cannot patch entire metadata object")
 		}
 
 		// We only need to (possibly) correct patch operations for the metadata
@@ -62,7 +63,7 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 		// If the next part of the path isn't a key in metav1.ObjectMeta, then we put it in annotations
 		parts := strings.Split(strings.Trim(op.Path, "/"), "/")
 		if len(parts) <= 1 {
-			return nil, fmt.Errorf("invalid patch path")
+			return nil, errors.New("invalid patch path")
 		}
 		if _, ok := metaV1Fields[parts[1]]; ok {
 			// Normal kube metadata
@@ -71,7 +72,7 @@ func marshalJSONPatch(patch resource.PatchRequest) ([]byte, error) {
 		// UNLESS it's extraFields, which holds implementation-specific extra fields
 		if parts[1] == "extraFields" {
 			if len(parts) < 3 {
-				return nil, fmt.Errorf("cannot patch entire extraFields, please patch fields in extraFields instead")
+				return nil, errors.New("cannot patch entire extraFields, please patch fields in extraFields instead")
 			}
 			// Just take the remaining part of the path and put it after /metadata
 			// If it's not a valid kubernetes metadata object, that's because the user has done something funny with extraFields,
@@ -148,6 +149,7 @@ func translateKubernetesAdmissionRequest(req *admission.AdmissionRequest, sch re
 		action = resource.AdmissionActionDelete
 	case admission.Connect:
 		action = resource.AdmissionActionConnect
+	default:
 	}
 
 	return &resource.AdmissionRequest{

@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -464,7 +465,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 			}
 			spec, ok := rawCRD["spec"].(map[string]any)
 			if !ok {
-				return nil, props, fmt.Errorf("could not parse CRD")
+				return nil, props, errors.New("could not parse CRD")
 			}
 			spec["conversion"] = map[string]any{
 				"strategy": "Webhook",
@@ -676,7 +677,7 @@ func parsePluginJSONValue(v any) (string, error) {
 	case bool:
 		return strconv.FormatBool(cast), nil
 	default:
-		return "", fmt.Errorf("unknown type")
+		return "", errors.New("unknown type")
 	}
 }
 

@@ -314,7 +314,7 @@ func (*MemcachedStore) Resync() error {
 
 func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string, err error) {
 	if m.keyFunc == nil {
-		return "", "", fmt.Errorf("no KeyFunc defined")
+		return "", "", errors.New("no KeyFunc defined")
 	}
 	externalKey, err = m.keyFunc(obj)
 	if err != nil {

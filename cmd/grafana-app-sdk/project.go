@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -79,6 +80,7 @@ var projectLocalInitCmd = &cobra.Command{
 	SilenceUsage: true,
 }
 
+//nolint:goconst
 func setupProjectCmd() {
 	projectCmd.PersistentFlags().StringP("path", "p", "", "Path to project directory")
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
@@ -537,7 +539,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if kindGrouping != kindGroupingGroup && kindGrouping != kindGroupingKind {
-		return fmt.Errorf("--grouping must be one of 'group'|'kind'")
+		return errors.New("--grouping must be one of 'group'|'kind'")
 	}
 
 	// Create the generator (used for generating non-static code)
@@ -675,7 +677,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, manifestGroup string, groupKinds bool) error {
 	// Check plugin ID
 	if manifestGroup == "" {
-		return fmt.Errorf("manifest group is required")
+		return errors.New("manifest group is required")
 	}
 
 	// Get the repo from the go.mod file
@@ -731,9 +733,6 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 	default:
 		return fmt.Errorf("unknown generator type: %T", cast)
 	}
-	if err != nil {
-		return err
-	}
 	if err = checkAndMakePath("pkg"); err != nil {
 		return err
 	}
@@ -752,11 +751,11 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 	// Check plugin ID
 	if manifestGroup == "" {
-		return fmt.Errorf("manifest group is required")
+		return errors.New("manifest group is required")
 	}
 
 	if !isCommandInstalled("yarn") {
-		return fmt.Errorf("yarn must be installed to add the frontend component")
+		return errors.New("yarn must be installed to add the frontend component")
 	}
 
 	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}

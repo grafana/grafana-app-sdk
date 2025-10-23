@@ -95,6 +95,7 @@ func NewSpec() *Spec {
 	return &Spec{
 		Inner:      *NewInnerObject1(),
 		Map:        map[string]Type2{},
+		Enum:       SpecEnumDefault,
 		BoolField:  false,
 		LinkedList: *NewRecursiveList(),
 	}

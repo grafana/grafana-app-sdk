@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,9 +21,7 @@ const (
 	KindEncodingUnknown KindEncoding = ""
 )
 
-var (
-	_ Schema = &Kind{}
-)
+var _ Schema = &Kind{}
 
 // Codec is an interface which describes any object which can read and write Object implementations to/from bytes.
 // A codec is often specific to an encoding of the bytes in the reader/writer, and may also be specific to
@@ -132,9 +131,7 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 		ManagedFields:              in.GetManagedFields(),
 	}
 	m["spec"] = in.GetSpec()
-	for k, v := range in.GetSubresources() {
-		m[k] = v
-	}
+	maps.Copy(m, in.GetSubresources())
 	return json.NewEncoder(out).Encode(m)
 }
 
@@ -155,7 +152,7 @@ func (t *TypedList[T]) Copy() ListObject {
 		TypeMeta: t.TypeMeta,
 		Items:    make([]T, len(t.Items)),
 	}
-	t.ListMeta.DeepCopyInto(&cpy.ListMeta)
+	t.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len(t.Items); i++ {
 		cpy.Items[i], _ = t.Items[i].Copy().(T)
 	}

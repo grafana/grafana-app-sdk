@@ -567,6 +567,7 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			builder = builder.Param(restful.QueryParameter(param.Name, param.Description))
 		case "header":
 			builder = builder.Param(restful.HeaderParameter(param.Name, param.Description))
+		default:
 		}
 	}
 
@@ -591,7 +592,7 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			ResourceIdentifier: identifier,
 			Path:               rpath,
 			URL:                req.Request.URL,
-			Method:             http.MethodGet,
+			Method:             req.Request.Method,
 			Headers:            req.Request.Header,
 			Body:               req.Request.Body,
 		})
@@ -696,10 +697,10 @@ func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 func (r *defaultInstaller) conversionHandlerFunc(src, dst schema.GroupVersionKind) func(a, b any, _ conversion.Scope) error {
 	return func(a, b any, _ conversion.Scope) error {
 		if r.app == nil {
-			return fmt.Errorf("app is not initialized")
+			return errors.New("app is not initialized")
 		}
 		if r.scheme == nil {
-			return fmt.Errorf("scheme is not initialized")
+			return errors.New("scheme is not initialized")
 		}
 		aResourceObj, ok := a.(resource.Object)
 		if !ok {
