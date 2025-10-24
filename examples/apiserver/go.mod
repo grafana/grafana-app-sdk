@@ -2,7 +2,7 @@ module github.com/grafana/grafana-app-sdk/examples/apiserver
 
 go 1.24.1
 
-toolchain go1.24.2
+toolchain go1.25.3
 
 replace github.com/grafana/grafana-app-sdk => ../../
 
