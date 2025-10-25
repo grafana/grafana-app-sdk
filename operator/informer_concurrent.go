@@ -39,7 +39,28 @@ type ConcurrentInformerOptions struct {
 }
 
 // NewConcurrentInformer creates a new ConcurrentInformer wrapping the provided Informer.
+// Deprecated: Use NewConcurrentInformerFromOptions instead, which accepts InformerOptions.
 func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
+	*ConcurrentInformer, error) {
+	ci := &ConcurrentInformer{
+		errorHandler:         DefaultErrorHandler,
+		informer:             inf,
+		watchers:             make([]*concurrentWatcher, 0),
+		maxConcurrentWorkers: 10,
+	}
+	if opts.ErrorHandler != nil {
+		ci.errorHandler = opts.ErrorHandler
+	}
+	if opts.MaxConcurrentWorkers > 0 {
+		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
+	}
+
+	return ci, nil
+}
+
+// NewConcurrentInformerFromOptions creates a new ConcurrentInformer wrapping the provided Informer,
+// using InformerOptions for configuration.
+func NewConcurrentInformerFromOptions(inf Informer, opts InformerOptions) (
 	*ConcurrentInformer, error) {
 	ci := &ConcurrentInformer{
 		errorHandler:         DefaultErrorHandler,

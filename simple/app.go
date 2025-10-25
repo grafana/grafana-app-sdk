@@ -11,6 +11,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
@@ -137,7 +138,9 @@ type InformerSupplier func(
 	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
 ) (operator.Informer, error)
 
-// DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer
+// DefaultInformerSupplier is a default InformerSupplier function which creates a basic operator.KubernetesBasedInformer.
+// Note: This supplier does NOT respect WatchListPageSize or UseWatchList configuration.
+// For memory-optimized informers that support these options, use OptimizedInformerSupplier instead.
 var DefaultInformerSupplier = func(
 	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
 ) (operator.Informer, error) {
@@ -151,9 +154,40 @@ var DefaultInformerSupplier = func(
 		return nil, err
 	}
 
-	return operator.NewConcurrentInformer(inf, operator.ConcurrentInformerOptions{
-		ErrorHandler: options.ErrorHandler,
+	return operator.NewConcurrentInformerFromOptions(inf, options)
+}
+
+// OptimizedInformerSupplier is an InformerSupplier that uses CustomCacheInformer and respects
+// all configuration in InformerOptions, including UseWatchList and WatchListPageSize.
+// This supplier provides better memory efficiency for large-scale watches (>10K objects).
+//
+// Experimental: This API is experimental and may change in future releases.
+//
+// Recommended for:
+//   - Watching cluster-scoped resources (e.g., namespaces, nodes)
+//   - Watching large numbers of objects (>10K)
+//   - Environments with memory constraints
+//
+// Configuration tips:
+//   - Set WatchListPageSize to 5000-10000 for optimal memory usage
+//   - Set UseWatchList to true on Kubernetes 1.27+ for streaming support
+//   - Both can be combined: WatchListPageSize provides fallback pagination if UseWatchList is not available
+var OptimizedInformerSupplier = func(
+	kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions,
+) (operator.Informer, error) {
+	client, err := clients.ClientFor(kind)
+	if err != nil {
+		return nil, err
+	}
+
+	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
+	lw := operator.NewListerWatcher(client, kind, options.ListWatchOptions)
+
+	inf := operator.NewCustomCacheInformer(store, lw, kind, operator.CustomCacheInformerOptions{
+		InformerOptions: options,
 	})
+
+	return operator.NewConcurrentInformerFromOptions(inf, options)
 }
 
 // AppInformerConfig contains configuration for the App's internal operator.InformerController

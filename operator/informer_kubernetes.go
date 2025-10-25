@@ -64,9 +64,20 @@ type InformerOptions struct {
 	// Paginated list is less efficient and depending on the actual size of objects
 	// might result in an increased memory consumption of the APIServer.
 	//
-	// If nil, defaults to the feature gate WatchListClient from client-go.
+	// Defaults to false. Requires Kubernetes 1.27+ when enabled.
 	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/3157-watch-list#design-details
-	UseWatchList *bool
+	UseWatchList bool
+	// WatchListPageSize is the requested chunk size for paginated LIST operations.
+	// This significantly reduces memory usage when watching large numbers of objects (>10K).
+	// Recommended values: 5000-10000 for most use cases.
+	// Note: This only affects traditional LIST operations. It does NOT apply to watch-list streaming (UseWatchList).
+	// An empty value (0) will use client-go's default pagination behavior based on resource version.
+	WatchListPageSize int64
+	// MaxConcurrentWorkers is the maximum number of concurrent workers for event processing in ConcurrentInformer.
+	// Each worker maintains a queue of events which are processed sequentially.
+	// Events for a particular object are assigned to the same worker to maintain in-order delivery per object.
+	// An empty value (0) will use the default of 10 workers.
+	MaxConcurrentWorkers uint64
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,

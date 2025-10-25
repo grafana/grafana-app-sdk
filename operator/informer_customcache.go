@@ -174,7 +174,8 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 			c,
 			c.store,
 			nil,
-			c.opts.UseWatchList)
+			c.opts.UseWatchList,
+			c.opts.WatchListPageSize)
 		c.started = true
 	}()
 
@@ -430,7 +431,8 @@ func newInformer(
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
 	transformer cache.TransformFunc,
-	useWatchList *bool,
+	useWatchList bool,
+	watchListPageSize int64,
 ) cache.Controller {
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
@@ -458,6 +460,7 @@ func newInformer(
 
 	controller := customcache.NewController(cfg)
 	controller.UseWatchList = useWatchList
+	controller.WatchListPageSize = watchListPageSize
 	return controller
 }
 
