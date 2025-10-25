@@ -40,8 +40,11 @@ type Controller struct {
 	reflector      *Reflector
 	reflectorMutex sync.RWMutex
 	// UseWatchList if turned on instructs the reflector to open a stream to bring data from the API server.
-	// If nil, defaults to the feature gate WatchListClient from client-go.
-	UseWatchList *bool
+	// Defaults to false.
+	UseWatchList bool
+	// WatchListPageSize is the requested chunk size for paginated LIST operations.
+	// An empty value (0) will use client-go's default pagination behavior.
+	WatchListPageSize int64
 }
 
 // NewController makes a new Controller from the given Config.
@@ -67,6 +70,12 @@ func (c *Controller) RunWithContext(ctx context.Context) {
 		c.config.Queue.Close()
 	}()
 
+	var useWatchList *bool
+	if c.UseWatchList {
+		val := true
+		useWatchList = &val
+	}
+
 	r := NewReflectorWithOptions(
 		cache.ToListerWatcherWithContext(c.config.ListerWatcher),
 		c.config.ObjectType,
@@ -76,11 +85,11 @@ func (c *Controller) RunWithContext(ctx context.Context) {
 			MinWatchTimeout: c.config.MinWatchTimeout,
 			TypeDescription: c.config.ObjectDescription,
 			Clock:           c.clock,
-			UseWatchList:    c.UseWatchList,
+			UseWatchList:    useWatchList,
 		},
 	)
 	r.ShouldResync = c.config.ShouldResync
-	r.WatchListPageSize = c.config.WatchListPageSize
+	r.WatchListPageSize = c.WatchListPageSize
 
 	c.reflectorMutex.Lock()
 	c.reflector = r
