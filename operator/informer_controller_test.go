@@ -1144,6 +1144,10 @@ func (i *mockInformer) Run(ctx context.Context) error {
 	return nil
 }
 
+func (i *mockInformer) WaitForSync(ctx context.Context) error {
+	return nil
+}
+
 type testInformer struct {
 	handlers []ResourceWatcher
 	onStop   func()
@@ -1178,6 +1182,10 @@ func (ti *testInformer) FireDelete(ctx context.Context, object resource.Object) 
 	for _, w := range ti.handlers {
 		w.Delete(ctx, object)
 	}
+}
+
+func (ti *testInformer) WaitForSync(ctx context.Context) error {
+	return nil
 }
 
 var emptyObject = &resource.TypedSpecObject[string]{}

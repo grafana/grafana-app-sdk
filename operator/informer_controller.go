@@ -43,6 +43,7 @@ var DefaultErrorHandler = func(ctx context.Context, err error) {
 // Informer is an interface describing an informer which can be managed by InformerController
 type Informer interface {
 	app.Runnable
+	WaitForSync(ctx context.Context) error
 	AddEventHandler(handler ResourceWatcher) error
 }
 

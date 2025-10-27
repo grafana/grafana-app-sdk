@@ -41,6 +41,12 @@ $(LINTER_BINARY):
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN_DIR) v$(LINTER_VERSION)
 	@mv $(BIN_DIR)/golangci-lint $@
 
+BENCHSTAT_VERSION := latest
+BENCHSTAT_BINARY  := $(BIN_DIR)/benchstat
+
+$(BENCHSTAT_BINARY):
+	GOBIN=$(abspath $(BIN_DIR)) go install golang.org/x/perf/cmd/benchstat@$(BENCHSTAT_VERSION)
+
 .PHONY: test
 test:
 	go test -count=1 -cover -covermode=atomic -coverprofile=$(COVOUT) $(SUBMODULES)
@@ -81,3 +87,41 @@ regenerate-codegen-test-files:
 generate: build
 	@$(BIN_DIR)/grafana-app-sdk generate -s=app -g=app --grouping=group --defpath=app/definitions
 	rm app/appmanifest_manifest.go
+
+.PHONY: bench
+bench:
+	@echo "Running all benchmarks..."
+	go test -bench=. -benchmem -benchtime=1x -count=1 ./benchmark/
+
+.PHONY: bench-baseline
+bench-baseline: $(BENCHSTAT_BINARY)
+	@echo "Establishing performance baseline..."
+	@mkdir -p $(BIN_DIR)/benchmarks
+	@go test -bench=. -benchmem -count=10 ./benchmark/ | tee $(BIN_DIR)/benchmarks/baseline.txt
+	@echo ""
+	@echo "✓ Baseline saved to $(BIN_DIR)/benchmarks/baseline.txt"
+	@echo "Now make your code optimizations and run 'make bench-compare' to see the impact."
+
+.PHONY: bench-compare
+bench-compare: $(BENCHSTAT_BINARY)
+	@if [ ! -f $(BIN_DIR)/benchmarks/baseline.txt ]; then \
+		echo "Error: No baseline found. Please run 'make bench-baseline' first."; \
+		exit 1; \
+	fi
+	@echo "Running benchmarks and comparing against baseline..."
+	@mkdir -p $(BIN_DIR)/benchmarks
+	@go test -bench=. -benchmem -count=10 ./benchmark/ | tee $(BIN_DIR)/benchmarks/current.txt
+	@echo ""
+	@echo "Statistical comparison (baseline vs current):"
+	@echo "Note: Negative delta (%) = improvement for time/memory metrics"
+	@echo ""
+	@$(BENCHSTAT_BINARY) $(BIN_DIR)/benchmarks/baseline.txt $(BIN_DIR)/benchmarks/current.txt
+
+.PHONY: bench-profile
+bench-profile:
+	@echo "Running benchmarks with memory profiling..."
+	@mkdir -p $(BIN_DIR)/profiles
+	go test -bench=. -benchmem -memprofile=$(BIN_DIR)/profiles/mem.out -cpuprofile=$(BIN_DIR)/profiles/cpu.out ./benchmark/
+	@echo "Memory profile: $(BIN_DIR)/profiles/mem.out"
+	@echo "CPU profile: $(BIN_DIR)/profiles/cpu.out"
+	@echo "View with: go tool pprof $(BIN_DIR)/profiles/mem.out"

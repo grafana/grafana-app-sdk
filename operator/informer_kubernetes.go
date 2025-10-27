@@ -194,6 +194,21 @@ func (k *KubernetesBasedInformer) HealthCheckName() string {
 	return k.healthCheckName
 }
 
+// WaitForSync waits for the informer to sync.
+// If the sync is not complete within the context deadline, it will return a timeout error.
+func (k *KubernetesBasedInformer) WaitForSync(ctx context.Context) error {
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if k.SharedIndexInformer.HasSynced() {
+				return nil
+			}
+		}
+	}
+}
+
 func (k *KubernetesBasedInformer) toResourceObject(obj any) (resource.Object, error) {
 	return toResourceObject(obj, k.schema)
 }
@@ -203,6 +218,7 @@ func (k *KubernetesBasedInformer) errorHandler(ctx context.Context, err error) {
 		k.errorHandlerFn(ctx, err)
 	}
 }
+
 func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 	// Nil check
 	if obj == nil {
