@@ -150,6 +150,8 @@ type bufferedQueue struct {
 	incomingEvents chan any
 	toProcess      chan any
 	buf            *buffer.RingGrowing //nolint:staticcheck
+	stopMux        sync.RWMutex
+	stopped        bool
 }
 
 // newBufferedQueue returns a properly initialized bufferedQueue. The consumer
@@ -170,6 +172,13 @@ func (l *bufferedQueue) events() chan any {
 
 // push inserts an event in the queue.
 func (l *bufferedQueue) push(event any) {
+	l.stopMux.RLock()
+	defer l.stopMux.RUnlock()
+
+	if l.stopped {
+		return
+	}
+
 	l.incomingEvents <- event
 }
 
@@ -206,5 +215,9 @@ func (l *bufferedQueue) run() {
 
 // stop stops the run processes. Because the channels are closed, the listener cannot be re-used.
 func (l *bufferedQueue) stop() {
+	l.stopMux.Lock()
+	defer l.stopMux.Unlock()
+
+	l.stopped = true
 	close(l.incomingEvents)
 }
