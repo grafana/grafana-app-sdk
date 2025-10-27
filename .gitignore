@@ -25,3 +25,7 @@ vendor/
 
 # gorelease dist dir
 dist/
+
+# WIP docs
+docs/wip
+

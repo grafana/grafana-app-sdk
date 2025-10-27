@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
 
+	customcache "github.com/grafana/grafana-app-sdk/k8s/cache"
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -52,7 +53,7 @@ func NewMemcachedInformer(
 	), nil
 }
 
-const defaultProcessorBufferSize = 1024
+const processorBufferSize = 1024
 
 // CustomCacheInformerOptions are the options for the CustomCacheInformer.
 type CustomCacheInformerOptions struct {
@@ -65,19 +66,16 @@ type CustomCacheInformerOptions struct {
 
 // CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
 type CustomCacheInformer struct {
-	started             bool
-	startedLock         sync.Mutex
-	store               cache.Store
-	controller          cache.Controller
-	listerWatcher       cache.ListerWatcher
-	objectType          resource.Object
-	processor           *informerProcessor
-	schema              resource.Kind
-	runContext          context.Context
-	processorBufferSize int
-	cacheResyncInterval time.Duration
-	eventTimeout        time.Duration
-	errorHandler        func(context.Context, error)
+	started       bool
+	startedLock   sync.Mutex
+	store         cache.Store
+	controller    cache.Controller
+	listerWatcher cache.ListerWatcher
+	opts          CustomCacheInformerOptions
+	objectType    resource.Object
+	processor     *informerProcessor
+	schema        resource.Kind
+	runContext    context.Context
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
@@ -85,43 +83,38 @@ type CustomCacheInformer struct {
 func NewCustomCacheInformer(
 	store cache.Store, lw cache.ListerWatcher, kind resource.Kind, opts CustomCacheInformerOptions,
 ) *CustomCacheInformer {
-	inf := &CustomCacheInformer{
+	if opts.ProcessorBufferSize <= 0 {
+		opts.ProcessorBufferSize = processorBufferSize
+	}
+
+	if opts.CacheResyncInterval < 0 {
+		opts.CacheResyncInterval = 0
+	}
+
+	if opts.EventTimeout < 0 {
+		opts.EventTimeout = 0
+	}
+
+	if opts.CacheResyncInterval > 0 && opts.EventTimeout > opts.CacheResyncInterval {
+		opts.EventTimeout = opts.CacheResyncInterval
+	}
+
+	if opts.ErrorHandler == nil {
+		opts.ErrorHandler = func(ctx context.Context, err error) {
+			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
+		}
+	}
+
+	return &CustomCacheInformer{
 		store:         store,
 		listerWatcher: lw,
 		// TODO: objectType being set doesn't allow for a generic untyped object to be passed
 		// We can enable the k8s.KindNegotiatedSerializer for this, but it would be used by all clients then
 		// objectType:    kind.ZeroValue(),
-		processor:           newInformerProcessor(),
-		schema:              kind,
-		processorBufferSize: defaultProcessorBufferSize,
-		errorHandler: func(ctx context.Context, err error) {
-			logging.FromContext(ctx).Error("error processing informer event", "component", "CustomCacheInformer", "error", err)
-		},
+		processor: newInformerProcessor(),
+		schema:    kind,
+		opts:      opts,
 	}
-
-	if opts.ProcessorBufferSize > 0 {
-		inf.processorBufferSize = opts.ProcessorBufferSize
-	}
-
-	if opts.CacheResyncInterval > 0 {
-		inf.cacheResyncInterval = opts.CacheResyncInterval
-	}
-
-	if opts.EventTimeout > 0 {
-		inf.eventTimeout = opts.EventTimeout
-
-		// Make sure the event timeout is below the cache resync interval,
-		// otherwise we run the risk of a handler being overwhelmed by events.
-		if inf.cacheResyncInterval > 0 {
-			inf.eventTimeout = min(inf.eventTimeout, inf.cacheResyncInterval)
-		}
-	}
-
-	if opts.ErrorHandler != nil {
-		inf.errorHandler = opts.ErrorHandler
-	}
-
-	return inf
 }
 
 // PrometheusCollectors returns a list of prometheus collectors used by the informer and its objects (such as the cache).
@@ -138,19 +131,18 @@ func (c *CustomCacheInformer) AddEventHandler(handler ResourceWatcher) error {
 		newInformerProcessorListener(
 			toResourceEventHandlerFuncs(
 				handler, c.toResourceObject, c.errorHandler, func() (context.Context, context.CancelFunc) {
-					ctx := context.Background()
 					if c.runContext != nil {
-						ctx = c.runContext
+						return c.runContext, func() {}
 					}
 
-					if c.eventTimeout > 0 {
-						return context.WithTimeout(ctx, c.eventTimeout)
+					if c.opts.EventTimeout > 0 {
+						return context.WithTimeout(context.Background(), c.opts.EventTimeout)
 					}
 
-					return context.WithCancel(ctx)
+					return context.WithCancel(context.Background())
 				},
 			),
-			defaultProcessorBufferSize,
+			processorBufferSize,
 		),
 	)
 	return nil
@@ -174,7 +166,16 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.startedLock.Lock()
 		defer c.startedLock.Unlock()
 
-		c.controller = newInformer(c.listerWatcher, c.objectType, c.cacheResyncInterval, c, c.store, nil)
+		c.controller = newInformer(
+			c.listerWatcher,
+			c.objectType,
+			c.schema.GroupVersionKind().String(),
+			c.opts.CacheResyncInterval,
+			c,
+			c.store,
+			nil,
+			c.opts.UseWatchList,
+			c.opts.WatchListPageSize)
 		c.started = true
 	}()
 
@@ -252,6 +253,14 @@ func (c *CustomCacheInformer) OnDelete(obj any) {
 
 func (c *CustomCacheInformer) toResourceObject(obj any) (resource.Object, error) {
 	return toResourceObject(obj, c.schema)
+}
+
+func (c *CustomCacheInformer) errorHandler(ctx context.Context, err error) {
+	if c.opts.ErrorHandler == nil {
+		return
+	}
+
+	c.opts.ErrorHandler(ctx, err)
 }
 
 // NewListerWatcher returns a cache.ListerWatcher for the provided resource.Schema that uses the given ListWatchClient.
@@ -417,10 +426,13 @@ func toResourceEventHandlerFuncs(
 func newInformer(
 	lw cache.ListerWatcher,
 	objType runtime.Object,
+	objDesc string,
 	resyncPeriod time.Duration,
 	h cache.ResourceEventHandler,
 	clientState cache.Store,
 	transformer cache.TransformFunc,
+	useWatchList bool,
+	watchListPageSize int64,
 ) cache.Controller {
 	// This will hold incoming changes. Note how we pass clientState in as a
 	// KeyLister, that way resync operations will result in the correct set
@@ -432,10 +444,11 @@ func newInformer(
 	})
 
 	cfg := &cache.Config{
-		Queue:            fifo,
-		ListerWatcher:    lw,
-		ObjectType:       objType,
-		FullResyncPeriod: resyncPeriod,
+		Queue:             fifo,
+		ListerWatcher:     lw,
+		ObjectType:        objType,
+		ObjectDescription: objDesc,
+		FullResyncPeriod:  resyncPeriod,
 
 		Process: func(obj any, isInInitialList bool) error {
 			if deltas, ok := obj.(cache.Deltas); ok {
@@ -444,7 +457,11 @@ func newInformer(
 			return errors.New("object given as Process argument is not Deltas")
 		},
 	}
-	return cache.New(cfg)
+
+	controller := customcache.NewController(cfg)
+	controller.UseWatchList = useWatchList
+	controller.WatchListPageSize = watchListPageSize
+	return controller
 }
 
 // processDeltas is mostly copied from the kubernetes method of the same name in client-go/tools/cache/controller.go,
