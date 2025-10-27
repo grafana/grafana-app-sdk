@@ -85,4 +85,4 @@ Each package also contains a README.md detailing package usage and simple exampl
 
 ## Contributing
 
-See our [contributing guide](CONTRIBUTING) for instructions on how to contribute to the development of the SDK.
+See our [contributing guide](CONTRIBUTING.md) for instructions on how to contribute to the development of the SDK.

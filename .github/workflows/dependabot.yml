@@ -24,7 +24,7 @@ jobs:
     steps:
     - name: Retrieve GitHub App secrets
       id: get-secrets
-      uses: grafana/shared-workflows/actions/get-vault-secrets@97c6f45f01d4bca8a3b1acfe397113ce88858a81
+      uses: grafana/shared-workflows/actions/get-vault-secrets@93f1ff8d6267af9094e988eb79c1fbb184d04e24
       with:
         repo_secrets: |
           APP_ID=grafana-go-workspace-bot:app-id
@@ -33,13 +33,13 @@ jobs:
 
     - name: Generate GitHub App token
       id: generate_token
-      uses: actions/create-github-app-token@v1
+      uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
       with:
         app-id: ${{ env.APP_ID }}
         private-key: ${{ env.PRIVATE_KEY }}
 
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
         ref: ${{ github.event.pull_request.head.ref }}
@@ -47,7 +47,7 @@ jobs:
         persist-credentials: true
 
     - name: Set go version
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@19bb51245e9c80abacb2e91cc42b33fa478b8639 # v4
       with:
         go-version-file: go.mod
     

@@ -99,38 +99,39 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 			path = append(path, cue.Str(p))
 		}
 		if val := ver.Schema.LookupPath(cue.MakePath(path...).Optional()); val.Err() == nil {
+			var lookup cue.Value
+			var optional bool
+
+			cuePath := cue.MakePath(cue.Str(field))
+
 			// Simplest way to check if it's an optional field is to try to look it up as non-optional, then try optional
-			if lookup := val.LookupPath(cue.MakePath(cue.Str(field))); lookup.Exists() {
-				typ, err := getCUEValueKindString(val, cue.MakePath(cue.Str(field)))
-				if err != nil {
-					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
-				}
-				fields = append(fields, templates.SchemaMetadataSelectableField{
-					Field:    s,
-					Optional: false,
-					Type:     typ,
-				})
-			} else if optional := val.LookupPath(cue.MakePath(cue.Str(field).Optional())); optional.Exists() {
-				typ, err := getCUEValueKindString(val, cue.MakePath(cue.Str(field).Optional()))
-				if err != nil {
-					return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
-				}
-				fields = append(fields, templates.SchemaMetadataSelectableField{
-					Field:    s,
-					Optional: true,
-					Type:     typ,
-				})
+			if lookup = val.LookupPath(cuePath); lookup.Exists() {
+				optional = false
+			} else if lookup = val.LookupPath(cuePath.Optional()); lookup.Exists() {
+				optional = true
 			} else {
 				return nil, fmt.Errorf("invalid selectable field path: %s", fieldPath)
 			}
+
+			typeStr, err := getCUEValueKindString(lookup)
+			if err != nil {
+				return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
+			}
+
+			fields = append(fields, templates.SchemaMetadataSelectableField{
+				Field:                s,
+				Optional:             optional,
+				Type:                 typeStr,
+				OptionalFieldsInPath: getOptionalFieldsInPath(ver.Schema, fieldPath),
+			})
 		}
 	}
 	return fields, nil
 }
 
-func getCUEValueKindString(v cue.Value, path cue.Path) (string, error) {
+func getCUEValueKindString(v cue.Value) (string, error) {
 	// This is a kind of messy way of guessing type without having to actually parse the AST
-	roughType := CUEValueToString(v.LookupPath(path))
+	roughType := CUEValueToString(v)
 	switch {
 	case strings.Contains(roughType, "time.Time"):
 		return "time", nil
@@ -142,4 +143,25 @@ func getCUEValueKindString(v cue.Value, path cue.Path) (string, error) {
 		return "int", nil
 	}
 	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, int and time.Time", v.Kind())
+}
+
+// getOptionalFieldsInPath returns a list of all optional fields found along the provided fieldPath.
+// This is used to generate nil checks on optional fields ensuring safe access to the selectable field.
+func getOptionalFieldsInPath(v cue.Value, fieldPath string) []string {
+	optionalFields := make([]string, 0)
+	currentPath := make([]string, 0)
+
+	for part := range strings.SplitSeq(fieldPath, ".") {
+		currentPath = append(currentPath, part)
+		cuePath := cue.MakePath(cue.Str(part))
+
+		if lookup := v.LookupPath(cuePath); lookup.Exists() {
+			v = lookup
+		} else if optional := v.LookupPath(cuePath.Optional()); optional.Exists() {
+			v = optional
+			optionalFields = append(optionalFields, strings.Join(currentPath, "."))
+		}
+	}
+
+	return optionalFields
 }
