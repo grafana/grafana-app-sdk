@@ -562,3 +562,7 @@ func (m mockInformer) AddEventHandler(handler operator.ResourceWatcher) error {
 	}
 	return nil
 }
+
+func (m mockInformer) WaitForSync(ctx context.Context) error {
+	return nil
+}

@@ -74,6 +74,36 @@ func DefaultClientConfig() ClientConfig {
 	}
 }
 
+// NewClientWithRESTInterface creates a Client with a custom rest.Interface.
+// This is primarily useful for testing with mock HTTP transports.
+// For production use, prefer using ClientRegistry.ClientFor() instead.
+func NewClientWithRESTInterface(
+	restClient rest.Interface,
+	kind resource.Kind,
+	config ClientConfig,
+) (*Client, error) {
+	codec := kind.Codec(resource.KindEncodingJSON)
+	if codec == nil {
+		return nil, errors.New("no codec for KindEncodingJSON")
+	}
+
+	return &Client{
+		client: &groupVersionClient{
+			client:  restClient,
+			version: kind.Version(),
+			config:  config,
+			// Metrics fields can be nil for testing/benchmarks
+			requestDurations: nil,
+			totalRequests:    nil,
+			watchEventsTotal: nil,
+			watchErrorsTotal: nil,
+		},
+		schema: kind,
+		codec:  codec,
+		config: config,
+	}, nil
+}
+
 // List lists resources in the provided namespace.
 // For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
 func (c *Client) List(ctx context.Context, namespace string, options resource.ListOptions) (

@@ -53,7 +53,11 @@ func NewMemcachedInformer(
 	), nil
 }
 
-const processorBufferSize = 1024
+const (
+	processorBufferSize        = 1024
+	waitForSyncInitialInterval = time.Millisecond
+	waitForSyncMaxInterval     = 100 * time.Millisecond
+)
 
 // CustomCacheInformerOptions are the options for the CustomCacheInformer.
 type CustomCacheInformerOptions struct {
@@ -62,20 +66,29 @@ type CustomCacheInformerOptions struct {
 	// This is the number of events that can be buffered before the processor is blocked.
 	// An empty value will use the default of 1024.
 	ProcessorBufferSize int
+	// WaitForSyncInitialInterval is the initial interval for the wait for sync.
+	// This is the interval at which the wait for sync will check if the informer has synced.
+	// An empty value will use the default of 1 millisecond.
+	WaitForSyncInitialInterval time.Duration
+	// WaitForSyncMaxInterval is the max interval for the wait for sync.
+	// This is the max interval at which the wait for sync will check if the informer has synced.
+	// An empty value will use the default of 100 milliseconds.
+	WaitForSyncMaxInterval time.Duration
 }
 
 // CustomCacheInformer is an informer that uses a custom cache.Store to store the state of the resources.
 type CustomCacheInformer struct {
-	started       bool
-	startedLock   sync.Mutex
-	store         cache.Store
-	controller    cache.Controller
-	listerWatcher cache.ListerWatcher
-	opts          CustomCacheInformerOptions
-	objectType    resource.Object
-	processor     *informerProcessor
-	schema        resource.Kind
-	runContext    context.Context
+	started        bool
+	startedLock    sync.RWMutex
+	controller     cache.Controller
+	controllerLock sync.RWMutex
+	store          cache.Store
+	listerWatcher  cache.ListerWatcher
+	opts           CustomCacheInformerOptions
+	objectType     resource.Object
+	processor      *informerProcessor
+	schema         resource.Kind
+	runContext     context.Context
 }
 
 // NewCustomCacheInformer returns a new CustomCacheInformer using the provided cache.Store and cache.ListerWatcher.
@@ -157,27 +170,30 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 	if c.HasStarted() {
 		return errors.New("informer is already started")
 	}
+
 	c.runContext = ctx
 	defer func() {
 		c.runContext = nil
 	}()
 
-	func() {
-		c.startedLock.Lock()
-		defer c.startedLock.Unlock()
+	// Initialize the controller
+	c.controllerLock.Lock()
+	c.controller = newInformer(
+		c.listerWatcher,
+		c.objectType,
+		c.schema.GroupVersionKind().String(),
+		c.opts.CacheResyncInterval,
+		c,
+		c.store,
+		nil,
+		c.opts.UseWatchList,
+		c.opts.WatchListPageSize)
+	c.controllerLock.Unlock()
 
-		c.controller = newInformer(
-			c.listerWatcher,
-			c.objectType,
-			c.schema.GroupVersionKind().String(),
-			c.opts.CacheResyncInterval,
-			c,
-			c.store,
-			nil,
-			c.opts.UseWatchList,
-			c.opts.WatchListPageSize)
-		c.started = true
-	}()
+	// Mark the informer as started
+	c.startedLock.Lock()
+	c.started = true
+	c.startedLock.Unlock()
 
 	// Separate stop channel because Processor should be stopped strictly after controller
 	processorStopCh := make(chan struct{})
@@ -192,6 +208,7 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		defer c.startedLock.Unlock()
 		c.started = false
 	}()
+
 	// Wait for the processor to complete startup before running the controller (otherwise events may be dropped by distribution)
 	<-c.processor.startedCh
 	c.controller.Run(ctx.Done())
@@ -200,31 +217,33 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 
 // HasStarted returns true if the informer is already running
 func (c *CustomCacheInformer) HasStarted() bool {
-	c.startedLock.Lock()
-	defer c.startedLock.Unlock()
+	c.startedLock.RLock()
+	defer c.startedLock.RUnlock()
+
 	return c.started
 }
 
 // HasSynced returns true if the informer has synced all events from the initial list request.
 func (c *CustomCacheInformer) HasSynced() bool {
-	c.startedLock.Lock()
-	defer c.startedLock.Unlock()
+	c.controllerLock.RLock()
+	defer c.controllerLock.RUnlock()
 
-	if c.controller == nil {
-		return false
+	if c.controller != nil {
+		return c.controller.HasSynced()
 	}
-	return c.controller.HasSynced()
+	return false
 }
 
 // LastSyncResourceVersion delegates to the underlying cache.Reflector's method,
 // if the informer has started. Otherwise, it returns an empty string.
 func (c *CustomCacheInformer) LastSyncResourceVersion() string {
-	c.startedLock.Lock()
-	defer c.startedLock.Unlock()
+	c.controllerLock.RLock()
+	defer c.controllerLock.RUnlock()
 
 	if c.controller == nil {
 		return ""
 	}
+
 	return c.controller.LastSyncResourceVersion()
 }
 
@@ -249,6 +268,25 @@ func (c *CustomCacheInformer) OnDelete(obj any) {
 	c.processor.distribute(informerEventDelete{
 		obj: obj,
 	})
+}
+
+// WaitForSync waits for the informer to sync all events from the initial list request.
+func (c *CustomCacheInformer) WaitForSync(ctx context.Context) error {
+	interval := waitForSyncInitialInterval
+
+	for {
+		if c.HasSynced() {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(interval):
+			// Exponential backoff up to max interval
+			interval = min(interval*2, waitForSyncMaxInterval)
+		}
+	}
 }
 
 func (c *CustomCacheInformer) toResourceObject(obj any) (resource.Object, error) {

@@ -123,3 +123,9 @@ func (ci *ConcurrentInformer) HealthChecks() []health.Check {
 	}
 	return checks
 }
+
+// WaitForSync waits for the informer to sync.
+// If the sync is not complete within the context deadline, it will return a timeout error.
+func (ci *ConcurrentInformer) WaitForSync(ctx context.Context) error {
+	return ci.informer.WaitForSync(ctx)
+}
