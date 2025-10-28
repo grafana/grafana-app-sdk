@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -49,44 +50,103 @@ func (*GenericNegotiatedSerializer) DecoderToVersion(_ runtime.Decoder, _ runtim
 type GenericJSONDecoder struct {
 }
 
+type objCheck struct {
+	metav1.TypeMeta `json:",inline"`
+	Type            string          `json:"type,omitempty"`
+	Items           json.RawMessage `json:"items,omitempty"`
+}
+
 // Decode decodes the provided data into UntypedWatchObject or UntypedObjectWrapper
 //
 //nolint:gocritic,revive
-func (*GenericJSONDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (
-	runtime.Object, *schema.GroupVersionKind, error) {
-	type check struct {
-		metav1.TypeMeta `json:",inline"`
-		Type            string        `json:"type"`
-		Kind            string        `json:"kind"`
-		Items           []interface{} `json:"items,omitempty"`
-	}
-	if into != nil {
-		// We shouldn't encounter this
-		// TODO: make better
-		err := json.Unmarshal(data, into)
-		return into, defaults, err
-	}
-
+func (*GenericJSONDecoder) Decode(
+	data []byte, defaults *schema.GroupVersionKind, into runtime.Object,
+) (runtime.Object, *schema.GroupVersionKind, error) {
 	// Determine what kind of object we have the raw bytes for
 	// We do this by unmarshalling into a superset of a few possible types, then narrowing down
 	// TODO: this seems very naive, check how apimachinery does it typically
-	chk := check{}
-	err := json.Unmarshal(data, &chk)
-	if chk.Type != "" {
-		// Watch response
-		w := &UntypedWatchObject{}
-		err = json.Unmarshal(data, w)
-		into = w
-	} else if chk.Items != nil {
-		// List
-		// TODO
-	} else if chk.Kind != "" {
+	var chk objCheck
+	if err := json.Unmarshal(data, &chk); err != nil {
+		logging.DefaultLogger.Error("error unmarshalling into objCheck", "error", err)
+		return into, defaults, fmt.Errorf("error unmarshalling into objCheck: %w", err)
+	}
+
+	switch {
+	case chk.Type != "": // Watch
+		obj, ok := into.(*metav1.WatchEvent)
+		if !ok {
+			logging.DefaultLogger.Error("error parsing watch event: into is not a *metav1.WatchEvent",
+				"into", into.GetObjectKind().GroupVersionKind().String(),
+			)
+
+			return into, defaults, fmt.Errorf("error parsing watch event: into is not a *metav1.WatchEvent")
+		}
+
+		if err := json.Unmarshal(data, obj); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *metav1.WatchEvent", "error", err)
+			return into, defaults, err
+		}
+
+		switch watch.EventType(obj.Type) {
+		case watch.Error, watch.Added, watch.Modified, watch.Deleted, watch.Bookmark:
+			// Other watch event types are already a resource.Object, so we can return them directly
+			return obj, defaults, nil
+		}
+
+		// If we get here, we have an unknown watch event type
+		logging.DefaultLogger.Error("unknown watch event type", "type", obj.Type)
+		return into, defaults, fmt.Errorf("unknown watch event type: %s", obj.Type)
+	case chk.APIVersion == StatusAPIVersion && chk.Kind == StatusKind: // Status
+		var obj *metav1.Status
+		if into == nil {
+			// Make a new status object
+			obj = &metav1.Status{}
+		} else {
+			var ok bool
+			obj, ok = into.(*metav1.Status)
+			if !ok {
+				logging.DefaultLogger.Error("error parsing status: into is not a *metav1.Status",
+					"into", into.GetObjectKind().GroupVersionKind().String(),
+				)
+
+				return into, defaults, fmt.Errorf("error parsing status: into is not a *metav1.Status")
+			}
+		}
+
+		if err := json.Unmarshal(data, obj); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *metav1.WatchEvent", "error", err)
+			return into, defaults, err
+		}
+
+		return obj, defaults, nil
+	case into != nil:
+		if err := json.Unmarshal(data, into); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into provided object", "error", err)
+			return into, defaults, err
+		}
+
+		return into, defaults, nil
+	case chk.Items != nil: // Fallback to UntypedList
+		l := &UntypedListObjectWrapper{}
+		if err := json.Unmarshal(data, l); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into UntypedListObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into UntypedListObjectWrapper: %w", err)
+		}
+
+		l.items = data
+		into = l
+	case chk.Kind != "": // Fallback to UntypedObject
 		o := &UntypedObjectWrapper{}
-		err = json.Unmarshal(data, o)
+		if err := json.Unmarshal(data, o); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into UntypedObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into UntypedObjectWrapper: %w", err)
+		}
+
 		o.object = data
 		into = o
 	}
-	return into, defaults, err
+
+	return into, defaults, nil
 }
 
 // Encode json-encodes the provided object
