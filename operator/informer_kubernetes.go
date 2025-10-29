@@ -67,6 +67,11 @@ type InformerOptions struct {
 	// Defaults to false. Requires Kubernetes 1.27+ when enabled.
 	// See https://github.com/kubernetes/enhancements/tree/master/keps/sig-api-machinery/3157-watch-list#design-details
 	UseWatchList bool
+	// UseRealFIFO if turned on instructs the informer to use a real FIFO queue, rather than a delta FIFO queue.
+	// The real FIFO queue guarantees in-order delivery of events, while the delta FIFO queue does not.
+	// This only has effect when using `CustomCacheInformer`,
+	// since the `KubernetesBasedInformer` uses a delta FIFO depending on the client-side feature gate in ENV.
+	UseRealFIFO bool
 	// WatchListPageSize is the requested chunk size for paginated LIST operations.
 	// This significantly reduces memory usage when watching large numbers of objects (>10K).
 	// Recommended values: 5000-10000 for most use cases.

@@ -178,7 +178,7 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 
 	// Initialize the controller
 	c.controllerLock.Lock()
-	c.controller = newInformer(
+	c.controller = NewInformer(
 		c.listerWatcher,
 		c.objectType,
 		c.schema.GroupVersionKind().String(),
@@ -187,6 +187,7 @@ func (c *CustomCacheInformer) Run(ctx context.Context) error {
 		c.store,
 		nil,
 		c.opts.UseWatchList,
+		c.opts.UseRealFIFO,
 		c.opts.WatchListPageSize)
 	c.controllerLock.Unlock()
 
@@ -458,10 +459,12 @@ func toResourceEventHandlerFuncs(
 	}
 }
 
-// newInformer is copied from the kubernetes unexported method of the same name in client-go/tools/cache/controller.go,
-// to allow the CustomCacheInformer to create a new cache.Controller informer that specifies the KnownObjects cache.Store
-// to use in the cache.DeltaFIFO used by the controller, as otherwise this cannot be specified in all exported methods.
-func newInformer(
+// NewInformer is copied from the kubernetes unexported method of the same name in
+// `k8s.io/client-go/tools/cache/controller.go`,
+// to allow the CustomCacheInformer to create a new cache.Controller informer,
+// that specifies the KnownObjects cache.Store to use in the cache.DeltaFIFO,
+// used by the controller, as otherwise this cannot be specified in all exported methods.
+func NewInformer(
 	lw cache.ListerWatcher,
 	objType runtime.Object,
 	objDesc string,
@@ -470,16 +473,19 @@ func newInformer(
 	clientState cache.Store,
 	transformer cache.TransformFunc,
 	useWatchList bool,
+	useRealFIFO bool,
 	watchListPageSize int64,
 ) cache.Controller {
-	// This will hold incoming changes. Note how we pass clientState in as a
-	// KeyLister, that way resync operations will result in the correct set
-	// of update/delete deltas.
-	fifo := cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
-		KnownObjects:          clientState,
-		EmitDeltaTypeReplaced: true,
-		Transformer:           transformer,
-	})
+	var fifo cache.Queue
+	if useRealFIFO {
+		fifo = cache.NewRealFIFO(cache.MetaNamespaceKeyFunc, clientState, transformer)
+	} else {
+		fifo = cache.NewDeltaFIFOWithOptions(cache.DeltaFIFOOptions{
+			KnownObjects:          clientState,
+			EmitDeltaTypeReplaced: true,
+			Transformer:           transformer,
+		})
+	}
 
 	cfg := &cache.Config{
 		Queue:             fifo,
