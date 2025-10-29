@@ -70,28 +70,6 @@ func (o *UntypedObjectWrapper) Into(into resource.Object, codec resource.Codec) 
 	return codec.Read(bytes.NewReader(o.object), into)
 }
 
-// UntypedListObjectWrapper wraps a list of UntypedObjectWrappers, and implements runtime.Object
-type UntypedListObjectWrapper struct {
-	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata"`
-	items           json.RawMessage
-}
-
-// DeepCopyObject copies the object
-func (o *UntypedListObjectWrapper) DeepCopyObject() runtime.Object {
-	val := reflect.ValueOf(o).Elem()
-
-	cpy := reflect.New(val.Type())
-	cpy.Elem().Set(val)
-
-	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
-		return obj
-	}
-
-	return nil
-}
-
 // UntypedWatchObject implements runtime.Object, and keeps the Object part of a kubernetes watch event as bytes
 // when unmarshaled, so that it can later be marshaled into a concrete type with Into().
 type UntypedWatchObject struct {
