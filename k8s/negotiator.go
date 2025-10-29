@@ -73,16 +73,8 @@ func (*GenericJSONDecoder) Decode(
 
 	switch {
 	case chk.Type != "": // Watch
-		obj, ok := into.(*metav1.WatchEvent)
-		if !ok {
-			logging.DefaultLogger.Error("error parsing watch event: into is not a *metav1.WatchEvent",
-				"into", into.GetObjectKind().GroupVersionKind().String(),
-			)
-
-			return into, defaults, fmt.Errorf("error parsing watch event: into is not a *metav1.WatchEvent")
-		}
-
-		if err := json.Unmarshal(data, obj); err != nil {
+		obj, err := unmarshalWithDefault(data, into, &metav1.WatchEvent{})
+		if err != nil {
 			logging.DefaultLogger.Error("error unmarshalling into *metav1.WatchEvent", "error", err)
 			return into, defaults, err
 		}
@@ -97,31 +89,19 @@ func (*GenericJSONDecoder) Decode(
 		logging.DefaultLogger.Error("unknown watch event type", "type", obj.Type)
 		return into, defaults, fmt.Errorf("unknown watch event type: %s", obj.Type)
 	case chk.APIVersion == StatusAPIVersion && chk.Kind == StatusKind: // Status
-		var obj *metav1.Status
-		if into == nil {
-			// Make a new status object
-			obj = &metav1.Status{}
-		} else {
-			var ok bool
-			obj, ok = into.(*metav1.Status)
-			if !ok {
-				logging.DefaultLogger.Error("error parsing status: into is not a *metav1.Status",
-					"into", into.GetObjectKind().GroupVersionKind().String(),
-				)
-
-				return into, defaults, fmt.Errorf("error parsing status: into is not a *metav1.Status")
-			}
-		}
-
-		if err := json.Unmarshal(data, obj); err != nil {
-			logging.DefaultLogger.Error("error unmarshalling into *metav1.WatchEvent", "error", err)
+		obj, err := unmarshalWithDefault(data, into, &metav1.Status{})
+		if err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *metav1.Status", "error", err)
 			return into, defaults, err
 		}
 
 		return obj, defaults, nil
-	case into != nil:
+	case into != nil: // Other known Kind
 		if err := json.Unmarshal(data, into); err != nil {
-			logging.DefaultLogger.Error("error unmarshalling into provided object", "error", err)
+			logging.DefaultLogger.Error(
+				fmt.Sprintf("error unmarshalling into provided %T", into),
+				"error", err,
+			)
 			return into, defaults, err
 		}
 
@@ -129,8 +109,8 @@ func (*GenericJSONDecoder) Decode(
 	case chk.Items != nil: // Fallback to UntypedList
 		l := &UntypedListObjectWrapper{}
 		if err := json.Unmarshal(data, l); err != nil {
-			logging.DefaultLogger.Error("error unmarshalling into UntypedListObjectWrapper", "error", err)
-			return into, defaults, fmt.Errorf("error unmarshalling into UntypedListObjectWrapper: %w", err)
+			logging.DefaultLogger.Error("error unmarshalling into *k8s.UntypedListObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into *k8s.UntypedListObjectWrapper: %w", err)
 		}
 
 		l.items = data
@@ -138,8 +118,8 @@ func (*GenericJSONDecoder) Decode(
 	case chk.Kind != "": // Fallback to UntypedObject
 		o := &UntypedObjectWrapper{}
 		if err := json.Unmarshal(data, o); err != nil {
-			logging.DefaultLogger.Error("error unmarshalling into UntypedObjectWrapper", "error", err)
-			return into, defaults, fmt.Errorf("error unmarshalling into UntypedObjectWrapper: %w", err)
+			logging.DefaultLogger.Error("error unmarshalling into *k8s.UntypedObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into *k8s.UntypedObjectWrapper: %w", err)
 		}
 
 		o.object = data
@@ -331,4 +311,21 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 // Identifier returns "generic-json-decoder"
 func (*CodecDecoder) Identifier() runtime.Identifier {
 	return "codec-decoder"
+}
+
+func unmarshalWithDefault[T any](data []byte, obj runtime.Object, defVal T) (T, error) {
+	res := defVal
+	if obj != nil {
+		cast, ok := obj.(T)
+		if !ok {
+			return res, fmt.Errorf("unable to cast %T into %T", obj, res)
+		}
+		res = cast
+	}
+
+	if err := json.Unmarshal(data, res); err != nil {
+		return defVal, err
+	}
+
+	return res, nil
 }
