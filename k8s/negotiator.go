@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	jsonserializer "k8s.io/apimachinery/pkg/runtime/serializer/json"
+	"k8s.io/apimachinery/pkg/watch"
 
 	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -49,44 +50,76 @@ func (*GenericNegotiatedSerializer) DecoderToVersion(_ runtime.Decoder, _ runtim
 type GenericJSONDecoder struct {
 }
 
+type objCheck struct {
+	metav1.TypeMeta `json:",inline"`
+	Type            string          `json:"type,omitempty"`
+	Items           json.RawMessage `json:"items,omitempty"`
+}
+
 // Decode decodes the provided data into UntypedWatchObject or UntypedObjectWrapper
 //
 //nolint:gocritic,revive
-func (*GenericJSONDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (
-	runtime.Object, *schema.GroupVersionKind, error) {
-	type check struct {
-		metav1.TypeMeta `json:",inline"`
-		Type            string        `json:"type"`
-		Kind            string        `json:"kind"`
-		Items           []interface{} `json:"items,omitempty"`
-	}
-	if into != nil {
-		// We shouldn't encounter this
-		// TODO: make better
-		err := json.Unmarshal(data, into)
-		return into, defaults, err
-	}
-
+func (*GenericJSONDecoder) Decode(
+	data []byte, defaults *schema.GroupVersionKind, into runtime.Object,
+) (runtime.Object, *schema.GroupVersionKind, error) {
 	// Determine what kind of object we have the raw bytes for
 	// We do this by unmarshalling into a superset of a few possible types, then narrowing down
 	// TODO: this seems very naive, check how apimachinery does it typically
-	chk := check{}
-	err := json.Unmarshal(data, &chk)
-	if chk.Type != "" {
-		// Watch response
-		w := &UntypedWatchObject{}
-		err = json.Unmarshal(data, w)
-		into = w
-	} else if chk.Items != nil {
-		// List
-		// TODO
-	} else if chk.Kind != "" {
+	var chk objCheck
+	if err := json.Unmarshal(data, &chk); err != nil {
+		logging.DefaultLogger.Error("error unmarshalling into objCheck", "error", err)
+		return into, defaults, fmt.Errorf("error unmarshalling into objCheck: %w", err)
+	}
+
+	switch {
+	case chk.Type != "": // Watch
+		obj, err := unmarshalWithDefault(data, into, &metav1.WatchEvent{})
+		if err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *metav1.WatchEvent", "error", err)
+			return into, defaults, err
+		}
+
+		switch watch.EventType(obj.Type) {
+		case watch.Error, watch.Added, watch.Modified, watch.Deleted, watch.Bookmark:
+			// Other watch event types are already a resource.Object, so we can return them directly
+			return obj, defaults, nil
+		}
+
+		// If we get here, we have an unknown watch event type
+		logging.DefaultLogger.Error("unknown watch event type", "type", obj.Type)
+		return into, defaults, fmt.Errorf("unknown watch event type: %s", obj.Type)
+	case chk.APIVersion == StatusAPIVersion && chk.Kind == StatusKind: // Status
+		obj, err := unmarshalWithDefault(data, into, &metav1.Status{})
+		if err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *metav1.Status", "error", err)
+			return into, defaults, err
+		}
+
+		return obj, defaults, nil
+	case into != nil: // Other known Kind
+		if err := json.Unmarshal(data, into); err != nil {
+			logging.DefaultLogger.Error(
+				fmt.Sprintf("error unmarshalling into provided %T", into),
+				"error", err,
+			)
+			return into, defaults, err
+		}
+
+		return into, defaults, nil
+	case chk.Items != nil: // TODO: the codecs don't know how to handle lists yet.
+		return nil, nil, fmt.Errorf("unsupported list object")
+	case chk.Kind != "": // Fallback to UntypedObject
 		o := &UntypedObjectWrapper{}
-		err = json.Unmarshal(data, o)
+		if err := json.Unmarshal(data, o); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *k8s.UntypedObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into *k8s.UntypedObjectWrapper: %w", err)
+		}
+
 		o.object = data
 		into = o
 	}
-	return into, defaults, err
+
+	return into, defaults, nil
 }
 
 // Encode json-encodes the provided object
@@ -271,4 +304,21 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 // Identifier returns "generic-json-decoder"
 func (*CodecDecoder) Identifier() runtime.Identifier {
 	return "codec-decoder"
+}
+
+func unmarshalWithDefault[T any](data []byte, obj runtime.Object, defVal T) (T, error) {
+	res := defVal
+	if obj != nil {
+		cast, ok := obj.(T)
+		if !ok {
+			return res, fmt.Errorf("unable to cast %T into %T", obj, res)
+		}
+		res = cast
+	}
+
+	if err := json.Unmarshal(data, res); err != nil {
+		return defVal, err
+	}
+
+	return res, nil
 }
