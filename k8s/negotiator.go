@@ -106,8 +106,15 @@ func (*GenericJSONDecoder) Decode(
 		}
 
 		return into, defaults, nil
-	case chk.Items != nil: // TODO: the codecs don't know how to handle lists yet.
-		return nil, nil, fmt.Errorf("unsupported list object")
+	case chk.Items != nil: // Fallback to UntypedList
+		l := &UntypedListObjectWrapper{}
+		if err := json.Unmarshal(data, l); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *k8s.UntypedListObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into *k8s.UntypedListObjectWrapper: %w", err)
+		}
+
+		l.items = data
+		into = l
 	case chk.Kind != "": // Fallback to UntypedObject
 		o := &UntypedObjectWrapper{}
 		if err := json.Unmarshal(data, o); err != nil {
