@@ -2,7 +2,6 @@ package benchmark_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,7 +52,7 @@ func newMockRestClient(kind resource.Kind, objects []resource.Object) (rest.Inte
 				Group:   kind.Schema.Group(),
 				Version: kind.Schema.Version(),
 			},
-			NegotiatedSerializer: &k8s.GenericNegotiatedSerializer{},
+			NegotiatedSerializer: &k8s.KindNegotiatedSerializer{Kind: kind},
 		},
 		Transport: transport,
 	}
@@ -114,7 +113,10 @@ func (m *mockRoundTripper) handleList(req *http.Request) (*http.Response, error)
 	}
 
 	endIdx := len(m.objects)
-	var continueToken string
+	var (
+		continueToken      string
+		remainingItemCount int64
+	)
 
 	// Handle pagination with limit
 	if limitStr := query.Get("limit"); limitStr != "" {
@@ -133,47 +135,46 @@ func (m *mockRoundTripper) handleList(req *http.Request) (*http.Response, error)
 		if endIdx < len(m.objects) {
 			continueToken = strconv.Itoa(endIdx)
 		}
-	}
-
-	// Get codec for marshaling objects
-	codec := m.kind.Codecs[resource.KindEncodingJSON]
-
-	// Marshal objects to JSON using the real codec
-	items := make([]json.RawMessage, 0, endIdx-startIdx)
-	for i := startIdx; i < endIdx; i++ {
-		buf := getBuffer()
-		if err := codec.Write(buf, m.objects[i]); err != nil {
-			putBuffer(buf)
-			return &http.Response{
-				StatusCode: http.StatusInternalServerError,
-				Body:       io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{"error":"marshal error: %v"}`, err)))),
-				Header:     make(http.Header),
-			}, nil
-		}
-		// Copy buffer contents before returning to pool
-		itemData := make([]byte, buf.Len())
-		copy(itemData, buf.Bytes())
-		items = append(items, json.RawMessage(itemData))
-		putBuffer(buf)
+		remainingItemCount = int64(len(m.objects) - endIdx)
 	}
 
 	// Create Kubernetes List response format
-	listResp := map[string]interface{}{
-		"apiVersion": m.kind.Schema.Group() + "/" + m.kind.Schema.Version(),
-		"kind":       m.kind.Schema.Kind() + "List",
-		"metadata": map[string]interface{}{
-			"resourceVersion": "1000",
+	listResp := &resource.TypedList[resource.Object]{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: schema.GroupVersion{
+				Group:   m.kind.Schema.Group(),
+				Version: m.kind.Schema.Version(),
+			}.Identifier(),
+			Kind: m.kind.Schema.ZeroListValue().GetObjectKind().GroupVersionKind().Kind,
 		},
-		"items": items,
+		ListMeta: metav1.ListMeta{
+			ResourceVersion: "1000",
+		},
+		Items: m.objects[startIdx:endIdx],
 	}
 
 	if continueToken != "" {
-		listResp["metadata"].(map[string]interface{})["continue"] = continueToken
+		listResp.Continue = continueToken
+	}
+	if remainingItemCount > 0 {
+		listResp.RemainingItemCount = &remainingItemCount
 	}
 
-	// Marshal the full response
-	body, err := json.Marshal(listResp)
-	if err != nil {
+	buf := getBuffer()
+	defer putBuffer(buf)
+
+	// Get codec for marshaling objects
+	codec := m.kind.Codec(resource.KindEncodingJSON)
+	if codec == nil {
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       io.NopCloser(bytes.NewReader([]byte(`{"error":"no codec for KindEncodingJSON"}`))),
+			Header:     make(http.Header),
+		}, nil
+	}
+
+	// Marshal the response to JSON.
+	if err := codec.WriteList(buf, listResp); err != nil {
 		return &http.Response{
 			StatusCode: http.StatusInternalServerError,
 			Body:       io.NopCloser(bytes.NewReader([]byte(fmt.Sprintf(`{"error":"response marshal error: %v"}`, err)))),
@@ -182,11 +183,11 @@ func (m *mockRoundTripper) handleList(req *http.Request) (*http.Response, error)
 	}
 
 	headers := make(http.Header)
-	headers.Set("Content-Type", "application/json")
+	headers.Set("Content-Type", string(resource.KindEncodingJSON))
 
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(bytes.NewReader(body)),
+		Body:       io.NopCloser(buf),
 		Header:     headers,
 	}, nil
 }

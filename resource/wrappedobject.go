@@ -27,8 +27,16 @@ func (PassthroughJSONCodec) Read(in io.Reader, into Object) error {
 	return json.NewDecoder(in).Decode(into)
 }
 
+func (PassthroughJSONCodec) ReadList(in io.Reader, into ListObject) error {
+	return json.NewDecoder(in).Decode(into)
+}
+
 func (PassthroughJSONCodec) Write(out io.Writer, obj Object) error {
 	return json.NewEncoder(out).Encode(obj)
+}
+
+func (PassthroughJSONCodec) WriteList(out io.Writer, list ListObject) error {
+	return json.NewEncoder(out).Encode(list)
 }
 
 type WrappedObjectType interface {
