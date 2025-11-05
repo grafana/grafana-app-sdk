@@ -76,6 +76,8 @@ type additionalMountedVolume struct {
 	MountPath  string `json:"mountPath" yaml:"mountPath"`
 }
 
+const placeholderPluginID = "example-plugin-id"
+
 func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
 	// Path (optional)
 	path, err := cmd.Flags().GetString("path")
@@ -193,10 +195,16 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// get plugin ID
+	// Get plugin ID
 	pluginID, err := getPluginID(path)
-	if err != nil {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		_, _ = fmt.Println("Warning: plugin id not found, using placeholder")
+		pluginID = placeholderPluginID
+	case err != nil:
 		return err
+	default:
+		// Do nothing
 	}
 
 	// Generate the k3d config (this has to be generated, as it needs to mount an absolute path on the host)
@@ -222,7 +230,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
+			generator, err := codegen.NewGenerator(parser.KindParser(cuekind.ParseConfig{
 				GenOperatorState: genOperatorState,
 				UseOldKinds:      useOldManifestKinds,
 			}), os.DirFS(sourcePath))
@@ -290,7 +298,7 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 func getPluginID(rootPath string) (string, error) {
 	pluginJSONPath := filepath.Join(rootPath, "plugin", "src", "plugin.json")
 	if _, err := os.Stat(pluginJSONPath); err != nil {
-		return "", fmt.Errorf("could not locate file %s", pluginJSONPath)
+		return "", err
 	}
 	pluginJSONFile, err := os.ReadFile(pluginJSONPath)
 	if err != nil {
