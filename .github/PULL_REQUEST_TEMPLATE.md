@@ -1,4 +1,4 @@
-# What Changed? Why?
+## What Changed? Why?
 
 Addresses Issue #<!-- [Enter issue number here] -->
 
