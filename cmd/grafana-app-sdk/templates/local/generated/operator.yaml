@@ -33,7 +33,7 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{.PluginID}}-operator
+  name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
   namespace: default
 spec:
   minReadySeconds: 10
@@ -41,17 +41,17 @@ spec:
   revisionHistoryLimit: 10
   selector:
     matchLabels:
-      name: {{.PluginID}}-operator
+      name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
   template:
     metadata:
       labels:
-        name: {{.PluginID}}-operator
+        name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
     spec:
       serviceAccount: operator
       containers:
         - image: {{.OperatorImage}}
           imagePullPolicy: IfNotPresent
-          name: {{.PluginID}}-operator
+          name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
           env:
             - name: OTEL_HOST
               value: tempo.default.svc
@@ -60,7 +60,7 @@ spec:
             - name: OTEL_CONN_TYPE
               value: grpc
             - name: OTEL_SERVICE_NAME
-              value: "{{.PluginID}}-operator"
+              value: "{{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}"
 {{ if .WebhookProperties.Enabled }}
             - name: WEBHOOK_PORT
               value: "{{ .WebhookProperties.Port }}"
@@ -88,11 +88,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{.PluginID}}-operator
+  name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
   namespace: default
 spec:
   selector:
-    name: {{.PluginID}}-operator
+    name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
   ports:
     - name: metrics
       port: 9090
@@ -106,14 +106,14 @@ spec:
 apiVersion: admissionregistration.k8s.io/v1
 kind: MutatingWebhookConfiguration
 metadata:
-  name: {{.PluginID}}-operator-mut-webhook
+  name: {{ if .DisableGrafanaPluginMount }}operator-mut-webhook{{ else }}{{.PluginID}}-operator-mut-webhook{{ end }}
 webhooks:
-  - name: {{.PluginID}}-operator.default.svc
+  - name: {{ if .DisableGrafanaPluginMount }}operator.default.svc{{ else }}{{.PluginID}}-operator.default.svc{{ end }}
     sideEffects: None
     admissionReviewVersions: ["v1","v1beta1"]
     clientConfig:
       service:
-        name: {{.PluginID}}-operator
+        name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
         namespace: default
         path: "/mutate"
       caBundle: {{.WebhookProperties.Base64CA}}
@@ -129,14 +129,14 @@ webhooks:
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: {{.PluginID}}-operator-val-webhook
+  name: {{ if .DisableGrafanaPluginMount }}operator-val-webhook{{ else }}{{.PluginID}}-operator-val-webhook{{ end }}
 webhooks:
-  - name: {{.PluginID}}-operator.default.svc
+  - name: {{ if .DisableGrafanaPluginMount }}operator.default.svc{{ else }}{{.PluginID}}-operator.default.svc{{ end }}
     sideEffects: None
     admissionReviewVersions: ["v1","v1beta1"]
     clientConfig:
       service:
-        name: {{.PluginID}}-operator
+        name: {{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}
         namespace: default
         path: "/validate"
       caBundle: {{.WebhookProperties.Base64CA}}
