@@ -84,6 +84,7 @@ endif
 .PHONY: debug
 debug: build
 	@if [ -n "$(APP_DIR)" ]; then \
+		mkdir -p "$(APP_DIR)"; \
 		cd "$(APP_DIR)" && dlv exec "$(abspath $(BIN_DIR))/grafana-app-sdk" --headless --listen=:$(or $(PORT),12345) --api-version=2 -- $(ARGS); \
 	else \
 		cd target && dlv exec "$(abspath $(BIN_DIR))/grafana-app-sdk" --headless --listen=:$(or $(PORT),12345) --api-version=2 -- $(ARGS); \
