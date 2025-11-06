@@ -193,17 +193,19 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Get plugin ID
+	// Get disablePluginMount ID
+	var disablePluginMount bool
 	pluginID, err := getPluginID(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		_, _ = fmt.Println("Warning: No plugin setup")
+		pluginID = "placeholder-plugin-id"
+		disablePluginMount = true
 	case err != nil:
 		return err
 	case pluginID == "":
-		return errors.New("plugin ID is empty")
+		return errors.New("plugin ID is unexpectedly empty")
 	default:
-		// Do nothing, we have a valid plugin ID
+		disablePluginMount = false
 	}
 
 	// Generate the k3d config (this has to be generated, as it needs to mount an absolute path on the host)
@@ -244,7 +246,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, *config)
+	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, disablePluginMount, *config)
 	if err != nil {
 		return err
 	}
@@ -398,12 +400,12 @@ type crdYAML struct {
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
 //nolint:funlen,errcheck,revive,gocyclo,gocognit
-func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, yamlGenProperties, error) {
+func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, disablePluginMount bool, config localEnvConfig) ([]byte, yamlGenProperties, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
 		PluginID:                  pluginID,
 		PluginIDKube:              kubeReplaceRegexp.ReplaceAllString(strings.ToLower(pluginID), "-"),
-		DisableGrafanaPluginMount: pluginID == "",
+		DisableGrafanaPluginMount: disablePluginMount,
 		CRDs:                      make([]yamlGenPropsCRD, 0),
 		Services:                  make([]yamlGenPropsService, 0),
 		Datasources:               make([]dataSourceConfig, 0),

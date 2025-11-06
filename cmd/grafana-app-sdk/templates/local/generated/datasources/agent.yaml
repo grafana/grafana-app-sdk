@@ -87,14 +87,14 @@ data:
           scrape_configs:
           - job_name: grafana
             static_configs:
-              - targets: ['grafana.default.svc.cluster.local']{{ if not .DisableGrafanaPluginMount }}
+              - targets: ['grafana.default.svc.cluster.local']
           - job_name: plugin
             metrics_path: '/api/plugins/{{.PluginID}}/metrics'
             static_configs:
-              - targets: ['grafana.default.svc.cluster.local']{{ end }}
+              - targets: ['grafana.default.svc.cluster.local']
           - job_name: operator
             static_configs:
-              - targets: ['{{ if .DisableGrafanaPluginMount }}operator{{ else }}{{.PluginID}}-operator{{ end }}.default.svc.cluster.local:9090']
+              - targets: ['{{.PluginID}}-operator.default.svc.cluster.local:9090']
       wal_directory: /var/lib/agent/data
     server:
         log_level: info
