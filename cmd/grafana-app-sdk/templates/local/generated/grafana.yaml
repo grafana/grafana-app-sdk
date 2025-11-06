@@ -1,4 +1,4 @@
-{{ if not .DisableGrafanaPluginMount }}apiVersion: v1
+apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: grafana
@@ -18,8 +18,7 @@ subjects:
     name: grafana
     namespace: default
 ---
-{{end}}
-apiVersion: v1
+{{end}}{{ if not .DisableGrafanaPluginMount }}apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{.PluginIDKube}}-provisioning
