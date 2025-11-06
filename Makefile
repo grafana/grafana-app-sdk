@@ -72,6 +72,24 @@ ifndef GOPATH
 endif
 	@cp "$(BIN_DIR)/grafana-app-sdk" "${GOPATH}/bin/grafana-app-sdk"
 
+# Debug the sdk using Delve
+# Requires Delve to be installed:
+# 	go install github.com/go-delve/delve/cmd/dlv@latest
+# Arguments:
+# 	APP_DIR - Directory of the application to debug (optional, defaults to the gitignored 'target' directory where the built binary is located)
+# 	PORT    - Port for Delve to listen on (optional, defaults to 12345)
+# 	ARGS    - Arguments to pass to the application being debugged (optional)
+# Usage:
+# 	make debug APP_DIR=target/issue-tracker-project PORT=12345 ARGS='project init "github.com/grafana/issue-tracker-project"'
+.PHONY: debug
+debug: build
+	@if [ -n "$(APP_DIR)" ]; then \
+		mkdir -p "$(APP_DIR)"; \
+		cd "$(APP_DIR)" && dlv exec "$(abspath $(BIN_DIR))/grafana-app-sdk" --headless --listen=:$(or $(PORT),12345) --api-version=2 -- $(ARGS); \
+	else \
+		cd target && dlv exec "$(abspath $(BIN_DIR))/grafana-app-sdk" --headless --listen=:$(or $(PORT),12345) --api-version=2 -- $(ARGS); \
+	fi
+
 .PHONY: update-workspace
 update-workspace:
 	@echo "updating workspace"
