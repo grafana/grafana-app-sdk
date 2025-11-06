@@ -1,4 +1,4 @@
-apiVersion: v1
+{{ if not .DisableGrafanaPluginMount }}apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: grafana
@@ -38,7 +38,7 @@ data:
           {{ $key }}: {{ $value }}{{end}}
         secureJsonData:{{ range $key, $value := .SecureJSONData }}
           {{ $key }}: {{ $value }}{{end}}
-{{ if .GenerateGrafanaDeployment }}
+{{ end }}{{ if .GenerateGrafanaDeployment }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -74,11 +74,11 @@ data:
     org_role = {{ .GrafanaAnonymousAuth }}{{ else }}
     enabled = false{{ end }}
     [log.frontend]
-    enabled = true
+    enabled = true{{ if not .DisableGrafanaPluginMount }}
     [plugins]
     allow_loading_unsigned_plugins = {{.PluginID}}
     [plugin.{{.PluginID}}]
-    tracing = true
+    tracing = true{{ end }}
     [server]
     http_port = 3000
     root_url = 
@@ -148,12 +148,12 @@ spec:
               memory: 40Mi
           volumeMounts:
             - mountPath: /etc/grafana-config
-              name: grafana-config
+              name: grafana-config{{ if not .DisableGrafanaPluginMount }}
             - mountPath: /etc/grafana/provisioning/plugins
               name: {{.PluginIDKube}}-provisioning
             - mountPath: /var/lib/grafana/plugins/{{.PluginID}}
               name: {{.PluginIDKube}}
-              readOnly: true
+              readOnly: true{{ end }}
             - mountPath: /etc/grafana/provisioning/datasources
               name: grafana-datasources
             - mountPath: /app-aggregator
@@ -163,13 +163,13 @@ spec:
       volumes:
         - configMap:
             name: grafana-config
-          name: grafana-config
+          name: grafana-config{{ if not .DisableGrafanaPluginMount }}
         - configMap:
             name: {{.PluginIDKube}}-provisioning
           name: {{.PluginIDKube}}-provisioning
         - hostPath:
             path: /tmp/k3d/mounted-files/plugin/dist
-          name: {{.PluginIDKube}}
+          name: {{.PluginIDKube}}{{ end }}
         - configMap:
             name: grafana-datasources
           name: grafana-datasources

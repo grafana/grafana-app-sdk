@@ -76,8 +76,6 @@ type additionalMountedVolume struct {
 	MountPath  string `json:"mountPath" yaml:"mountPath"`
 }
 
-const placeholderPluginID = "example-plugin-id"
-
 func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
 	// Path (optional)
 	path, err := cmd.Flags().GetString("path")
@@ -199,12 +197,13 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	pluginID, err := getPluginID(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		_, _ = fmt.Println("Warning: plugin id not found, using placeholder")
-		pluginID = placeholderPluginID
+		_, _ = fmt.Println("Warning: No plugin setup")
 	case err != nil:
 		return err
+	case pluginID == "":
+		return errors.New("plugin ID is empty")
 	default:
-		// Do nothing
+		// Do nothing, we have a valid plugin ID
 	}
 
 	// Generate the k3d config (this has to be generated, as it needs to mount an absolute path on the host)
@@ -345,6 +344,7 @@ type scriptGenProperties struct {
 type yamlGenProperties struct {
 	PluginID                  string
 	PluginIDKube              string
+	DisableGrafanaPluginMount bool
 	CRDs                      []yamlGenPropsCRD
 	Services                  []yamlGenPropsService
 	JSONData                  map[string]string
@@ -401,14 +401,15 @@ var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, yamlGenProperties, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
-		PluginID:       pluginID,
-		PluginIDKube:   kubeReplaceRegexp.ReplaceAllString(strings.ToLower(pluginID), "-"),
-		CRDs:           make([]yamlGenPropsCRD, 0),
-		Services:       make([]yamlGenPropsService, 0),
-		Datasources:    make([]dataSourceConfig, 0),
-		JSONData:       make(map[string]string),
-		SecureJSONData: make(map[string]string),
-		OperatorImage:  config.OperatorImage,
+		PluginID:                  pluginID,
+		PluginIDKube:              kubeReplaceRegexp.ReplaceAllString(strings.ToLower(pluginID), "-"),
+		DisableGrafanaPluginMount: pluginID == "",
+		CRDs:                      make([]yamlGenPropsCRD, 0),
+		Services:                  make([]yamlGenPropsService, 0),
+		Datasources:               make([]dataSourceConfig, 0),
+		JSONData:                  make(map[string]string),
+		SecureJSONData:            make(map[string]string),
+		OperatorImage:             config.OperatorImage,
 		WebhookProperties: yamlGenPropsWebhooks{
 			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
