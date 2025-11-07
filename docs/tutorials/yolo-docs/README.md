@@ -55,14 +55,14 @@ with a custom service that looks up external related issues.
 
 ## Other Resources
 
+- **[Concepts](CONCEPTS.md) - a list of key concepts the SDK depends on and how they
+interrelate
+- **[Technologies](TECHNOLOGIES.md) - a list of key technologies used, and how.
 - **[Platform Concepts](../../application-design/platform-concepts.md)** - Deep dive into how the platform works
-- **[Application Design Patterns](../../application-design/README.md)** - Detailed explanation of all three patterns
-- **[Issue Tracker Tutorial](../issue-tracker/)** - Complete walkthrough of building an operator-based app
 - **[API Server Example](../../../examples/apiserver/)** - Working example of a custom API server
 
 ## Questions?
 
 - Check the [main documentation](../../README.md)
 - See [Kubernetes concepts](../../kubernetes.md) if you're new to Kubernetes patterns
-- Browse the [examples](../../../examples/) for working code
 
