@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -57,6 +57,33 @@ var (
 	}
 	responseBytes, _ = json.Marshal(k8sResponseObject)
 )
+
+func TestDefaultClientConfig(t *testing.T) {
+	config := DefaultClientConfig()
+	// Check the KubeConfigProvider's logic
+	t.Run("KubeConfigProvider doesn't modify APIPath when already set", func(t *testing.T) {
+		existingPath := "/a/path"
+		rcfg := rest.Config{
+			APIPath: existingPath,
+		}
+		provided := config.KubeConfigProvider(testKind, rcfg)
+		assert.Equal(t, rcfg, provided)
+	})
+	t.Run("KubeConfigProvider sets APIPath to /apis for custom kinds", func(t *testing.T) {
+		rcfg := rest.Config{}
+		provided := config.KubeConfigProvider(testKind, rcfg)
+		assert.NotEqual(t, rcfg, provided)
+		assert.Equal(t, "/apis", provided.APIPath)
+	})
+	t.Run("KubeConfigProvider sets APIPath to /apis for kinds with an empty group (legacy k8s kinds)", func(t *testing.T) {
+		rcfg := rest.Config{}
+		provided := config.KubeConfigProvider(resource.Kind{
+			Schema: resource.NewSimpleSchema("", "v1", &resource.UntypedObject{}, &resource.UntypedList{}),
+		}, rcfg)
+		assert.NotEqual(t, rcfg, provided)
+		assert.Equal(t, "/api", provided.APIPath)
+	})
+}
 
 func TestClient_Get(t *testing.T) {
 	client, server := getClientTestSetup(testKind)
@@ -933,10 +960,10 @@ func (r *mockRESTClient) APIVersion() schema.GroupVersion {
 
 // mockWatch implements watch.Interface for testing
 type mockWatch struct {
-	ch       chan watch.Event
-	stopCh   chan struct{}
-	stopped  bool
-	stopMux  sync.Mutex
+	ch      chan watch.Event
+	stopCh  chan struct{}
+	stopped bool
+	stopMux sync.Mutex
 }
 
 func newMockWatch() *mockWatch {
@@ -970,10 +997,10 @@ func (m *mockWatch) sendEvent(evt watch.Event) {
 
 func TestMetricsWatchWrapper(t *testing.T) {
 	tests := []struct {
-		name                string
-		events              []watch.Event
-		expectEventCounts   map[string]int
-		expectErrorCounts   map[string]int
+		name              string
+		events            []watch.Event
+		expectEventCounts map[string]int
+		expectErrorCounts map[string]int
 	}{
 		{
 			name: "records ADDED event",
