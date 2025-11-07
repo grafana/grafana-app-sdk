@@ -9,12 +9,7 @@ App Platform is a system that lets you build Grafana plugins by **defining your 
 can reconcile & watch resources, and ways you can plug in custom APIs of your own.
 
 It's called app platform because this is the new default way to build things on the Grafana Platform.
-Everything's an app, which can have front-end, back-end, and operator segments.
-
-### What do I get?  Why would I do it this way?
-
-Because you want to reduce toil, get stuff for free, and spend less time doing undifferentiated
-heavy lifting.
+Everything's an app, which can have front-end, back-end, and operator segments. Doing it this way reduces toil, gets many features for free, and has your team doing less heavy lifting.
 
 **🚀 Generated APIs** - No need to write/maintain CRUD endpoints or OpenAPI specs. Define your schema and get a complete API automatically.
 
@@ -31,7 +26,7 @@ your data, and get a versioning and API approach that will match what everyone e
 
 ## So what should I do?
 
-There are only three basic patterns for different needs. Pick which one suits
+There are three basic patterns. Pick which one suits
 what you want to do.
 
 > **💡 Tip**: Most greenfield plugins start as CRD-based and evolve into operator-based as requirements grow. Custom APIs are relatively rare and only needed for specific use cases, but may be the go-to if you have something complex you need to migrate.
@@ -44,8 +39,7 @@ what you want to do.
 
 ## What's Next?
 
-To learn app platform concepts, do all 3 tutorials, in this order. Each one builds on the
-last.
+To learn app platform concepts, we recommend learning by doing: 3 tutorials, in this order. Each one builds on the last.
 
 - **[CRD-Based Tutorial](./crd-based/)** - Builds a simple issue tracker
 - **[Operator-Based Tutorial](./operator-based/)** - Extends the issue tracker with
@@ -55,14 +49,12 @@ with a custom service that looks up external related issues.
 
 ## Other Resources
 
-- **[Concepts](CONCEPTS.md) - a list of key concepts the SDK depends on and how they
-interrelate
-- **[Technologies](TECHNOLOGIES.md) - a list of key technologies used, and how.
-- **[Platform Concepts](../../application-design/platform-concepts.md)** - Deep dive into how the platform works
-- **[API Server Example](../../../examples/apiserver/)** - Working example of a custom API server
+If this learning style isn't your thing, you have these other options:
 
-## Questions?
+| [Concepts](CONCEPTS.md) | [Technologies](TECHNOLOGIES.md) | [Use Cases](USE-CASES.md) |
+|-------------------------|---------------------------------|---------------------------|
+| List key ideas app platform relies on, and how they interrelate | key tech used, and how | problems this SDK can help you solve |
 
-- Check the [main documentation](../../README.md)
+- **[How the Platform Works](../../application-design/platform-concepts.md)**
 - See [Kubernetes concepts](../../kubernetes.md) if you're new to Kubernetes patterns
-
+- [Other documentation](../../README.md)
