@@ -49,8 +49,9 @@ type localEnvConfig struct {
 	GenerateGrafanaDeployment bool                      `json:"generateGrafanaDeployment" yaml:"generateGrafanaDeployment"`
 	GrafanaImage              string                    `json:"grafanaImage" yaml:"grafanaImage"`
 	GrafanaInstallPlugins     string                    `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
-	GrafanaWithAnonymousAuth  bool                      `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
-	AdditionalVolumeMounts    []additionalMountedVolume `json:"additionalVolumeMounts" yaml:"additionalVolumeMounts"`
+	GrafanaWithAnonymousAuth    bool                      `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
+	GrafanaKubernetesAggregator bool                      `json:"grafanaKubernetesAggregator" yaml:"grafanaKubernetesAggregator"`
+	AdditionalVolumeMounts      []additionalMountedVolume `json:"additionalVolumeMounts" yaml:"additionalVolumeMounts"`
 }
 
 type dataSourceConfig struct {
@@ -347,8 +348,9 @@ type yamlGenProperties struct {
 	GenerateGrafanaDeployment bool
 	GrafanaImage              string
 	GrafanaInstallPlugins     string
-	GrafanaAnonymousAuth      string
-	APIGroups                 map[string][]string // map of group -> list of supported versions
+	GrafanaAnonymousAuth        string
+	GrafanaKubernetesAggregator bool
+	APIGroups                   map[string][]string // map of group -> list of supported versions
 }
 
 type yamlGenPropsCRD struct {
@@ -424,6 +426,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 	if config.GrafanaWithAnonymousAuth {
 		props.GrafanaAnonymousAuth = "Viewer"
 	}
+	props.GrafanaKubernetesAggregator = config.GrafanaKubernetesAggregator
 
 	if props.WebhookProperties.Enabled {
 		if config.Webhooks.Port > 0 {

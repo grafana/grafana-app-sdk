@@ -38,7 +38,7 @@ data:
           {{ $key }}: {{ $value }}{{end}}
         secureJsonData:{{ range $key, $value := .SecureJSONData }}
           {{ $key }}: {{ $value }}{{end}}
-{{ if .GenerateGrafanaDeployment }}
+{{ if .GenerateGrafanaDeployment }}{{if .GrafanaKubernetesAggregator}}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -54,7 +54,7 @@ data:
       host: kubernetes.default.svc
       port: 443
     {{ end }}{{end}}
----
+{{end}}---
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -91,9 +91,9 @@ data:
     grafanaAPIServerEnsureKubectlAccess = true
     ; disable the experimental APIs flag to disable bundling of the example service locally
     grafanaAPIServerWithExperimentalAPIs = false
-    kubernetesAggregator = true
+    kubernetesAggregator = {{.GrafanaKubernetesAggregator}}{{if .GrafanaKubernetesAggregator}}
     [grafana-apiserver]
-    remote_services_file = /app-aggregator/apiservices.yaml
+    remote_services_file = /app-aggregator/apiservices.yaml{{end}}
 ---
 apiVersion: v1
 kind: Service
@@ -155,10 +155,10 @@ spec:
               name: {{.PluginIDKube}}
               readOnly: true
             - mountPath: /etc/grafana/provisioning/datasources
-              name: grafana-datasources
+              name: grafana-datasources{{if .GrafanaKubernetesAggregator}}
             - mountPath: /app-aggregator
               name: grafana-apiserver-provisioning
-              readOnly: true
+              readOnly: true{{end}}
       serviceAccount: grafana
       volumes:
         - configMap:
@@ -172,10 +172,10 @@ spec:
           name: {{.PluginIDKube}}
         - configMap:
             name: grafana-datasources
-          name: grafana-datasources
+          name: grafana-datasources{{if .GrafanaKubernetesAggregator}}
         - configMap:
             name: grafana-apiserver-provisioning
-          name: grafana-apiserver-provisioning
+          name: grafana-apiserver-provisioning{{end}}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
