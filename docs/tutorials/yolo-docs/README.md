@@ -90,13 +90,14 @@ These are _notional examples only_
 
 ## What's Next?
 
-Choose the pattern that fits your needs and follow the corresponding tutorial:
+To learn app platform concepts, do all 3 tutorials, in this order. Each one builds on the
+last.
 
-- **[CRD-Based Tutorial](./crd-based/)** - Build a runbooks catalog with managed backend (coming soon)
-- **[Operator-Based Tutorial](./operator-based/)** - Build an SLO monitor with automation (coming soon)
-- **[Custom API Tutorial](./custom-api/)** - Build a cost analytics plugin (coming soon)
-
-If you're not sure which to choose, start with the **CRD-Based Tutorial** - it's the simplest and you can always add operator functionality later.
+- **[CRD-Based Tutorial](./crd-based/)** - Builds a simple issue tracker
+- **[Operator-Based Tutorial](./operator-based/)** - Extends the issue tracker with
+a watcher that flags issues based on keywords
+- **[Custom API Tutorial](./custom-api/)** - Extends the operator-based issue tracker
+with a custom service that looks up external related issues.
 
 ## Other Resources
 

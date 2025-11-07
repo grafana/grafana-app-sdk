@@ -52,12 +52,10 @@ This creates the basic project structure with go modules, CUE modules, and local
 Download the example Issue kind definition.
 
 ```bash
-curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/yolo-docs/crd-based/examples/issue-v1.cue
+curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/cue/issue-v1.cue
 ```
 
-This defines an `Issue` resource with `title`, `description`, `status`, and `flagged` fields.
-
-> **Note**: The `flagged` field will be used later if you add operator functionality (see "What's Next" below).
+This defines an `Issue` resource with `title`, `description`, and `status` fields.
 
 ### 4. Update the Manifest
 
@@ -89,13 +87,13 @@ This creates type-safe Go structs, TypeScript interfaces, and CRD definitions in
 
 ### 6. Add Boilerplate Components
 
-Generate frontend and backend boilerplate.
+Generate frontend, backend, and operator boilerplate.
 
 ```bash
-grafana-app-sdk project component add frontend backend
+grafana-app-sdk project component add frontend backend operator
 ```
 
-This scaffolds the plugin UI and API handlers.
+This scaffolds the plugin UI, API handlers, and operator watchers.
 
 > **Learn More**: [Boilerplate Generation](../../issue-tracker/04-boilerplate.md)
 
@@ -109,26 +107,17 @@ make deps
 
 ### 8. Build Everything
 
-Build the plugin backend and frontend.
+Build the plugin backend, frontend, and operator container.
 
 ```bash
 make build
 ```
 
-This compiles the Go binaries and bundles the React app.
+This compiles the Go binaries, bundles the React app, and creates a Docker image.
 
 > **Learn More**: [Build & Deployment Details](../../issue-tracker/05-local-deployment.md)
 
-### 9. Configure Local Deployment
-
-Before deploying, edit `local/config.yaml` to disable the operator (since this is a CRD-only app):
-
-```yaml
-# Comment out or empty the operatorImage line:
-operatorImage: ""
-```
-
-### 10. Deploy Locally
+### 9. Deploy Locally
 
 Start your local k3d cluster and deploy the app.
 
@@ -136,15 +125,16 @@ Start your local k3d cluster and deploy the app.
 make local/up
 ```
 
-Wait for the cluster to initialize, then deploy the plugin:
+Wait for the cluster to initialize, then deploy the plugin and operator:
 
 ```bash
 make local/deploy_plugin
+make local/push_operator
 ```
 
-The plugin is deployed to the cluster. The platform will handle all backend functionality automatically.
+The plugin is deployed to the cluster and the operator image is imported into k3d.
 
-### 11. Verify Your Deployment
+### 10. Verify Your Deployment
 
 Access Grafana at [http://grafana.k3d.localhost:9999](http://grafana.k3d.localhost:9999) (credentials: `admin`/`admin`).
 
@@ -168,7 +158,7 @@ You should see an empty list of issues:
 }
 ```
 
-### 12. Create a Test Resource
+### 11. Create a Test Resource
 
 Create an issue via the API:
 
@@ -188,18 +178,13 @@ View your app UI at [http://grafana.k3d.localhost:9999/a/issuetrackerproject-app
 
 ## What You Built
 
-You now have a **complete CRD-based application** where the platform provides ALL backend functionality - you only defined the schema!
-
-You get automatically:
+You now have:
 
 - **Custom Resource Type**: `Issue` resources stored in Kubernetes
 - **REST API**: Full CRUD operations at `/apis/issuetrackerproject.ext.grafana.com/v1alpha1/`
 - **Grafana Plugin**: Basic UI at `/a/issuetrackerproject-app/`
-- **Authentication & Authorization**: Built-in RBAC
-- **Multi-tenancy**: Namespace isolation
-- **kubectl Support**: Manage issues via CLI
-- **GitOps Support**: Use tools like Flux for declarative management
-- **Local Environment**: K3d cluster with Grafana and your app
+- **Operator**: Watches for Issue changes and logs events
+- **Local Environment**: K3d cluster with Grafana, your app, and monitoring
 
 ## Iterate & Develop
 
@@ -209,8 +194,11 @@ To make changes and redeploy:
 # After code changes
 make build
 
-# Redeploy plugin
+# Redeploy plugin frontend
 make local/deploy_plugin
+
+# Redeploy operator
+make build/operator && make local/push_operator
 ```
 
 ## Clean Up
@@ -229,15 +217,7 @@ make local/clean
 
 ## What's Next? Use-Case Focused Guide
 
-Now that you have a working CRD-based app, you can extend it or explore other concepts:
-
-### Next: Add Operator Functionality
-
-**Want your app to automatically react to changes?** Continue to the next tutorial to add a watcher that automatically flags urgent issues:
-
-- **[Operator-Based Tutorial](../operator-based/)** - Add event-driven automation
-- **Concepts**: [Platform Concepts](../../application-design/platform-concepts.md#asynchronous-business-logic)
-- **Deep Dive**: [Operators Guide](../../operators.md)
+Now that you have a working app, customize it based on your needs:
 
 ### I want to customize the frontend UI
 
@@ -246,13 +226,26 @@ Build a custom React UI for managing your resources:
 - **Tutorial**: [Writing Our Front-End](../../issue-tracker/06-frontend.md)
 - **Topics**: API client creation, state management, CRUD operations
 
-### I want a custom backend service, not a generated one
+### I want my operator to react to changes
 
-You'll need to use the Kubernetes aggregation layer / extension API servers:
+Add business logic that runs when resources are created, updated, or deleted:
 
-- **[Custom API Tutorial](../custom-api/)** - Add custom endpoints with external data
-- **Example**: [API Server Example](../../../examples/apiserver/)
-- **See also**: [Applications with Custom APIs](../../application-design/README.md#applications-with-custom-apis)
+- **Tutorial**: [Adding Operator Code](../../issue-tracker/07-operator-watcher.md)
+- **Topics**: Watchers, reconcilers, metrics, status subresources
+- **Deep Dive**: [Operators and Event-Based Design](../../../operators.md)
+
+### I want to validate or transform incoming requests
+
+Add validation rules and automatic mutations via admission control:
+
+- **Tutorial**: [Adding Admission Control](../../issue-tracker/08-adding-admission-control.md)
+- **Topics**: Validating webhooks, mutating webhooks, admission requests
+
+### I want a custom backend service, not a generated one.
+
+You'll need to use the Kubernetes aggregation layer / extension API servers, this tutorial won't extend to that.
+
+- **See also**: [Applications with custom APIs](../../../application-design/README.md#applications-with-custom-apis)
 
 ### I want to understand CUE schemas better
 
@@ -294,6 +287,8 @@ Walk through the complete tutorial with detailed explanations:
 
 **Plugin won't load**: Ensure you ran `make local/deploy_plugin` after building.
 
+**Operator failing to start**: Verify the image was pushed with `make local/push_operator`.
+
 **Port conflicts**: Check that ports 9999 (Grafana) and 10350 (Tilt) are available.
 
 **kubectl can't find resources**: Ensure your kubeconfig points to the k3d cluster:
@@ -305,14 +300,9 @@ kubectl config current-context  # Should show k3d-issue-tracker-project
 
 ## Additional Resources
 
-### Core Concepts
-- [Platform Concepts](../../application-design/platform-concepts.md) - Understanding the platform architecture
-- [Application Design Patterns](../../application-design/README.md) - When to use each pattern
-
-### Reference Documentation
-- [SDK Documentation](../../README.md)
-- [CLI Reference](../../cli.md)
-- [Kubernetes Primer](../../kubernetes.md)
-- [App Manifest Specification](../../app-manifest.md)
+- [SDK Documentation](../../../README.md)
+- [CLI Reference](../../../cli.md)
+- [Kubernetes Primer](../../../kubernetes.md)
+- [App Manifest Specification](../../../app-manifest.md)
 
 
