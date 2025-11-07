@@ -203,7 +203,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	case err != nil:
 		return err
 	case pluginID == "":
-		return errors.New("plugin ID is unexpectedly empty")
+		return errors.New("plugin ID cannot be empty")
 	default:
 		disablePluginMount = false
 	}
