@@ -5,88 +5,42 @@ app platform is, how you can benefit, and what you should do next.
 
 ## What is the App Platform?
 
-App Platform is a system that lets you build Grafana plugins by **defining your data structure**, and the platform **automatically generates a complete API** for you.
+App Platform is a system that lets you build Grafana plugins by **defining your data structure**. The platform **automatically generates a complete API** for you.  It has options to add operators which
+can reconcile & watch resources, and ways you can plug in custom APIs of your own.
 
-1. You describe your data
-2. The platform creates a full REST API with endpoints for create, read, update, delete, list, and watch
-3. Your plugin gets authentication, authorization, and multi-tenancy **for free**
-4. Manage your data easily through your UI, CLI tools like `kubectl`, or GitOps tools like Flux
+It's called app platform because this is the new default way to build things on the Grafana Platform.
+Everything's an app, which can have front-end, back-end, and operator segments.
 
-### Wait, what do I get?
+### What do I get?  Why would I do it this way?
 
-**🚀 Generated APIs** - No need to write CRUD endpoints. Define your schema and get a complete API automatically.
+Because you want to reduce toil, get stuff for free, and spend less time doing undifferentiated
+heavy lifting.
 
-**🔒 Multi-tenancy & RBAC Built-in** - Your data is automatically isolated by namespace/tenant. Different teams can have resources with the same names without conflicts. Avoid your team doing undifferentiated heavy lifting 
-(like RBAC implementation). Toil is bad.
+**🚀 Generated APIs** - No need to write/maintain CRUD endpoints or OpenAPI specs. Define your schema and get a complete API automatically.
 
-**📊 Options for Event-Driven** - React to changes asynchronously with operators and reconcilers, good for automation.
+**🔒 Multi-tenancy, Terraform, RBAC Built-in** - Your data is automatically isolated by namespace/tenant. Different teams can have resources with the same names without conflicts. No customer feature
+requests ("does this work with RBAC?"). No security incidents due to isolation bugs. 
+Toil is bad, right?
+
+**📊 Flexible Options** - React to changes async, do event driven stuff with operators and reconcilers, good for automation.
 
 **🎯 Type-Safe** - Code generation gives you type-safe Go & Typescript code.
+
+**Sane Versioning, Tool Compatibility** - use normal things like `kubectl` to interact with
+your data, and get a versioning and API approach that will match what everyone else expects.
 
 ## So what should I do?
 
 There are only three basic patterns for different needs. Pick which one suits
 what you want to do.
 
-> **💡 Tip**: Most plugins start as CRD-based and evolve into operator-based as requirements grow. Custom APIs are relatively rare and only needed for specific use cases, but may be the go-to if you have something complex you need to migrate.
+> **💡 Tip**: Most greenfield plugins start as CRD-based and evolve into operator-based as requirements grow. Custom APIs are relatively rare and only needed for specific use cases, but may be the go-to if you have something complex you need to migrate.
 
-### 1. CRD-Based Applications
-**You get**: Complete backend service (API, storage, auth, multi-tenancy)  
-**You provide**: A `Kind` (your data schema)  
-**You build**: Frontend UI to display and edit that data  
-**Use when**: You want a managed backend - all the infrastructure without writing backend code  
-**The platform handles**: Storage, API endpoints, validation, RBAC
-
-### 2. Operator-Based Applications
-**You get**: Everything from pattern 1, plus...  
-**You build**: Backend logic that reacts to changes (reconcilers, validators, mutators)  
-**Use when**: Creating a resource should trigger automation, or when
-you need custom backend behavior outside of the request/response loop
-
-### 3. Custom API Applications
-**You get**: Everything from pattern 2, plus full control over API behavior  
-**You build**: Custom API server with your own logic  
-**Use when**: You need non-standard endpoints or external data sources
-
-## Which Pattern Do I Need?
-
-These are _notional examples only_
-
-### CRD-Based: **Runbooks Catalog**
-
-**What it does**: Allows teams to create a catalog of their runbooks with metadata (owner, on-call team, related dashboards, etc).
-
-**Why this pattern**:
-- Just needs to store and display runbook metadata
-- Platform provides the complete backend automatically
-- Basic schema validation is sufficient
-- Users manage runbooks through the UI, but can also use `kubectl` or GitOps tools
-
----
-
-### Operator-Based: **SLO Monitor Plugin**
-
-**What it does**: Users define SLOs (Service Level Objectives) as custom resources. The operator automatically creates corresponding alerts, recording rules, and status dashboards.
-
-**Why this pattern**:
-- When a user creates an SLO, the backend must automatically provision multiple resources
-- Set default values if not specified
-- Validate complex business rules
-- Async work that shouldn't block the API request
-- Cleanup generated resources when SLO is deleted
-
----
-
-### Custom API: **Cross-Cloud Cost Analytics Plugin**
-
-**What it does**: Aggregates billing data from AWS, GCP, and Azure APIs to show cost breakdowns by service, team, or time period.
-
-**Why this pattern**:
-- Data is computed on-demand from external APIs, not stored in our platform
-- Needs custom endpoints like `/costs/by-team`, `/costs/forecast` that don't map to standard CRUD
-- Custom authorization (finance sees all, teams see their own)
-- Queries go to external cloud APIs
-- Custom caching for expensive operations
+| Application Type | You Get | You Build/Provide | Use When |
+|------------------|---------|-------------------|----------|
+| **CRD-Based** | Complete backend service (API, storage, auth, multi-tenancy) | A `Kind` (your data schema) + Frontend UI to display and edit that data | You want a managed backend - all the infrastructure without writing backend code |
+| **Operator-Based** | Everything above, plus event-driven automation | Backend logic that reacts to changes (reconcilers, validators, mutators) | Creating a resource should trigger automation, or you need custom backend behavior outside of the request/response loop |
+| **Custom API** | Everything from Operator-Based, plus full control over API behavior | Custom API server with your own logic | You need non-standard endpoints or external data sources |
 
 ## What's Next?
 
