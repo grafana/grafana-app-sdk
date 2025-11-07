@@ -193,10 +193,19 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// get plugin ID
+	// Get disablePluginMount ID
+	var disablePluginMount bool
 	pluginID, err := getPluginID(path)
-	if err != nil {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		pluginID = "placeholder-plugin-id"
+		disablePluginMount = true
+	case err != nil:
 		return err
+	case pluginID == "":
+		return errors.New("plugin ID cannot be empty")
+	default:
+		disablePluginMount = false
 	}
 
 	// Generate the k3d config (this has to be generated, as it needs to mount an absolute path on the host)
@@ -222,7 +231,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
+			generator, err := codegen.NewGenerator(parser.KindParser(cuekind.ParseConfig{
 				GenOperatorState: genOperatorState,
 				UseOldKinds:      useOldManifestKinds,
 			}), os.DirFS(sourcePath))
@@ -237,7 +246,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, *config)
+	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, disablePluginMount, *config)
 	if err != nil {
 		return err
 	}
@@ -290,7 +299,7 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 func getPluginID(rootPath string) (string, error) {
 	pluginJSONPath := filepath.Join(rootPath, "plugin", "src", "plugin.json")
 	if _, err := os.Stat(pluginJSONPath); err != nil {
-		return "", fmt.Errorf("could not locate file %s", pluginJSONPath)
+		return "", err
 	}
 	pluginJSONFile, err := os.ReadFile(pluginJSONPath)
 	if err != nil {
@@ -337,6 +346,7 @@ type scriptGenProperties struct {
 type yamlGenProperties struct {
 	PluginID                  string
 	PluginIDKube              string
+	DisableGrafanaPluginMount bool
 	CRDs                      []yamlGenPropsCRD
 	Services                  []yamlGenPropsService
 	JSONData                  map[string]string
@@ -390,17 +400,18 @@ type crdYAML struct {
 var kubeReplaceRegexp = regexp.MustCompile(`[^a-z0-9\-]`)
 
 //nolint:funlen,errcheck,revive,gocyclo,gocognit
-func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, config localEnvConfig) ([]byte, yamlGenProperties, error) {
+func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID string, disablePluginMount bool, config localEnvConfig) ([]byte, yamlGenProperties, error) {
 	output := bytes.Buffer{}
 	props := yamlGenProperties{
-		PluginID:       pluginID,
-		PluginIDKube:   kubeReplaceRegexp.ReplaceAllString(strings.ToLower(pluginID), "-"),
-		CRDs:           make([]yamlGenPropsCRD, 0),
-		Services:       make([]yamlGenPropsService, 0),
-		Datasources:    make([]dataSourceConfig, 0),
-		JSONData:       make(map[string]string),
-		SecureJSONData: make(map[string]string),
-		OperatorImage:  config.OperatorImage,
+		PluginID:                  pluginID,
+		PluginIDKube:              kubeReplaceRegexp.ReplaceAllString(strings.ToLower(pluginID), "-"),
+		DisableGrafanaPluginMount: disablePluginMount,
+		CRDs:                      make([]yamlGenPropsCRD, 0),
+		Services:                  make([]yamlGenPropsService, 0),
+		Datasources:               make([]dataSourceConfig, 0),
+		JSONData:                  make(map[string]string),
+		SecureJSONData:            make(map[string]string),
+		OperatorImage:             config.OperatorImage,
 		WebhookProperties: yamlGenPropsWebhooks{
 			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
 		},
