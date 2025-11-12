@@ -36,7 +36,7 @@ datasourceConfigs:
 generateGrafanaDeployment: true
 
 # which grafana image to use
-grafanaImage: grafana/grafana-enterprise:main
+grafanaImage: grafana/grafana-enterprise:12.0.0
 
 # Install plugins from other sources (URLS). See https://grafana.com/docs/grafana/latest/setup-grafana/configure-docker/#install-plugins-from-other-sources
 grafanaInstallPlugins: ""
