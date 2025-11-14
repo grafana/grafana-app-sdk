@@ -128,7 +128,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	}
 	if s.PreferredVersion != nil {
 		data.PreferredVersion = *s.PreferredVersion
-	} else {
+	} else if len(s.Versions) > 0 {
 		data.PreferredVersion = s.Versions[len(s.Versions)-1].Name
 	}
 	// Permissions
