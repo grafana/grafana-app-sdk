@@ -1839,6 +1839,7 @@ golang.org/x/telemetry v0.0.0-20250710130107-8d8967aff50b/go.mod h1:4ZwOYna0/zsO
 golang.org/x/telemetry v0.0.0-20250807160809-1a19826ec488 h1:3doPGa+Gg4snce233aCWnbZVFsyFMo/dR40KK/6skyE=
 golang.org/x/telemetry v0.0.0-20250807160809-1a19826ec488/go.mod h1:fGb/2+tgXXjhjHsTNdVEEMZNWA0quBnfrO+AfoDSAKw=
 golang.org/x/telemetry v0.0.0-20251008203120-078029d740a8/go.mod h1:Pi4ztBfryZoJEkyFTI5/Ocsu2jXyDr6iSdgJiYE/uwE=
+golang.org/x/telemetry v0.0.0-20251111182119-bc8e575c7b54/go.mod h1:hKdjCMrbv9skySur+Nek8Hd0uJ0GuxJIoIX2payrIdQ=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
 golang.org/x/term v0.21.0/go.mod h1:ooXLefLobQVslOqselCNF4SxFAaoS6KujMbsGzSDmX0=
@@ -2177,6 +2178,8 @@ k8s.io/code-generator v0.34.0 h1:Ze2i1QsvUprIlX3oHiGv09BFQRLCz+StA8qKwwFzees=
 k8s.io/code-generator v0.34.0/go.mod h1:Py2+4w2HXItL8CGhks8uI/wS3Y93wPKO/9mBQUYNua0=
 k8s.io/code-generator v0.34.1 h1:WpphT26E+j7tEgIUfFr5WfbJrktCGzB3JoJH9149xYc=
 k8s.io/code-generator v0.34.1/go.mod h1:DeWjekbDnJWRwpw3s0Jat87c+e0TgkxoR4ar608yqvg=
+k8s.io/code-generator v0.34.2 h1:9bG6jTxmsU3HXE5BNYJTC8AZ1D6hVVfkm8yYSkdkGY0=
+k8s.io/code-generator v0.34.2/go.mod h1:dnDDEd6S/z4uZ+PG1aE58ySCi/lR4+qT3a4DddE4/2I=
 k8s.io/component-base v0.30.3 h1:Ci0UqKWf4oiwy8hr1+E3dsnliKnkMLZMVbWzeorlk7s=
 k8s.io/component-base v0.30.3/go.mod h1:C1SshT3rGPCuNtBs14RmVD2xW0EhRSeLvBh7AGk1quA=
 k8s.io/component-base v0.31.0 h1:/KIzGM5EvPNQcYgwq5NwoQBaOlVFrghoVGr8lG6vNRs=
