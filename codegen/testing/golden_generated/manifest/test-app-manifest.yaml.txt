@@ -238,6 +238,8 @@ spec:
                       additionalProperties: false
                       properties:
                         message:
+                          description: A comment containging "quotes" should not break
+                            anything
                           type: string
                         status:
                           enum:
