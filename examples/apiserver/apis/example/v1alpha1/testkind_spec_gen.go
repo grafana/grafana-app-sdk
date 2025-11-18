@@ -21,5 +21,7 @@ type TestKindSpec struct {
 
 // NewTestKindSpec creates a new TestKindSpec object.
 func NewTestKindSpec() *TestKindSpec {
-	return &TestKindSpec{}
+	return &TestKindSpec{
+		TestField: "foobar",
+	}
 }

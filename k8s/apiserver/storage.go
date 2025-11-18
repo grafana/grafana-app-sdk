@@ -25,6 +25,7 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 
 	store := &genericregistry.Store{
 		NewFunc: func() runtime.Object {
+			// HERE
 			return kind.ZeroValue()
 		},
 		NewListFunc: func() runtime.Object {

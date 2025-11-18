@@ -5,6 +5,7 @@
 package v1alpha1
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -18,8 +19,9 @@ var (
 			FieldValueFunc: func(o resource.Object) (string, error) {
 				cast, ok := o.(*TestKind)
 				if !ok {
-					return "", fmt.Errorf("provided object must be of type *TestKind")
+					return "", errors.New("provided object must be of type *TestKind")
 				}
+
 				return cast.Spec.TestField, nil
 			},
 		},
