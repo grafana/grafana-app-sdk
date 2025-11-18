@@ -55,7 +55,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.SilenceUsage = true
 }
 
-//nolint:funlen,revive
+//nolint:funlen,revive,gocyclo
 func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	// Global flags
 	sourcePath, err := cmd.Flags().GetString(sourceFlag)
@@ -139,6 +139,11 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		goModGenPath = goGenPath
 	}
 
+	// Backwards-compatibility for manifests written to the base generated path
+	manifestPath := "manifestdata"
+	if m, _ := filepath.Glob(filepath.Join(goModGenPath, "*_manifest.go")); len(m) > 0 {
+		manifestPath = ""
+	}
 	var files codejen.Files
 	switch format {
 	case FormatCUE:
@@ -154,6 +159,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			GenOperatorState:       genOperatorState,
 			UseOldManifestKinds:    useOldManifestKinds,
 			CRDCompatibleManifest:  crdCompatibleManifest,
+			ManifestPath:           manifestPath,
 		}, selector)
 		if err != nil {
 			return err
@@ -202,6 +208,7 @@ type kindGenConfig struct {
 	TSGenBasePath          string
 	CRDEncoding            string
 	CRDPath                string
+	ManifestPath           string
 	GroupKinds             bool
 	ManifestIncludeSchemas bool
 	GenOperatorState       bool
@@ -265,7 +272,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.GroupKinds), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.ManifestPath, cfg.GroupKinds), selectors...)
 	if err != nil {
 		return nil, err
 	}

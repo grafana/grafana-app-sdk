@@ -48,7 +48,7 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --crdmanifest \
   --gomodgenpath="pkg/generated"
 # Move the manifest files
-mv ${testdir}/go/groupbygroup/*.go "${testdir}/manifest/go/groupbygroup"
+echo "Moving generated Manifest files to ${testdir}/manifest/"
 mv ${testdir}/crd/test-app-manifest.* "${testdir}/manifest/"
 mv ${testdir}/crd/custom-app-manifest.* "${testdir}/manifest/"
 # Group by kind (only customKind)
@@ -61,7 +61,6 @@ go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testin
   --gomodule="${gomod}" \
   --crdmanifest \
   --gomodgenpath="pkg/generated"
-mv ${testdir}/go/groupbykind/*.go "${testdir}/manifest/go/groupbykind"
 
 # Rename files to append .txt
 find "${testdir}" -depth -name "*.go" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;
