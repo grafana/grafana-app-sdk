@@ -4,8 +4,9 @@ package v3
 
 // +k8s:openapi-gen=true
 type CreateReconcile struct {
-	Status  CreateReconcileStatus `json:"status"`
-	Message string                `json:"message"`
+	Status CreateReconcileStatus `json:"status"`
+	// A comment containing "quotes" should not break anything
+	Message string `json:"message"`
 }
 
 // NewCreateReconcile creates a new CreateReconcile object.
