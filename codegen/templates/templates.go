@@ -448,9 +448,8 @@ func (ManifestGoFileMetadata) KindToPackageName(input string) string {
 func (m ManifestGoFileMetadata) GetPackageName(kind, version string) string {
 	if m.KindsAreGrouped {
 		return ToPackageName(version)
-	} else {
-		return fmt.Sprintf("%s%s", m.KindToPackageName(kind), ToPackageName(version))
 	}
+	return fmt.Sprintf("%s%s", m.KindToPackageName(kind), ToPackageName(version))
 }
 
 func (ManifestGoFileMetadata) GroupToPackageName(input string) string {
