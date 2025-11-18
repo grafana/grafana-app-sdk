@@ -3,25 +3,55 @@
 package v1alpha1
 
 // +k8s:openapi-gen=true
-type TestKindFooBar struct {
-	Foo string          `json:"foo"`
-	Bar *TestKindFooBar `json:"bar,omitempty"`
+type TestKindFoo struct {
+	Foo string      `json:"foo"`
+	Bar TestKindBar `json:"bar"`
 }
 
-// NewTestKindFooBar creates a new TestKindFooBar object.
-func NewTestKindFooBar() *TestKindFooBar {
-	return &TestKindFooBar{}
+// NewTestKindFoo creates a new TestKindFoo object.
+func NewTestKindFoo() *TestKindFoo {
+	return &TestKindFoo{
+		Foo: "foo",
+		Bar: *NewTestKindBar(),
+	}
+}
+
+// +k8s:openapi-gen=true
+type TestKindBar struct {
+	Value string      `json:"value"`
+	Baz   TestKindBaz `json:"baz"`
+}
+
+// NewTestKindBar creates a new TestKindBar object.
+func NewTestKindBar() *TestKindBar {
+	return &TestKindBar{
+		Value: "bar",
+		Baz:   *NewTestKindBaz(),
+	}
+}
+
+// +k8s:openapi-gen=true
+type TestKindBaz struct {
+	Value int64 `json:"value"`
+}
+
+// NewTestKindBaz creates a new TestKindBaz object.
+func NewTestKindBaz() *TestKindBaz {
+	return &TestKindBaz{
+		Value: 10,
+	}
 }
 
 // +k8s:openapi-gen=true
 type TestKindSpec struct {
-	TestField string          `json:"testField"`
-	Foobar    *TestKindFooBar `json:"foobar,omitempty"`
+	TestField string      `json:"testField"`
+	Foo       TestKindFoo `json:"foo"`
 }
 
 // NewTestKindSpec creates a new TestKindSpec object.
 func NewTestKindSpec() *TestKindSpec {
 	return &TestKindSpec{
-		TestField: "foobar",
+		TestField: "default value",
+		Foo:       *NewTestKindFoo(),
 	}
 }

@@ -19,13 +19,20 @@ testKindv1alpha1: testKind & {
 	validation: operations: ["CREATE", "UPDATE"]
 	selectableFields: [".spec.testField"]
 	schema: {
-		#FooBar: {
-			foo:  string
-			bar?: #FooBar
+		#Foo: {
+			foo: string | *"foo"
+			bar: #Bar
+		}
+		#Bar: {
+			value: string | *"bar"
+			baz:   #Baz
+		}
+		#Baz: {
+			value: int | *10
 		}
 		spec: {
-			testField: string | *"foobar"
-			foobar?:   #FooBar 
+			testField: string | *"default value"
+			foo:       #Foo
 		}
 		mysubresource: {
 			extraValue: string

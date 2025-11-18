@@ -27,7 +27,8 @@ type TestKind struct {
 
 func NewTestKind() *TestKind {
 	return &TestKind{
-		Spec: *NewTestKindSpec(),
+		Spec:   *NewTestKindSpec(),
+		Status: *NewTestKindStatus(),
 	}
 }
 

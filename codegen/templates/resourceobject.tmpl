@@ -33,6 +33,8 @@ type {{.TypeName}} struct {
 func New{{.TypeName}}() *{{.TypeName}} {
     return &{{.TypeName}}{
         Spec: *New{{.SpecTypeName}}(),
+        {{ range .Subresources }}{{ .Name }}: *New{{.TypeName}}(),
+        {{ end }}
     }
 }
 
