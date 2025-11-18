@@ -5,7 +5,7 @@ package v3
 // +k8s:openapi-gen=true
 type CreateReconcile struct {
 	Status CreateReconcileStatus `json:"status"`
-	// A comment containging "quotes" should not break anything
+	// A comment containing "quotes" should not break anything
 	Message string `json:"message"`
 }
 
