@@ -95,7 +95,7 @@ func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codeje
 	return g
 }
 
-func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	parts := strings.Split(projectRepo, "/")
 	if len(parts) == 0 {
 		parts = []string{""}
@@ -104,10 +104,11 @@ func AppGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.Jen
 	g.Append(
 		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.AppGenerator{
-			GroupByKind: !groupKinds,
-			ProjectRepo: projectRepo,
-			ProjectName: parts[len(parts)-1],
-			CodegenPath: codegenPath,
+			GroupByKind:         !groupKinds,
+			ProjectRepo:         projectRepo,
+			ProjectName:         parts[len(parts)-1],
+			CodegenPath:         codegenPath,
+			ManifestPackagePath: manifestGoFilePath,
 		},
 	)
 	return g

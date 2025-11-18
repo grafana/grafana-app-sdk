@@ -6,7 +6,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/simple"
 
-	manifestdata "{{.Repo}}/{{.CodegenPath}}{{ if ne .ManifestPackagePath "" }}/{{.ManifestPackagePath}}{{ end }}""
+	manifestdata "{{.Repo}}/{{.CodegenPath}}{{ if ne .ManifestPackagePath "" }}/{{.ManifestPackagePath}}{{ end }}"
 	{{ if .KindsAreGrouped }}{{ range $key, $val := .GVToKindAll }}{{ $.ToPackageNameVariable ($key.String) }} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.GroupToPackageName $key.Group }}/{{ $.ToPackageName $key.Version }}"
     {{ end }}{{ else }}{{ range .Resources }}{{$k:=.}}{{range .Versions}}{{ $.ToPackageName $k.MachineName}}{{ $.ToPackageName .}} "{{$.Repo}}/{{$.CodegenPath}}/{{ $.ToPackageName $k.MachineName }}/{{ $.ToPackageName .}}"
 	{{end}}{{end}}{{end}}{{ if ne .WatcherPackage "" }}"{{$.Repo}}/pkg/{{.WatcherPackage}}"{{end}}
