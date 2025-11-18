@@ -2,6 +2,7 @@ package cuekind
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -151,7 +152,9 @@ func TestManifestGoGenerator(t *testing.T) {
 		// 10 -> manifest file, then the custom route response+query+body for reconcile, response body and wrapper+query+body for search in v3, +1 client per version (3)
 		require.Len(t, files, 11, "should be 11 files generated, got %d", len(files))
 		// Check content against the golden files
-		for _, file := range files {
+		for i, file := range files {
+			err := os.WriteFile(fmt.Sprintf("file_%d", i)+".txt", file.Data, 0644)
+			require.Nil(t, err)
 			if file.RelativePath == "testapp_manifest.go" {
 				compareToGolden(t, codejen.Files{file}, "manifest/go/groupbygroup")
 			} else {

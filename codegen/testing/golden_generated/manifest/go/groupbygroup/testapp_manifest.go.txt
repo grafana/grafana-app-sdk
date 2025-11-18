@@ -183,7 +183,8 @@ var appManifestData = app.ManifestData{
 																		Properties: map[string]spec.Schema{
 																			"message": {
 																				SchemaProps: spec.SchemaProps{
-																					Type: []string{"string"},
+																					Type:        []string{"string"},
+																					Description: "A comment containging \"quotes\" should not break anything",
 																				},
 																			},
 																			"status": {

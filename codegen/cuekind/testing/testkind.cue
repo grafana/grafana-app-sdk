@@ -94,6 +94,7 @@ testKind: {
 						}
 						response: {
 							status: "success" | "failure"
+                            // A comment containging "quotes" should not break anything
 							message: string
 						}
 						responseMetadata: typeMeta: false
