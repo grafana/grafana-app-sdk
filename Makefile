@@ -64,6 +64,11 @@ clean:
 build: update-workspace
 	@go build -ldflags="-X 'main.version=dev-$(BRANCH)' -X 'main.source=$(HOST)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(shell date -u "+%FT%TZ")'" -o "$(BIN_DIR)/grafana-app-sdk" cmd/grafana-app-sdk/*.go
 
+# Build the sdk with debug flags set (no optimizations, no inlining)
+.PHONY: build/debug
+build/debug: update-workspace
+	@go build -gcflags="all=-N -l" -ldflags="-X 'main.version=dev-$(BRANCH)' -X 'main.source=$(HOST)' -X 'main.commit=$(COMMIT)' -X 'main.date=$(shell date -u "+%FT%TZ")'" -o "$(BIN_DIR)/grafana-app-sdk" cmd/grafana-app-sdk/*.go
+
 .PHONY: install
 install: build
 ifndef GOPATH
@@ -82,7 +87,7 @@ endif
 # Usage:
 # 	make debug APP_DIR=target/issue-tracker-project PORT=12345 ARGS='project init "github.com/grafana/issue-tracker-project"'
 .PHONY: debug
-debug: build
+debug: build/debug
 	@if [ -n "$(APP_DIR)" ]; then \
 		mkdir -p "$(APP_DIR)"; \
 		cd "$(APP_DIR)" && dlv exec "$(abspath $(BIN_DIR))/grafana-app-sdk" --headless --listen=:$(or $(PORT),12345) --api-version=2 -- $(ARGS); \

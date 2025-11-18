@@ -29,6 +29,9 @@ var (
 		"refString": func(ref spec.Ref) string {
 			return ref.String()
 		},
+		"escapeQuotes": func(s string) string {
+			return strings.ReplaceAll(s, `"`, `\"`)
+		},
 	}
 
 	templateResourceObject, _   = template.ParseFS(templates, "resourceobject.tmpl")
