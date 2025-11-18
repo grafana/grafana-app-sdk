@@ -15,7 +15,7 @@ import (
 {{$root:=.}}
 // schema is unexported to prevent accidental overwrites
 var (
-    schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", &{{.Kind}}{}, &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
+    schema{{.Kind}} = resource.NewSimpleSchema("{{.Group}}", "{{.Version}}", New{{.Kind}}(), &{{.Kind}}List{}, resource.WithKind("{{.Kind}}"),
         resource.WithPlural("{{.Plural}}"), resource.WithScope(resource.{{.Scope}}Scope) {{if gt $sfl 0}}, resource.WithSelectableFields([]resource.SelectableField{ {{ range .SelectableFields }}resource.SelectableField{
             FieldSelector: "{{.Field}}",
             FieldValueFunc: func(o resource.Object) (string, error) {

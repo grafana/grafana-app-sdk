@@ -25,6 +25,12 @@ type TestKind struct {
 	Status TestKindStatus `json:"status" yaml:"status"`
 }
 
+func NewTestKind() *TestKind {
+	return &TestKind{
+		Spec: *NewTestKindSpec(),
+	}
+}
+
 func (o *TestKind) GetSpec() any {
 	return o.Spec
 }

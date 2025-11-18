@@ -6,14 +6,13 @@ package v1alpha1
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // schema is unexported to prevent accidental overwrites
 var (
-	schemaTestKind = resource.NewSimpleSchema("example.ext.grafana.com", "v1alpha1", &TestKind{}, &TestKindList{}, resource.WithKind("TestKind"),
+	schemaTestKind = resource.NewSimpleSchema("example.ext.grafana.com", "v1alpha1", NewTestKind(), &TestKindList{}, resource.WithKind("TestKind"),
 		resource.WithPlural("testkinds"), resource.WithScope(resource.NamespacedScope), resource.WithSelectableFields([]resource.SelectableField{resource.SelectableField{
 			FieldSelector: ".spec.testField",
 			FieldValueFunc: func(o resource.Object) (string, error) {

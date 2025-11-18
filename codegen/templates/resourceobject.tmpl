@@ -30,6 +30,12 @@ type {{.TypeName}} struct {
 	{{ end }}
 }
 
+func New{{.TypeName}}() *{{.TypeName}} {
+    return &{{.TypeName}}{
+        Spec: *New{{.SpecTypeName}}(),
+    }
+}
+
 func ({{.ObjectShortName}} *{{.TypeName}}) GetSpec() any {
 	return {{.ObjectShortName}}.Spec
 }
