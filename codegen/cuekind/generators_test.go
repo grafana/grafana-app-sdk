@@ -145,7 +145,7 @@ func TestManifestGoGenerator(t *testing.T) {
 			GenOperatorState: true,
 		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("groupbygroup", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
+		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 10 -> manifest file, then the custom route response+query+body for reconcile, response body and wrapper+query+body for search in v3, +1 client per version (3)
@@ -161,7 +161,7 @@ func TestManifestGoGenerator(t *testing.T) {
 			GenOperatorState: true,
 		}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("groupbykind", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
+		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 3 -> manifest, client v0_0, client v1_0

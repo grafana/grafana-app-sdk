@@ -70,7 +70,6 @@ jobs:
           cp ../grafana-app-sdk/codegen/cuekind/testing/*.cue kinds/
           mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
           mv cmp/manifest/*.txt cmp/crd/
-          cp cmp/manifest/go/groupbygroup/*.txt cmp/go/groupbygroup/
           find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
       - name: Generate code
         run: |
