@@ -630,5 +630,15 @@ func WriteRuntimeObjectWrapper(metadata RuntimeObjectWrapperMetadata, out io.Wri
 // ToPackageName sanitizes an input into a deterministic allowed go package name.
 // It is used to turn kind names or versions into package names when performing go code generation.
 func ToPackageName(input string) string {
-	return regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
+	pkgName := regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
+	switch pkgName {
+	case "go":
+		return "go_pkg"
+	case "default":
+		return "default_pkg"
+	case "package":
+		return "package_pkg"
+	default:
+		return pkgName
+	}
 }

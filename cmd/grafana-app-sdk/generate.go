@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
@@ -265,11 +264,8 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		}
 	}
 
-	// Sanitized package name for manifest generation
-	pkgName := sanitizePackageName(cfg.GoGenBasePath)
-
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(pkgName, cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.GroupKinds), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.GoGenBasePath), cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.GroupKinds), selectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -326,19 +322,4 @@ func postGenerateFilesCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (
 		relativePath = filepath.Join(relativePath, targetResource)
 	}
 	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds), selectors...)
-}
-
-func sanitizePackageName(basePath string) string {
-	pkgName := filepath.Base(basePath)
-	pkgName = strings.ReplaceAll(pkgName, "-", "_")
-	switch pkgName {
-	case "go":
-		return "go_pkg"
-	case "default":
-		return "default_pkg"
-	case "package":
-		return "package_pkg"
-	default:
-		return pkgName
-	}
 }
