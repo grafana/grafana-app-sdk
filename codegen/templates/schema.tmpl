@@ -4,7 +4,7 @@
 
 package {{.Package}}
 {{$sfl := len .SelectableFields}}
-{{$needsFmt := false}}{{range .SelectableFields}}{{if .Optional}}{{$needsFmt = true}}{{end}}{{end}}
+{{$needsFmt := false}}{{range .SelectableFields}}{{if ne .Type "string"}}{{$needsFmt = true}}{{end}}{{end}}
 import (
     {{if gt $sfl 0}}
     "errors"
