@@ -304,6 +304,12 @@ var appManifestData = app.ManifestData{
 											},
 										}},
 								},
+								VendorExtensible: spec.VendorExtensible{
+									Extensions: spec.Extensions{
+										"x-grafana-test":       true,
+										"x-grafana-test-value": map[string]interface{}{"val": "1"},
+									},
+								},
 							},
 						},
 					},
