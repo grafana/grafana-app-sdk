@@ -3,7 +3,7 @@
 // DO NOT EDIT
 //
 
-package groupbygroup
+package manifestdata
 
 import (
 	"encoding/json"

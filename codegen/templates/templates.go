@@ -501,13 +501,14 @@ func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 }
 
 type AppMetadata struct {
-	PackageName     string
-	ProjectName     string
-	Repo            string
-	CodegenPath     string
-	WatcherPackage  string
-	KindsAreGrouped bool
-	Resources       []AppMetadataKind
+	PackageName         string
+	ProjectName         string
+	Repo                string
+	CodegenPath         string
+	WatcherPackage      string
+	ManifestPackagePath string
+	KindsAreGrouped     bool
+	Resources           []AppMetadataKind
 }
 
 type AppMetadataKind struct {

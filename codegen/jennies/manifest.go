@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/format"
 	"maps"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -96,11 +97,12 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 }
 
 type ManifestGoGenerator struct {
-	Package        string
-	ProjectRepo    string
-	CodegenPath    string
-	GroupByKind    bool
-	IncludeSchemas bool
+	Package         string
+	ProjectRepo     string
+	CodegenPath     string
+	DestinationPath string
+	GroupByKind     bool
+	IncludeSchemas  bool
 }
 
 func (*ManifestGoGenerator) JennyName() string {
@@ -150,7 +152,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	files := make(codejen.Files, 0)
 	files = append(files, codejen.File{
 		Data:         formatted,
-		RelativePath: fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group),
+		RelativePath: filepath.Join(g.DestinationPath, fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group)),
 		From:         []codejen.NamedJenny{g},
 	})
 
