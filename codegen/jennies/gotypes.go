@@ -47,6 +47,21 @@ type GoTypes struct {
 	// AnyAsInterface determines whether to use `interface{}` instead of `any` in generated go code.
 	// If true, `interface{}` will be used instead of `any`.
 	AnyAsInterface bool
+
+	// ExcludeFields will exclude fields with the provided name at the provided Depth value from having types generated for them.
+	// This only applies to fields at the Depth where types will be generated, and will not be applied to field names
+	// within a type already having a go type generated for it. This only applies at Depth > 0, as at Depth = 0,
+	// only one type is generated for the entire CUE object.
+	// Practically, since current implementation is to generate one go file per field at Depth, this excludes
+	// a go file for the type from being generated.
+	// ex:
+	//
+	//  {
+	//     Foo: string
+	//     Bar: string
+	//  }
+	// With an ExcludeFields of `Bar` will only generate a file and go type for `Foo`.
+	ExcludeFields []string
 }
 
 func (*GoTypes) JennyName() string {
@@ -86,7 +101,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 		if !g.GroupByKind {
 			namePrefix = exportField(name)
 		}
-		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix)
+		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix, g.ExcludeFields)
 	}
 
 	codegenPipeline := cog.TypesFromSchema().
@@ -116,11 +131,26 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 }
 
 //nolint:goconst
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeNames []string) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
+		}
+		exclude := false
+		for _, s := range excludeNames {
+			// Check if the exclude name matches either the final element of the path, or the joined path
+			if len(fieldName) > 0 && strings.EqualFold(fieldName[len(fieldName)-1], s) {
+				exclude = true
+				break
+			}
+			if strings.EqualFold(strings.Join(fieldName, ""), s) {
+				exclude = true
+				break
+			}
+		}
+		if exclude {
+			return nil, nil
 		}
 
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
@@ -148,7 +178,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix)
+		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix, excludeNames)
 		if err != nil {
 			return nil, err
 		}
