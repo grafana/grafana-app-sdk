@@ -1,7 +1,7 @@
 package kinds
 
 testKind: {
-	kind: "TestKind"
+	kind:   "TestKind"
 	plural: "testkinds"
 	codegen: ts: enabled: false
 	conversion: true
@@ -16,16 +16,23 @@ testKindv0alpha1: testKind & {
 }
 
 testKindv1alpha1: testKind & {
-	validation: operations: ["CREATE","UPDATE"]
+	validation: operations: ["CREATE", "UPDATE"]
 	selectableFields: [".spec.testField"]
 	schema: {
-		#FooBar: {
-			foo: string
-			bar?: #FooBar
+		#Foo: {
+			foo: string | *"foo"
+			bar: #Bar
+		}
+		#Bar: {
+			value: string | *"bar"
+			baz:   #Baz
+		}
+		#Baz: {
+			value: int | *10
 		}
 		spec: {
-			testField: string
-			foobar?: #FooBar
+			testField: string | *"default value"
+			foo:       #Foo
 		}
 		mysubresource: {
 			extraValue: string
@@ -46,7 +53,7 @@ testKindv1alpha1: testKind & {
 					status: string
 				}
 				responseMetadata: {
-					typeMeta: true
+					typeMeta:   true
 					objectMeta: true
 				}
 			}
@@ -65,12 +72,13 @@ testKindv1alpha1: testKind & {
 				response: {
 					#RecursiveType: {
 						message: string
-						next?: #RecursiveType
+						next?:   #RecursiveType
 					}
 					message: string
-					next?: #RecursiveType
+					next?:   #RecursiveType
 				}
 			}
 		}
 	}
 }
+

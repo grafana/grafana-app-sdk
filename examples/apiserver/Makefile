@@ -1,6 +1,6 @@
 .PHONY: etcd
 etcd:
-	@docker run -d --name etcd --env ALLOW_NONE_AUTHENTICATION=yes -p 2379:2379 bitnami/etcd:latest
+	@docker run -d --name etcd --env ALLOW_NONE_AUTHENTICATION=yes -p 2379:2379 bitnamilegacy/etcd:latest
 
 .PHONY: generate
 generate:

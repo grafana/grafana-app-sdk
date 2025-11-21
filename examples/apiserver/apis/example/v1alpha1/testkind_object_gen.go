@@ -27,6 +27,14 @@ type TestKind struct {
 	Mysubresource TestKindMysubresource `json:"mysubresource" yaml:"mysubresource"`
 }
 
+func NewTestKind() *TestKind {
+	return &TestKind{
+		Spec:          *NewTestKindSpec(),
+		Status:        *NewTestKindStatus(),
+		Mysubresource: *NewTestKindMysubresource(),
+	}
+}
+
 func (o *TestKind) GetSpec() any {
 	return o.Spec
 }
