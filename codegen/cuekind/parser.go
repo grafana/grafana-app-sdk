@@ -561,6 +561,16 @@ func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[stri
 			if nameStrVal.Exists() && !nameStrVal.IsNull() {
 				route.Name, _ = nameStrVal.String()
 			}
+			if extensions := routeVal.LookupPath(cue.MakePath(cue.Str("extensions"))); extensions.Err() == nil && extensions.Exists() {
+				extMap := make(map[string]any)
+				err = extensions.Decode(&extMap)
+				if err != nil {
+					return nil, fmt.Errorf("error decoding customRoutes extensions for path '%s': %w", pathStr, err)
+				}
+				if len(extMap) > 0 {
+					route.Extensions = extMap
+				}
+			}
 			customRoutes[pathStr][methodStr] = route
 		}
 	}
