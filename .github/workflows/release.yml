@@ -30,7 +30,7 @@ jobs:
         cache: false
     # Release
     - name: Create Release
-      uses: goreleaser/goreleaser-action@a08664b80c0ab417b1babcbf750274aed2018fef
+      uses: goreleaser/goreleaser-action@5fdedb94abba051217030cc86d4523cf3f02243d # v4
       with:
         distribution: goreleaser
         version: latest
