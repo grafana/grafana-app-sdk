@@ -28,7 +28,9 @@ var _ Schema = &Kind{}
 // Object implementations.
 type Codec interface {
 	Read(in io.Reader, into Object) error
+	ReadList(in io.Reader, into ListObject) error
 	Write(out io.Writer, obj Object) error
+	WriteList(out io.Writer, list ListObject) error
 }
 
 // Kind is a struct which encapsulates Schema information and Codecs for reading/writing Objects which are instances
@@ -61,6 +63,20 @@ func (k *Kind) Read(in io.Reader, encoding KindEncoding) (Object, error) {
 	return into, nil
 }
 
+// ReadList is a convenience wrapper for getting the Codec for a particular KindEncoding and reading into ListObject
+func (k *Kind) ReadList(in io.Reader, encoding KindEncoding) (ListObject, error) {
+	codec := k.Codec(encoding)
+	if codec == nil {
+		return nil, fmt.Errorf("no codec for encoding '%s'", encoding)
+	}
+	into := k.ZeroListValue()
+	err := codec.ReadList(in, into)
+	if err != nil {
+		return nil, err
+	}
+	return into, nil
+}
+
 // Write is a convenience wrapper for getting the Codec for a particular KindEncoding and calling Codec.Write
 func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
 	codec := k.Codec(encoding)
@@ -68,6 +84,15 @@ func (k *Kind) Write(obj Object, out io.Writer, encoding KindEncoding) error {
 		return fmt.Errorf("no codec for encoding '%s'", encoding)
 	}
 	return codec.Write(out, obj)
+}
+
+// WriteList is a convenience wrapper for getting the Codec for a particular KindEncoding and calling Codec.WriteList
+func (k *Kind) WriteList(list ListObject, out io.Writer, encoding KindEncoding) error {
+	codec := k.Codec(encoding)
+	if codec == nil {
+		return fmt.Errorf("no codec for encoding '%s'", encoding)
+	}
+	return codec.WriteList(out, list)
 }
 
 // GroupVersionKind is a convenience method that assembles a schema.GroupVersionKind from Group(), Version(), and Kind()
@@ -109,29 +134,54 @@ func (*JSONCodec) Read(in io.Reader, out Object) error {
 	return json.NewDecoder(in).Decode(&out)
 }
 
+// ReadList is a simple wrapper for the json package unmarshal into the list object.
+func (*JSONCodec) ReadList(in io.Reader, out ListObject) error {
+	return json.NewDecoder(in).Decode(&out)
+}
+
 // Write marshals the provided Object into kubernetes-formatted JSON bytes.
 func (*JSONCodec) Write(out io.Writer, in Object) error {
-	m := make(map[string]any)
-	m["apiVersion"], m["kind"] = in.GetObjectKind().GroupVersionKind().ToAPIVersionAndKind()
-	m["metadata"] = metav1.ObjectMeta{
-		Name:                       in.GetName(),
-		GenerateName:               in.GetGenerateName(),
-		Namespace:                  in.GetNamespace(),
-		SelfLink:                   in.GetSelfLink(),
-		UID:                        in.GetUID(),
-		ResourceVersion:            in.GetResourceVersion(),
-		Generation:                 in.GetGeneration(),
-		CreationTimestamp:          in.GetCreationTimestamp(),
-		DeletionTimestamp:          in.GetDeletionTimestamp(),
-		DeletionGracePeriodSeconds: in.GetDeletionGracePeriodSeconds(),
-		Labels:                     in.GetLabels(),
-		Annotations:                in.GetAnnotations(),
-		OwnerReferences:            in.GetOwnerReferences(),
-		Finalizers:                 in.GetFinalizers(),
-		ManagedFields:              in.GetManagedFields(),
+	m := map[string]any{
+		"apiVersion": in.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+		"kind":       in.GetObjectKind().GroupVersionKind().Kind,
+		"metadata": metav1.ObjectMeta{
+			Name:                       in.GetName(),
+			GenerateName:               in.GetGenerateName(),
+			Namespace:                  in.GetNamespace(),
+			SelfLink:                   in.GetSelfLink(),
+			UID:                        in.GetUID(),
+			ResourceVersion:            in.GetResourceVersion(),
+			Generation:                 in.GetGeneration(),
+			CreationTimestamp:          in.GetCreationTimestamp(),
+			DeletionTimestamp:          in.GetDeletionTimestamp(),
+			DeletionGracePeriodSeconds: in.GetDeletionGracePeriodSeconds(),
+			Labels:                     in.GetLabels(),
+			Annotations:                in.GetAnnotations(),
+			OwnerReferences:            in.GetOwnerReferences(),
+			Finalizers:                 in.GetFinalizers(),
+			ManagedFields:              in.GetManagedFields(),
+		},
+		"spec": in.GetSpec(),
 	}
-	m["spec"] = in.GetSpec()
+
 	maps.Copy(m, in.GetSubresources())
+
+	return json.NewEncoder(out).Encode(m)
+}
+
+// WriteList marshals the provided ListObject into kubernetes-formatted JSON bytes.
+func (*JSONCodec) WriteList(out io.Writer, in ListObject) error {
+	m := map[string]any{
+		"apiVersion": in.GetObjectKind().GroupVersionKind().GroupVersion().String(),
+		"kind":       in.GetObjectKind().GroupVersionKind().Kind,
+		"metadata": metav1.ListMeta{
+			ResourceVersion:    in.GetResourceVersion(),
+			Continue:           in.GetContinue(),
+			RemainingItemCount: in.GetRemainingItemCount(),
+		},
+		"items": in.GetItems(),
+	}
+
 	return json.NewEncoder(out).Encode(m)
 }
 

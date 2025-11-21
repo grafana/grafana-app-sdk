@@ -12,72 +12,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/simple"
 )
 
-// runInformerWithValidation runs an informer and validates that all expected events are received.
-// It sets up event handlers, runs the informer, waits for sync, validates event delivery,
-// and handles shutdown with the specified timeout.
-func runInformerWithValidation(b *testing.B, inf operator.Informer, expectedCount int) {
-	// Track received events to verify event delivery
-	var (
-		receivedCount atomic.Int32
-		doneCh        = make(chan struct{})
-	)
-
-	if err := inf.AddEventHandler(&operator.SimpleWatcher{
-		AddFunc: func(_ context.Context, obj resource.Object) error {
-			if int(receivedCount.Add(1)) == expectedCount {
-				close(doneCh)
-			}
-
-			return nil
-		},
-	}); err != nil {
-		b.Fatalf("failed to add event handler: %v", err)
-	}
-
-	// Create context with cancellation to be able to stop the informer
-	ctx, cancel := context.WithCancel(b.Context())
-
-	// Run informer in background
-	errCh := make(chan error, 1)
-	go func() {
-		errCh <- inf.Run(ctx)
-	}()
-
-	// Wait for the informer to sync fully.
-	if err := inf.WaitForSync(ctx); err != nil {
-		cancel()
-		b.Fatalf("failed to wait for informer to sync: %v", err)
-	}
-
-	// Wait for all events to be processed
-	select {
-	case <-doneCh:
-		// All events received
-	case <-b.Context().Done():
-		cancel()
-		b.Fatalf("timeout waiting for events, got %d of %d", receivedCount.Load(), expectedCount)
-	}
-
-	// Verify all objects were received via event handler
-	actualCount := int(receivedCount.Load())
-	if actualCount != expectedCount {
-		cancel()
-		b.Fatalf("expected %d objects via event handler, got %d", expectedCount, actualCount)
-	}
-
-	// Stop informer
-	cancel()
-
-	// Wait for shutdown
-	select {
-	case <-errCh:
-	// Clean shutdown
-	case <-b.Context().Done():
-		// Shutdown timeout
-		b.Fatalf("timeout waiting for informer to stop")
-	}
-}
-
 // BenchmarkDefaultInformerSupplier benchmarks the standard K8s informer supplier.
 func BenchmarkDefaultInformerSupplier(b *testing.B) {
 	if err := suppressLogger(); err != nil {
@@ -176,6 +110,7 @@ func BenchmarkOptimizedInformerSupplier(b *testing.B) {
 				ListWatchOptions:  operator.ListWatchOptions{},
 				WatchListPageSize: scenario.watchListPageSize,
 				UseWatchList:      scenario.useWatchList,
+				UseRealFIFO:       true,
 			}
 
 			for b.Loop() {
@@ -189,5 +124,71 @@ func BenchmarkOptimizedInformerSupplier(b *testing.B) {
 				runInformerWithValidation(b, inf, scenario.objectCount)
 			}
 		})
+	}
+}
+
+// runInformerWithValidation runs an informer and validates that all expected events are received.
+// It sets up event handlers, runs the informer, waits for sync, validates event delivery,
+// and handles shutdown with the specified timeout.
+func runInformerWithValidation(b *testing.B, inf operator.Informer, expectedCount int) {
+	// Track received events to verify event delivery
+	var (
+		receivedCount atomic.Int32
+		doneCh        = make(chan struct{})
+	)
+
+	if err := inf.AddEventHandler(&operator.SimpleWatcher{
+		AddFunc: func(_ context.Context, obj resource.Object) error {
+			if int(receivedCount.Add(1)) == expectedCount {
+				close(doneCh)
+			}
+
+			return nil
+		},
+	}); err != nil {
+		b.Fatalf("failed to add event handler: %v", err)
+	}
+
+	// Create context with cancellation to be able to stop the informer
+	ctx, cancel := context.WithCancel(b.Context())
+
+	// Run informer in background
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- inf.Run(ctx)
+	}()
+
+	// Wait for the informer to sync fully.
+	if err := inf.WaitForSync(ctx); err != nil {
+		cancel()
+		b.Fatalf("failed to wait for informer to sync: %v", err)
+	}
+
+	// Wait for all events to be processed
+	select {
+	case <-doneCh:
+		// All events received
+	case <-b.Context().Done():
+		cancel()
+		b.Fatalf("timeout waiting for events, got %d of %d", receivedCount.Load(), expectedCount)
+	}
+
+	// Verify all objects were received via event handler
+	actualCount := int(receivedCount.Load())
+	if actualCount != expectedCount {
+		cancel()
+		b.Fatalf("expected %d objects via event handler, got %d", expectedCount, actualCount)
+	}
+
+	// Stop informer
+	cancel()
+
+	// Wait for shutdown
+	select {
+	case <-errCh:
+	// Clean shutdown
+	case <-b.Context().Done():
+		// Shutdown timeout
+		b.Fatalf("timeout waiting for informer to stop")
 	}
 }
