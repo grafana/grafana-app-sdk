@@ -377,6 +377,7 @@
                                                         ],
                                                         "properties": {
                                                             "message": {
+                                                                "description": "A comment containing \"quotes\" should not break anything",
                                                                 "type": "string"
                                                             },
                                                             "status": {

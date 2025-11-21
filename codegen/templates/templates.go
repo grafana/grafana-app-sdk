@@ -29,6 +29,9 @@ var (
 		"refString": func(ref spec.Ref) string {
 			return ref.String()
 		},
+		"escapeQuotes": func(s string) string {
+			return strings.ReplaceAll(s, `"`, `\"`)
+		},
 	}
 
 	templateResourceObject, _   = template.ParseFS(templates, "resourceobject.tmpl")
@@ -498,13 +501,14 @@ func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 }
 
 type AppMetadata struct {
-	PackageName     string
-	ProjectName     string
-	Repo            string
-	CodegenPath     string
-	WatcherPackage  string
-	KindsAreGrouped bool
-	Resources       []AppMetadataKind
+	PackageName         string
+	ProjectName         string
+	Repo                string
+	CodegenPath         string
+	WatcherPackage      string
+	ManifestPackagePath string
+	KindsAreGrouped     bool
+	Resources           []AppMetadataKind
 }
 
 type AppMetadataKind struct {
@@ -624,8 +628,41 @@ func WriteRuntimeObjectWrapper(metadata RuntimeObjectWrapperMetadata, out io.Wri
 	return templateRuntimeObject.Execute(out, metadata)
 }
 
+// goKeywords is the set of Go reserved keywords that cannot be used as package names
+var goKeywords = map[string]struct{}{
+	"break":       {},
+	"case":        {},
+	"chan":        {},
+	"const":       {},
+	"continue":    {},
+	"default":     {},
+	"defer":       {},
+	"else":        {},
+	"fallthrough": {},
+	"for":         {},
+	"func":        {},
+	"go":          {},
+	"goto":        {},
+	"if":          {},
+	"import":      {},
+	"interface":   {},
+	"map":         {},
+	"package":     {},
+	"range":       {},
+	"return":      {},
+	"select":      {},
+	"struct":      {},
+	"switch":      {},
+	"type":        {},
+	"var":         {},
+}
+
 // ToPackageName sanitizes an input into a deterministic allowed go package name.
 // It is used to turn kind names or versions into package names when performing go code generation.
 func ToPackageName(input string) string {
-	return regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
+	pkgName := regexp.MustCompile(`([^A-Za-z0-9_])`).ReplaceAllString(input, "_")
+	if _, ok := goKeywords[pkgName]; ok {
+		return pkgName + "_pkg"
+	}
+	return pkgName
 }
