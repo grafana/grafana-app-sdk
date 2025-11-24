@@ -132,7 +132,12 @@ OperationProps: spec3.OperationProps{
             {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
         },{{ end }}
     },{{ end }}
-},{{ end }}
+},{{ if .Extensions }}
+VendorExtensible: spec.VendorExtensible{
+    Extensions: spec.Extensions{ {{ range $key, $val := .Extensions }}
+        "{{ $key }}": {{printf "%#v" $val}},{{ end }}
+    },
+},{{ end }}{{ end }}
 
 var ({{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{ if .Schema }}
     rawSchema{{.Kind}}{{$.ToPackageName $v.Name}} = []byte({{$.ToJSONBacktickString .Schema}})

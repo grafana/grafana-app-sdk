@@ -110,9 +110,10 @@ type CustomRouteResponseMetadata struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
-	Name     string              `json:"name"`
-	Request  CustomRouteRequest  `json:"request"`
-	Response CustomRouteResponse `json:"response"`
+	Name       string              `json:"name"`
+	Request    CustomRouteRequest  `json:"request"`
+	Response   CustomRouteResponse `json:"response"`
+	Extensions map[string]any      `json:"extensions,omitempty"`
 }
 
 type KindVersion struct {

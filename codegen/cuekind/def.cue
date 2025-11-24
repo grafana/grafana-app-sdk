@@ -94,6 +94,10 @@ SchemaWithOperatorState: Schema & {
     // responseMetadata allows codegen to include kubernetes metadata in the generated response object.
     // It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
     responseMetadata: #CustomRouteResponseMetadata
+    // extensions are all openAPI extensions that you wish to apply to this route.
+    extensions: {
+    	[=~"^x-(.+)$"]: _
+    }
 }
 #CustomRoutePath: string
 #CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
