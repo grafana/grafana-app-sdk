@@ -4,10 +4,13 @@
 
 package {{.Package}}
 {{$sfl := len .SelectableFields}}
+{{$needsFmt := false}}{{range .SelectableFields}}{{if ne .Type "string"}}{{$needsFmt = true}}{{end}}{{end}}
 import (
     {{if gt $sfl 0}}
-    "fmt"
     "errors"
+    {{if $needsFmt}}
+    "fmt"
+    {{end}}
     {{end}}
 
     "github.com/grafana/grafana-app-sdk/resource"
