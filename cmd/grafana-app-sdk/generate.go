@@ -271,8 +271,12 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		}
 	}
 
+	manifestPkg := filepath.Base(cfg.ManifestPath)
+	if cfg.ManifestPath == "" {
+		manifestPkg = filepath.Base(cfg.GoGenBasePath)
+	}
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(filepath.Base(cfg.ManifestPath), cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.ManifestPath, cfg.GroupKinds), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.ManifestIncludeSchemas, cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.ManifestPath, cfg.GroupKinds), selectors...)
 	if err != nil {
 		return nil, err
 	}
