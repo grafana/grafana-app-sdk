@@ -8,9 +8,9 @@ retract (
 )
 
 require (
-	github.com/grafana/grafana-app-sdk v0.48.2
-	github.com/grafana/grafana-app-sdk/logging v0.48.2
-	github.com/grafana/grafana-plugin-sdk-go v0.282.0
+	github.com/grafana/grafana-app-sdk v0.48.4
+	github.com/grafana/grafana-app-sdk/logging v0.48.3
+	github.com/grafana/grafana-plugin-sdk-go v0.283.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/otel v1.38.0
@@ -115,6 +115,6 @@ require (
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.1 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )

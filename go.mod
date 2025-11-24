@@ -16,7 +16,7 @@ require (
 	github.com/getkin/kin-openapi v0.133.0
 	github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770
 	github.com/grafana/cog v0.0.46
-	github.com/grafana/grafana-app-sdk/logging v0.48.2
+	github.com/grafana/grafana-app-sdk/logging v0.48.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
@@ -44,7 +44,7 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912
 	k8s.io/utils v0.0.0-20250604170112-4c0f3b243397
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.0
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -126,7 +126,7 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.44.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
 	golang.org/x/mod v0.30.0 // indirect
 	golang.org/x/net v0.47.0 // indirect

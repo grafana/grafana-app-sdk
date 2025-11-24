@@ -7,8 +7,8 @@ toolchain go1.24.2
 replace github.com/grafana/grafana-app-sdk => ../../
 
 require (
-	github.com/grafana/grafana-app-sdk v0.48.1
-	github.com/grafana/grafana-app-sdk/logging v0.48.2
+	github.com/grafana/grafana-app-sdk v0.48.2
+	github.com/grafana/grafana-app-sdk/logging v0.48.3
 	k8s.io/apimachinery v0.34.2
 	k8s.io/apiserver v0.34.2
 	k8s.io/client-go v0.34.2
@@ -92,7 +92,7 @@ require (
 	go.uber.org/zap v1.27.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.44.0 // indirect
+	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/exp v0.0.0-20251002181428-27f1f14c8bb9 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.33.0 // indirect
@@ -118,6 +118,6 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.31.2 // indirect
 	sigs.k8s.io/json v0.0.0-20241014173422-cfa47c3a1cc8 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.3.1 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
