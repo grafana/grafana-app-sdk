@@ -23,6 +23,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v0alpha1"
 	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v1alpha1"
+	"github.com/grafana/grafana-app-sdk/examples/apiserver/apis/example/v2alpha1"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 	"github.com/grafana/grafana-app-sdk/k8s/apiserver/cmd/server"
@@ -173,6 +174,21 @@ func NewApp(config app.Config) (app.App, error) {
 					})
 				},
 			},
+			"v2alpha1": {{
+				Namespaced: true,
+				Path:       "example",
+				Method:     "GET",
+			}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+				return json.NewEncoder(writer).Encode(v2alpha1.GetExample{
+					TypeMeta: metav1.TypeMeta{
+						Kind:       "Example",
+						APIVersion: config.ManifestData.Group + "/v2alpha1",
+					},
+					GetExampleBody: v2alpha1.GetExampleBody{
+						Message: "This is a route that exists in a version which only has resource routes and no kinds",
+					},
+				})
+			}},
 		},
 	})
 }
