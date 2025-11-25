@@ -24,6 +24,7 @@ const (
 	ResourceActionCreate = ResourceAction("CREATE")
 	ResourceActionUpdate = ResourceAction("UPDATE")
 	ResourceActionDelete = ResourceAction("DELETE")
+	ResourceActionResync = ResourceAction("RESYNC")
 )
 
 // ErrNilObject indicates that a provided resource.Object is nil, and cannot be processed
@@ -483,12 +484,18 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			// Generate the unique key for this object
 			retryKey := c.keyForReconcilerEvent(resourceKind, index, newObj)
 
+			// Convert to a resync action if the old and new RV are the same
+			action := ResourceActionUpdate
+			if oldObj != nil && oldObj.GetResourceVersion() == newObj.GetResourceVersion() {
+				action = ResourceActionResync
+			}
+
 			// Dequeue retries according to the RetryDequeuePolicy
-			c.dequeueIfRequired(retryKey, newObj, ResourceActionUpdate)
+			c.dequeueIfRequired(retryKey, newObj, action)
 
 			// Do the reconciler's update, check for error or a response with a specified RetryAfter
 			req := ReconcileRequest{
-				Action: ReconcileActionUpdated,
+				Action: ReconcileActionFromResourceAction(action),
 				Object: newObj,
 			}
 			c.doReconcile(ctx, reconciler, req, retryKey)
