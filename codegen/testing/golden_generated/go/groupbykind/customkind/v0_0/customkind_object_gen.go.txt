@@ -25,6 +25,13 @@ type CustomKind struct {
 	Status Status `json:"status" yaml:"status"`
 }
 
+func NewCustomKind() *CustomKind {
+	return &CustomKind{
+		Spec:   *NewSpec(),
+		Status: *NewStatus(),
+	}
+}
+
 func (o *CustomKind) GetSpec() any {
 	return o.Spec
 }
