@@ -103,6 +103,12 @@ testKind: {
 				"/search": {
 					GET: {
 						name: "getTestKindSearchResult"
+						extensions: {
+							"x-grafana-test": true
+							"x-grafana-test-value": {
+								val: "1"
+							}
+						}
 						request: {
 							query: {
 								q: string

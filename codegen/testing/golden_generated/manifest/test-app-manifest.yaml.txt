@@ -311,6 +311,9 @@ spec:
                       - kind
                       type: object
                 description: Default OK response
+            x-grafana-test: true
+            x-grafana-test-value:
+              val: "1"
       schema:
         spec:
           properties:
