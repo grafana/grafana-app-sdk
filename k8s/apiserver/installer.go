@@ -12,6 +12,7 @@ import (
 	"path"
 	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -95,6 +96,37 @@ func NewKubernetesGenericAPIServer(apiserver *genericapiserver.GenericAPIServer)
 	}
 }
 
+func (k *KubernetesGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error {
+	err := k.GenericAPIServer.InstallAPIGroup(apiGroupInfo)
+	if err != nil {
+		return err
+	}
+	// Make sure GroupVersions which have no resources still get installed
+	for _, gv := range apiGroupInfo.PrioritizedVersions {
+		if m, ok := apiGroupInfo.VersionedResourcesStorageMap[gv.Group]; ok && len(m) > 0 {
+			continue
+		}
+		// Check if a WS exists for the path (it might if a different version for the group had kinds)
+		rootPath := fmt.Sprintf("/apis/%s/%s", gv.Group, gv.Version)
+		if k.Handler == nil || k.Handler.GoRestfulContainer == nil {
+			return errors.New("cannot install custom route: underlying Handler.GoRestfulContainer is nil")
+		}
+		found := false
+		for _, ws := range k.Handler.GoRestfulContainer.RegisteredWebServices() {
+			if ws.RootPath() == rootPath {
+				found = true
+				break
+			}
+		}
+		if !found {
+			ws := new(restful.WebService)
+			ws.Path(fmt.Sprintf("/apis/%s/%s", gv.Group, gv.Version))
+			k.Handler.GoRestfulContainer.Add(ws)
+		}
+	}
+	return nil
+}
+
 // RegisteredWebServices returns the result of the underlying apiserver's Handler.GoRestfulContainer.RegisteredWebServices(),
 // or nil if either Handler or Handler.GoRestfulContainer is nil
 func (k *KubernetesGenericAPIServer) RegisteredWebServices() []*restful.WebService {
@@ -170,6 +202,7 @@ func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, reso
 	return installer, nil
 }
 
+//nolint:gocognit,gocyclo,funlen
 func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	if scheme == nil {
 		return errors.New("scheme cannot be nil")
@@ -233,6 +266,17 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		groupVersions = append(groupVersions, gv)
 	}
 
+	// Make sure we didn't miss any versions that don't have any kinds registered
+	for _, v := range r.appConfig.ManifestData.Versions {
+		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
+		if _, ok := kindsByGV[gv]; ok {
+			continue
+		}
+		groupVersions = append(groupVersions, gv)
+		// Add a dummy kind to the scheme for this version to get it to exist in the scheme (used for discovery)
+		scheme.AddKnownTypeWithName(gv.WithKind("none"), &resource.UntypedObject{})
+	}
+
 	internalGv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: runtime.APIVersionInternal}
 	for _, internalKind := range internalKinds {
 		scheme.AddKnownTypeWithName(internalGv.WithKind(internalKind.Kind()), internalKind.ZeroValue())
@@ -260,8 +304,10 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		}
 		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) > 0
 	})
-	if err = scheme.SetVersionPriority(groupVersions...); err != nil {
-		return fmt.Errorf("failed to set version priority: %w", err)
+	if len(groupVersions) > 0 {
+		if err = scheme.SetVersionPriority(groupVersions...); err != nil {
+			return fmt.Errorf("failed to set version priority: %w", err)
+		}
 	}
 
 	// save the scheme for later use
@@ -359,7 +405,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
-//nolint:gocognit,funlen
+//nolint:gocognit,funlen,gocyclo
 func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {
@@ -438,6 +484,17 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 		}
 	}
 
+	// Make sure we didn't miss any versions that don't have any kinds registered
+	for _, v := range r.appConfig.ManifestData.Versions {
+		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
+		if _, ok := kindsByGV[gv]; ok {
+			continue
+		}
+		if !slices.Contains(apiGroupInfo.PrioritizedVersions, gv) {
+			apiGroupInfo.PrioritizedVersions = append(apiGroupInfo.PrioritizedVersions, gv)
+		}
+	}
+
 	err = server.InstallAPIGroup(&apiGroupInfo)
 	if err != nil {
 		return err
@@ -456,9 +513,15 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 		if webServices == nil {
 			return errors.New("could not register custom routes: server.RegisteredWebServices() is nil")
 		}
-		for _, ws := range webServices {
-			for _, ver := range r.ManifestData().Versions {
+		for _, ver := range r.ManifestData().Versions {
+			if len(ver.Routes.Namespaced) == 0 && len(ver.Routes.Cluster) == 0 {
+				// No resource routes for this version
+				continue
+			}
+			found := false
+			for _, ws := range webServices {
 				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
+					found = true
 					for rpath, route := range ver.Routes.Namespaced {
 						err := r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
 						if err != nil {
@@ -471,7 +534,12 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 							return fmt.Errorf("failed to register cluster custom route '%s' for version %s: %w", rpath, ver.Name, err)
 						}
 					}
+					break
 				}
+			}
+			if !found {
+				// Return an error here rather than failing silently to add the routes
+				return fmt.Errorf("failed to find WebService for version %s", ver.Name)
 			}
 		}
 	}
