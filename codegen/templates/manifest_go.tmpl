@@ -37,7 +37,13 @@ SchemaProps: spec.SchemaProps{
     },{{ end }}{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
-    },{{ end }}{{ if (refString .Ref) }}
+    },{{ end }}{{ if .Items }}
+    Items: &spec.SchemaOrArray{ {{ if .Items.Schema }}
+        Schema: &spec.Schema{ {{ template "schema" .Items.Schema }} },
+        {{ else if .Items.Array }}Schemas: []spec.Schema{ {{ range .Items.Array }}
+            { {{ template "schema" . }} },{{ end }}
+        },
+        {{ end }} },{{ end }}{{ if (refString .Ref) }}
     Ref: spec.MustCreateRef("{{ .Ref | refString }}"),{{ end }}
 },{{ if .Extensions }}
 VendorExtensible: spec.VendorExtensible{

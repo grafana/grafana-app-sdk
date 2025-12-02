@@ -148,8 +148,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 10 -> manifest file, then the custom route response+query+body for reconcile, response body and wrapper+query+body for search in v3, +1 client per version (3)
-		require.Len(t, files, 11, "should be 11 files generated, got %d", len(files))
+		// 14 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), +1 client per version (3)
+		require.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")

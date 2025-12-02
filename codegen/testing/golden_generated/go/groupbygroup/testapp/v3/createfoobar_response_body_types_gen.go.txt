@@ -1,0 +1,26 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type VersionsV3RoutesNamespacedFoobarPOSTKey struct {
+	Name  string  `json:"name"`
+	Match *string `json:"match,omitempty"`
+}
+
+// NewVersionsV3RoutesNamespacedFoobarPOSTKey creates a new VersionsV3RoutesNamespacedFoobarPOSTKey object.
+func NewVersionsV3RoutesNamespacedFoobarPOSTKey() *VersionsV3RoutesNamespacedFoobarPOSTKey {
+	return &VersionsV3RoutesNamespacedFoobarPOSTKey{}
+}
+
+// +k8s:openapi-gen=true
+type CreateFoobarBody struct {
+	Altered []VersionsV3RoutesNamespacedFoobarPOSTKey `json:"altered"`
+}
+
+// NewCreateFoobarBody creates a new CreateFoobarBody object.
+func NewCreateFoobarBody() *CreateFoobarBody {
+	return &CreateFoobarBody{
+		Altered: []VersionsV3RoutesNamespacedFoobarPOSTKey{},
+	}
+}

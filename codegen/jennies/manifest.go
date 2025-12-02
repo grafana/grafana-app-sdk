@@ -669,6 +669,17 @@ func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[strin
 	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
 		sch.AdditionalProperties.Schema.SchemaProps = prefixReferences(sch.AdditionalProperties.Schema.SchemaProps, prefix, rootSchemas)
 	}
+	if sch.Items != nil {
+		if sch.Items.Schema != nil {
+			sch.Items.Schema.SchemaProps = prefixReferences(sch.Items.Schema.SchemaProps, prefix, rootSchemas)
+		}
+		if len(sch.Items.Schemas) > 0 {
+			for idx, item := range sch.Items.Schemas {
+				item.SchemaProps = prefixReferences(item.SchemaProps, prefix, rootSchemas)
+				sch.Items.Schemas[idx] = item
+			}
+		}
+	}
 	return sch
 }
 
