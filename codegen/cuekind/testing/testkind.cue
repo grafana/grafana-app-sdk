@@ -37,6 +37,22 @@ testManifestV2: {
 testManifestV3: {
 	codegen: ts: enabled: false
 	kinds: [testKind & testKind.versions["v3"]]
+	routes: namespaced: {
+		"/foobar": {
+			"POST": {
+				#Key: {
+					name: string
+					match?: string
+				}
+				request: body: {
+					keys: [...#Key]
+				}
+				response: {
+					altered: [...#Key]
+				}
+			}
+		}
+	}
 }
 
 testKind: {
@@ -120,6 +136,9 @@ testKind: {
 							items: [...{
 								name: string
 								score: float
+								list: [...{
+									foo: string
+								}]
 							}]
 							total: int
 						}
