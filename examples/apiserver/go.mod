@@ -8,7 +8,7 @@ replace github.com/grafana/grafana-app-sdk => ../../
 
 require (
 	github.com/grafana/grafana-app-sdk v0.48.2
-	github.com/grafana/grafana-app-sdk/logging v0.48.3
+	github.com/grafana/grafana-app-sdk/logging v0.48.5
 	k8s.io/apimachinery v0.34.2
 	k8s.io/apiserver v0.34.2
 	k8s.io/client-go v0.34.2
@@ -69,7 +69,7 @@ require (
 	github.com/prometheus/common v0.67.2 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
 	github.com/puzpuzpuz/xsync/v2 v2.5.1 // indirect
-	github.com/spf13/cobra v1.10.1 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stoewer/go-strcase v1.3.1 // indirect
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
