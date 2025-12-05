@@ -91,7 +91,7 @@ Allowed values are 'group' and 'kind'. This should match the flag used in the 'g
 
 	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
 	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
-	projectLocalGenerateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "useOldManifestKinds"))
+	_ = projectLocalGenerateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "useOldManifestKinds"))
 
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)

@@ -187,16 +187,6 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 		}
 	}
 
-	manifestPath := "manifestdata"
-	if m, _ := filepath.Glob(filepath.Join(cfg.GoModGenPath, "*_manifest.go")); len(m) > 0 {
-		manifestPath = ""
-	}
-
-	manifestPkg := filepath.Base(manifestPath)
-	if manifestPath == "" {
-		manifestPkg = filepath.Base(cfg.GoModGenPath)
-	}
-
 	goModule := cfg.GoModule
 	if goModule == "" {
 		goModule, err = getGoModule("go.mod")
@@ -208,6 +198,17 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 	goModGenPath := cfg.GoModGenPath
 	if goModGenPath == "" {
 		goModGenPath = cfg.GoGenPath
+	}
+
+	// Backwards-compatibility for manifests written to the base generated path
+	manifestPath := "manifestdata"
+	if m, _ := filepath.Glob(filepath.Join(goModGenPath, "*_manifest.go")); len(m) > 0 {
+		manifestPath = ""
+	}
+
+	manifestPkg := filepath.Base(manifestPath)
+	if manifestPath == "" {
+		manifestPkg = filepath.Base(goModGenPath)
 	}
 
 	// Manifest

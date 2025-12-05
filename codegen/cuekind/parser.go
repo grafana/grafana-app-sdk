@@ -236,7 +236,6 @@ func parseConfig(val cue.Value) (*ParsedConfig, error) {
 		return nil, err
 	}
 
-
 	return cfg, nil
 }
 
