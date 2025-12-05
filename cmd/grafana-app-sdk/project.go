@@ -91,6 +91,7 @@ Allowed values are 'group' and 'kind'. This should match the flag used in the 'g
 
 	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
 	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
+	projectLocalGenerateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "useOldManifestKinds"))
 
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
@@ -529,11 +530,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
-	if err != nil {
-		return err
-	}
-
 	kindGrouping, err := cmd.Flags().GetString("grouping")
 	if err != nil {
 		return err
@@ -547,24 +543,20 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	var manifestParser codegen.Parser[codegen.AppManifest]
 	switch format {
 	case FormatCUE:
-		parser, err := cuekind.NewParser()
+		parser, err := cuekind.NewParser(os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
-			GenOperatorState: genOperatorState,
-		}), os.DirFS(sourcePath))
+		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser())
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser(cuekind.ParseConfig{
-			GenOperatorState: genOperatorState,
-		})
+		manifestParser = parser.ManifestParser()
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
 
-	manifests, err := manifestParser.Parse(os.DirFS(sourcePath), selector)
+	manifests, err := manifestParser.Parse(selector)
 	if err != nil {
 		return fmt.Errorf("error parsing manifest '%s': %v", sourcePath, err)
 	}
@@ -626,7 +618,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	if err != nil {
 		return err
 	}
-	var writeFileFunc = writeFile
+	writeFileFunc := writeFile
 	if confirmOverwrite {
 		writeFileFunc = writeFileWithOverwriteConfirm
 	}
