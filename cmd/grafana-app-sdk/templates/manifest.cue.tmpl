@@ -1,5 +1,19 @@
 package kinds
 
+// config contains global code generation configuration options for the app.
+config : {
+    goGenPath:              "pkg/generated/",
+    tsGenPath:              "plugin/src/generated/",
+    defEncoding:            "json",
+    defPath:                "definitions",
+    grouping:               "kind",
+    postProcess:            false,
+    manifestIncludeSchemas: true,
+    useOldManifestKinds:    false,
+    cRDManifest:            false,
+    genOperatorState:       true,
+}
+
 manifest: {
 	// appName is the unique name of your app. It is used to reference the app from other config objects,
 	// and to generate the group used by your app in the app platform API.
