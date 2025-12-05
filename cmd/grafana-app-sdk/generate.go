@@ -202,13 +202,13 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 
 	// Backwards-compatibility for manifests written to the base generated path
 	manifestPath := "manifestdata"
-	if m, _ := filepath.Glob(filepath.Join(cfg.GoModGenPath, "*_manifest.go")); len(m) > 0 {
+	if m, _ := filepath.Glob(filepath.Join(goModGenPath, "*_manifest.go")); len(m) > 0 {
 		manifestPath = ""
 	}
 
 	manifestPkg := filepath.Base(manifestPath)
 	if manifestPath == "" {
-		manifestPkg = filepath.Base(cfg.GoModGenPath)
+		manifestPkg = filepath.Base(goModGenPath)
 	}
 
 	// Manifest
