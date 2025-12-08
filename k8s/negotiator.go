@@ -106,8 +106,15 @@ func (*GenericJSONDecoder) Decode(
 		}
 
 		return into, defaults, nil
-	case chk.Items != nil: // TODO: the codecs don't know how to handle lists yet.
-		return nil, nil, fmt.Errorf("unsupported list object")
+	case chk.Items != nil: // Fallback to UntypedList
+		l := &UntypedListObjectWrapper{}
+		if err := json.Unmarshal(data, l); err != nil {
+			logging.DefaultLogger.Error("error unmarshalling into *k8s.UntypedListObjectWrapper", "error", err)
+			return into, defaults, fmt.Errorf("error unmarshalling into *k8s.UntypedListObjectWrapper: %w", err)
+		}
+
+		l.items = data
+		into = l
 	case chk.Kind != "": // Fallback to UntypedObject
 		o := &UntypedObjectWrapper{}
 		if err := json.Unmarshal(data, o); err != nil {
@@ -221,8 +228,7 @@ func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, in
 			return cast, defaults, err
 		case resource.ListObject:
 			logging.DefaultLogger.Debug("decoding object into provided resource.ListObject", "gvk", into.GetObjectKind().GroupVersionKind().String())
-			// TODO: use codec for each element in the list?
-			err := c.Decoder(data, cast)
+			err := c.Codec.ReadList(bytes.NewReader(data), cast)
 			return cast, defaults, err
 		case *metav1.WatchEvent:
 			logging.DefaultLogger.Debug("decoding object into provided *v1.WatchEvent", "gvk", into.GetObjectKind().GroupVersionKind().String())
@@ -275,8 +281,7 @@ func (c *CodecDecoder) Decode(data []byte, defaults *schema.GroupVersionKind, in
 			logging.DefaultLogger.Warn("no SampleObject set in CodecDecoder, using *resource.TypedList[*resource.UntypedObject]")
 			obj = &resource.TypedList[*resource.UntypedObject]{}
 		}
-		// TODO: use codec for each element in the list?
-		err = c.Decoder(data, &obj)
+		err = c.Codec.ReadList(bytes.NewReader(data), obj)
 		return obj, defaults, err
 	}
 
@@ -298,7 +303,10 @@ func (c *CodecDecoder) Encode(obj runtime.Object, w io.Writer) error {
 	if cast, ok := obj.(resource.Object); ok {
 		return c.Codec.Write(w, cast)
 	}
-	return errors.New("provided object is not a resource.Object")
+	if cast, ok := obj.(resource.ListObject); ok {
+		return c.Codec.WriteList(w, cast)
+	}
+	return errors.New("provided object is not a resource.Object or resource.ListObject")
 }
 
 // Identifier returns "generic-json-decoder"
