@@ -7,7 +7,6 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
-	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
@@ -45,31 +44,6 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 		&jennies.Constants{
 			GroupByKind: !groupKinds,
 		},
-	)
-	return g
-}
-
-// BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
-
-	g := codejen.JennyListWithNamer(namerFunc)
-	g.Append(
-		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, !groupKinds),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
-			RelativePath: "plugin/secure/data.go",
-			Data:         pluginSecurePkgFiles["data.go"],
-		}),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
-			RelativePath: "plugin/secure/middleware.go",
-			Data:         pluginSecurePkgFiles["middleware.go"],
-		}),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
-			RelativePath: "plugin/secure/retriever.go",
-			Data:         pluginSecurePkgFiles["retriever.go"],
-		}),
-		jennies.RouterCodeGenerator(projectRepo),
-		jennies.BackendPluginMainGenerator(projectRepo, generatedAPIPath, !groupKinds),
 	)
 	return g
 }

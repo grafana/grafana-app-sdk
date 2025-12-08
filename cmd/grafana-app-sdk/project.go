@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"embed"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -492,7 +491,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if len(args) < 1 {
 		fmt.Println(`Usage: grafana-app-sdk project component add [options] <components>
 	where <components> are one or more of:
-		backend
 		frontend
 		operator`)
 		os.Exit(1)
@@ -576,17 +574,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	// Allow for multiple components to be added at once
 	for _, component := range args {
 		switch component {
-		case "backend":
-			switch format {
-			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, manifest.Properties().Group, kindGrouping == kindGroupingGroup)
-			default:
-				return fmt.Errorf("unknown kind format '%s'", format)
-			}
-			if err != nil {
-				fmt.Printf("%s\n", err.Error())
-				os.Exit(1)
-			}
 		case "frontend":
 			err = addComponentFrontend(path, manifest.Properties().Group)
 			if err != nil {
@@ -626,7 +613,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	if err != nil {
 		return err
 	}
-	var writeFileFunc = writeFile
+	writeFileFunc := writeFile
 	if confirmOverwrite {
 		writeFileFunc = writeFileWithOverwriteConfirm
 	}
@@ -645,6 +632,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 		}
 		appFiles, err := cast.Generate(cuekind.AppGenerator(repo, "pkg/generated", manifestPath, groupKinds), selectors...)
 		if err != nil {
+
 			return err
 		}
 		files = append(files, appFiles...)
@@ -668,84 +656,6 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	err = writeFileFunc(filepath.Join(projectRootPath, "cmd", "operator", "Dockerfile"), dockerfile)
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-//
-// Backend plugin
-//
-
-// Linter doesn't like "Potential file inclusion via variable", which is actually desired here
-//
-//nolint:gosec
-func addComponentBackend[G anyGenerator](projectRootPath string, generator G, selectors []string, manifestGroup string, groupKinds bool) error {
-	// Check plugin ID
-	if manifestGroup == "" {
-		return errors.New("manifest group is required")
-	}
-
-	// Get the repo from the go.mod file
-	repo, err := getGoModule(filepath.Join(projectRootPath, "go.mod"))
-	if err != nil {
-		return err
-	}
-
-	err = projectAddPluginAPI(generator, repo, filepath.Join(projectRootPath, "pkg/generated"), groupKinds, selectors)
-	if err != nil {
-		return err
-	}
-
-	// Magefile
-	mg, _ := templates.ReadFile("templates/Magefile.go.tmpl")
-	err = writeFile(filepath.Join(projectRootPath, "plugin/Magefile.go"), mg)
-	if err != nil {
-		return err
-	}
-
-	// Write or update the plugin.json
-	pluginJSONPath := filepath.Join(projectRootPath, "plugin/src/plugin.json")
-	if _, err = os.Stat(pluginJSONPath); err == nil {
-		// Update plugin.json to include the executable name and backend bool
-		m := make(map[string]any)
-		b, _ := os.ReadFile(pluginJSONPath)
-		err = json.Unmarshal(b, &m)
-		if err != nil {
-			return err
-		}
-		m["executable"] = fmt.Sprintf("gpx_%s-app", manifestGroup)
-		m["backend"] = true
-		b, _ = json.MarshalIndent(m, "", "  ")
-		err = writeFile(pluginJSONPath, b)
-	} else {
-		// New plugin.json
-		err = writePluginJSON(pluginJSONPath,
-			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
-	}
-	return err
-}
-
-//nolint:revive
-func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPath string, groupKinds bool, selectors []string) error {
-	var files codejen.Files
-	var err error
-	switch cast := any(generator).(type) {
-	case *codegen.Generator[codegen.Kind]:
-		files, err = cast.Generate(cuekind.BackendPluginGenerator(repo, generatedAPIModelsPath, groupKinds), selectors...)
-		if err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unknown generator type: %T", cast)
-	}
-	if err = checkAndMakePath("pkg"); err != nil {
-		return err
-	}
-	for _, f := range files {
-		err = writeFile(filepath.Join("pkg", f.RelativePath), f.Data)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }

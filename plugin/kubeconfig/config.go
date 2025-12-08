@@ -1,3 +1,4 @@
+// Deprecated: No longer in use
 package kubeconfig
 
 import (
@@ -7,11 +8,9 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-var (
-	// ErrContextValueMissing is an error that's returned
-	// when trying to fetch a Config from a context that doesn't have one.
-	ErrContextValueMissing = errors.New("context does not contain the kubeconfig value")
-)
+// ErrContextValueMissing is an error that's returned
+// when trying to fetch a Config from a context that doesn't have one.
+var ErrContextValueMissing = errors.New("context does not contain the kubeconfig value")
 
 type ctxKey struct{}
 

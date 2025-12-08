@@ -1,3 +1,5 @@
+// Deprecated: This module is deprecated. Please migrate to example.com/new/module/v2
+// for continued support and new features.
 module github.com/grafana/grafana-app-sdk/plugin
 
 go 1.24.6

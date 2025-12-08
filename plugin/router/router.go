@@ -1,3 +1,4 @@
+// Deprecated: No longer in use
 package router
 
 import (
