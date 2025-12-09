@@ -84,7 +84,7 @@ grafanaVolumeMounts:
 #     editable: true
 #     name: "BigQuery"
 #     type: grafana-bigquery-datasource
-#     uid: "grafana-bigquery"
+#     uid: "my-bigquery-datasource"
 #     jsonData:
 #       authenticationType: gce
 #       defaultProject: my-project
