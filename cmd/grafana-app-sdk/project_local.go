@@ -64,7 +64,7 @@ type dataSourceConfig struct {
 	UID          string         `json:"uid" yaml:"uid"`
 	URL          string         `json:"url" yaml:"url"`
 	Dependencies []string       `json:"dependencies" yaml:"dependencies"`
-	JsonData     map[string]any `json:"jsonData" yaml:"jsonData"`
+	JSONData     map[string]any `json:"jsonData" yaml:"jsonData"` //nolint:revive
 }
 
 type localEnvWebhookConfig struct {

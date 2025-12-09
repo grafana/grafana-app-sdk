@@ -220,7 +220,7 @@ data:
           type: {{.Type}}
           uid: {{.UID}}{{ if .URL }}
           url: {{.URL}}{{ end }}
-          version: 1{{ if .JsonData }}
-          jsonData:{{ range $key, $value := .JsonData }}
+          version: 1{{ if .JSONData }}
+          jsonData:{{ range $key, $value := .JSONData }}
             {{$key}}: {{$value}}{{ end }}{{ end }}{{ end }}
 {{end}}
