@@ -1,7 +1,7 @@
 package cuekind
 
 type KindsConfig struct {
-	Grouping            string
+	Grouping       string
 	PerKindVersion bool
 }
 
