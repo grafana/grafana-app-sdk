@@ -189,42 +189,6 @@ func (p *Parser) GetParsedConfig() *ParsedConfig {
 	return p.parsedConfig
 }
 
-func parseConfig(val cue.Value) (*ParsedConfig, error) {
-	// Load config with defaults, if present in the cue config they are overidden
-	cfg := &ParsedConfig{
-		Kinds: &KindsConfig{
-			Grouping:       "kind",
-			PerKindVersion: false,
-		},
-		CustomResourceDefinitions: &CRDConfig{
-			IncludeInManifest: true,
-			Format:            "json",
-			Path:              "definitions",
-			UseCRDFormat:      false,
-		},
-		Codegen: &CodegenConfig{
-			GoGenPath:                      "pkg/generated/",
-			TsGenPath:                      "plugin/src/generated/",
-			EnableK8sPostProcessing:        false,
-			GoModule:                       "",
-			GoModGenPath:                   "",
-			EnableOperatorStatusGeneration: true,
-		},
-	}
-	configVal := val.LookupPath(cue.MakePath(cue.Str("config")))
-	if err := configVal.Err(); err != nil {
-		_, _ = fmt.Printf("[WARN] Error parsing config, using defaults: %s\n", err.Error())
-		return cfg, nil
-	}
-
-	err := configVal.Decode(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	return cfg, nil
-}
-
 func (p *Parser) parseManifestVersions(manifest *codegen.SimpleManifest, val cue.Value) error {
 	manifest.AllVersions = make([]codegen.Version, 0)
 	versionsVal := val.LookupPath(cue.MakePath(cue.Str("versions")))
