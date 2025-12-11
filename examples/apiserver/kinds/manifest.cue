@@ -1,27 +1,5 @@
 package kinds
 
-// config contains global code generation configuration options for the app.
-config: {
-	customResourceDefinitions: {
-		includeInManifest: true  // manifestIncludeSchemas
-		useCRDFormat:      false // crdManifest
-		path:              "definitions"
-		format:            "json"
-	}
-
-	kinds: {
-		grouping:       "kind"
-		perKindVersion: false // useOldManifestKinds
-	}
-
-	codegen: {
-		goGenPath:                      "pkg/generated/"
-		tsGenPath:                      "plugin/src/generated/"
-		enableK8sPostProcessing:        false // postProcess
-		enableOperatorStatusGeneration: true  // genOperatorState
-	}
-}
-
 manifest: {
 	// appName is the unique name of your app. It is used to reference the app from other config objects,
 	// and to generate the group used by your app in the app platform API.
@@ -30,9 +8,9 @@ manifest: {
 	// "v<integer>(alpha|beta)<integer>". Each version contains the kinds your app manages for that version.
 	// If your app needs access to kinds managed by another app, use permissions.accessKinds to allow your app access.
 	versions: {
-		"v0alpha1": {kinds: [testKindv0alpha1]}
-		"v1alpha1": v1alpha1
-		"v2alpha1": v2alpha1
+			"v0alpha1": {kinds:[testKindv0alpha1]}
+	    "v1alpha1": v1alpha1
+	    "v2alpha1": v2alpha1
 	}
 	preferredVersion: "v1alpha1"
 	// extraPermissions contains any additional permissions your app may require to function.
@@ -53,71 +31,71 @@ manifest: {
 // v1alpha1 is the v1alpha1 version of the app's API.
 // It includes kinds which the v1alpha1 API serves, and (future) custom routes served globally from the v1alpha1 version.
 v1alpha1: {
-	// kinds is the list of kinds served by this version
-	kinds: [testKindv1alpha1]
-	// [OPTIONAL]
-	// served indicates whether this particular version is served by the API server.
-	// served should be set to false before a version is removed from the manifest entirely.
-	// served defaults to true if not present.
-	served: true
-	// [OPTIONAL]
-	// Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
-	// If not present, default values within the codegen trait are used.
-	// If you wish to specify codegen per-version, put this section in the version's object
-	// (for example, <no value>v1alpha1) instead.
-	codegen: {
-		// [OPTIONAL]
-		// ts contains TypeScript code generation properties for the kind
-		ts: {
-			// [OPTIONAL]
-			// enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
-			// Defaults to true if not present.
-			enabled: true
-		}
-		// [OPTIONAL]
-		// go contains go code generation properties for the kind
-		go: {
-			// [OPTIONAL]
-			// enabled indicates whether the CLI should generate back-end go code for the kind.
-			// Defaults to true if not present.
-			enabled: true
-		}
-	}
-	routes: namespaced: {
-		"/foobar": {
-			"GET": {
-				response: {
-					foo:    string
-					shared: #SharedType
-				}
-				request: {
-					query: {
-						foo: string
-					}
-					body: {
-						input:  string
-						shared: #SharedType
-					}
-				}
-			}
-		}
-	}
-	routes: cluster: {
-		"/foobar": {
-			"GET": {
-				name: "getClusterFoobar"
-				response: {
-					#Extra: {
-						foo: string
-					}
-					bar: string
-					extra: {
-						[string]: #Extra
-					}
-				}
-			}
-		}
-	}
+    // kinds is the list of kinds served by this version
+    kinds: [testKindv1alpha1]
+    // [OPTIONAL]
+    // served indicates whether this particular version is served by the API server.
+    // served should be set to false before a version is removed from the manifest entirely.
+    // served defaults to true if not present.
+    served: true
+    // [OPTIONAL]
+    // Codegen is a trait that tells the grafana-app-sdk, or other code generation tooling, how to process this kind.
+    // If not present, default values within the codegen trait are used.
+    // If you wish to specify codegen per-version, put this section in the version's object
+    // (for example, <no value>v1alpha1) instead.
+    codegen: {
+        // [OPTIONAL]
+        // ts contains TypeScript code generation properties for the kind
+        ts: {
+            // [OPTIONAL]
+            // enabled indicates whether the CLI should generate front-end TypeScript code for the kind.
+            // Defaults to true if not present.
+            enabled: true
+        }
+        // [OPTIONAL]
+        // go contains go code generation properties for the kind
+        go: {
+            // [OPTIONAL]
+            // enabled indicates whether the CLI should generate back-end go code for the kind.
+            // Defaults to true if not present.
+            enabled: true
+        }
+    }
+    routes: namespaced: {
+    	"/foobar": {
+    		"GET": {
+    			response: {
+    				foo: string
+    				shared: #SharedType
+    			}
+    			request: {
+    				query: {
+    					foo: string
+    				}
+    				body: {
+    					input: string
+    					shared: #SharedType
+    				}
+    			}
+    		}
+    	}
+    }
+    routes: cluster: {
+    	"/foobar": {
+    		"GET": {
+    			name: "getClusterFoobar"
+    			response: {
+    				#Extra: {
+    					foo: string
+    				}
+    				bar: string
+    				extra: {
+    					[string]: #Extra
+    				}
+    			}
+    		}
+    	}
+    }
 }
 
 // Version with only custom resource routes, no kinds
