@@ -98,7 +98,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 
 	cfg := parser.GetParsedConfig()
 
-	if cfg.Grouping != kindGroupingGroup && cfg.Grouping != kindGroupingKind {
+	if cfg.Kinds.Grouping != kindGroupingGroup && cfg.Kinds.Grouping != kindGroupingKind {
 		return fmt.Errorf("--grouping must be one of 'group'|'kind'")
 	}
 
@@ -121,7 +121,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Jennies that need to be run post-file-write
-	if cfg.PostProcess {
+	if cfg.Codegen.EnableK8sPostProcessing {
 		if format == FormatCUE {
 			files, err = postGenerateFilesCue(parser, selector)
 			if err != nil {
@@ -160,34 +160,34 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 		return nil, err
 	}
 	for i, f := range resourceFiles {
-		resourceFiles[i].RelativePath = filepath.Join(cfg.GoGenPath, f.RelativePath)
+		resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
 	}
 	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), selectors...)
 	if err != nil {
 		return nil, err
 	}
 	for i, f := range tsResourceFiles {
-		tsResourceFiles[i].RelativePath = filepath.Join(cfg.TsGenPath, f.RelativePath)
+		tsResourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.TsGenPath, f.RelativePath)
 	}
 	// CRD
 	var crdFiles codejen.Files
-	if cfg.DefEncoding != "none" {
+	if cfg.CustomResourceDefinitions.Format != "none" {
 		encFunc := func(v any) ([]byte, error) {
 			return json.MarshalIndent(v, "", "    ")
 		}
-		if cfg.DefEncoding == "yaml" {
+		if cfg.CustomResourceDefinitions.Format == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.DefEncoding), selectors...)
+		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CustomResourceDefinitions.Format), selectors...)
 		if err != nil {
 			return nil, err
 		}
 		for i, f := range crdFiles {
-			crdFiles[i].RelativePath = filepath.Join(cfg.DefPath, f.RelativePath)
+			crdFiles[i].RelativePath = filepath.Join(cfg.CustomResourceDefinitions.Path, f.RelativePath)
 		}
 	}
 
-	goModule := cfg.GoModule
+	goModule := cfg.Codegen.GoModule
 	if goModule == "" {
 		goModule, err = getGoModule("go.mod")
 		if err != nil {
@@ -195,9 +195,9 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 		}
 	}
 
-	goModGenPath := cfg.GoModGenPath
+	goModGenPath := cfg.Codegen.GoModGenPath
 	if goModGenPath == "" {
-		goModGenPath = cfg.GoGenPath
+		goModGenPath = cfg.Codegen.GoGenPath
 	}
 
 	// Backwards-compatibility for manifests written to the base generated path
@@ -212,30 +212,23 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.ManifestIncludeSchemas, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.CustomResourceDefinitions.IncludeInManifest, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), selectors...)
 	if err != nil {
 		return nil, err
 	}
 	for i, f := range goManifestFiles {
-		goManifestFiles[i].RelativePath = filepath.Join(cfg.GoGenPath, f.RelativePath)
+		goManifestFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
 	}
 
 	// Manifest CRD
 	var manifestFiles codejen.Files
-	if cfg.DefEncoding != "none" {
-		encFunc := func(v any) ([]byte, error) {
-			return json.MarshalIndent(v, "", "    ")
-		}
-		if cfg.DefEncoding == "yaml" {
-			encFunc = yaml.Marshal
-		}
-
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(encFunc, cfg.DefEncoding, cfg.ManifestIncludeSchemas, cfg.CRDManifest), selectors...)
+	if cfg.CustomResourceDefinitions.Format != "none" {
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), selectors...)
 		if err != nil {
 			return nil, err
 		}
 		for i, f := range manifestFiles {
-			manifestFiles[i].RelativePath = filepath.Join(cfg.DefPath, f.RelativePath)
+			manifestFiles[i].RelativePath = filepath.Join(cfg.CustomResourceDefinitions.Path, f.RelativePath)
 		}
 	}
 
@@ -249,7 +242,7 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 
 func postGenerateFilesCue(parser *cuekind.Parser, selectors ...string) (codejen.Files, error) {
 	cfg := parser.GetParsedConfig()
-	repo, err := getGoModule(cfg.GoGenPath)
+	repo, err := getGoModule(cfg.Codegen.GoGenPath)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +250,7 @@ func postGenerateFilesCue(parser *cuekind.Parser, selectors ...string) (codejen.
 	if err != nil {
 		return nil, err
 	}
-	relativePath := cfg.GoGenPath
+	relativePath := cfg.Codegen.GoGenPath
 	if !cfg.GroupKinds() {
 		relativePath = filepath.Join(relativePath, targetResource)
 	}

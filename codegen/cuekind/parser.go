@@ -66,7 +66,7 @@ func NewParser(files fs.FS) (*Parser, error) {
 		return nil, fmt.Errorf("could not parse manifest config: %w", err)
 	}
 
-	defs, err := getCUEDefinitions(cfg.GenOperatorState)
+	defs, err := getCUEDefinitions(cfg.Codegen.EnableOperatorStatusGeneration)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
@@ -82,26 +82,6 @@ type Parser struct {
 	root                 cue.Value
 	loadedCUEDefinitions *cueDefinitions
 	parsedConfig         *ParsedConfig
-}
-
-type ParsedConfig struct {
-	GoGenPath              string
-	TsGenPath              string
-	DefEncoding            string
-	DefPath                string
-	Grouping               string
-	PostProcess            bool
-	ManifestIncludeSchemas bool
-	GoModule               string
-	GoModGenPath           string
-	UseOldManifestKinds    bool
-	CRDManifest            bool
-	GenOperatorState       bool
-}
-
-// GroupKinds returns true if the config is set to group by kind
-func (cfg *ParsedConfig) GroupKinds() bool {
-	return cfg.Grouping == "group"
 }
 
 type cueDefinitions struct {
@@ -173,7 +153,7 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 		val = val.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
 	}
 
-	if p.parsedConfig.UseOldManifestKinds {
+	if p.parsedConfig.Kinds.PerKindVersion {
 		val = val.Unify(p.loadedCUEDefinitions.OldManifest)
 	} else {
 		val = val.Unify(p.loadedCUEDefinitions.Manifest)
@@ -193,7 +173,7 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 		Props: manifestProps,
 	}
 
-	if p.parsedConfig.UseOldManifestKinds {
+	if p.parsedConfig.Kinds.PerKindVersion {
 		err = p.parseManifestKinds(manifest, val)
 	} else {
 		err = p.parseManifestVersions(manifest, val)
@@ -212,18 +192,24 @@ func (p *Parser) GetParsedConfig() *ParsedConfig {
 func parseConfig(val cue.Value) (*ParsedConfig, error) {
 	// Load config with defaults, if present in the cue config they are overidden
 	cfg := &ParsedConfig{
-		GoGenPath:              "pkg/generated/",
-		TsGenPath:              "plugin/src/generated/",
-		DefEncoding:            "json",
-		DefPath:                "definitions",
-		Grouping:               "kind",
-		PostProcess:            false,
-		ManifestIncludeSchemas: true,
-		GoModule:               "",
-		GoModGenPath:           "",
-		UseOldManifestKinds:    false,
-		CRDManifest:            false,
-		GenOperatorState:       true,
+		Kinds: &KindsConfig{
+			Grouping:       "kind",
+			PerKindVersion: false,
+		},
+		CustomResourceDefinitions: &CRDConfig{
+			IncludeInManifest: true,
+			Format:            "json",
+			Path:              "definitions",
+			UseCRDFormat:      false,
+		},
+		Codegen: &CodegenConfig{
+			GoGenPath:                      "pkg/generated/",
+			TsGenPath:                      "plugin/src/generated/",
+			EnableK8sPostProcessing:        false,
+			GoModule:                       "",
+			GoModGenPath:                   "",
+			EnableOperatorStatusGeneration: true,
+		},
 	}
 	configVal := val.LookupPath(cue.MakePath(cue.Str("config")))
 	if err := configVal.Err(); err != nil {

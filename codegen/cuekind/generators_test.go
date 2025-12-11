@@ -1,7 +1,6 @@
 package cuekind
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,10 +15,6 @@ const (
 	TestCUEDirectory         = "./testing"
 	ReferenceOutputDirectory = "../testing/golden_generated"
 )
-
-var jsonEncoder = func(v any) ([]byte, error) {
-	return json.MarshalIndent(v, "", "    ")
-}
 
 func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
