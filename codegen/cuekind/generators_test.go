@@ -50,9 +50,8 @@ func TestResourceGenerator(t *testing.T) {
 
 	parser, err := NewParser(os.DirFS(TestCUEDirectory))
 	require.NoError(t, err)
-	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
+	kinds, err := parser.KindParser().Parse("customManifest")
 	require.NoError(t, err)
-
 	sameGroupKinds, err := parser.KindParser().Parse("testManifest")
 	require.NoError(t, err)
 
@@ -109,11 +108,12 @@ func TestManifestGenerator(t *testing.T) {
 	parser, err := NewParser(os.DirFS(TestCUEDirectory))
 	require.NoError(t, err)
 
+	cfg := parser.GetParsedConfig()
+
 	t.Run("resource", func(t *testing.T) {
-		manifests, err := parser.ManifestParser().Parse("testManifest")
+		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		cfg := parser.GetParsedConfig().CustomResourceDefinitions
-		files, err := ManifestGenerator(cfg).Generate(manifests...)
+		files, err := ManifestGenerator(cfg.CustomResourceDefinitions).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
@@ -128,9 +128,9 @@ func TestManifestGoGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
-		manifests, err := parser.ManifestParser().Parse("testManifest")
+		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(manifests...)
+		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 14 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), +1 client per version (3)
@@ -142,9 +142,9 @@ func TestManifestGoGenerator(t *testing.T) {
 	})
 
 	t.Run("group by kind", func(t *testing.T) {
-		manifests, err := parser.ManifestParser().Parse("customManifest")
+		kinds, err := parser.ManifestParser().Parse("customManifest")
 		require.NoError(t, err)
-		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(manifests...)
+		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 3 -> manifest, client v0_0, client v1_0
