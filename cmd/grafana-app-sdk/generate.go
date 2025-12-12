@@ -32,41 +32,41 @@ const deprecationMessage = "this flag is no longer effective, please modify your
 func setupGenerateCmd() {
 	generateCmd.PersistentFlags().StringP("gogenpath", "g", "pkg/generated/",
 		"Path to directory where generated go code will reside")
-	_ = generateCmd.PersistentFlags().MarkDeprecated("gogenpath", fmt.Sprintf(deprecationMessage, "goGenPath"))
+	_ = generateCmd.PersistentFlags().MarkDeprecated("gogenpath", fmt.Sprintf(deprecationMessage, "codegen.goGenPath"))
 
 	generateCmd.PersistentFlags().StringP("tsgenpath", "t", "plugin/src/generated/",
 		"Path to directory where generated TypeScript code will reside")
-	_ = generateCmd.PersistentFlags().MarkDeprecated("tsgenpath", fmt.Sprintf(deprecationMessage, "tsGenPath"))
+	_ = generateCmd.PersistentFlags().MarkDeprecated("tsgenpath", fmt.Sprintf(deprecationMessage, "codegen.tsGenPath"))
 
 	generateCmd.Flags().String("defencoding", "json", `Encoding for Custom Resource Definition 
 files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD generation.`)
-	_ = generateCmd.Flags().MarkDeprecated("defencoding", fmt.Sprintf(deprecationMessage, "defEncoding"))
+	_ = generateCmd.Flags().MarkDeprecated("defencoding", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.format"))
 
 	generateCmd.Flags().String("defpath", "definitions", `Path where Custom Resource 
 Definitions will be created. Only applicable if type=kubernetes`)
-	_ = generateCmd.Flags().MarkDeprecated("defpath", fmt.Sprintf(deprecationMessage, "defPath"))
+	_ = generateCmd.Flags().MarkDeprecated("defpath", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.path"))
 
 	generateCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
-	_ = generateCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "grouping"))
+	_ = generateCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
 
 	generateCmd.Flags().Bool("postprocess", false, "Whether to run post-processing on the generated files after they are written to disk. Post-processing includes code generation based on +k8s comments on types. Post-processing will fail if the dependencies required by the generated code are absent from go.mod.")
-	_ = generateCmd.Flags().MarkDeprecated("postprocess", fmt.Sprintf(deprecationMessage, "postProcess"))
+	_ = generateCmd.Flags().MarkDeprecated("postprocess", fmt.Sprintf(deprecationMessage, "codegen.enableK8sPostProcessing"))
 
 	generateCmd.Flags().Bool("noschemasinmanifest", false, "Whether to exclude kind schemas from the generated app manifest. This flag exists to allow for codegen with recursive types in CUE until github.com/grafana/grafana-app-sdk/issues/460 is resolved.")
-	_ = generateCmd.Flags().MarkDeprecated("noschemasinmanifest", fmt.Sprintf(deprecationMessage, "manifestIncludeSchemas"))
+	_ = generateCmd.Flags().MarkDeprecated("noschemasinmanifest", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.includeInManifest"))
 
 	generateCmd.Flags().String("gomodule", "", `module name found in go.mod. If absent it will be inferred from ./go.mod`)
-	_ = generateCmd.Flags().MarkDeprecated("gomodule", fmt.Sprintf(deprecationMessage, "goModule"))
+	_ = generateCmd.Flags().MarkDeprecated("gomodule", fmt.Sprintf(deprecationMessage, "codegen.goModule"))
 
 	generateCmd.Flags().String("gomodgenpath", "", `This argument is used as a relative path for generated go code from the go module root. It only needs to be present if gogenpath is an absolute path, or is not a relative path from the go module root.`)
-	_ = generateCmd.Flags().MarkDeprecated("gomodgenpath", fmt.Sprintf(deprecationMessage, "goModGenPath"))
+	_ = generateCmd.Flags().MarkDeprecated("gomodgenpath", fmt.Sprintf(deprecationMessage, "codegen.goModGenPath"))
 
 	generateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
-	_ = generateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "useOldManifestKinds"))
+	_ = generateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "kinds.perKindVersion"))
 
 	generateCmd.Flags().Bool("crdmanifest", false, "Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents. Use this flag to keep legacy behavior (CRD schemas in the manifest)")
-	_ = generateCmd.Flags().MarkDeprecated("crdmanifest", fmt.Sprintf(deprecationMessage, "crdManifest"))
+	_ = generateCmd.Flags().MarkDeprecated("crdmanifest", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.useCRDFormat"))
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based

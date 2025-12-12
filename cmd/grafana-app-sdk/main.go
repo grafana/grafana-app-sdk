@@ -33,7 +33,7 @@ func main() {
 	rootCmd.PersistentFlags().String(selectorFlag, "manifest", "Path selector to use for the manifest")
 
 	rootCmd.PersistentFlags().Bool(genOperatorStateFlag, true, "Generate operator state code")
-	_ = rootCmd.PersistentFlags().MarkDeprecated(genOperatorStateFlag, fmt.Sprintf(deprecationMessage, "genOperatorState"))
+	_ = rootCmd.PersistentFlags().MarkDeprecated(genOperatorStateFlag, fmt.Sprintf(deprecationMessage, "codegen.enableOperatorStatusGeneration"))
 
 	setupVersionCmd()
 	setupGenerateCmd()
