@@ -1062,7 +1062,7 @@ func checkWatchListDataConsistencyIfRequested[T runtime.Object, U any](ctx conte
 	}
 	// for informers we pass an empty ListOptions because
 	// listFn might be wrapped for filtering during informer construction.
-	consistencydetector.CheckDataConsistency(ctx, identity, lastSyncedResourceVersion, listFn, metav1.ListOptions{}, retrieveItemsFn)
+	consistencydetector.CheckDataConsistency(ctx, identity, lastSyncedResourceVersion, listFn, nil, metav1.ListOptions{}, retrieveItemsFn)
 }
 
 func getTypeDescriptionFromObject(expectedType interface{}) string {

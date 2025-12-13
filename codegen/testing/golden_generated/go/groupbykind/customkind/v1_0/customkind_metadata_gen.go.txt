@@ -14,22 +14,22 @@ type Metadata struct {
 	// Can't use this as it's not yet enforced CUE:
 	// ...string
 	// Have to do this gnarly regex instead
-	CustomMetadataField string     `json:"customMetadataField"`
-	UpdateTimestamp     time.Time  `json:"updateTimestamp"`
-	CreatedBy           string     `json:"createdBy"`
-	Uid                 string     `json:"uid"`
-	CreationTimestamp   time.Time  `json:"creationTimestamp"`
-	DeletionTimestamp   *time.Time `json:"deletionTimestamp,omitempty"`
-	Finalizers          []string   `json:"finalizers"`
-	ResourceVersion     string     `json:"resourceVersion"`
-	Generation          int64      `json:"generation"`
+	CustomMetadataField string `json:"customMetadataField"`
 	// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
 	// Can't use this as it's not yet enforced CUE:
 	// ...string
 	// Have to do this gnarly regex instead
 	OtherMetadataField string            `json:"otherMetadataField"`
-	UpdatedBy          string            `json:"updatedBy"`
+	Uid                string            `json:"uid"`
+	CreationTimestamp  time.Time         `json:"creationTimestamp"`
+	DeletionTimestamp  *time.Time        `json:"deletionTimestamp,omitempty"`
+	Finalizers         []string          `json:"finalizers"`
+	ResourceVersion    string            `json:"resourceVersion"`
+	Generation         int64             `json:"generation"`
 	Labels             map[string]string `json:"labels"`
+	UpdateTimestamp    time.Time         `json:"updateTimestamp"`
+	CreatedBy          string            `json:"createdBy"`
+	UpdatedBy          string            `json:"updatedBy"`
 }
 
 // NewMetadata creates a new Metadata object.

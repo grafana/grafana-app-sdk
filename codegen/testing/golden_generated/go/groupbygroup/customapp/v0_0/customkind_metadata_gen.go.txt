@@ -10,16 +10,16 @@ import (
 // TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
 // without external reference as using the CommonMetadata reference breaks thema codegen.
 type CustomKindMetadata struct {
-	UpdateTimestamp   time.Time         `json:"updateTimestamp"`
-	CreatedBy         string            `json:"createdBy"`
 	Uid               string            `json:"uid"`
 	CreationTimestamp time.Time         `json:"creationTimestamp"`
 	DeletionTimestamp *time.Time        `json:"deletionTimestamp,omitempty"`
 	Finalizers        []string          `json:"finalizers"`
 	ResourceVersion   string            `json:"resourceVersion"`
 	Generation        int64             `json:"generation"`
-	UpdatedBy         string            `json:"updatedBy"`
 	Labels            map[string]string `json:"labels"`
+	UpdateTimestamp   time.Time         `json:"updateTimestamp"`
+	CreatedBy         string            `json:"createdBy"`
+	UpdatedBy         string            `json:"updatedBy"`
 }
 
 // NewCustomKindMetadata creates a new CustomKindMetadata object.
