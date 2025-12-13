@@ -172,11 +172,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
-	if err != nil {
-		return err
-	}
-	useOldManifestKinds, err := cmd.Flags().GetBool("useoldmanifestkinds")
+	configName, err := cmd.Flags().GetString(configFlag)
 	if err != nil {
 		return err
 	}
@@ -218,7 +214,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	err = updateLocalConfigFromManifest(config, format, sourcePath, useOldManifestKinds, selector)
+	err = updateLocalConfigFromManifest(config, format, sourcePath, configName, selector)
 	if err != nil {
 		return err
 	}
@@ -227,14 +223,11 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
 		case FormatCUE:
-			parser, err := cuekind.NewParser()
+			parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator(parser.KindParser(cuekind.ParseConfig{
-				GenOperatorState: genOperatorState,
-				UseOldKinds:      useOldManifestKinds,
-			}), os.DirFS(sourcePath))
+			generator, err := codegen.NewGenerator(parser.KindParser())
 			if err != nil {
 				return nil, err
 			}
@@ -814,23 +807,23 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string, useOldManifestKinds bool, selectors ...string) error {
+func updateLocalConfigFromManifest(config *localEnvConfig, format, cuePath, configName string, selectors ...string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
 	}
 	if format == FormatCUE {
-		parser, err := cuekind.NewParser()
+		parser, err := cuekind.NewParser(os.DirFS(cuePath), configName)
 		if err != nil {
 			return err
 		}
-		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(cuekind.ParseConfig{
-			UseOldKinds: useOldManifestKinds,
-		}), os.DirFS(cuePath))
+		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser())
 		if err != nil {
 			return err
 		}
-		fs, err := generator.Generate(cuekind.ManifestGenerator(json.Marshal, "json", false, true), selectors...)
+		cfg := parser.GetParsedConfig()
+
+		fs, err := generator.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), selectors...)
 		if err != nil {
 			return err
 		}
