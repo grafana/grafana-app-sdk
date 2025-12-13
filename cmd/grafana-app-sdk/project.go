@@ -518,6 +518,12 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Name of the cue object containing the config (optional)
+	configName, err := cmd.Flags().GetString(configFlag)
+	if err != nil {
+		return err
+	}
+
 	// Default overwrite
 	overwrite, err := cmd.Flags().GetBool("overwrite")
 	if err != nil {
@@ -543,7 +549,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	var manifestParser codegen.Parser[codegen.AppManifest]
 	switch format {
 	case FormatCUE:
-		parser, err := cuekind.NewParser(os.DirFS(sourcePath))
+		parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
 		if err != nil {
 			return err
 		}

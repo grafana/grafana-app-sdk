@@ -23,10 +23,12 @@ const (
 	sourceFlag           = "source"
 	formatFlag           = "format"
 	selectorFlag         = "manifest"
+	configFlag           = "config"
 	genOperatorStateFlag = "genoperatorstate"
 )
 
 func main() {
+	rootCmd.PersistentFlags().StringP(configFlag, "c", "rootCmd", "name of the config cue object within the source cue module")
 	rootCmd.PersistentFlags().StringP(sourceFlag, "s", "kinds", "Path to directory with your codegen source files (such as a CUE module)")
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
 

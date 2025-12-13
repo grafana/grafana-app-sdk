@@ -172,6 +172,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	configName, err := cmd.Flags().GetString(configFlag)
+	if err != nil {
+		return err
+	}
 	localPath := filepath.Join(path, "local")
 	localGenPath := filepath.Join(localPath, "generated")
 	absPath, err := filepath.Abs(path)
@@ -210,7 +214,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	err = updateLocalConfigFromManifest(config, format, sourcePath, selector)
+	err = updateLocalConfigFromManifest(config, format, sourcePath, configName, selector)
 	if err != nil {
 		return err
 	}
@@ -219,7 +223,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
 		case FormatCUE:
-			parser, err := cuekind.NewParser(os.DirFS(sourcePath))
+			parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
 			if err != nil {
 				return nil, err
 			}
@@ -803,13 +807,13 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string, selectors ...string) error {
+func updateLocalConfigFromManifest(config *localEnvConfig, format, cuePath, configName string, selectors ...string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
 	}
 	if format == FormatCUE {
-		parser, err := cuekind.NewParser(os.DirFS(cuePath))
+		parser, err := cuekind.NewParser(os.DirFS(cuePath), configName)
 		if err != nil {
 			return err
 		}

@@ -20,7 +20,7 @@ func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(os.DirFS(TestCUEDirectory))
+	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
 	require.NoError(t, err)
 	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
 	require.NoError(t, err)
@@ -48,7 +48,7 @@ func TestResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(os.DirFS(TestCUEDirectory))
+	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
 	require.NoError(t, err)
 	kinds, err := parser.KindParser().Parse("customManifest")
 	require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(os.DirFS(TestCUEDirectory))
+	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
 	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
@@ -105,7 +105,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 }
 
 func TestManifestGenerator(t *testing.T) {
-	parser, err := NewParser(os.DirFS(TestCUEDirectory))
+	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
 	require.NoError(t, err)
 
 	cfg := parser.GetParsedConfig()
@@ -124,7 +124,7 @@ func TestManifestGenerator(t *testing.T) {
 }
 
 func TestManifestGoGenerator(t *testing.T) {
-	parser, err := NewParser(os.DirFS(TestCUEDirectory))
+	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
 	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {

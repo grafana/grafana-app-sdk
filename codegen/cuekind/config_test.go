@@ -33,7 +33,7 @@ config: {
 }
 `)
 
-	cfg, err := parseConfig(val)
+	cfg, err := parseConfig(val, "config")
 	require.NoError(t, err)
 
 	assert.Equal(t, "group", cfg.Kinds.Grouping)
@@ -62,7 +62,7 @@ config: {
 }
 `)
 
-	cfg, err := parseConfig(val)
+	cfg, err := parseConfig(val, "config")
 	require.NoError(t, err)
 
 	assert.Equal(t, "kind", cfg.Kinds.Grouping)

@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/grafana/codejen"
-	"gopkg.in/yaml.v3"
+	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"

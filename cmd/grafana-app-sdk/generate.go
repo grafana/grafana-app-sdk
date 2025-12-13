@@ -91,7 +91,13 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	parser, err := cuekind.NewParser(os.DirFS(sourcePath))
+	// Name of the cue object containing the config (optional)
+	configName, err := cmd.Flags().GetString("config")
+	if err != nil {
+		return err
+	}
+
+	parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
 	if err != nil {
 		return err
 	}

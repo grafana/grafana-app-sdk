@@ -23,8 +23,8 @@ const DefaultManifestSelector = "manifest"
 //go:embed def.cue cue.mod/module.cue
 var overlayFS embed.FS
 
-// NewParser creates a new parser instance for the given file source
-func NewParser(files fs.FS) (*Parser, error) {
+// NewParser creates a new parser instance for the given file source and configuration name.
+func NewParser(files fs.FS, configName string) (*Parser, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
@@ -61,7 +61,7 @@ func NewParser(files fs.FS) (*Parser, error) {
 		return nil, root.Err()
 	}
 
-	cfg, err := parseConfig(root)
+	cfg, err := parseConfig(root, configName)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse manifest config: %w", err)
 	}

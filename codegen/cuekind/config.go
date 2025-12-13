@@ -38,7 +38,7 @@ func (cfg *ParsedConfig) GroupKinds() bool {
 	return cfg.Kinds.Grouping == "group"
 }
 
-func parseConfig(val cue.Value) (*ParsedConfig, error) {
+func parseConfig(val cue.Value, configName string) (*ParsedConfig, error) {
 	// Load config with defaults, if present in the cue config they are overidden
 	cfg := &ParsedConfig{
 		Kinds: &KindsConfig{
@@ -60,7 +60,7 @@ func parseConfig(val cue.Value) (*ParsedConfig, error) {
 			EnableOperatorStatusGeneration: true,
 		},
 	}
-	configVal := val.LookupPath(cue.MakePath(cue.Str("config")))
+	configVal := val.LookupPath(cue.MakePath(cue.Str(configName)))
 	if err := configVal.Err(); err != nil {
 		_, _ = fmt.Printf("[WARN] Error parsing config, using defaults: %s\n", err.Error())
 		return cfg, nil
