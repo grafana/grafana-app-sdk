@@ -8,30 +8,30 @@ import (
 
 // +k8s:openapi-gen=true
 type CustomKindInnerObject1 struct {
-	InnerField1 string                   `json:"innerField1"`
-	InnerField2 []string                 `json:"innerField2"`
-	InnerField3 []CustomKindInnerObject2 `json:"innerField3"`
-	InnerField4 []map[string]interface{} `json:"innerField4"`
+	InnerField1 string                                              `json:"innerField1"`
+	InnerField2 []string                                            `json:"innerField2"`
+	InnerField3 []CustomKindcustomKindVersionsV10SchemaInnerObject2 `json:"innerField3"`
+	InnerField4 []map[string]interface{}                            `json:"innerField4"`
 }
 
 // NewCustomKindInnerObject1 creates a new CustomKindInnerObject1 object.
 func NewCustomKindInnerObject1() *CustomKindInnerObject1 {
 	return &CustomKindInnerObject1{
 		InnerField2: []string{},
-		InnerField3: []CustomKindInnerObject2{},
+		InnerField3: []CustomKindcustomKindVersionsV10SchemaInnerObject2{},
 		InnerField4: []map[string]interface{}{},
 	}
 }
 
 // +k8s:openapi-gen=true
-type CustomKindInnerObject2 struct {
+type CustomKindcustomKindVersionsV10SchemaInnerObject2 struct {
 	Name    string                 `json:"name"`
 	Details map[string]interface{} `json:"details"`
 }
 
-// NewCustomKindInnerObject2 creates a new CustomKindInnerObject2 object.
-func NewCustomKindInnerObject2() *CustomKindInnerObject2 {
-	return &CustomKindInnerObject2{
+// NewCustomKindcustomKindVersionsV10SchemaInnerObject2 creates a new CustomKindcustomKindVersionsV10SchemaInnerObject2 object.
+func NewCustomKindcustomKindVersionsV10SchemaInnerObject2() *CustomKindcustomKindVersionsV10SchemaInnerObject2 {
+	return &CustomKindcustomKindVersionsV10SchemaInnerObject2{
 		Details: map[string]interface{}{},
 	}
 }
@@ -40,14 +40,27 @@ func NewCustomKindInnerObject2() *CustomKindInnerObject2 {
 type CustomKindUnionType interface{}
 
 // +k8s:openapi-gen=true
-type CustomKindType1 struct {
+type CustomKindcustomKindVersionsV10SchemaType1 struct {
 	Group   string   `json:"group"`
 	Options []string `json:"options,omitempty"`
 }
 
-// NewCustomKindType1 creates a new CustomKindType1 object.
-func NewCustomKindType1() *CustomKindType1 {
-	return &CustomKindType1{}
+// NewCustomKindcustomKindVersionsV10SchemaType1 creates a new CustomKindcustomKindVersionsV10SchemaType1 object.
+func NewCustomKindcustomKindVersionsV10SchemaType1() *CustomKindcustomKindVersionsV10SchemaType1 {
+	return &CustomKindcustomKindVersionsV10SchemaType1{}
+}
+
+// +k8s:openapi-gen=true
+type CustomKindcustomKindVersionsV10SchemaType2 struct {
+	Group   string                 `json:"group"`
+	Details map[string]interface{} `json:"details"`
+}
+
+// NewCustomKindcustomKindVersionsV10SchemaType2 creates a new CustomKindcustomKindVersionsV10SchemaType2 object.
+func NewCustomKindcustomKindVersionsV10SchemaType2() *CustomKindcustomKindVersionsV10SchemaType2 {
+	return &CustomKindcustomKindVersionsV10SchemaType2{
+		Details: map[string]interface{}{},
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -65,13 +78,24 @@ func NewCustomKindType2() *CustomKindType2 {
 
 // +k8s:openapi-gen=true
 type CustomKindRecursiveList struct {
-	Val  string                   `json:"val"`
-	Next *CustomKindRecursiveList `json:"next,omitempty"`
+	Val  string                                              `json:"val"`
+	Next *CustomKindcustomKindVersionsV10SchemaRecursiveList `json:"next,omitempty"`
 }
 
 // NewCustomKindRecursiveList creates a new CustomKindRecursiveList object.
 func NewCustomKindRecursiveList() *CustomKindRecursiveList {
 	return &CustomKindRecursiveList{}
+}
+
+// +k8s:openapi-gen=true
+type CustomKindcustomKindVersionsV10SchemaRecursiveList struct {
+	Val  string                                              `json:"val"`
+	Next *CustomKindcustomKindVersionsV10SchemaRecursiveList `json:"next,omitempty"`
+}
+
+// NewCustomKindcustomKindVersionsV10SchemaRecursiveList creates a new CustomKindcustomKindVersionsV10SchemaRecursiveList object.
+func NewCustomKindcustomKindVersionsV10SchemaRecursiveList() *CustomKindcustomKindVersionsV10SchemaRecursiveList {
+	return &CustomKindcustomKindVersionsV10SchemaRecursiveList{}
 }
 
 // +k8s:openapi-gen=true
