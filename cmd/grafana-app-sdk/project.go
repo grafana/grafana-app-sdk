@@ -538,6 +538,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
+	if err != nil {
+		return err
+	}
+
 	kindGrouping, err := cmd.Flags().GetString("grouping")
 	if err != nil {
 		return err
@@ -559,6 +564,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	baseCfg := config.NewDefaultConfig()
 	baseCfg.Kinds.Grouping = kindGrouping
 	baseCfg.ManifestSelector = selector
+	baseCfg.Codegen.EnableOperatorStatusGeneration = genOperatorState
 
 	cfg, err := config.Load(genSrc, configName, baseCfg)
 	if err != nil {
