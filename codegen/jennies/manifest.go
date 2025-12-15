@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"go/format"
 	"maps"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -96,11 +97,12 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 }
 
 type ManifestGoGenerator struct {
-	Package        string
-	ProjectRepo    string
-	CodegenPath    string
-	GroupByKind    bool
-	IncludeSchemas bool
+	Package         string
+	ProjectRepo     string
+	CodegenPath     string
+	DestinationPath string
+	GroupByKind     bool
+	IncludeSchemas  bool
 }
 
 func (*ManifestGoGenerator) JennyName() string {
@@ -150,7 +152,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	files := make(codejen.Files, 0)
 	files = append(files, codejen.File{
 		Data:         formatted,
-		RelativePath: fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group),
+		RelativePath: filepath.Join(g.DestinationPath, fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group)),
 		From:         []codejen.NamedJenny{g},
 	})
 
@@ -473,6 +475,12 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				OperationId: operationID,
 			},
 		}
+		if len(sourceRoute.Extensions) > 0 {
+			targetOperation.Extensions = make(spec.Extensions)
+			for k, v := range sourceRoute.Extensions {
+				targetOperation.Extensions[k] = v
+			}
+		}
 
 		switch upperMethod {
 		case "GET":
@@ -660,6 +668,17 @@ func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[strin
 	}
 	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
 		sch.AdditionalProperties.Schema.SchemaProps = prefixReferences(sch.AdditionalProperties.Schema.SchemaProps, prefix, rootSchemas)
+	}
+	if sch.Items != nil {
+		if sch.Items.Schema != nil {
+			sch.Items.Schema.SchemaProps = prefixReferences(sch.Items.Schema.SchemaProps, prefix, rootSchemas)
+		}
+		if len(sch.Items.Schemas) > 0 {
+			for idx, item := range sch.Items.Schemas {
+				item.SchemaProps = prefixReferences(item.SchemaProps, prefix, rootSchemas)
+				sch.Items.Schemas[idx] = item
+			}
+		}
 	}
 	return sch
 }

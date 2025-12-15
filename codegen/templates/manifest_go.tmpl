@@ -3,7 +3,7 @@
 // DO NOT EDIT
 //
 
-package {{.Package}}
+package {{$.ToPackageName .Package}}
 
 import (
     "encoding/json"
@@ -22,7 +22,7 @@ import (
 SchemaProps: spec.SchemaProps{
     {{ if .Type }}Type: []string{ {{ range $index, $type := .Type }}{{ if $index }}, {{ end }}"{{$type}}"{{ end }} },{{ end }}{{ if .Format }}
     Format: "{{.Format}}",{{ end }}{{ if .Description }}
-    Description: "{{.Description}}",{{ end }}{{ if .Enum }}
+    Description: "{{ escapeQuotes .Description }}",{{ end }}{{ if .Enum }}
     Enum: []interface{}{ {{ range .Enum }}
         "{{.}}",{{ end }}
     },{{ end }}{{ if .Properties }}
@@ -37,7 +37,13 @@ SchemaProps: spec.SchemaProps{
     },{{ end }}{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
-    },{{ end }}{{ if (refString .Ref) }}
+    },{{ end }}{{ if .Items }}
+    Items: &spec.SchemaOrArray{ {{ if .Items.Schema }}
+        Schema: &spec.Schema{ {{ template "schema" .Items.Schema }} },
+        {{ else if .Items.Array }}Schemas: []spec.Schema{ {{ range .Items.Array }}
+            { {{ template "schema" . }} },{{ end }}
+        },
+        {{ end }} },{{ end }}{{ if (refString .Ref) }}
     Ref: spec.MustCreateRef("{{ .Ref | refString }}"),{{ end }}
 },{{ if .Extensions }}
 VendorExtensible: spec.VendorExtensible{
@@ -51,7 +57,7 @@ VendorExtensible: spec.VendorExtensible{
     ParameterProps: spec3.ParameterProps{
         Name: "{{.Name}}",{{ end }}{{ if .In }}
         In: "{{.In}}",{{ end }}{{ if .Description }}
-        Description: "{{.Description}}",{{ end }}{{ if .Required }}
+        Description: "{{ escapeQuotes .Description }}",{{ end }}{{ if .Required }}
         Required: {{.Required}},{{ end }}{{ if .Schema }}
         Schema: &spec.Schema{ {{ template "schema" .Schema }}
         },
@@ -66,7 +72,7 @@ MediaTypeProps: spec3.MediaTypeProps{
         {{ range $key, $example := .Examples }}"{{$key}}": {
             ExampleProps: spec3.ExampleProps{
                 {{ if $example.Summary }}Summary: "{{$example.Summary}}",{{ end }}
-                {{ if $example.Description }}Description: "{{$example.Description}}",{{ end }}
+                {{ if $example.Description }}Description: "{{ escapeQuotes $example.Description }}",{{ end }}
                 {{ if $example.Value }}Value: map[string]interface{}{
                     {{- range $k, $v := $example.Value }}
                     "{{$k}}": {{- if eq (printf "%T" $v) "string" -}}"{{$v}}"{{- else -}}{{printf "%#v" $v}}{{- end -}},
@@ -89,7 +95,7 @@ ResponsesProps: spec3.ResponsesProps{
 {{ define "response" }}
 &spec3.Response{
     ResponseProps: spec3.ResponseProps{
-        {{ if .Description }}Description: "{{.Description}}",{{ end }}
+        {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
         {{ if .Content }}Content: map[string]*spec3.MediaType{ {{ range $contentType, $mediaType := .Content }}
             "{{$contentType}}": { {{ template "mediaTypeContent" $mediaType }} },{{ end }}
         },{{ end }}
@@ -98,7 +104,7 @@ ResponsesProps: spec3.ResponsesProps{
 
 {{ define "requestBody" }}
 RequestBodyProps: spec3.RequestBodyProps{
-    {{ if .Description }}Description: "{{.Description}}",{{ end }}
+    {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
     {{ if .Required }}Required: {{.Required}},{{ end }}
     {{ if .Content }}Content: map[string]*spec3.MediaType{ {{ range $contentType, $mediaType := .Content }}
         "{{$contentType}}": { {{ template "mediaTypeContent" $mediaType }} },{{ end }}
@@ -108,12 +114,12 @@ RequestBodyProps: spec3.RequestBodyProps{
 {{ define "operation" }}
 OperationProps: spec3.OperationProps{
     {{ if .Summary }}Summary: "{{.Summary}}",{{ end }}
-    {{ if .Description }}Description: "{{.Description}}",{{ end }}
+    {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
     {{ if .OperationId }}OperationId: "{{.OperationId}}",{{ end }}
     {{ if .Tags }}Tags: []string{ {{ range $index, $tag := .Tags }}{{ if $index }}, {{ end }}"{{$tag}}"{{ end }} },{{ end }}
     {{ if .ExternalDocs }}ExternalDocs: &spec3.ExternalDocumentation{
         {{ if .ExternalDocs.URL }}URL: "{{.ExternalDocs.URL}}",{{ end }}
-        {{ if .ExternalDocs.Description }}Description: "{{.ExternalDocs.Description}}",{{ end }}
+        {{ if .ExternalDocs.Description }}Description: "{{ escapeQuotes .ExternalDocs.Description }}",{{ end }}
     },{{ end }}
     {{ if .Parameters }}Parameters: []*spec3.Parameter{ {{ range .Parameters }}
         {{ template "parameter" . }}{{ end }}
@@ -129,10 +135,15 @@ OperationProps: spec3.OperationProps{
     {{ if .Servers }}Servers: []*spec3.Server{ {{ range .Servers }}
         {
             {{ if .URL }}URL: "{{.URL}}",{{ end }}
-            {{ if .Description }}Description: "{{.Description}}",{{ end }}
+            {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
         },{{ end }}
     },{{ end }}
-},{{ end }}
+},{{ if .Extensions }}
+VendorExtensible: spec.VendorExtensible{
+    Extensions: spec.Extensions{ {{ range $key, $val := .Extensions }}
+        "{{ $key }}": {{printf "%#v" $val}},{{ end }}
+    },
+},{{ end }}{{ end }}
 
 var ({{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{ if .Schema }}
     rawSchema{{.Kind}}{{$.ToPackageName $v.Name}} = []byte({{$.ToJSONBacktickString .Schema}})
@@ -173,7 +184,7 @@ var appManifestData = app.ManifestData{
                 Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+                        Description: "{{ (escapeQuotes $props.Description) }}",{{ end }}{{ if $props.Parameters }}
                         Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
                             {{ template "parameter" . }}{{ end }}
                         },{{ end }}{{ if $props.Get }}
@@ -195,7 +206,7 @@ var appManifestData = app.ManifestData{
                 Namespaced: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Namespaced }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+                        Description: "{{ escapeQuotes $props.Description }}",{{ end }}{{ if $props.Parameters }}
                         Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
                             {{ template "parameter" . }}{{ end }}
                         },{{ end }}{{ if $props.Get }}
@@ -214,7 +225,7 @@ var appManifestData = app.ManifestData{
                 Cluster: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Cluster }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{$props.Description}}",{{ end }}{{ if $props.Parameters }}
+                        Description: "{{ escapeQuotes $props.Description }}",{{ end }}{{ if $props.Parameters }}
                         Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
                             {{ template "parameter" . }}{{ end }}
                         },{{ end }}{{ if $props.Get }}

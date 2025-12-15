@@ -66,6 +66,18 @@ func DefaultClientConfig() ClientConfig {
 		CustomMetadataIsAnyType:   false,
 		MetricsConfig:             metrics.DefaultConfig(""),
 		EnableStreamErrorHandling: true,
+		KubeConfigProvider: func(kind resource.Kind, kubeConfig rest.Config) rest.Config {
+			if kubeConfig.APIPath != "" {
+				return kubeConfig // Don't modify the kubeConfig if the APIPath is already configured
+			}
+			// If it isn't configured, set the APIPath based on the kind's group
+			if kind.Group() == "" {
+				kubeConfig.APIPath = "/api"
+			} else {
+				kubeConfig.APIPath = "/apis"
+			}
+			return kubeConfig
+		},
 		/* NegotiatedSerializerProvider: func(kind resource.Kind) runtime.NegotiatedSerializer {
 			return &KindNegotiatedSerializer{
 				Kind: kind,
