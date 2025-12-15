@@ -5,14 +5,15 @@ import (
 	"path/filepath"
 	"testing"
 
+	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 )
 
 const (
-	TestCUEDirectory         = "./testing"
 	ReferenceOutputDirectory = "../testing/golden_generated"
 )
 
@@ -20,7 +21,7 @@ func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
+	parser, err := NewParser(testingCue(t), testingConfig())
 	require.NoError(t, err)
 	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
 	require.NoError(t, err)
@@ -48,7 +49,7 @@ func TestResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
+	parser, err := NewParser(testingCue(t), testingConfig())
 	require.NoError(t, err)
 	kinds, err := parser.KindParser().Parse("customManifest")
 	require.NoError(t, err)
@@ -89,7 +90,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
+	parser, err := NewParser(testingCue(t), testingConfig())
 	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
@@ -105,10 +106,9 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 }
 
 func TestManifestGenerator(t *testing.T) {
-	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
+	cfg := testingConfig()
+	parser, err := NewParser(testingCue(t), cfg)
 	require.NoError(t, err)
-
-	cfg := parser.GetParsedConfig()
 
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("testManifest")
@@ -124,7 +124,7 @@ func TestManifestGenerator(t *testing.T) {
 }
 
 func TestManifestGoGenerator(t *testing.T) {
-	parser, err := NewParser(os.DirFS(TestCUEDirectory), "config")
+	parser, err := NewParser(testingCue(t), testingConfig())
 	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
@@ -165,4 +165,16 @@ func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 		// Use strings for easier-to-read diff in the event of a mismatch
 		assert.Equal(t, string(file), string(f.Data))
 	}
+}
+
+func testingConfig() *config.Config {
+	cfg := config.NewDefaultConfig()
+	cfg.CustomResourceDefinitions.UseCRDFormat = true
+	return cfg
+}
+
+func testingCue(t *testing.T) cue.Value {
+	root, err := LoadCue(os.DirFS("./testing"))
+	require.NoError(t, err)
+	return root
 }

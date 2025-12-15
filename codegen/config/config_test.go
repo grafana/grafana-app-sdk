@@ -33,7 +33,7 @@ config: {
 }
 `)
 
-	cfg, err := Load(val, DefaultConfigSelector)
+	cfg, err := Load(val, DefaultConfigSelector, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "group", cfg.Kinds.Grouping)
@@ -62,7 +62,7 @@ config: {
 }
 `)
 
-	cfg, err := Load(val, "config")
+	cfg, err := Load(val, "config", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "kind", cfg.Kinds.Grouping)
