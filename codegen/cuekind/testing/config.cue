@@ -1,6 +1,6 @@
 package testing
 
-configJsonCustom: {
+configJson: {
 	customResourceDefinitions: {
 		includeInManifest: true
 		useCRDFormat:      true
@@ -16,29 +16,10 @@ configJsonCustom: {
 	kinds: {
 		grouping: "group"
 	}
-	manifestSelectors: ["customManifest"]
+	manifestSelectors: ["customManifest", "testManifest"]
 }
 
-configJsonTest: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "codegen/testing/golden_generated/crd"
-		format:            "json"
-	}
-	codegen: {
-		goGenPath:    "codegen/testing/golden_generated/go/groupbygroup"
-		goModule:     "codegen-tests"
-		goModGenPath: "pkg/generated"
-		tsGenPath:    "codegen/testing/golden_generated/typescript/versioned"
-	}
-	kinds: {
-		grouping: "group"
-	}
-	manifestSelectors: ["testManifest"]
-}
-
-configYamlTest: {
+configYaml: {
 	customResourceDefinitions: {
 		includeInManifest: true
 		useCRDFormat:      true
@@ -54,26 +35,7 @@ configYamlTest: {
 	kinds: {
 		grouping: "group"
 	}
-	manifestSelectors: ["testManifest"]
-}
-
-configYamlCustom: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "codegen/testing/golden_generated/crd"
-		format:            "yaml"
-	}
-	codegen: {
-		goGenPath:    "codegen/testing/golden_generated/go/groupbygroup"
-		goModule:     "codegen-tests"
-		goModGenPath: "pkg/generated"
-		tsGenPath:    "codegen/testing/golden_generated/typescript/versioned"
-	}
-	kinds: {
-		grouping: "group"
-	}
-	manifestSelectors: ["customManifest"]
+	manifestSelectors: ["customManifest", "testManifest"]
 }
 
 configKind: {
@@ -95,7 +57,7 @@ configKind: {
 	manifestSelectors: ["customManifest"]
 }
 
-configIntegrationGen1Custom: {
+configIntegrationGen1: {
 	customResourceDefinitions: {
 		includeInManifest: true
 		useCRDFormat:      true
@@ -108,26 +70,10 @@ configIntegrationGen1Custom: {
 	kinds: {
 		grouping: "kind"
 	}
-	manifestSelectors: ["customManifest"]
+	manifestSelectors: ["testManifest", "customManifest"]
 }
 
-configIntegrationGen1Test: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		format:            "json"
-	}
-	codegen: {
-		goGenPath: "pkg/gen1"
-		tsGenPath: "ts/gen1"
-	}
-	kinds: {
-		grouping: "kind"
-	}
-	manifestSelectors: ["testManifest"]
-}
-
-configIntegrationGen2Custom: {
+configIntegrationGen2: {
 	customResourceDefinitions: {
 		includeInManifest: true
 		useCRDFormat:      true
@@ -140,21 +86,5 @@ configIntegrationGen2Custom: {
 	kinds: {
 		grouping: "group"
 	}
-	manifestSelectors: ["customManifest"]
-}
-
-configIntegrationGen2Test: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		format:            "yaml"
-	}
-	codegen: {
-		goGenPath: "pkg/gen2"
-		tsGenPath: "ts/gen2"
-	}
-	kinds: {
-		grouping: "group"
-	}
-	manifestSelectors: ["testManifest"]
+	manifestSelectors: ["testManifest", "customManifest"]
 }

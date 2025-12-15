@@ -8,22 +8,15 @@ testdir="${rootdir}/codegen/testing/golden_generated"
 echo "Regenerating golden test files from current codegen output"
 
 # Group by group
-go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="customManifest" --config "configJsonCustom"
-go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="testManifest" --config "configJsonTest"
-go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="customManifest" --config "configYamlCustom"
-go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="testManifest" --config "configYamlTest"
+go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configJson"
+go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configYaml"
 # Move the manifest files
 echo "Moving generated Manifest files to ${testdir}/manifest/"
 mv ${testdir}/crd/test-app-manifest.* "${testdir}/manifest/"
 mv ${testdir}/crd/custom-app-manifest.* "${testdir}/manifest/"
 
 # Group by kind (only customKind)
-go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="customManifest" --config "configKind"
+go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configKind"
 
 # Rename files to append .txt
 find "${testdir}" -depth -name "*.go" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;

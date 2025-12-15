@@ -74,10 +74,8 @@ jobs:
       - name: Generate code
         run: |
           cd codegen-tests
-          grafana-app-sdk generate --config configIntegrationGen1Custom
-          grafana-app-sdk generate --config configIntegrationGen1Test
-          grafana-app-sdk generate --config configIntegrationGen2Custom
-          grafana-app-sdk generate --config configIntegrationGen2Test
+          grafana-app-sdk generate --config configIntegrationGen1
+          grafana-app-sdk generate --config configIntegrationGen2
 
           # NOTE: These four are here for backwards compatibility testing using now deprecated cli flags
           grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=customManifest --crdmanifest 
