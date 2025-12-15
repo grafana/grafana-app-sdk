@@ -30,6 +30,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
@@ -168,11 +169,15 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	selector, err := cmd.Flags().GetString(selectorFlag)
+	configName, err := cmd.Flags().GetString(configFlag)
 	if err != nil {
 		return err
 	}
-	configName, err := cmd.Flags().GetString(configFlag)
+	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
+	if err != nil {
+		return err
+	}
+	useOldManifestKinds, err := cmd.Flags().GetBool("useoldmanifestkinds")
 	if err != nil {
 		return err
 	}
@@ -183,8 +188,8 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Get config
-	config, err := getLocalEnvConfig(localPath)
+	// Get envCfg
+	envCfg, err := getLocalEnvConfig(localPath)
 	if err != nil {
 		return err
 	}
@@ -205,7 +210,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Generate the k3d config (this has to be generated, as it needs to mount an absolute path on the host)
-	k3dConfig, err := generateK3dConfig(absPath, *config)
+	k3dConfig, err := generateK3dConfig(absPath, *envCfg)
 	if err != nil {
 		return err
 	}
@@ -214,7 +219,12 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	err = updateLocalConfigFromManifest(config, format, sourcePath, configName, selector)
+	// HACK: Load base config from CLI flags which will eventually be removed
+	baseConfig := config.NewDefaultConfig()
+	baseConfig.Codegen.EnableOperatorStatusGeneration = genOperatorState
+	baseConfig.Kinds.PerKindVersion = useOldManifestKinds
+
+	err = updateLocalConfigFromManifest(envCfg, baseConfig, format, sourcePath, configName)
 	if err != nil {
 		return err
 	}
@@ -223,7 +233,15 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
 		case FormatCUE:
-			parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
+			root, err := cuekind.LoadCue(os.DirFS(sourcePath))
+			if err != nil {
+				return nil, err
+			}
+			cfg, err := config.Load(root, configName, baseConfig)
+			if err != nil {
+				return nil, err
+			}
+			parser, err := cuekind.NewParser(root, cfg)
 			if err != nil {
 				return nil, err
 			}
@@ -231,7 +249,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), selector)
+			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), cfg.ManifestSelector)
 		case FormatNone:
 			return codejen.Files{}, nil
 		default:
@@ -239,7 +257,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, disablePluginMount, *config)
+	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, disablePluginMount, *envCfg)
 	if err != nil {
 		return err
 	}
@@ -247,7 +265,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	aggregateScript, err := generateAggregationScript(*config, genProps)
+	aggregateScript, err := generateAggregationScript(*envCfg, genProps)
 	if err != nil {
 		return err
 	}
@@ -807,13 +825,21 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(config *localEnvConfig, format, cuePath, configName string, selectors ...string) error {
+func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Config, format, cuePath, configName string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
 	}
 	if format == FormatCUE {
-		parser, err := cuekind.NewParser(os.DirFS(cuePath), configName)
+		root, err := cuekind.LoadCue(os.DirFS(cuePath))
+		if err != nil {
+			return err
+		}
+		cfg, err := config.Load(root, configName, baseConfig)
+		if err != nil {
+			return err
+		}
+		parser, err := cuekind.NewParser(root, cfg)
 		if err != nil {
 			return err
 		}
@@ -821,9 +847,8 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format, cuePath, conf
 		if err != nil {
 			return err
 		}
-		cfg := parser.GetParsedConfig()
 
-		fs, err := generator.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), selectors...)
+		fs, err := generator.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelector)
 		if err != nil {
 			return err
 		}
@@ -839,13 +864,13 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format, cuePath, conf
 			for _, v := range md.Spec.Versions {
 				for _, k := range v.Kinds {
 					if k.Conversion {
-						config.Webhooks.Converting = true
+						envCfg.Webhooks.Converting = true
 					}
 					if k.Admission != nil && k.Admission.SupportsAnyValidation() {
-						config.Webhooks.Validating = true
+						envCfg.Webhooks.Validating = true
 					}
 					if k.Admission != nil && k.Admission.SupportsAnyMutation() {
-						config.Webhooks.Mutating = true
+						envCfg.Webhooks.Mutating = true
 					}
 				}
 			}

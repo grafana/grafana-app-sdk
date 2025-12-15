@@ -6,19 +6,18 @@ import (
 	"os"
 	"path/filepath"
 
+	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
 const (
-	targetResource    = "resource"
-	targetModel       = "model"
-	kindGroupingGroup = "group"
-	kindGroupingKind  = "kind"
+	targetResource = "resource"
 )
 
 var generateCmd = &cobra.Command{
@@ -46,7 +45,7 @@ files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD
 Definitions will be created. Only applicable if type=kubernetes`)
 	_ = generateCmd.Flags().MarkDeprecated("defpath", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.path"))
 
-	generateCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
+	generateCmd.Flags().String("grouping", config.KindGroupingGroup, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
 	_ = generateCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
 
@@ -84,52 +83,132 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-
-	// Selector (optional)
-	selector, err := cmd.Flags().GetString(selectorFlag)
+	configSelector, err := cmd.Flags().GetString(configFlag)
+	if err != nil {
+		return err
+	}
+	manifestSelector, err := cmd.Flags().GetString(selectorFlag)
 	if err != nil {
 		return err
 	}
 
-	// Name of the cue object containing the config (optional)
-	configName, err := cmd.Flags().GetString("config")
+	// command-specific flags
+	goGenPath, err := cmd.Flags().GetString("gogenpath")
 	if err != nil {
 		return err
 	}
 
-	parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
+	tsGenPath, err := cmd.Flags().GetString("tsgenpath")
 	if err != nil {
 		return err
 	}
 
-	cfg := parser.GetParsedConfig()
-
-	if cfg.Kinds.Grouping != kindGroupingGroup && cfg.Kinds.Grouping != kindGroupingKind {
-		return fmt.Errorf("--grouping must be one of 'group'|'kind'")
+	encType, err := cmd.Flags().GetString("defencoding")
+	if err != nil {
+		return err
 	}
 
-	var files codejen.Files
+	defPath, err := cmd.Flags().GetString("defpath")
+	if err != nil {
+		return err
+	}
+
+	grouping, err := cmd.Flags().GetString("grouping")
+	if err != nil {
+		return err
+	}
+	postProcess, err := cmd.Flags().GetBool("postprocess")
+	if err != nil {
+		return err
+	}
+	noSchemasInManifest, err := cmd.Flags().GetBool("noschemasinmanifest")
+	if err != nil {
+		return err
+	}
+	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
+	if err != nil {
+		return err
+	}
+	goModule, err := cmd.Flags().GetString("gomodule")
+	if err != nil {
+		return err
+	}
+	goModGenPath, err := cmd.Flags().GetString("gomodgenpath")
+	if err != nil {
+		return err
+	}
+	useOldManifestKinds, err := cmd.Flags().GetBool("useoldmanifestkinds")
+	if err != nil {
+		return err
+	}
+	crdCompatibleManifest, err := cmd.Flags().GetBool("crdmanifest")
+	if err != nil {
+		return err
+	}
+
+	// HACK: Use flags for a base config for backwards-compatibility
+	baseConfig := &config.Config{
+		Codegen: &config.CodegenConfig{
+			GoModule:                       goModule,
+			GoModGenPath:                   goModGenPath,
+			GoGenPath:                      goGenPath,
+			TsGenPath:                      tsGenPath,
+			EnableK8sPostProcessing:        postProcess,
+			EnableOperatorStatusGeneration: genOperatorState,
+		},
+		CustomResourceDefinitions: &config.CRDConfig{
+			IncludeInManifest: !noSchemasInManifest,
+			Format:            encType,
+			Path:              defPath,
+			UseCRDFormat:      crdCompatibleManifest,
+		},
+		Kinds: &config.KindsConfig{
+			Grouping:       grouping,
+			PerKindVersion: useOldManifestKinds,
+		},
+		ManifestSelector: manifestSelector,
+	}
+
+	var genSrc any
+
 	switch format {
 	case FormatCUE:
-		files, err = generateKindsCue(parser, selector)
+		genSrc, err = cuekind.LoadCue(os.DirFS(sourcePath))
 		if err != nil {
 			return err
 		}
+	case FormatNone:
 	default:
-		return fmt.Errorf("unknown kind format '%s'", format)
+		return fmt.Errorf("unknown format '%s'", format)
 	}
 
-	for _, f := range files {
-		err = writeFile(f.RelativePath, f.Data)
+	// Load config
+	cfg, err := config.Load(genSrc, configSelector, baseConfig)
+	if err != nil {
+		return err
+	}
+
+	switch v := genSrc.(type) {
+	case cue.Value:
+		parser, err := cuekind.NewParser(v, cfg)
 		if err != nil {
 			return err
 		}
-	}
+		files, err := generateKindsCue(parser, cfg)
+		if err != nil {
+			return err
+		}
 
-	// Jennies that need to be run post-file-write
-	if cfg.Codegen.EnableK8sPostProcessing {
-		if format == FormatCUE {
-			files, err = postGenerateFilesCue(parser, selector)
+		for _, f := range files {
+			err = writeFile(f.RelativePath, f.Data)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Jennies that need to be run post-file-write
+		if cfg.Codegen.EnableK8sPostProcessing {
+			files, err = postGenerateFilesCue(parser, cfg)
 			if err != nil {
 				return err
 			}
@@ -140,13 +219,15 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 				}
 			}
 		}
+	default:
+		return fmt.Errorf("unsupported source type '%T'", v)
 	}
 
 	return nil
 }
 
 //nolint:funlen,goconst
-func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.Files, error) {
+func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Files, error) {
 	// Slightly hacky multiple generators as an intermediary while we move to a better system.
 	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
 	generatorForKinds, err := codegen.NewGenerator(parser.KindParser())
@@ -158,17 +239,15 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 		return nil, err
 	}
 
-	cfg := parser.GetParsedConfig()
-
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds()), selectors...)
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds()), cfg.ManifestSelector)
 	if err != nil {
 		return nil, err
 	}
 	for i, f := range resourceFiles {
 		resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
 	}
-	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), selectors...)
+	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +263,7 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 		if cfg.CustomResourceDefinitions.Format == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CustomResourceDefinitions.Format), selectors...)
+		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CustomResourceDefinitions.Format), cfg.ManifestSelector)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +297,7 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.CustomResourceDefinitions.IncludeInManifest, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), selectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.CustomResourceDefinitions.IncludeInManifest, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), cfg.ManifestSelector)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +308,7 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 	// Manifest CRD
 	var manifestFiles codejen.Files
 	if cfg.CustomResourceDefinitions.Format != "none" {
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), selectors...)
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelector)
 		if err != nil {
 			return nil, err
 		}
@@ -246,8 +325,7 @@ func generateKindsCue(parser *cuekind.Parser, selectors ...string) (codejen.File
 	return allFiles, nil
 }
 
-func postGenerateFilesCue(parser *cuekind.Parser, selectors ...string) (codejen.Files, error) {
-	cfg := parser.GetParsedConfig()
+func postGenerateFilesCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Files, error) {
 	repo, err := getGoModule(cfg.Codegen.GoGenPath)
 	if err != nil {
 		return nil, err
@@ -260,5 +338,5 @@ func postGenerateFilesCue(parser *cuekind.Parser, selectors ...string) (codejen.
 	if !cfg.GroupKinds() {
 		relativePath = filepath.Join(relativePath, targetResource)
 	}
-	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds()), selectors...)
+	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds()), cfg.ManifestSelector)
 }

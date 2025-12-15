@@ -14,10 +14,12 @@ import (
 	"strings"
 	"text/template"
 
+	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
@@ -86,7 +88,7 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
-	projectAddComponentCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
+	projectAddComponentCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
 
 	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
@@ -512,12 +514,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Selector (optional)
-	selector, err := cmd.Flags().GetString(selectorFlag)
-	if err != nil {
-		return err
-	}
-
 	// Name of the cue object containing the config (optional)
 	configName, err := cmd.Flags().GetString(configFlag)
 	if err != nil {
@@ -540,16 +536,34 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if kindGrouping != kindGroupingGroup && kindGrouping != kindGroupingKind {
-		return errors.New("--grouping must be one of 'group'|'kind'")
+
+	var genSrc any
+
+	switch format {
+	case FormatCUE:
+		genSrc, err = cuekind.LoadCue(os.DirFS(sourcePath))
+		if err != nil {
+			return err
+		}
+	case FormatNone:
+	default:
+		return fmt.Errorf("unknown format '%s'", format)
+	}
+
+	baseCfg := config.NewDefaultConfig()
+	baseCfg.Kinds.Grouping = kindGrouping
+
+	cfg, err := config.Load(genSrc, configName, baseCfg)
+	if err != nil {
+		return err
 	}
 
 	// Create the generator (used for generating non-static code)
 	var generator any
 	var manifestParser codegen.Parser[codegen.AppManifest]
-	switch format {
-	case FormatCUE:
-		parser, err := cuekind.NewParser(os.DirFS(sourcePath), configName)
+	switch v := genSrc.(type) {
+	case cue.Value:
+		parser, err := cuekind.NewParser(v, cfg)
 		if err != nil {
 			return err
 		}
@@ -562,7 +576,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
 
-	manifests, err := manifestParser.Parse(selector)
+	manifests, err := manifestParser.Parse(cfg.ManifestSelector)
 	if err != nil {
 		return fmt.Errorf("error parsing manifest '%s': %v", sourcePath, err)
 	}
@@ -577,7 +591,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, manifest.Properties().Group, kindGrouping == kindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), []string{cfg.ManifestSelector}, manifest.Properties().Group, kindGrouping == config.KindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -594,7 +608,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, kindGrouping == kindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), []string{cfg.ManifestSelector}, kindGrouping == config.KindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}

@@ -1,4 +1,4 @@
-package cuekind
+package config
 
 import (
 	"testing"
@@ -33,7 +33,7 @@ config: {
 }
 `)
 
-	cfg, err := parseConfig(val, "config")
+	cfg, err := Load(val, DefaultConfigSelector)
 	require.NoError(t, err)
 
 	assert.Equal(t, "group", cfg.Kinds.Grouping)
@@ -62,7 +62,7 @@ config: {
 }
 `)
 
-	cfg, err := parseConfig(val, "config")
+	cfg, err := Load(val, "config")
 	require.NoError(t, err)
 
 	assert.Equal(t, "kind", cfg.Kinds.Grouping)

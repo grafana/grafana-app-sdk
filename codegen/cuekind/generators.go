@@ -8,6 +8,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
@@ -126,7 +127,7 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(cfg *CRDConfig) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGenerator(cfg *config.CRDConfig) *codejen.JennyList[codegen.AppManifest] {
 	generator := &jennies.ManifestGenerator{
 		Encoder:        jsonEncoder,
 		FileExtension:  cfg.Format,

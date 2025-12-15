@@ -16,6 +16,7 @@ import (
 	"cuelang.org/go/cue/load"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 )
 
 const DefaultManifestSelector = "manifest"
@@ -23,29 +24,42 @@ const DefaultManifestSelector = "manifest"
 //go:embed def.cue cue.mod/module.cue
 var overlayFS embed.FS
 
-// NewParser creates a new parser instance for the given file source and configuration name.
-func NewParser(files fs.FS, configName string) (*Parser, error) {
+// NewParser creates a new parser instance for the provided CUE value and config.
+func NewParser(src cue.Value, cfg *config.Config) (*CUEParser, error) {
+	defs, err := getCUEDefinitions(cfg.Codegen.EnableOperatorStatusGeneration)
+	if err != nil {
+		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
+	}
+
+	return &CUEParser{
+		src:                  src,
+		config:               cfg,
+		loadedCUEDefinitions: defs,
+	}, nil
+}
+
+func LoadCue(files fs.FS) (cue.Value, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue
 	modFile, err := files.Open("cue.mod/module.cue")
 	if err != nil {
-		return nil, fmt.Errorf("provided fs.FS is not a valid CUE module: error opening cue.mod/module.cue: %w", err)
+		return cue.Value{}, fmt.Errorf("provided fs.FS is not a valid CUE module: error opening cue.mod/module.cue: %w", err)
 	}
 	defer modFile.Close()
 	modFileContents, err := io.ReadAll(modFile)
 	if err != nil {
-		return nil, errors.New("error reading contents of cue.mod/module.cue")
+		return cue.Value{}, errors.New("error reading contents of cue.mod/module.cue")
 	}
 	cueMod := cuecontext.New().CompileString(string(modFileContents))
 	if cueMod.Err() != nil {
-		return nil, cueMod.Err()
+		return cue.Value{}, cueMod.Err()
 	}
 	modPath, _ := cueMod.LookupPath(cue.MakePath(cue.Str("module"))).String()
 
 	overlay := make(map[string]load.Source)
 	err = ToOverlay(filepath.Join("/", modPath), files, overlay)
 	if err != nil {
-		return nil, err
+		return cue.Value{}, err
 	}
 	inst := load.Instances(nil, &load.Config{
 		Overlay:    overlay,
@@ -54,34 +68,20 @@ func NewParser(files fs.FS, configName string) (*Parser, error) {
 		Dir:        filepath.FromSlash(filepath.Join("/", modPath)),
 	})
 	if len(inst) != 1 {
-		return nil, errors.New("no data")
+		return cue.Value{}, errors.New("no data")
 	}
 	root := cuecontext.New().BuildInstance(inst[0])
 	if root.Err() != nil {
-		return nil, root.Err()
+		return cue.Value{}, root.Err()
 	}
 
-	cfg, err := parseConfig(root, configName)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse manifest config: %w", err)
-	}
-
-	defs, err := getCUEDefinitions(cfg.Codegen.EnableOperatorStatusGeneration)
-	if err != nil {
-		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
-	}
-
-	return &Parser{
-		root:                 root,
-		parsedConfig:         cfg,
-		loadedCUEDefinitions: defs,
-	}, nil
+	return root, nil
 }
 
-type Parser struct {
-	root                 cue.Value
+type CUEParser struct {
+	src                  cue.Value
 	loadedCUEDefinitions *cueDefinitions
-	parsedConfig         *ParsedConfig
+	config               *config.Config
 }
 
 type cueDefinitions struct {
@@ -100,7 +100,7 @@ func (p *parser[T]) Parse(selectors ...string) ([]T, error) {
 	return p.parseFunc(selectors...)
 }
 
-func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
+func (p *CUEParser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 	return &parser[codegen.AppManifest]{
 		parseFunc: func(s ...string) ([]codegen.AppManifest, error) {
 			if len(s) == 0 {
@@ -124,7 +124,7 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 // rather than loading the selector(s) as kinds.
 //
 //nolint:revive
-func (p *Parser) KindParser() codegen.Parser[codegen.Kind] {
+func (p *CUEParser) KindParser() codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(s ...string) ([]codegen.Kind, error) {
 			if len(s) == 0 {
@@ -147,13 +147,13 @@ func (p *Parser) KindParser() codegen.Parser[codegen.Kind] {
 // returning the parsed codegen.AppManifest object or an error.
 //
 //nolint:funlen
-func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, error) {
-	val := p.root
+func (p *CUEParser) ParseManifest(manifestSelector string) (codegen.AppManifest, error) {
+	val := p.src
 	if manifestSelector != "" {
 		val = val.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
 	}
 
-	if p.parsedConfig.Kinds.PerKindVersion {
+	if p.config.Kinds.PerKindVersion {
 		val = val.Unify(p.loadedCUEDefinitions.OldManifest)
 	} else {
 		val = val.Unify(p.loadedCUEDefinitions.Manifest)
@@ -173,7 +173,7 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 		Props: manifestProps,
 	}
 
-	if p.parsedConfig.Kinds.PerKindVersion {
+	if p.config.Kinds.PerKindVersion {
 		err = p.parseManifestKinds(manifest, val)
 	} else {
 		err = p.parseManifestVersions(manifest, val)
@@ -185,11 +185,7 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 	return manifest, nil
 }
 
-func (p *Parser) GetParsedConfig() *ParsedConfig {
-	return p.parsedConfig
-}
-
-func (p *Parser) parseManifestVersions(manifest *codegen.SimpleManifest, val cue.Value) error {
+func (p *CUEParser) parseManifestVersions(manifest *codegen.SimpleManifest, val cue.Value) error {
 	manifest.AllVersions = make([]codegen.Version, 0)
 	versionsVal := val.LookupPath(cue.MakePath(cue.Str("versions")))
 	if versionsVal.Err() != nil {
@@ -242,7 +238,7 @@ func (p *Parser) parseManifestVersions(manifest *codegen.SimpleManifest, val cue
 	return nil
 }
 
-func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Value) error {
+func (p *CUEParser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Value) error {
 	kindsVal := val.LookupPath(cue.MakePath(cue.Str("kinds")))
 	if kindsVal.Err() != nil {
 		return kindsVal.Err()
@@ -313,7 +309,7 @@ func (p *Parser) parseManifestKinds(manifest *codegen.SimpleManifest, val cue.Va
 	return nil
 }
 
-func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.VersionedKind, error) {
+func (p *CUEParser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codegen.VersionedKind, error) {
 	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
 	// This gives us default values for all fields that weren't filled out,
 	// and will create errors for required fields that may be missing.
@@ -447,7 +443,7 @@ func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
 	return nil
 }
 
-func (p *Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
+func (p *CUEParser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
 	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
 	// This gives us default values for all fields that weren't filled out,
 	// and will create errors for required fields that may be missing.
@@ -505,7 +501,7 @@ func (p *Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (code
 	return someKind, nil
 }
 
-func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[string]codegen.CustomRoute, error) {
+func (*CUEParser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[string]codegen.CustomRoute, error) {
 	if !customRoutesVal.Exists() || customRoutesVal.Err() != nil {
 		return nil, nil
 	}
