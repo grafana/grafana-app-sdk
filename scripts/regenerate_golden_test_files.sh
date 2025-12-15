@@ -4,19 +4,18 @@ set -e
 
 rootdir="$(git rev-parse --show-toplevel)"
 testdir="${rootdir}/codegen/testing/golden_generated"
-gomod="codegen-tests"
 
 echo "Regenerating golden test files from current codegen output"
 
 # Group by group
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="customManifest" --config "configJson"
+  --manifest="customManifest" --config "configJsonCustom"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="testManifest" --config "configJson"
+  --manifest="testManifest" --config "configJsonTest"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="customManifest" --config "configYaml"
+  --manifest="customManifest" --config "configYamlCustom"
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" \
-  --manifest="testManifest" --config "configYaml"
+  --manifest="testManifest" --config "configYamlTest"
 # Move the manifest files
 echo "Moving generated Manifest files to ${testdir}/manifest/"
 mv ${testdir}/crd/test-app-manifest.* "${testdir}/manifest/"

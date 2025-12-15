@@ -74,10 +74,10 @@ jobs:
       - name: Generate code
         run: |
           cd codegen-tests
-          grafana-app-sdk generate --manifest=customManifest --config configIntegrationGen1
-          grafana-app-sdk generate --manifest=testManifest --config configIntegrationGen1
-          grafana-app-sdk generate --manifest=customManifest --config configIntegrationGen2
-          grafana-app-sdk generate --manifest=testManifest --config configIntegrationGen2
+          grafana-app-sdk generate --config configIntegrationGen1Custom
+          grafana-app-sdk generate --config configIntegrationGen1Test
+          grafana-app-sdk generate --config configIntegrationGen2Custom
+          grafana-app-sdk generate --config configIntegrationGen2Test
           sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/manifestdata/*.go
           diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
