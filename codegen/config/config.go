@@ -94,7 +94,7 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		Kinds: &KindsConfig{
 			Grouping:       "kind",
-			PerKindVersion: true,
+			PerKindVersion: false,
 		},
 		CustomResourceDefinitions: &CRDConfig{
 			IncludeInManifest: true,

@@ -50,9 +50,11 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	_ = generateCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
 
 	generateCmd.Flags().Bool("postprocess", false, "Whether to run post-processing on the generated files after they are written to disk. Post-processing includes code generation based on +k8s comments on types. Post-processing will fail if the dependencies required by the generated code are absent from go.mod.")
+	generateCmd.Flags().Lookup("postprocess").NoOptDefVal = "true"
 	_ = generateCmd.Flags().MarkDeprecated("postprocess", fmt.Sprintf(deprecationMessage, "codegen.enableK8sPostProcessing"))
 
 	generateCmd.Flags().Bool("noschemasinmanifest", false, "Whether to exclude kind schemas from the generated app manifest. This flag exists to allow for codegen with recursive types in CUE until github.com/grafana/grafana-app-sdk/issues/460 is resolved.")
+	generateCmd.Flags().Lookup("noschemasinmanifest").NoOptDefVal = "true"
 	_ = generateCmd.Flags().MarkDeprecated("noschemasinmanifest", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.includeInManifest"))
 
 	generateCmd.Flags().String("gomodule", "", `module name found in go.mod. If absent it will be inferred from ./go.mod`)
@@ -62,9 +64,11 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	_ = generateCmd.Flags().MarkDeprecated("gomodgenpath", fmt.Sprintf(deprecationMessage, "codegen.goModGenPath"))
 
 	generateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
+	generateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
 	_ = generateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "kinds.perKindVersion"))
 
 	generateCmd.Flags().Bool("crdmanifest", false, "Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents. Use this flag to keep legacy behavior (CRD schemas in the manifest)")
+	generateCmd.Flags().Lookup("crdmanifest").NoOptDefVal = "true"
 	_ = generateCmd.Flags().MarkDeprecated("crdmanifest", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.useCRDFormat"))
 
 	// Don't show "usage" information when an error is returned form the command,

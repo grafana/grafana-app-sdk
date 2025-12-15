@@ -33,6 +33,7 @@ func main() {
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
 
 	rootCmd.PersistentFlags().String(selectorFlag, "manifest", "Path selector to use for the manifest")
+	_ = rootCmd.PersistentFlags().MarkDeprecated(selectorFlag, fmt.Sprintf(deprecationMessage, "codegen.manifestSelectors"))
 
 	rootCmd.PersistentFlags().Bool(genOperatorStateFlag, true, "Generate operator state code")
 	_ = rootCmd.PersistentFlags().MarkDeprecated(genOperatorStateFlag, fmt.Sprintf(deprecationMessage, "codegen.enableOperatorStatusGeneration"))
