@@ -580,7 +580,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser())
+		generator, err = codegen.NewGenerator(parser.KindParser())
 		if err != nil {
 			return err
 		}

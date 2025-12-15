@@ -44,7 +44,7 @@ type Config struct {
 
 // GroupKinds returns true if the config is set to group by kind
 func (cfg *Config) GroupKinds() bool {
-	return cfg.Kinds.Grouping == "group"
+	return cfg.Kinds.Grouping == KindGroupingGroup
 }
 
 // Load loads configuration from the given source into a Config struct.
@@ -94,7 +94,7 @@ func NewDefaultConfig() *Config {
 	return &Config{
 		Kinds: &KindsConfig{
 			Grouping:       "kind",
-			PerKindVersion: false,
+			PerKindVersion: true,
 		},
 		CustomResourceDefinitions: &CRDConfig{
 			IncludeInManifest: true,
