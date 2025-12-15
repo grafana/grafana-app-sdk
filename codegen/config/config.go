@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	DefaultConfigSelector = "config"
-	KindGroupingGroup     = "group"
-	KindGroupingKind      = "kind"
+	DefaultManifestSelector = "manifest"
+	DefaultConfigSelector   = "config"
+	KindGroupingGroup       = "group"
+	KindGroupingKind        = "kind"
 )
 
 type KindsConfig struct {
@@ -38,7 +39,7 @@ type Config struct {
 	Kinds                     *KindsConfig
 	CustomResourceDefinitions *CRDConfig
 	Codegen                   *CodegenConfig
-	ManifestSelector          string
+	ManifestSelectors         []string
 }
 
 // GroupKinds returns true if the config is set to group by kind
@@ -109,6 +110,6 @@ func NewDefaultConfig() *Config {
 			GoModGenPath:                   "",
 			EnableOperatorStatusGeneration: true,
 		},
-		ManifestSelector: "manifest",
+		ManifestSelectors: []string{DefaultManifestSelector},
 	}
 }

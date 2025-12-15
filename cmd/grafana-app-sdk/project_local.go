@@ -227,7 +227,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	baseConfig := config.NewDefaultConfig()
 	baseConfig.Codegen.EnableOperatorStatusGeneration = genOperatorState
 	baseConfig.Kinds.PerKindVersion = useOldManifestKinds
-	baseConfig.ManifestSelector = selector
+	baseConfig.ManifestSelectors = []string{selector}
 
 	err = updateLocalConfigFromManifest(envCfg, baseConfig, format, sourcePath, configName)
 	if err != nil {
@@ -254,7 +254,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), cfg.ManifestSelector)
+			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), cfg.ManifestSelectors...)
 		case FormatNone:
 			return codejen.Files{}, nil
 		default:
@@ -853,7 +853,7 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Co
 			return err
 		}
 
-		fs, err := generator.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelector)
+		fs, err := generator.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelectors...)
 		if err != nil {
 			return err
 		}

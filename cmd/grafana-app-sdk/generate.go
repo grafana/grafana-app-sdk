@@ -166,7 +166,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			Grouping:       grouping,
 			PerKindVersion: useOldManifestKinds,
 		},
-		ManifestSelector: manifestSelector,
+		ManifestSelectors: []string{manifestSelector},
 	}
 
 	var genSrc any
@@ -240,14 +240,14 @@ func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Fi
 	}
 
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds()), cfg.ManifestSelector)
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds()), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
 	for i, f := range resourceFiles {
 		resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
 	}
-	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelector)
+	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +263,7 @@ func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Fi
 		if cfg.CustomResourceDefinitions.Format == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CustomResourceDefinitions.Format), cfg.ManifestSelector)
+		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CustomResourceDefinitions.Format), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
@@ -297,7 +297,7 @@ func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Fi
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.CustomResourceDefinitions.IncludeInManifest, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), cfg.ManifestSelector)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.CustomResourceDefinitions.IncludeInManifest, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +308,7 @@ func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Fi
 	// Manifest CRD
 	var manifestFiles codejen.Files
 	if cfg.CustomResourceDefinitions.Format != "none" {
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelector)
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
@@ -338,5 +338,5 @@ func postGenerateFilesCue(parser *cuekind.CUEParser, cfg *config.Config) (codeje
 	if !cfg.GroupKinds() {
 		relativePath = filepath.Join(relativePath, targetResource)
 	}
-	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds()), cfg.ManifestSelector)
+	return generator.Generate(cuekind.PostResourceGenerationGenerator(repo, relativePath, cfg.GroupKinds()), cfg.ManifestSelectors...)
 }

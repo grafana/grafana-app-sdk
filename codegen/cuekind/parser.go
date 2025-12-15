@@ -19,8 +19,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/config"
 )
 
-const DefaultManifestSelector = "manifest"
-
 //go:embed def.cue cue.mod/module.cue
 var overlayFS embed.FS
 

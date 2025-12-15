@@ -563,7 +563,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 
 	baseCfg := config.NewDefaultConfig()
 	baseCfg.Kinds.Grouping = kindGrouping
-	baseCfg.ManifestSelector = selector
+	baseCfg.ManifestSelectors = []string{selector}
 	baseCfg.Codegen.EnableOperatorStatusGeneration = genOperatorState
 
 	cfg, err := config.Load(genSrc, configName, baseCfg)
@@ -589,7 +589,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
 
-	manifests, err := manifestParser.Parse(cfg.ManifestSelector)
+	manifests, err := manifestParser.Parse(cfg.ManifestSelectors...)
 	if err != nil {
 		return fmt.Errorf("error parsing manifest '%s': %v", sourcePath, err)
 	}
@@ -604,7 +604,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), []string{cfg.ManifestSelector}, manifest.Properties().Group, kindGrouping == config.KindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, kindGrouping == config.KindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -621,7 +621,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), []string{cfg.ManifestSelector}, kindGrouping == config.KindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, kindGrouping == config.KindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
