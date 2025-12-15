@@ -131,14 +131,14 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 }
 
 //nolint:goconst
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeNames []string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeFields []string) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
 		exclude := false
-		for _, s := range excludeNames {
+		for _, s := range excludeFields {
 			// Check if the exclude name matches either the final element of the path, or the joined path
 			if len(fieldName) > 0 && strings.EqualFold(fieldName[len(fieldName)-1], s) {
 				exclude = true
@@ -150,7 +150,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 			}
 		}
 		if exclude {
-			return nil, nil
+			return codejen.Files{}, nil
 		}
 
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
@@ -178,7 +178,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix, excludeNames)
+		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix, excludeFields)
 		if err != nil {
 			return nil, err
 		}
