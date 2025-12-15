@@ -31,7 +31,7 @@ func NewParser(src cue.Value, cfg *config.Config) (*CUEParser, error) {
 
 	return &CUEParser{
 		src:                  src,
-		config:               cfg,
+		perKindVersion:       cfg.Kinds.PerKindVersion,
 		loadedCUEDefinitions: defs,
 	}, nil
 }
@@ -79,7 +79,7 @@ func LoadCue(files fs.FS) (cue.Value, error) {
 type CUEParser struct {
 	src                  cue.Value
 	loadedCUEDefinitions *cueDefinitions
-	config               *config.Config
+	perKindVersion       bool
 }
 
 type cueDefinitions struct {
@@ -151,7 +151,7 @@ func (p *CUEParser) ParseManifest(manifestSelector string) (codegen.AppManifest,
 		val = val.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
 	}
 
-	if p.config.Kinds.PerKindVersion {
+	if p.perKindVersion {
 		val = val.Unify(p.loadedCUEDefinitions.OldManifest)
 	} else {
 		val = val.Unify(p.loadedCUEDefinitions.Manifest)
@@ -171,7 +171,7 @@ func (p *CUEParser) ParseManifest(manifestSelector string) (codegen.AppManifest,
 		Props: manifestProps,
 	}
 
-	if p.config.Kinds.PerKindVersion {
+	if p.perKindVersion {
 		err = p.parseManifestKinds(manifest, val)
 	} else {
 		err = p.parseManifestVersions(manifest, val)

@@ -22,6 +22,34 @@ _kubeObjectMetadata: {
 	}
 }
 
+#KindsConfig: {
+	grouping:       "kind" | "group" | *"kind"
+	perKindVersion: bool | *false
+}
+
+#CRDConfig: {
+	includeInManifest: bool | *true
+	format:            "json" | "yaml" | "none" | *"json"
+	path:              string | *"definitions"
+	useCRDFormat:      bool | *false
+}
+
+#CodegenConfig: {
+	goModule:                       string | *""
+	goModGenPath:                   string | *""
+	goGenPath:                      string | *"pkg/generated/"
+	tsGenPath:                      string | *"plugin/src/generated/"
+	enableK8sPostProcessing:        bool | *false
+	enableOperatorStatusGeneration: bool | *true
+}
+
+Config: {
+	customResourceDefinitions: #CRDConfig | *{}
+	codegen: #CodegenConfig | *{}
+	kinds: #KindsConfig | *{}
+	manifestSelectors: [...string] | *["manifest"]
+}
+
 Schema: {
 	// metadata contains embedded CommonMetadata and can be extended with custom string fields
 	// TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
@@ -40,7 +68,7 @@ Schema: {
 		[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|generation|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
 	}
 
-	spec:   _
+	spec: _
 
 	// cuetsy is not happy creating spec with the MinFields constraint directly
 	_specIsNonEmpty: spec & struct.MinFields(0)
@@ -78,28 +106,28 @@ SchemaWithOperatorState: Schema & {
 	operations: [...string]
 }
 #CustomRouteRequest: {
-    query?: _
-    body?: _
+	query?: _
+	body?:  _
 }
 #CustomRouteResponse: _
 #CustomRouteResponseMetadata: {
-		typeMeta: bool | *true
-		listMeta: bool | *false
-		objectMeta: bool | *false
+	typeMeta:   bool | *true
+	listMeta:   bool | *false
+	objectMeta: bool | *false
 }
 #CustomRoute: {
-		name?: =~ "^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
-    request: #CustomRouteRequest
-    response: #CustomRouteResponse
-    // responseMetadata allows codegen to include kubernetes metadata in the generated response object.
-    // It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
-    responseMetadata: #CustomRouteResponseMetadata
-    // extensions are all openAPI extensions that you wish to apply to this route.
-    extensions: {
-    	[=~"^x-(.+)$"]: _
-    }
+	name?:    =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	request:  #CustomRouteRequest
+	response: #CustomRouteResponse
+	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
+	// It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
+	responseMetadata: #CustomRouteResponseMetadata
+	// extensions are all openAPI extensions that you wish to apply to this route.
+	extensions: {
+		[=~"^x-(.+)$"]: _
+	}
 }
-#CustomRoutePath: string
+#CustomRoutePath:   string
 #CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
 #CustomRouteCapability: {
 	[#CustomRoutePath]: {
@@ -192,8 +220,7 @@ Kind: S={
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *S._codegen.go.enabled
-			config: {
-			} | *S._codegen.go.config
+			config: {} | *S._codegen.go.config
 		}
 	}
 
@@ -255,7 +282,7 @@ Version: S={
 	kinds: [...{
 		group:         S.fullGroup
 		manifestGroup: S.group
-		_codegen: S.codegen
+		_codegen:      S.codegen
 	} & Kind]
 	// routes is a map of path patterns to custom routes that will be exposed as resources for this version.
 	// entries here should not conflict with the plural names for any kinds for this version.
@@ -278,12 +305,12 @@ Manifest: S={
 	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	versions: {
 		[V=string]: {
-			name: V
+			name:          V
 			group:         S.fullGroup
 			manifestGroup: S.group
 		} & Version
 	}
-	_allVersions: [for key, _ in S.versions { key }]
+	_allVersions: [for key, _ in S.versions {key}]
 	preferredVersion: string | *(list.Sort(S._allVersions, list.Descending)[0])
 	extraPermissions: {
 		accessKinds: [...#AccessKind]
@@ -432,8 +459,7 @@ KindOld: S={
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *true
-			config: {
-			}
+			config: {}
 		}
 	}
 
