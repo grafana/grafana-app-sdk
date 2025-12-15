@@ -45,7 +45,7 @@ files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD
 Definitions will be created. Only applicable if type=kubernetes`)
 	_ = generateCmd.Flags().MarkDeprecated("defpath", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.path"))
 
-	generateCmd.Flags().String("grouping", config.KindGroupingGroup, `Kind go package grouping.
+	generateCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
 	_ = generateCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
 
