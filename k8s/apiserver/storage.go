@@ -34,7 +34,7 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 		DefaultQualifiedResource: kind.GroupVersionResource().GroupResource(),
 		SingularQualifiedResource: schema.GroupResource{
 			Group:    kind.Group(),
-			Resource: kind.Kind(),
+			Resource: strings.ToLower(kind.Kind()),
 		},
 
 		CreateStrategy: strategy,
