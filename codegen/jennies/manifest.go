@@ -475,6 +475,12 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				OperationId: operationID,
 			},
 		}
+		if len(sourceRoute.Extensions) > 0 {
+			targetOperation.Extensions = make(spec.Extensions)
+			for k, v := range sourceRoute.Extensions {
+				targetOperation.Extensions[k] = v
+			}
+		}
 
 		switch upperMethod {
 		case "GET":
@@ -662,6 +668,17 @@ func prefixReferences(sch spec.SchemaProps, prefix string, rootSchemas map[strin
 	}
 	if sch.AdditionalProperties != nil && sch.AdditionalProperties.Schema != nil {
 		sch.AdditionalProperties.Schema.SchemaProps = prefixReferences(sch.AdditionalProperties.Schema.SchemaProps, prefix, rootSchemas)
+	}
+	if sch.Items != nil {
+		if sch.Items.Schema != nil {
+			sch.Items.Schema.SchemaProps = prefixReferences(sch.Items.Schema.SchemaProps, prefix, rootSchemas)
+		}
+		if len(sch.Items.Schemas) > 0 {
+			for idx, item := range sch.Items.Schemas {
+				item.SchemaProps = prefixReferences(item.SchemaProps, prefix, rootSchemas)
+				sch.Items.Schemas[idx] = item
+			}
+		}
 	}
 	return sch
 }

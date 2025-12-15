@@ -37,7 +37,13 @@ SchemaProps: spec.SchemaProps{
     },{{ end }}{{ end }}{{ if .Required }}
     Required: []string{ {{ range .Required }}
         "{{.}}",{{ end }}
-    },{{ end }}{{ if (refString .Ref) }}
+    },{{ end }}{{ if .Items }}
+    Items: &spec.SchemaOrArray{ {{ if .Items.Schema }}
+        Schema: &spec.Schema{ {{ template "schema" .Items.Schema }} },
+        {{ else if .Items.Array }}Schemas: []spec.Schema{ {{ range .Items.Array }}
+            { {{ template "schema" . }} },{{ end }}
+        },
+        {{ end }} },{{ end }}{{ if (refString .Ref) }}
     Ref: spec.MustCreateRef("{{ .Ref | refString }}"),{{ end }}
 },{{ if .Extensions }}
 VendorExtensible: spec.VendorExtensible{
@@ -132,7 +138,12 @@ OperationProps: spec3.OperationProps{
             {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
         },{{ end }}
     },{{ end }}
-},{{ end }}
+},{{ if .Extensions }}
+VendorExtensible: spec.VendorExtensible{
+    Extensions: spec.Extensions{ {{ range $key, $val := .Extensions }}
+        "{{ $key }}": {{printf "%#v" $val}},{{ end }}
+    },
+},{{ end }}{{ end }}
 
 var ({{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{ if .Schema }}
     rawSchema{{.Kind}}{{$.ToPackageName $v.Name}} = []byte({{$.ToJSONBacktickString .Schema}})
