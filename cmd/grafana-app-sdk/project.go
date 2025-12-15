@@ -514,6 +514,12 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Selector (optional)
+	selector, err := cmd.Flags().GetString(selectorFlag)
+	if err != nil {
+		return err
+	}
+
 	// Name of the cue object containing the config (optional)
 	configName, err := cmd.Flags().GetString(configFlag)
 	if err != nil {
@@ -552,6 +558,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 
 	baseCfg := config.NewDefaultConfig()
 	baseCfg.Kinds.Grouping = kindGrouping
+	baseCfg.ManifestSelector = selector
 
 	cfg, err := config.Load(genSrc, configName, baseCfg)
 	if err != nil {

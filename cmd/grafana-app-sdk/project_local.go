@@ -169,6 +169,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	selector, err := cmd.Flags().GetString(selectorFlag)
+	if err != nil {
+		return err
+	}
 	configName, err := cmd.Flags().GetString(configFlag)
 	if err != nil {
 		return err
@@ -223,6 +227,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	baseConfig := config.NewDefaultConfig()
 	baseConfig.Codegen.EnableOperatorStatusGeneration = genOperatorState
 	baseConfig.Kinds.PerKindVersion = useOldManifestKinds
+	baseConfig.ManifestSelector = selector
 
 	err = updateLocalConfigFromManifest(envCfg, baseConfig, format, sourcePath, configName)
 	if err != nil {
