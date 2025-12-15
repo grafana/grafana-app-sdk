@@ -1,14 +1,5 @@
 package testing
 
-config: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "definitions"
-		format:            "json"
-	}
-}
-
 configJsonCustom: {
 	customResourceDefinitions: {
 		includeInManifest: true
