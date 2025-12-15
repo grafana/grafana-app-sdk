@@ -231,7 +231,7 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 }
 
 //nolint:funlen,goconst
-func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Files, error) {
+func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files, error) {
 	// Slightly hacky multiple generators as an intermediary while we move to a better system.
 	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
 	generatorForKinds, err := codegen.NewGenerator(parser.KindParser())
@@ -329,7 +329,7 @@ func generateKindsCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Fi
 	return allFiles, nil
 }
 
-func postGenerateFilesCue(parser *cuekind.CUEParser, cfg *config.Config) (codejen.Files, error) {
+func postGenerateFilesCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files, error) {
 	repo, err := getGoModule(cfg.Codegen.GoGenPath)
 	if err != nil {
 		return nil, err
