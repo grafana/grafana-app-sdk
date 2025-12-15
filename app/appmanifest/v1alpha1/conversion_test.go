@@ -36,4 +36,16 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		require.Nil(t, err)
 		assert.Equal(t, md, v1md)
 	})
+
+	t.Run("no versions", func(t *testing.T) {
+		v1alpha1 := AppManifestSpec{
+			AppName: "foo",
+		}
+		md, err := v1alpha1.ToManifestData()
+		require.NoError(t, err)
+		assert.Equal(t, app.ManifestData{
+			AppName:  "foo",
+			Versions: []app.ManifestVersion{},
+		}, md)
+	})
 }

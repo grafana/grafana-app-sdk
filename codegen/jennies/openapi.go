@@ -98,7 +98,7 @@ func (o *OpenAPI) getTargetsFunc(packagePath string, fs *codejen.FS) func(contex
 		arguments.OutputPkg = packagePath
 		arguments.OutputDir = packagePath
 		arguments.OutputFile = "zz_openapi_gen.go"
-		return generators.GetTargets(context, arguments)
+		return generators.GetOpenAPITargets(context, arguments, nil)
 	}
 }
 

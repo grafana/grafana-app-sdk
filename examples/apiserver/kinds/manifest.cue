@@ -10,6 +10,7 @@ manifest: {
 	versions: {
 			"v0alpha1": {kinds:[testKindv0alpha1]}
 	    "v1alpha1": v1alpha1
+	    "v2alpha1": v2alpha1
 	}
 	preferredVersion: "v1alpha1"
 	// extraPermissions contains any additional permissions your app may require to function.
@@ -95,6 +96,23 @@ v1alpha1: {
     		}
     	}
     }
+}
+
+// Version with only custom resource routes, no kinds
+v2alpha1: {
+	kinds: []
+	routes: {
+		namespaced: {
+			"/example": {
+				"GET": {
+					name: "getExample"
+					response: {
+						message: string
+					}
+				}
+			}
+		}
+	}
 }
 
 // Test type for go naming conflicts

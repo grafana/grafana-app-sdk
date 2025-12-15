@@ -238,6 +238,8 @@ spec:
                       additionalProperties: false
                       properties:
                         message:
+                          description: A comment containing "quotes" should not break
+                            anything
                           type: string
                         status:
                           enum:
@@ -285,6 +287,16 @@ spec:
                           items:
                             additionalProperties: false
                             properties:
+                              list:
+                                items:
+                                  additionalProperties: false
+                                  properties:
+                                    foo:
+                                      type: string
+                                  required:
+                                  - foo
+                                  type: object
+                                type: array
                               name:
                                 type: string
                               score:
@@ -292,6 +304,7 @@ spec:
                             required:
                             - name
                             - score
+                            - list
                             type: object
                           type: array
                         kind:
@@ -309,6 +322,9 @@ spec:
                       - kind
                       type: object
                 description: Default OK response
+            x-grafana-test: true
+            x-grafana-test-value:
+              val: "1"
       schema:
         spec:
           properties:
