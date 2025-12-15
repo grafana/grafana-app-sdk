@@ -1,0 +1,24 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+type CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey struct {
+	Name  string  `json:"name"`
+	Match *string `json:"match,omitempty"`
+}
+
+// NewCreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey creates a new CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey object.
+func NewCreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey() *CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey {
+	return &CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey{}
+}
+
+type CreateFoobarRequestBody struct {
+	Keys []CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey `json:"keys"`
+}
+
+// NewCreateFoobarRequestBody creates a new CreateFoobarRequestBody object.
+func NewCreateFoobarRequestBody() *CreateFoobarRequestBody {
+	return &CreateFoobarRequestBody{
+		Keys: []CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey{},
+	}
+}

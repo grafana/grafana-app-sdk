@@ -16,12 +16,25 @@ func NewGetTestKindSearchResultBody() *GetTestKindSearchResultBody {
 }
 
 // +k8s:openapi-gen=true
+type V3GetTestKindSearchResultBodyItemsList struct {
+	Foo string `json:"foo"`
+}
+
+// NewV3GetTestKindSearchResultBodyItemsList creates a new V3GetTestKindSearchResultBodyItemsList object.
+func NewV3GetTestKindSearchResultBodyItemsList() *V3GetTestKindSearchResultBodyItemsList {
+	return &V3GetTestKindSearchResultBodyItemsList{}
+}
+
+// +k8s:openapi-gen=true
 type V3GetTestKindSearchResultBodyItems struct {
-	Name  string  `json:"name"`
-	Score float64 `json:"score"`
+	Name  string                                   `json:"name"`
+	Score float64                                  `json:"score"`
+	List  []V3GetTestKindSearchResultBodyItemsList `json:"list"`
 }
 
 // NewV3GetTestKindSearchResultBodyItems creates a new V3GetTestKindSearchResultBodyItems object.
 func NewV3GetTestKindSearchResultBodyItems() *V3GetTestKindSearchResultBodyItems {
-	return &V3GetTestKindSearchResultBodyItems{}
+	return &V3GetTestKindSearchResultBodyItems{
+		List: []V3GetTestKindSearchResultBodyItemsList{},
+	}
 }

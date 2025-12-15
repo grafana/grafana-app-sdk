@@ -377,6 +377,7 @@
                                                         ],
                                                         "properties": {
                                                             "message": {
+                                                                "description": "A comment containing \"quotes\" should not break anything",
                                                                 "type": "string"
                                                             },
                                                             "status": {
@@ -448,9 +449,25 @@
                                                                     "type": "object",
                                                                     "required": [
                                                                         "name",
-                                                                        "score"
+                                                                        "score",
+                                                                        "list"
                                                                     ],
                                                                     "properties": {
+                                                                        "list": {
+                                                                            "type": "array",
+                                                                            "items": {
+                                                                                "type": "object",
+                                                                                "required": [
+                                                                                    "foo"
+                                                                                ],
+                                                                                "properties": {
+                                                                                    "foo": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "additionalProperties": false
+                                                                            }
+                                                                        },
                                                                         "name": {
                                                                             "type": "string"
                                                                         },
@@ -474,6 +491,10 @@
                                                 }
                                             }
                                         }
+                                    },
+                                    "x-grafana-test": true,
+                                    "x-grafana-test-value": {
+                                        "val": "1"
                                     }
                                 }
                             }

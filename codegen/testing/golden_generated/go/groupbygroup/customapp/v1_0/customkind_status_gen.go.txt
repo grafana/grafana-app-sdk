@@ -22,12 +22,12 @@ func NewCustomKindstatusOperatorState() *CustomKindstatusOperatorState {
 
 // +k8s:openapi-gen=true
 type CustomKindStatus struct {
-	StatusField1 string `json:"statusField1"`
 	// operatorStates is a map of operator ID to operator state evaluations.
 	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
 	OperatorStates map[string]CustomKindstatusOperatorState `json:"operatorStates,omitempty"`
 	// additionalFields is reserved for future use
 	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
+	StatusField1     string                 `json:"statusField1"`
 }
 
 // NewCustomKindStatus creates a new CustomKindStatus object.

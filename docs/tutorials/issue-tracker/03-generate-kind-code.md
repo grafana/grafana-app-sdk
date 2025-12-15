@@ -104,7 +104,7 @@ $ make generate
  * Writing file plugin/src/generated/issue/v1alpha1/types.status.gen.ts
  * Writing file definitions/issue.issuetrackerproject.ext.grafana.com.json
  * Writing file definitions/issue-tracker-project-manifest.json
- * Writing file pkg/generated/issuetrackerproject_manifest.go
+ * Writing file pkg/generated/manifestdata/issuetrackerproject_manifest.go
 ```
 That's a bunch of files written! Let's tree the directory to understand the structure a bit better.
 ```shell
@@ -142,7 +142,8 @@ $ tree .
 │       │       ├── issue_schema_gen.go
 │       │       ├── issue_spec_gen.go
 │       │       └── issue_status_gen.go
-│       └── issuetrackerproject_manifest.go
+│       ├── manifestdata
+│       │   └── issuetrackerproject_manifest.go
 └── plugin
     └── src
         └── generated
@@ -178,7 +179,8 @@ pkg/generated
 │       ├── issue_schema_gen.go
 │       ├── issue_spec_gen.go
 │       └── issue_status_gen.go
-└── issuetrackerproject_manifest.go
+├── manifestdata
+    └── issuetrackerproject_manifest.go
 
 3 directories, 7 files
 ```
@@ -193,7 +195,7 @@ Likewise, `issue_schema_gen.go` defines a `resource.Schema` for this specific ve
 in addition to a `resource.Kind` for the kind. Finally, `issue_codec_gen.go` contains code for a kubernetes-JSON-bytes<->Issue `Object` codec, 
 which is used by the `Kind` for marshaling and unmarshaling our Object when interacting with the API server.
 
-Finally, we have `issuetrackerproject_manifest.go` in the `pkg/generated` directory. This contains an in-code version of our manifest. 
+Finally, we have `issuetrackerproject_manifest.go` in the `pkg/generated/manifestdata` directory. This contains an in-code version of our manifest. 
 As we'll see a bit later, the manifest is also used in code to communicate app capabilities, so we have this in-code representation, 
 as well as an API server one.
 
