@@ -30,9 +30,12 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 		NewListFunc: func() runtime.Object {
 			return kind.ZeroListValue()
 		},
-		PredicateFunc:             matchKindFunc(kind),
-		DefaultQualifiedResource:  kind.GroupVersionResource().GroupResource(),
-		SingularQualifiedResource: kind.GroupVersionResource().GroupResource(),
+		PredicateFunc:            matchKindFunc(kind),
+		DefaultQualifiedResource: kind.GroupVersionResource().GroupResource(),
+		SingularQualifiedResource: schema.GroupResource{
+			Group:    kind.Group(),
+			Resource: kind.Kind(),
+		},
 
 		CreateStrategy: strategy,
 		UpdateStrategy: strategy,
