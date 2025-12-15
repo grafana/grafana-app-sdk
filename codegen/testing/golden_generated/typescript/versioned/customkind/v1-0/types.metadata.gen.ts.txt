@@ -9,34 +9,34 @@ export interface Metadata {
 	// ...string
 	// Have to do this gnarly regex instead
 	customMetadataField: string;
-	updateTimestamp: string;
-	createdBy: string;
+	// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
+	// Can't use this as it's not yet enforced CUE:
+	// ...string
+	// Have to do this gnarly regex instead
+	otherMetadataField: string;
 	uid: string;
 	creationTimestamp: string;
 	deletionTimestamp?: string;
 	finalizers: string[];
 	resourceVersion: string;
 	generation: number;
-	// All extensions to this metadata need to have string values (for APIServer encoding-to-annotations purposes)
-	// Can't use this as it's not yet enforced CUE:
-	// ...string
-	// Have to do this gnarly regex instead
-	otherMetadataField: string;
-	updatedBy: string;
 	labels: Record<string, string>;
+	updateTimestamp: string;
+	createdBy: string;
+	updatedBy: string;
 }
 
 export const defaultMetadata = (): Metadata => ({
 	customMetadataField: "",
-	updateTimestamp: "",
-	createdBy: "",
+	otherMetadataField: "",
 	uid: "",
 	creationTimestamp: "",
 	finalizers: [],
 	resourceVersion: "",
 	generation: 0,
-	otherMetadataField: "",
-	updatedBy: "",
 	labels: {},
+	updateTimestamp: "",
+	createdBy: "",
+	updatedBy: "",
 });
 
