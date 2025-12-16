@@ -97,6 +97,8 @@ func ReconcileActionFromResourceAction(action ResourceAction) ReconcileAction {
 		return ReconcileActionUpdated
 	case ResourceActionDelete:
 		return ReconcileActionDeleted
+	case ResourceActionResync:
+		return ReconcileActionResynced
 	default:
 		return ReconcileActionUnknown
 	}
@@ -112,6 +114,8 @@ func ResourceActionFromReconcileAction(action ReconcileAction) ResourceAction {
 		return ResourceActionUpdate
 	case ReconcileActionDeleted:
 		return ResourceActionDelete
+	case ReconcileActionResynced:
+		return ResourceActionResync
 	default:
 		return ResourceAction("")
 	}
