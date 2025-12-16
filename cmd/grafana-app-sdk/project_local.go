@@ -52,17 +52,20 @@ type localEnvConfig struct {
 	GrafanaInstallPlugins     string                    `json:"grafanaInstallPlugins" yaml:"grafanaInstallPlugins"`
 	GrafanaWithAnonymousAuth  bool                      `json:"grafanaWithAnonymousAuth" yaml:"grafanaWithAnonymousAuth"`
 	AdditionalVolumeMounts    []additionalMountedVolume `json:"additionalVolumeMounts" yaml:"additionalVolumeMounts"`
+	GrafanaEnvVars            []grafanaEnvVar           `json:"grafanaEnvVars" yaml:"grafanaEnvVars"`
+	GrafanaVolumeMounts       []grafanaVolumeMount      `json:"grafanaVolumeMounts" yaml:"grafanaVolumeMounts"`
 }
 
 type dataSourceConfig struct {
-	Access       string   `json:"access" yaml:"access"`
-	Editable     bool     `json:"editable" yaml:"editable"`
-	IsDefault    bool     `json:"isDefault" yaml:"isDefault"`
-	Name         string   `json:"name" yaml:"name"`
-	Type         string   `json:"type" yaml:"type"`
-	UID          string   `json:"uid" yaml:"uid"`
-	URL          string   `json:"url" yaml:"url"`
-	Dependencies []string `json:"dependencies" yaml:"dependencies"`
+	Access       string         `json:"access" yaml:"access"`
+	Editable     bool           `json:"editable" yaml:"editable"`
+	IsDefault    bool           `json:"isDefault" yaml:"isDefault"`
+	Name         string         `json:"name" yaml:"name"`
+	Type         string         `json:"type" yaml:"type"`
+	UID          string         `json:"uid" yaml:"uid"`
+	URL          string         `json:"url" yaml:"url"`
+	Dependencies []string       `json:"dependencies" yaml:"dependencies"`
+	JSONData     map[string]any `json:"jsonData" yaml:"jsonData"` //nolint:revive
 }
 
 type localEnvWebhookConfig struct {
@@ -75,6 +78,20 @@ type localEnvWebhookConfig struct {
 type additionalMountedVolume struct {
 	SourcePath string `json:"sourcePath" yaml:"sourcePath"`
 	MountPath  string `json:"mountPath" yaml:"mountPath"`
+}
+
+// grafanaEnvVar represents an environment variable to add to the Grafana container
+type grafanaEnvVar struct {
+	Name  string `json:"name" yaml:"name"`
+	Value string `json:"value" yaml:"value"`
+}
+
+// grafanaVolumeMount represents a volume mount to add to the Grafana container.
+// The HostPath should reference a path from additionalVolumeMounts (the k3d node mount path).
+type grafanaVolumeMount struct {
+	Name      string `json:"name" yaml:"name"`
+	MountPath string `json:"mountPath" yaml:"mountPath"`
+	HostPath  string `json:"hostPath" yaml:"hostPath"`
 }
 
 func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
@@ -344,13 +361,8 @@ func generateK3dConfig(projectRoot string, envCfg localEnvConfig) ([]byte, error
 		return nil, err
 	}
 	additionalVolumes := make([]additionalMountedVolume, 0)
-	for _, v := range envCfg.AdditionalVolumeMounts {
-		if len(v.SourcePath) > 1 && v.SourcePath[0] != '/' {
-			if v.SourcePath[0:2] == "./" {
-				v.SourcePath = v.SourcePath[2:]
-			}
-			v.SourcePath = filepath.Join(projectRoot, v.SourcePath)
-		}
+	for _, v := range config.AdditionalVolumeMounts {
+		v.SourcePath = expandPath(v.SourcePath, projectRoot)
 		additionalVolumes = append(additionalVolumes, v)
 	}
 	buf := &bytes.Buffer{}
@@ -383,6 +395,8 @@ type yamlGenProperties struct {
 	GrafanaInstallPlugins     string
 	GrafanaAnonymousAuth      string
 	APIGroups                 map[string][]string // map of group -> list of supported versions
+	GrafanaEnvVars            []grafanaEnvVar
+	GrafanaVolumeMounts       []grafanaVolumeMount
 }
 
 type yamlGenPropsCRD struct {
@@ -443,6 +457,8 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		GrafanaImage:              config.GrafanaImage,
 		GrafanaInstallPlugins:     config.GrafanaInstallPlugins,
 		APIGroups:                 make(map[string][]string),
+		GrafanaEnvVars:            config.GrafanaEnvVars,
+		GrafanaVolumeMounts:       config.GrafanaVolumeMounts,
 	}
 	props.Services = append(props.Services, yamlGenPropsService{
 		KubeName: "grafana",
@@ -727,6 +743,40 @@ func generateTiltfile() ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), err
+}
+
+// expandPath expands a path, handling ~ for home directory and relative paths.
+// If the path starts with ~, it's expanded to the user's home directory.
+// If the path is relative (doesn't start with /), it's joined with projectRoot.
+func expandPath(path, projectRoot string) string {
+	if len(path) == 0 {
+		return path
+	}
+
+	// Handle ~ expansion
+	if path[0] == '~' {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			if len(path) == 1 {
+				return home
+			}
+			if path[1] == '/' {
+				return filepath.Join(home, path[2:])
+			}
+		}
+		// If we can't get home dir, fall through to other handling
+	}
+
+	// Handle absolute paths
+	if path[0] == '/' {
+		return path
+	}
+
+	// Handle relative paths
+	if len(path) > 1 && path[0:2] == "./" {
+		path = path[2:]
+	}
+	return filepath.Join(projectRoot, path)
 }
 
 var ca = &x509.Certificate{

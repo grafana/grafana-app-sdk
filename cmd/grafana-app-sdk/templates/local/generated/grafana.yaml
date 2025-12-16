@@ -134,7 +134,9 @@ spec:
             - name: GF_INSTALL_PLUGINS
               value: "{{.GrafanaInstallPlugins}}"
             - name: GF_PATHS_CONFIG
-              value: /etc/grafana-config/grafana.ini
+              value: /etc/grafana-config/grafana.ini{{ range .GrafanaEnvVars }}
+            - name: {{.Name}}
+              value: "{{.Value}}"{{ end }}
           image: {{.GrafanaImage}}
           imagePullPolicy: IfNotPresent
           name: grafana
@@ -157,7 +159,10 @@ spec:
               name: grafana-datasources
             - mountPath: /app-aggregator
               name: grafana-apiserver-provisioning
-              readOnly: true
+              readOnly: true{{ range .GrafanaVolumeMounts }}
+            - mountPath: {{.MountPath}}
+              name: {{.Name}}
+              readOnly: true{{ end }}
       serviceAccount: grafana
       volumes:
         - configMap:
@@ -174,7 +179,10 @@ spec:
           name: grafana-datasources
         - configMap:
             name: grafana-apiserver-provisioning
-          name: grafana-apiserver-provisioning
+          name: grafana-apiserver-provisioning{{ range .GrafanaVolumeMounts }}
+        - hostPath:
+            path: {{.HostPath}}
+          name: {{.Name}}{{ end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -206,11 +214,13 @@ data:
     apiVersion: 1
     datasources:{{ range .Datasources }}
         - access: {{.Access}}
-          editable: false
+          editable: {{.Editable}}
           isDefault: {{.IsDefault}}
           name: {{.Name}}
           type: {{.Type}}
-          uid: {{.UID}}
-          url: {{.URL}}
-          version: 1{{end}}
+          uid: {{.UID}}{{ if .URL }}
+          url: {{.URL}}{{ end }}
+          version: 1{{ if .JSONData }}
+          jsonData:{{ range $key, $value := .JSONData }}
+            {{$key}}: {{$value}}{{ end }}{{ end }}{{ end }}
 {{end}}
