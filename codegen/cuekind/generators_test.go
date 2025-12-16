@@ -19,7 +19,7 @@ func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(testingCue(t), testingConfig())
+	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
 	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
 	require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(testingCue(t), testingConfig())
+	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
 	kinds, err := parser.KindParser().Parse("customManifest")
 	require.NoError(t, err)
@@ -88,7 +88,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(testingCue(t), testingConfig())
+	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
@@ -104,14 +104,13 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 }
 
 func TestManifestGenerator(t *testing.T) {
-	cfg := testingConfig()
-	parser, err := NewParser(testingCue(t), cfg)
+	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
 
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		files, err := ManifestGenerator(cfg.CustomResourceDefinitions).Generate(kinds...)
+		files, err := ManifestGenerator("json", true, true).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
@@ -122,7 +121,7 @@ func TestManifestGenerator(t *testing.T) {
 }
 
 func TestManifestGoGenerator(t *testing.T) {
-	parser, err := NewParser(testingCue(t), testingConfig())
+	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
@@ -166,7 +165,7 @@ func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 }
 
 func testingCue(t *testing.T) *Cue {
-	root, err := LoadCue(os.DirFS("./testing"), true)
+	root, err := LoadCue(os.DirFS("./testing"))
 	require.NoError(t, err)
 	return root
 }
