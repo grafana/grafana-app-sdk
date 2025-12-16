@@ -224,10 +224,15 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// HACK: Load base config from CLI flags which will eventually be removed
-	baseConfig := config.NewDefaultConfig()
-	baseConfig.Codegen.EnableOperatorStatusGeneration = genOperatorState
-	baseConfig.Kinds.PerKindVersion = useOldManifestKinds
-	baseConfig.ManifestSelectors = []string{selector}
+	baseConfig := &config.Config{
+		Kinds: &config.KindsConfig{
+			PerKindVersion: useOldManifestKinds,
+		},
+		Codegen: &config.CodegenConfig{
+			EnableOperatorStatusGeneration: genOperatorState,
+		},
+		ManifestSelectors: []string{selector},
+	}
 
 	err = updateLocalConfigFromManifest(envCfg, baseConfig, format, sourcePath, configName)
 	if err != nil {
@@ -286,8 +291,8 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 }
 
 func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
-	// Read config (try YAML first, then JSON)
-	config := localEnvConfig{
+	// Read envCfg (try YAML first, then JSON)
+	envCfg := localEnvConfig{
 		GenerateGrafanaDeployment: true,
 		GrafanaImage:              "grafana/grafana-enterprise:11.2.2",
 	}
@@ -296,7 +301,7 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = yaml.Unmarshal(cfgBytes, &config)
+		err = yaml.Unmarshal(cfgBytes, &envCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -305,14 +310,14 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = json.Unmarshal(cfgBytes, &config)
+		err = json.Unmarshal(cfgBytes, &envCfg)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		return nil, fmt.Errorf("nether %s/config.yaml nor %s/config.json not found, please run `grafana-app-sdk project local init` to generate", localPath, localPath)
 	}
-	return &config, nil
+	return &envCfg, nil
 }
 
 func getPluginID(rootPath string) (string, error) {
@@ -333,13 +338,13 @@ func getPluginID(rootPath string) (string, error) {
 	return um.ID, err
 }
 
-func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error) {
+func generateK3dConfig(projectRoot string, envCfg localEnvConfig) ([]byte, error) {
 	k3dConfigTmpl, err := template.ParseFS(localEnvFiles, "templates/local/generated/k3d-config.json")
 	if err != nil {
 		return nil, err
 	}
 	additionalVolumes := make([]additionalMountedVolume, 0)
-	for _, v := range config.AdditionalVolumeMounts {
+	for _, v := range envCfg.AdditionalVolumeMounts {
 		if len(v.SourcePath) > 1 && v.SourcePath[0] != '/' {
 			if v.SourcePath[0:2] == "./" {
 				v.SourcePath = v.SourcePath[2:]
@@ -351,7 +356,7 @@ func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error
 	buf := &bytes.Buffer{}
 	err = k3dConfigTmpl.Execute(buf, map[string]any{
 		"ProjectRoot":       projectRoot,
-		"BindPort":          strconv.Itoa(config.Port),
+		"BindPort":          strconv.Itoa(envCfg.Port),
 		"AdditionalVolumes": additionalVolumes,
 	})
 	return buf.Bytes(), err
@@ -601,14 +606,14 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 	return output.Bytes(), props, err
 }
 
-func generateAggregationScript(config localEnvConfig, genProps yamlGenProperties) ([]byte, error) {
+func generateAggregationScript(envCfg localEnvConfig, genProps yamlGenProperties) ([]byte, error) {
 	tmpl, err := template.ParseFS(localEnvFiles, "templates/local/generated/configure-grafana.sh")
 	if err != nil {
 		return nil, err
 	}
 	output := bytes.Buffer{}
 	err = tmpl.Execute(&output, scriptGenProperties{
-		Port: config.Port,
+		Port: envCfg.Port,
 		CRDs: genProps.CRDs,
 	})
 	if err != nil {
@@ -659,17 +664,17 @@ func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlG
 	return nil
 }
 
-func localGenerateGrafanaYAML(config localEnvConfig, props *yamlGenProperties, out io.Writer) error {
-	for k, v := range config.PluginJSON {
+func localGenerateGrafanaYAML(envCfg localEnvConfig, props *yamlGenProperties, out io.Writer) error {
+	for k, v := range envCfg.PluginJSON {
 		val, err := parsePluginJSONValue(v)
 		if err != nil {
 			return fmt.Errorf("unable to parse pluginJson key '%s'", k)
 		}
 		props.JSONData[k] = val
 	}
-	config.PluginSecureJSON["kubeconfig"] = "cluster"
-	config.PluginSecureJSON["kubenamespace"] = "default"
-	for k, v := range config.PluginSecureJSON {
+	envCfg.PluginSecureJSON["kubeconfig"] = "cluster"
+	envCfg.PluginSecureJSON["kubenamespace"] = "default"
+	for k, v := range envCfg.PluginSecureJSON {
 		val, err := parsePluginJSONValue(v)
 		if err != nil {
 			return fmt.Errorf("unable to parse pluginSecureJson key '%s'", k)

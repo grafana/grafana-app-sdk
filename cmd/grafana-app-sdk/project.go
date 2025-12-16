@@ -560,12 +560,17 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown format '%s'", format)
 	}
 
-	baseCfg := config.NewDefaultConfig()
-	baseCfg.Kinds.Grouping = kindGrouping
-	baseCfg.ManifestSelectors = []string{selector}
-	baseCfg.Codegen.EnableOperatorStatusGeneration = genOperatorState
+	baseConfig := &config.Config{
+		Kinds: &config.KindsConfig{
+			Grouping: kindGrouping,
+		},
+		Codegen: &config.CodegenConfig{
+			EnableOperatorStatusGeneration: genOperatorState,
+		},
+		ManifestSelectors: []string{selector},
+	}
 
-	cfg, err := config.Load(genSrc, configName, baseCfg)
+	cfg, err := config.Load(genSrc, configName, baseConfig)
 	if err != nil {
 		return err
 	}

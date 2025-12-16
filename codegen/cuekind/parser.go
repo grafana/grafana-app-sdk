@@ -12,6 +12,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
+const DefaultManifestSelector = "manifest"
+
 type Parser struct {
 	root                 cue.Value
 	perKindVersion       bool
@@ -44,7 +46,7 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 	return &parser[codegen.AppManifest]{
 		parseFunc: func(s ...string) ([]codegen.AppManifest, error) {
 			if len(s) == 0 {
-				s = []string{"manifest"}
+				s = []string{DefaultManifestSelector}
 			}
 			manifests := make([]codegen.AppManifest, 0, len(s))
 			for _, selector := range s {
@@ -60,7 +62,7 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 }
 
 // KindParser returns a Parser that returns a list of codegen.Kind.
-// If useManifest is true, it will load kinds from a manifest provided by the selector(s) in Parse (or "manifest" if no selectors are present),
+// If useManifest is true, it will load kinds from a manifest provided by the selector(s) in Parse (or DefaultManifestSelector if no selectors are present),
 // rather than loading the selector(s) as kinds.
 //
 //nolint:revive
@@ -68,7 +70,7 @@ func (p *Parser) KindParser() codegen.Parser[codegen.Kind] {
 	return &parser[codegen.Kind]{
 		parseFunc: func(s ...string) ([]codegen.Kind, error) {
 			if len(s) == 0 {
-				s = []string{"manifest"}
+				s = []string{DefaultManifestSelector}
 			}
 			kinds := make([]codegen.Kind, 0)
 			for _, selector := range s {

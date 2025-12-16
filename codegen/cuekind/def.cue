@@ -44,9 +44,9 @@ _kubeObjectMetadata: {
 }
 
 Config: {
-	customResourceDefinitions: #CRDConfig | *{}
-	codegen: #CodegenConfig | *{}
-	kinds: #KindsConfig | *{}
+	customResourceDefinitions: #CRDConfig
+	codegen:                   #CodegenConfig
+	kinds:                     #KindsConfig
 	manifestSelectors: [...string] | *["manifest"]
 }
 

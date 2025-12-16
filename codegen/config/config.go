@@ -1,7 +1,6 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 
 	"cuelang.org/go/cue"
@@ -9,10 +8,9 @@ import (
 )
 
 const (
-	DefaultManifestSelector = "manifest"
-	DefaultConfigSelector   = "config"
-	KindGroupingGroup       = "group"
-	KindGroupingKind        = "kind"
+	DefaultConfigSelector = "config"
+	KindGroupingGroup     = "group"
+	KindGroupingKind      = "kind"
 )
 
 type KindsConfig struct {
@@ -50,7 +48,7 @@ func Load(src any, selector string, baseConfig *Config) (*Config, error) {
 		selector = DefaultConfigSelector
 	}
 	if baseConfig == nil {
-		baseConfig = NewDefaultConfig()
+		baseConfig = &Config{}
 	}
 
 	var err error
@@ -64,35 +62,7 @@ func Load(src any, selector string, baseConfig *Config) (*Config, error) {
 		return nil, err
 	}
 
-	if baseConfig.Kinds.Grouping != KindGroupingGroup && baseConfig.Kinds.Grouping != KindGroupingKind {
-		return nil, errors.New("grouping must be one of 'group'|'kind'")
-	}
-
 	return baseConfig, nil
-}
-
-func NewDefaultConfig() *Config {
-	return &Config{
-		Kinds: &KindsConfig{
-			Grouping:       "kind",
-			PerKindVersion: false,
-		},
-		CustomResourceDefinitions: &CRDConfig{
-			IncludeInManifest: true,
-			Format:            "json",
-			Path:              "definitions",
-			UseCRDFormat:      false,
-		},
-		Codegen: &CodegenConfig{
-			GoGenPath:                      "pkg/generated/",
-			TsGenPath:                      "plugin/src/generated/",
-			EnableK8sPostProcessing:        false,
-			GoModule:                       "",
-			GoModGenPath:                   "",
-			EnableOperatorStatusGeneration: true,
-		},
-		ManifestSelectors: []string{DefaultManifestSelector},
-	}
 }
 
 // GroupKinds returns true if the config is set to group by kind
