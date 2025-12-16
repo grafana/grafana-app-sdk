@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
