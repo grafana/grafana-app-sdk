@@ -31,7 +31,7 @@ const (
 const deprecationMessage = "this flag is deprecated and will be removed soon, please modify your manifest config and set %s instead"
 
 func main() {
-	rootCmd.PersistentFlags().StringP(configFlag, "c", "config", "Selector (name) of the config object within the manifest")
+	rootCmd.PersistentFlags().StringP(configFlag, "c", "config", "Path selector of the config object within the manifest")
 	rootCmd.PersistentFlags().StringP(sourceFlag, "s", "kinds", "Path to directory with your codegen source files (such as a CUE module)")
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
 
