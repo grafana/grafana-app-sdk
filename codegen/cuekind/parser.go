@@ -288,46 +288,6 @@ func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codege
 	return someKind, nil
 }
 
-type cueDefinitions struct {
-	Kind        cue.Value
-	Schema      cue.Value
-	Manifest    cue.Value
-	OldKind     cue.Value
-	OldManifest cue.Value
-}
-
-// getCUEDefinitions loads CUE definitions for various types if not yet loaded,
-// and returns a cueDefinitions object with the CUE values for them.
-// revive complains about the usage of control flag, but it's not a problem here.
-// nolint:revive
-func getCUEDefinitions(defs cue.Value, genOperatorState bool) (*cueDefinitions, error) {
-	kindDef := defs.LookupPath(cue.MakePath(cue.Str("Kind")))
-	manifestDef := defs.LookupPath(cue.MakePath(cue.Str("Manifest")))
-	oldKindDef := defs.LookupPath(cue.MakePath(cue.Str("KindOld")))
-	oldManifestDef := defs.LookupPath(cue.MakePath(cue.Str("ManifestOld")))
-
-	var schemaDef cue.Value
-	if genOperatorState {
-		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
-	} else {
-		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("Schema")))
-	}
-
-	return &cueDefinitions{
-			Kind:        kindDef,
-			Schema:      schemaDef,
-			Manifest:    manifestDef,
-			OldKind:     oldKindDef,
-			OldManifest: oldManifestDef,
-		}, errors.Join(
-			kindDef.Err(),
-			schemaDef.Err(),
-			manifestDef.Err(),
-			oldKindDef.Err(),
-			oldManifestDef.Err(),
-		)
-}
-
 func (p *Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {
 	// Start by unifying the provided cue.Value with the cue.Value that contains our Kind definition.
 	// This gives us default values for all fields that weren't filled out,
@@ -460,6 +420,46 @@ func (*Parser) parseCustomRoutes(customRoutesVal cue.Value) (map[string]map[stri
 		}
 	}
 	return customRoutes, nil
+}
+
+type cueDefinitions struct {
+	Kind        cue.Value
+	Schema      cue.Value
+	Manifest    cue.Value
+	OldKind     cue.Value
+	OldManifest cue.Value
+}
+
+// getCUEDefinitions loads CUE definitions for various types if not yet loaded,
+// and returns a cueDefinitions object with the CUE values for them.
+// revive complains about the usage of control flag, but it's not a problem here.
+// nolint:revive
+func getCUEDefinitions(defs cue.Value, genOperatorState bool) (*cueDefinitions, error) {
+	kindDef := defs.LookupPath(cue.MakePath(cue.Str("Kind")))
+	manifestDef := defs.LookupPath(cue.MakePath(cue.Str("Manifest")))
+	oldKindDef := defs.LookupPath(cue.MakePath(cue.Str("KindOld")))
+	oldManifestDef := defs.LookupPath(cue.MakePath(cue.Str("ManifestOld")))
+
+	var schemaDef cue.Value
+	if genOperatorState {
+		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
+	} else {
+		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("Schema")))
+	}
+
+	return &cueDefinitions{
+			Kind:        kindDef,
+			Schema:      schemaDef,
+			Manifest:    manifestDef,
+			OldKind:     oldKindDef,
+			OldManifest: oldManifestDef,
+		}, errors.Join(
+			kindDef.Err(),
+			schemaDef.Err(),
+			manifestDef.Err(),
+			oldKindDef.Err(),
+			oldManifestDef.Err(),
+		)
 }
 
 var (
