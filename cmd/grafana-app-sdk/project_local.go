@@ -238,15 +238,18 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
 		case FormatCUE:
-			root, err := cuekind.LoadCue(os.DirFS(sourcePath))
+			cue, err := cuekind.LoadCue(os.DirFS(sourcePath))
 			if err != nil {
 				return nil, err
 			}
-			cfg, err := config.Load(root, configName, baseConfig)
+			cfg, err := config.Load(cue, configName, baseConfig)
 			if err != nil {
 				return nil, err
 			}
-			parser, err := cuekind.NewParser(root, cfg)
+			parser, err := cuekind.NewParser(cue,
+				cfg.Codegen.EnableOperatorStatusGeneration,
+				cfg.Kinds.PerKindVersion,
+			)
 			if err != nil {
 				return nil, err
 			}
@@ -836,15 +839,18 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Co
 		Spec app.ManifestData `json:"spec"`
 	}
 	if format == FormatCUE {
-		root, err := cuekind.LoadCue(os.DirFS(cuePath))
+		cue, err := cuekind.LoadCue(os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}
-		cfg, err := config.Load(root, configName, baseConfig)
+		cfg, err := config.Load(cue, configName, baseConfig)
 		if err != nil {
 			return err
 		}
-		parser, err := cuekind.NewParser(root, cfg)
+		parser, err := cuekind.NewParser(cue,
+			cfg.Codegen.EnableOperatorStatusGeneration,
+			cfg.Kinds.PerKindVersion,
+		)
 		if err != nil {
 			return err
 		}
@@ -853,7 +859,12 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Co
 			return err
 		}
 
-		fs, err := generator.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelectors...)
+		fs, err := generator.Generate(cuekind.ManifestGenerator(
+			cfg.CustomResourceDefinitions.Format,
+			cfg.CustomResourceDefinitions.IncludeInManifest,
+			cfg.CustomResourceDefinitions.UseCRDFormat),
+			cfg.ManifestSelectors...,
+		)
 		if err != nil {
 			return err
 		}

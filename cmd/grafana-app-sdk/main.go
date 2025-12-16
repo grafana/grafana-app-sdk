@@ -28,7 +28,7 @@ const (
 )
 
 func main() {
-	rootCmd.PersistentFlags().StringP(configFlag, "c", "config", "name of the config cue object within the source cue module")
+	rootCmd.PersistentFlags().StringP(configFlag, "c", "config", "Selector (name) of the config object within the manifest")
 	rootCmd.PersistentFlags().StringP(sourceFlag, "s", "kinds", "Path to directory with your codegen source files (such as a CUE module)")
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
 

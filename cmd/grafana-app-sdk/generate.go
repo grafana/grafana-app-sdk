@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -25,7 +24,7 @@ var generateCmd = &cobra.Command{
 	RunE: generateCmdFunc,
 }
 
-const deprecationMessage = "this flag is no longer effective, please modify your manifest.cue and set config.%s instead"
+const deprecationMessage = "this flag is deprecated and will be removed soon, please modify your manifest config and set %s instead"
 
 //nolint:goconst
 func setupGenerateCmd() {
@@ -193,8 +192,11 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	}
 
 	switch v := genSrc.(type) {
-	case cue.Value:
-		parser, err := cuekind.NewParser(v, cfg)
+	case *cuekind.Cue:
+		parser, err := cuekind.NewParser(v,
+			cfg.Codegen.EnableOperatorStatusGeneration,
+			cfg.Kinds.PerKindVersion,
+		)
 		if err != nil {
 			return err
 		}
@@ -312,7 +314,11 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	// Manifest CRD
 	var manifestFiles codejen.Files
 	if cfg.CustomResourceDefinitions.Format != "none" {
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cfg.CustomResourceDefinitions), cfg.ManifestSelectors...)
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(
+			cfg.CustomResourceDefinitions.Format,
+			cfg.CustomResourceDefinitions.IncludeInManifest,
+			cfg.CustomResourceDefinitions.UseCRDFormat),
+			cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}

@@ -1,93 +1,35 @@
 package cuekind
 
 import (
-	"embed"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 
 	"cuelang.org/go/cue"
-	"cuelang.org/go/cue/cuecontext"
-	"cuelang.org/go/cue/load"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/config"
 )
 
-//go:embed def.cue cue.mod/module.cue
-var overlayFS embed.FS
+type Parser struct {
+	root                 cue.Value
+	perKindVersion       bool
+	loadedCUEDefinitions *cueDefinitions
+}
 
 // NewParser creates a new parser instance for the provided CUE value and config.
-func NewParser(src cue.Value, cfg *config.Config) (*Parser, error) {
-	defs, err := getCUEDefinitions(cfg.Codegen.EnableOperatorStatusGeneration)
+func NewParser(c *Cue, enableOperatorStatusGeneration, perKindVersion bool) (*Parser, error) {
+	defs, err := getCUEDefinitions(c.Defs, enableOperatorStatusGeneration)
 	if err != nil {
 		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
 	}
 
 	return &Parser{
-		src:                  src,
-		perKindVersion:       cfg.Kinds.PerKindVersion,
+		root:                 c.Root,
+		perKindVersion:       perKindVersion,
 		loadedCUEDefinitions: defs,
 	}, nil
-}
-
-func LoadCue(files fs.FS) (cue.Value, error) {
-	// Load the FS
-	// Get the module from cue.mod/module.cue
-	modFile, err := files.Open("cue.mod/module.cue")
-	if err != nil {
-		return cue.Value{}, fmt.Errorf("provided fs.FS is not a valid CUE module: error opening cue.mod/module.cue: %w", err)
-	}
-	defer modFile.Close()
-	modFileContents, err := io.ReadAll(modFile)
-	if err != nil {
-		return cue.Value{}, errors.New("error reading contents of cue.mod/module.cue")
-	}
-	cueMod := cuecontext.New().CompileString(string(modFileContents))
-	if cueMod.Err() != nil {
-		return cue.Value{}, cueMod.Err()
-	}
-	modPath, _ := cueMod.LookupPath(cue.MakePath(cue.Str("module"))).String()
-
-	overlay := make(map[string]load.Source)
-	err = ToOverlay(filepath.Join("/", modPath), files, overlay)
-	if err != nil {
-		return cue.Value{}, err
-	}
-	inst := load.Instances(nil, &load.Config{
-		Overlay:    overlay,
-		ModuleRoot: filepath.FromSlash(filepath.Join("/", modPath)),
-		Module:     modPath,
-		Dir:        filepath.FromSlash(filepath.Join("/", modPath)),
-	})
-	if len(inst) != 1 {
-		return cue.Value{}, errors.New("no data")
-	}
-	root := cuecontext.New().BuildInstance(inst[0])
-	if root.Err() != nil {
-		return cue.Value{}, root.Err()
-	}
-
-	return root, nil
-}
-
-type Parser struct {
-	src                  cue.Value
-	loadedCUEDefinitions *cueDefinitions
-	perKindVersion       bool
-}
-
-type cueDefinitions struct {
-	Kind        cue.Value
-	Schema      cue.Value
-	Manifest    cue.Value
-	OldKind     cue.Value
-	OldManifest cue.Value
 }
 
 type parser[T any] struct {
@@ -146,7 +88,7 @@ func (p *Parser) KindParser() codegen.Parser[codegen.Kind] {
 //
 //nolint:funlen
 func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, error) {
-	val := p.src
+	val := p.root
 	if manifestSelector != "" {
 		val = val.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
 	}
@@ -344,101 +286,44 @@ func (p *Parser) parseKind(val cue.Value, kindDef, schemaDef cue.Value) (*codege
 	return someKind, nil
 }
 
+type cueDefinitions struct {
+	Kind        cue.Value
+	Schema      cue.Value
+	Manifest    cue.Value
+	OldKind     cue.Value
+	OldManifest cue.Value
+}
+
 // getCUEDefinitions loads CUE definitions for various types if not yet loaded,
 // and returns a cueDefinitions object with the CUE values for them.
 // revive complains about the usage of control flag, but it's not a problem here.
 // nolint:revive
-func getCUEDefinitions(genOperatorState bool) (*cueDefinitions, error) {
-	kindOverlay := make(map[string]load.Source)
-	err := ToOverlay("/github.com/grafana/grafana-app-sdk/codegen/cuekind", overlayFS, kindOverlay)
-	if err != nil {
-		return nil, err
-	}
-	kindInstWithDef := load.Instances(nil, &load.Config{
-		Overlay:    kindOverlay,
-		ModuleRoot: filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
-		Module:     "github.com/grafana/grafana-app-sdk/codegen/cuekind",
-		Dir:        filepath.FromSlash("/github.com/grafana/grafana-app-sdk/codegen/cuekind"),
-	})[0]
-	inst := cuecontext.New().BuildInstance(kindInstWithDef)
-	if inst.Err() != nil {
-		return nil, inst.Err()
-	}
-	kindDef := inst.LookupPath(cue.MakePath(cue.Str("Kind")))
-	if kindDef.Err() != nil {
-		return nil, kindDef.Err()
-	}
+func getCUEDefinitions(defs cue.Value, genOperatorState bool) (*cueDefinitions, error) {
+	kindDef := defs.LookupPath(cue.MakePath(cue.Str("Kind")))
+	manifestDef := defs.LookupPath(cue.MakePath(cue.Str("Manifest")))
+	oldKindDef := defs.LookupPath(cue.MakePath(cue.Str("KindOld")))
+	oldManifestDef := defs.LookupPath(cue.MakePath(cue.Str("ManifestOld")))
 
 	var schemaDef cue.Value
 	if genOperatorState {
-		schemaDef = inst.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
-		if schemaDef.Err() != nil {
-			return nil, schemaDef.Err()
-		}
+		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
 	} else {
-		schemaDef = inst.LookupPath(cue.MakePath(cue.Str("Schema")))
-		if schemaDef.Err() != nil {
-			return nil, schemaDef.Err()
-		}
-	}
-
-	manifestDef := inst.LookupPath(cue.MakePath(cue.Str("Manifest")))
-	if manifestDef.Err() != nil {
-		return nil, manifestDef.Err()
-	}
-
-	oldKindDef := inst.LookupPath(cue.MakePath(cue.Str("KindOld")))
-	if oldKindDef.Err() != nil {
-		return nil, oldKindDef.Err()
-	}
-
-	oldManifestDef := inst.LookupPath(cue.MakePath(cue.Str("ManifestOld")))
-	if oldManifestDef.Err() != nil {
-		return nil, oldManifestDef.Err()
+		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("Schema")))
 	}
 
 	return &cueDefinitions{
-		Kind:        kindDef,
-		Schema:      schemaDef,
-		Manifest:    manifestDef,
-		OldKind:     oldKindDef,
-		OldManifest: oldManifestDef,
-	}, nil
-}
-
-func ToOverlay(prefix string, vfs fs.FS, overlay map[string]load.Source) error {
-	// TODO why not just stick the prefix on automatically...?
-	if !filepath.IsAbs(prefix) {
-		return fmt.Errorf("must provide absolute path prefix when generating cue overlay, got %q", prefix)
-	}
-	err := fs.WalkDir(vfs, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		f, err := vfs.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close() // nolint: errcheck
-
-		b, err := io.ReadAll(f)
-		if err != nil {
-			return err
-		}
-
-		overlay[filepath.Join(prefix, path)] = load.FromBytes(b)
-		return nil
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
+			Kind:        kindDef,
+			Schema:      schemaDef,
+			Manifest:    manifestDef,
+			OldKind:     oldKindDef,
+			OldManifest: oldManifestDef,
+		}, errors.Join(
+			kindDef.Err(),
+			schemaDef.Err(),
+			manifestDef.Err(),
+			oldKindDef.Err(),
+			oldManifestDef.Err(),
+		)
 }
 
 func (p *Parser) parseKindOld(val cue.Value, kindDef, schemaDef cue.Value) (codegen.Kind, error) {

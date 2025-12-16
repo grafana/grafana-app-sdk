@@ -1,39 +1,18 @@
 package config
 
 import (
+	"os"
 	"testing"
 
-	"cuelang.org/go/cue/cuecontext"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseConfigOverridesDefaults(t *testing.T) {
-	ctx := cuecontext.New()
-	val := ctx.CompileString(`
-config: {
-	kinds: {
-		grouping: "group"
-		perKindVersion: true
-	}
-	customResourceDefinitions: {
-		includeInManifest: false
-		format: "yaml"
-		path: "custom/defs"
-		useCRDFormat: true
-	}
-	codegen: {
-		goModule: "github.com/example/module"
-		goModGenPath: "internal/mod"
-		goGenPath: "alt/pkg/"
-		tsGenPath: "alt/ts/"
-		enableK8sPostProcessing: true
-		enableOperatorStatusGeneration: false
-	}
-}
-`)
-
-	cfg, err := Load(val, DefaultConfigSelector, nil)
+	val, err := cuekind.LoadCue(os.DirFS("."))
+	require.NoError(t, err)
+	cfg, err := Load(val, "configA", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "group", cfg.Kinds.Grouping)
@@ -53,16 +32,9 @@ config: {
 }
 
 func TestParseConfigDefaultFallback(t *testing.T) {
-	ctx := cuecontext.New()
-	val := ctx.CompileString(`
-config: {
-	codegen: {
-		goModule: "github.com/example/module"
-	}
-}
-`)
-
-	cfg, err := Load(val, "config", nil)
+	val, err := cuekind.LoadCue(os.DirFS("."))
+	require.NoError(t, err)
+	cfg, err := Load(val, "configB", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, "kind", cfg.Kinds.Grouping)

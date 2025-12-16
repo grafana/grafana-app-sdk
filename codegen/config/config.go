@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"cuelang.org/go/cue"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
 const (
@@ -42,11 +43,6 @@ type Config struct {
 	ManifestSelectors         []string
 }
 
-// GroupKinds returns true if the config is set to group by kind
-func (cfg *Config) GroupKinds() bool {
-	return cfg.Kinds.Grouping == KindGroupingGroup
-}
-
 // Load loads configuration from the given source into a Config struct.
 // HACK: Base config is only used for backwards compatibilit with CLI flags.
 func Load(src any, selector string, baseConfig *Config) (*Config, error) {
@@ -59,8 +55,8 @@ func Load(src any, selector string, baseConfig *Config) (*Config, error) {
 
 	var err error
 	switch v := src.(type) {
-	case cue.Value:
-		err = baseConfig.loadFromCueValue(v, selector)
+	case *cuekind.Cue:
+		err = baseConfig.loadFromCue(v, selector)
 	default:
 		// unknown source type, return baseConfig
 	}
@@ -73,21 +69,6 @@ func Load(src any, selector string, baseConfig *Config) (*Config, error) {
 	}
 
 	return baseConfig, nil
-}
-
-func (cfg *Config) loadFromCueValue(val cue.Value, selector string) error {
-	configVal := val.LookupPath(cue.MakePath(cue.Str(selector)))
-	if err := configVal.Err(); err != nil {
-		_, _ = fmt.Printf("[WARN] Error parsing config from cue, using defaults: %s\n", err.Error())
-		return nil
-	}
-
-	err := configVal.Decode(cfg)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func NewDefaultConfig() *Config {
@@ -112,4 +93,35 @@ func NewDefaultConfig() *Config {
 		},
 		ManifestSelectors: []string{DefaultManifestSelector},
 	}
+}
+
+// GroupKinds returns true if the config is set to group by kind
+func (cfg *Config) GroupKinds() bool {
+	return cfg.Kinds.Grouping == KindGroupingGroup
+}
+
+// loadFromCue loads configuration from a cuekind.Cue into the Config struct.
+func (cfg *Config) loadFromCue(c *cuekind.Cue, selector string) error {
+	configDef := c.Defs.LookupPath(cue.MakePath(cue.Str("Config")))
+	if err := configDef.Err(); err != nil {
+		return err
+	}
+
+	configVal := c.Root.LookupPath(cue.MakePath(cue.Str(selector)))
+	if err := configVal.Err(); err != nil {
+		_, _ = fmt.Printf("[WARN] Config selector '%s' not found in cue, using defaults\n", selector)
+		return nil
+	}
+
+	configVal = configVal.Unify(configDef)
+	if err := configVal.Err(); err != nil {
+		return err
+	}
+
+	err := configVal.Decode(cfg)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

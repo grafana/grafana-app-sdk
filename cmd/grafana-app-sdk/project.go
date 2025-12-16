@@ -14,7 +14,6 @@ import (
 	"strings"
 	"text/template"
 
-	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
 
@@ -575,8 +574,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	var generator any
 	var manifestParser codegen.Parser[codegen.AppManifest]
 	switch v := genSrc.(type) {
-	case cue.Value:
-		parser, err := cuekind.NewParser(v, cfg)
+	case *cuekind.Cue:
+		parser, err := cuekind.NewParser(v,
+			cfg.Codegen.EnableOperatorStatusGeneration,
+			cfg.Kinds.PerKindVersion,
+		)
 		if err != nil {
 			return err
 		}

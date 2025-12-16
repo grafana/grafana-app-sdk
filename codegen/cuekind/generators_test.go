@@ -5,9 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"cuelang.org/go/cue"
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
@@ -167,14 +165,8 @@ func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 	}
 }
 
-func testingConfig() *config.Config {
-	cfg := config.NewDefaultConfig()
-	cfg.CustomResourceDefinitions.UseCRDFormat = true
-	return cfg
-}
-
-func testingCue(t *testing.T) cue.Value {
-	root, err := LoadCue(os.DirFS("./testing"))
+func testingCue(t *testing.T) *Cue {
+	root, err := LoadCue(os.DirFS("./testing"), true)
 	require.NoError(t, err)
 	return root
 }
