@@ -361,7 +361,7 @@ func generateK3dConfig(projectRoot string, envCfg localEnvConfig) ([]byte, error
 		return nil, err
 	}
 	additionalVolumes := make([]additionalMountedVolume, 0)
-	for _, v := range config.AdditionalVolumeMounts {
+	for _, v := range envCfg.AdditionalVolumeMounts {
 		v.SourcePath = expandPath(v.SourcePath, projectRoot)
 		additionalVolumes = append(additionalVolumes, v)
 	}
