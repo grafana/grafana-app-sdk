@@ -108,7 +108,7 @@ regenerate-codegen-test-files:
 
 .PHONY: generate
 generate: build
-	@$(BIN_DIR)/grafana-app-sdk generate -s=app -g=app --grouping=group --defpath=app/definitions
+	@$(BIN_DIR)/grafana-app-sdk generate -s=app
 	rm app/manifestdata/appmanifest_manifest.go
 
 .PHONY: bench

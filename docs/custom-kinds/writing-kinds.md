@@ -111,10 +111,10 @@ grafana-app-sdk generate
 ```
 (if you saved your CUE file to a directory different than `./kinds`, add `-c <CUE directory>`)
 
-Generated code by default ends up in three different places (these directories can be customized with CLI flags, use `grafana-app-sdk generate --help` to display them):
-* `pkg/generated/foo/v1`
-* `plugin/src/generated/foo/v1`
-* `definitions/`
+Generated code by default ends up in three different places (these paths can be customized via the manifest's `config` block):
+* `config.codegen.goGenPath` (for example `pkg/generated/foo/v1`)
+* `config.codegen.tsGenPath` (for example `plugin/src/generated/foo/v1`)
+* `config.customResourceDefinitions.path` (for example `definitions/`)
 
 ### `pkg/generated`
 
@@ -141,7 +141,7 @@ Additional `types.x.gen.ts` files will be generated for each subresource in your
 
 ### `definitions`
 
-The `definitions` directory holds a JSON (or YAML, depending on CLI flags) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md). 
+The `definitions` directory holds a JSON (or YAML, depending on your configuration) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md). 
 This directory also holds a generated JSON (or YAML) **manifest** for your app. This is a file which will be used in the future to register your app with the grafana API server, without needing to work with CRD's and RBAC.
 
 ### Toggling TypeScript/Go Codegen

@@ -1,5 +1,17 @@
 package app
 
+config: {
+	codegen: {
+		goGenPath: "app"
+	}
+	customResourceDefinitions: {
+		path: "app/definitions"
+	}
+	kinds: {
+		grouping: "group"
+	}
+}
+
 manifest: {
 	appName: "app-manifest"
 	groupOverride: "apps.grafana.com"

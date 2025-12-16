@@ -89,6 +89,7 @@ func setupProjectCmd() {
 
 	projectAddComponentCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
+	_ = projectAddComponentCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
 
 	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
 	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"

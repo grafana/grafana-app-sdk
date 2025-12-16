@@ -280,7 +280,7 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	if goModule == "" {
 		goModule, err = getGoModule("go.mod")
 		if err != nil {
-			return nil, fmt.Errorf("unable to load go module from ./go.mod: %w. Use --gomodule to set a value", err)
+			return nil, fmt.Errorf("unable to load go module from ./go.mod: %w. Set config.codegen.goModule with a value", err)
 		}
 	}
 

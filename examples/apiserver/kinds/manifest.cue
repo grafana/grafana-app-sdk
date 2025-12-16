@@ -5,16 +5,16 @@ config: {
 		includeInManifest: true  // manifestIncludeSchemas
 		useCRDFormat:      false // crdManifest
 		path:              "definitions"
-		format:            "json"
+		format:            "none"
 	}
 
 	kinds: {
-		grouping:       "kind"
+		grouping:       "group"
 		perKindVersion: false // useOldManifestKinds
 	}
 
 	codegen: {
-		goGenPath:                      "pkg/generated/"
+		goGenPath:                      "apis"
 		tsGenPath:                      "plugin/src/generated/"
 		enableK8sPostProcessing:        false // postProcess
 		enableOperatorStatusGeneration: true  // genOperatorState
