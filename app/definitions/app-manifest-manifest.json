@@ -851,6 +851,7 @@
                 ]
             }
         ],
+        "preferredVersion": "v1alpha2",
         "extraPermissions": {
             "accessKinds": [
                 {
