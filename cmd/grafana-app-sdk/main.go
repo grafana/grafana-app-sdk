@@ -27,13 +27,16 @@ const (
 	configFlag           = "config"
 )
 
+// Deprecation message template
+const deprecationMessage = "this flag is deprecated and will be removed soon, please modify your manifest config and set %s instead"
+
 func main() {
 	rootCmd.PersistentFlags().StringP(configFlag, "c", "config", "Selector (name) of the config object within the manifest")
 	rootCmd.PersistentFlags().StringP(sourceFlag, "s", "kinds", "Path to directory with your codegen source files (such as a CUE module)")
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
 
 	rootCmd.PersistentFlags().String(selectorFlag, "manifest", "Path selector to use for the manifest")
-	_ = rootCmd.PersistentFlags().MarkDeprecated(selectorFlag, fmt.Sprintf(deprecationMessage, "codegen.manifestSelectors"))
+	_ = rootCmd.PersistentFlags().MarkDeprecated(selectorFlag, fmt.Sprintf(deprecationMessage, "manifestSelectors"))
 
 	rootCmd.PersistentFlags().Bool(genOperatorStateFlag, true, "Generate operator state code")
 	_ = rootCmd.PersistentFlags().MarkDeprecated(genOperatorStateFlag, fmt.Sprintf(deprecationMessage, "codegen.enableOperatorStatusGeneration"))

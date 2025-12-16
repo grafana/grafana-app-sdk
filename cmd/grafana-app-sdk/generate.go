@@ -24,8 +24,6 @@ var generateCmd = &cobra.Command{
 	RunE: generateCmdFunc,
 }
 
-const deprecationMessage = "this flag is deprecated and will be removed soon, please modify your manifest config and set %s instead"
-
 //nolint:goconst
 func setupGenerateCmd() {
 	generateCmd.PersistentFlags().StringP("gogenpath", "g", "pkg/generated/",
