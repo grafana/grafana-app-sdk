@@ -181,6 +181,15 @@ func projectInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	configFileContents, err := templates.ReadFile("templates/config.cue.tmpl")
+	if err != nil {
+		return err
+	}
+	err = writeFileWithOverwriteConfirm(filepath.Join(path, "kinds", "config.cue"), configFileContents)
+	if err != nil {
+		return err
+	}
+
 	// Initial empty project directory structure
 	err = checkAndMakePath(filepath.Join(path, "pkg"))
 	if err != nil {

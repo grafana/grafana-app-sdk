@@ -1,28 +1,5 @@
 package kinds
 
-// config contains global code generation configuration options for the app. 
-// You can modify this as you see fit. These are the defaults:
-config: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "definitions"
-		format:            "json"
-	}
-
-	kinds: {
-		grouping:       "kind"
-		perKindVersion: false
-	}
-
-	codegen: {
-		goGenPath:                      "pkg/generated/"
-		tsGenPath:                      "plugin/src/generated/"
-		enableK8sPostProcessing:        false
-		enableOperatorStatusGeneration: true
-	}
-}
-
 manifest: {
 	// appName is the unique name of your app. It is used to reference the app from other config objects,
 	// and to generate the group used by your app in the app platform API.

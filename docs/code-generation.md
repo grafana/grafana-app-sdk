@@ -9,7 +9,7 @@ Code generation done by the grafana-app-sdk can be broadly split into two bucket
 Code generation turns kinds written in CUE into go and TypeScript code which can be used to write your app logic. 
 A full breakdown on writing CUE kinds and using them with the CLI's code generation can be found in the [Writing Kinds](./custom-kinds/writing-kinds.md) document.
 
-Kind codegen uses `grafana-app-sdk generate` as its base command. Generation settings can be supplied through CLI flags or, preferably, via the manifest's top-level `config` block. Legacy flags such as `--gogenpath`, `--tsgenpath`, `--defencoding`, and `--defpath` remain available but are deprecated; prefer configuring the manifest instead. A minimal example looks like:
+Kind codegen uses `grafana-app-sdk generate` as its base command. Generation settings can be supplied through CLI flags or, preferably, via `config.cue`. The following is an example `config.cue` for kind code generation:
 ```cue
 config: {
     codegen: {
@@ -24,10 +24,6 @@ config: {
     kinds: {
         grouping: "kind"
     }
-}
-
-manifest: {
-    // ...
 }
 ```
 `grafana-app-sdk generate` scans the `source` directory for CUE files, and parses all top-level fields in all present CUE files as CUE kinds. If kind validation encounters any errors, no files will be written, and the validation error(s) will be printed out. On successful generation: 
