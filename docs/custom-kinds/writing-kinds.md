@@ -114,7 +114,7 @@ grafana-app-sdk generate
 Generated code by default ends up in three different places (these paths can be customized via the manifest's `config` block):
 * `config.codegen.goGenPath` (for example `pkg/generated/foo/v1`)
 * `config.codegen.tsGenPath` (for example `plugin/src/generated/foo/v1`)
-* `config.customResourceDefinitions.path` (for example `definitions/`)
+* `config.definitions.path` (for example `definitions/`)
 
 ### `pkg/generated`
 

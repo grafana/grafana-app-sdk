@@ -35,7 +35,7 @@ config: {
 `grafana-app-sdk generate` scans the `source` directory for CUE files, and parses all top-level fields in all present CUE files as CUE kinds. If kind validation encounters any errors, no files will be written, and the validation error(s) will be printed out. On successful generation: 
 * kind go code will be written to the path in `config.codegen.goGenPath`, with a package for each unique kind-version combination
 * kind TypeScript code will be written to the path in `config.codegen.tsGenPath`, with a folder for each unique kind-version combination
-* kind CRD files and app manifest will be written to `config.customResourceDefinitions.path`, encoded according to `config.customResourceDefinitions.format` (set it to `"none"` to disable CRD output)
+* kind CRD files and app manifest will be written to `config.definitions.path`, encoded according to `config.definitions.format` (set it to `"none"` to disable CRD output)
 
 > [!IMPORTANT]
 > Because the interfaces that the grafana-app-sdk libraries use can change, be sure to run kind code generation using a version of the `grafana-app-sdk` CLI that matches the version of the dependency you use in your project. Whenever you update the dependency, make sure you re-run the kind code generation as well.

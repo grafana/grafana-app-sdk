@@ -4,7 +4,7 @@ config: {
 	codegen: {
 		goGenPath: "app"
 	}
-	customResourceDefinitions: {
+	definitions: {
 		path: "app/definitions"
 	}
 	kinds: {
