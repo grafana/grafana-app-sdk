@@ -1,36 +1,12 @@
 # Generating Kind Code
 
 Now that we have our kind and schema defined, we want to generate code from them that we can use. 
-To do this, we need to add the kind to our **manifest**. The manifest is information about our app,
-including the versions and kinds it provides, as well as configuration options for code generation. 
-If we don't add our kind to the manifest, it isn't considered part of our app. 
+To do this, we need to add the kind to our **manifest**. The manifest is information about our app, 
+including the versions and kinds it provides. If we don't add our kind to the manifest, it isn't considered part of our app. 
 
 Our project init created a default manifest for us, found in `./kinds/manifest.cue`:
 ```cue
 package kinds
-
-// config contains global code generation configuration options for the app. 
-// You can modify this as you see fit. These are the defaults:
-config: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      false
-		path:              "definitions"
-		format:            "json"
-	}
-
-	kinds: {
-		grouping:       "kind"
-		perKindVersion: false
-	}
-
-	codegen: {
-		goGenPath:                      "pkg/generated/"
-		tsGenPath:                      "plugin/src/generated/"
-		enableK8sPostProcessing:        false
-		enableOperatorStatusGeneration: true
-	}
-}
 
 manifest: {
 	// appName is the unique name of your app. It is used to reference the app from other config objects,
