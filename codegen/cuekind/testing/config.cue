@@ -88,3 +88,7 @@ configIntegrationGen2: {
 	}
 	manifestSelectors: ["testManifest", "customManifest"]
 }
+
+configIntegrationGen3: {
+	manifestSelectors: ["customManifest"]
+}
