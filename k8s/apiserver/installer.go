@@ -505,22 +505,22 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	hasEnabledRoutes := make(map[string]bool)
 	for _, v := range r.appConfig.ManifestData.Versions {
 		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
+		for routePath := range v.Routes.Namespaced {
+			if r.isCustomRouteEnabled(gv, routePath) {
+				hasEnabledRoutes[gv.Version] = true
+				break
+			}
+		}
+		for routePath := range v.Routes.Cluster {
+			if r.isCustomRouteEnabled(gv, routePath) {
+				hasEnabledRoutes[gv.Version] = true
+				break
+			}
+		}
 		if _, ok := kindsByGV[gv]; ok {
 			continue
 		}
 		if !slices.Contains(apiGroupInfo.PrioritizedVersions, gv) {
-			for routePath := range v.Routes.Namespaced {
-				if r.isCustomRouteEnabled(schema.GroupVersion{Group: gv.Group, Version: gv.Version}, routePath) {
-					hasEnabledRoutes[gv.Version] = true
-					break
-				}
-			}
-			for routePath := range v.Routes.Cluster {
-				if r.isCustomRouteEnabled(schema.GroupVersion{Group: gv.Group, Version: gv.Version}, routePath) {
-					hasEnabledRoutes[gv.Version] = true
-					break
-				}
-			}
 			if hasEnabledRoutes[gv.Version] {
 				// skip this version because none of the custom routes are enabled
 				continue
@@ -548,7 +548,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			return errors.New("could not register custom routes: server.RegisteredWebServices() is nil")
 		}
 		for _, ver := range r.ManifestData().Versions {
-			if len(ver.Routes.Namespaced) == 0 && len(ver.Routes.Cluster) == 0 && !hasEnabledRoutes[ver.Name] {
+			if !hasEnabledRoutes[ver.Name] {
 				// No resource routes for this version
 				continue
 			}
