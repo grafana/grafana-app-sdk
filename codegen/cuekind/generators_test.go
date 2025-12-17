@@ -1,40 +1,33 @@
 package cuekind
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/grafana/codejen"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 )
 
 const (
-	TestCUEDirectory         = "./testing"
 	ReferenceOutputDirectory = "../testing/golden_generated"
 )
-
-var jsonEncoder = func(v any) ([]byte, error) {
-	return json.MarshalIndent(v, "", "    ")
-}
 
 func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser()
-	require.Nil(t, err)
-	kinds, err := parser.KindParser(ParseConfig{
-		GenOperatorState: true,
-	}).Parse(os.DirFS(TestCUEDirectory), "customManifest", "testManifest")
-	require.Nil(t, err)
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
+	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
+	require.NoError(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
 		files, err := CRDGenerator(jsonEncoder, "json").Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 3)
 		// Check content against the golden files
@@ -43,7 +36,7 @@ func TestCRDGenerator(t *testing.T) {
 
 	t.Run("YAML", func(t *testing.T) {
 		files, err := CRDGenerator(yaml.Marshal, "yaml").Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 3)
 		// Check content against the golden files
@@ -55,20 +48,16 @@ func TestResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser()
-	require.Nil(t, err)
-	kinds, err := parser.KindParser(ParseConfig{
-		GenOperatorState: true,
-	}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
-	require.Nil(t, err)
-	sameGroupKinds, err := parser.KindParser(ParseConfig{
-		GenOperatorState: true,
-	}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
-	require.Nil(t, err)
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
+	kinds, err := parser.KindParser().Parse("customManifest")
+	require.NoError(t, err)
+	sameGroupKinds, err := parser.KindParser().Parse("testManifest")
+	require.NoError(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
 		files, err := ResourceGenerator(false).Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
 		assert.Len(t, files, 12, "should be 12 files generated, got %d", len(files))
@@ -78,7 +67,7 @@ func TestResourceGenerator(t *testing.T) {
 
 	t.Run("group by group", func(t *testing.T) {
 		files, err := ResourceGenerator(true).Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
 		assert.Len(t, files, 12, "should be 12 files generated, got %d", len(files))
@@ -88,7 +77,7 @@ func TestResourceGenerator(t *testing.T) {
 
 	t.Run("group by group, multiple kinds", func(t *testing.T) {
 		files, err := ResourceGenerator(true).Generate(sameGroupKinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))
 		// Check content against the golden files
@@ -100,16 +89,14 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser()
-	require.Nil(t, err)
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
-		kinds, err := parser.KindParser(ParseConfig{
-			GenOperatorState: true,
-		}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
-		require.Nil(t, err)
+		kinds, err := parser.KindParser().Parse("customManifest")
+		require.NoError(t, err)
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 8)
 		// Check content against the golden files
@@ -118,16 +105,14 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 }
 
 func TestManifestGenerator(t *testing.T) {
-	parser, err := NewParser()
-	require.Nil(t, err)
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
 
 	t.Run("resource", func(t *testing.T) {
-		kinds, err := parser.ManifestParser(ParseConfig{
-			GenOperatorState: true,
-		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
-		require.Nil(t, err)
-		files, err := ManifestGenerator(yaml.Marshal, "yaml", true, true).Generate(kinds...)
-		require.Nil(t, err)
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+		files, err := ManifestGenerator("json", true, jennies.VersionV1Alpha1).Generate(kinds...)
+		require.NoError(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
@@ -137,16 +122,14 @@ func TestManifestGenerator(t *testing.T) {
 }
 
 func TestManifestGoGenerator(t *testing.T) {
-	parser, err := NewParser()
-	require.Nil(t, err)
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
-		kinds, err := parser.ManifestParser(ParseConfig{
-			GenOperatorState: true,
-		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
-		require.Nil(t, err)
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
 		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		// 14 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), +1 client per version (3)
 		require.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
@@ -157,12 +140,10 @@ func TestManifestGoGenerator(t *testing.T) {
 	})
 
 	t.Run("group by kind", func(t *testing.T) {
-		kinds, err := parser.ManifestParser(ParseConfig{
-			GenOperatorState: true,
-		}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
-		require.Nil(t, err)
+		kinds, err := parser.ManifestParser().Parse("customManifest")
+		require.NoError(t, err)
 		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Check number of files generated
 		// 3 -> manifest, client v0_0, client v1_0
 		assert.Len(t, files, 3)
@@ -177,9 +158,15 @@ func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {
 	for _, f := range files {
 		// Check if there's a golden generated file to compare against
 		file, err := os.ReadFile(filepath.Join(ReferenceOutputDirectory, pathPrefix, f.RelativePath+".txt"))
-		require.Nil(t, err)
+		require.NoError(t, err)
 		// Compare the contents of the file to the generated contents
 		// Use strings for easier-to-read diff in the event of a mismatch
 		assert.Equal(t, string(file), string(f.Data))
 	}
+}
+
+func testingCue(t *testing.T) *Cue {
+	root, err := LoadCue(os.DirFS("./testing"))
+	require.NoError(t, err)
+	return root
 }
