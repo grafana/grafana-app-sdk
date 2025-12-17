@@ -23,25 +23,39 @@ _kubeObjectMetadata: {
 }
 
 #KindsConfig: {
+	// grouping mirrors the deprecated --grouping CLI flag and determines how generated Go packages are arranged.
 	grouping:       "group" | *"kind"
+	// perKindVersion replaces the deprecated --useoldmanifestkinds flag to keep the legacy manifest layout where kinds own versions.
 	perKindVersion: bool | *false
 }
 
 #DefinitionsConfig: {
-	genManifest:     bool | *true             // whether to generate the manifest file
-	genCRDs:         bool | *true             // whether to generate CRD files for each kind
-	path:            string | *"definitions"  // path of definition files
-	encoding:        *"json" | "yaml"         // encoding format of definition files
-	manifestVersion: "v1alpha1" | *"v1alpha2" // valid manifest versions, `useCRDFormat` tells it to use "v1alpha1"
-	manifestSchemas: bool | *true             // not even sure if we want to include this option, as it was there to allow turning off the schemas in the manifest when generating recursive schemas caused a stack overflow
+	// genManifest controls whether manifest files are written; the old --defencoding=none flag disabled this output.
+	genManifest:     bool | *true
+	// genCRDs controls CRD emission and was also toggled off when --defencoding=none was set in the CLI.
+	genCRDs:         bool | *true
+	// path matches the deprecated --defpath flag and sets where definition files are written.
+	path:            string | *"definitions"
+	// encoding replaces the --defencoding flag for choosing JSON or YAML serialization of CRDs and manifests.
+	encoding:        *"json" | "yaml"
+	// manifestVersion supersedes the --crdmanifest flag, letting you pin the manifest schema format (legacy v1alpha1 vs default v1alpha2).
+	manifestVersion: "v1alpha1" | *"v1alpha2"
+	// manifestSchemas corresponds to the --noschemasinmanifest flag, allowing schema omission when recursive types caused issues.
+	manifestSchemas: bool | *true
 }
 
 #CodegenConfig: {
+	// goModule replaces the deprecated --gomodule flag for explicitly setting the module path.
 	goModule:                       string | *""
+	// goModGenPath supersedes --gomodgenpath and anchors generated Go output relative to the module root.
 	goModGenPath:                   string | *""
+	// goGenPath matches the --gogenpath flag and defines the Go code output directory.
 	goGenPath:                      string | *"pkg/generated/"
+	// tsGenPath mirrors the --tsgenpath flag and configures the TypeScript output directory.
 	tsGenPath:                      string | *"plugin/src/generated/"
+	// enableK8sPostProcessing takes the place of --postprocess to run Kubernetes code generators after writing files.
 	enableK8sPostProcessing:        bool | *false
+	// enableOperatorStatusGeneration replaces the root --genoperatorstate flag and toggles status helpers in generated code.
 	enableOperatorStatusGeneration: bool | *true
 }
 
