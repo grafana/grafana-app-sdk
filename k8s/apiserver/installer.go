@@ -548,7 +548,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			return errors.New("could not register custom routes: server.RegisteredWebServices() is nil")
 		}
 		for _, ver := range r.ManifestData().Versions {
-			if len(ver.Routes.Namespaced) == 0 && len(ver.Routes.Cluster) == 0 && hasEnabledRoutes[ver.Name] {
+			if len(ver.Routes.Namespaced) == 0 && len(ver.Routes.Cluster) == 0 && !hasEnabledRoutes[ver.Name] {
 				// No resource routes for this version
 				continue
 			}
