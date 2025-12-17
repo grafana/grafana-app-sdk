@@ -205,7 +205,7 @@ func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, reso
 }
 
 // SetResourceConfig sets a ResourceConfig for the installer, which will be used to check each kind and route
-// when installing the APIs. Custom routes will be matched using their path as the resource.
+// when installing the APIs. Custom routes will be matched using the first slash-separated segment of their path as the resource.
 // Providing a `nil` ResourceConfig will remove any resourceConfig checking (this is the default behavior).
 func (r *defaultInstaller) SetResourceConfig(resourceConfig *serverstorage.ResourceConfig) {
 	r.resourceConfig = resourceConfig
@@ -510,21 +510,13 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 		}
 		if !slices.Contains(apiGroupInfo.PrioritizedVersions, gv) {
 			for routePath, _ := range v.Routes.Namespaced {
-				if r.resourceConfig == nil || r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
-					Group:    gv.Group,
-					Version:  gv.Version,
-					Resource: strings.Trim(routePath, "/"),
-				}) {
+				if r.isCustomRouteEnabled(schema.GroupVersion{Group: gv.Group, Version: gv.Version}, routePath) {
 					hasEnabledRoutes[gv.Version] = true
 					break
 				}
 			}
 			for routePath, _ := range v.Routes.Cluster {
-				if r.resourceConfig == nil || r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
-					Group:    gv.Group,
-					Version:  gv.Version,
-					Resource: strings.Trim(routePath, "/"),
-				}) {
+				if r.isCustomRouteEnabled(schema.GroupVersion{Group: gv.Group, Version: gv.Version}, routePath) {
 					hasEnabledRoutes[gv.Version] = true
 					break
 				}
@@ -565,11 +557,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
 					found = true
 					for rpath, route := range ver.Routes.Namespaced {
-						if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
-							Group:    group,
-							Version:  ver.Name,
-							Resource: strings.Trim(rpath, "/"),
-						}) {
+						if !r.isCustomRouteEnabled(schema.GroupVersion{Group: group, Version: ver.Name}, rpath) {
 							logging.DefaultLogger.Info("Skipping namespaced custom route based on provided ResourceConfig", "path", rpath, "version", ver.Name, "group", group)
 							continue
 						}
@@ -579,11 +567,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 						}
 					}
 					for rpath, route := range ver.Routes.Cluster {
-						if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
-							Group:    group,
-							Version:  ver.Name,
-							Resource: strings.Trim(rpath, "/"),
-						}) {
+						if !r.isCustomRouteEnabled(schema.GroupVersion{Group: group, Version: ver.Name}, rpath) {
 							logging.DefaultLogger.Info("Skipping cluster custom route based on provided ResourceConfig", "path", rpath, "version", ver.Name, "group", group)
 							continue
 						}
@@ -813,6 +797,15 @@ func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}
 	return groupVersions
+}
+
+// isCustomRouteEnabled returns true if any of the following are true:
+// * resourceConfig is nil
+// * a resource with the same GV and resource==<first /-separated path segment of the path> is enabled
+// This is split into a separate method to allow for this logic to be more complex if we need to do exact route matching
+func (r *defaultInstaller) isCustomRouteEnabled(groupVersion schema.GroupVersion, routePath string) bool {
+	return r.resourceConfig == nil ||
+		r.resourceConfig.ResourceEnabled(groupVersion.WithResource(strings.Split(strings.Trim(routePath, "/"), "/")[0]))
 }
 
 // conversionHandlerFunc returns a function that will convert resources of type src to dst.
