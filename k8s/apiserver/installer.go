@@ -521,7 +521,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			continue
 		}
 		if !slices.Contains(apiGroupInfo.PrioritizedVersions, gv) {
-			if hasEnabledRoutes[gv.Version] {
+			if !hasEnabledRoutes[gv.Version] {
 				// skip this version because none of the custom routes are enabled
 				continue
 			}
