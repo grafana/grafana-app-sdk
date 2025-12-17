@@ -4,7 +4,7 @@ config: {
 	definitions: {
 		manifestSchemas: true
 		path:            "definitions"
-		genManfiest:     false
+		genManifest:     false
 		genCRDs:         false
 	}
 

@@ -43,7 +43,7 @@ configKind: {
 		manifestSchemas: true
 		manifestVersion: "v1alpha1"
 		path:            "codegen/testing/golden_generated/crd"
-		genManfiest:     false
+		genManifest:     false
 		genCRDs:         false
 	}
 	codegen: {
