@@ -33,6 +33,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 	plural := "issues"
 	served := true
 	preferred := "v1"
+	dryRunKinds := false
 	assert.Equal(t, &AppManifest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AppManifest",
@@ -56,6 +57,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 					Schemas: schema,
 				}},
 			}},
+			DryRunKinds: &dryRunKinds,
 		},
 		Status: AppManifestStatus{
 			Resources: map[string]AppManifeststatusApplyStatus{
@@ -77,6 +79,12 @@ func TestAppManifestKind_Write(t *testing.T) {
 	require.Nil(t, err)
 	cast, ok := obj.(*AppManifest)
 	require.True(t, ok, "read object is not of type *AppManifest")
+	// the default value for dryRunKinds is false, so it becomes *false when loaded from nil
+	// we need to make it nil again before writing so it will match the input file when written back out
+	// verify that it loaded as *false before we set it to nil, because if it loaded as nil that's a regression
+	require.NotNil(t, cast.Spec.DryRunKinds)
+	require.False(t, *cast.Spec.DryRunKinds)
+	cast.Spec.DryRunKinds = nil
 	out := bytes.Buffer{}
 	err = kind.Write(cast, &out, resource.KindEncodingJSON)
 	require.Nil(t, err)
