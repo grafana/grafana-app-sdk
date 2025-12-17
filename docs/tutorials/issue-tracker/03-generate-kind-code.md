@@ -118,7 +118,6 @@ This command should output a list of all the files it writes:
 $ make generate
  * Writing file pkg/generated/issue/v1alpha1/constants.go
  * Writing file pkg/generated/issue/v1alpha1/issue_codec_gen.go
- * Writing file pkg/generated/issue/v1alpha1/issue_metadata_gen.go
  * Writing file pkg/generated/issue/v1alpha1/issue_object_gen.go
  * Writing file pkg/generated/issue/v1alpha1/issue_schema_gen.go
  * Writing file pkg/generated/issue/v1alpha1/issue_spec_gen.go
@@ -163,7 +162,6 @@ $ tree .
 │       │   └── v1alpha1
 │       │       ├── constants.go
 │       │       ├── issue_codec_gen.go
-│       │       ├── issue_metadata_gen.go
 │       │       ├── issue_object_gen.go
 │       │       ├── issue_schema_gen.go
 │       │       ├── issue_spec_gen.go
@@ -180,7 +178,7 @@ $ tree .
                     ├── types.spec.gen.ts
                     └── types.status.gen.ts
 
-21 directories, 24 files
+20 directories, 23 files
 ```
 
 All of our generated go code lives in `pkg/generated`, and all the generated TypeScript lives in `plugin/src/generated`. 
@@ -201,7 +199,6 @@ pkg/generated
 │   └── v1alpha1
 │       ├── constants.go
 │       ├── issue_codec_gen.go
-│       ├── issue_metadata_gen.go
 │       ├── issue_object_gen.go
 │       ├── issue_schema_gen.go
 │       ├── issue_spec_gen.go
@@ -209,11 +206,11 @@ pkg/generated
 ├── manifestdata
     └── issuetrackerproject_manifest.go
 
-4 directories, 8 files
+3 directories, 7 files
 ```
 
 The exported go types from our kind's `v1alpha1` schema definition are `issue_spec_gen.go` and `issue_status_gen.go`. 
-`issue_metadata_gen.go` exists for legacy reasons we won't touch on here. You'll note that `issue_status_gen.go` contain types and fields which we didn't define in our schema--that's because of the joined "default" status information. 
+You'll note that `issue_status_gen.go` contain types and fields which we didn't define in our schema--that's because of the joined "default" status information. 
 If we had defined a `status` or `metadata` in our schema, those fields would _also_ be present in the generated types.
 
 In addition to the types generated from our kind's schema, we have `issue_object_gen.go`, `issue_schema_gen.go`, and `issue_codec_gen.go`. 
