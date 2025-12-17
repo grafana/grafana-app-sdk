@@ -10,7 +10,7 @@ import (
 )
 
 func TestParseConfigOverridesDefaults(t *testing.T) {
-	val, err := cuekind.LoadCue(os.DirFS("."))
+	val, err := cuekind.LoadCue(os.DirFS("testing"))
 	require.NoError(t, err)
 	cfg, err := Load(val, "configA", nil)
 	require.NoError(t, err)
@@ -32,7 +32,7 @@ func TestParseConfigOverridesDefaults(t *testing.T) {
 }
 
 func TestParseConfigDefaultFallback(t *testing.T) {
-	val, err := cuekind.LoadCue(os.DirFS("."))
+	val, err := cuekind.LoadCue(os.DirFS("testing"))
 	require.NoError(t, err)
 	cfg, err := Load(val, "configB", nil)
 	require.NoError(t, err)
