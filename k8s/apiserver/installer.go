@@ -509,13 +509,13 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			continue
 		}
 		if !slices.Contains(apiGroupInfo.PrioritizedVersions, gv) {
-			for routePath, _ := range v.Routes.Namespaced {
+			for routePath := range v.Routes.Namespaced {
 				if r.isCustomRouteEnabled(schema.GroupVersion{Group: gv.Group, Version: gv.Version}, routePath) {
 					hasEnabledRoutes[gv.Version] = true
 					break
 				}
 			}
-			for routePath, _ := range v.Routes.Cluster {
+			for routePath := range v.Routes.Cluster {
 				if r.isCustomRouteEnabled(schema.GroupVersion{Group: gv.Group, Version: gv.Version}, routePath) {
 					hasEnabledRoutes[gv.Version] = true
 					break
