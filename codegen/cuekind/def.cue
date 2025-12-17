@@ -23,15 +23,17 @@ _kubeObjectMetadata: {
 }
 
 #KindsConfig: {
-	grouping:       "kind" | "group" | *"kind"
+	grouping:       "group" | *"kind"
 	perKindVersion: bool | *false
 }
 
-#CRDConfig: {
-	includeInManifest: bool | *true
-	format:            "json" | "yaml" | "none" | *"json"
-	path:              string | *"definitions"
-	useCRDFormat:      bool | *false
+#DefinitionsConfig: {
+	genManifest:     bool | *true             // whether to generate the manifest file
+	genCRDs:         bool | *true             // whether to generate CRD files for each kind
+	path:            string | *"definitions"  // path of definition files
+	encoding:        *"json" | "yaml"         // encoding format of definition files
+	manifestVersion: "v1alpha1" | *"v1alpha2" // valid manifest versions, `useCRDFormat` tells it to use "v1alpha1"
+	manifestSchemas: bool | *true             // not even sure if we want to include this option, as it was there to allow turning off the schemas in the manifest when generating recursive schemas caused a stack overflow
 }
 
 #CodegenConfig: {
@@ -44,9 +46,9 @@ _kubeObjectMetadata: {
 }
 
 Config: {
-	customResourceDefinitions: #CRDConfig
-	codegen:                   #CodegenConfig
-	kinds:                     #KindsConfig
+	definitions: #DefinitionsConfig
+	codegen:     #CodegenConfig
+	kinds:       #KindsConfig
 	manifestSelectors: [...string] | *["manifest"]
 }
 

@@ -915,9 +915,9 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Co
 		}
 
 		fs, err := generator.Generate(cuekind.ManifestGenerator(
-			cfg.CustomResourceDefinitions.Format,
-			cfg.CustomResourceDefinitions.IncludeInManifest,
-			cfg.CustomResourceDefinitions.UseCRDFormat),
+			cfg.Definitions.Encoding,
+			cfg.Definitions.ManifestSchemas,
+			cfg.Definitions.ManifestVersion),
 			cfg.ManifestSelectors...,
 		)
 		if err != nil {

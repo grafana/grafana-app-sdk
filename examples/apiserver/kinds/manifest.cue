@@ -1,16 +1,16 @@
 package kinds
 
 config: {
-	customResourceDefinitions: {
-		includeInManifest: true  // manifestIncludeSchemas
-		useCRDFormat:      false // crdManifest
-		path:              "definitions"
-		format:            "none"
+	definitions: {
+		manifestSchemas: true
+		path:            "definitions"
+		genManfiest:     false
+		genCRDs:         false
 	}
 
 	kinds: {
 		grouping:       "group"
-		perKindVersion: false // useOldManifestKinds
+		perKindVersion: false
 	}
 
 	codegen: {

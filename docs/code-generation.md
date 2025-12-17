@@ -12,18 +12,24 @@ A full breakdown on writing CUE kinds and using them with the CLI's code generat
 Kind codegen uses `grafana-app-sdk generate` as its base command. Generation settings can be supplied through CLI flags or, preferably, via `config.cue`. The following is an example `config.cue` for kind code generation:
 ```cue
 config: {
-    codegen: {
-        goGenPath: "pkg/generated/"
-        tsGenPath: "plugin/src/generated/"
-    }
-    customResourceDefinitions: {
-        format: "json"
-        path: "definitions"
-        includeInManifest: true
-    }
-    kinds: {
-        grouping: "kind"
-    }
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		path:            "definitions"
+		encoding:        "json"
+	}
+
+	kinds: {
+		grouping:       "kind"
+		perKindVersion: false
+	}
+
+	codegen: {
+		goGenPath:                      "pkg/generated/"
+		tsGenPath:                      "plugin/src/generated/"
+		enableK8sPostProcessing:        false
+		enableOperatorStatusGeneration: true
+	}
 }
 ```
 `grafana-app-sdk generate` scans the `source` directory for CUE files, and parses all top-level fields in all present CUE files as CUE kinds. If kind validation encounters any errors, no files will be written, and the validation error(s) will be printed out. On successful generation: 

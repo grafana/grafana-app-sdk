@@ -13,6 +13,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 )
 
 const (
@@ -36,11 +37,11 @@ func setupGenerateCmd() {
 
 	generateCmd.Flags().String("defencoding", "json", `Encoding for Custom Resource Definition 
 files. Allowed values are 'json', 'yaml', and 'none'. Use 'none' to turn off CRD generation.`)
-	_ = generateCmd.Flags().MarkDeprecated("defencoding", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.format"))
+	_ = generateCmd.Flags().MarkDeprecated("defencoding", fmt.Sprintf(deprecationMessage, "definitions.encoding"))
 
 	generateCmd.Flags().String("defpath", "definitions", `Path where Custom Resource 
 Definitions will be created. Only applicable if type=kubernetes`)
-	_ = generateCmd.Flags().MarkDeprecated("defpath", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.path"))
+	_ = generateCmd.Flags().MarkDeprecated("defpath", fmt.Sprintf(deprecationMessage, "definitions.path"))
 
 	generateCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where 'group' places all kinds with the same group in the same package, and 'kind' creates separate packages per kind (packaging will always end with the version)`)
@@ -52,7 +53,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 
 	generateCmd.Flags().Bool("noschemasinmanifest", false, "Whether to exclude kind schemas from the generated app manifest. This flag exists to allow for codegen with recursive types in CUE until github.com/grafana/grafana-app-sdk/issues/460 is resolved.")
 	generateCmd.Flags().Lookup("noschemasinmanifest").NoOptDefVal = "true"
-	_ = generateCmd.Flags().MarkDeprecated("noschemasinmanifest", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.includeInManifest"))
+	_ = generateCmd.Flags().MarkDeprecated("noschemasinmanifest", fmt.Sprintf(deprecationMessage, "definitions.manifestSchemas"))
 
 	generateCmd.Flags().String("gomodule", "", `module name found in go.mod. If absent it will be inferred from ./go.mod`)
 	_ = generateCmd.Flags().MarkDeprecated("gomodule", fmt.Sprintf(deprecationMessage, "codegen.goModule"))
@@ -66,7 +67,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 
 	generateCmd.Flags().Bool("crdmanifest", false, "Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents. Use this flag to keep legacy behavior (CRD schemas in the manifest)")
 	generateCmd.Flags().Lookup("crdmanifest").NoOptDefVal = "true"
-	_ = generateCmd.Flags().MarkDeprecated("crdmanifest", fmt.Sprintf(deprecationMessage, "customResourceDefinitions.useCRDFormat"))
+	_ = generateCmd.Flags().MarkDeprecated("crdmanifest", fmt.Sprintf(deprecationMessage, "definitions.manfiestVersion"))
 
 	// Don't show "usage" information when an error is returned form the command,
 	// because our errors are not command-usage-based
@@ -157,17 +158,23 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			EnableK8sPostProcessing:        postProcess,
 			EnableOperatorStatusGeneration: genOperatorState,
 		},
-		CustomResourceDefinitions: &config.CRDConfig{
-			IncludeInManifest: !noSchemasInManifest,
-			Format:            encType,
-			Path:              defPath,
-			UseCRDFormat:      crdCompatibleManifest,
+		Definitions: &config.DefinitionsConfig{
+			GenManifest:     encType != "none",
+			GenCRDs:         encType != "none",
+			ManifestSchemas: !noSchemasInManifest,
+			Encoding:        encType,
+			Path:            defPath,
+			ManifestVersion: jennies.VersionV1Alpha2,
 		},
 		Kinds: &config.KindsConfig{
 			Grouping:       grouping,
 			PerKindVersion: useOldManifestKinds,
 		},
 		ManifestSelectors: []string{manifestSelector},
+	}
+
+	if crdCompatibleManifest {
+		baseConfig.Definitions.ManifestVersion = jennies.VersionV1Alpha1
 	}
 
 	var genSrc any
@@ -260,19 +267,19 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	}
 	// CRD
 	var crdFiles codejen.Files
-	if cfg.CustomResourceDefinitions.Format != "none" {
+	if cfg.Definitions.GenCRDs {
 		encFunc := func(v any) ([]byte, error) {
 			return json.MarshalIndent(v, "", "    ")
 		}
-		if cfg.CustomResourceDefinitions.Format == "yaml" {
+		if cfg.Definitions.Encoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.CustomResourceDefinitions.Format), cfg.ManifestSelectors...)
+		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.Definitions.Encoding), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
 		for i, f := range crdFiles {
-			crdFiles[i].RelativePath = filepath.Join(cfg.CustomResourceDefinitions.Path, f.RelativePath)
+			crdFiles[i].RelativePath = filepath.Join(cfg.Definitions.Path, f.RelativePath)
 		}
 	}
 
@@ -301,7 +308,7 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.CustomResourceDefinitions.IncludeInManifest, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.Definitions.ManifestSchemas, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -311,17 +318,17 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 
 	// Manifest CRD
 	var manifestFiles codejen.Files
-	if cfg.CustomResourceDefinitions.Format != "none" {
+	if cfg.Definitions.GenManifest {
 		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(
-			cfg.CustomResourceDefinitions.Format,
-			cfg.CustomResourceDefinitions.IncludeInManifest,
-			cfg.CustomResourceDefinitions.UseCRDFormat),
+			cfg.Definitions.Encoding,
+			cfg.Definitions.ManifestSchemas,
+			cfg.Definitions.ManifestVersion),
 			cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
 		for i, f := range manifestFiles {
-			manifestFiles[i].RelativePath = filepath.Join(cfg.CustomResourceDefinitions.Path, f.RelativePath)
+			manifestFiles[i].RelativePath = filepath.Join(cfg.Definitions.Path, f.RelativePath)
 		}
 	}
 

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/grafana/codejen"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
@@ -110,7 +111,7 @@ func TestManifestGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		files, err := ManifestGenerator("json", true, true).Generate(kinds...)
+		files, err := ManifestGenerator("json", true, jennies.VersionV1Alpha1).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema

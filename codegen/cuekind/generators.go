@@ -127,12 +127,12 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(extension string, includeSchemas bool, crdCompatible bool) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGenerator(extension string, includeSchemas bool, version string) *codejen.JennyList[codegen.AppManifest] {
 	generator := &jennies.ManifestGenerator{
-		Encoder:        jsonEncoder,
-		FileExtension:  extension,
-		IncludeSchemas: includeSchemas,
-		CRDCompatible:  crdCompatible,
+		Encoder:         jsonEncoder,
+		FileExtension:   extension,
+		IncludeSchemas:  includeSchemas,
+		ManifestVersion: version,
 	}
 
 	switch extension {

@@ -19,11 +19,13 @@ type KindsConfig struct {
 	PerKindVersion bool
 }
 
-type CRDConfig struct {
-	IncludeInManifest bool
-	Format            string
-	Path              string
-	UseCRDFormat      bool
+type DefinitionsConfig struct {
+	GenManifest     bool
+	GenCRDs         bool
+	ManifestSchemas bool
+	Encoding        string
+	Path            string
+	ManifestVersion string
 }
 
 type CodegenConfig struct {
@@ -36,10 +38,10 @@ type CodegenConfig struct {
 }
 
 type Config struct {
-	Kinds                     *KindsConfig
-	CustomResourceDefinitions *CRDConfig
-	Codegen                   *CodegenConfig
-	ManifestSelectors         []string
+	Kinds             *KindsConfig
+	Definitions       *DefinitionsConfig
+	Codegen           *CodegenConfig
+	ManifestSelectors []string
 }
 
 // Load loads configuration from the given source into a Config struct.

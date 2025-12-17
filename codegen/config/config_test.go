@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,10 +19,10 @@ func TestParseConfigOverridesDefaults(t *testing.T) {
 	assert.Equal(t, "group", cfg.Kinds.Grouping)
 	assert.True(t, cfg.Kinds.PerKindVersion)
 
-	assert.False(t, cfg.CustomResourceDefinitions.IncludeInManifest)
-	assert.Equal(t, "yaml", cfg.CustomResourceDefinitions.Format)
-	assert.Equal(t, "custom/defs", cfg.CustomResourceDefinitions.Path)
-	assert.True(t, cfg.CustomResourceDefinitions.UseCRDFormat)
+	assert.False(t, cfg.Definitions.ManifestSchemas)
+	assert.Equal(t, "yaml", cfg.Definitions.Encoding)
+	assert.Equal(t, "custom/defs", cfg.Definitions.Path)
+	assert.Equal(t, jennies.VersionV1Alpha1, cfg.Definitions.ManifestVersion)
 
 	assert.Equal(t, "github.com/example/module", cfg.Codegen.GoModule)
 	assert.Equal(t, "internal/mod", cfg.Codegen.GoModGenPath)
@@ -40,10 +41,10 @@ func TestParseConfigDefaultFallback(t *testing.T) {
 	assert.Equal(t, "kind", cfg.Kinds.Grouping)
 	assert.False(t, cfg.Kinds.PerKindVersion)
 
-	assert.True(t, cfg.CustomResourceDefinitions.IncludeInManifest)
-	assert.Equal(t, "json", cfg.CustomResourceDefinitions.Format)
-	assert.Equal(t, "definitions", cfg.CustomResourceDefinitions.Path)
-	assert.False(t, cfg.CustomResourceDefinitions.UseCRDFormat)
+	assert.True(t, cfg.Definitions.ManifestSchemas)
+	assert.Equal(t, "json", cfg.Definitions.Encoding)
+	assert.Equal(t, "definitions", cfg.Definitions.Path)
+	assert.Equal(t, jennies.VersionV1Alpha2, cfg.Definitions.ManifestVersion)
 
 	assert.Equal(t, "pkg/generated/", cfg.Codegen.GoGenPath)
 	assert.Equal(t, "plugin/src/generated/", cfg.Codegen.TsGenPath)

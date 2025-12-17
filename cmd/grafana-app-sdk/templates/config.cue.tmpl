@@ -3,11 +3,11 @@ package kinds
 // config contains global code generation configuration options for the app.
 // You can modify this as you see fit. These are the defaults:
 config: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "definitions"
-		format:            "json"
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		path:            "definitions"
+		encoding:        "json"
 	}
 
 	kinds: {

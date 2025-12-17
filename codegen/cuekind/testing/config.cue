@@ -1,11 +1,11 @@
 package testing
 
 configJson: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "codegen/testing/golden_generated/crd"
-		format:            "json"
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		path:            "codegen/testing/golden_generated/crd"
+		encoding:        "json"
 	}
 	codegen: {
 		goGenPath:    "codegen/testing/golden_generated/go/groupbygroup"
@@ -20,11 +20,11 @@ configJson: {
 }
 
 configYaml: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "codegen/testing/golden_generated/crd"
-		format:            "yaml"
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		path:            "codegen/testing/golden_generated/crd"
+		encoding:        "yaml"
 	}
 	codegen: {
 		goGenPath:    "codegen/testing/golden_generated/go/groupbygroup"
@@ -39,11 +39,12 @@ configYaml: {
 }
 
 configKind: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		path:              "codegen/testing/golden_generated/crd"
-		format:            "none"
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		path:            "codegen/testing/golden_generated/crd"
+		genManfiest:     false
+		genCRDs:         false
 	}
 	codegen: {
 		goGenPath:    "codegen/testing/golden_generated/go/groupbykind"
@@ -58,10 +59,10 @@ configKind: {
 }
 
 configIntegrationGen1: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		format:            "json"
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		encoding:        "json"
 	}
 	codegen: {
 		goGenPath: "pkg/gen1"
@@ -74,10 +75,10 @@ configIntegrationGen1: {
 }
 
 configIntegrationGen2: {
-	customResourceDefinitions: {
-		includeInManifest: true
-		useCRDFormat:      true
-		format:            "yaml"
+	definitions: {
+		manifestSchemas: true
+		manifestVersion: "v1alpha1"
+		encoding:        "yaml"
 	}
 	codegen: {
 		goGenPath: "pkg/gen2"

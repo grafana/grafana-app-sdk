@@ -5,11 +5,11 @@ configA: {
 		grouping:       "group"
 		perKindVersion: true
 	}
-	customResourceDefinitions: {
-		includeInManifest: false
-		format:            "yaml"
-		path:              "custom/defs"
-		useCRDFormat:      true
+	definitions: {
+		manifestSchemas: false
+		encoding:        "yaml"
+		path:            "custom/defs"
+		manifestVersion: "v1alpha1"
 	}
 	codegen: {
 		goModule:                       "github.com/example/module"

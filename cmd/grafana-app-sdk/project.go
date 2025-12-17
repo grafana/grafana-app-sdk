@@ -570,6 +570,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown format '%s'", format)
 	}
 
+	// HACK: Load base config from CLI flags which will eventually be removed
 	baseConfig := &config.Config{
 		Kinds: &config.KindsConfig{
 			Grouping: kindGrouping,
