@@ -109,7 +109,9 @@ regenerate-codegen-test-files:
 .PHONY: generate
 generate: build
 	@$(BIN_DIR)/grafana-app-sdk generate -s=app -g=app --grouping=group --defpath=app/definitions
-	rm app/appmanifest_manifest.go
+	rm app/manifestdata/appmanifest_manifest.go
+	# Delete generated clients as they are unused and cause linter errors at the moment
+	rm app/appmanifest/**/appmanifest_client_gen.go
 
 .PHONY: bench
 bench:

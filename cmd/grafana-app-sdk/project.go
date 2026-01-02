@@ -630,6 +630,11 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	if confirmOverwrite {
 		writeFileFunc = writeFileWithOverwriteConfirm
 	}
+	// Backwards-compatibility for manifests written to the base generated path
+	manifestPath := "manifestdata"
+	if m, _ := filepath.Glob(filepath.Join("pkg/generated", "*_manifest.go")); len(m) > 0 {
+		manifestPath = ""
+	}
 
 	var files codejen.Files
 	switch cast := any(generator).(type) {
@@ -638,7 +643,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 		if err != nil {
 			return err
 		}
-		appFiles, err := cast.Generate(cuekind.AppGenerator(repo, "pkg/generated", groupKinds), selectors...)
+		appFiles, err := cast.Generate(cuekind.AppGenerator(repo, "pkg/generated", manifestPath, groupKinds), selectors...)
 		if err != nil {
 			return err
 		}
@@ -804,10 +809,6 @@ func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 	if err != nil {
 		return err
 	}
-	err = writePluginConstants(filepath.Join(projectRootPath, "plugin/src/constants.ts"), manifestGroup)
-	if err != nil {
-		return err
-	}
 	return os.Remove("./tmp-tmp-app")
 }
 
@@ -865,24 +866,6 @@ func writePluginJSON(fullPath, id, name, author, slug string) error {
 		Name:   name,
 		Author: author,
 		Slug:   slug,
-	}
-	b := bytes.Buffer{}
-	err = tmp.Execute(&b, data)
-	if err != nil {
-		return err
-	}
-	return writeFile(fullPath, b.Bytes())
-}
-
-func writePluginConstants(fullPath, pluginID string) error {
-	tmp, err := template.ParseFS(templates, "templates/constants.ts.tmpl")
-	if err != nil {
-		return err
-	}
-	data := struct {
-		PluginID string
-	}{
-		PluginID: pluginID,
 	}
 	b := bytes.Buffer{}
 	err = tmp.Execute(&b, data)

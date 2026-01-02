@@ -70,8 +70,8 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator(false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 14 (7 -> object, spec, metadata, status, schema, codec, constants) * 2 versions
-		assert.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
+		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
+		assert.Len(t, files, 12, "should be 12 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbykind")
 	})
@@ -80,8 +80,8 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator(true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 14 (7 -> object, spec, metadata, status, schema, codec, constants) * 2 versions
-		assert.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
+		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
+		assert.Len(t, files, 12, "should be 12 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")
 	})
@@ -90,7 +90,7 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator(true).Generate(sameGroupKinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 27, "should be 27 files generated, got %d", len(files))
+		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")
 	})
@@ -145,18 +145,14 @@ func TestManifestGoGenerator(t *testing.T) {
 			GenOperatorState: true,
 		}).Parse(os.DirFS(TestCUEDirectory), "testManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("groupbygroup", true, "codegen-tests", "pkg/generated", true).Generate(kinds...)
+		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
-		// 10 -> manifest file, then the custom route response+query+body for reconcile, response body and wrapper+query+body for search in v3, +1 client per version (3)
-		require.Len(t, files, 11, "should be 11 files generated, got %d", len(files))
+		// 14 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), +1 client per version (3)
+		require.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
-			if file.RelativePath == "testapp_manifest.go" {
-				compareToGolden(t, codejen.Files{file}, "manifest/go/groupbygroup")
-			} else {
-				compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
-			}
+			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
 		}
 	})
 
@@ -165,18 +161,14 @@ func TestManifestGoGenerator(t *testing.T) {
 			GenOperatorState: true,
 		}).Parse(os.DirFS(TestCUEDirectory), "customManifest")
 		require.Nil(t, err)
-		files, err := ManifestGoGenerator("groupbykind", true, "codegen-tests", "pkg/generated", false).Generate(kinds...)
+		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 3 -> manifest, client v0_0, client v1_0
 		assert.Len(t, files, 3)
 		// Check content against the golden files
 		for _, file := range files {
-			if file.RelativePath == "customapp_manifest.go" {
-				compareToGolden(t, codejen.Files{file}, "manifest/go/groupbykind")
-			} else {
-				compareToGolden(t, codejen.Files{file}, "go/groupbykind")
-			}
+			compareToGolden(t, codejen.Files{file}, "go/groupbykind")
 		}
 	})
 }

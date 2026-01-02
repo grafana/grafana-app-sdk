@@ -50,6 +50,7 @@ type AppManifestManifestVersionKind struct {
 // NewAppManifestManifestVersionKind creates a new AppManifestManifestVersionKind object.
 func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
 	return &AppManifestManifestVersionKind{
+		Scope:      AppManifestManifestVersionKindScopeNamespaced,
 		Conversion: (func(input bool) *bool { return &input })(false),
 	}
 }

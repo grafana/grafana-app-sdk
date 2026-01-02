@@ -11,10 +11,11 @@ import (
 )
 
 type AppGenerator struct {
-	GroupByKind bool
-	ProjectRepo string
-	ProjectName string
-	CodegenPath string
+	GroupByKind         bool
+	ProjectRepo         string
+	ProjectName         string
+	CodegenPath         string
+	ManifestPackagePath string
 }
 
 func (*AppGenerator) JennyName() string {
@@ -23,13 +24,14 @@ func (*AppGenerator) JennyName() string {
 
 func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 	tmd := templates.AppMetadata{
-		Repo:            a.ProjectRepo,
-		ProjectName:     a.ProjectName,
-		CodegenPath:     a.CodegenPath,
-		PackageName:     "app",
-		WatcherPackage:  "watchers",
-		Resources:       make([]templates.AppMetadataKind, 0),
-		KindsAreGrouped: !a.GroupByKind,
+		Repo:                a.ProjectRepo,
+		ProjectName:         a.ProjectName,
+		CodegenPath:         a.CodegenPath,
+		PackageName:         "app",
+		WatcherPackage:      "watchers",
+		Resources:           make([]templates.AppMetadataKind, 0),
+		KindsAreGrouped:     !a.GroupByKind,
+		ManifestPackagePath: a.ManifestPackagePath,
 	}
 
 	for _, kind := range kinds {

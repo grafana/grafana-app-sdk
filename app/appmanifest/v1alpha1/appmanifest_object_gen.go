@@ -25,6 +25,13 @@ type AppManifest struct {
 	Status AppManifestStatus `json:"status" yaml:"status"`
 }
 
+func NewAppManifest() *AppManifest {
+	return &AppManifest{
+		Spec:   *NewAppManifestSpec(),
+		Status: *NewAppManifestStatus(),
+	}
+}
+
 func (o *AppManifest) GetSpec() any {
 	return o.Spec
 }
