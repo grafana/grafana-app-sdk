@@ -239,7 +239,7 @@ func generateKindsCue(modFS fs.FS, cfg kindGenConfig, selectors ...string) (code
 		return nil, err
 	}
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GoModuleName, cfg.GoGenBasePath, cfg.GroupKinds), selectors...)
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GoModuleName, cfg.GoModuleGenBasePath, cfg.GroupKinds), selectors...)
 	if err != nil {
 		return nil, err
 	}

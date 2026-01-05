@@ -111,3 +111,21 @@ const (
 	SpecEnumVal4    SpecEnum = "val4"
 	SpecEnumDefault SpecEnum = "default"
 )
+func (InnerObject1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.InnerObject1"
+}
+func (InnerObject2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.InnerObject2"
+}
+func (Type1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Type1"
+}
+func (Type2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Type2"
+}
+func (RecursiveList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.RecursiveList"
+}
+func (Spec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Spec"
+}

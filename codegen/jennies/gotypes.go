@@ -270,6 +270,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 	if namerFunc != nil {
 		// Implement OpenAPIModelNamer for all generated types
 		// TODO: @IfSentient this should probably be accomplished in cog instead, as regex matching isn't the best approach
+		// Using the OpenAPI gives us slightly different naming in some edge cases, so we can't use that
 		appendBytes := bytes.Buffer{}
 		matcher := regexp.MustCompile(`(?m)^type\s+([A-Za-z0-9_]+)\s+struct`)
 		for _, matches := range matcher.FindAllSubmatch(files[0].Data, -1) {
@@ -283,46 +284,6 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 `, string(matches[1]), openAPIName))
 		}
 		files[0].Data = append(files[0].Data, appendBytes.Bytes()...)
-
-		/* this doesn't quite work the way we want it to as naming can mismatch
-				openAPICodegenPipeline := cog.TypesFromSchema().
-					CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
-					SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
-					GenerateOpenAPI(cog.OpenAPIGenerationConfig{})
-				openAPIFiles, err := openAPICodegenPipeline.Run(context.Background())
-				if err != nil {
-					return nil, err
-				}
-				// should only be one file
-				if len(openAPIFiles) != 1 {
-					return nil, fmt.Errorf("expected one OpenAPI definition but got %d", len(files))
-				}
-				// Iterate through the definitions, as they should match 1:1 to the go types
-				schemaProps := simpleOpenAPIDoc[openapi3.Schema]{}
-				err = json.Unmarshal(openAPIFiles[0].Data, &schemaProps)
-				if err != nil {
-					return nil, fmt.Errorf("failed to unmarshal OpenAPI definition: %w", err)
-				}
-				appendBytes := bytes.Buffer{}
-				for k, val := range schemaProps.Components.Schemas {
-					// strip any leading path info and definition marker (#)
-					parts := strings.Split(k, ".")
-					if len(parts) > 0 {
-						k = parts[len(parts)-1]
-					}
-					if k[0] == '#' {
-						k = k[1:]
-					}
-					openAPIName := namerFunc(k)
-					appendBytes.WriteString(fmt.Sprintf(`func (%s) OpenAPIModelName() string {
-			return "%s"
-		}
-		`, k, openAPIName))
-					fmt.Println(k)
-					j, _ := json.MarshalIndent(val, "", "  ")
-					fmt.Println("\t", string(j))
-				}
-				files[0].Data = append(files[0].Data, appendBytes.Bytes()...)*/
 	}
 
 	return files[0].Data, nil

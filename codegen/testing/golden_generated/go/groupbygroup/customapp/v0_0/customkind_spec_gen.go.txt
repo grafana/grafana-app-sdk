@@ -12,3 +12,6 @@ type CustomKindSpec struct {
 func NewCustomKindSpec() *CustomKindSpec {
 	return &CustomKindSpec{}
 }
+func (CustomKindSpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindSpec"
+}

@@ -413,7 +413,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	}
 	if hasCustomRoutes {
 		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
-		res[ToOpenAPIName("com.github.grafana-app-sdk.k8s.apiserver.EmptyObject")] = common.OpenAPIDefinition{
+		res["com.github.grafana.grafana-app-sdk.k8s.apiserver.EmptyObject"] = common.OpenAPIDefinition{
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
 					Description: "EmptyObject defines a model for a missing object type",
@@ -422,10 +422,6 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			},
 		}
 	}
-	for k := range res {
-		fmt.Println(k)
-	}
-	fmt.Println("============")
 	return res
 }
 

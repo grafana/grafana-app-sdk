@@ -67,7 +67,7 @@ func TestResourceGenerator(t *testing.T) {
 	require.Nil(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
-		files, err := ResourceGenerator(false).Generate(kinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", false).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
@@ -77,7 +77,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group", func(t *testing.T) {
-		files, err := ResourceGenerator(true).Generate(kinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(kinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
@@ -87,7 +87,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group, multiple kinds", func(t *testing.T) {
-		files, err := ResourceGenerator(true).Generate(sameGroupKinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(sameGroupKinds...)
 		require.Nil(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))

@@ -4,37 +4,46 @@ package v3
 
 // +k8s:openapi-gen=true
 type GetTestKindSearchResultBody struct {
-	Items []V3GetTestKindSearchResultBodyItems `json:"items"`
+	Items []GetTestKindSearchResultV3BodyItems `json:"items"`
 	Total int64                                `json:"total"`
 }
 
 // NewGetTestKindSearchResultBody creates a new GetTestKindSearchResultBody object.
 func NewGetTestKindSearchResultBody() *GetTestKindSearchResultBody {
 	return &GetTestKindSearchResultBody{
-		Items: []V3GetTestKindSearchResultBodyItems{},
+		Items: []GetTestKindSearchResultV3BodyItems{},
 	}
 }
 
 // +k8s:openapi-gen=true
-type V3GetTestKindSearchResultBodyItemsList struct {
+type GetTestKindSearchResultV3BodyItemsList struct {
 	Foo string `json:"foo"`
 }
 
-// NewV3GetTestKindSearchResultBodyItemsList creates a new V3GetTestKindSearchResultBodyItemsList object.
-func NewV3GetTestKindSearchResultBodyItemsList() *V3GetTestKindSearchResultBodyItemsList {
-	return &V3GetTestKindSearchResultBodyItemsList{}
+// NewGetTestKindSearchResultV3BodyItemsList creates a new GetTestKindSearchResultV3BodyItemsList object.
+func NewGetTestKindSearchResultV3BodyItemsList() *GetTestKindSearchResultV3BodyItemsList {
+	return &GetTestKindSearchResultV3BodyItemsList{}
 }
 
 // +k8s:openapi-gen=true
-type V3GetTestKindSearchResultBodyItems struct {
+type GetTestKindSearchResultV3BodyItems struct {
 	Name  string                                   `json:"name"`
 	Score float64                                  `json:"score"`
-	List  []V3GetTestKindSearchResultBodyItemsList `json:"list"`
+	List  []GetTestKindSearchResultV3BodyItemsList `json:"list"`
 }
 
-// NewV3GetTestKindSearchResultBodyItems creates a new V3GetTestKindSearchResultBodyItems object.
-func NewV3GetTestKindSearchResultBodyItems() *V3GetTestKindSearchResultBodyItems {
-	return &V3GetTestKindSearchResultBodyItems{
-		List: []V3GetTestKindSearchResultBodyItemsList{},
+// NewGetTestKindSearchResultV3BodyItems creates a new GetTestKindSearchResultV3BodyItems object.
+func NewGetTestKindSearchResultV3BodyItems() *GetTestKindSearchResultV3BodyItems {
+	return &GetTestKindSearchResultV3BodyItems{
+		List: []GetTestKindSearchResultV3BodyItemsList{},
 	}
+}
+func (GetTestKindSearchResultBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultBody"
+}
+func (GetTestKindSearchResultV3BodyItemsList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultV3BodyItemsList"
+}
+func (GetTestKindSearchResultV3BodyItems) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultV3BodyItems"
 }
