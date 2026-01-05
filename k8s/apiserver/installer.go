@@ -1096,42 +1096,42 @@ func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, routePath st
 		resp, _ := resolver(kind, ver, routePath, "POST")
 		methods["POST"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Post),
 		}
 	}
 	if props.Put != nil {
 		resp, _ := resolver(kind, ver, routePath, "PUT")
 		methods["PUT"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Put),
 		}
 	}
 	if props.Patch != nil {
 		resp, _ := resolver(kind, ver, routePath, "PATCH")
 		methods["PATCH"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Patch),
 		}
 	}
 	if props.Delete != nil {
 		resp, _ := resolver(kind, ver, routePath, "DELETE")
 		methods["DELETE"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Delete),
 		}
 	}
 	if props.Head != nil {
 		resp, _ := resolver(kind, ver, routePath, "HEAD")
 		methods["HEAD"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Head),
 		}
 	}
 	if props.Options != nil {
 		resp, _ := resolver(kind, ver, routePath, "OPTIONS")
 		methods["OPTIONS"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Options),
 		}
 	}
 	return methods
