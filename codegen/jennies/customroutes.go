@@ -45,11 +45,12 @@ func (*CustomRouteGoTypesJenny) JennyName() string {
 	return "CustomRouteTypes"
 }
 
+//nolint:gocognit
 func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	for _, version := range appManifest.Versions() {
 		for _, kind := range version.Kinds() {
-			var openAPINamer func(string) string = nil
+			var openAPINamer func(string) string
 			if c.OpenAPINamer != nil {
 				openAPINamer = func(name string) string {
 					return c.OpenAPINamer(OpenAPINamerInfo{
@@ -74,7 +75,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				}
 			}
 		}
-		var openAPINamer func(string) string = nil
+		var openAPINamer func(string) string
 		if c.OpenAPINamer != nil {
 			openAPINamer = func(name string) string {
 				return c.OpenAPINamer(OpenAPINamerInfo{

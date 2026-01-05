@@ -20,7 +20,6 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -266,23 +265,6 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		}
 		groupVersions = append(groupVersions, gv)
 	}
-
-	// Add namespaced and cluster routes' types to the scheme as well
-	/*for _, v := range r.appConfig.ManifestData.Versions {
-		gv := schema.GroupVersion{
-			Group:   r.appConfig.ManifestData.Group,
-			Version: v.Name,
-		}
-		for cpath, route := range v.Routes.Namespaced {
-			if route.Get != nil {
-				// TODO: more types
-				if goType, ok := r.resolver.CustomRouteReturnGoType("", v.Name, cpath, "GET"); ok {
-					scheme.AddKnownTypes(gv, goType)
-				}
-			}
-			goType, ok := r.resolver.CustomRouteReturnGoType("", v.Name, cpath, method)
-		}
-	}*/
 
 	// Make sure we didn't miss any versions that don't have any kinds registered
 	for _, v := range r.appConfig.ManifestData.Versions {
@@ -562,9 +544,6 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				return fmt.Errorf("failed to find WebService for version %s", ver.Name)
 			}
 		}
-	}
-	for k, v := range r.scheme.KnownTypes(schema.GroupVersion{Group: "example.ext.grafana.com", Version: "v1alpha1"}) {
-		fmt.Printf("\n\t%s: %T", k, v)
 	}
 
 	return err
@@ -948,20 +927,20 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 				typeSchema.Properties["metadata"] = spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Default: map[string]any{},
-						Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
+						Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 					},
 				}
-				dependencies = append(dependencies, v1.ObjectMeta{}.OpenAPIModelName())
+				dependencies = append(dependencies, metav1.ObjectMeta{}.OpenAPIModelName())
 			}
 		} else if usesListMeta, ok := metadataProp.Extensions[app.OpenAPIExtensionUsesKubernetesListMeta]; ok {
 			if cast, ok := usesListMeta.(bool); ok && cast {
 				typeSchema.Properties["metadata"] = spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Default: map[string]any{},
-						Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
+						Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 					},
 				}
-				dependencies = append(dependencies, v1.ListMeta{}.OpenAPIModelName())
+				dependencies = append(dependencies, metav1.ListMeta{}.OpenAPIModelName())
 			}
 		}
 	}
@@ -1351,7 +1330,6 @@ func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value strin
 // To ensure we use the same naming definition as kubernetes expects
 // TODO: @IfSentient we should start using OpenAPIModelName() on all go types generated, this will likely need to be done in grafana/cog
 func ToOpenAPIName(name string) string {
-
 	nameParts := strings.Split(name, "/")
 	// Reverse first part. e.g., io.k8s... instead of k8s.io...
 	if len(nameParts) > 0 && strings.Contains(nameParts[0], ".") {

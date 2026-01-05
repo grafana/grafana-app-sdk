@@ -169,7 +169,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codeg
 			return codejen.Files{}, nil
 		}
 
-		var namerFunc func(string) string = nil
+		var namerFunc func(string) string
 		if g.OpenAPINamer != nil {
 			namerFunc = func(name string) string {
 				grp := kind.Properties().ManifestGroup
@@ -278,10 +278,13 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 				continue
 			}
 			openAPIName := namerFunc(string(matches[1]))
-			appendBytes.WriteString(fmt.Sprintf(`func (%s) OpenAPIModelName() string {
+			_, err = appendBytes.WriteString(fmt.Sprintf(`func (%s) OpenAPIModelName() string {
 	return "%s"
 }
 `, string(matches[1]), openAPIName))
+			if err != nil {
+				return nil, fmt.Errorf("failed to write OpenAPIModelName() function: %w", err)
+			}
 		}
 		files[0].Data = append(files[0].Data, appendBytes.Bytes()...)
 	}

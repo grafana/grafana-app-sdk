@@ -40,6 +40,12 @@ func getGeneratedPathForKind(groupByKind bool, group string, kind codegen.Versio
 	return filepath.Join(ToPackageName(group), ToPackageName(version))
 }
 
+// GetGeneratedGoTypePath returns the correct codegen path based on the kind, version, and whether the
+// generated code should be grouped by kind or by GroupVersion.
+// When groupByKind is true, the path will be <kind>/<version>.
+// When groupByKind is false, the path will be <shortGroup>/<version>.
+//
+//nolint:revive
 func GetGeneratedGoTypePath(groupByKind bool, shortGroup string, version string, kindMachineName string) string {
 	if groupByKind {
 		return filepath.Join(ToPackageName(kindMachineName), ToPackageName(version))
