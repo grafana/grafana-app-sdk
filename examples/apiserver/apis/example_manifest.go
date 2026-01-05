@@ -232,6 +232,12 @@ var appManifestData = app.ManifestData{
 																						"finalizers": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"array"},
+																								Items: &spec.SchemaOrArray{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"string"},
+																										}},
+																								},
 																							},
 																						},
 																						"generateName": {
@@ -260,6 +266,50 @@ var appManifestData = app.ManifestData{
 																						"managedFields": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"array"},
+																								Items: &spec.SchemaOrArray{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"object"},
+																											Properties: map[string]spec.Schema{
+																												"apiVersion": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"fieldsType": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"fieldsV1": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"object"},
+																													},
+																												},
+																												"manager": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"operation": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"subresource": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"time": {
+																													SchemaProps: spec.SchemaProps{
+																														Type:   []string{"string"},
+																														Format: "date-time",
+																													},
+																												},
+																											},
+																										}},
+																								},
 																							},
 																						},
 																						"name": {
@@ -275,6 +325,50 @@ var appManifestData = app.ManifestData{
 																						"ownerReferences": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"array"},
+																								Items: &spec.SchemaOrArray{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"object"},
+																											Properties: map[string]spec.Schema{
+																												"apiVersion": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"blockOwnerDeletion": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"boolean"},
+																													},
+																												},
+																												"controller": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"boolean"},
+																													},
+																												},
+																												"kind": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"name": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"uid": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																											},
+																											Required: []string{
+																												"apiVersion",
+																												"kind",
+																												"name",
+																												"uid",
+																											},
+																										}},
+																								},
 																							},
 																						},
 																						"resourceVersion": {

@@ -20,6 +20,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -266,6 +267,23 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		groupVersions = append(groupVersions, gv)
 	}
 
+	// Add namespaced and cluster routes' types to the scheme as well
+	/*for _, v := range r.appConfig.ManifestData.Versions {
+		gv := schema.GroupVersion{
+			Group:   r.appConfig.ManifestData.Group,
+			Version: v.Name,
+		}
+		for cpath, route := range v.Routes.Namespaced {
+			if route.Get != nil {
+				// TODO: more types
+				if goType, ok := r.resolver.CustomRouteReturnGoType("", v.Name, cpath, "GET"); ok {
+					scheme.AddKnownTypes(gv, goType)
+				}
+			}
+			goType, ok := r.resolver.CustomRouteReturnGoType("", v.Name, cpath, method)
+		}
+	}*/
+
 	// Make sure we didn't miss any versions that don't have any kinds registered
 	for _, v := range r.appConfig.ManifestData.Versions {
 		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
@@ -346,6 +364,8 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if pkgPrefix == "" {
 				fmt.Printf("scheme does not contain kind %s.%s, skipping OpenAPI component\n", v.Name, manifestKind.Kind) //nolint:revive
 			}
+			// format the package prefix the way k8s expects it
+			pkgPrefix = ToOpenAPIName(pkgPrefix)
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
 			if err != nil {
 				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err) //nolint:revive
@@ -355,7 +375,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if len(manifestKind.Routes) > 0 {
 				hasCustomRoutes = true
 				// Add the definitions and use the name as the reflect type name from the resolver, if it exists
-				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, "", defaultEtcdPathPrefix, callback))
+				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, "", pkgPrefix, callback))
 			}
 		}
 		// TODO: improve this, it's a bit wonky
@@ -365,7 +385,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback)
 			maps.Copy(res, entries)
 			for k := range entries {
-				parts := strings.Split(k, ".") // Everything before the . is the prefix
+				parts := strings.Split(k, ".") // Everything before the final . is the prefix
 				customRoutePkgPrefix = strings.Join(parts[:len(parts)-1], ".")
 				break
 			}
@@ -375,7 +395,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback)
 			maps.Copy(res, entries)
 			for k := range entries {
-				parts := strings.Split(k, ".") // Everything before the . is the prefix
+				parts := strings.Split(k, ".") // Everything before the final . is the prefix
 				customRoutePkgPrefix = strings.Join(parts[:len(parts)-1], ".")
 				break
 			}
@@ -393,7 +413,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	}
 	if hasCustomRoutes {
 		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
-		res["github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject"] = common.OpenAPIDefinition{
+		res[ToOpenAPIName("com.github.grafana-app-sdk.k8s.apiserver.EmptyObject")] = common.OpenAPIDefinition{
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
 					Description: "EmptyObject defines a model for a missing object type",
@@ -402,6 +422,10 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			},
 		}
 	}
+	for k := range res {
+		fmt.Println(k)
+	}
+	fmt.Println("============")
 	return res
 }
 
@@ -542,6 +566,9 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				return fmt.Errorf("failed to find WebService for version %s", ver.Name)
 			}
 		}
+	}
+	for k, v := range r.scheme.KnownTypes(schema.GroupVersion{Group: "example.ext.grafana.com", Version: "v1alpha1"}) {
+		fmt.Printf("\n\t%s: %T", k, v)
 	}
 
 	return err
@@ -884,7 +911,7 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 	pkgPrefix := defaultPkgPrefix
 	if ok {
 		typ := reflect.TypeOf(goType)
-		pkgPrefix = typ.PkgPath()
+		pkgPrefix = ToOpenAPIName(typ.PkgPath())
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
@@ -925,27 +952,27 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 				typeSchema.Properties["metadata"] = spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Default: map[string]any{},
-						Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						Ref:     ref(v1.ObjectMeta{}.OpenAPIModelName()),
 					},
 				}
-				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+				dependencies = append(dependencies, v1.ObjectMeta{}.OpenAPIModelName())
 			}
 		} else if usesListMeta, ok := metadataProp.Extensions[app.OpenAPIExtensionUsesKubernetesListMeta]; ok {
 			if cast, ok := usesListMeta.(bool); ok && cast {
 				typeSchema.Properties["metadata"] = spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Default: map[string]any{},
-						Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						Ref:     ref(v1.ListMeta{}.OpenAPIModelName()),
 					},
 				}
-				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta")
+				dependencies = append(dependencies, v1.ListMeta{}.OpenAPIModelName())
 			}
 		}
 	}
 	if len(dependencies) == 0 {
 		dependencies = nil // set dependencies to nil so it's omitted in the OpenAPIDefinition
 	}
-	return typePath, common.OpenAPIDefinition{
+	return ToOpenAPIName(typePath), common.OpenAPIDefinition{
 		Schema:       typeSchema,
 		Dependencies: dependencies,
 	}
@@ -1001,7 +1028,7 @@ func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, met
 	goType, ok := resolver(kind, ver, opPath, method)
 	if ok {
 		typ := reflect.TypeOf(goType)
-		pkgPrefix = typ.PkgPath()
+		pkgPrefix = ToOpenAPIName(typ.PkgPath())
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
@@ -1036,7 +1063,7 @@ func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, met
 	if len(dependencies) == 0 {
 		dependencies = nil
 	}
-	return typePath, common.OpenAPIDefinition{
+	return ToOpenAPIName(typePath), common.OpenAPIDefinition{
 		Schema:       typeSchema,
 		Dependencies: dependencies,
 	}
@@ -1303,6 +1330,10 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 
 type EmptyObject struct{}
 
+func (EmptyObject) OpenAPIModelName() string {
+	return "com.github.grafana-app-sdk.k8s.apiserver.EmptyObject"
+}
+
 func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value string) (string, string, error) {
 	return func(label, value string) (string, string, error) {
 		if label == "metadata.name" || (kind.Scope() != resource.ClusterScope && label == "metadata.namespace") {
@@ -1318,4 +1349,25 @@ func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value strin
 		}
 		return "", "", fmt.Errorf("field label not supported for %s: %s", kind.GroupVersionKind(), label)
 	}
+}
+
+// ToOpenAPIName is copied from k8s.io/apimachinery/pkg/runtime/scheme.go's toOpenAPIDefinitionName
+// To ensure we use the same naming definition as kubernetes expects
+// TODO: @IfSentient we should start using OpenAPIModelName() on all go types generated, this will likely need to be done in grafana/cog
+func ToOpenAPIName(name string) string {
+
+	nameParts := strings.Split(name, "/")
+	// Reverse first part. e.g., io.k8s... instead of k8s.io...
+	if len(nameParts) > 0 && strings.Contains(nameParts[0], ".") {
+		nameParts[0] = reverseParts(nameParts[0])
+	}
+	return strings.Join(nameParts, ".")
+}
+
+func reverseParts(dotSeparatedName string) string {
+	parts := strings.Split(dotSeparatedName, ".")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return strings.Join(parts, ".")
 }

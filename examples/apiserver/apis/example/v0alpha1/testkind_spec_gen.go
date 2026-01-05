@@ -11,3 +11,6 @@ type TestKindSpec struct {
 func NewTestKindSpec() *TestKindSpec {
 	return &TestKindSpec{}
 }
+func (TestKindSpec) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v0alpha1.TestKindSpec"
+}

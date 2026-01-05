@@ -11,3 +11,6 @@ type GetExampleBody struct {
 func NewGetExampleBody() *GetExampleBody {
 	return &GetExampleBody{}
 }
+func (GetExampleBody) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v2alpha1.GetExampleBody"
+}

@@ -32,6 +32,13 @@ type CustomRouteGoTypesJenny struct {
 	// AnyAsInterface determines whether to use `interface{}` instead of `any` in generated go code.
 	// If true, `interface{}` will be used instead of `any`.
 	AnyAsInterface bool
+
+	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
+	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
+	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
+	// apiservers if using the default apiserver.AppInstaller.
+	// gvk.Kind may be empty when called if the custom route is a resource route without a kind.
+	OpenAPINamer func(OpenAPINamerInfo) string
 }
 
 func (*CustomRouteGoTypesJenny) JennyName() string {
@@ -42,12 +49,24 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 	files := make(codejen.Files, 0)
 	for _, version := range appManifest.Versions() {
 		for _, kind := range version.Kinds() {
+			var openAPINamer func(string) string = nil
+			if c.OpenAPINamer != nil {
+				openAPINamer = func(name string) string {
+					return c.OpenAPINamer(OpenAPINamerInfo{
+						TypeName:   name,
+						FullGroup:  appManifest.Properties().FullGroup,
+						ShortGroup: appManifest.Properties().Group,
+						Version:    version.Name(),
+						Kind:       kind.Kind,
+					})
+				}
+			}
 			for cpath, methods := range kind.Routes {
 				for method, route := range methods {
 					if route.Name == "" {
 						route.Name = defaultRouteName(method, cpath)
 					}
-					generated, err := c.generateCustomRouteKinds(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), strings.ToLower(kind.MachineName), route)
+					generated, err := c.generateCustomRouteKinds(getGeneratedPathForKind(c.GroupByKind, appManifest.Properties().Group, kind, version.Name()), ToPackageName(version.Name()), strings.ToLower(kind.MachineName), route, openAPINamer)
 					if err != nil {
 						return nil, fmt.Errorf("failed to generate custom route types for route %s, kind %s: %w", route.Name, kind.Kind, err)
 					}
@@ -55,12 +74,24 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				}
 			}
 		}
+		var openAPINamer func(string) string = nil
+		if c.OpenAPINamer != nil {
+			openAPINamer = func(name string) string {
+				return c.OpenAPINamer(OpenAPINamerInfo{
+					TypeName:   name,
+					FullGroup:  appManifest.Properties().FullGroup,
+					ShortGroup: appManifest.Properties().Group,
+					Version:    version.Name(),
+					Kind:       "",
+				})
+			}
+		}
 		for cpath, methods := range version.Routes().Namespaced {
 			for method, route := range methods {
 				if route.Name == "" {
 					route.Name = defaultRouteName(method, cpath)
 				}
-				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route, openAPINamer)
 				if err != nil {
 					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
 				}
@@ -72,7 +103,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 				if route.Name == "" {
 					route.Name = defaultRouteName(method, cpath)
 				}
-				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route)
+				generated, err := c.generateCustomRouteKinds(filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name())), ToPackageName(version.Name()), "", route, openAPINamer)
 				if err != nil {
 					return nil, fmt.Errorf("failed to generate custom route types for route %s, version %s: %w", route.Name, version.Name(), err)
 				}
@@ -83,7 +114,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 	return files, nil
 }
 
-func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute) (codejen.Files, error) {
+func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute, openAPINamer func(string) string) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if !customRoute.Response.Schema.Exists() {
 		return nil, errors.New("custom route response is required")
@@ -96,7 +127,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	}
 	// Response
 	typeName := exportField(customRoute.Name)
-	responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath)
+	responseFiles, err := c.generateResponseTypes(customRoute, typeName, packageName, filenamePrefix, basePath, openAPINamer)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +143,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 			PackageName: packageName,
 			Name:        "Params",
 			NamePrefix:  requestTypeName,
-		}, 1)
+		}, 0, openAPINamer)
 		if err != nil {
 			return nil, err
 		}
@@ -122,11 +153,17 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 			From:         []codejen.NamedJenny{c},
 		})
 
+		wrapperTypeName := fmt.Sprintf("%sObject", requestParamsTypeName)
+		wrapperOpenAPIName := ""
+		if openAPINamer != nil {
+			wrapperOpenAPIName = openAPINamer(wrapperTypeName)
+		}
 		requestQueryObjectType := bytes.Buffer{}
 		err = templates.WriteRuntimeObjectWrapper(templates.RuntimeObjectWrapperMetadata{
-			PackageName:     packageName,
-			WrapperTypeName: fmt.Sprintf("%sObject", requestParamsTypeName),
-			TypeName:        requestParamsTypeName,
+			PackageName:      packageName,
+			WrapperTypeName:  wrapperTypeName,
+			TypeName:         requestParamsTypeName,
+			OpenAPIModelName: wrapperOpenAPIName,
 		}, &requestQueryObjectType)
 		if err != nil {
 			return nil, err
@@ -144,7 +181,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 			PackageName: packageName,
 			Name:        "Body",
 			NamePrefix:  requestTypeName,
-		}, 1)
+		}, 0, openAPINamer)
 		if err != nil {
 			return nil, err
 		}
@@ -157,7 +194,7 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 	return files, nil
 }
 
-func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, filenamePrefix, fileBasePath string) (codejen.Files, error) {
+func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, filenamePrefix, fileBasePath string, openAPINamer func(string) string) (codejen.Files, error) {
 	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
 		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
@@ -168,11 +205,11 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	}
 	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
 		PackageName:                    packageName,
-		Name:                           toExportedFieldName(bodyName),
-		NamePrefix:                     "", // TODO: not sure if we want this set
+		Name:                           "Body",
+		NamePrefix:                     toExportedFieldName(typeName), // TODO: not sure if we want this set
 		AddKubernetesOpenAPIGenComment: c.AddKubernetesCodegen,
 		AnyAsInterface:                 c.AnyAsInterface,
-	}, 1)
+	}, 0, openAPINamer)
 	if err != nil {
 		return nil, err
 	}
@@ -190,6 +227,10 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		From:         []codejen.NamedJenny{c},
 	})
 	if customRoute.Response.Metadata.TypeMeta {
+		wrapperOpenAPIName := ""
+		if openAPINamer != nil {
+			wrapperOpenAPIName = openAPINamer(typeName)
+		}
 		buf := bytes.Buffer{}
 		err = templates.WriteRuntimeObjectWrapper(templates.RuntimeObjectWrapperMetadata{
 			PackageName:               packageName,
@@ -197,6 +238,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 			WrapperTypeName:           typeName,
 			HasObjectMeta:             customRoute.Response.Metadata.ObjectMeta,
 			HasListMeta:               customRoute.Response.Metadata.ListMeta,
+			OpenAPIModelName:          wrapperOpenAPIName,
 			AddDeepCopyForTypeName:    true,
 			KubernetesCodegenComments: true,
 		}, &buf)

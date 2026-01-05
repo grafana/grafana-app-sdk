@@ -647,6 +647,7 @@ func cueSchemaToSpecSchemaProps(v cue.Value, refPrefix string) (spec.SchemaProps
 	response := prefixReferences(schemaProps.Components.Schemas[kindKey], refPrefix, schemas)
 	delete(schemaProps.Components.Schemas, kindKey)
 	for k, val := range schemaProps.Components.Schemas {
+		fmt.Println("EXTRA SCHEMA: ", k)
 		schemas[fmt.Sprintf("%s%s", refPrefix, k)] = prefixReferences(val, refPrefix, schemas)
 	}
 	return response, schemas, nil

@@ -243,6 +243,10 @@ func (o *TestKind) DeepCopyInto(dst *TestKind) {
 	o.Status.DeepCopyInto(&dst.Status)
 }
 
+func (TestKind) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v0alpha1.TestKind"
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &TestKind{}
 
@@ -294,6 +298,10 @@ func (o *TestKindList) DeepCopy() *TestKindList {
 
 func (o *TestKindList) DeepCopyInto(dst *TestKindList) {
 	resource.CopyObjectInto(dst, o)
+}
+
+func (TestKindList) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v0alpha1.TestKindList"
 }
 
 // Interface compliance compile-time check

@@ -124,9 +124,9 @@ func NewApp(config app.Config) (app.App, error) {
 						},
 						GetRecursiveResponseBody: v1alpha1.GetRecursiveResponseBody{
 							Message: "Hello, world!",
-							Next: &v1alpha1.VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType{
+							Next: &v1alpha1.GetRecursiveResponseRecursiveType{
 								Message: "Hello again!",
-								Next: &v1alpha1.VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType{
+								Next: &v1alpha1.GetRecursiveResponseRecursiveType{
 									Message: "Hello once more!",
 								},
 							},

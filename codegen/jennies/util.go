@@ -39,3 +39,10 @@ func getGeneratedPathForKind(groupByKind bool, group string, kind codegen.Versio
 	}
 	return filepath.Join(ToPackageName(group), ToPackageName(version))
 }
+
+func GetGeneratedGoTypePath(groupByKind bool, shortGroup string, version string, kindMachineName string) string {
+	if groupByKind {
+		return filepath.Join(ToPackageName(kindMachineName), ToPackageName(version))
+	}
+	return filepath.Join(ToPackageName(shortGroup), ToPackageName(version))
+}
