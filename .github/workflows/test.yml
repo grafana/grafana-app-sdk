@@ -77,7 +77,7 @@ jobs:
           grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=customManifest --crdmanifest
           grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=testManifest --crdmanifest
           grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=customManifest --crdmanifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2  --gomodgenpath="pkg/generated"--defencoding=yaml --manifest=testManifest --crdmanifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=testManifest --crdmanifest
           sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/manifestdata/*.go
           diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
