@@ -30,6 +30,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
@@ -189,6 +190,10 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	configName, err := cmd.Flags().GetString(configFlag)
+	if err != nil {
+		return err
+	}
 	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
 	if err != nil {
 		return err
@@ -204,8 +209,8 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Get config
-	config, err := getLocalEnvConfig(localPath)
+	// Get envCfg
+	envCfg, err := getLocalEnvConfig(localPath)
 	if err != nil {
 		return err
 	}
@@ -226,7 +231,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Generate the k3d config (this has to be generated, as it needs to mount an absolute path on the host)
-	k3dConfig, err := generateK3dConfig(absPath, *config)
+	k3dConfig, err := generateK3dConfig(absPath, *envCfg)
 	if err != nil {
 		return err
 	}
@@ -235,7 +240,18 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	err = updateLocalConfigFromManifest(config, format, sourcePath, useOldManifestKinds, selector)
+	// HACK: Load base config from CLI flags which will eventually be removed
+	baseConfig := &config.Config{
+		Kinds: &config.KindsConfig{
+			PerKindVersion: useOldManifestKinds,
+		},
+		Codegen: &config.CodegenConfig{
+			EnableOperatorStatusGeneration: genOperatorState,
+		},
+		ManifestSelectors: []string{selector},
+	}
+
+	err = updateLocalConfigFromManifest(envCfg, baseConfig, format, sourcePath, configName)
 	if err != nil {
 		return err
 	}
@@ -244,18 +260,26 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	parseFunc := func() (codejen.Files, error) {
 		switch format {
 		case FormatCUE:
-			parser, err := cuekind.NewParser()
+			cue, err := cuekind.LoadCue(os.DirFS(sourcePath))
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator(parser.KindParser(cuekind.ParseConfig{
-				GenOperatorState: genOperatorState,
-				UseOldKinds:      useOldManifestKinds,
-			}), os.DirFS(sourcePath))
+			cfg, err := config.Load(cue, configName, baseConfig)
 			if err != nil {
 				return nil, err
 			}
-			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), selector)
+			parser, err := cuekind.NewParser(cue,
+				cfg.Codegen.EnableOperatorStatusGeneration,
+				cfg.Kinds.PerKindVersion,
+			)
+			if err != nil {
+				return nil, err
+			}
+			generator, err := codegen.NewGenerator(parser.KindParser())
+			if err != nil {
+				return nil, err
+			}
+			return generator.Generate(cuekind.CRDGenerator(yaml.Marshal, "yaml"), cfg.ManifestSelectors...)
 		case FormatNone:
 			return codejen.Files{}, nil
 		default:
@@ -263,7 +287,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, disablePluginMount, *config)
+	k8sYAML, genProps, err := generateKubernetesYAML(parseFunc, pluginID, disablePluginMount, *envCfg)
 	if err != nil {
 		return err
 	}
@@ -271,7 +295,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	aggregateScript, err := generateAggregationScript(*config, genProps)
+	aggregateScript, err := generateAggregationScript(*envCfg, genProps)
 	if err != nil {
 		return err
 	}
@@ -284,8 +308,8 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 }
 
 func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
-	// Read config (try YAML first, then JSON)
-	config := localEnvConfig{
+	// Read envCfg (try YAML first, then JSON)
+	envCfg := localEnvConfig{
 		GenerateGrafanaDeployment: true,
 		GrafanaImage:              "grafana/grafana-enterprise:11.2.2",
 	}
@@ -294,7 +318,7 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = yaml.Unmarshal(cfgBytes, &config)
+		err = yaml.Unmarshal(cfgBytes, &envCfg)
 		if err != nil {
 			return nil, err
 		}
@@ -303,14 +327,14 @@ func getLocalEnvConfig(localPath string) (*localEnvConfig, error) {
 		if err != nil {
 			return nil, err
 		}
-		err = json.Unmarshal(cfgBytes, &config)
+		err = json.Unmarshal(cfgBytes, &envCfg)
 		if err != nil {
 			return nil, err
 		}
 	} else {
 		return nil, fmt.Errorf("nether %s/config.yaml nor %s/config.json not found, please run `grafana-app-sdk project local init` to generate", localPath, localPath)
 	}
-	return &config, nil
+	return &envCfg, nil
 }
 
 func getPluginID(rootPath string) (string, error) {
@@ -331,20 +355,20 @@ func getPluginID(rootPath string) (string, error) {
 	return um.ID, err
 }
 
-func generateK3dConfig(projectRoot string, config localEnvConfig) ([]byte, error) {
+func generateK3dConfig(projectRoot string, envCfg localEnvConfig) ([]byte, error) {
 	k3dConfigTmpl, err := template.ParseFS(localEnvFiles, "templates/local/generated/k3d-config.json")
 	if err != nil {
 		return nil, err
 	}
 	additionalVolumes := make([]additionalMountedVolume, 0)
-	for _, v := range config.AdditionalVolumeMounts {
+	for _, v := range envCfg.AdditionalVolumeMounts {
 		v.SourcePath = expandPath(v.SourcePath, projectRoot)
 		additionalVolumes = append(additionalVolumes, v)
 	}
 	buf := &bytes.Buffer{}
 	err = k3dConfigTmpl.Execute(buf, map[string]any{
 		"ProjectRoot":       projectRoot,
-		"BindPort":          strconv.Itoa(config.Port),
+		"BindPort":          strconv.Itoa(envCfg.Port),
 		"AdditionalVolumes": additionalVolumes,
 	})
 	return buf.Bytes(), err
@@ -598,14 +622,14 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 	return output.Bytes(), props, err
 }
 
-func generateAggregationScript(config localEnvConfig, genProps yamlGenProperties) ([]byte, error) {
+func generateAggregationScript(envCfg localEnvConfig, genProps yamlGenProperties) ([]byte, error) {
 	tmpl, err := template.ParseFS(localEnvFiles, "templates/local/generated/configure-grafana.sh")
 	if err != nil {
 		return nil, err
 	}
 	output := bytes.Buffer{}
 	err = tmpl.Execute(&output, scriptGenProperties{
-		Port: config.Port,
+		Port: envCfg.Port,
 		CRDs: genProps.CRDs,
 	})
 	if err != nil {
@@ -656,17 +680,17 @@ func localGenerateDatasourceYAML(datasource string, isDefault bool, props *yamlG
 	return nil
 }
 
-func localGenerateGrafanaYAML(config localEnvConfig, props *yamlGenProperties, out io.Writer) error {
-	for k, v := range config.PluginJSON {
+func localGenerateGrafanaYAML(envCfg localEnvConfig, props *yamlGenProperties, out io.Writer) error {
+	for k, v := range envCfg.PluginJSON {
 		val, err := parsePluginJSONValue(v)
 		if err != nil {
 			return fmt.Errorf("unable to parse pluginJson key '%s'", k)
 		}
 		props.JSONData[k] = val
 	}
-	config.PluginSecureJSON["kubeconfig"] = "cluster"
-	config.PluginSecureJSON["kubenamespace"] = "default"
-	for k, v := range config.PluginSecureJSON {
+	envCfg.PluginSecureJSON["kubeconfig"] = "cluster"
+	envCfg.PluginSecureJSON["kubenamespace"] = "default"
+	for k, v := range envCfg.PluginSecureJSON {
 		val, err := parsePluginJSONValue(v)
 		if err != nil {
 			return fmt.Errorf("unable to parse pluginSecureJson key '%s'", k)
@@ -864,23 +888,38 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePath string, useOldManifestKinds bool, selectors ...string) error {
+func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Config, format, cuePath, configName string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
 	}
 	if format == FormatCUE {
-		parser, err := cuekind.NewParser()
+		cue, err := cuekind.LoadCue(os.DirFS(cuePath))
 		if err != nil {
 			return err
 		}
-		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser(cuekind.ParseConfig{
-			UseOldKinds: useOldManifestKinds,
-		}), os.DirFS(cuePath))
+		cfg, err := config.Load(cue, configName, baseConfig)
 		if err != nil {
 			return err
 		}
-		fs, err := generator.Generate(cuekind.ManifestGenerator(json.Marshal, "json", false, true), selectors...)
+		parser, err := cuekind.NewParser(cue,
+			cfg.Codegen.EnableOperatorStatusGeneration,
+			cfg.Kinds.PerKindVersion,
+		)
+		if err != nil {
+			return err
+		}
+		generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser())
+		if err != nil {
+			return err
+		}
+
+		fs, err := generator.Generate(cuekind.ManifestGenerator(
+			cfg.Definitions.Encoding,
+			cfg.Definitions.ManifestSchemas,
+			cfg.Definitions.ManifestVersion),
+			cfg.ManifestSelectors...,
+		)
 		if err != nil {
 			return err
 		}
@@ -896,13 +935,13 @@ func updateLocalConfigFromManifest(config *localEnvConfig, format string, cuePat
 			for _, v := range md.Spec.Versions {
 				for _, k := range v.Kinds {
 					if k.Conversion {
-						config.Webhooks.Converting = true
+						envCfg.Webhooks.Converting = true
 					}
 					if k.Admission != nil && k.Admission.SupportsAnyValidation() {
-						config.Webhooks.Validating = true
+						envCfg.Webhooks.Validating = true
 					}
 					if k.Admission != nil && k.Admission.SupportsAnyMutation() {
-						config.Webhooks.Mutating = true
+						envCfg.Webhooks.Mutating = true
 					}
 				}
 			}

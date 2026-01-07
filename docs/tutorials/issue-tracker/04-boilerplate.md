@@ -21,16 +21,14 @@ Usage:
   grafana-app-sdk project component add [flags]
 
 Flags:
-      --grouping string   Kind go package grouping.
-                          Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command (default "kind")
   -h, --help              help for add
 
 Global Flags:
-  -f, --format string     Format in which kinds are written for this project (currently allowed values are 'cue') (default "cue")
-      --manifest string   Path selector to use for the manifest (default "manifest")
-      --overwrite         Overwrite existing files instead of prompting
-  -p, --path string       Path to project directory
-  -s, --source string     Path to directory with your codegen source files (such as a CUE module) (default "kinds")
+  -c, --config string   Path selector of the config object within the manifest (default "config")
+  -f, --format string   Format in which kinds are written for this project (currently allowed values are 'cue') (default "cue")
+      --overwrite       Overwrite existing files instead of prompting
+  -p, --path string     Path to project directory
+  -s, --source string   Path to directory with your codegen source files (such as a CUE module) (default "kinds")
 ```
 
 We can leave all these flags empty, as we're fine with the defaults, but it's good to know how we can find information about the CLI commands.
