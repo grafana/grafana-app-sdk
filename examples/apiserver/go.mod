@@ -7,7 +7,7 @@ toolchain go1.24.2
 replace github.com/grafana/grafana-app-sdk => ../../
 
 require (
-	github.com/grafana/grafana-app-sdk v0.48.2
+	github.com/grafana/grafana-app-sdk v0.48.7
 	github.com/grafana/grafana-app-sdk/logging v0.48.5
 	k8s.io/apimachinery v0.34.3
 	k8s.io/apiserver v0.34.3
