@@ -31,6 +31,15 @@ datasourceConfigs:
 #    type: prometheus
 #    uid: "my-cortex-datasource"
 #    url: "http://cortex.default.svc.cluster.local:9009/api/prom"
+# Here is an example with jsonData (e.g., for BigQuery)
+#  - access: proxy
+#    editable: true
+#    name: "BigQuery"
+#    type: grafana-bigquery-datasource
+#    uid: "my-bigquery-datasource"
+#    jsonData:
+#      authenticationType: gce
+#      defaultProject: my-project
 #
 # Toggle the generating of the grafana deployments, if you want to control these elsewhere
 generateGrafanaDeployment: true
@@ -42,6 +51,41 @@ grafanaImage: grafana/grafana-enterprise:12.0.0
 grafanaInstallPlugins: ""
 
 # You can mount additional volumes from the local disk (aside from the already-mounted ./local/mounted-files) by specifying them here
+# These volumes are mounted into the k3d node. To also mount them into the Grafana container, use grafanaVolumeMounts.
 additionalVolumeMounts:
 #  - sourcePath: "./local/other" # Paths starting with a ./ or no leading slash are relative to the project root. Start with / for an absolute path
 #    mountPath: "/tmp/k3d/other" # The destination volume path. Best practice is to use /tmp/k3d as the starting point. The default volume mount for ./local/mounted-files is /tmp/k3d/mounted-files
+
+# Additional environment variables to add to the Grafana container
+grafanaEnvVars:
+#  - name: "GOOGLE_APPLICATION_CREDENTIALS"
+#    value: "/gcloud/application_default_credentials.json"
+
+# Additional volume mounts to add to the Grafana container
+# The hostPath should reference a path from additionalVolumeMounts (the k3d node mount path)
+grafanaVolumeMounts:
+#  - name: "gcloud-credentials"
+#    mountPath: "/gcloud"
+#    hostPath: "/tmp/k3d/gcloud"
+
+# Example: Full BigQuery setup with gcloud credentials
+# additionalVolumeMounts:
+#   - sourcePath: "~/.config/gcloud"  # ~ is expanded to home directory
+#     mountPath: "/tmp/k3d/gcloud"
+# grafanaEnvVars:
+#   - name: "GOOGLE_APPLICATION_CREDENTIALS"
+#     value: "/gcloud/application_default_credentials.json"
+# grafanaVolumeMounts:
+#   - name: "gcloud-credentials"
+#     mountPath: "/gcloud"
+#     hostPath: "/tmp/k3d/gcloud"
+# datasourceConfigs:
+#   - access: proxy
+#     editable: true
+#     name: "BigQuery"
+#     type: grafana-bigquery-datasource
+#     uid: "my-bigquery-datasource"
+#     jsonData:
+#       authenticationType: gce
+#       defaultProject: my-project
+# grafanaInstallPlugins: "grafana-bigquery-datasource"

@@ -641,6 +641,76 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 	})
 }
 
+func TestInformerController_Run_HandleEvents(t *testing.T) {
+	t.Run("reconciler update", func(t *testing.T) {
+		kind := "foo"
+		inf := &testInformer{}
+		c := NewInformerController(InformerControllerConfig{})
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		reconcileAction := ReconcileActionUnknown
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileAction = request.Action
+				wg.Done()
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		oldObj := emptyObject.Copy()
+		newObj := emptyObject.Copy()
+		newObj.SetResourceVersion("321") // Different RV
+		inf.FireUpdate(context.Background(), oldObj, newObj)
+		wg.Wait()
+		cancel()
+		assert.Equal(t, ReconcileActionUpdated, reconcileAction)
+	})
+	t.Run("reconciler cache resync", func(t *testing.T) {
+		kind := "foo"
+		inf := &testInformer{}
+		c := NewInformerController(InformerControllerConfig{})
+		c.RetryPolicy = func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 50
+		}
+		c.retryTickerInterval = time.Millisecond * 50
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		reconcileAction := ReconcileActionUnknown
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileAction = request.Action
+				wg.Done()
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		// Run
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		oldObj := emptyObject.Copy()
+		newObj := emptyObject.Copy()
+		inf.FireUpdate(context.Background(), oldObj, newObj)
+		wg.Wait()
+		cancel()
+		assert.Equal(t, ReconcileActionResynced, reconcileAction)
+	})
+}
+
 func TestInformerController_Run_BackoffRetry(t *testing.T) {
 	// The backoff retry test needs to take at least 16 seconds to run properly, so it's isolated to its own function
 	// to avoid the often-used default of a 30-second-timeout on tests affecting other retry tests which take a few seconds each to run
