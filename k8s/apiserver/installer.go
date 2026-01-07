@@ -355,6 +355,8 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if pkgPrefix == "" {
 				fmt.Printf("scheme does not contain kind %s.%s, skipping OpenAPI component\n", v.Name, manifestKind.Kind) //nolint:revive
 			}
+			// format the package prefix the way k8s expects it
+			pkgPrefix = ToOpenAPIName(pkgPrefix)
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
 			if err != nil {
 				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err) //nolint:revive
@@ -364,7 +366,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if len(manifestKind.Routes) > 0 {
 				hasCustomRoutes = true
 				// Add the definitions and use the name as the reflect type name from the resolver, if it exists
-				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, "", defaultEtcdPathPrefix, callback))
+				maps.Copy(res, r.getManifestCustomRoutesOpenAPI(manifestKind.Kind, v.Name, manifestKind.Routes, "", pkgPrefix, callback))
 			}
 		}
 		// TODO: improve this, it's a bit wonky
@@ -374,7 +376,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback)
 			maps.Copy(res, entries)
 			for k := range entries {
-				parts := strings.Split(k, ".") // Everything before the . is the prefix
+				parts := strings.Split(k, ".") // Everything before the final . is the prefix
 				customRoutePkgPrefix = strings.Join(parts[:len(parts)-1], ".")
 				break
 			}
@@ -384,7 +386,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback)
 			maps.Copy(res, entries)
 			for k := range entries {
-				parts := strings.Split(k, ".") // Everything before the . is the prefix
+				parts := strings.Split(k, ".") // Everything before the final . is the prefix
 				customRoutePkgPrefix = strings.Join(parts[:len(parts)-1], ".")
 				break
 			}
@@ -402,7 +404,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	}
 	if hasCustomRoutes {
 		maps.Copy(res, GetResourceCallOptionsOpenAPIDefinition())
-		res["github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject"] = common.OpenAPIDefinition{
+		res["com.github.grafana.grafana-app-sdk.k8s.apiserver.EmptyObject"] = common.OpenAPIDefinition{
 			Schema: spec.Schema{
 				SchemaProps: spec.SchemaProps{
 					Description: "EmptyObject defines a model for a missing object type",
@@ -935,7 +937,7 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 	pkgPrefix := defaultPkgPrefix
 	if ok {
 		typ := reflect.TypeOf(goType)
-		pkgPrefix = typ.PkgPath()
+		pkgPrefix = ToOpenAPIName(typ.PkgPath())
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
@@ -976,27 +978,27 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 				typeSchema.Properties["metadata"] = spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Default: map[string]any{},
-						Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+						Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 					},
 				}
-				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+				dependencies = append(dependencies, metav1.ObjectMeta{}.OpenAPIModelName())
 			}
 		} else if usesListMeta, ok := metadataProp.Extensions[app.OpenAPIExtensionUsesKubernetesListMeta]; ok {
 			if cast, ok := usesListMeta.(bool); ok && cast {
 				typeSchema.Properties["metadata"] = spec.Schema{
 					SchemaProps: spec.SchemaProps{
 						Default: map[string]any{},
-						Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+						Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 					},
 				}
-				dependencies = append(dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta")
+				dependencies = append(dependencies, metav1.ListMeta{}.OpenAPIModelName())
 			}
 		}
 	}
 	if len(dependencies) == 0 {
 		dependencies = nil // set dependencies to nil so it's omitted in the OpenAPIDefinition
 	}
-	return typePath, common.OpenAPIDefinition{
+	return ToOpenAPIName(typePath), common.OpenAPIDefinition{
 		Schema:       typeSchema,
 		Dependencies: dependencies,
 	}
@@ -1052,7 +1054,7 @@ func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, met
 	goType, ok := resolver(kind, ver, opPath, method)
 	if ok {
 		typ := reflect.TypeOf(goType)
-		pkgPrefix = typ.PkgPath()
+		pkgPrefix = ToOpenAPIName(typ.PkgPath())
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
@@ -1087,7 +1089,7 @@ func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, met
 	if len(dependencies) == 0 {
 		dependencies = nil
 	}
-	return typePath, common.OpenAPIDefinition{
+	return ToOpenAPIName(typePath), common.OpenAPIDefinition{
 		Schema:       typeSchema,
 		Dependencies: dependencies,
 	}
@@ -1354,6 +1356,10 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 
 type EmptyObject struct{}
 
+func (EmptyObject) OpenAPIModelName() string {
+	return "com.github.grafana-app-sdk.k8s.apiserver.EmptyObject"
+}
+
 func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value string) (string, string, error) {
 	return func(label, value string) (string, string, error) {
 		if label == "metadata.name" || (kind.Scope() != resource.ClusterScope && label == "metadata.namespace") {
@@ -1369,4 +1375,24 @@ func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value strin
 		}
 		return "", "", fmt.Errorf("field label not supported for %s: %s", kind.GroupVersionKind(), label)
 	}
+}
+
+// ToOpenAPIName is copied from k8s.io/apimachinery/pkg/runtime/scheme.go's toOpenAPIDefinitionName
+// To ensure we use the same naming definition as kubernetes expects
+// TODO: @IfSentient we should start using OpenAPIModelName() on all go types generated, this will likely need to be done in grafana/cog
+func ToOpenAPIName(name string) string {
+	nameParts := strings.Split(name, "/")
+	// Reverse first part. e.g., io.k8s... instead of k8s.io...
+	if len(nameParts) > 0 && strings.Contains(nameParts[0], ".") {
+		nameParts[0] = reverseParts(nameParts[0])
+	}
+	return strings.Join(nameParts, ".")
+}
+
+func reverseParts(dotSeparatedName string) string {
+	parts := strings.Split(dotSeparatedName, ".")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return strings.Join(parts, ".")
 }

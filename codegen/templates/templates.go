@@ -102,6 +102,7 @@ type ResourceObjectTemplateMetadata struct {
 	SpecTypeName         string
 	ObjectTypeName       string
 	ObjectShortName      string
+	OpenAPIModelName     string
 	Subresources         []SubresourceMetadata
 	CustomMetadataFields []ObjectMetadataField
 }
@@ -618,6 +619,7 @@ type RuntimeObjectWrapperMetadata struct {
 	PackageName               string
 	WrapperTypeName           string
 	TypeName                  string
+	OpenAPIModelName          string
 	HasObjectMeta             bool
 	HasListMeta               bool
 	AddDeepCopyForTypeName    bool

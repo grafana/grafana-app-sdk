@@ -41,4 +41,9 @@ func (o *{{ .WrapperTypeName }}) DeepCopyInto(dst *{{ .WrapperTypeName }}) {
     _ = resource.CopyObjectInto(&dst{{ .TypeName }}, &o.{{ .TypeName }}){{ end }}
 }
 
+{{ if .OpenAPIModelName }}
+func ({{.WrapperTypeName}}) OpenAPIModelName() string {
+    return "{{ .OpenAPIModelName }}"
+}{{ end }}
+
 var _ runtime.Object = New{{ .WrapperTypeName }}()

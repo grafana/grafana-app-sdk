@@ -243,6 +243,10 @@ func (o *TestKind2) DeepCopyInto(dst *TestKind2) {
 	o.Status.DeepCopyInto(&dst.Status)
 }
 
+func (TestKind2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2"
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &TestKind2{}
 
@@ -294,6 +298,10 @@ func (o *TestKind2List) DeepCopy() *TestKind2List {
 
 func (o *TestKind2List) DeepCopyInto(dst *TestKind2List) {
 	resource.CopyObjectInto(dst, o)
+}
+
+func (TestKind2List) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2List"
 }
 
 // Interface compliance compile-time check

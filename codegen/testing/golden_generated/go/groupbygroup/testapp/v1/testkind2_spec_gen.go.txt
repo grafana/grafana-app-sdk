@@ -11,3 +11,6 @@ type TestKind2Spec struct {
 func NewTestKind2Spec() *TestKind2Spec {
 	return &TestKind2Spec{}
 }
+func (TestKind2Spec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2Spec"
+}

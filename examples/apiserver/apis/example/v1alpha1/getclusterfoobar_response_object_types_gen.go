@@ -34,4 +34,8 @@ func (o *GetClusterFoobar) DeepCopyInto(dst *GetClusterFoobar) {
 	o.GetClusterFoobarBody.DeepCopyInto(&dst.GetClusterFoobarBody)
 }
 
+func (GetClusterFoobar) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobar"
+}
+
 var _ runtime.Object = NewGetClusterFoobar()

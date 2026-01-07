@@ -42,3 +42,9 @@ const (
 	TestKindStatusOperatorStateStateInProgress TestKindStatusOperatorStateState = "in_progress"
 	TestKindStatusOperatorStateStateFailed     TestKindStatusOperatorStateState = "failed"
 )
+func (TestKindstatusOperatorState) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindstatusOperatorState"
+}
+func (TestKindStatus) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindStatus"
+}

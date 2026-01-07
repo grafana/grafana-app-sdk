@@ -23,3 +23,9 @@ func NewGetFoobarRequestBody() *GetFoobarRequestBody {
 		Shared: *NewGetFoobarRequestSharedType(),
 	}
 }
+func (GetFoobarRequestSharedType) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarRequestSharedType"
+}
+func (GetFoobarRequestBody) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarRequestBody"
+}

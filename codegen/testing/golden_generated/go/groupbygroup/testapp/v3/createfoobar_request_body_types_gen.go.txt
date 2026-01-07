@@ -2,23 +2,29 @@
 
 package v3
 
-type CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey struct {
+type CreateFoobarRequestKey struct {
 	Name  string  `json:"name"`
 	Match *string `json:"match,omitempty"`
 }
 
-// NewCreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey creates a new CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey object.
-func NewCreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey() *CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey {
-	return &CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey{}
+// NewCreateFoobarRequestKey creates a new CreateFoobarRequestKey object.
+func NewCreateFoobarRequestKey() *CreateFoobarRequestKey {
+	return &CreateFoobarRequestKey{}
 }
 
 type CreateFoobarRequestBody struct {
-	Keys []CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey `json:"keys"`
+	Keys []CreateFoobarRequestKey `json:"keys"`
 }
 
 // NewCreateFoobarRequestBody creates a new CreateFoobarRequestBody object.
 func NewCreateFoobarRequestBody() *CreateFoobarRequestBody {
 	return &CreateFoobarRequestBody{
-		Keys: []CreateFoobarRequestversionsV3RoutesNamespacedFoobarPOSTKey{},
+		Keys: []CreateFoobarRequestKey{},
 	}
+}
+func (CreateFoobarRequestKey) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarRequestKey"
+}
+func (CreateFoobarRequestBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarRequestBody"
 }

@@ -1,6 +1,7 @@
 package cuekind
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/grafana/codejen"
@@ -8,6 +9,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
+	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
@@ -23,7 +25,7 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // If `groupKinds` is true, kinds within the same group will exist in the same package.
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
-func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
 	g := codejen.JennyListWithNamer(namerFunc)
 	g.Append(
 		&jennies.GoTypes{
@@ -32,10 +34,18 @@ func ResourceGenerator(groupKinds bool) *codejen.JennyList[codegen.Kind] {
 			GroupByKind:          !groupKinds,
 			AnyAsInterface:       true,                 // This is for compatibility with kube openAPI generator, which has issues with map[string]any
 			ExcludeFields:        []string{"metadata"}, // We don't want an object generated for the metadata, as we use the k8s metadata objects
+			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
+				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
+				return apiserver.ToOpenAPIName(path)
+			},
 		},
 		&jennies.ResourceObjectGenerator{
 			SubresourceTypesArePrefixed: groupKinds,
 			GroupByKind:                 !groupKinds,
+			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
+				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
+				return apiserver.ToOpenAPIName(path)
+			},
 		},
 		&jennies.SchemaGenerator{
 			GroupByKind: !groupKinds,
@@ -150,6 +160,10 @@ func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath
 			AddKubernetesCodegen: true,
 			GroupByKind:          !groupKinds,
 			AnyAsInterface:       true, // This is for compatibility with kube openAPI generator, which has issues with map[string]any
+			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
+				path := filepath.Join(projectRepo, goGenPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
+				return apiserver.ToOpenAPIName(path)
+			},
 		},
 		&jennies.ResourceClientJenny{
 			GroupByKind: !groupKinds,
