@@ -29,6 +29,7 @@ import (
 	genericregistry "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
+	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -170,9 +171,10 @@ var (
 var _ AppInstaller = (*defaultInstaller)(nil)
 
 type defaultInstaller struct {
-	appProvider app.Provider
-	appConfig   app.Config
-	resolver    GoTypeResolver
+	appProvider    app.Provider
+	appConfig      app.Config
+	resolver       GoTypeResolver
+	resourceConfig *serverstorage.ResourceConfig
 
 	app    app.App
 	appMux sync.Mutex
@@ -200,6 +202,13 @@ func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, reso
 		installer.appConfig.SpecificConfig = appProvider.SpecificConfig()
 	}
 	return installer, nil
+}
+
+// SetResourceConfig sets a ResourceConfig for the installer, which will be used to check each kind and route
+// when installing the APIs. Custom routes will be matched using the first slash-separated segment of their path as the resource.
+// Providing a `nil` ResourceConfig will remove any resourceConfig checking (this is the default behavior).
+func (r *defaultInstaller) SetResourceConfig(resourceConfig *serverstorage.ResourceConfig) {
+	r.resourceConfig = resourceConfig
 }
 
 //nolint:gocognit,gocyclo,funlen
@@ -425,6 +434,14 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	for gv, kinds := range kindsByGV {
 		storage := map[string]rest.Storage{}
 		for _, kind := range kinds {
+			if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
+				Group:    gv.Group,
+				Version:  gv.Version,
+				Resource: kind.Kind.Plural(),
+			}) {
+				logging.DefaultLogger.Info("Skipping resource based on provided ResourceConfig", "kind", kind.Kind, "version", gv.Version, "group", group)
+				continue
+			}
 			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
 			if err != nil {
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
@@ -485,12 +502,29 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	}
 
 	// Make sure we didn't miss any versions that don't have any kinds registered
+	hasEnabledRoutes := make(map[string]bool)
 	for _, v := range r.appConfig.ManifestData.Versions {
 		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
+		for routePath := range v.Routes.Namespaced {
+			if r.isCustomRouteEnabled(gv, routePath) {
+				hasEnabledRoutes[gv.Version] = true
+				break
+			}
+		}
+		for routePath := range v.Routes.Cluster {
+			if r.isCustomRouteEnabled(gv, routePath) {
+				hasEnabledRoutes[gv.Version] = true
+				break
+			}
+		}
 		if _, ok := kindsByGV[gv]; ok {
 			continue
 		}
 		if !slices.Contains(apiGroupInfo.PrioritizedVersions, gv) {
+			if !hasEnabledRoutes[gv.Version] {
+				// skip this version because none of the custom routes are enabled
+				continue
+			}
 			apiGroupInfo.PrioritizedVersions = append(apiGroupInfo.PrioritizedVersions, gv)
 		}
 	}
@@ -514,7 +548,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			return errors.New("could not register custom routes: server.RegisteredWebServices() is nil")
 		}
 		for _, ver := range r.ManifestData().Versions {
-			if len(ver.Routes.Namespaced) == 0 && len(ver.Routes.Cluster) == 0 {
+			if !hasEnabledRoutes[ver.Name] {
 				// No resource routes for this version
 				continue
 			}
@@ -523,12 +557,20 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
 					found = true
 					for rpath, route := range ver.Routes.Namespaced {
+						if !r.isCustomRouteEnabled(schema.GroupVersion{Group: group, Version: ver.Name}, rpath) {
+							logging.DefaultLogger.Info("Skipping namespaced custom route based on provided ResourceConfig", "path", rpath, "version", ver.Name, "group", group)
+							continue
+						}
 						err := r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.NamespacedScope)
 						if err != nil {
 							return fmt.Errorf("failed to register namespaced custom route '%s' for version %s: %w", rpath, ver.Name, err)
 						}
 					}
 					for rpath, route := range ver.Routes.Cluster {
+						if !r.isCustomRouteEnabled(schema.GroupVersion{Group: group, Version: ver.Name}, rpath) {
+							logging.DefaultLogger.Info("Skipping cluster custom route based on provided ResourceConfig", "path", rpath, "version", ver.Name, "group", group)
+							continue
+						}
 						err := r.registerResourceRoute(ws, schema.GroupVersion{Group: group, Version: ver.Name}, rpath, route, resource.ClusterScope)
 						if err != nil {
 							return fmt.Errorf("failed to register cluster custom route '%s' for version %s: %w", rpath, ver.Name, err)
@@ -755,6 +797,15 @@ func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}
 	return groupVersions
+}
+
+// isCustomRouteEnabled returns true if any of the following are true:
+// * resourceConfig is nil
+// * a resource with the same GV and resource==<first /-separated path segment of the path> is enabled
+// This is split into a separate method to allow for this logic to be more complex if we need to do exact route matching
+func (r *defaultInstaller) isCustomRouteEnabled(groupVersion schema.GroupVersion, routePath string) bool {
+	return r.resourceConfig == nil ||
+		r.resourceConfig.ResourceEnabled(groupVersion.WithResource(strings.Split(strings.Trim(routePath, "/"), "/")[0]))
 }
 
 // conversionHandlerFunc returns a function that will convert resources of type src to dst.
@@ -1094,42 +1145,42 @@ func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, routePath st
 		resp, _ := resolver(kind, ver, routePath, "POST")
 		methods["POST"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Post),
 		}
 	}
 	if props.Put != nil {
 		resp, _ := resolver(kind, ver, routePath, "PUT")
 		methods["PUT"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Put),
 		}
 	}
 	if props.Patch != nil {
 		resp, _ := resolver(kind, ver, routePath, "PATCH")
 		methods["PATCH"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Patch),
 		}
 	}
 	if props.Delete != nil {
 		resp, _ := resolver(kind, ver, routePath, "DELETE")
 		methods["DELETE"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Delete),
 		}
 	}
 	if props.Head != nil {
 		resp, _ := resolver(kind, ver, routePath, "HEAD")
 		methods["HEAD"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Head),
 		}
 	}
 	if props.Options != nil {
 		resp, _ := resolver(kind, ver, routePath, "OPTIONS")
 		methods["OPTIONS"] = SubresourceConnectorResponseObject{
 			Object:    resp,
-			MIMETypes: mimeTypes(props.Get),
+			MIMETypes: mimeTypes(props.Options),
 		}
 	}
 	return methods
