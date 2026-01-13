@@ -3,21 +3,14 @@ package operator
 import (
 	"context"
 	"errors"
-	"fmt"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/goleak"
-	clientfeatures "k8s.io/client-go/features"
 )
 
 func TestMain(m *testing.M) {
-	// Have to turn off WatchListClient because it doesn't use the custom cache, and the CustomCacheInformer tests fail
-	// TODO: @IfSentient is this intentional? reflector.go constructs an in-memory store in watchList that is uses instead of the provided store
-	os.Setenv(fmt.Sprintf("KUBE_FEATURE_%s", clientfeatures.WatchListClient), "false")
-
 	goleak.VerifyTestMain(m)
 }
 

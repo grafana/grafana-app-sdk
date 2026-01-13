@@ -46,11 +46,29 @@ func TestCustomCacheInformer_Run(t *testing.T) {
 func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 	events := make(chan watch.Event)
 	defer close(events)
+	waitForInitialEvents := sync.WaitGroup{}
+	waitForInitialEvents.Add(1)
 	inf := NewCustomCacheInformer(newUnsafeCache(), &mockListWatcher{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return &resource.UntypedList{}, nil
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			go func() {
+				if options.SendInitialEvents != nil && *options.SendInitialEvents {
+					// WatchList, we need to return a bookmark for it to realize it's done with initial events and start syncing
+					events <- watch.Event{
+						Type: watch.Bookmark,
+						Object: &resource.UntypedObject{
+							ObjectMeta: metav1.ObjectMeta{
+								Annotations: map[string]string{
+									metav1.InitialEventsAnnotationKey: "true",
+								},
+							},
+						},
+					}
+				}
+				waitForInitialEvents.Done()
+			}()
 			return &mockWatch{
 				events: events,
 			}, nil
@@ -96,6 +114,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go inf.Run(ctx)
+	waitForInitialEvents.Wait()
 
 	// Add
 	wg.Add(numHandlers)
@@ -126,11 +145,29 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	numEvents := 1000
 	events := make(chan watch.Event, numEvents)
 	defer close(events)
+	waitForInitialEvents := sync.WaitGroup{}
+	waitForInitialEvents.Add(1)
 	inf := NewCustomCacheInformer(newUnsafeCache(), &mockListWatcher{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return &resource.UntypedList{}, nil
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			go func() {
+				if options.SendInitialEvents != nil && *options.SendInitialEvents {
+					// WatchList, we need to return a bookmark for it to realize it's done with initial events and start syncing
+					events <- watch.Event{
+						Type: watch.Bookmark,
+						Object: &resource.UntypedObject{
+							ObjectMeta: metav1.ObjectMeta{
+								Annotations: map[string]string{
+									metav1.InitialEventsAnnotationKey: "true",
+								},
+							},
+						},
+					}
+				}
+				waitForInitialEvents.Done()
+			}()
 			return &mockWatch{
 				events: events,
 			}, nil
@@ -159,6 +196,7 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go inf.Run(ctx)
+	waitForInitialEvents.Wait()
 	for i := 0; i < numEvents; i++ {
 		etype := watch.Added
 		switch i % 3 {
@@ -191,11 +229,29 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 	events := make(chan watch.Event)
 	defer close(events)
 	store := newUnsafeCache()
+	waitForInitialEvents := sync.WaitGroup{}
+	waitForInitialEvents.Add(1)
 	inf := NewCustomCacheInformer(store, &mockListWatcher{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			return &resource.UntypedList{}, nil
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			go func() {
+				if options.SendInitialEvents != nil && *options.SendInitialEvents {
+					// WatchList, we need to return a bookmark for it to realize it's done with initial events and start syncing
+					events <- watch.Event{
+						Type: watch.Bookmark,
+						Object: &resource.UntypedObject{
+							ObjectMeta: metav1.ObjectMeta{
+								Annotations: map[string]string{
+									metav1.InitialEventsAnnotationKey: "true",
+								},
+							},
+						},
+					}
+				}
+				waitForInitialEvents.Done()
+			}()
 			return &mockWatch{
 				events: events,
 			}, nil
@@ -219,6 +275,7 @@ func TestCustomCacheInformer_Run_CacheState(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	go inf.Run(ctx)
 	defer cancel()
+	waitForInitialEvents.Wait()
 
 	obj := &resource.UntypedObject{
 		ObjectMeta: metav1.ObjectMeta{
