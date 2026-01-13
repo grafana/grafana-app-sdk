@@ -1,10 +1,12 @@
 package cuekind
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 
 	"github.com/grafana/codejen"
+	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
@@ -135,14 +137,25 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(encoder jennies.ManifestOutputEncoder, extension string, includeSchemas bool, crdCompatible bool) *codejen.JennyList[codegen.AppManifest] {
+func ManifestGenerator(extension string, includeSchemas bool, version string) *codejen.JennyList[codegen.AppManifest] {
+	generator := &jennies.ManifestGenerator{
+		Encoder:         jsonEncoder,
+		FileExtension:   extension,
+		IncludeSchemas:  includeSchemas,
+		ManifestVersion: version,
+	}
+
+	switch extension {
+	case "json":
+		generator.Encoder = jsonEncoder
+	case "yaml":
+		generator.Encoder = yaml.Marshal
+	default:
+		// defaults to json
+	}
+
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
-	g.Append(&jennies.ManifestGenerator{
-		Encoder:        encoder,
-		FileExtension:  extension,
-		IncludeSchemas: includeSchemas,
-		CRDCompatible:  crdCompatible,
-	})
+	g.Append(generator)
 	return g
 }
 
@@ -183,4 +196,8 @@ func namerFuncManifest(m codegen.AppManifest) string {
 		return "nil"
 	}
 	return m.Name()
+}
+
+var jsonEncoder = func(v any) ([]byte, error) {
+	return json.MarshalIndent(v, "", "    ")
 }

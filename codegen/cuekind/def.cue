@@ -22,6 +22,50 @@ _kubeObjectMetadata: {
 	}
 }
 
+#KindsConfig: {
+	// grouping mirrors the deprecated --grouping CLI flag and determines how generated Go packages are arranged.
+	grouping:       "group" | *"kind"
+	// perKindVersion replaces the deprecated --useoldmanifestkinds flag to keep the legacy manifest layout where kinds own versions.
+	perKindVersion: bool | *false
+}
+
+#DefinitionsConfig: {
+	// genManifest controls whether manifest files are written; the old --defencoding=none flag disabled this output.
+	genManifest:     bool | *true
+	// genCRDs controls CRD emission and was also toggled off when --defencoding=none was set in the CLI.
+	genCRDs:         bool | *true
+	// path matches the deprecated --defpath flag and sets where definition files are written.
+	path:            string | *"definitions"
+	// encoding replaces the --defencoding flag for choosing JSON or YAML serialization of CRDs and manifests.
+	encoding:        *"json" | "yaml"
+	// manifestVersion supersedes the --crdmanifest flag, letting you pin the manifest schema format (legacy v1alpha1 vs default v1alpha2).
+	manifestVersion: "v1alpha1" | *"v1alpha2"
+	// manifestSchemas corresponds to the --noschemasinmanifest flag, allowing schema omission when recursive types caused issues.
+	manifestSchemas: bool | *true
+}
+
+#CodegenConfig: {
+	// goModule replaces the deprecated --gomodule flag for explicitly setting the module path.
+	goModule:                       string | *""
+	// goModGenPath supersedes --gomodgenpath and anchors generated Go output relative to the module root.
+	goModGenPath:                   string | *""
+	// goGenPath matches the --gogenpath flag and defines the Go code output directory.
+	goGenPath:                      string | *"pkg/generated/"
+	// tsGenPath mirrors the --tsgenpath flag and configures the TypeScript output directory.
+	tsGenPath:                      string | *"plugin/src/generated/"
+	// enableK8sPostProcessing takes the place of --postprocess to run Kubernetes code generators after writing files.
+	enableK8sPostProcessing:        bool | *false
+	// enableOperatorStatusGeneration replaces the root --genoperatorstate flag and toggles status helpers in generated code.
+	enableOperatorStatusGeneration: bool | *true
+}
+
+Config: {
+	definitions: #DefinitionsConfig
+	codegen:     #CodegenConfig
+	kinds:       #KindsConfig
+	manifestSelectors: [...string] | *["manifest"]
+}
+
 Schema: {
 	// metadata contains embedded CommonMetadata and can be extended with custom string fields
 	// TODO: use CommonMetadata instead of redefining here; currently needs to be defined here
@@ -40,7 +84,7 @@ Schema: {
 		[!~"^(uid|creationTimestamp|deletionTimestamp|finalizers|resourceVersion|generation|labels|updateTimestamp|createdBy|updatedBy|extraFields)$"]: string
 	}
 
-	spec:   _
+	spec: _
 
 	// cuetsy is not happy creating spec with the MinFields constraint directly
 	_specIsNonEmpty: spec & struct.MinFields(0)
@@ -78,28 +122,28 @@ SchemaWithOperatorState: Schema & {
 	operations: [...string]
 }
 #CustomRouteRequest: {
-    query?: _
-    body?: _
+	query?: _
+	body?:  _
 }
 #CustomRouteResponse: _
 #CustomRouteResponseMetadata: {
-		typeMeta: bool | *true
-		listMeta: bool | *false
-		objectMeta: bool | *false
+	typeMeta:   bool | *true
+	listMeta:   bool | *false
+	objectMeta: bool | *false
 }
 #CustomRoute: {
-		name?: =~ "^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
-    request: #CustomRouteRequest
-    response: #CustomRouteResponse
-    // responseMetadata allows codegen to include kubernetes metadata in the generated response object.
-    // It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
-    responseMetadata: #CustomRouteResponseMetadata
-    // extensions are all openAPI extensions that you wish to apply to this route.
-    extensions: {
-    	[=~"^x-(.+)$"]: _
-    }
+	name?:    =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	request:  #CustomRouteRequest
+	response: #CustomRouteResponse
+	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
+	// It is also copied into the AppManifest responseMetadata for use in kube-OpenAPI generation.
+	responseMetadata: #CustomRouteResponseMetadata
+	// extensions are all openAPI extensions that you wish to apply to this route.
+	extensions: {
+		[=~"^x-(.+)$"]: _
+	}
 }
-#CustomRoutePath: string
+#CustomRoutePath:   string
 #CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
 #CustomRouteCapability: {
 	[#CustomRoutePath]: {
@@ -192,8 +236,7 @@ Kind: S={
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *S._codegen.go.enabled
-			config: {
-			} | *S._codegen.go.config
+			config: {} | *S._codegen.go.config
 		}
 	}
 
@@ -255,7 +298,7 @@ Version: S={
 	kinds: [...{
 		group:         S.fullGroup
 		manifestGroup: S.group
-		_codegen: S.codegen
+		_codegen:      S.codegen
 	} & Kind]
 	// routes is a map of path patterns to custom routes that will be exposed as resources for this version.
 	// entries here should not conflict with the plural names for any kinds for this version.
@@ -278,12 +321,12 @@ Manifest: S={
 	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	versions: {
 		[V=string]: {
-			name: V
+			name:          V
 			group:         S.fullGroup
 			manifestGroup: S.group
 		} & Version
 	}
-	_allVersions: [for key, _ in S.versions { key }]
+	_allVersions: [for key, _ in S.versions {key}]
 	preferredVersion: string | *(list.Sort(S._allVersions, list.Descending)[0])
 	extraPermissions: {
 		accessKinds: [...#AccessKind]
@@ -432,8 +475,7 @@ KindOld: S={
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *true
-			config: {
-			}
+			config: {}
 		}
 	}
 

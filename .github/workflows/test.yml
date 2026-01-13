@@ -17,7 +17,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
       # make test
       - name: Test
         # find all go.mod files and run go test against directories containing go.mod files
@@ -35,7 +35,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
           # Preflight checks
       - name: Preflight checks
         run: make check-go-version
@@ -50,13 +50,13 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 0
-          path: 'grafana-app-sdk'
+          path: "grafana-app-sdk"
           persist-credentials: false
       # Go env
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
-          go-version-file: './grafana-app-sdk/go.mod'
+          go-version-file: "./grafana-app-sdk/go.mod"
       # Install the CLI
       - name: Install the CLI
         run: cd cmd/grafana-app-sdk && go install && cd -
@@ -71,13 +71,24 @@ jobs:
           mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
           mv cmp/manifest/*.txt cmp/crd/
           find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
-      - name: Generate code
+      - name: Generate code (backwards compatibility)
         run: |
           cd codegen-tests
+          # NOTE: These four are here for backwards compatibility testing using now deprecated cli flags
           grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=customManifest --crdmanifest
           grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=testManifest --crdmanifest
           grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=customManifest --crdmanifest
           grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=testManifest --crdmanifest
+          sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/manifestdata/*.go
+          diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
+          sed -i '/^Common subdirectories/d' diff.txt
+          difflines=$(wc -l diff.txt | awk '{ print $1 }')
+          echo "GoGroupByKindDiff=${difflines}" >> $GITHUB_ENV
+      - name: Generate code
+        run: |
+          cd codegen-tests
+          grafana-app-sdk generate --config configIntegrationGen1
+          grafana-app-sdk generate --config configIntegrationGen2
           sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/manifestdata/*.go
           diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
@@ -148,13 +159,14 @@ jobs:
           mkdir -p test-project && cd test-project
           grafana-app-sdk project init "test-project"
           rm -rf kinds/manifest.cue
+          rm -rf kinds/config.cue
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
           cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
-          grafana-app-sdk generate --manifest=customManifest
-          grafana-app-sdk project component add frontend backend operator --manifest=customManifest
+          cp ../grafana-app-sdk/codegen/cuekind/testing/config.cue kinds/config.cue
+          grafana-app-sdk generate --config configIntegrationGen3
+          grafana-app-sdk project component add frontend backend operator --config configIntegrationGen3
           go mod tidy
           go build cmd/operator/*.go
           go build plugin/pkg/*.go
-  
