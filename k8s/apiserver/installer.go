@@ -33,6 +33,7 @@ import (
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/util"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -346,17 +347,18 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 				fmt.Printf("scheme is not set in defaultInstaller.GetOpenAPIDefinitions, skipping %s. This will impact kind availability\n", manifestKind.Kind) //nolint:revive
 				continue
 			}
-			pkgPrefix := ""
-			for k, t := range r.scheme.KnownTypes(schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}) {
-				if k == manifestKind.Kind {
-					pkgPrefix = t.PkgPath()
-				}
+			pkgPrefix, err := r.scheme.ToOpenAPIDefinitionName(schema.GroupVersionKind{
+				Group:   r.appConfig.ManifestData.Group,
+				Version: v.Name,
+				Kind:    manifestKind.Kind,
+			})
+			if err != nil {
+				fmt.Printf("error getting OpenAPI Name for %s.%s: %s, skipping\n", v.Name, manifestKind.Kind, err.Error()) //nolint:revive
+				continue
 			}
-			if pkgPrefix == "" {
-				fmt.Printf("scheme does not contain kind %s.%s, skipping OpenAPI component\n", v.Name, manifestKind.Kind) //nolint:revive
+			if idx := strings.LastIndex(pkgPrefix, "."); idx > 0 {
+				pkgPrefix = pkgPrefix[0:idx]
 			}
-			// format the package prefix the way k8s expects it
-			pkgPrefix = ToOpenAPIName(pkgPrefix)
 			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
 			if err != nil {
 				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err) //nolint:revive
@@ -937,7 +939,15 @@ func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method
 	pkgPrefix := defaultPkgPrefix
 	if ok {
 		typ := reflect.TypeOf(goType)
-		pkgPrefix = ToOpenAPIName(typ.PkgPath())
+		// Prefer the OpenAPIModelName() if present
+		if cast, ok := typ.(util.OpenAPIModelNamer); ok {
+			pkgPrefix = cast.OpenAPIModelName()
+			if idx := strings.LastIndex(pkgPrefix, "."); idx > 0 {
+				pkgPrefix = pkgPrefix[0:idx]
+			}
+		} else {
+			pkgPrefix = ToOpenAPIName(typ.PkgPath())
+		}
 		typePath = typ.PkgPath() + "." + typ.Name()
 	} else {
 		// Use a default type name
