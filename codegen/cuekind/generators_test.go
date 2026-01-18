@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
+
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 )
 
 const (
@@ -56,7 +57,7 @@ func TestResourceGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
-		files, err := ResourceGenerator(false).Generate(kinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", false).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
@@ -66,7 +67,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group", func(t *testing.T) {
-		files, err := ResourceGenerator(true).Generate(kinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
@@ -76,7 +77,7 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group, multiple kinds", func(t *testing.T) {
-		files, err := ResourceGenerator(true).Generate(sameGroupKinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(sameGroupKinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))

@@ -34,4 +34,8 @@ func (o *GetMessage) DeepCopyInto(dst *GetMessage) {
 	o.GetMessageBody.DeepCopyInto(&dst.GetMessageBody)
 }
 
+func (GetMessage) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetMessage"
+}
+
 var _ runtime.Object = NewGetMessage()

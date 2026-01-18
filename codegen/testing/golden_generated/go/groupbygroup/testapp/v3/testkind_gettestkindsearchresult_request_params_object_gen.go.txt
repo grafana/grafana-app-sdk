@@ -30,4 +30,9 @@ func (o *GetTestKindSearchResultRequestParamsObject) DeepCopyInto(dst *GetTestKi
     _ = resource.CopyObjectInto(&dstGetTestKindSearchResultRequestParams, &o.GetTestKindSearchResultRequestParams)
 }
 
+
+func (GetTestKindSearchResultRequestParamsObject) OpenAPIModelName() string {
+    return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultRequestParamsObject"
+}
+
 var _ runtime.Object = NewGetTestKindSearchResultRequestParamsObject()

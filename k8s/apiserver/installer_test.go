@@ -140,14 +140,14 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 		return ref
 	}
 	expected := make(map[string]common.OpenAPIDefinition)
-	oapi1, err := md.Versions[0].Kinds[0].Schema.AsKubeOpenAPI(kind.GroupVersionKind(), refCallback, "github.com/grafana/grafana-app-sdk/resource")
+	oapi1, err := md.Versions[0].Kinds[0].Schema.AsKubeOpenAPI(kind.GroupVersionKind(), refCallback, ToOpenAPIName("github.com/grafana/grafana-app-sdk/resource"))
 	require.Nil(t, err)
 	maps.Copy(expected, oapi1)
 	maps.Copy(expected, GetResourceCallOptionsOpenAPIDefinition())
-	expected["/registry/grafana.app.GetFoo"] = common.OpenAPIDefinition{
+	expected["com.github.grafana.grafana-app-sdk.k8s.apiserver.getFooResponse"] = common.OpenAPIDefinition{
 		Schema: fooSch,
 	}
-	expected["github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject"] = common.OpenAPIDefinition{
+	expected[ToOpenAPIName("github.com/grafana/grafana-app-sdk/k8s/apiserver.EmptyObject")] = common.OpenAPIDefinition{
 		Schema: spec.Schema{
 			SchemaProps: spec.SchemaProps{
 				Description: "EmptyObject defines a model for a missing object type",
@@ -158,7 +158,15 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 
 	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
 		KindToGoTypeFunc: func(k, v string) (resource.Kind, bool) {
+			assert.Equal(t, TestKind.Kind(), k)
+			assert.Equal(t, TestKind.Version(), v)
 			return kind, true
+		},
+		CustomRouteReturnGoTypeFunc: func(k, version, path, verb string) (goType any, exists bool) {
+			assert.Equal(t, TestKind.Kind(), k)
+			assert.Equal(t, TestKind.Version(), version)
+			assert.Equal(t, "/foo", path)
+			return getFooResponse{}, true
 		},
 	})
 	require.Nil(t, err)
@@ -168,6 +176,8 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 	require.Equal(t, len(expected), len(res))
 	assert.Equal(t, expected, res)
 }
+
+type getFooResponse struct{}
 
 func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 	md := app.ManifestData{

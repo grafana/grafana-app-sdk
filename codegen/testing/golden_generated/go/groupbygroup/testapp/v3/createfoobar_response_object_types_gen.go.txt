@@ -34,4 +34,8 @@ func (o *CreateFoobar) DeepCopyInto(dst *CreateFoobar) {
 	o.CreateFoobarBody.DeepCopyInto(&dst.CreateFoobarBody)
 }
 
+func (CreateFoobar) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobar"
+}
+
 var _ runtime.Object = NewCreateFoobar()

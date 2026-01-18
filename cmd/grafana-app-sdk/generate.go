@@ -251,7 +251,7 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	}
 
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.GroupKinds()), cfg.ManifestSelectors...)
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.Codegen.GoModule, cfg.Codegen.GoModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}

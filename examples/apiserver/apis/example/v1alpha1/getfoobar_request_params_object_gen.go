@@ -30,4 +30,9 @@ func (o *GetFoobarRequestParamsObject) DeepCopyInto(dst *GetFoobarRequestParamsO
     _ = resource.CopyObjectInto(&dstGetFoobarRequestParams, &o.GetFoobarRequestParams)
 }
 
+
+func (GetFoobarRequestParamsObject) OpenAPIModelName() string {
+    return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarRequestParamsObject"
+}
+
 var _ runtime.Object = NewGetFoobarRequestParamsObject()

@@ -3,24 +3,30 @@
 package v1alpha1
 
 // +k8s:openapi-gen=true
-type VersionsV1alpha1RoutesClusterFoobarGETResponseExtra struct {
+type GetClusterFoobarExtra struct {
 	Foo string `json:"foo"`
 }
 
-// NewVersionsV1alpha1RoutesClusterFoobarGETResponseExtra creates a new VersionsV1alpha1RoutesClusterFoobarGETResponseExtra object.
-func NewVersionsV1alpha1RoutesClusterFoobarGETResponseExtra() *VersionsV1alpha1RoutesClusterFoobarGETResponseExtra {
-	return &VersionsV1alpha1RoutesClusterFoobarGETResponseExtra{}
+// NewGetClusterFoobarExtra creates a new GetClusterFoobarExtra object.
+func NewGetClusterFoobarExtra() *GetClusterFoobarExtra {
+	return &GetClusterFoobarExtra{}
 }
 
 // +k8s:openapi-gen=true
 type GetClusterFoobarBody struct {
-	Bar   string                                                         `json:"bar"`
-	Extra map[string]VersionsV1alpha1RoutesClusterFoobarGETResponseExtra `json:"extra"`
+	Bar   string                           `json:"bar"`
+	Extra map[string]GetClusterFoobarExtra `json:"extra"`
 }
 
 // NewGetClusterFoobarBody creates a new GetClusterFoobarBody object.
 func NewGetClusterFoobarBody() *GetClusterFoobarBody {
 	return &GetClusterFoobarBody{
-		Extra: map[string]VersionsV1alpha1RoutesClusterFoobarGETResponseExtra{},
+		Extra: map[string]GetClusterFoobarExtra{},
 	}
+}
+func (GetClusterFoobarExtra) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobarExtra"
+}
+func (GetClusterFoobarBody) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobarBody"
 }

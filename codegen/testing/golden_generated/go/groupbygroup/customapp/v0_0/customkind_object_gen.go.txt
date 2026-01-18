@@ -243,6 +243,10 @@ func (o *CustomKind) DeepCopyInto(dst *CustomKind) {
 	o.Status.DeepCopyInto(&dst.Status)
 }
 
+func (CustomKind) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKind"
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &CustomKind{}
 
@@ -294,6 +298,10 @@ func (o *CustomKindList) DeepCopy() *CustomKindList {
 
 func (o *CustomKindList) DeepCopyInto(dst *CustomKindList) {
 	resource.CopyObjectInto(dst, o)
+}
+
+func (CustomKindList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindList"
 }
 
 // Interface compliance compile-time check
