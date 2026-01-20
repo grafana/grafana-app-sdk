@@ -59,7 +59,7 @@ In this case, the only version-specific information we have is our schema.
 
 So, what's going on with `issueKind`? We've got a few fields here that describe our kind information, which we can break down:
 
-| Snippit                                 | Meaning                                                                                                                                                                                                           |
+| Snippet                                 | Meaning                                                                                                                                                                                                           |
 |-----------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | <nobr>`kind: "Issue"`</nobr>            | This is just the human-readable name, which will be used for naming some things in-code.                                                                                                                          |
 | <nobr>`pluralName: "Issues"`</nobr>     | This is the plural name of our kind, which is optional and will default to the value of `kind` + `s`.                                                                                                             |
