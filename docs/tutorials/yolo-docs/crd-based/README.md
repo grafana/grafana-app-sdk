@@ -138,7 +138,11 @@ Start your local k3d cluster and deploy the app.
 make local/up
 ```
 
-Wait for the cluster to initialize, then deploy the plugin:
+Once the cluster has initialized, press the SPACEBAR key to open the Tilt console in your browser and check on the status.
+
+Note: If you see a warning triangle next to the Grafana component, you may need to modify the `local/config.yaml` file to use `image:grafana-enterprise:12.0.0` instead of `main`. This is a known bug and is being fixed.
+
+Next deploy the plugin:
 
 ```bash
 make local/deploy_plugin
