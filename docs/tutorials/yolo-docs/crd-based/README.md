@@ -140,7 +140,7 @@ make local/up
 
 Once the cluster has initialized, press the SPACEBAR key to open the Tilt console in your browser and check on the status.
 
-Note: If you see a warning triangle next to the Grafana component, you may need to modify the `local/config.yaml` file to use `image:grafana-enterprise:12.0.0` instead of `main`. This is a known bug and is being fixed.
+Note: If you see a warning triangle next to the Grafana component, you may need to modify the `local/config.yaml` file to use `image:grafana/grafana-enterprise:12.0.0` instead of `main`. This is a known bug and is being fixed.
 
 Next deploy the plugin:
 
