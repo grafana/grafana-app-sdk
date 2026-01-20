@@ -112,10 +112,12 @@ make deps
 Build the plugin backend and frontend.
 
 ```bash
-make build
+make build/plugin-backend && make build/plugin-frontend
 ```
 
 This compiles the Go binaries and bundles the React app.
+
+Note: if you run `make build` it will try to build all three components (backend, frontend, and operator) and fail due to having no operator component.
 
 > **Learn More**: [Build & Deployment Details](../../issue-tracker/05-local-deployment.md)
 
