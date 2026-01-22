@@ -23,6 +23,7 @@ Godocs on exported library package code (such as `resource`, `operator`, `plugin
 | [Kubernetes Concepts](./kubernetes.md)                             | A primer on some kubernetes concepts which are relevant to using the SDK backed by a kubernetes API server |
 | [Admission Control](./admission-control.md)                        | How to set up admission control on your kinds for an API server                                            |
 | [Field Errors in Status](./architecture/field-errors-in-status.md) | Convention for reporting actionable runtime validation errors in resource status                           |
+| [Version-Specific Validation](./architecture/version-specific-validation.md) | Handling validation when frontend and backend have different rules across API versions                     |
 
 ## Base Concepts of the SDK
 
