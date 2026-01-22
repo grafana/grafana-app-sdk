@@ -2,7 +2,7 @@
 
 ## Overview
 
-When API versions evolve, validation rules may change between versions. This document explains how to handle validation when frontend and backend have different rules, and how `fieldErrors` in status helps surface these mismatches.
+When API versions evolve, validation rules may change between versions. This document explains how to handle validation when frontend and backend have different rules, focusing on version-specific format validation in admission webhooks.
 
 ## Problem Scenario
 
