@@ -5,8 +5,8 @@ the best practice is to implement admission control at the API server level itse
 multi-tenant operator to validate and/or mutate requests to the API server.
 
 > **Note**: Admission control is used for **static validation** (format, structure, type checks, static business rules). For **runtime validation** 
-> that depends on external systems or dynamic state, use [`fieldErrors` in status](./architecture/field-errors-in-status.md) instead. 
-> See [Field Errors in Status](./architecture/field-errors-in-status.md) for details on when to use each approach.
+> that depends on external systems or dynamic state, use [`fieldErrors` in status](./architecture/validation-patterns.md) instead. 
+> See [Validation Patterns](./architecture/validation-patterns.md) for details on when to use each approach.
 
 The `resource` package contains two interfaces used for admission control:
 * [ValidatingAdmissionController](https://pkg.go.dev/github.com/grafana/grafana-app-sdk/resource#ValidatingAdmissionController), which is used to _validate_ incoming requests, returning a yes/no on whether the request should be allowed to proceed, and
@@ -115,9 +115,9 @@ Admission control handles **static validation** that can be checked synchronousl
 - Structure validation (enum values, data types, JSON structure)
 - Static business rules (naming conventions, reserved names)
 
-For **runtime validation** that depends on external systems, internal state, or dynamic conditions, use [`fieldErrors` in status](./architecture/field-errors-in-status.md):
+For **runtime validation** that depends on external systems, internal state, or dynamic conditions, use [`fieldErrors` in status](./architecture/validation-patterns.md):
 - External system checks (repository exists, branch exists, installation ID valid)
 - Internal runtime state (resource conflicts, service availability)
 - Dynamic state that can change over time (credentials expired, external resource deleted)
 
-See [Field Errors in Status](./architecture/field-errors-in-status.md) for the complete convention and implementation guide.
+See [Validation Patterns](./architecture/validation-patterns.md) for the complete convention and implementation guide.

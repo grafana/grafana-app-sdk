@@ -1,4 +1,4 @@
-# Field Errors in Status: Actionable Runtime Validation Errors
+# Validation Patterns: Field Errors in Status and Runtime Validation
 
 ## Overview
 
