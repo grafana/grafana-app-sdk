@@ -271,10 +271,21 @@ status:
 
 **Frontend Usage**:
 ```typescript
-// After creating the connection, wait for reconciliation
-const conn = await waitForReconciliation('my-connection');
+// Step 1: Validate before creation using dryRun
+const errors = await validateBeforeCreate(connectionSpec);
+if (errors.length > 0) {
+  errors.forEach(error => {
+    if (error.field === 'spec.installationID') {
+      setFieldError('installationID', error.message);
+    }
+  });
+  return; // Don't create if validation fails
+}
 
-// Display error next to the installationID field
+// Step 2: Create resource if validation passes
+const conn = await api.createConnection(connectionSpec);
+
+// Step 3: Display any ongoing validation errors from status
 conn.status.fieldErrors?.forEach(error => {
   if (error.field === 'spec.installationID') {
     setFieldError('installationID', error.detail);
@@ -416,37 +427,55 @@ func (c *ResourceController) process(ctx context.Context, resource *Resource) er
 
 ### Create/Update Flow
 
-1. Submit CREATE or UPDATE request
-2. Wait for reconciliation (`status.observedGeneration == metadata.generation`)
-3. Read `status.fieldErrors`
-4. Map field paths to form fields
-5. Display inline validation errors
+**Recommended Pattern: Use `dryRun=true` for pre-creation validation**
 
-**Using Watch (Recommended)**:
-```typescript
-async function waitForReconciliation(name: string): Promise<Resource> {
-  return new Promise((resolve, reject) => {
-    const watch = api.watchResource(name);
-    
-    watch.on('update', (resource) => {
-      if (resource.status.observedGeneration === resource.metadata.generation) {
-        watch.close();
-        resolve(resource);
-      }
-    });
-  });
-}
-```
+1. Validate before creation using `dryRun=true`
+2. Extract errors from HTTP 422 response (`details.causes`)
+3. Display errors inline without creating the resource
+4. If validation passes, create the resource
+5. After creation, read `status.fieldErrors` for ongoing validation (e.g., external system changes)
 
-**Using Poll**:
+**Pre-Creation Validation with `dryRun`**:
 ```typescript
-async function waitForReconciliation(name: string): Promise<Resource> {
-  while (true) {
-    const resource = await api.getResource(name);
-    if (resource.status.observedGeneration === resource.metadata.generation) {
-      return resource;
+// Validate before creation using dryRun (default approach)
+async function validateBeforeCreate(spec: ResourceSpec): Promise<ValidationErrors> {
+  try {
+    await api.createResource(spec, { dryRun: true });
+    return []; // No errors
+  } catch (error) {
+    // Extract field errors from HTTP error response
+    if (error.status === 422 && error.body?.details?.causes) {
+      return error.body.details.causes.map((cause: any) => ({
+        field: cause.field,
+        message: cause.message,
+        type: cause.type,
+      }));
     }
-    await sleep(500);
+    throw error; // Re-throw unexpected errors
+  }
+}
+
+// Create resource after validation
+async function createResource(spec: ResourceSpec) {
+  // Step 1: Validate first using dryRun
+  const errors = await validateBeforeCreate(spec);
+  if (errors.length > 0) {
+    // Display errors in form without creating resource
+    errors.forEach(error => {
+      setFieldError(mapFieldPathToFormField(error.field), error.message);
+    });
+    return;
+  }
+  
+  // Step 2: Create resource if validation passes
+  const resource = await api.createResource(spec);
+  
+  // Step 3: Read status.fieldErrors for ongoing validation
+  // (e.g., if external system state changes after creation)
+  if (resource.status.fieldErrors?.length > 0) {
+    resource.status.fieldErrors.forEach(error => {
+      setFieldError(mapFieldPathToFormField(error.field), error.detail);
+    });
   }
 }
 ```
@@ -568,15 +597,15 @@ func (v *AdmissionValidator) validateRuntime(ctx context.Context, obj runtime.Ob
 - Resource is persisted
 - Controllers reconcile and populate `status.fieldErrors`
 - Errors available in `status.fieldErrors` array
-- Frontend can watch/poll for status updates
+- Used for ongoing validation (e.g., external system changes after creation)
 
 ### Client Implementation Patterns
 
-**Pre-Creation Validation with `dryRun`** can be used by any API client:
+**Pre-Creation Validation with `dryRun`** can be used by any API client. This is the **default approach** for runtime validation:
 
 **Frontend (TypeScript)**:
 ```typescript
-// Step 1: Validate before creation using dryRun
+// Step 1: Validate before creation using dryRun (default approach)
 async function validateBeforeCreate(spec: ResourceSpec): Promise<ValidationErrors> {
   try {
     await api.createResource(spec, { dryRun: true });
@@ -596,7 +625,7 @@ async function validateBeforeCreate(spec: ResourceSpec): Promise<ValidationError
 
 // Step 2: Create resource if validation passes
 async function createResource(spec: ResourceSpec) {
-  // Validate first
+  // Validate first using dryRun
   const errors = await validateBeforeCreate(spec);
   if (errors.length > 0) {
     // Display errors in form without creating resource
@@ -609,12 +638,10 @@ async function createResource(spec: ResourceSpec) {
   // Create resource
   const resource = await api.createResource(spec);
   
-  // Step 3: Wait for reconciliation and check status.fieldErrors
-  const reconciled = await waitForReconciliation(resource.metadata.name);
-  
-  // Check for any runtime errors that occurred during reconciliation
-  if (reconciled.status.fieldErrors?.length > 0) {
-    reconciled.status.fieldErrors.forEach(error => {
+  // Step 3: Read status.fieldErrors for ongoing validation
+  // (e.g., if external system state changes after creation)
+  if (resource.status.fieldErrors?.length > 0) {
+    resource.status.fieldErrors.forEach(error => {
       setFieldError(mapFieldPathToFormField(error.field), error.detail);
     });
   }
@@ -779,15 +806,19 @@ graph LR
     style D fill:#99ff99
 ```
 
-**Solution**: Single source of truth in status.
+**Solution**: Use `dryRun=true` for pre-creation validation, then `status.fieldErrors` for ongoing validation.
 
 ```mermaid
 graph LR
-    A[Frontend] -->|POST /resource| B[Create Endpoint]
-    B -->|Reconcile| C[Controller]
-    C -->|Update| D[Status.fieldErrors]
-    A -->|GET /resource| D
-    style D fill:#99ff99
+    A[Frontend] -->|POST /resource?dryRun=true| B[Admission Validator]
+    B -->|Runtime Validation| C[External Systems]
+    B -->|HTTP 422 Errors| A
+    A -->|POST /resource| D[Create Endpoint]
+    D -->|Reconcile| E[Controller]
+    E -->|Update| F[Status.fieldErrors]
+    A -->|GET /resource| F
+    style B fill:#99ff99
+    style F fill:#99ff99
 ```
 
 #### 2. **Stale Data**
@@ -838,12 +869,10 @@ curl -X POST https://grafana.example.com/apis/provisioning.grafana.app/v0alpha1/
   -d @repo.yaml
 # Or use a custom CLI tool that wraps this endpoint
 
-# ✅ Correct: Check status directly - standard kubectl pattern
-kubectl apply -f repo.yaml
-# Wait for reconciliation (or watch)
-kubectl get repository my-repo -o jsonpath='{.status.fieldErrors}'
-# Or watch for status updates
-kubectl get repository my-repo -w -o jsonpath='{.status.fieldErrors}'
+# ✅ Correct: Validate before creation using dryRun, then check status
+kubectl apply --dry-run=client -f repo.yaml  # Validate first
+kubectl apply -f repo.yaml                    # Create if validation passes
+kubectl get repository my-repo -o jsonpath='{.status.fieldErrors}'  # Check ongoing validation
 ```
 
 #### 5. **Inconsistent Patterns**
