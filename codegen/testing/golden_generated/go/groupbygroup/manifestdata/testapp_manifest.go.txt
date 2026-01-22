@@ -497,6 +497,83 @@ var appManifestData = app.ManifestData{
 			MutationPath:   "/mutate",
 		},
 	},
+	Roles: map[string]app.ManifestRole{
+		"test-app:admin": app.ManifestRole{
+			PermissionSet: "admin",
+			Versions: map[string]app.ManifestRoleVersion{
+				"v1": {
+					Kinds: []string{
+						"TestKind",
+						"TestKind2",
+					},
+				},
+				"v2": {
+					Kinds: []string{
+						"TestKind",
+					},
+				},
+				"v3": {
+					Kinds: []string{
+						"TestKind",
+					},
+				},
+			},
+		},
+		"test-app:editor": app.ManifestRole{
+			PermissionSet: "editor",
+			Versions: map[string]app.ManifestRoleVersion{
+				"v1": {
+					Kinds: []string{
+						"TestKind",
+						"TestKind2",
+					},
+				},
+				"v2": {
+					Kinds: []string{
+						"TestKind",
+					},
+				},
+				"v3": {
+					Kinds: []string{
+						"TestKind",
+					},
+				},
+			},
+		},
+		"test-app:reader": app.ManifestRole{
+			PermissionSet: "viewer",
+			Versions: map[string]app.ManifestRoleVersion{
+				"v1": {
+					Kinds: []string{
+						"TestKind",
+						"TestKind2",
+					},
+				},
+				"v2": {
+					Kinds: []string{
+						"TestKind",
+					},
+				},
+				"v3": {
+					Kinds: []string{
+						"TestKind",
+					},
+				},
+			},
+		},
+	},
+	RoleBindings: &app.ManifestRoleBindings{
+		Anonymous: []string{},
+		Viewer: []string{
+			"test-app:reader",
+		},
+		Editor: []string{
+			"test-app:editor",
+		},
+		Admin: []string{
+			"test-app:admin",
+		},
+	},
 }
 
 func LocalManifest() app.Manifest {

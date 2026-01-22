@@ -204,6 +204,32 @@ func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProper
 }
 
 // +k8s:openapi-gen=true
+type AppManifestRole struct {
+	PermissionSet AppManifestRolePermissionSet      `json:"permissionSet"`
+	Versions      map[string]AppManifestRoleVersion `json:"versions"`
+}
+
+// NewAppManifestRole creates a new AppManifestRole object.
+func NewAppManifestRole() *AppManifestRole {
+	return &AppManifestRole{
+		PermissionSet: AppManifestRolePermissionSetViewer,
+		Versions:      map[string]AppManifestRoleVersion{},
+	}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleVersion struct {
+	Kinds []string `json:"kinds"`
+}
+
+// NewAppManifestRoleVersion creates a new AppManifestRoleVersion object.
+func NewAppManifestRoleVersion() *AppManifestRoleVersion {
+	return &AppManifestRoleVersion{
+		Kinds: []string{},
+	}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestSpec struct {
 	AppName string `json:"appName"`
 	Group   string `json:"group"`
@@ -225,6 +251,13 @@ type AppManifestSpec struct {
 	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 	// mutation, or conversion.
 	Operator *AppManifestOperatorInfo `json:"operator,omitempty"`
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	Roles map[string]AppManifestRole `json:"roles,omitempty"`
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// Additional groups are specified under "additional"
+	RoleBindings *AppManifestV1alpha2SpecRoleBindings `json:"roleBindings,omitempty"`
 }
 
 // NewAppManifestSpec creates a new AppManifestSpec object.
@@ -249,9 +282,38 @@ func NewAppManifestV1alpha2SpecExtraPermissions() *AppManifestV1alpha2SpecExtraP
 }
 
 // +k8s:openapi-gen=true
+type AppManifestV1alpha2SpecRoleBindings struct {
+	Anonymous  []string            `json:"anonymous"`
+	Viewer     []string            `json:"viewer"`
+	Editor     []string            `json:"editor"`
+	Admin      []string            `json:"admin"`
+	Additional map[string][]string `json:"additional"`
+}
+
+// NewAppManifestV1alpha2SpecRoleBindings creates a new AppManifestV1alpha2SpecRoleBindings object.
+func NewAppManifestV1alpha2SpecRoleBindings() *AppManifestV1alpha2SpecRoleBindings {
+	return &AppManifestV1alpha2SpecRoleBindings{
+		Anonymous:  []string{},
+		Viewer:     []string{},
+		Editor:     []string{},
+		Admin:      []string{},
+		Additional: map[string][]string{},
+	}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestManifestVersionKindScope string
 
 const (
 	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
 	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
+)
+
+// +k8s:openapi-gen=true
+type AppManifestRolePermissionSet string
+
+const (
+	AppManifestRolePermissionSetViewer AppManifestRolePermissionSet = "viewer"
+	AppManifestRolePermissionSetEditor AppManifestRolePermissionSet = "editor"
+	AppManifestRolePermissionSetAdmin  AppManifestRolePermissionSet = "admin"
 )

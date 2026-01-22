@@ -266,6 +266,32 @@ var appManifestData = app.ManifestData{
             ValidationPath: "{{.ManifestData.Operator.Webhooks.ValidationPath}}",
             MutationPath: "{{.ManifestData.Operator.Webhooks.MutationPath}}",
         },{{ end }}
+    },{{ end }}{{ if .ManifestData.Roles }}
+    Roles: map[string]app.ManifestRole{
+        {{ range $key, $val := .ManifestData.Roles }}"{{ $key }}": app.ManifestRole{
+            PermissionSet: "{{ $val.PermissionSet }}",
+            Versions: map[string]app.ManifestRoleVersion{ {{ range $ver, $rv := $val.Versions }}
+                "{{ $ver }}": {
+                    Kinds: []string{
+                        {{ range $rv.Kinds }}"{{ . }}",
+                    {{ end }} },
+                },{{ end }}
+            },
+        },
+    {{ end }} },{{ end }}{{ if .ManifestData.RoleBindings }}
+    RoleBindings: &app.ManifestRoleBindings{
+        Anonymous: []string{ {{ if .ManifestData.RoleBindings.Anonymous }}
+            {{ range .ManifestData.RoleBindings.Anonymous }}"{{ . }}",
+        {{ end }}{{ end }} },
+        Viewer: []string{ {{ if .ManifestData.RoleBindings.Viewer }}
+            {{ range .ManifestData.RoleBindings.Viewer }}"{{ . }}",
+        {{ end }}{{ end }} },
+        Editor: []string{ {{ if .ManifestData.RoleBindings.Editor }}
+            {{ range .ManifestData.RoleBindings.Editor }}"{{ . }}",
+        {{ end }}{{ end }} },
+        Admin: []string{ {{ if .ManifestData.RoleBindings.Admin }}
+            {{ range .ManifestData.RoleBindings.Admin }}"{{ . }}",
+        {{ end }}{{ end }} },
     },{{ end }}
 }
 

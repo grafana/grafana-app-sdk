@@ -428,6 +428,91 @@
                                         "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
                                         "type": "string"
                                     },
+                                    "roleBindings": {
+                                        "description": "RoleBindings binds the roles specified in Roles to groups.\nBasic groups are \"anonymous\", \"viewer\", \"editor\", and \"admin\".\nAdditional groups are specified under \"additional\"",
+                                        "properties": {
+                                            "additional": {
+                                                "additionalProperties": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "type": "object"
+                                            },
+                                            "admin": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "anonymous": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "editor": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "viewer": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "required": [
+                                            "anonymous",
+                                            "viewer",
+                                            "editor",
+                                            "admin",
+                                            "additional"
+                                        ],
+                                        "type": "object"
+                                    },
+                                    "roles": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "permissionSet": {
+                                                    "default": "viewer",
+                                                    "enum": [
+                                                        "viewer",
+                                                        "editor",
+                                                        "admin"
+                                                    ],
+                                                    "type": "string"
+                                                },
+                                                "versions": {
+                                                    "additionalProperties": {
+                                                        "properties": {
+                                                            "kinds": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "kinds"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "required": [
+                                                "permissionSet",
+                                                "versions"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Roles contains information for new user roles associated with this app.\nIt is a map of the role name (e.g. \"dashboard:reader\") to the set of permissions on resources managed by this app.",
+                                        "type": "object"
+                                    },
                                     "versions": {
                                         "description": "Versions is the list of versions for this manifest, in order.",
                                         "items": {

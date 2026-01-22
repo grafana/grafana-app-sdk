@@ -198,6 +198,31 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			data.Operator.Webhooks = &webhooks
 		}
 	}
+	// Roles and RoleBindings
+	if s.Roles != nil {
+		data.Roles = make(map[string]app.ManifestRole)
+		for k, v := range s.Roles {
+			converted := app.ManifestRole{
+				PermissionSet: string(v.PermissionSet),
+				Versions:      make(map[string]app.ManifestRoleVersion),
+			}
+			for k2, v2 := range v.Versions {
+				converted.Versions[k2] = app.ManifestRoleVersion{
+					Kinds: v2.Kinds,
+				}
+			}
+			data.Roles[k] = converted
+		}
+	}
+	if s.RoleBindings != nil {
+		data.RoleBindings = &app.ManifestRoleBindings{
+			Anonymous:  s.RoleBindings.Anonymous,
+			Viewer:     s.RoleBindings.Viewer,
+			Editor:     s.RoleBindings.Editor,
+			Admin:      s.RoleBindings.Admin,
+			Additional: s.RoleBindings.Additional,
+		}
+	}
 	return data, data.Validate()
 }
 
@@ -328,5 +353,31 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 		}
 	}
+	// Roles and RoleBindings
+	if data.Roles != nil {
+		manifestSpec.Roles = make(map[string]AppManifestRole)
+		for k, v := range data.Roles {
+			converted := AppManifestRole{
+				PermissionSet: AppManifestRolePermissionSet(v.PermissionSet),
+				Versions:      make(map[string]AppManifestRoleVersion),
+			}
+			for k2, v2 := range v.Versions {
+				converted.Versions[k2] = AppManifestRoleVersion{
+					Kinds: v2.Kinds,
+				}
+			}
+			manifestSpec.Roles[k] = converted
+		}
+	}
+	if data.RoleBindings != nil {
+		manifestSpec.RoleBindings = &AppManifestV1alpha2SpecRoleBindings{
+			Anonymous:  data.RoleBindings.Anonymous,
+			Viewer:     data.RoleBindings.Viewer,
+			Editor:     data.RoleBindings.Editor,
+			Admin:      data.RoleBindings.Admin,
+			Additional: data.RoleBindings.Additional,
+		}
+	}
+
 	return &manifestSpec, nil
 }

@@ -277,6 +277,81 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
+	// Roles and RoleBindings
+	// Generate default Roles and RoleBindings if none were specified
+	// TODO: should this be in the jenny, or the parser?
+	roles := m.Properties().Roles
+	bindings := m.Properties().RoleBindings
+	if m.Properties().Roles == nil {
+		readerVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
+		editorVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
+		adminVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
+		for _, v := range m.Versions() {
+			rv := codegen.AppManifestPropertiesRoleVersion{
+				Kinds: make([]string, 0),
+			}
+			ev := codegen.AppManifestPropertiesRoleVersion{
+				Kinds: make([]string, 0),
+			}
+			av := codegen.AppManifestPropertiesRoleVersion{
+				Kinds: make([]string, 0),
+			}
+			for _, k := range v.Kinds() {
+				rv.Kinds = append(rv.Kinds, k.Kind)
+				ev.Kinds = append(ev.Kinds, k.Kind)
+				av.Kinds = append(av.Kinds, k.Kind)
+			}
+			readerVersions[v.Name()] = rv
+			editorVersions[v.Name()] = ev
+			adminVersions[v.Name()] = av
+		}
+		readerKey := fmt.Sprintf("%s:reader", strings.ToLower(m.Name()))
+		editorKey := fmt.Sprintf("%s:editor", strings.ToLower(m.Name()))
+		adminKey := fmt.Sprintf("%s:admin", strings.ToLower(m.Name()))
+		roles = map[string]codegen.AppManifestPropertiesRole{
+			readerKey: {
+				PermissionSet: "viewer",
+				Versions:      readerVersions,
+			},
+			editorKey: {
+				PermissionSet: "editor",
+				Versions:      editorVersions,
+			},
+			adminKey: {
+				PermissionSet: "admin",
+				Versions:      adminVersions,
+			},
+		}
+
+		if m.Properties().RoleBindings == nil {
+			bindings = &codegen.AppManifestPropertiesRoleBindings{
+				Viewer: []string{readerKey},
+				Editor: []string{editorKey},
+				Admin:  []string{adminKey},
+			}
+		}
+	}
+	manifest.Roles = make(map[string]app.ManifestRole)
+	for k, v := range roles {
+		converted := app.ManifestRole{
+			PermissionSet: v.PermissionSet,
+			Versions:      make(map[string]app.ManifestRoleVersion),
+		}
+		for k2, v2 := range v.Versions {
+			converted.Versions[k2] = app.ManifestRoleVersion{
+				Kinds: v2.Kinds,
+			}
+		}
+		manifest.Roles[k] = converted
+	}
+	manifest.RoleBindings = &app.ManifestRoleBindings{
+		Anonymous:  bindings.Anonymous,
+		Viewer:     bindings.Viewer,
+		Editor:     bindings.Editor,
+		Admin:      bindings.Admin,
+		Additional: bindings.Additional,
+	}
+
 	return &manifest, nil
 }
 
