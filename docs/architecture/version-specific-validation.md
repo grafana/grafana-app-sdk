@@ -25,11 +25,9 @@ Or the reverse:
 2. **Backend** (using `v1alpha1` rules): Rejects branch name `feature/user.login` because dots are not allowed
 3. **Result**: User submits form, but backend rejects it, causing confusion
 
-## Solution: Use `fieldErrors` in Status
+## Solution: Don't Duplicate Validation Logic
 
-Instead of duplicating validation logic in the frontend, rely on backend validation and `fieldErrors` in status to surface validation errors.
-
-> **Note**: For complete information on `fieldErrors` in status, see [Field Errors in Status](./field-errors-in-status.md).
+Instead of duplicating validation logic in the frontend, rely on backend validation to enforce version-specific rules. The backend admission webhook is the single source of truth for validation rules.
 
 ### Backend Implementation
 
@@ -93,20 +91,15 @@ function validateBranchName(branch: string, apiVersion: string): boolean {
   return false;
 }
 
-// ✅ Correct: Use backend validation and fieldErrors
+// ✅ Correct: Use backend validation (no frontend validation)
 async function createRepository(spec: RepositorySpec) {
   try {
-    // Step 1: Validate with dryRun (backend validates format)
-    await api.createResource(spec, { dryRun: true });
-    
-    // Step 2: Create resource
+    // Create resource - backend validates format based on API version
     const resource = await api.createResource(spec);
-    
-    // Step 3: Resource is created successfully
-    // Runtime validation errors (if any) will appear in status.fieldErrors
-    // and can be checked via GET request or watch
+    // Resource created successfully - backend validated format
   } catch (error) {
     // Handle admission errors (format validation)
+    // Backend returns version-specific validation errors
     if (error.status === 422 && error.body?.details?.causes) {
       error.body.details.causes.forEach((cause: any) => {
         if (cause.field === 'spec.github.branch') {
@@ -148,8 +141,8 @@ const repo = await api.createResource({
   }
 });
 
-// Backend admission validates format (v1beta1 allows dots)
-// If format is invalid, returns HTTP 422 with error details
+// Backend admission validates format based on API version (v1beta1 allows dots)
+// If format is invalid for the API version, returns HTTP 422 with error details
 // If format is valid, resource is created successfully
 
 // Frontend doesn't need to know version-specific format rules
@@ -184,19 +177,23 @@ func (v *AdmissionValidator) Validate(...) error {
 ### 2. Frontend: Don't Duplicate Validation
 
 - **Don't**: Implement format validation in frontend
-- **Do**: Use `dryRun=true` for pre-creation validation
-- **Do**: Read `fieldErrors` from status for runtime errors
-- **Do**: Display errors from backend (admission or status)
+- **Do**: Let backend admission webhook validate format based on API version
+- **Do**: Display errors from backend admission responses
+- **Do**: Handle HTTP 422 errors with version-specific validation messages
 
 ```typescript
 // ✅ Correct: Use backend validation
 try {
-  await api.createResource(spec, { dryRun: true });
   const resource = await api.createResource(spec);
-  // Resource created successfully - backend validated format
+  // Resource created successfully - backend validated format based on API version
 } catch (error) {
   // Display errors from error.body.details.causes (admission errors)
   // These are version-specific format validation errors from backend
+  if (error.status === 422 && error.body?.details?.causes) {
+    error.body.details.causes.forEach((cause: any) => {
+      setFieldError(mapFieldPathToFormField(cause.field), cause.message);
+    });
+  }
 }
 ```
 
@@ -205,15 +202,17 @@ try {
 When adding a new API version with different validation rules:
 
 1. **Backend**: Implement version-specific validation in admission webhook
-2. **Frontend**: Update API client to support new version (no validation logic changes needed)
-3. **Frontend**: Use `dryRun=true` to validate before creation
-4. **Testing**: Test with mismatched frontend/backend versions to ensure errors are surfaced correctly
+2. **Backend**: Return clear error messages indicating which API version's rules apply
+3. **Frontend**: Update API client to support new version (no validation logic changes needed)
+4. **Frontend**: Display backend validation errors to users
+5. **Testing**: Test with mismatched frontend/backend versions to ensure errors are surfaced correctly
 
 ## Summary
 
 - **Format validation** (version-specific): Handle in admission webhook, return HTTP 422 errors
-- **Frontend**: Don't duplicate validation logic - use backend validation via `dryRun`
+- **Frontend**: Don't duplicate validation logic - rely on backend admission validation
 - **Benefits**: Single source of truth, version independence, automatic updates, clear error messages
+- **Key Principle**: Backend defines validation rules per API version, frontend displays errors from backend
 
 ## Related Documentation
 
