@@ -77,44 +77,6 @@ func (v *AdmissionValidator) Validate(ctx context.Context, a admission.Attribute
 }
 ```
 
-**Controller** (runtime validation - version-agnostic):
-
-```go
-// Controller performs runtime validation (version-agnostic)
-func (c *RepositoryController) reconcile(ctx context.Context, repo *provisioning.Repository) error {
-    var fieldErrors []ErrorDetails
-    
-    // Runtime validation: check if branch exists (same for all versions)
-    branchRef := fmt.Sprintf("refs/heads/%s", repo.Spec.GitHub.Branch)
-    _, err := c.gitClient.GetRef(ctx, branchRef)
-    if err != nil {
-        if errors.Is(err, nanogit.ErrObjectNotFound) {
-            fieldErrors = append(fieldErrors, ErrorDetails{
-                Type:   metav1.CauseTypeFieldValueInvalid,
-                Field:  "spec.github.branch",
-                Detail: "branch not found", // Actionable: user should use an existing branch
-            })
-        } else {
-            fieldErrors = append(fieldErrors, ErrorDetails{
-                Type:   metav1.CauseTypeFieldValueInvalid,
-                Field:  "spec.github.branch",
-                Detail: fmt.Sprintf("failed to check if branch exists: %v", err),
-            })
-        }
-    }
-    
-    // Update fieldErrors in status
-    patchOps := []map[string]interface{}{
-        {
-            "op":    "replace",
-            "path":  "/status/fieldErrors",
-            "value": fieldErrors,
-        },
-    }
-    
-    return c.statusPatcher.Patch(ctx, repo, patchOps...)
-}
-```
 
 ### Frontend Implementation
 
@@ -140,17 +102,9 @@ async function createRepository(spec: RepositorySpec) {
     // Step 2: Create resource
     const resource = await api.createResource(spec);
     
-    // Step 3: Wait for reconciliation and check fieldErrors
-    const reconciled = await waitForReconciliation(resource.metadata.name);
-    
-    // Step 4: Display any runtime errors from fieldErrors
-    if (reconciled.status.fieldErrors?.length > 0) {
-      reconciled.status.fieldErrors.forEach(error => {
-        if (error.field === 'spec.github.branch') {
-          setFieldError('branch', error.detail);
-        }
-      });
-    }
+    // Step 3: Resource is created successfully
+    // Runtime validation errors (if any) will appear in status.fieldErrors
+    // and can be checked via GET request or watch
   } catch (error) {
     // Handle admission errors (format validation)
     if (error.status === 422 && error.body?.details?.causes) {
@@ -179,9 +133,8 @@ async function createRepository(spec: RepositorySpec) {
 
 1. **Frontend** (if it had validation): Would reject `feature/user.login` ❌
 2. **Backend** (admission): Accepts `feature/user.login` ✅ (valid for `v1beta1`)
-3. **Backend** (controller): Checks if branch exists, populates `fieldErrors` if not found
 
-**With `fieldErrors` approach**:
+**With backend validation approach**:
 
 ```typescript
 // Frontend doesn't validate format - backend does
@@ -197,15 +150,10 @@ const repo = await api.createResource({
 
 // Backend admission validates format (v1beta1 allows dots)
 // If format is invalid, returns HTTP 422 with error details
+// If format is valid, resource is created successfully
 
-// If format is valid, resource is created and controller checks if branch exists
-const reconciled = await waitForReconciliation(repo.metadata.name);
-
-// Display runtime errors from fieldErrors
-if (reconciled.status.fieldErrors?.length > 0) {
-  // Show: "branch not found" if branch doesn't exist
-  // Frontend doesn't need to know version-specific format rules
-}
+// Frontend doesn't need to know version-specific format rules
+// Backend is the single source of truth for validation
 ```
 
 ### Benefits
@@ -233,22 +181,7 @@ func (v *AdmissionValidator) Validate(...) error {
 }
 ```
 
-### 2. Runtime Validation in Controller (Version-Agnostic)
-
-- **Where**: Controller reconciliation
-- **When**: After resource is persisted
-- **What**: External system checks, dynamic state validation
-- **Error Format**: `fieldErrors` in status
-
-```go
-// Controller handles runtime validation (same for all versions)
-func (c *Controller) reconcile(...) error {
-    // Check external systems (branch exists, repo exists, etc.)
-    // Populate fieldErrors in status
-}
-```
-
-### 3. Frontend: Don't Duplicate Validation
+### 2. Frontend: Don't Duplicate Validation
 
 - **Don't**: Implement format validation in frontend
 - **Do**: Use `dryRun=true` for pre-creation validation
@@ -260,10 +193,10 @@ func (c *Controller) reconcile(...) error {
 try {
   await api.createResource(spec, { dryRun: true });
   const resource = await api.createResource(spec);
-  const reconciled = await waitForReconciliation(resource.metadata.name);
-  // Display errors from reconciled.status.fieldErrors
+  // Resource created successfully - backend validated format
 } catch (error) {
   // Display errors from error.body.details.causes (admission errors)
+  // These are version-specific format validation errors from backend
 }
 ```
 
@@ -272,19 +205,16 @@ try {
 When adding a new API version with different validation rules:
 
 1. **Backend**: Implement version-specific validation in admission webhook
-2. **Backend**: Keep runtime validation version-agnostic in controller
-3. **Frontend**: Update API client to support new version (no validation logic changes needed)
-4. **Frontend**: Use `dryRun=true` and `fieldErrors` to surface validation errors
-5. **Testing**: Test with mismatched frontend/backend versions to ensure errors are surfaced correctly
+2. **Frontend**: Update API client to support new version (no validation logic changes needed)
+3. **Frontend**: Use `dryRun=true` to validate before creation
+4. **Testing**: Test with mismatched frontend/backend versions to ensure errors are surfaced correctly
 
 ## Summary
 
 - **Format validation** (version-specific): Handle in admission webhook, return HTTP 422 errors
-- **Runtime validation** (version-agnostic): Handle in controller, populate `fieldErrors` in status
-- **Frontend**: Don't duplicate validation logic - use backend validation via `dryRun` and `fieldErrors`
+- **Frontend**: Don't duplicate validation logic - use backend validation via `dryRun`
 - **Benefits**: Single source of truth, version independence, automatic updates, clear error messages
 
 ## Related Documentation
 
-- [Field Errors in Status](./field-errors-in-status.md) - Complete guide on using `fieldErrors` for runtime validation
 - [Admission Control](../admission-control.md) - How to implement admission webhooks for format validation
