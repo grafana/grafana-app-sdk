@@ -162,11 +162,11 @@ appManifestv1alpha2: appManifestKind & {
 			// Basic groups are "anonymous", "viewer", "editor", and "admin".
 			// Additional groups are specified under "additional"
 			roleBindings?: {
-				anonymous: [...string]
-				viewer: [...string]
-				editor: [...string]
-				admin: [...string]
-				additional: {
+				anonymous?: [...string]
+				viewer?: [...string]
+				editor?: [...string]
+				admin?: [...string]
+				additional?: {
 					[string]: [...string]
 				}
 			}

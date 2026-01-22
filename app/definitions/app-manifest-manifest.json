@@ -873,13 +873,6 @@
                                                 "type": "array"
                                             }
                                         },
-                                        "required": [
-                                            "anonymous",
-                                            "viewer",
-                                            "editor",
-                                            "admin",
-                                            "additional"
-                                        ],
                                         "type": "object"
                                     },
                                     "roles": {
@@ -960,6 +953,64 @@
                         "watch"
                     ]
                 }
+            ]
+        },
+        "roles": {
+            "app-manifest:admin": {
+                "permissionSet": "admin",
+                "versions": {
+                    "v1alpha1": {
+                        "kinds": [
+                            "AppManifest"
+                        ]
+                    },
+                    "v1alpha2": {
+                        "kinds": [
+                            "AppManifest"
+                        ]
+                    }
+                }
+            },
+            "app-manifest:editor": {
+                "permissionSet": "editor",
+                "versions": {
+                    "v1alpha1": {
+                        "kinds": [
+                            "AppManifest"
+                        ]
+                    },
+                    "v1alpha2": {
+                        "kinds": [
+                            "AppManifest"
+                        ]
+                    }
+                }
+            },
+            "app-manifest:reader": {
+                "permissionSet": "viewer",
+                "versions": {
+                    "v1alpha1": {
+                        "kinds": [
+                            "AppManifest"
+                        ]
+                    },
+                    "v1alpha2": {
+                        "kinds": [
+                            "AppManifest"
+                        ]
+                    }
+                }
+            }
+        },
+        "roleBindings": {
+            "viewer": [
+                "app-manifest:reader"
+            ],
+            "editor": [
+                "app-manifest:editor"
+            ],
+            "admin": [
+                "app-manifest:admin"
             ]
         }
     }

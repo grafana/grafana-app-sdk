@@ -228,7 +228,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 
 // SpecFromManifestData is a function which converts an instance of app.ManifestData
 // to this specific version of the AppManifestSpec (v1alpha1).
-// nolint:gocognit,funlen
+// nolint:gocognit,funlen,gocyclo
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	manifestSpec := AppManifestSpec{
 		AppName:  data.AppName,

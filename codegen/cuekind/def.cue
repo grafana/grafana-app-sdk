@@ -380,9 +380,10 @@ Manifest: S={
 
 	// Roles contains information for new user roles associated with this app.
 	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
-	// If unspecified, roles will be created for "reader", "editor", and "admin" automatically that include all kinds
+	// If unspecified, roles will be created for "reader", "editor", and "admin" automatically that include all kinds.
+	// A role name must begin with the app name and a colon before (e.g. "<myapp>:editor")
 	roles?: {
-		[string]: #Role
+		[string & =~"^(S.appName):[a-z0-9]+$"]: #Role
 	}
 	// RoleBindings binds the roles specified in Roles to groups.
 	// Basic groups are "anonymous", "viewer", "editor", and "admin".

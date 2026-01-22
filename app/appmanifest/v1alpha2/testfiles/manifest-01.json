@@ -94,7 +94,39 @@
           }
         ]
       }
-    ]
+    ],
+    "roles": {
+      "issue-tracker-project:reader": {
+        "permissionSet": "viewer",
+        "versions": {
+          "v1": {
+            "kinds": ["Issue"]
+          }
+        }
+      },
+      "issue-tracker-project:editor": {
+        "permissionSet": "editor",
+        "versions": {
+          "v1": {
+            "kinds": ["Issue"]
+          }
+        }
+      },
+      "issue-tracker-project:admin": {
+        "permissionSet": "admin",
+        "versions": {
+          "v1": {
+            "kinds": ["Issue"]
+          }
+        }
+      }
+    },
+    "roleBindings": {
+      "anonymous": ["issue-tracker-project:reader"],
+      "viewer": ["issue-tracker-project:reader"],
+      "editor": ["issue-tracker-project:editor"],
+      "admin": ["issue-tracker-project:admin"]
+    }
   },
   "status": {
     "resources": {

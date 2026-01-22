@@ -283,22 +283,16 @@ func NewAppManifestV1alpha2SpecExtraPermissions() *AppManifestV1alpha2SpecExtraP
 
 // +k8s:openapi-gen=true
 type AppManifestV1alpha2SpecRoleBindings struct {
-	Anonymous  []string            `json:"anonymous"`
-	Viewer     []string            `json:"viewer"`
-	Editor     []string            `json:"editor"`
-	Admin      []string            `json:"admin"`
-	Additional map[string][]string `json:"additional"`
+	Anonymous  []string            `json:"anonymous,omitempty"`
+	Viewer     []string            `json:"viewer,omitempty"`
+	Editor     []string            `json:"editor,omitempty"`
+	Admin      []string            `json:"admin,omitempty"`
+	Additional map[string][]string `json:"additional,omitempty"`
 }
 
 // NewAppManifestV1alpha2SpecRoleBindings creates a new AppManifestV1alpha2SpecRoleBindings object.
 func NewAppManifestV1alpha2SpecRoleBindings() *AppManifestV1alpha2SpecRoleBindings {
-	return &AppManifestV1alpha2SpecRoleBindings{
-		Anonymous:  []string{},
-		Viewer:     []string{},
-		Editor:     []string{},
-		Admin:      []string{},
-		Additional: map[string][]string{},
-	}
+	return &AppManifestV1alpha2SpecRoleBindings{}
 }
 
 // +k8s:openapi-gen=true

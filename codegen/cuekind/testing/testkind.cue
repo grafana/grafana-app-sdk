@@ -19,6 +19,18 @@ testManifest: {
 		}]
 	}
 	operatorURL: "https://foo.bar:8443"
+	roles: {
+		"test-app:reader": {
+			permissionSet: "viewer"
+			versions: {
+				"v1": { kinds: ["TestKind"] }
+				"v2": { kinds: ["TestKind"] }
+			}
+		}
+	}
+	roleBindings: {
+		anonymous: ["test-app:reader"]
+	}
 }
 
 testManifestV1: {

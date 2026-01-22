@@ -465,13 +465,6 @@
                                                 "type": "array"
                                             }
                                         },
-                                        "required": [
-                                            "anonymous",
-                                            "viewer",
-                                            "editor",
-                                            "admin",
-                                            "additional"
-                                        ],
                                         "type": "object"
                                     },
                                     "roles": {

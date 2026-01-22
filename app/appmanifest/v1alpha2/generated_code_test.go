@@ -58,6 +58,38 @@ func TestAppManifestKind_Read(t *testing.T) {
 				}},
 			}},
 			DryRunKinds: &dryRunKinds,
+			Roles: map[string]AppManifestRole{
+				"issue-tracker-project:reader": {
+					PermissionSet: AppManifestRolePermissionSetViewer,
+					Versions: map[string]AppManifestRoleVersion{
+						"v1": {
+							Kinds: []string{"Issue"},
+						},
+					},
+				},
+				"issue-tracker-project:editor": {
+					PermissionSet: AppManifestRolePermissionSetEditor,
+					Versions: map[string]AppManifestRoleVersion{
+						"v1": {
+							Kinds: []string{"Issue"},
+						},
+					},
+				},
+				"issue-tracker-project:admin": {
+					PermissionSet: AppManifestRolePermissionSetAdmin,
+					Versions: map[string]AppManifestRoleVersion{
+						"v1": {
+							Kinds: []string{"Issue"},
+						},
+					},
+				},
+			},
+			RoleBindings: &AppManifestV1alpha2SpecRoleBindings{
+				Anonymous: []string{"issue-tracker-project:reader"},
+				Viewer:    []string{"issue-tracker-project:reader"},
+				Editor:    []string{"issue-tracker-project:editor"},
+				Admin:     []string{"issue-tracker-project:admin"},
+			},
 		},
 		Status: AppManifestStatus{
 			Resources: map[string]AppManifeststatusApplyStatus{
