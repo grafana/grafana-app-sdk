@@ -468,7 +468,7 @@ resources.forEach(resource => {
 
 ### Overview
 
-Kubernetes provides a standard `dryRun=true` parameter for validating requests without persisting changes. This allows frontends to validate resources before creation, addressing the concern of "avoiding creation of invalid objects."
+Kubernetes provides a standard `dryRun=true` parameter for validating requests without persisting changes. This allows any API client (frontend applications, kubectl, CLI tools, automation scripts) to validate resources before creation, addressing the concern of "avoiding creation of invalid objects."
 
 ### Important: `fieldErrors` Are NOT Populated During `dryRun`
 
@@ -570,9 +570,11 @@ func (v *AdmissionValidator) validateRuntime(ctx context.Context, obj runtime.Ob
 - Errors available in `status.fieldErrors` array
 - Frontend can watch/poll for status updates
 
-### Frontend Implementation Pattern
+### Client Implementation Patterns
 
-**Pre-Creation Validation with `dryRun`**:
+**Pre-Creation Validation with `dryRun`** can be used by any API client:
+
+**Frontend (TypeScript)**:
 ```typescript
 // Step 1: Validate before creation using dryRun
 async function validateBeforeCreate(spec: ResourceSpec): Promise<ValidationErrors> {
@@ -619,9 +621,40 @@ async function createResource(spec: ResourceSpec) {
 }
 ```
 
+**kubectl**:
+```bash
+# Validate before creating
+kubectl apply --dry-run=client -f repository.yaml
+
+# If validation passes, create the resource
+kubectl apply -f repository.yaml
+
+# Check status.fieldErrors after creation
+kubectl get repository my-repo -o jsonpath='{.status.fieldErrors}'
+```
+
+**curl/API Client**:
+```bash
+# Validate before creating (dryRun)
+curl -X POST \
+  "https://api.example.com/apis/provisioning.grafana.app/v0alpha1/repositories?dryRun=All" \
+  -H "Content-Type: application/json" \
+  -d @repository.json
+
+# If validation passes (no 422 error), create the resource
+curl -X POST \
+  "https://api.example.com/apis/provisioning.grafana.app/v0alpha1/repositories" \
+  -H "Content-Type: application/json" \
+  -d @repository.json
+
+# Check status.fieldErrors after creation
+curl "https://api.example.com/apis/provisioning.grafana.app/v0alpha1/repositories/my-repo" \
+  | jq '.status.fieldErrors'
+```
+
 **Why Both Phases?**
 
-1. **`dryRun` (Phase 1)**: Prevents creating invalid resources, provides immediate feedback
+1. **`dryRun` (Phase 1)**: Prevents creating invalid resources, provides immediate feedback to any API client (frontend, kubectl, CLI tools, automation scripts)
 2. **Status `fieldErrors` (Phase 2)**: Handles errors that occur after creation (e.g., external system changes, transient failures, ongoing validation)
 
 ### Admission Webhook Implementation
@@ -712,7 +745,7 @@ func (v *AdmissionValidator) validateRuntime(ctx context.Context, repo *provisio
 2. **Admission errors during `dryRun`**: Returned as HTTP 422 with field details in `details.causes`
 3. **`fieldErrors` are NOT in status during `dryRun`**: Controllers don't run, so status is empty
 4. **Two-phase validation**: Use `dryRun` for pre-creation validation, `status.fieldErrors` for post-creation validation
-5. **Frontend extracts errors from HTTP response**: During `dryRun`, errors come from the HTTP error response, not from `status.fieldErrors`
+5. **Clients extract errors from HTTP response**: During `dryRun`, errors come from the HTTP error response (HTTP 422), not from `status.fieldErrors`. This works for any API client (frontend, kubectl, curl, automation scripts)
 
 ### Comparison: `dryRun` vs `status.fieldErrors`
 
