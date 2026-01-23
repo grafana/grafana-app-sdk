@@ -219,6 +219,10 @@ func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
 	{{.ObjectShortName}}.Spec.DeepCopyInto(&dst.Spec){{ range .Subresources }}
 	{{$.ObjectShortName}}.{{.Name}}.DeepCopyInto(&dst.{{.Name}}){{end}}
 }
+{{ if .OpenAPIModelName }}
+func ({{.TypeName}}) OpenAPIModelName() string {
+    return "{{ .OpenAPIModelName }}"
+}{{ end }}
 
 // Interface compliance compile-time check
 var _ resource.Object = &{{.TypeName}}{}
@@ -272,6 +276,10 @@ func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopy() *{{.TypeName}}List {
 func ({{.ObjectShortName}} *{{.TypeName}}List) DeepCopyInto(dst *{{.TypeName}}List) {
 	resource.CopyObjectInto(dst, {{.ObjectShortName}})
 }
+{{ if .OpenAPIModelName }}
+func ({{.TypeName}}List) OpenAPIModelName() string {
+    return "{{ .OpenAPIModelName }}List"
+}{{ end }}
 
 // Interface compliance compile-time check
 var _ resource.ListObject = &{{.TypeName}}List{}

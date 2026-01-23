@@ -55,3 +55,15 @@ func NewTestKindSpec() *TestKindSpec {
 		Foo:       *NewTestKindFoo(),
 	}
 }
+func (TestKindFoo) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindFoo"
+}
+func (TestKindBar) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindBar"
+}
+func (TestKindBaz) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindBaz"
+}
+func (TestKindSpec) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindSpec"
+}

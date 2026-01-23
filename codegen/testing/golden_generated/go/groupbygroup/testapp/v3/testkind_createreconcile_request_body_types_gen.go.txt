@@ -13,3 +13,6 @@ func NewCreateReconcileRequestBody() *CreateReconcileRequestBody {
 		Force: false,
 	}
 }
+func (CreateReconcileRequestBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileRequestBody"
+}

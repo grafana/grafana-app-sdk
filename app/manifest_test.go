@@ -847,7 +847,7 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"),
 						},
 					},
 				},
@@ -856,7 +856,7 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 		},
 		Dependencies: make([]string, 0),
 	}
-	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+	kind.Dependencies = append(kind.Dependencies, "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta")
 	for k, prop := range props {
 		kind.Schema.Properties[k] = spec.Schema{
 			SchemaProps: prop,
@@ -897,7 +897,7 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"),
 						},
 					},
 					"items": {
@@ -918,7 +918,7 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
+			"io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
 	}
 }
 

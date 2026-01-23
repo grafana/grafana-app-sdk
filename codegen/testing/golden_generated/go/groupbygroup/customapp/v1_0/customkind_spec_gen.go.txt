@@ -111,3 +111,21 @@ const (
 	CustomKindSpecEnumVal4    CustomKindSpecEnum = "val4"
 	CustomKindSpecEnumDefault CustomKindSpecEnum = "default"
 )
+func (CustomKindInnerObject1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject1"
+}
+func (CustomKindInnerObject2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject2"
+}
+func (CustomKindType1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType1"
+}
+func (CustomKindType2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType2"
+}
+func (CustomKindRecursiveList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindRecursiveList"
+}
+func (CustomKindSpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindSpec"
+}

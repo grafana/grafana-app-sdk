@@ -544,7 +544,6 @@ func (r *Reflector) watchList(ctx context.Context) (watch.Interface, error) {
 	logger := klog.FromContext(ctx)
 	var w watch.Interface
 	var err error
-	var temporaryStore cache.Store
 	var resourceVersion string
 	// TODO(#115478): see if this function could be turned
 	//  into a method and see if error handling
@@ -584,7 +583,6 @@ func (r *Reflector) watchList(ctx context.Context) (watch.Interface, error) {
 
 		resourceVersion = ""
 		lastKnownRV := r.rewatchResourceVersion()
-		temporaryStore = cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc, storeOpts...)
 		// TODO(#115478): large "list", slow clients, slow network, p&f
 		//  might slow down streaming and eventually fail.
 		//  maybe in such a case we should retry with an increased timeout?
@@ -605,7 +603,7 @@ func (r *Reflector) watchList(ctx context.Context) (watch.Interface, error) {
 			}
 			return nil, err
 		}
-		watchListBookmarkReceived, err := handleListWatch(ctx, start, w, temporaryStore, r.expectedType, r.expectedGVK, r.name, r.typeDescription,
+		watchListBookmarkReceived, err := handleListWatch(ctx, start, w, r.store, r.expectedType, r.expectedGVK, r.name, r.typeDescription,
 			func(rv string) { resourceVersion = rv },
 			r.clock, make(chan error))
 		if err != nil {
@@ -624,17 +622,9 @@ func (r *Reflector) watchList(ctx context.Context) (watch.Interface, error) {
 	}
 	// We successfully got initial state from watch-list confirmed by the
 	// "k8s.io/initial-events-end" bookmark.
-	initTrace.Step("Objects streamed", trace.Field{Key: "count", Value: len(temporaryStore.List())})
+	initTrace.Step("Objects streamed")
 	r.setIsLastSyncResourceVersionUnavailable(false)
 
-	// we utilize the temporaryStore to ensure independence from the current store implementation.
-	// as of today, the store is implemented as a queue and will be drained by the higher-level
-	// component as soon as it finishes replacing the content.
-	checkWatchListDataConsistencyIfRequested(ctx, r.name, resourceVersion, r.listerWatcher.ListWithContext, transformer, temporaryStore.List)
-
-	if err := r.store.Replace(temporaryStore.List(), resourceVersion); err != nil {
-		return nil, fmt.Errorf("unable to sync watch-list result: %w", err)
-	}
 	initTrace.Step("SyncWith done")
 	r.setLastSyncResourceVersion(resourceVersion)
 
@@ -766,7 +756,7 @@ func handleListWatch(
 	ctx context.Context,
 	start time.Time,
 	w watch.Interface,
-	store cache.Store,
+	store cache.ReflectorStore,
 	expectedType reflect.Type,
 	expectedGVK *schema.GroupVersionKind,
 	name string,
