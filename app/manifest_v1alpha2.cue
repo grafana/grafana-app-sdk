@@ -124,13 +124,20 @@ appManifestv1alpha2: appManifestKind & {
 			kinds: [...string]
 		}
 		#Role: {
+			// Title will be used as the role title in grafana
+			title: string
+			// Description is used as the role description in grafana, displayed in the UI and API responses
+			description: string
 			permissionSet: *"viewer" | "editor" | "admin"
 			versions: {
 				[string]: #RoleVersion
 			}
 		}
 		spec: {
-			appName: string
+			// AppName is the unique ID of the app
+			appName: string & =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+			// AppDisplayName is the display name of the app, which can contain any printable characters
+			appDisplayName: string
 			group: string
 			// Versions is the list of versions for this manifest, in order.
 			versions: [...#ManifestVersion]

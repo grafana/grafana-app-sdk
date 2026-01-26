@@ -11,6 +11,7 @@ type AppManifest interface {
 
 type AppManifestProperties struct {
 	AppName          string                                `json:"appName"`
+	AppDisplayName   string                                `json:"appDisplayName"`
 	Group            string                                `json:"group"`
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
@@ -32,6 +33,8 @@ type AppManifestKindPermission struct {
 
 type AppManifestPropertiesRole struct {
 	PermissionSet string                                      `json:"permissionSet" yaml:"permissionSet"`
+	Title         string                                      `json:"title"`
+	Description   string                                      `json:"description"`
 	Versions      map[string]AppManifestPropertiesRoleVersion `json:"versions" yaml:"versions"`
 }
 

@@ -22,6 +22,8 @@ testManifest: {
 	roles: {
 		"test-app:reader": {
 			permissionSet: "viewer"
+			title: "Test App Viewer"
+			description: "View Test App Resources"
 			versions: {
 				"v1": { kinds: ["TestKind"] }
 				"v2": { kinds: ["TestKind"] }

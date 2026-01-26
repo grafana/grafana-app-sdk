@@ -176,9 +176,41 @@ func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProper
 }
 
 // +k8s:openapi-gen=true
+type AppManifestRole struct {
+	// Title will be used as the role title in grafana
+	Title string `json:"title"`
+	// Description is used as the role description in grafana, displayed in the UI and API responses
+	Description   string                            `json:"description"`
+	PermissionSet AppManifestRolePermissionSet      `json:"permissionSet"`
+	Versions      map[string]AppManifestRoleVersion `json:"versions"`
+}
+
+// NewAppManifestRole creates a new AppManifestRole object.
+func NewAppManifestRole() *AppManifestRole {
+	return &AppManifestRole{
+		PermissionSet: AppManifestRolePermissionSetViewer,
+		Versions:      map[string]AppManifestRoleVersion{},
+	}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleVersion struct {
+	Kinds []string `json:"kinds"`
+}
+
+// NewAppManifestRoleVersion creates a new AppManifestRoleVersion object.
+func NewAppManifestRoleVersion() *AppManifestRoleVersion {
+	return &AppManifestRoleVersion{
+		Kinds: []string{},
+	}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestSpec struct {
 	AppName string `json:"appName"`
-	Group   string `json:"group"`
+	// AppDisplayName is the display name of the app, which can contain any printable characters
+	AppDisplayName string `json:"appDisplayName"`
+	Group          string `json:"group"`
 	// Versions is the list of versions for this manifest, in order.
 	Versions []AppManifestManifestVersion `json:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
@@ -197,6 +229,13 @@ type AppManifestSpec struct {
 	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 	// mutation, or conversion.
 	Operator *AppManifestOperatorInfo `json:"operator,omitempty"`
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	Roles map[string]AppManifestRole `json:"roles,omitempty"`
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// Additional groups are specified under "additional"
+	RoleBindings *AppManifestV1alpha1SpecRoleBindings `json:"roleBindings,omitempty"`
 }
 
 // NewAppManifestSpec creates a new AppManifestSpec object.
@@ -221,9 +260,32 @@ func NewAppManifestV1alpha1SpecExtraPermissions() *AppManifestV1alpha1SpecExtraP
 }
 
 // +k8s:openapi-gen=true
+type AppManifestV1alpha1SpecRoleBindings struct {
+	Anonymous  []string            `json:"anonymous,omitempty"`
+	Viewer     []string            `json:"viewer,omitempty"`
+	Editor     []string            `json:"editor,omitempty"`
+	Admin      []string            `json:"admin,omitempty"`
+	Additional map[string][]string `json:"additional,omitempty"`
+}
+
+// NewAppManifestV1alpha1SpecRoleBindings creates a new AppManifestV1alpha1SpecRoleBindings object.
+func NewAppManifestV1alpha1SpecRoleBindings() *AppManifestV1alpha1SpecRoleBindings {
+	return &AppManifestV1alpha1SpecRoleBindings{}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestManifestVersionKindScope string
 
 const (
 	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
 	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
+)
+
+// +k8s:openapi-gen=true
+type AppManifestRolePermissionSet string
+
+const (
+	AppManifestRolePermissionSetViewer AppManifestRolePermissionSet = "viewer"
+	AppManifestRolePermissionSetEditor AppManifestRolePermissionSet = "editor"
+	AppManifestRolePermissionSetAdmin  AppManifestRolePermissionSet = "admin"
 )

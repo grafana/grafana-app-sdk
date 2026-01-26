@@ -286,6 +286,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		readerVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
 		editorVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
 		adminVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
+		kindListMap := make(map[string]struct{}, 0)
 		for _, v := range m.Versions() {
 			rv := codegen.AppManifestPropertiesRoleVersion{
 				Kinds: make([]string, 0),
@@ -300,6 +301,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 				rv.Kinds = append(rv.Kinds, k.Kind)
 				ev.Kinds = append(ev.Kinds, k.Kind)
 				av.Kinds = append(av.Kinds, k.Kind)
+				kindListMap[k.PluralName] = struct{}{}
 			}
 			readerVersions[v.Name()] = rv
 			editorVersions[v.Name()] = ev
@@ -308,17 +310,39 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		readerKey := fmt.Sprintf("%s:reader", strings.ToLower(m.Name()))
 		editorKey := fmt.Sprintf("%s:editor", strings.ToLower(m.Name()))
 		adminKey := fmt.Sprintf("%s:admin", strings.ToLower(m.Name()))
+		kindList := make([]string, 0, len(kindListMap))
+		for k := range kindListMap {
+			kindList = append(kindList, k)
+		}
+		allKindsDesc := strings.Builder{}
+		for i, k := range kindList {
+			if i > 0 {
+				if len(kindList) > 2 {
+					allKindsDesc.WriteString(", ")
+				}
+				if i == len(kindList)-1 {
+					allKindsDesc.WriteString("and ")
+				}
+			}
+			allKindsDesc.WriteString(k)
+		}
 		roles = map[string]codegen.AppManifestPropertiesRole{
 			readerKey: {
 				PermissionSet: "viewer",
+				Title:         fmt.Sprintf("%s Reader", m.Properties().AppDisplayName),
+				Description:   fmt.Sprintf("Read %s", allKindsDesc.String()),
 				Versions:      readerVersions,
 			},
 			editorKey: {
 				PermissionSet: "editor",
+				Title:         fmt.Sprintf("%s Editor", m.Properties().AppDisplayName),
+				Description:   fmt.Sprintf("Create, Read, Update, and Delete %s", allKindsDesc.String()),
 				Versions:      editorVersions,
 			},
 			adminKey: {
 				PermissionSet: "admin",
+				Title:         fmt.Sprintf("%s Admin", m.Properties().AppDisplayName),
+				Description:   fmt.Sprintf("Allows all actions on %s", allKindsDesc.String()),
 				Versions:      adminVersions,
 			},
 		}
@@ -335,6 +359,8 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	for k, v := range roles {
 		converted := app.ManifestRole{
 			PermissionSet: v.PermissionSet,
+			Title:         v.Title,
+			Description:   v.Description,
 			Versions:      make(map[string]app.ManifestRoleVersion),
 		}
 		for k2, v2 := range v.Versions {

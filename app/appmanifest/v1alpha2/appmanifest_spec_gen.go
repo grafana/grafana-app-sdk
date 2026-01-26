@@ -205,6 +205,10 @@ func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProper
 
 // +k8s:openapi-gen=true
 type AppManifestRole struct {
+	// Title will be used as the role title in grafana
+	Title string `json:"title"`
+	// Description is used as the role description in grafana, displayed in the UI and API responses
+	Description   string                            `json:"description"`
 	PermissionSet AppManifestRolePermissionSet      `json:"permissionSet"`
 	Versions      map[string]AppManifestRoleVersion `json:"versions"`
 }
@@ -231,8 +235,11 @@ func NewAppManifestRoleVersion() *AppManifestRoleVersion {
 
 // +k8s:openapi-gen=true
 type AppManifestSpec struct {
+	// AppName is the unique ID of the app
 	AppName string `json:"appName"`
-	Group   string `json:"group"`
+	// AppDisplayName is the display name of the app, which can contain any printable characters
+	AppDisplayName string `json:"appDisplayName"`
+	Group          string `json:"group"`
 	// Versions is the list of versions for this manifest, in order.
 	Versions []AppManifestManifestVersion `json:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.

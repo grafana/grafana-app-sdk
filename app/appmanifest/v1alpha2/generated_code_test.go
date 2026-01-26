@@ -45,6 +45,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 		},
 		Spec: AppManifestSpec{
 			AppName:          "issue-tracker-project",
+			AppDisplayName:   "Issue Tracker",
 			Group:            "issuetrackerproject.ext.grafana.com",
 			PreferredVersion: &preferred,
 			Versions: []AppManifestManifestVersion{{
@@ -61,6 +62,8 @@ func TestAppManifestKind_Read(t *testing.T) {
 			Roles: map[string]AppManifestRole{
 				"issue-tracker-project:reader": {
 					PermissionSet: AppManifestRolePermissionSetViewer,
+					Title:         "Issue Tracker Reader",
+					Description:   "Read Issues",
 					Versions: map[string]AppManifestRoleVersion{
 						"v1": {
 							Kinds: []string{"Issue"},
@@ -69,6 +72,8 @@ func TestAppManifestKind_Read(t *testing.T) {
 				},
 				"issue-tracker-project:editor": {
 					PermissionSet: AppManifestRolePermissionSetEditor,
+					Title:         "Issue Tracker Editor",
+					Description:   "Edit Issues",
 					Versions: map[string]AppManifestRoleVersion{
 						"v1": {
 							Kinds: []string{"Issue"},
@@ -77,6 +82,8 @@ func TestAppManifestKind_Read(t *testing.T) {
 				},
 				"issue-tracker-project:admin": {
 					PermissionSet: AppManifestRolePermissionSetAdmin,
+					Title:         "Issue Tracker Admin",
+					Description:   "Administrate Issues",
 					Versions: map[string]AppManifestRoleVersion{
 						"v1": {
 							Kinds: []string{"Issue"},

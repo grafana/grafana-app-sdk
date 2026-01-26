@@ -328,6 +328,8 @@ Version: S={
 
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	// appDisplayName is the display name of the app. Unlike the appName, it can contain any printable characters and will be shown in the UI.
+	appDisplayName: string | *S.appName
 	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	versions: {
 		[V=string]: {

@@ -83,6 +83,8 @@ const (
 type ManifestData struct {
 	// AppName is the unique identifier for the App
 	AppName string `json:"appName" yaml:"appName"`
+	// AppDisplayName is the human-readable display name of the app. Unlike the AppName, any printable characters are allowed in this field
+	AppDisplayName string `json:"appDisplayName" yaml:"appDisplayName"`
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.com"
 	Group string `json:"group" yaml:"group"`
@@ -375,6 +377,8 @@ type ManifestOperatorWebhookProperties struct {
 // A ManifestRole consists of a PermissionSet (such as "editor") and a set of versions with kinds to apply that permission set to.
 type ManifestRole struct {
 	PermissionSet string                         `json:"permissionSet" yaml:"permissionSet"`
+	Title         string                         `json:"title" yaml:"title"`
+	Description   string                         `json:"description" yaml:"description"`
 	Versions      map[string]ManifestRoleVersion `json:"versions" yaml:"versions"`
 }
 

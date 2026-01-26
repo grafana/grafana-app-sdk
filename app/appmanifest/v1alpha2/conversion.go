@@ -17,9 +17,10 @@ import (
 // nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
-		AppName:  s.AppName,
-		Group:    s.Group,
-		Versions: make([]app.ManifestVersion, len(s.Versions)),
+		AppName:        s.AppName,
+		AppDisplayName: s.AppDisplayName,
+		Group:          s.Group,
+		Versions:       make([]app.ManifestVersion, len(s.Versions)),
 	}
 	// Versions
 	for idx, version := range s.Versions {
@@ -204,6 +205,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		for k, v := range s.Roles {
 			converted := app.ManifestRole{
 				PermissionSet: string(v.PermissionSet),
+				Title:         v.Title,
+				Description:   v.Description,
 				Versions:      make(map[string]app.ManifestRoleVersion),
 			}
 			for k2, v2 := range v.Versions {
@@ -231,9 +234,10 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 // nolint:gocognit,funlen,gocyclo
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	manifestSpec := AppManifestSpec{
-		AppName:  data.AppName,
-		Group:    data.Group,
-		Versions: make([]AppManifestManifestVersion, 0),
+		AppName:        data.AppName,
+		AppDisplayName: data.AppDisplayName,
+		Group:          data.Group,
+		Versions:       make([]AppManifestManifestVersion, 0),
 	}
 	if data.PreferredVersion != "" {
 		manifestSpec.PreferredVersion = &data.PreferredVersion
@@ -359,6 +363,8 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		for k, v := range data.Roles {
 			converted := AppManifestRole{
 				PermissionSet: AppManifestRolePermissionSet(v.PermissionSet),
+				Title:         v.Title,
+				Description:   v.Description,
 				Versions:      make(map[string]AppManifestRoleVersion),
 			}
 			for k2, v2 := range v.Versions {
