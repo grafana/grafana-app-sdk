@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/k8s"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -26,6 +26,7 @@ const (
 	blue   = "\033[1;34m"
 )
 
+//nolint:revive
 func main() {
 	log.SetPrefix("\033[0;37m")
 	kubeCfgFile := flag.String("kubecfg", "", "kube config path")

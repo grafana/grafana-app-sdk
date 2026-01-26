@@ -1,3 +1,4 @@
+//nolint:revive
 package main
 
 import (
@@ -9,9 +10,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/grafana/grafana-app-sdk/k8s"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -48,6 +49,7 @@ func (g *group) Kinds() []resource.Kind {
 	return g.kinds
 }
 
+//nolint:revive
 func main() {
 	// We're going to use kubernetes for our storage system, so we need to get a kubernetes config
 	// In this example, we load a kube config from a kube config file on-disk at the path specified by the kubecfg flag
@@ -79,7 +81,7 @@ func main() {
 		defer cancel()
 		err = manager.RegisterSchema(ctx, schema, resource.RegisterSchemaOptions{
 			NoErrorOnConflict:   true, // If the schema already exists, don't throw an error, just return
-			WaitForAvailability: true, // Wait for the schema to be available in the system (creates can be async), or until the context is cancelled
+			WaitForAvailability: true, // Wait for the schema to be available in the system (creates can be async), or until the context is canceled
 			// We could also call manager.WaitForAvailability, but this just adds a convenience layer
 		})
 		if err != nil {
@@ -134,6 +136,9 @@ func useStore(generator resource.ClientGenerator) {
 		Namespace: "default",
 		Name:      "example-1",
 	}, resource.SubresourceStatus, &statusUpdate)
+	if err != nil {
+		panic(err)
+	}
 	logObj("Updated Obj2 using Store", obj2Updated)
 
 	def1 := Def1{}
@@ -179,6 +184,9 @@ func useStore(generator resource.ClientGenerator) {
 func useSimpleStore(generator resource.ClientGenerator) {
 	// SimpleStore can only manipulate one Custom Resource type, but allows for direct manipulation of the Spec object
 	simpleStore, err := resource.NewSimpleStore[Obj2Spec](obj2Kind, generator)
+	if err != nil {
+		panic(err)
+	}
 	added, err := simpleStore.Add(context.TODO(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-2",
@@ -207,6 +215,9 @@ func useSimpleStore(generator resource.ClientGenerator) {
 		Namespace: "default",
 		Name:      "example-2",
 	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func logObj(msg string, obj any) {

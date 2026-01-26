@@ -1,109 +1,130 @@
+version: "2"
 run:
   tests: false
-  skip-dirs:
-    - test/
-    - internal/deepmap/
-
-linters-settings:
-  funlen:
-    lines: 100
-    statements: 60
-    ignore-comments: true
-  goimports:
-    local-prefixes: github.com/grafana/grafana-app-sdk
-  revive:
-    ignore-generated-header: true
-    enable-all-rules: true
-    confidence: 0.8
-    rules:
-      # TODO: consider enabling these and figuring out the values and enabling these
-      # instead of using a bunch of other linters (e.g. gocognit, funlen, etc.)
-      - name: cognitive-complexity
-        disabled: true
-      - name: argument-limit
-        disabled: true
-      - name: function-length
-        disabled: true
-      - name: function-result-limit
-        disabled: true
-      - name: banned-characters
-        disabled: true
-      - name: file-header
-        disabled: true
-      - name: cyclomatic
-        disabled: true
-      - name: line-length-limit
-        disabled: true
-      - name: max-public-structs
-        disabled: true
-      # TODO: this should be enabled, but we'll have to add package comments first.
-      # We should take care of that before 1.0.
-      - name: package-comments
-        disabled: true
-      # TODO: this is disabled because it complains about `inline` in JSON tags (albeit for a valid reason).
-      # See https://github.com/mgechev/revive/issues/520 for details.
-      - name: struct-tag
-        disabled: true
-      # TODO: this triggers a lot of false-positives, but might be useful in theory.
-      # Consider spending time on figuring the args.
-      - name: add-constant
-        disabled: true
-      # These linters are disabled "for good".
-      - name: confusing-naming
-        disabled: true
-      - name:  nested-structs
-        disabled: true
-  gocognit:
-    min-complexity: 50
-  gomnd:
-    settings:
-      mnd:
-        # the list of enabled checks, see https://github.com/tommy-muehle/go-mnd/#checks for description.
-        checks:
-        - argument
-        - case
-        - condition
-        - operation
-        - return
-        ignored-numbers: 0,1
-  misspell:
-    locale: US
-
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
+    - copyloopvar
     - dogsled
     - dupl
-    - errcheck
     - funlen
     - gochecknoinits
     - gocognit
     - goconst
     - gocritic
     - gocyclo
-    - gofmt
-    - goimports
     - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - misspell
     - nakedret
     - prealloc
     - revive
-    - staticcheck
-    - typecheck
     - unconvert
     - unparam
     - unused
     - whitespace
-
-issues:
-  # Excluding configuration per-path, per-linter, per-text and per-source
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gomnd
-        - gocognit
+  settings:
+    funlen:
+      lines: 100
+      statements: 60
+      ignore-comments: true
+    gocognit:
+      min-complexity: 50
+    misspell:
+      locale: US
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+      ignored-numbers:
+        - "0"
+        - "1"
+    revive:
+      confidence: 0.8
+      enable-all-rules: true
+      rules:
+        # TODO: consider enabling these and figuring out the values and enabling these
+        # instead of using a bunch of other linters (e.g. gocognit, funlen, etc.)
+        - name: cognitive-complexity
+          disabled: true
+        - name: argument-limit
+          disabled: true
+        - name: function-length
+          disabled: true
+        - name: function-result-limit
+          disabled: true
+        - name: banned-characters
+          disabled: true
+        - name: file-header
+          disabled: true
+        - name: cyclomatic
+          disabled: true
+        - name: line-length-limit
+          disabled: true
+        - name: max-public-structs
+          disabled: true
+        # TODO: this should be enabled, but we'll have to add package comments first.
+        # We should take care of that before 1.0.
+        - name: package-comments
+          disabled: true
+        # TODO: this is disabled because it complains about `inline` in JSON tags (albeit for a valid reason).
+        # See https://github.com/mgechev/revive/issues/520 for details.
+        - name: struct-tag
+          disabled: true
+        # TODO: this triggers a lot of false-positives, but might be useful in theory.
+        # Consider spending time on figuring the args.
+        - name: add-constant
+          disabled: true
+        # These linters are disabled "for good".
+        - name: confusing-naming
+          disabled: true
+        - name: nested-structs
+          disabled: true
+        - name: use-errors-new
+          disabled: true
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gocognit
+          - mnd
+        path: _test\.go
+    paths:
+      - test/
+      - internal/deepmap/
+      - third_party$
+      - builtin$
+      - examples$
+      - k8s/client
+      - k8s/cache
+      - .*_gen\.go$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/grafana/grafana-app-sdk
+  exclusions:
+    generated: lax
+    paths:
+      - test/
+      - internal/deepmap/
+      - third_party$
+      - builtin$
+      - examples$
+      - k8s/client
+      - k8s/cache
+      - .*_gen\.go$

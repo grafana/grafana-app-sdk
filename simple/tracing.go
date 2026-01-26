@@ -31,6 +31,8 @@ type OpenTelemetryConfig struct {
 
 // SetTraceProvider creates a trace.TracerProvider and sets it as the global TracerProvider which is used by
 // default for all app-sdk packages unless overridden.
+//
+//nolint:revive
 func SetTraceProvider(cfg OpenTelemetryConfig) error {
 	var exp trace.SpanExporter
 	switch cfg.ConnType {

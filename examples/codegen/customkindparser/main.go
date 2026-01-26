@@ -30,6 +30,9 @@ func main() {
 
 	// Just generate the JSON CustomResourceDefinition file for the myObject selector:
 	files, err := g.Generate(themagen.CRDGenerator(json.Marshal, "json"), "myObject")
+	if err != nil {
+		log.Panicln(err)
+	}
 	// Print the contents to the console, rather than writing out to disk
 	// You could also use this to write to a kubernetes API
 	for _, f := range files {

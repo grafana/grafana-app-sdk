@@ -114,6 +114,8 @@ func (t *TypedStore[T]) Update(ctx context.Context, identifier Identifier, obj T
 // It is usually best to use the result of a Get call, change the appropriate values, and then call Upsert with that.
 // The update will fail if no ResourceVersion is provided, or if the ResourceVersion does not match the current one.
 // It returns the updated Object from the storage system.
+//
+//nolint:revive
 func (t *TypedStore[T]) Upsert(ctx context.Context, identifier Identifier, obj T) (T, error) {
 	resp, err := t.client.Get(ctx, identifier)
 

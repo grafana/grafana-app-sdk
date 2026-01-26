@@ -80,7 +80,7 @@ var projectLocalInitCmd = &cobra.Command{
 func setupProjectCmd() {
 	projectCmd.PersistentFlags().StringP("path", "p", "", "Path to project directory")
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
-	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
+	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true" //nolint:goconst
 
 	projectAddComponentCmd.Flags().String("plugin-id", "", "Plugin ID")
 	projectAddComponentCmd.Flags().String("kindgrouping", kindGroupingKind, `Kind go package grouping.
