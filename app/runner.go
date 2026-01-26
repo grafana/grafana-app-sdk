@@ -41,6 +41,8 @@ type MultiRunner struct {
 
 // Run runs all Runners in separate goroutines, and calls ErrorHandler if any of them exits early with an error.
 // If ErrorHandler returns true (or if there is no ErrorHandler), the other Runners are canceled and the error is returned.
+//
+//nolint:revive
 func (m *MultiRunner) Run(ctx context.Context) error {
 	propagatedContext, cancel := context.WithCancel(ctx)
 	defer cancel()

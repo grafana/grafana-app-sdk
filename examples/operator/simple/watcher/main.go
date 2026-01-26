@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+//nolint:revive
 func main() {
 	kubeCfgFile := flag.String("kubecfg", "", "kube config path")
 	flag.Parse()
@@ -66,7 +67,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		panic(fmt.Errorf("unable to initialise operator: %w", err))
+		panic(fmt.Errorf("unable to initialise operator: %w", err)) //nolint:misspell
 	}
 
 	// Set up the watcher

@@ -1,3 +1,4 @@
+//nolint:revive
 package main
 
 // Datasource configuration. New datasources for the local dev environment codegen should go here
