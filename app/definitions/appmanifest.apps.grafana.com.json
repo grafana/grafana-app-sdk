@@ -16,6 +16,10 @@
                         "properties": {
                             "spec": {
                                 "properties": {
+                                    "appDisplayName": {
+                                        "description": "AppDisplayName is the display name of the app, which can contain any printable characters",
+                                        "type": "string"
+                                    },
                                     "appName": {
                                         "type": "string"
                                     },
@@ -91,6 +95,94 @@
                                     "preferredVersion": {
                                         "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
                                         "type": "string"
+                                    },
+                                    "roleBindings": {
+                                        "description": "RoleBindings binds the roles specified in Roles to groups.\nBasic groups are \"anonymous\", \"viewer\", \"editor\", and \"admin\".\nAdditional groups are specified under \"additional\"",
+                                        "properties": {
+                                            "additional": {
+                                                "additionalProperties": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "type": "object"
+                                            },
+                                            "admin": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "anonymous": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "editor": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "viewer": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "roles": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "description": {
+                                                    "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
+                                                    "type": "string"
+                                                },
+                                                "permissionSet": {
+                                                    "default": "viewer",
+                                                    "enum": [
+                                                        "viewer",
+                                                        "editor",
+                                                        "admin"
+                                                    ],
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "description": "Title will be used as the role title in grafana",
+                                                    "type": "string"
+                                                },
+                                                "versions": {
+                                                    "additionalProperties": {
+                                                        "properties": {
+                                                            "kinds": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "kinds"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "required": [
+                                                "title",
+                                                "description",
+                                                "permissionSet",
+                                                "versions"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Roles contains information for new user roles associated with this app.\nIt is a map of the role name (e.g. \"dashboard:reader\") to the set of permissions on resources managed by this app.",
+                                        "type": "object"
                                     },
                                     "versions": {
                                         "description": "Versions is the list of versions for this manifest, in order.",
@@ -252,6 +344,7 @@
                                 },
                                 "required": [
                                     "appName",
+                                    "appDisplayName",
                                     "group",
                                     "versions"
                                 ],
@@ -352,7 +445,12 @@
                         "properties": {
                             "spec": {
                                 "properties": {
+                                    "appDisplayName": {
+                                        "description": "AppDisplayName is the display name of the app, which can contain any printable characters",
+                                        "type": "string"
+                                    },
                                     "appName": {
+                                        "description": "AppName is the unique ID of the app",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -427,6 +525,94 @@
                                     "preferredVersion": {
                                         "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
                                         "type": "string"
+                                    },
+                                    "roleBindings": {
+                                        "description": "RoleBindings binds the roles specified in Roles to groups.\nBasic groups are \"anonymous\", \"viewer\", \"editor\", and \"admin\".\nAdditional groups are specified under \"additional\"",
+                                        "properties": {
+                                            "additional": {
+                                                "additionalProperties": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "type": "object"
+                                            },
+                                            "admin": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "anonymous": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "editor": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "viewer": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "roles": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "description": {
+                                                    "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
+                                                    "type": "string"
+                                                },
+                                                "permissionSet": {
+                                                    "default": "viewer",
+                                                    "enum": [
+                                                        "viewer",
+                                                        "editor",
+                                                        "admin"
+                                                    ],
+                                                    "type": "string"
+                                                },
+                                                "title": {
+                                                    "description": "Title will be used as the role title in grafana",
+                                                    "type": "string"
+                                                },
+                                                "versions": {
+                                                    "additionalProperties": {
+                                                        "properties": {
+                                                            "kinds": {
+                                                                "items": {
+                                                                    "type": "string"
+                                                                },
+                                                                "type": "array"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "kinds"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "required": [
+                                                "title",
+                                                "description",
+                                                "permissionSet",
+                                                "versions"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Roles contains information for new user roles associated with this app.\nIt is a map of the role name (e.g. \"dashboard:reader\") to the set of permissions on resources managed by this app.",
+                                        "type": "object"
                                     },
                                     "versions": {
                                         "description": "Versions is the list of versions for this manifest, in order.",
@@ -609,6 +795,7 @@
                                 },
                                 "required": [
                                     "appName",
+                                    "appDisplayName",
                                     "group",
                                     "versions"
                                 ],

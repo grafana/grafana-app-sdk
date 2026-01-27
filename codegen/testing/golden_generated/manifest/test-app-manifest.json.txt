@@ -6,6 +6,7 @@
     },
     "spec": {
         "appName": "test-app",
+        "appDisplayName": "",
         "group": "testapp.ext.grafana.com",
         "versions": [
             {
@@ -524,6 +525,30 @@
                 "validationPath": "/validate",
                 "mutationPath": "/mutate"
             }
+        },
+        "roles": {
+            "test-app:reader": {
+                "title": "Test App Viewer",
+                "description": "View Test App Resources",
+                "permissionSet": "viewer",
+                "versions": {
+                    "v1": {
+                        "kinds": [
+                            "TestKind"
+                        ]
+                    },
+                    "v2": {
+                        "kinds": [
+                            "TestKind"
+                        ]
+                    }
+                }
+            }
+        },
+        "roleBindings": {
+            "anonymous": [
+                "test-app:reader"
+            ]
         }
     }
 }

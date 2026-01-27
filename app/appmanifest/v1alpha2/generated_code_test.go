@@ -45,6 +45,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 		},
 		Spec: AppManifestSpec{
 			AppName:          "issue-tracker-project",
+			AppDisplayName:   "Issue Tracker",
 			Group:            "issuetrackerproject.ext.grafana.com",
 			PreferredVersion: &preferred,
 			Versions: []AppManifestManifestVersion{{
@@ -58,6 +59,44 @@ func TestAppManifestKind_Read(t *testing.T) {
 				}},
 			}},
 			DryRunKinds: &dryRunKinds,
+			Roles: map[string]AppManifestRole{
+				"issue-tracker-project:reader": {
+					PermissionSet: AppManifestRolePermissionSetViewer,
+					Title:         "Issue Tracker Reader",
+					Description:   "Read Issues",
+					Versions: map[string]AppManifestRoleVersion{
+						"v1": {
+							Kinds: []string{"Issue"},
+						},
+					},
+				},
+				"issue-tracker-project:editor": {
+					PermissionSet: AppManifestRolePermissionSetEditor,
+					Title:         "Issue Tracker Editor",
+					Description:   "Edit Issues",
+					Versions: map[string]AppManifestRoleVersion{
+						"v1": {
+							Kinds: []string{"Issue"},
+						},
+					},
+				},
+				"issue-tracker-project:admin": {
+					PermissionSet: AppManifestRolePermissionSetAdmin,
+					Title:         "Issue Tracker Admin",
+					Description:   "Administrate Issues",
+					Versions: map[string]AppManifestRoleVersion{
+						"v1": {
+							Kinds: []string{"Issue"},
+						},
+					},
+				},
+			},
+			RoleBindings: &AppManifestV1alpha2SpecRoleBindings{
+				Anonymous: []string{"issue-tracker-project:reader"},
+				Viewer:    []string{"issue-tracker-project:reader"},
+				Editor:    []string{"issue-tracker-project:editor"},
+				Admin:     []string{"issue-tracker-project:admin"},
+			},
 		},
 		Status: AppManifestStatus{
 			Resources: map[string]AppManifeststatusApplyStatus{

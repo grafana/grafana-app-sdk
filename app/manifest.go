@@ -83,6 +83,8 @@ const (
 type ManifestData struct {
 	// AppName is the unique identifier for the App
 	AppName string `json:"appName" yaml:"appName"`
+	// AppDisplayName is the human-readable display name of the app. Unlike the AppName, any printable characters are allowed in this field
+	AppDisplayName string `json:"appDisplayName" yaml:"appDisplayName"`
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.com"
 	Group string `json:"group" yaml:"group"`
@@ -99,6 +101,13 @@ type ManifestData struct {
 	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 	// mutation, or conversion.
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	Roles map[string]ManifestRole `json:"roles,omitempty" yaml:"roles,omitempty"`
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// At this time, only these are supported.
+	RoleBindings *ManifestRoleBindings `json:"roleBindings,omitempty" yaml:"roleBindings,omitempty"`
 }
 
 func (m *ManifestData) IsEmpty() bool {
@@ -362,6 +371,35 @@ type ManifestOperatorWebhookProperties struct {
 	ConversionPath string `json:"conversionPath" yaml:"conversionPath"`
 	ValidationPath string `json:"validationPath" yaml:"validationPath"`
 	MutationPath   string `json:"mutationPath" yaml:"mutationPath"`
+}
+
+// ManifestRole describes a role used in the ManifestData Roles map.
+// A ManifestRole consists of a PermissionSet (such as "editor") and a set of versions with kinds to apply that permission set to.
+type ManifestRole struct {
+	PermissionSet string                         `json:"permissionSet" yaml:"permissionSet"`
+	Title         string                         `json:"title" yaml:"title"`
+	Description   string                         `json:"description" yaml:"description"`
+	Versions      map[string]ManifestRoleVersion `json:"versions" yaml:"versions"`
+}
+
+// ManifestRoleVersion is an entry in a ManifestRole item. It describes a set of kinds for a particular version.
+type ManifestRoleVersion struct {
+	Kinds []string `json:"kinds" yaml:"kinds"`
+}
+
+// ManifestRoleBindings is the set of RoleBindings for ManifestData.RoleBindings.
+// It binds a grafana group to one or more roles as described by ManifestData.Roles (or other role strings defined by other apps).
+type ManifestRoleBindings struct {
+	// Anonymous set the role(s) granted to anonymous users.
+	Anonymous []string `json:"anonymous" yaml:"anonymous"`
+	// Viewer sets the role(s) granted to users in the "viewer" group
+	Viewer []string `json:"viewer" yaml:"viewer"`
+	// Editor sets the role(s) granted to users in the "editor" group
+	Editor []string `json:"editor" yaml:"editor"`
+	// Admin sets the role(s) granted to users in the "admin" group
+	Admin []string `json:"admin" yaml:"admin"`
+	// Additional is a map of additional group strings to their associated roles
+	Additional map[string][]string `json:"additional" yaml:"additional"`
 }
 
 // VersionSchemaFromMap accepts an OpenAPI-shaped map[string]any, where the contents of the map are either a full openAPI document
