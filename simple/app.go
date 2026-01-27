@@ -430,6 +430,9 @@ func (a *App) AddRunnable(runner app.Runnable) {
 
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
+	if kind.Kind.Schema == nil {
+		return errors.New("cannot manage an empty kind")
+	}
 	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
@@ -466,6 +469,9 @@ func (a *App) manageKind(kind AppManagedKind) error {
 }
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
+	if kind.Kind.Schema == nil {
+		return errors.New("cannot watch an empty kind")
+	}
 	if kind.Reconciler != nil && kind.Watcher != nil {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}

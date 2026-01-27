@@ -58,6 +58,12 @@ type ResourceObjectGenerator struct {
 	// When GroupByKind is false, subresource types (such as spec and status) are assumed to be prefixed with the
 	// kind name, which can be accomplished by setting GroupByKind=false on the GoTypesGenerator.
 	GroupByKind bool
+
+	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
+	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
+	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
+	// apiservers if using the default apiserver.AppInstaller.
+	OpenAPINamer func(OpenAPINamerInfo) string
 }
 
 func (*ResourceObjectGenerator) JennyName() string {
@@ -69,7 +75,20 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 	allVersions := kind.Versions()
 	for i := range len(allVersions) {
 		ver := allVersions[i]
-		b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version))
+		openAPIName := ""
+		if r.OpenAPINamer != nil {
+			grp := kind.Properties().ManifestGroup
+			if grp == "" {
+				grp = kind.Properties().Group
+			}
+			openAPIName = r.OpenAPINamer(OpenAPINamerInfo{
+				TypeName:   kind.Name(),
+				ShortGroup: grp,
+				Version:    ver.Version,
+				Kind:       kind.Name(),
+			})
+		}
+		b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version), openAPIName)
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +101,7 @@ func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string) ([]byte, error) {
+func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string, openAPIName string) ([]byte, error) {
 	customMetadataFields := make([]templates.ObjectMetadataField, 0)
 	mdv := version.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
 	if mdv.Exists() {
@@ -129,6 +148,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 		ObjectShortName:      "o",
 		Subresources:         make([]templates.SubresourceMetadata, 0),
 		CustomMetadataFields: customMetadataFields,
+		OpenAPIModelName:     openAPIName,
 	}
 	it, err := version.Schema.Fields()
 	if err != nil {

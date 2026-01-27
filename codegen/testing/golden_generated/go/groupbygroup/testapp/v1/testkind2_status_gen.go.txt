@@ -42,3 +42,9 @@ const (
 	TestKind2StatusOperatorStateStateInProgress TestKind2StatusOperatorStateState = "in_progress"
 	TestKind2StatusOperatorStateStateFailed     TestKind2StatusOperatorStateState = "failed"
 )
+func (TestKind2statusOperatorState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2statusOperatorState"
+}
+func (TestKind2Status) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2Status"
+}

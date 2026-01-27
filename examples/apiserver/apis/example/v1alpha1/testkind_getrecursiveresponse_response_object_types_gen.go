@@ -34,4 +34,8 @@ func (o *GetRecursiveResponse) DeepCopyInto(dst *GetRecursiveResponse) {
 	o.GetRecursiveResponseBody.DeepCopyInto(&dst.GetRecursiveResponseBody)
 }
 
+func (GetRecursiveResponse) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponse"
+}
+
 var _ runtime.Object = NewGetRecursiveResponse()

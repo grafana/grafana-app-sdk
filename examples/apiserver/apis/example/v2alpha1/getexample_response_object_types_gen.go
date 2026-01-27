@@ -34,4 +34,8 @@ func (o *GetExample) DeepCopyInto(dst *GetExample) {
 	o.GetExampleBody.DeepCopyInto(&dst.GetExampleBody)
 }
 
+func (GetExample) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v2alpha1.GetExample"
+}
+
 var _ runtime.Object = NewGetExample()
