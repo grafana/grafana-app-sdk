@@ -69,3 +69,12 @@ const (
 	AppManifestStatusOperatorStateStateInProgress AppManifestStatusOperatorStateState = "in_progress"
 	AppManifestStatusOperatorStateStateFailed     AppManifestStatusOperatorStateState = "failed"
 )
+func (AppManifeststatusApplyStatus) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifeststatusApplyStatus"
+}
+func (AppManifeststatusOperatorState) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifeststatusOperatorState"
+}
+func (AppManifestStatus) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestStatus"
+}
