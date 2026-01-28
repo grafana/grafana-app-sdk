@@ -3,6 +3,7 @@ kind: AppManifest
 metadata:
   name: test-app
 spec:
+  appDisplayName: ""
   appName: test-app
   extraPermissions:
     accessKinds:
@@ -20,6 +21,21 @@ spec:
       mutationPath: /mutate
       validationPath: /validate
   preferredVersion: v1
+  roleBindings:
+    anonymous:
+    - test-app:reader
+  roles:
+    test-app:reader:
+      description: View Test App Resources
+      permissionSet: viewer
+      title: Test App Viewer
+      versions:
+        v1:
+          kinds:
+          - TestKind
+        v2:
+          kinds:
+          - TestKind
   versions:
   - kinds:
     - admission:

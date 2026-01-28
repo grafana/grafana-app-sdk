@@ -16,9 +16,10 @@ import (
 // nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
-		AppName:  s.AppName,
-		Group:    s.Group,
-		Versions: make([]app.ManifestVersion, len(s.Versions)),
+		AppName:        s.AppName,
+		AppDisplayName: s.AppDisplayName,
+		Group:          s.Group,
+		Versions:       make([]app.ManifestVersion, len(s.Versions)),
 	}
 	// Versions
 	for idx, version := range s.Versions {
@@ -168,6 +169,33 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			data.Operator.Webhooks = &webhooks
 		}
 	}
+	// Roles and RoleBindings
+	if s.Roles != nil {
+		data.Roles = make(map[string]app.ManifestRole)
+		for k, v := range s.Roles {
+			converted := app.ManifestRole{
+				PermissionSet: string(v.PermissionSet),
+				Title:         v.Title,
+				Description:   v.Description,
+				Versions:      make(map[string]app.ManifestRoleVersion),
+			}
+			for k2, v2 := range v.Versions {
+				converted.Versions[k2] = app.ManifestRoleVersion{
+					Kinds: v2.Kinds,
+				}
+			}
+			data.Roles[k] = converted
+		}
+	}
+	if s.RoleBindings != nil {
+		data.RoleBindings = &app.ManifestRoleBindings{
+			Anonymous:  s.RoleBindings.Anonymous,
+			Viewer:     s.RoleBindings.Viewer,
+			Editor:     s.RoleBindings.Editor,
+			Admin:      s.RoleBindings.Admin,
+			Additional: s.RoleBindings.Additional,
+		}
+	}
 	return data, data.Validate()
 }
 
@@ -177,9 +205,10 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 // nolint:gocognit,funlen
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	spec := AppManifestSpec{
-		AppName:  data.AppName,
-		Group:    data.Group,
-		Versions: make([]AppManifestManifestVersion, 0),
+		AppName:        data.AppName,
+		AppDisplayName: data.AppDisplayName,
+		Group:          data.Group,
+		Versions:       make([]AppManifestManifestVersion, 0),
 	}
 	if data.PreferredVersion != "" {
 		spec.PreferredVersion = &data.PreferredVersion
@@ -282,5 +311,33 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 		}
 	}
+	// Roles and RoleBindings
+	if data.Roles != nil {
+		spec.Roles = make(map[string]AppManifestRole)
+		for k, v := range data.Roles {
+			converted := AppManifestRole{
+				PermissionSet: AppManifestRolePermissionSet(v.PermissionSet),
+				Title:         v.Title,
+				Description:   v.Description,
+				Versions:      make(map[string]AppManifestRoleVersion),
+			}
+			for k2, v2 := range v.Versions {
+				converted.Versions[k2] = AppManifestRoleVersion{
+					Kinds: v2.Kinds,
+				}
+			}
+			spec.Roles[k] = converted
+		}
+	}
+	if data.RoleBindings != nil {
+		spec.RoleBindings = &AppManifestV1alpha1SpecRoleBindings{
+			Anonymous:  data.RoleBindings.Anonymous,
+			Viewer:     data.RoleBindings.Viewer,
+			Editor:     data.RoleBindings.Editor,
+			Admin:      data.RoleBindings.Admin,
+			Additional: data.RoleBindings.Additional,
+		}
+	}
+
 	return &spec, nil
 }

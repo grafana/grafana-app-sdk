@@ -7,6 +7,7 @@
   },
   "spec": {
     "appName": "issue-tracker-project",
+    "appDisplayName": "Issue Tracker",
     "group": "issuetrackerproject.ext.grafana.com",
     "preferredVersion": "v1",
     "versions": [
@@ -94,7 +95,45 @@
           }
         ]
       }
-    ]
+    ],
+    "roles": {
+      "issue-tracker-project:reader": {
+        "permissionSet": "viewer",
+        "title": "Issue Tracker Reader",
+        "description": "Read Issues",
+        "versions": {
+          "v1": {
+            "kinds": ["Issue"]
+          }
+        }
+      },
+      "issue-tracker-project:editor": {
+        "permissionSet": "editor",
+        "title": "Issue Tracker Editor",
+        "description": "Edit Issues",
+        "versions": {
+          "v1": {
+            "kinds": ["Issue"]
+          }
+        }
+      },
+      "issue-tracker-project:admin": {
+        "permissionSet": "admin",
+        "title": "Issue Tracker Admin",
+        "description": "Administrate Issues",
+        "versions": {
+          "v1": {
+            "kinds": ["Issue"]
+          }
+        }
+      }
+    },
+    "roleBindings": {
+      "anonymous": ["issue-tracker-project:reader"],
+      "viewer": ["issue-tracker-project:reader"],
+      "editor": ["issue-tracker-project:editor"],
+      "admin": ["issue-tracker-project:admin"]
+    }
   },
   "status": {
     "resources": {

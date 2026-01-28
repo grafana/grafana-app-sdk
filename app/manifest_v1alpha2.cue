@@ -120,8 +120,24 @@ appManifestv1alpha2: appManifestKind & {
 			// Webhooks contains information about the various webhook paths.
 			webhooks?: #OperatorWebhookProperties
 		}
+		#RoleVersion: {
+			kinds: [...string]
+		}
+		#Role: {
+			// Title will be used as the role title in grafana
+			title: string
+			// Description is used as the role description in grafana, displayed in the UI and API responses
+			description: string
+			permissionSet: *"viewer" | "editor" | "admin"
+			versions: {
+				[string]: #RoleVersion
+			}
+		}
 		spec: {
-			appName: string
+			// AppName is the unique ID of the app
+			appName: string & =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+			// AppDisplayName is the display name of the app, which can contain any printable characters
+			appDisplayName: string
 			group: string
 			// Versions is the list of versions for this manifest, in order.
 			versions: [...#ManifestVersion]
@@ -144,6 +160,23 @@ appManifestv1alpha2: appManifestKind & {
 			// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 			// mutation, or conversion.
 			operator?: #OperatorInfo
+			// Roles contains information for new user roles associated with this app.
+			// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+			roles?: {
+				[string]: #Role
+			}
+			// RoleBindings binds the roles specified in Roles to groups.
+			// Basic groups are "anonymous", "viewer", "editor", and "admin".
+			// Additional groups are specified under "additional"
+			roleBindings?: {
+				anonymous?: [...string]
+				viewer?: [...string]
+				editor?: [...string]
+				admin?: [...string]
+				additional?: {
+					[string]: [...string]
+				}
+			}
 		}
 		status: {
 			#ApplyStatus: {

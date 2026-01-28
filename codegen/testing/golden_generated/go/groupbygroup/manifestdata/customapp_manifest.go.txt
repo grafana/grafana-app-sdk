@@ -72,6 +72,65 @@ var appManifestData = app.ManifestData{
 			},
 		},
 	},
+	Roles: map[string]app.ManifestRole{
+		"custom-app:admin": app.ManifestRole{
+			PermissionSet: "admin",
+			Versions: map[string]app.ManifestRoleVersion{
+				"v0-0": {
+					Kinds: []string{
+						"CustomKind",
+					},
+				},
+				"v1-0": {
+					Kinds: []string{
+						"CustomKind",
+					},
+				},
+			},
+		},
+		"custom-app:editor": app.ManifestRole{
+			PermissionSet: "editor",
+			Versions: map[string]app.ManifestRoleVersion{
+				"v0-0": {
+					Kinds: []string{
+						"CustomKind",
+					},
+				},
+				"v1-0": {
+					Kinds: []string{
+						"CustomKind",
+					},
+				},
+			},
+		},
+		"custom-app:reader": app.ManifestRole{
+			PermissionSet: "viewer",
+			Versions: map[string]app.ManifestRoleVersion{
+				"v0-0": {
+					Kinds: []string{
+						"CustomKind",
+					},
+				},
+				"v1-0": {
+					Kinds: []string{
+						"CustomKind",
+					},
+				},
+			},
+		},
+	},
+	RoleBindings: &app.ManifestRoleBindings{
+		Anonymous: []string{},
+		Viewer: []string{
+			"custom-app:reader",
+		},
+		Editor: []string{
+			"custom-app:editor",
+		},
+		Admin: []string{
+			"custom-app:admin",
+		},
+	},
 }
 
 func LocalManifest() app.Manifest {
