@@ -119,8 +119,8 @@ github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 h1:JeSE6pjso5T
 github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674/go.mod h1:r4w70xmWCQKmi1ONH4KIaBptdivuRPyosB9RmPlGEwA=
 github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770 h1:+cFvbhw2O+WxmVtKUH7CKCfFLM2L8No3Q0R9g/IuTlg=
 github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770/go.mod h1:HVKowlidslFhPxKtj5oRrWS+d1u0zl7xC8aeWm7dEUU=
-github.com/grafana/cog v0.0.47 h1:jQ8qm4zpu5TZHEzvDfM1lZLINinqAQ9ioTtA+5BawkY=
-github.com/grafana/cog v0.0.47/go.mod h1:54NBcmt64FQM76jMaXJR4Jy22lBceOnC9GnpQhc9V2o=
+github.com/grafana/cog v0.0.48 h1:o2jCNjHAp3oak8Swl7NVOwfZDaFWFDboZzLD2JQvpTM=
+github.com/grafana/cog v0.0.48/go.mod h1:ZHTb53Vc5C5OdIISZoW0pfqlI8KiFD2bSOJDRANA20I=
 github.com/grafana/grafana-app-sdk/logging v0.49.0 h1:0X2QmqQk7yK48loxiXWBzi4GrDdgM2LIlCt5M40CVrM=
 github.com/grafana/grafana-app-sdk/logging v0.49.0/go.mod h1:5u3KalezoBAAo2Y3ytDYDAIIPvEqFLLDSxeiK99QxDU=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 h1:QGLs/O40yoNK9vmy4rhUGBVyMf1lISBGtXRpsu/Qu/o=
