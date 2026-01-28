@@ -3,6 +3,79 @@
 # https://docs.tilt.dev/api.html#api.version_settings
 version_settings(constraint='>=0.22.2')
 
+# Load Helm extension for helm_repo and helm_resource functions
+load('ext://helm_resource', 'helm_resource', 'helm_repo')
+
+# Configure local registry
+default_registry('localhost:5000')
+
+# Load operator image name from config.yaml or config.json
+operator_image = ''
+if os.path.exists('config.json'):
+    config = read_json('config.json')
+    operator_image = config.get('operatorImage', '')
+elif os.path.exists('config.yaml'):
+    config = read_yaml('config.yaml')
+    operator_image = config.get('operatorImage', '')
+
+# Build and push the operator image to the local registry if operatorImage is set
+if operator_image:
+    docker_build('localhost/'+operator_image, 
+                 context='../',
+                 dockerfile='../cmd/operator/Dockerfile')
+
+# Ingress
+# Check if an ingress controller already exists (e.g., traefik in k3d)
+# Only deploy nginx-ingress if no ingress controller is found
+# Check for common ingress controllers: traefik (k3d), nginx-ingress, or any IngressClass
+_ingress_check_cmd = 'kubectl get ingressclass -o name 2>/dev/null | head -1 || kubectl get deployment traefik -n kube-system -o name 2>/dev/null | head -1 || kubectl get deployment ingress-nginx-controller -n ingress-nginx -o name 2>/dev/null | head -1 || echo ""'
+_ingress_check_result = str(local(_ingress_check_cmd, quiet=True))
+_has_ingress = _ingress_check_result and _ingress_check_result.strip() != ""
+
+if not _has_ingress:
+    # Add the ingress-nginx chart repository
+    helm_repo(
+        'ingress-nginx-repo',
+        'https://kubernetes.github.io/ingress-nginx',
+    )
+
+    # Create the ingress-nginx namespace if it doesn't exist
+    local('kubectl get ns ingress-nginx || kubectl create ns ingress-nginx')
+
+    # Check if ingress-ready label exists on any node (for kind clusters)
+    _node_check = str(local('kubectl get nodes -l ingress-ready=true -o name 2>/dev/null | head -1 || echo ""', quiet=True))
+    _has_ingress_ready_node = _node_check and _node_check.strip() != ""
+    
+    # Build helm flags
+    _helm_flags = [
+        '--set', 'controller.hostPort.enabled=true',
+        '--set', 'controller.hostPort.ports.http=80',
+        '--set', 'controller.hostPort.ports.https=443',
+        '--set', 'controller.service.type=NodePort',
+        '--set', 'controller.replicaCount=1',
+        '--set', 'controller.podLabels.app=ingress-nginx',
+    ]
+    
+    # Only add nodeSelector if ingress-ready nodes exist (kind clusters)
+    if _has_ingress_ready_node:
+        _helm_flags.extend(['--set-string', 'controller.nodeSelector.ingress-ready=true'])
+    
+    # Install the ingress-nginx chart configured for kind
+    # The controller will use the ingress-ready=true node label if available
+    # Using --atomic=false and no --wait to prevent timeouts - pods will start in background
+    helm_resource(
+        'ingress-nginx',
+        'ingress-nginx/ingress-nginx',
+        namespace='ingress-nginx',
+        resource_deps=['ingress-nginx-repo'],
+        flags=_helm_flags + [
+            # Don't wait for pods - let them start in background to avoid timeouts
+            '--timeout', '2m',
+        ],
+    )
+else:
+    print("Existing ingress controller detected (e.g., traefik in k3d), skipping nginx-ingress deployment")
+
 def name(c):
   return c['metadata']['name']
 

@@ -1,0 +1,31 @@
+apiVersion: ctlptl.dev/v1alpha1
+kind: Registry
+name: kind-registry
+port: 5000
+listenAddress: "127.0.0.1"
+---
+apiVersion: ctlptl.dev/v1alpha1
+kind: Cluster
+name: kind-{{.ClusterName}}
+product: kind
+registry: kind-registry
+kindV1Alpha4Cluster:
+  name: kind
+  nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+    - |
+      kind: InitConfiguration
+      nodeRegistration:
+        kubeletExtraArgs:
+          node-labels: "ingress-ready=true"
+    extraPortMappings:
+    - containerPort: 80
+      hostPort: 9999
+      protocol: TCP
+    - containerPort: 443
+      hostPort: 9443
+      protocol: TCP
+    extraMounts:
+    - hostPath: ./local/mounted-files
+      containerPath: /tmp/k3d/mounted-files

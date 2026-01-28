@@ -1,32 +1,35 @@
 #!/usr/bin/env bash
 set -eufo pipefail
 
-CLUSTER_NAME="{{.ClusterName}}"
+ctlptl_config=${1:-ctlptl-config.yaml}
 
 create_cluster() {
-  K3D_CONFIG="${1:-generated/k3d-config.json}"
-
-  if ! k3d cluster list "${CLUSTER_NAME}" >/dev/null 2>&1; then
-    # Array of extra options to add to the k3d cluster create command
-    EXTRA_K3D_OPTS=()
-
-    # Bug in k3d for btrfs filesystems workaround, see https://k3d.io/v5.2.2/faq/faq/#issues-with-btrfs
-    # Apple is APFS/HFS and stat has a different API, so we might as well skip that
-    if [[ "${OSTYPE}" != "darwin*" ]]; then
-      ROOTFS="$(stat -f --format="%T" "/")"
-      if [[ "${ROOTFS}" == "btrfs" ]]; then
-        EXTRA_K3D_OPTS+=("-v" "/dev/mapper:/dev/mapper")
-      fi
-    fi
-
-    k3d cluster create "${CLUSTER_NAME}" --config "${K3D_CONFIG}" ${EXTRA_K3D_OPTS[@]+"${EXTRA_K3D_OPTS[@]}"}
+  kind_bin=$(which kind)
+  ctlptl_bin=$(which ctlptl)
+  if [[ $kind_bin == "" ]]; then
+    echo "kind (https://kind.sigs.k8s.io/) is required to run the local development environment."
+    exit 1
+  fi
+  if [[ $ctlptl_bin == "" ]]; then
+    echo "ctlptl (https://github.com/tilt-dev/ctlptl)is not installed, falling back to shell script."
+    sh ./scripts/kind-cluster.sh "kind-{{.ClusterName}}"
   else
-    echo "Cluster already exists"
+    ctlptl apply -f ${ctlptl_config}
   fi
 }
 
 delete_cluster() {
-  k3d cluster delete "${CLUSTER_NAME}"
+  kind_bin=$(which kind)
+  ctlptl_bin=$(which ctlptl)
+  if [[ $kind_bin == "" ]]; then
+    echo "kind (https://kind.sigs.k8s.io/) is required to run the local development environment."
+    exit 1
+  fi
+  if [[ $ctlptl_bin == "" ]]; then
+    kind cluster delete --name="kind-{{.ClusterName}}"
+  else
+    ctlptl delete -f ${ctlptl_config}
+  fi
 }
 
 if [ $# -lt 1 ]; then

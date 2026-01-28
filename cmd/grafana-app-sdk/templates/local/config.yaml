@@ -1,6 +1,8 @@
 # Port used to bind services to localhost, for example, grafana will be available at http://grafana.k3d.localhost:9999
+# For ctlptl with kind, this is unused, edit the port(s) in ctlptl-config.yaml instead.
 port: 9999
 # Port used for the kubernetes APIServer on localhost
+# For ctlptl with kind, this is unused, edit ctlptl-config.yaml instead.
 kubePort: 8556
 # Pre-configured datasources to install on grafana. For custom-configuration datasources, use `datasourceConfigs`
 datasources:

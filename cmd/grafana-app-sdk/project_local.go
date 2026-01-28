@@ -159,6 +159,15 @@ func initializeLocalEnvFiles(basePath, clusterName, operatorImageName string) er
 		return err
 	}
 
+	ctlptlConfig, err := generateCtlPtlFile(clusterName)
+	if err != nil {
+		return err
+	}
+	err = writeFileWithOverwriteConfirm(filepath.Join(localPath, "ctlptl-config.yaml"), ctlptlConfig)
+	if err != nil {
+		return err
+	}
+
 	err = checkAndMakePath(filepath.Join(localPath, "additional"))
 	if err != nil {
 		return err
@@ -739,6 +748,21 @@ func generateTiltfile() ([]byte, error) {
 		return nil, err
 	}
 	err = tmplGrafana.Execute(&buf, struct{}{})
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), err
+}
+
+func generateCtlPtlFile(clusterName string) ([]byte, error) {
+	buf := bytes.Buffer{}
+	tmplGrafana, err := template.ParseFS(localEnvFiles, "templates/local/ctlptl-config.yaml")
+	if err != nil {
+		return nil, err
+	}
+	err = tmplGrafana.Execute(&buf, struct {
+		ClusterName string
+	}{ClusterName: clusterName})
 	if err != nil {
 		return nil, err
 	}
