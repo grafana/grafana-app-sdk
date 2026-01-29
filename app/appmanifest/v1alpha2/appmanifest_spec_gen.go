@@ -255,3 +255,39 @@ const (
 	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
 	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
 )
+func (AppManifestManifestVersion) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestManifestVersion"
+}
+func (AppManifestManifestVersionKind) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestManifestVersionKind"
+}
+func (AppManifestAdmissionCapabilities) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestAdmissionCapabilities"
+}
+func (AppManifestValidationCapability) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestValidationCapability"
+}
+func (AppManifestMutationCapability) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestMutationCapability"
+}
+func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
+}
+func (AppManifestManifestVersionRoutes) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
+}
+func (AppManifestKindPermission) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestKindPermission"
+}
+func (AppManifestOperatorInfo) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestOperatorInfo"
+}
+func (AppManifestOperatorWebhookProperties) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestOperatorWebhookProperties"
+}
+func (AppManifestSpec) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestSpec"
+}
+func (AppManifestV1alpha2SpecExtraPermissions) OpenAPIModelName() string {
+	return "appmanifest.v1alpha2.AppManifestV1alpha2SpecExtraPermissions"
+}

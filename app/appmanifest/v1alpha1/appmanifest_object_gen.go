@@ -243,6 +243,10 @@ func (o *AppManifest) DeepCopyInto(dst *AppManifest) {
 	o.Status.DeepCopyInto(&dst.Status)
 }
 
+func (AppManifest) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifest"
+}
+
 // Interface compliance compile-time check
 var _ resource.Object = &AppManifest{}
 
@@ -294,6 +298,10 @@ func (o *AppManifestList) DeepCopy() *AppManifestList {
 
 func (o *AppManifestList) DeepCopyInto(dst *AppManifestList) {
 	resource.CopyObjectInto(dst, o)
+}
+
+func (AppManifestList) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestList"
 }
 
 // Interface compliance compile-time check
