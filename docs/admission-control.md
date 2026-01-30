@@ -4,6 +4,10 @@ While an app can do some level of admission control by restricting access to the
 the best practice is to implement admission control at the API server level itself. This is done by exposing webhooks from the 
 multi-tenant operator to validate and/or mutate requests to the API server.
 
+> **Note**: Admission control is used for **static validation** (format, structure, type checks, static business rules). For **runtime validation** 
+> that depends on external systems or dynamic state, use [`fieldErrors` in status](./architecture/validation-patterns.md) instead. 
+> See [Validation Patterns](./architecture/validation-patterns.md) for details on when to use each approach.
+
 The `resource` package contains two interfaces used for admission control:
 * [ValidatingAdmissionController](https://pkg.go.dev/github.com/grafana/grafana-app-sdk/resource#ValidatingAdmissionController), which is used to _validate_ incoming requests, returning a yes/no on whether the request should be allowed to proceed, and
 * [MutatingAdmissionController](https://pkg.go.dev/github.com/grafana/grafana-app-sdk/resource#MutatingAdmissionController), which is used to _alter_ an incoming request, returning am altered object which is translated into series of patch operations which will be made by the API server before proceeding
@@ -103,3 +107,17 @@ mounted in `/run/secrets/tls`.
 For production use, you can either re-use the configs and secrets created by the local environment (they are self-signed, but do not need a real CA as 
 they are only used for communication between the API server and the webhook server), or generate new ones. Keep in mind that every time you generate 
 the local environment, the cert bundle is generated (and is unique each time), so don't rely on it being consistent.
+
+## Admission Control vs Runtime Validation
+
+Admission control handles **static validation** that can be checked synchronously before a resource is persisted:
+- Format validation (URL format, type checks, required fields)
+- Structure validation (enum values, data types, JSON structure)
+- Static business rules (naming conventions, reserved names)
+
+For **runtime validation** that depends on external systems, internal state, or dynamic conditions, use [`fieldErrors` in status](./architecture/validation-patterns.md):
+- External system checks (repository exists, branch exists, installation ID valid)
+- Internal runtime state (resource conflicts, service availability)
+- Dynamic state that can change over time (credentials expired, external resource deleted)
+
+See [Validation Patterns](./architecture/validation-patterns.md) for the complete convention and implementation guide.
