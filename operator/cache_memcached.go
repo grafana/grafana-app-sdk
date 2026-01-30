@@ -305,9 +305,46 @@ func (m *MemcachedStore) getByKey(key string) (item any, exists bool, err error)
 	return item, true, nil
 }
 
-func (*MemcachedStore) Replace([]any, string) error {
-	return nil
+// Replace replaces all the existing elements for the kind in memcached with the provided list.
+// Replace is not guaranteed to be atomic or idempotent, as concurrent calls to Add, Update, or Delete
+// can alter the state of already-set keys while Replace is running.
+// Replace will take linear time based on the number of items, as each item needs to be set.
+// When Replace is called, the tracking of existing items is cleared. The items will remain in the underlying memcached,
+// but List and ListKeys will no longer return them (and they should eventually be removed by memcached if not replaced in this call).
+// If an error is encountered, it will be returned immediately, and remaining items in the list may not be set.
+func (m *MemcachedStore) Replace(items []any, _ string) error {
+	// Since the underlying memcached store may be used my multiple MemcachedStore instances, we don't remove anything here
+	// Instead, we simply set all the elements from the list, regardless of whether this is a new add or replace, and don't try to delete missing elements.
+	// We replace the keys element itself, so that any elements that aren't in the replacement will no longer be fetched,
+	// and will eventually be purged.
+	m.keys.Clear()
+	for i := 0; i < len(items); i++ {
+		key, trackKey, err := m.getKey(items[i])
+		if err != nil {
+			return fmt.Errorf("unable to get key for item %d: %w", i, err)
+		}
+		o, err := json.Marshal(items[i])
+		if err != nil {
+			return err
+		}
+		start := time.Now()
+		err = m.attemptWithRefreshOnTimeout(func() error {
+			return m.client.Set(&memcache.Item{
+				Key:   key,
+				Value: o,
+			})
+		})
+		m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
+		if m.trackKeys && err == nil {
+			m.keys.Store(trackKey, struct{}{})
+		}
+		if err != nil {
+			return fmt.Errorf("unable to set key for item %d: %w", i, err)
+		}
+	}
+	return m.syncKeys()
 }
+
 func (*MemcachedStore) Resync() error {
 	return nil
 }
