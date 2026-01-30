@@ -32,10 +32,15 @@ type AppManifestKindPermission struct {
 }
 
 type AppManifestPropertiesRole struct {
-	PermissionSet string                                      `json:"permissionSet" yaml:"permissionSet"`
-	Title         string                                      `json:"title"`
-	Description   string                                      `json:"description"`
-	Versions      map[string]AppManifestPropertiesRoleVersion `json:"versions" yaml:"versions"`
+	Title       string                          `json:"title"`
+	Description string                          `json:"description"`
+	Kinds       []AppManifestPropertiesRoleKind `json:"kinds"`
+}
+
+type AppManifestPropertiesRoleKind struct {
+	Kind          string   `json:"kind"`
+	Verbs         []string `json:"verbs"`
+	PermissionSet *string  `json:"permissionSet"`
 }
 
 type AppManifestPropertiesRoleVersion struct {

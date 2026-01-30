@@ -98,34 +98,28 @@
     ],
     "roles": {
       "issue-tracker-project:reader": {
-        "permissionSet": "viewer",
         "title": "Issue Tracker Reader",
         "description": "Read Issues",
-        "versions": {
-          "v1": {
-            "kinds": ["Issue"]
-          }
-        }
+        "kinds": [{
+          "kind": "Issue",
+          "permissionSet": "viewer"
+        }]
       },
       "issue-tracker-project:editor": {
-        "permissionSet": "editor",
         "title": "Issue Tracker Editor",
         "description": "Edit Issues",
-        "versions": {
-          "v1": {
-            "kinds": ["Issue"]
-          }
-        }
+        "kinds": [{
+          "kind": "Issue",
+          "verbs": ["get","list","watch","create","update","patch","delete"]
+        }]
       },
       "issue-tracker-project:admin": {
-        "permissionSet": "admin",
         "title": "Issue Tracker Admin",
         "description": "Administrate Issues",
-        "versions": {
-          "v1": {
-            "kinds": ["Issue"]
-          }
-        }
+        "kinds": [{
+          "kind": "Issue",
+          "permissionSet": "admin"
+        }]
       }
     },
     "roleBindings": {

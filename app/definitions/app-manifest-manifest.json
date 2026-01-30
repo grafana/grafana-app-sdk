@@ -312,6 +312,45 @@
                                         "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
                                         "type": "string"
                                     },
+                                    "kinds": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/RoleKind"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "routes": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/RoleRoute"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "title": {
+                                        "description": "Title will be used as the role title in grafana",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "title",
+                                    "description"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleKind": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithPermissionSet"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithVerbs"
+                                    }
+                                ]
+                            },
+                            "RoleKindWithPermissionSet": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
                                     "permissionSet": {
                                         "default": "viewer",
                                         "enum": [
@@ -320,30 +359,21 @@
                                             "admin"
                                         ],
                                         "type": "string"
-                                    },
-                                    "title": {
-                                        "description": "Title will be used as the role title in grafana",
-                                        "type": "string"
-                                    },
-                                    "versions": {
-                                        "additionalProperties": {
-                                            "$ref": "#/components/schemas/RoleVersion"
-                                        },
-                                        "type": "object"
                                     }
                                 },
                                 "required": [
-                                    "title",
-                                    "description",
-                                    "permissionSet",
-                                    "versions"
+                                    "kind",
+                                    "permissionSet"
                                 ],
                                 "type": "object"
                             },
-                            "RoleVersion": {
+                            "RoleKindWithVerbs": {
                                 "additionalProperties": false,
                                 "properties": {
-                                    "kinds": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "verbs": {
                                         "items": {
                                             "type": "string"
                                         },
@@ -351,7 +381,31 @@
                                     }
                                 },
                                 "required": [
-                                    "kinds"
+                                    "kind",
+                                    "verbs"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleRoute": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "httpVerbs": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "route": {
+                                        "type": "string"
+                                    },
+                                    "version": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "version",
+                                    "route",
+                                    "httpVerbs"
                                 ],
                                 "type": "object"
                             },
@@ -851,6 +905,45 @@
                                         "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
                                         "type": "string"
                                     },
+                                    "kinds": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/RoleKind"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "routes": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/RoleRoute"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "title": {
+                                        "description": "Title will be used as the role title in grafana",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "title",
+                                    "description"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleKind": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithPermissionSet"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithVerbs"
+                                    }
+                                ]
+                            },
+                            "RoleKindWithPermissionSet": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
                                     "permissionSet": {
                                         "default": "viewer",
                                         "enum": [
@@ -859,30 +952,21 @@
                                             "admin"
                                         ],
                                         "type": "string"
-                                    },
-                                    "title": {
-                                        "description": "Title will be used as the role title in grafana",
-                                        "type": "string"
-                                    },
-                                    "versions": {
-                                        "additionalProperties": {
-                                            "$ref": "#/components/schemas/RoleVersion"
-                                        },
-                                        "type": "object"
                                     }
                                 },
                                 "required": [
-                                    "title",
-                                    "description",
-                                    "permissionSet",
-                                    "versions"
+                                    "kind",
+                                    "permissionSet"
                                 ],
                                 "type": "object"
                             },
-                            "RoleVersion": {
+                            "RoleKindWithVerbs": {
                                 "additionalProperties": false,
                                 "properties": {
-                                    "kinds": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "verbs": {
                                         "items": {
                                             "type": "string"
                                         },
@@ -890,7 +974,31 @@
                                     }
                                 },
                                 "required": [
-                                    "kinds"
+                                    "kind",
+                                    "verbs"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleRoute": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "httpVerbs": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "route": {
+                                        "type": "string"
+                                    },
+                                    "version": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "version",
+                                    "route",
+                                    "httpVerbs"
                                 ],
                                 "type": "object"
                             },
@@ -1075,67 +1183,26 @@
             ]
         },
         "roles": {
-            "app-manifest:admin": {
-                "title": "",
-                "description": "",
-                "permissionSet": "admin",
-                "versions": {
-                    "v1alpha1": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    },
-                    "v1alpha2": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
+            "appmanifest:viewer": {
+                "title": "AppManifest Viewer",
+                "description": "Get, List, and Watch AppManifests",
+                "kinds": [
+                    {
+                        "kind": "AppManifest",
+                        "permissionSet": "viewer"
                     }
-                }
-            },
-            "app-manifest:editor": {
-                "title": "",
-                "description": "",
-                "permissionSet": "editor",
-                "versions": {
-                    "v1alpha1": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    },
-                    "v1alpha2": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    }
-                }
-            },
-            "app-manifest:reader": {
-                "title": "",
-                "description": "",
-                "permissionSet": "viewer",
-                "versions": {
-                    "v1alpha1": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    },
-                    "v1alpha2": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    }
-                }
+                ]
             }
         },
         "roleBindings": {
             "viewer": [
-                "app-manifest:reader"
+                "appmanifest:viewer"
             ],
             "editor": [
-                "app-manifest:editor"
+                "appmanifest:viewer"
             ],
             "admin": [
-                "app-manifest:admin"
+                "appmanifest:viewer"
             ]
         }
     }

@@ -341,7 +341,7 @@
                         "routes": {
                             "/reconcile": {
                                 "post": {
-                                    "operationId": "createReconcile",
+                                    "operationId": "createReconcileRequest",
                                     "requestBody": {
                                         "content": {
                                             "application/json": {
@@ -530,19 +530,12 @@
             "test-app:reader": {
                 "title": "Test App Viewer",
                 "description": "View Test App Resources",
-                "permissionSet": "viewer",
-                "versions": {
-                    "v1": {
-                        "kinds": [
-                            "TestKind"
-                        ]
-                    },
-                    "v2": {
-                        "kinds": [
-                            "TestKind"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "permissionSet": "viewer"
                     }
-                }
+                ]
             }
         },
         "roleBindings": {

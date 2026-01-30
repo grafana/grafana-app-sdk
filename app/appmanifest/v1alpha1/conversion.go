@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"strings"
 
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -174,14 +175,54 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		data.Roles = make(map[string]app.ManifestRole)
 		for k, v := range s.Roles {
 			converted := app.ManifestRole{
-				PermissionSet: string(v.PermissionSet),
-				Title:         v.Title,
-				Description:   v.Description,
-				Versions:      make(map[string]app.ManifestRoleVersion),
+				Title:       v.Title,
+				Description: v.Description,
+				Kinds:       make([]app.ManifestRoleKind, len(v.Kinds)),
 			}
-			for k2, v2 := range v.Versions {
-				converted.Versions[k2] = app.ManifestRoleVersion{
-					Kinds: v2.Kinds,
+			for idx, k2 := range v.Kinds {
+				switch knd := k2.(type) {
+				case AppManifestRoleKindWithPermissionSet:
+					perms := string(knd.PermissionSet)
+					converted.Kinds[idx] = app.ManifestRoleKind{
+						Kind:          knd.Kind,
+						PermissionSet: &perms,
+					}
+				case AppManifestRoleKindWithVerbs:
+					verbs := make([]string, len(knd.Verbs))
+					copy(verbs, knd.Verbs)
+					converted.Kinds[idx] = app.ManifestRoleKind{
+						Kind:  knd.Kind,
+						Verbs: verbs,
+					}
+				case map[string]any:
+					kindVal, ok := knd["kind"]
+					if !ok {
+						return app.ManifestData{}, fmt.Errorf("unable to parse roles: missing kind in role %s, kind index %d", k, idx)
+					}
+					kindStr, ok := kindVal.(string)
+					if !ok {
+						return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'kind' type string, got %v)", k, idx, reflect.TypeOf(kindVal))
+					}
+					roleKind := app.ManifestRoleKind{
+						Kind: kindStr,
+					}
+					if permSetVal, ok := knd["permissionSet"]; ok {
+						str, ok := permSetVal.(string)
+						if !ok {
+							return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'permissionSet' type string, got %v)", k, idx, reflect.TypeOf(permSetVal))
+						}
+						roleKind.PermissionSet = &str
+					} else if verbVals, ok := knd["verbs"]; ok {
+						verbs, ok := verbVals.([]string)
+						if !ok {
+							return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'verbs' type []string, got %v)", k, idx, reflect.TypeOf(verbVals))
+						}
+						roleKind.Verbs = make([]string, len(verbs))
+						copy(roleKind.Verbs, verbs)
+					}
+					converted.Kinds[idx] = roleKind
+				default:
+					return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind type %v for role %s, kind index %d", reflect.TypeOf(knd), k, idx)
 				}
 			}
 			data.Roles[k] = converted
@@ -316,14 +357,23 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		spec.Roles = make(map[string]AppManifestRole)
 		for k, v := range data.Roles {
 			converted := AppManifestRole{
-				PermissionSet: AppManifestRolePermissionSet(v.PermissionSet),
-				Title:         v.Title,
-				Description:   v.Description,
-				Versions:      make(map[string]AppManifestRoleVersion),
+				Title:       v.Title,
+				Description: v.Description,
+				Kinds:       make([]AppManifestRoleKind, len(v.Kinds)),
 			}
-			for k2, v2 := range v.Versions {
-				converted.Versions[k2] = AppManifestRoleVersion{
-					Kinds: v2.Kinds,
+			for idx, knd := range v.Kinds {
+				if knd.PermissionSet != nil {
+					converted.Kinds[idx] = AppManifestRoleKindWithPermissionSet{
+						Kind:          knd.Kind,
+						PermissionSet: AppManifestRoleKindWithPermissionSetPermissionSet(*knd.PermissionSet),
+					}
+					continue
+				}
+				verbs := make([]string, len(knd.Verbs))
+				copy(verbs, knd.Verbs)
+				converted.Kinds[idx] = AppManifestRoleKindWithVerbs{
+					Kind:  knd.Kind,
+					Verbs: verbs,
 				}
 			}
 			spec.Roles[k] = converted

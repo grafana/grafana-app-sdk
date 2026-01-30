@@ -283,89 +283,28 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	roles := m.Properties().Roles
 	bindings := m.Properties().RoleBindings
 	if m.Properties().Roles == nil {
-		readerVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
-		editorVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
-		adminVersions := make(map[string]codegen.AppManifestPropertiesRoleVersion)
-		kindListMap := make(map[string]struct{}, 0)
-		for _, v := range m.Versions() {
-			rv := codegen.AppManifestPropertiesRoleVersion{
-				Kinds: make([]string, 0),
-			}
-			ev := codegen.AppManifestPropertiesRoleVersion{
-				Kinds: make([]string, 0),
-			}
-			av := codegen.AppManifestPropertiesRoleVersion{
-				Kinds: make([]string, 0),
-			}
-			for _, k := range v.Kinds() {
-				rv.Kinds = append(rv.Kinds, k.Kind)
-				ev.Kinds = append(ev.Kinds, k.Kind)
-				av.Kinds = append(av.Kinds, k.Kind)
-				kindListMap[k.PluralName] = struct{}{}
-			}
-			readerVersions[v.Name()] = rv
-			editorVersions[v.Name()] = ev
-			adminVersions[v.Name()] = av
+		var err error
+		var defaultBindings codegen.AppManifestPropertiesRoleBindings
+		roles, defaultBindings, err = buildDefaultManifestRolesAndBindings(m)
+		if err != nil {
+			return nil, err
 		}
-		readerKey := fmt.Sprintf("%s:reader", strings.ToLower(m.Name()))
-		editorKey := fmt.Sprintf("%s:editor", strings.ToLower(m.Name()))
-		adminKey := fmt.Sprintf("%s:admin", strings.ToLower(m.Name()))
-		kindList := make([]string, 0, len(kindListMap))
-		for k := range kindListMap {
-			kindList = append(kindList, k)
-		}
-		allKindsDesc := strings.Builder{}
-		for i, k := range kindList {
-			if i > 0 {
-				if len(kindList) > 2 {
-					allKindsDesc.WriteString(", ")
-				}
-				if i == len(kindList)-1 {
-					allKindsDesc.WriteString("and ")
-				}
-			}
-			allKindsDesc.WriteString(k)
-		}
-		roles = map[string]codegen.AppManifestPropertiesRole{
-			readerKey: {
-				PermissionSet: "viewer",
-				Title:         fmt.Sprintf("%s Reader", m.Properties().AppDisplayName),
-				Description:   fmt.Sprintf("Read %s", allKindsDesc.String()),
-				Versions:      readerVersions,
-			},
-			editorKey: {
-				PermissionSet: "editor",
-				Title:         fmt.Sprintf("%s Editor", m.Properties().AppDisplayName),
-				Description:   fmt.Sprintf("Create, Read, Update, and Delete %s", allKindsDesc.String()),
-				Versions:      editorVersions,
-			},
-			adminKey: {
-				PermissionSet: "admin",
-				Title:         fmt.Sprintf("%s Admin", m.Properties().AppDisplayName),
-				Description:   fmt.Sprintf("Allows all actions on %s", allKindsDesc.String()),
-				Versions:      adminVersions,
-			},
-		}
-
-		if m.Properties().RoleBindings == nil {
-			bindings = &codegen.AppManifestPropertiesRoleBindings{
-				Viewer: []string{readerKey},
-				Editor: []string{editorKey},
-				Admin:  []string{adminKey},
-			}
+		if bindings == nil {
+			bindings = &defaultBindings
 		}
 	}
 	manifest.Roles = make(map[string]app.ManifestRole)
 	for k, v := range roles {
 		converted := app.ManifestRole{
-			PermissionSet: v.PermissionSet,
-			Title:         v.Title,
-			Description:   v.Description,
-			Versions:      make(map[string]app.ManifestRoleVersion),
+			Title:       v.Title,
+			Description: v.Description,
+			Kinds:       make([]app.ManifestRoleKind, len(v.Kinds)),
 		}
-		for k2, v2 := range v.Versions {
-			converted.Versions[k2] = app.ManifestRoleVersion{
-				Kinds: v2.Kinds,
+		for idx, kind := range v.Kinds {
+			converted.Kinds[idx] = app.ManifestRoleKind{
+				Kind:          kind.Kind,
+				PermissionSet: kind.PermissionSet,
+				Verbs:         kind.Verbs,
 			}
 		}
 		manifest.Roles[k] = converted
@@ -379,6 +318,108 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	}
 
 	return &manifest, nil
+}
+
+func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings, error) {
+	viewer := app.ManifestRolePermissionSetViewer
+	editor := app.ManifestRolePermissionSetEditor
+	admin := app.ManifestRolePermissionSetAdmin
+	readerKinds := make(map[string]struct{})
+	editorKinds := make(map[string]struct{})
+	adminKinds := make(map[string]struct{})
+	readerRoleKinds := make([]codegen.AppManifestPropertiesRoleKind, 0)
+	editorRoleKinds := make([]codegen.AppManifestPropertiesRoleKind, 0)
+	adminRoleKinds := make([]codegen.AppManifestPropertiesRoleKind, 0)
+	kindListMap := make(map[string]struct{}, 0)
+	for _, v := range m.Versions() {
+		for _, k := range v.Kinds() {
+			if _, ok := readerKinds[k.Kind]; !ok {
+				readerKinds[k.Kind] = struct{}{}
+				readerRoleKinds = append(readerRoleKinds, codegen.AppManifestPropertiesRoleKind{
+					Kind:          k.Kind,
+					PermissionSet: &viewer,
+				})
+			}
+			if _, ok := editorKinds[k.Kind]; !ok {
+				editorKinds[k.Kind] = struct{}{}
+				editorRoleKinds = append(editorRoleKinds, codegen.AppManifestPropertiesRoleKind{
+					Kind:          k.Kind,
+					PermissionSet: &editor,
+				})
+			}
+			if _, ok := adminKinds[k.Kind]; !ok {
+				adminKinds[k.Kind] = struct{}{}
+				adminRoleKinds = append(adminRoleKinds, codegen.AppManifestPropertiesRoleKind{
+					Kind:          k.Kind,
+					PermissionSet: &admin,
+				})
+			}
+			// subresources
+			it, err := k.Schema.Fields()
+			if err != nil {
+				return nil, codegen.AppManifestPropertiesRoleBindings{}, err
+			}
+			for it.Next() {
+				if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+					continue
+				}
+				sr := fmt.Sprintf("%s/%s", k.Kind, it.Selector().String())
+				if _, ok := adminKinds[sr]; !ok {
+					adminKinds[sr] = struct{}{}
+					adminRoleKinds = append(adminRoleKinds, codegen.AppManifestPropertiesRoleKind{
+						Kind:          sr,
+						PermissionSet: &admin,
+					})
+				}
+			}
+
+			kindListMap[k.PluralName] = struct{}{}
+		}
+	}
+	readerKey := fmt.Sprintf("%s:reader", strings.ToLower(m.Name()))
+	editorKey := fmt.Sprintf("%s:editor", strings.ToLower(m.Name()))
+	adminKey := fmt.Sprintf("%s:admin", strings.ToLower(m.Name()))
+	kindList := make([]string, 0, len(kindListMap))
+	for k := range kindListMap {
+		kindList = append(kindList, k)
+	}
+	allKindsDesc := strings.Builder{}
+	for i, k := range kindList {
+		if i > 0 {
+			if len(kindList) > 2 {
+				allKindsDesc.WriteString(", ")
+			}
+			if i == len(kindList)-1 {
+				allKindsDesc.WriteString("and ")
+			}
+		}
+		allKindsDesc.WriteString(k)
+	}
+	roles := map[string]codegen.AppManifestPropertiesRole{
+		readerKey: {
+			Title:       fmt.Sprintf("%s Reader", m.Properties().AppDisplayName),
+			Description: fmt.Sprintf("Read %s", allKindsDesc.String()),
+			Kinds:       readerRoleKinds,
+		},
+		editorKey: {
+			Title:       fmt.Sprintf("%s Editor", m.Properties().AppDisplayName),
+			Description: fmt.Sprintf("Create, Read, Update, and Delete %s", allKindsDesc.String()),
+			Kinds:       editorRoleKinds,
+		},
+		adminKey: {
+			Title:       fmt.Sprintf("%s Admin", m.Properties().AppDisplayName),
+			Description: fmt.Sprintf("Allows all actions on %s", allKindsDesc.String()),
+			Kinds:       adminRoleKinds,
+		},
+	}
+
+	bindings := codegen.AppManifestPropertiesRoleBindings{
+		Viewer: []string{readerKey},
+		Editor: []string{editorKey},
+		Admin:  []string{adminKey},
+	}
+
+	return roles, bindings, nil
 }
 
 type simpleOpenAPIDoc[T any] struct {

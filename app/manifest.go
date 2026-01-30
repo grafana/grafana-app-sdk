@@ -23,6 +23,10 @@ const (
 	OpenAPIExtensionPrefix                   = "x-grafana-app"
 	OpenAPIExtensionUsesKubernetesObjectMeta = OpenAPIExtensionPrefix + "-uses-kubernetes-object-metadata"
 	OpenAPIExtensionUsesKubernetesListMeta   = OpenAPIExtensionPrefix + "-uses-kubernetes-list-metadata"
+
+	ManifestRolePermissionSetViewer = "viewer"
+	ManifestRolePermissionSetEditor = "editor"
+	ManifestRolePermissionSetAdmin  = "admin"
 )
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
@@ -377,15 +381,21 @@ type ManifestOperatorWebhookProperties struct {
 // ManifestRole describes a role used in the ManifestData Roles map.
 // A ManifestRole consists of a PermissionSet (such as "editor") and a set of versions with kinds to apply that permission set to.
 type ManifestRole struct {
-	PermissionSet string                         `json:"permissionSet" yaml:"permissionSet"`
-	Title         string                         `json:"title" yaml:"title"`
-	Description   string                         `json:"description" yaml:"description"`
-	Versions      map[string]ManifestRoleVersion `json:"versions" yaml:"versions"`
+	Title       string             `json:"title" yaml:"title"`
+	Description string             `json:"description" yaml:"description"`
+	Kinds       []ManifestRoleKind `json:"kinds" yaml:"kinds"`
 }
 
-// ManifestRoleVersion is an entry in a ManifestRole item. It describes a set of kinds for a particular version.
-type ManifestRoleVersion struct {
-	Kinds []string `json:"kinds" yaml:"kinds"`
+// ManifestRoleKind is an association between a kind and a set of permissions
+type ManifestRoleKind struct {
+	// Kind is the kind name
+	Kind string `json:"kind" yaml:"kind"`
+	// Verbs is a list of kubernetes verbs (get, list, watch, create, update, patch, delete, deletecollection).
+	// It is mutually exclusive with PermissionSet
+	Verbs []string `json:"verbs,omitempty" yaml:"verbs,omitempty"`
+	// PermissionSet is a permission set (viewer, editor, admin) to associate with the kind.
+	// It is mutually exclusive with Verbs
+	PermissionSet *string `json:"permissionSet,omitempty" yaml:"permissionSet,omitempty"`
 }
 
 // ManifestRoleBindings is the set of RoleBindings for ManifestData.RoleBindings.

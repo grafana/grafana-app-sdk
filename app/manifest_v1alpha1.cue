@@ -88,18 +88,27 @@ appManifestv1alpha1: appManifestKind & {
 			// Webhooks contains information about the various webhook paths.
 			webhooks?: #OperatorWebhookProperties
 		}
-		#RoleVersion: {
-			kinds: [...string]
+		#RoleKindWithPermissionSet: {
+			kind: string
+			permissionSet: *"viewer" | "editor" | "admin"
+		}
+		#RoleKindWithVerbs: {
+			kind: string
+			verbs: [...string]
+		}
+		#RoleKind: #RoleKindWithPermissionSet | #RoleKindWithVerbs
+		#RoleRoute: {
+			version: string
+			route: string
+			httpVerbs: [...string]
 		}
 		#Role: {
 			// Title will be used as the role title in grafana
 			title: string
 			// Description is used as the role description in grafana, displayed in the UI and API responses
 			description: string
-			permissionSet: *"viewer" | "editor" | "admin"
-			versions: {
-				[string]: #RoleVersion
-			}
+			kinds?: [...#RoleKind]
+			routes?: [...#RoleRoute]
 		}
 		spec: {
 			appName: string & =~"^([a-z][a-z0-9-]*[a-z0-9])$"

@@ -180,28 +180,56 @@ type AppManifestRole struct {
 	// Title will be used as the role title in grafana
 	Title string `json:"title"`
 	// Description is used as the role description in grafana, displayed in the UI and API responses
-	Description   string                            `json:"description"`
-	PermissionSet AppManifestRolePermissionSet      `json:"permissionSet"`
-	Versions      map[string]AppManifestRoleVersion `json:"versions"`
+	Description string                 `json:"description"`
+	Kinds       []AppManifestRoleKind  `json:"kinds,omitempty"`
+	Routes      []AppManifestRoleRoute `json:"routes,omitempty"`
 }
 
 // NewAppManifestRole creates a new AppManifestRole object.
 func NewAppManifestRole() *AppManifestRole {
-	return &AppManifestRole{
-		PermissionSet: AppManifestRolePermissionSetViewer,
-		Versions:      map[string]AppManifestRoleVersion{},
+	return &AppManifestRole{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKind interface{}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithPermissionSet struct {
+	Kind          string                                            `json:"kind"`
+	PermissionSet AppManifestRoleKindWithPermissionSetPermissionSet `json:"permissionSet"`
+}
+
+// NewAppManifestRoleKindWithPermissionSet creates a new AppManifestRoleKindWithPermissionSet object.
+func NewAppManifestRoleKindWithPermissionSet() *AppManifestRoleKindWithPermissionSet {
+	return &AppManifestRoleKindWithPermissionSet{
+		PermissionSet: AppManifestRoleKindWithPermissionSetPermissionSetViewer,
 	}
 }
 
 // +k8s:openapi-gen=true
-type AppManifestRoleVersion struct {
-	Kinds []string `json:"kinds"`
+type AppManifestRoleKindWithVerbs struct {
+	Kind  string   `json:"kind"`
+	Verbs []string `json:"verbs"`
 }
 
-// NewAppManifestRoleVersion creates a new AppManifestRoleVersion object.
-func NewAppManifestRoleVersion() *AppManifestRoleVersion {
-	return &AppManifestRoleVersion{
-		Kinds: []string{},
+// NewAppManifestRoleKindWithVerbs creates a new AppManifestRoleKindWithVerbs object.
+func NewAppManifestRoleKindWithVerbs() *AppManifestRoleKindWithVerbs {
+	return &AppManifestRoleKindWithVerbs{
+		Verbs: []string{},
+	}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleRoute struct {
+	Version   string   `json:"version"`
+	Route     string   `json:"route"`
+	HttpVerbs []string `json:"httpVerbs"`
+}
+
+// NewAppManifestRoleRoute creates a new AppManifestRoleRoute object.
+func NewAppManifestRoleRoute() *AppManifestRoleRoute {
+	return &AppManifestRoleRoute{
+		HttpVerbs: []string{},
 	}
 }
 
@@ -282,10 +310,10 @@ const (
 )
 
 // +k8s:openapi-gen=true
-type AppManifestRolePermissionSet string
+type AppManifestRoleKindWithPermissionSetPermissionSet string
 
 const (
-	AppManifestRolePermissionSetViewer AppManifestRolePermissionSet = "viewer"
-	AppManifestRolePermissionSetEditor AppManifestRolePermissionSet = "editor"
-	AppManifestRolePermissionSetAdmin  AppManifestRolePermissionSet = "admin"
+	AppManifestRoleKindWithPermissionSetPermissionSetViewer AppManifestRoleKindWithPermissionSetPermissionSet = "viewer"
+	AppManifestRoleKindWithPermissionSetPermissionSetEditor AppManifestRoleKindWithPermissionSetPermissionSet = "editor"
+	AppManifestRoleKindWithPermissionSetPermissionSetAdmin  AppManifestRoleKindWithPermissionSetPermissionSet = "admin"
 )
