@@ -319,7 +319,55 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		Additional: bindings.Additional,
 	}
 
-	return &manifest, nil
+	// validate that routes and kinds in roles exist
+	// TODO: do this here, or on parse? here we have the data in a more typed context
+	kinds := make(map[string]struct{})
+	routes := make(map[string]struct{})
+	for _, v := range m.Versions() {
+		for _, k := range v.Kinds() {
+			kinds[strings.ToLower(k.Kind)] = struct{}{}
+			it, err := k.Schema.Fields()
+			if err != nil {
+				return nil, fmt.Errorf("error iterating over kind %s schema: %w", k.Kind, err)
+			}
+			for it.Next() {
+				if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+					continue
+				}
+				kinds[fmt.Sprintf("%s/%s", strings.ToLower(k.Kind), strings.ToLower(it.Selector().String()))] = struct{}{}
+			}
+			for _, r := range k.Routes {
+				for _, rr := range r {
+					routes[rr.Name] = struct{}{}
+				}
+			}
+		}
+		for _, r := range v.Routes().Namespaced {
+			for _, rr := range r {
+				routes[rr.Name] = struct{}{}
+			}
+		}
+		for _, r := range v.Routes().Cluster {
+			for _, rr := range r {
+				routes[rr.Name] = struct{}{}
+			}
+		}
+	}
+	var errs error
+	for name, role := range manifest.Roles {
+		for _, k := range role.Kinds {
+			if _, ok := kinds[strings.ToLower(k.Kind)]; !ok {
+				errors.Join(errs, fmt.Errorf("invalid role %s: kind %s does not exist in manifest", name, k.Kind))
+			}
+		}
+		for _, r := range role.Routes {
+			if _, ok := routes[r]; !ok {
+				errors.Join(errs, fmt.Errorf("invalid role %s: route %s does not exist in manifest", name, r))
+			}
+		}
+	}
+
+	return &manifest, errs
 }
 
 func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings, error) {
