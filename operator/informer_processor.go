@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,8 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/utils/buffer"
-
-	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 /*
@@ -36,61 +35,70 @@ type informerEventCacheSync struct {
 }
 
 type informerProcessor struct {
-	listeners    map[*informerProcessorListener]bool
-	listenersMux sync.RWMutex
-	wg           wait.Group
-	started      bool
-	startedCh    chan struct{}
+	listeners map[*informerProcessorListener]struct{}
+	wg        wait.Group
+	startMux  sync.RWMutex
+	started   bool
+	startedCh chan struct{}
 }
 
 func newInformerProcessor() *informerProcessor {
 	return &informerProcessor{
-		listeners: make(map[*informerProcessorListener]bool),
+		listeners: make(map[*informerProcessorListener]struct{}),
 	}
 }
 
-func (p *informerProcessor) addListener(l *informerProcessorListener) {
-	p.listenersMux.Lock()
-	defer p.listenersMux.Unlock()
-	p.listeners[l] = true
+func (p *informerProcessor) addListener(l *informerProcessorListener) error {
+	p.startMux.Lock()
+	defer p.startMux.Unlock()
+
+	if p.started {
+		return errors.New("error adding listener: not allowed after processor already started")
+	}
+
+	p.listeners[l] = struct{}{}
+	return nil
 }
 
 func (p *informerProcessor) distribute(event any) {
-	if !p.started {
-		// Drop events if we're not started to prevent us from not being able to start if listener.push() blocks
-		if logging.DefaultLogger != nil {
-			logging.DefaultLogger.Warn("Received event for informer distribution while processor is not started, dropping event")
-		}
-		return
-	}
-	p.listenersMux.RLock()
-	defer p.listenersMux.RUnlock()
+	// Block until the processor is started.
+	<-p.startedCh
+
+	// Distribute the event to all listeners.
 	for listener := range p.listeners {
 		listener.push(event)
 	}
 }
 
 func (p *informerProcessor) run(stopCh <-chan struct{}) {
-	p.listenersMux.Lock()
+	// Start everything, use a mutex to prevent race conditions.
+	p.startMux.Lock()
 	for listener := range p.listeners {
 		p.wg.Start(listener.run)
 	}
 	p.started = true
-	p.listenersMux.Unlock()
+	p.startMux.Unlock()
+
+	// Signal that the processor has started.
+	// Run in a goroutine to prevent blocking if the channel buffer is full
 	if p.startedCh != nil {
-		// Run in a goroutine to prevent blocking if the channel buffer is full
 		go func() {
-			p.startedCh <- struct{}{}
+			close(p.startedCh)
 		}()
 	}
+
+	// Wait for the processor to be stopped
 	<-stopCh
-	p.listenersMux.Lock()
+
+	// Stop everything, use a mutex to prevent race conditions.
+	p.startMux.Lock()
 	p.started = false
 	for listener := range p.listeners {
 		listener.stop()
 	}
-	p.listenersMux.Unlock()
+	p.startMux.Unlock()
 
+	// Wait for all listeners to stop.
 	p.wg.Wait()
 }
 
