@@ -35,6 +35,7 @@ type AppManifestPropertiesRole struct {
 	Title       string                          `json:"title"`
 	Description string                          `json:"description"`
 	Kinds       []AppManifestPropertiesRoleKind `json:"kinds"`
+	Routes      []string                        `json:"routes"`
 }
 
 type AppManifestPropertiesRoleKind struct {

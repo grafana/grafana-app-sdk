@@ -27,6 +27,7 @@ testManifest: {
 				kind: "TestKind"
 				permissionSet: "viewer"
 			}]
+			routes: ["createFoobar"]
 		}
 	}
 	roleBindings: {

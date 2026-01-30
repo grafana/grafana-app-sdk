@@ -384,6 +384,9 @@ type ManifestRole struct {
 	Title       string             `json:"title" yaml:"title"`
 	Description string             `json:"description" yaml:"description"`
 	Kinds       []ManifestRoleKind `json:"kinds" yaml:"kinds"`
+	// Routes is a list of route names to match.
+	// To match the same route in multiple versions, it should share the same name.
+	Routes []string `json:"routes" yaml:"routes"`
 }
 
 // ManifestRoleKind is an association between a kind and a set of permissions

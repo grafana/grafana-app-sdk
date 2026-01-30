@@ -208,6 +208,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				Title:       v.Title,
 				Description: v.Description,
 				Kinds:       make([]app.ManifestRoleKind, len(v.Kinds)),
+				Routes:      make([]string, len(v.Routes)),
 			}
 			for idx, k2 := range v.Kinds {
 				switch knd := k2.(type) {
@@ -255,6 +256,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind type %v for role %s, kind index %d", reflect.TypeOf(knd), k, idx)
 				}
 			}
+			copy(converted.Routes, v.Routes)
 			data.Roles[k] = converted
 		}
 	}
@@ -406,6 +408,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Title:       v.Title,
 				Description: v.Description,
 				Kinds:       make([]AppManifestRoleKind, len(v.Kinds)),
+				Routes:      make([]string, len(v.Routes)),
 			}
 			for idx, knd := range v.Kinds {
 				if knd.PermissionSet != nil {
@@ -422,6 +425,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					Verbs: verbs,
 				}
 			}
+			copy(converted.Routes, v.Routes)
 			manifestSpec.Roles[k] = converted
 		}
 	}

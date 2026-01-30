@@ -93,7 +93,26 @@
               }
             }
           }
-        ]
+        ],
+        "routes": {
+          "namespaced": {
+            "/foo": {
+              "GET": {
+                "name": "getFoos",
+                "response": {
+                  "properties": {
+                    "foo": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "responseMetadata": {
+                  "objectMeta": false
+                }
+              }
+            }
+          }
+        }
       }
     ],
     "roles": {
@@ -119,7 +138,8 @@
         "kinds": [{
           "kind": "Issue",
           "permissionSet": "admin"
-        }]
+        }],
+        "routes": ["getFoos"]
       }
     },
     "roleBindings": {

@@ -86,6 +86,7 @@ var appManifestData = app.ManifestData{
 					PermissionSet: strPtr("admin"),
 				},
 			},
+			Routes: []string{},
 		},
 		"custom-app:editor": {
 			Title:       "custom-app Editor",
@@ -96,6 +97,7 @@ var appManifestData = app.ManifestData{
 					PermissionSet: strPtr("editor"),
 				},
 			},
+			Routes: []string{},
 		},
 		"custom-app:reader": {
 			Title:       "custom-app Reader",
@@ -106,6 +108,7 @@ var appManifestData = app.ManifestData{
 					PermissionSet: strPtr("viewer"),
 				},
 			},
+			Routes: []string{},
 		},
 	},
 	RoleBindings: &app.ManifestRoleBindings{

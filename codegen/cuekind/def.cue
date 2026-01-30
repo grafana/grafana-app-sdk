@@ -316,14 +316,19 @@ Version: S={
 	actions: [...string]
 }
 
-#RoleVersion: {
-	kinds: [...string]
+#RoleKind: {
+	kind: string
+	// permissionSet is a permission set (viewer, editor, admin) to associate with the kind.
+	// It is mutually exclusive with verbs
+	permissionSet?: string
+	// verbs is a list of kubernetes verbs (get, list, watch, create, update, patch, delete, deletecollection).
+	// It is mutually exclusive with PermissionSet
+	verbs: [...string]
 }
+
 #Role: {
 	permissionSet: *"viewer" | "editor" | "admin"
-	versions: {
-		[string]: #RoleVersion
-	}
+	kinds: [...#RoleKind]
 }
 
 Manifest: S={

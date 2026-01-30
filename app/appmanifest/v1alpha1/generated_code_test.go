@@ -56,6 +56,23 @@ func TestAppManifestKind_Read(t *testing.T) {
 					Plural: &plural,
 					Scope:  "Namespaced",
 					Schema: schema,
+					Routes: map[string]any{
+						"/foo": map[string]any{
+							"GET": map[string]any{
+								"name": "getFoos",
+								"response": map[string]any{
+									"properties": map[string]any{
+										"foo": map[string]any{
+											"type": "string",
+										},
+									},
+								},
+								"responseMetadata": map[string]any{
+									"objectMeta": false,
+								},
+							},
+						},
+					},
 				}},
 			}},
 			DryRunKinds: &dryRunKinds,
@@ -69,7 +86,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 							PermissionSet: "viewer",
 						},
 					},
-					Routes: []AppManifestRoleRoute{},
+					Routes: []string{},
 				},
 				"issue-tracker-project:editor": {
 					Title:       "Issue Tracker Editor",
@@ -80,7 +97,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 							Verbs: []string{"get", "list", "watch", "create", "update", "patch", "delete"},
 						},
 					},
-					Routes: []AppManifestRoleRoute{},
+					Routes: []string{},
 				},
 				"issue-tracker-project:admin": {
 					Title:       "Issue Tracker Admin",
@@ -91,7 +108,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 							PermissionSet: "admin",
 						},
 					},
-					Routes: []AppManifestRoleRoute{},
+					Routes: []string{"getFoos"},
 				},
 			},
 			RoleBindings: &AppManifestV1alpha1SpecRoleBindings{

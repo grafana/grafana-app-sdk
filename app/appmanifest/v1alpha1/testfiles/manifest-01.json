@@ -86,6 +86,23 @@
                 "type": "object",
                 "x-kubernetes-preserve-unknown-fields": true
               }
+            },
+            "routes": {
+              "/foo": {
+                "GET": {
+                  "name": "getFoos",
+                  "response": {
+                    "properties": {
+                      "foo": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "responseMetadata": {
+                    "objectMeta": false
+                  }
+                }
+              }
             }
           }
         ]
@@ -114,7 +131,8 @@
         "kinds": [{
           "kind": "Issue",
           "permissionSet": "admin"
-        }]
+        }],
+        "routes": ["getFoos"]
       }
     },
     "roleBindings": {

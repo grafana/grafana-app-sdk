@@ -281,6 +281,9 @@ var appManifestData = app.ManifestData{
                     {{ end }} },{{ end }}
                 },{{ end }} 
             },
+            Routes: []string{ {{ range $val.Routes }}
+                "{{ . }}",{{ end }} 
+            },
         },
     {{ end }} },{{ end }}{{ if .ManifestData.RoleBindings }}
     RoleBindings: &app.ManifestRoleBindings{

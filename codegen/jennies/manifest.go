@@ -299,6 +299,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			Title:       v.Title,
 			Description: v.Description,
 			Kinds:       make([]app.ManifestRoleKind, len(v.Kinds)),
+			Routes:      make([]string, len(v.Routes)),
 		}
 		for idx, kind := range v.Kinds {
 			converted.Kinds[idx] = app.ManifestRoleKind{
@@ -307,6 +308,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 				Verbs:         kind.Verbs,
 			}
 		}
+		copy(converted.Routes, v.Routes)
 		manifest.Roles[k] = converted
 	}
 	manifest.RoleBindings = &app.ManifestRoleBindings{

@@ -319,8 +319,9 @@
                                         "type": "array"
                                     },
                                     "routes": {
+                                        "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
                                         "items": {
-                                            "$ref": "#/components/schemas/RoleRoute"
+                                            "type": "string"
                                         },
                                         "type": "array"
                                     },
@@ -383,29 +384,6 @@
                                 "required": [
                                     "kind",
                                     "verbs"
-                                ],
-                                "type": "object"
-                            },
-                            "RoleRoute": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "httpVerbs": {
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "route": {
-                                        "type": "string"
-                                    },
-                                    "version": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "version",
-                                    "route",
-                                    "httpVerbs"
                                 ],
                                 "type": "object"
                             },
@@ -912,8 +890,9 @@
                                         "type": "array"
                                     },
                                     "routes": {
+                                        "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
                                         "items": {
-                                            "$ref": "#/components/schemas/RoleRoute"
+                                            "type": "string"
                                         },
                                         "type": "array"
                                     },
@@ -976,29 +955,6 @@
                                 "required": [
                                     "kind",
                                     "verbs"
-                                ],
-                                "type": "object"
-                            },
-                            "RoleRoute": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "httpVerbs": {
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "route": {
-                                        "type": "string"
-                                    },
-                                    "version": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "version",
-                                    "route",
-                                    "httpVerbs"
                                 ],
                                 "type": "object"
                             },

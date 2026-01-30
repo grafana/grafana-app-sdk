@@ -180,9 +180,11 @@ type AppManifestRole struct {
 	// Title will be used as the role title in grafana
 	Title string `json:"title"`
 	// Description is used as the role description in grafana, displayed in the UI and API responses
-	Description string                 `json:"description"`
-	Kinds       []AppManifestRoleKind  `json:"kinds,omitempty"`
-	Routes      []AppManifestRoleRoute `json:"routes,omitempty"`
+	Description string                `json:"description"`
+	Kinds       []AppManifestRoleKind `json:"kinds,omitempty"`
+	// Routes is a list of route names to match.
+	// To match the same route in multiple versions, it should share the same name.
+	Routes []string `json:"routes,omitempty"`
 }
 
 // NewAppManifestRole creates a new AppManifestRole object.
@@ -216,20 +218,6 @@ type AppManifestRoleKindWithVerbs struct {
 func NewAppManifestRoleKindWithVerbs() *AppManifestRoleKindWithVerbs {
 	return &AppManifestRoleKindWithVerbs{
 		Verbs: []string{},
-	}
-}
-
-// +k8s:openapi-gen=true
-type AppManifestRoleRoute struct {
-	Version   string   `json:"version"`
-	Route     string   `json:"route"`
-	HttpVerbs []string `json:"httpVerbs"`
-}
-
-// NewAppManifestRoleRoute creates a new AppManifestRoleRoute object.
-func NewAppManifestRoleRoute() *AppManifestRoleRoute {
-	return &AppManifestRoleRoute{
-		HttpVerbs: []string{},
 	}
 }
 
@@ -317,3 +305,48 @@ const (
 	AppManifestRoleKindWithPermissionSetPermissionSetEditor AppManifestRoleKindWithPermissionSetPermissionSet = "editor"
 	AppManifestRoleKindWithPermissionSetPermissionSetAdmin  AppManifestRoleKindWithPermissionSetPermissionSet = "admin"
 )
+func (AppManifestManifestVersion) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestManifestVersion"
+}
+func (AppManifestManifestVersionKind) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestManifestVersionKind"
+}
+func (AppManifestAdmissionCapabilities) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestAdmissionCapabilities"
+}
+func (AppManifestValidationCapability) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestValidationCapability"
+}
+func (AppManifestMutationCapability) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestMutationCapability"
+}
+func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestAdditionalPrinterColumns"
+}
+func (AppManifestKindPermission) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestKindPermission"
+}
+func (AppManifestOperatorInfo) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestOperatorInfo"
+}
+func (AppManifestOperatorWebhookProperties) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestOperatorWebhookProperties"
+}
+func (AppManifestRole) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestRole"
+}
+func (AppManifestRoleKindWithPermissionSet) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestRoleKindWithPermissionSet"
+}
+func (AppManifestRoleKindWithVerbs) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestRoleKindWithVerbs"
+}
+func (AppManifestSpec) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestSpec"
+}
+func (AppManifestV1alpha1SpecExtraPermissions) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestV1alpha1SpecExtraPermissions"
+}
+func (AppManifestV1alpha1SpecRoleBindings) OpenAPIModelName() string {
+	return "appmanifest.v1alpha1.AppManifestV1alpha1SpecRoleBindings"
+}

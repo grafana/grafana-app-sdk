@@ -201,27 +201,9 @@
                                                     "type": "array"
                                                 },
                                                 "routes": {
+                                                    "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
                                                     "items": {
-                                                        "properties": {
-                                                            "httpVerbs": {
-                                                                "items": {
-                                                                    "type": "string"
-                                                                },
-                                                                "type": "array"
-                                                            },
-                                                            "route": {
-                                                                "type": "string"
-                                                            },
-                                                            "version": {
-                                                                "type": "string"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "version",
-                                                            "route",
-                                                            "httpVerbs"
-                                                        ],
-                                                        "type": "object"
+                                                        "type": "string"
                                                     },
                                                     "type": "array"
                                                 },
@@ -686,27 +668,9 @@
                                                     "type": "array"
                                                 },
                                                 "routes": {
+                                                    "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
                                                     "items": {
-                                                        "properties": {
-                                                            "httpVerbs": {
-                                                                "items": {
-                                                                    "type": "string"
-                                                                },
-                                                                "type": "array"
-                                                            },
-                                                            "route": {
-                                                                "type": "string"
-                                                            },
-                                                            "version": {
-                                                                "type": "string"
-                                                            }
-                                                        },
-                                                        "required": [
-                                                            "version",
-                                                            "route",
-                                                            "httpVerbs"
-                                                        ],
-                                                        "type": "object"
+                                                        "type": "string"
                                                     },
                                                     "type": "array"
                                                 },

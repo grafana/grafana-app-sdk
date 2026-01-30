@@ -30,6 +30,8 @@ spec:
       kinds:
       - kind: TestKind
         permissionSet: viewer
+      routes:
+      - createFoobar
       title: Test App Viewer
   versions:
   - kinds:

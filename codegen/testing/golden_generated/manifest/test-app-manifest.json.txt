@@ -535,6 +535,9 @@
                         "kind": "TestKind",
                         "permissionSet": "viewer"
                     }
+                ],
+                "routes": [
+                    "createFoobar"
                 ]
             }
         },

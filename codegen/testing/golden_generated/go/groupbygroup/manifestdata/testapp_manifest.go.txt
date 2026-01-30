@@ -507,6 +507,9 @@ var appManifestData = app.ManifestData{
 					PermissionSet: strPtr("viewer"),
 				},
 			},
+			Routes: []string{
+				"createFoobar",
+			},
 		},
 	},
 	RoleBindings: &app.ManifestRoleBindings{
