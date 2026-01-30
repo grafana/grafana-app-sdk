@@ -927,7 +927,7 @@ func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, rout
 }
 
 func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, op *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
-	// We need to fully copy the route info so that mutliple calls to this method with the same input (such as calling GetOpenAPIDefinitions() multiple times) don't cause issues when we do ref replacement
+	// We need to fully copy the route info so that multiple calls to this method with the same input (such as calling GetOpenAPIDefinitions() multiple times) don't cause issues when we do ref replacement
 	operation := copyOperation(op)
 
 	typePath := ""
@@ -1054,7 +1054,7 @@ func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref commo
 }
 
 func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, op *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
-	// We need to fully copy the route info so that mutliple calls to this method with the same input (such as calling GetOpenAPIDefinitions() multiple times) don't cause issues when we do ref replacement
+	// We need to fully copy the route info so that multiple calls to this method with the same input (such as calling GetOpenAPIDefinitions() multiple times) don't cause issues when we do ref replacement
 	operation := copyOperation(op)
 	typePath := ""
 	pkgPrefix := defaultPkgPrefix
