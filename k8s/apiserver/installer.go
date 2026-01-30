@@ -1420,7 +1420,7 @@ func copySpec3Parameter(param *spec3.Parameter) *spec3.Parameter {
 	}
 	if param.Schema != nil {
 		schCpy := copySpecSchema(param.Schema)
-		param.Schema = &schCpy
+		cpy.Schema = &schCpy
 	}
 	if param.Content != nil {
 		cpy.Content = make(map[string]*spec3.MediaType)
