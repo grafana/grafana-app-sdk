@@ -139,4 +139,9 @@ v2alpha1: {
 // Test type for go naming conflicts
 #SharedType: {
 	bar: string
+	dep: [...#SharedTypeDep]
+}
+
+#SharedTypeDep: {
+	value: string
 }

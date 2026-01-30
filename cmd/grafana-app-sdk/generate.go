@@ -250,8 +250,21 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 		return nil, err
 	}
 
+	goModule := cfg.Codegen.GoModule
+	if goModule == "" {
+		goModule, err = getGoModule("go.mod")
+		if err != nil {
+			return nil, fmt.Errorf("unable to load go module from ./go.mod: %w. Set config.codegen.goModule with a value", err)
+		}
+	}
+
+	goModGenPath := cfg.Codegen.GoModGenPath
+	if goModGenPath == "" {
+		goModGenPath = cfg.Codegen.GoGenPath
+	}
+
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(cfg.Codegen.GoModule, cfg.Codegen.GoModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
+	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(goModule, goModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -281,19 +294,6 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 		for i, f := range crdFiles {
 			crdFiles[i].RelativePath = filepath.Join(cfg.Definitions.Path, f.RelativePath)
 		}
-	}
-
-	goModule := cfg.Codegen.GoModule
-	if goModule == "" {
-		goModule, err = getGoModule("go.mod")
-		if err != nil {
-			return nil, fmt.Errorf("unable to load go module from ./go.mod: %w. Set config.codegen.goModule with a value", err)
-		}
-	}
-
-	goModGenPath := cfg.Codegen.GoModGenPath
-	if goModGenPath == "" {
-		goModGenPath = cfg.Codegen.GoGenPath
 	}
 
 	// Backwards-compatibility for manifests written to the base generated path
