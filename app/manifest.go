@@ -279,6 +279,42 @@ type ManifestVersionKind struct {
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 }
 
+// Subresources returns a list of all (stored) subresources for the kind.
+// The list of subresources will not include "spec" or "metadata" as they are not subresources.
+// Routes for the kind (subresource routes) will also not be included, as they are not stored.
+//
+//nolint:goconst
+func (m *ManifestVersionKind) Subresources() []string {
+	if m.Schema == nil {
+		return []string{}
+	}
+	mp := m.Schema.AsOpenAPI3SchemasMap()
+	k, ok := mp[m.Kind]
+	if !ok {
+		return []string{}
+	}
+	cast, ok := k.(map[string]any)
+	if !ok {
+		return []string{}
+	}
+	props, ok := cast["properties"]
+	if !ok {
+		return []string{}
+	}
+	cast, ok = props.(map[string]any)
+	if !ok {
+		return []string{}
+	}
+	subresources := make([]string, 0)
+	for k := range cast {
+		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" {
+			continue
+		}
+		subresources = append(subresources, k)
+	}
+	return subresources
+}
+
 type ManifestVersionKindAdditionalPrinterColumn struct {
 	// name is a human readable name for the column.
 	Name string `json:"name"`

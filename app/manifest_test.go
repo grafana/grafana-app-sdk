@@ -145,6 +145,57 @@ func TestManifestData_Validate(t *testing.T) {
 	}
 }
 
+func TestManifestVersionKind_Subresources(t *testing.T) {
+	sch1, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{}}`)), "Foo")
+	sch2, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{},"status":{}}`)), "Foo")
+
+	tests := []struct {
+		name     string
+		kind     ManifestVersionKind
+		expected []string
+	}{{
+		name:     "empty kind",
+		expected: []string{},
+	}, {
+		name: "empty schema",
+		kind: ManifestVersionKind{
+			Kind: "Foo",
+			Schema: &VersionSchema{
+				raw: map[string]any{},
+			},
+		},
+		expected: []string{},
+	}, {
+		name: "invalid schema",
+		kind: ManifestVersionKind{
+			Kind: "Foo",
+			Schema: &VersionSchema{
+				raw: jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}}}`)),
+			},
+		},
+		expected: []string{},
+	}, {
+		name: "no subresources",
+		kind: ManifestVersionKind{
+			Kind:   "Foo",
+			Schema: sch1,
+		},
+		expected: []string{},
+	}, {
+		name: "status subresource",
+		kind: ManifestVersionKind{
+			Kind:   "Foo",
+			Schema: sch2,
+		},
+		expected: []string{"status"},
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.kind.Subresources())
+		})
+	}
+}
+
 func TestVersionSchemaFromMap(t *testing.T) {
 	tests := []struct {
 		name        string
