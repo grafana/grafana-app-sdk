@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/stretchr/testify/assert"
 )
 
