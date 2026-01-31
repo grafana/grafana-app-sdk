@@ -396,9 +396,11 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 		if len(v.Routes.Schemas) > 0 {
 			replFunc := app.KubeOpenAPIReferenceReplacerFunc(customRoutePkgPrefix, schema.GroupVersionKind{Group: r.appConfig.ManifestData.Group, Version: v.Name})
 			for key, sch := range v.Routes.Schemas {
-				deps := r.replaceReferencesInSchema(&sch, callback, replFunc)
+				// copy the schema so we don't modify the original
+				cpy := copySpecSchema(&sch)
+				deps := r.replaceReferencesInSchema(&cpy, callback, replFunc)
 				res[replFunc(key)] = common.OpenAPIDefinition{
-					Schema:       sch,
+					Schema:       cpy,
 					Dependencies: deps,
 				}
 			}
@@ -928,7 +930,10 @@ func (r *defaultInstaller) getManifestCustomRoutesOpenAPI(kind, ver string, rout
 	return defs
 }
 
-func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (r *defaultInstaller) getOperationResponseOpenAPI(kind, ver, opPath, method string, op *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+	// We need to fully copy the route info so that multiple calls to this method with the same input (such as calling GetOpenAPIDefinitions() multiple times) don't cause issues when we do ref replacement
+	operation := copyOperation(op)
+
 	typePath := ""
 	if resolver == nil {
 		resolver = func(_, _, _, _ string) (any, bool) {
@@ -1018,8 +1023,9 @@ func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref commo
 	deps := make([]string, 0)
 	if sch.Ref.String() != "" {
 		rf := strings.TrimPrefix(sch.Ref.String(), "#/components/schemas/")
-		sch.Ref = ref(replaceFunc(rf))
-		deps = append(deps, replaceFunc(rf))
+		rf = replaceFunc(rf)
+		sch.Ref = ref(rf)
+		deps = append(deps, rf)
 		return deps
 	}
 	for key, prop := range sch.Properties {
@@ -1033,6 +1039,12 @@ func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref commo
 		}
 		if prop.AdditionalProperties != nil && prop.AdditionalProperties.Schema != nil {
 			d := r.replaceReferencesInSchema(prop.AdditionalProperties.Schema, ref, replaceFunc)
+			sch.Properties[key] = prop
+			deps = append(deps, d...)
+			continue
+		}
+		if prop.Items != nil && prop.Items.Schema != nil {
+			d := r.replaceReferencesInSchema(prop.Items.Schema, ref, replaceFunc)
 			sch.Properties[key] = prop
 			deps = append(deps, d...)
 			continue
@@ -1053,7 +1065,10 @@ func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref commo
 	return deps
 }
 
-func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, operation *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, method string, op *spec3.Operation, resolver CustomRouteResponseResolver, defaultPkgPrefix string, ref common.ReferenceCallback) (string, common.OpenAPIDefinition) {
+	// We need to fully copy the route info so that multiple calls to this method with the same input (such as calling GetOpenAPIDefinitions() multiple times) don't cause issues when we do ref replacement
+	operation := copyOperation(op)
+
 	typePath := ""
 	pkgPrefix := defaultPkgPrefix
 	if resolver == nil {
@@ -1362,6 +1377,187 @@ func copySpecSchema(in *spec.Schema) spec.Schema {
 		maps.Copy(out.ExtraProps, in.ExtraProps)
 	}
 	return out
+}
+
+func copyOperation(operation *spec3.Operation) *spec3.Operation {
+	if operation == nil {
+		return nil
+	}
+	cpy := spec3.Operation{
+		OperationProps: spec3.OperationProps{
+			Summary:     operation.Summary,
+			Description: operation.Description,
+			OperationId: operation.OperationId,
+			Deprecated:  operation.Deprecated,
+			RequestBody: copySpec3RequestBody(operation.RequestBody),
+			Responses:   copySpec3Responses(operation.Responses),
+		},
+	}
+	if operation.Tags != nil {
+		cpy.Tags = make([]string, len(operation.Tags))
+		copy(cpy.Tags, operation.Tags)
+	}
+	// TODO: ExternalDocs -- not used currently
+	if operation.Parameters != nil {
+		cpy.Parameters = make([]*spec3.Parameter, len(operation.Parameters))
+		for idx, param := range operation.Parameters {
+			cpy.Parameters[idx] = copySpec3Parameter(param)
+		}
+	}
+	// TODO: SecurityRequirements -- not used currently
+	// TODO: Servers -- not used currently
+	if operation.Extensions != nil {
+		cpy.Extensions = make(map[string]any)
+		maps.Copy(cpy.Extensions, operation.Extensions)
+	}
+
+	return &cpy
+}
+
+func copySpec3Parameter(param *spec3.Parameter) *spec3.Parameter {
+	if param == nil {
+		return nil
+	}
+	cpy := spec3.Parameter{
+		ParameterProps: spec3.ParameterProps{
+			Name:            param.Name,
+			In:              param.In,
+			Description:     param.Description,
+			Required:        param.Required,
+			Deprecated:      param.Deprecated,
+			AllowEmptyValue: param.AllowEmptyValue,
+			Style:           param.Style,
+			Explode:         param.Explode,
+			AllowReserved:   param.AllowReserved,
+		},
+	}
+	if param.Schema != nil {
+		schCpy := copySpecSchema(param.Schema)
+		cpy.Schema = &schCpy
+	}
+	if param.Content != nil {
+		cpy.Content = make(map[string]*spec3.MediaType)
+		for k, v := range param.Content {
+			cpy.Content[k] = copySpec3MediaType(v)
+		}
+	}
+	// TODO: Example -- not used currently
+	// TODO: Examples -- not used currently
+	if param.Ref.String() != "" {
+		cpy.Ref, _ = spec.NewRef(param.Ref.String())
+	}
+	if param.Extensions != nil {
+		cpy.Extensions = make(map[string]any)
+		maps.Copy(cpy.Extensions, param.Extensions)
+	}
+	return &cpy
+}
+
+func copySpec3RequestBody(body *spec3.RequestBody) *spec3.RequestBody {
+	if body == nil {
+		return nil
+	}
+	cpy := spec3.RequestBody{
+		RequestBodyProps: spec3.RequestBodyProps{
+			Description: body.Description,
+			Required:    body.Required,
+		},
+	}
+	if body.Content != nil {
+		cpy.Content = make(map[string]*spec3.MediaType)
+		for k, v := range body.Content {
+			cpy.Content[k] = copySpec3MediaType(v)
+		}
+	}
+	if body.Ref.String() != "" {
+		cpy.Ref, _ = spec.NewRef(body.Ref.String())
+	}
+	if body.Extensions != nil {
+		cpy.Extensions = make(map[string]any)
+		maps.Copy(cpy.Extensions, body.Extensions)
+	}
+	return &cpy
+}
+
+func copySpec3Responses(responses *spec3.Responses) *spec3.Responses {
+	if responses == nil {
+		return nil
+	}
+	cpy := spec3.Responses{
+		ResponsesProps: spec3.ResponsesProps{
+			Default: copySpec3Response(responses.Default),
+		},
+	}
+	if responses.StatusCodeResponses != nil {
+		cpy.StatusCodeResponses = make(map[int]*spec3.Response)
+		for k, v := range responses.StatusCodeResponses {
+			cpy.StatusCodeResponses[k] = copySpec3Response(v)
+		}
+	}
+	if responses.Extensions != nil {
+		cpy.Extensions = make(map[string]any)
+		maps.Copy(cpy.Extensions, responses.Extensions)
+	}
+	return &cpy
+}
+
+func copySpec3Response(response *spec3.Response) *spec3.Response {
+	if response == nil {
+		return nil
+	}
+	cpy := spec3.Response{
+		ResponseProps: spec3.ResponseProps{
+			Description: response.Description,
+		},
+	}
+	if response.Headers != nil {
+		cpy.Headers = make(map[string]*spec3.Header)
+		maps.Copy(cpy.Headers, response.Headers) // Just copy the map because we never mutate these
+	}
+	if response.Content != nil {
+		cpy.Content = make(map[string]*spec3.MediaType)
+		for k, v := range response.Content {
+			cpy.Content[k] = copySpec3MediaType(v)
+		}
+	}
+	if response.Links != nil {
+		cpy.Links = make(map[string]*spec3.Link)
+		maps.Copy(cpy.Links, response.Links) // Just copy the map because we never mutate these
+	}
+	if response.Ref.String() != "" {
+		cpy.Ref, _ = spec.NewRef(response.Ref.String())
+	}
+	if response.Extensions != nil {
+		cpy.Extensions = make(map[string]any)
+		maps.Copy(cpy.Extensions, response.Extensions)
+	}
+	return &cpy
+}
+
+func copySpec3MediaType(mt *spec3.MediaType) *spec3.MediaType {
+	if mt == nil {
+		return nil
+	}
+	cpy := spec3.MediaType{
+		MediaTypeProps: spec3.MediaTypeProps{
+			Example: mt.Example,
+		},
+	}
+	if mt.Schema != nil {
+		schCpy := copySpecSchema(mt.Schema)
+		cpy.Schema = &schCpy
+	}
+	// TODO: Example -- not used currently
+	// TODO: Examples -- not used currently
+	if mt.Encoding != nil {
+		cpy.Encoding = make(map[string]*spec3.Encoding)
+		maps.Copy(cpy.Encoding, mt.Encoding) // Just copy the map because we never mutate these
+	}
+	if mt.Extensions != nil {
+		cpy.Extensions = make(map[string]any)
+		maps.Copy(cpy.Extensions, mt.Extensions)
+	}
+	return &cpy
 }
 
 type EmptyObject struct{}

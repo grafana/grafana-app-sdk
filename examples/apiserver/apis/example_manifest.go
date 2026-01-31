@@ -672,9 +672,37 @@ var appManifestData = app.ManifestData{
 										Type: []string{"string"},
 									},
 								},
+								"dep": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"array"},
+										Items: &spec.SchemaOrArray{
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+
+													Ref: spec.MustCreateRef("#/components/schemas/getFoobarSharedTypeDep"),
+												}},
+										},
+									},
+								},
 							},
 							Required: []string{
 								"bar",
+								"dep",
+							},
+						},
+					},
+					"getFoobarSharedTypeDep": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							Properties: map[string]spec.Schema{
+								"value": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"string"},
+									},
+								},
+							},
+							Required: []string{
+								"value",
 							},
 						},
 					},

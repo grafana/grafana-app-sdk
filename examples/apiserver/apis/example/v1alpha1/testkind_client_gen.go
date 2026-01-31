@@ -9,9 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type TestKindClient struct {
