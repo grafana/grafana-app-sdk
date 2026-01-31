@@ -104,12 +104,12 @@ func (c *TestKindClient) Delete(ctx context.Context, identifier resource.Identif
 	return c.client.Delete(ctx, identifier, opts)
 }
 
-type CreateReconcileRequest struct {
-	Body    CreateReconcileRequestBody
+type CreateReconcileRequestRequest struct {
+	Body    CreateReconcileRequestRequestBody
 	Headers http.Header
 }
 
-func (c *TestKindClient) CreateReconcile(ctx context.Context, identifier resource.Identifier, request CreateReconcileRequest) (*CreateReconcile, error) {
+func (c *TestKindClient) CreateReconcileRequest(ctx context.Context, identifier resource.Identifier, request CreateReconcileRequestRequest) (*CreateReconcileRequest, error) {
 	body, err := json.Marshal(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
@@ -123,10 +123,10 @@ func (c *TestKindClient) CreateReconcile(ctx context.Context, identifier resourc
 	if err != nil {
 		return nil, err
 	}
-	cast := CreateReconcile{}
+	cast := CreateReconcileRequest{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into CreateReconcile: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into CreateReconcileRequest: %w", err)
 	}
 	return &cast, nil
 }

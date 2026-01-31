@@ -3,9 +3,38 @@ kind: AppManifest
 metadata:
   name: custom-app
 spec:
+  appDisplayName: ""
   appName: custom-app
   group: customapp.ext.grafana.com
   preferredVersion: v1-0
+  roleBindings:
+    admin:
+    - custom-app:admin
+    editor:
+    - custom-app:editor
+    viewer:
+    - custom-app:reader
+  roles:
+    custom-app:admin:
+      description: Allows all actions on CustomKinds
+      kinds:
+      - kind: CustomKind
+        permissionSet: admin
+      - kind: CustomKind/status
+        permissionSet: admin
+      title: custom-app Admin
+    custom-app:editor:
+      description: Create, Read, Update, and Delete CustomKinds
+      kinds:
+      - kind: CustomKind
+        permissionSet: editor
+      title: custom-app Editor
+    custom-app:reader:
+      description: Read CustomKinds
+      kinds:
+      - kind: CustomKind
+        permissionSet: viewer
+      title: custom-app Reader
   versions:
   - kinds:
     - conversion: false

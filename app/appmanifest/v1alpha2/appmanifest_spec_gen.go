@@ -204,9 +204,58 @@ func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProper
 }
 
 // +k8s:openapi-gen=true
+type AppManifestRole struct {
+	// Title will be used as the role title in grafana
+	Title string `json:"title"`
+	// Description is used as the role description in grafana, displayed in the UI and API responses
+	Description string                `json:"description"`
+	Kinds       []AppManifestRoleKind `json:"kinds,omitempty"`
+	// Routes is a list of route names to match.
+	// To match the same route in multiple versions, it should share the same name.
+	Routes []string `json:"routes,omitempty"`
+}
+
+// NewAppManifestRole creates a new AppManifestRole object.
+func NewAppManifestRole() *AppManifestRole {
+	return &AppManifestRole{}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKind interface{}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithPermissionSet struct {
+	Kind          string                                            `json:"kind"`
+	PermissionSet AppManifestRoleKindWithPermissionSetPermissionSet `json:"permissionSet"`
+}
+
+// NewAppManifestRoleKindWithPermissionSet creates a new AppManifestRoleKindWithPermissionSet object.
+func NewAppManifestRoleKindWithPermissionSet() *AppManifestRoleKindWithPermissionSet {
+	return &AppManifestRoleKindWithPermissionSet{
+		PermissionSet: AppManifestRoleKindWithPermissionSetPermissionSetViewer,
+	}
+}
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithVerbs struct {
+	Kind  string   `json:"kind"`
+	Verbs []string `json:"verbs"`
+}
+
+// NewAppManifestRoleKindWithVerbs creates a new AppManifestRoleKindWithVerbs object.
+func NewAppManifestRoleKindWithVerbs() *AppManifestRoleKindWithVerbs {
+	return &AppManifestRoleKindWithVerbs{
+		Verbs: []string{},
+	}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestSpec struct {
+	// AppName is the unique ID of the app
 	AppName string `json:"appName"`
-	Group   string `json:"group"`
+	// AppDisplayName is the display name of the app, which can contain any printable characters
+	AppDisplayName string `json:"appDisplayName"`
+	Group          string `json:"group"`
 	// Versions is the list of versions for this manifest, in order.
 	Versions []AppManifestManifestVersion `json:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
@@ -225,6 +274,13 @@ type AppManifestSpec struct {
 	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 	// mutation, or conversion.
 	Operator *AppManifestOperatorInfo `json:"operator,omitempty"`
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	Roles map[string]AppManifestRole `json:"roles,omitempty"`
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// Additional groups are specified under "additional"
+	RoleBindings *AppManifestV1alpha2SpecRoleBindings `json:"roleBindings,omitempty"`
 }
 
 // NewAppManifestSpec creates a new AppManifestSpec object.
@@ -249,9 +305,80 @@ func NewAppManifestV1alpha2SpecExtraPermissions() *AppManifestV1alpha2SpecExtraP
 }
 
 // +k8s:openapi-gen=true
+type AppManifestV1alpha2SpecRoleBindings struct {
+	Anonymous  []string            `json:"anonymous,omitempty"`
+	Viewer     []string            `json:"viewer,omitempty"`
+	Editor     []string            `json:"editor,omitempty"`
+	Admin      []string            `json:"admin,omitempty"`
+	Additional map[string][]string `json:"additional,omitempty"`
+}
+
+// NewAppManifestV1alpha2SpecRoleBindings creates a new AppManifestV1alpha2SpecRoleBindings object.
+func NewAppManifestV1alpha2SpecRoleBindings() *AppManifestV1alpha2SpecRoleBindings {
+	return &AppManifestV1alpha2SpecRoleBindings{}
+}
+
+// +k8s:openapi-gen=true
 type AppManifestManifestVersionKindScope string
 
 const (
 	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
 	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
 )
+
+// +k8s:openapi-gen=true
+type AppManifestRoleKindWithPermissionSetPermissionSet string
+
+const (
+	AppManifestRoleKindWithPermissionSetPermissionSetViewer AppManifestRoleKindWithPermissionSetPermissionSet = "viewer"
+	AppManifestRoleKindWithPermissionSetPermissionSetEditor AppManifestRoleKindWithPermissionSetPermissionSet = "editor"
+	AppManifestRoleKindWithPermissionSetPermissionSetAdmin  AppManifestRoleKindWithPermissionSetPermissionSet = "admin"
+)
+func (AppManifestManifestVersion) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersion"
+}
+func (AppManifestManifestVersionKind) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKind"
+}
+func (AppManifestAdmissionCapabilities) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdmissionCapabilities"
+}
+func (AppManifestValidationCapability) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestValidationCapability"
+}
+func (AppManifestMutationCapability) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestMutationCapability"
+}
+func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
+}
+func (AppManifestManifestVersionRoutes) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
+}
+func (AppManifestKindPermission) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestKindPermission"
+}
+func (AppManifestOperatorInfo) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorInfo"
+}
+func (AppManifestOperatorWebhookProperties) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorWebhookProperties"
+}
+func (AppManifestRole) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRole"
+}
+func (AppManifestRoleKindWithPermissionSet) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithPermissionSet"
+}
+func (AppManifestRoleKindWithVerbs) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithVerbs"
+}
+func (AppManifestSpec) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSpec"
+}
+func (AppManifestV1alpha2SpecExtraPermissions) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecExtraPermissions"
+}
+func (AppManifestV1alpha2SpecRoleBindings) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecRoleBindings"
+}
