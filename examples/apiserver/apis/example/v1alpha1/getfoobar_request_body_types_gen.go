@@ -4,12 +4,24 @@ package v1alpha1
 
 // Test type for go naming conflicts
 type GetFoobarRequestSharedType struct {
-	Bar string `json:"bar"`
+	Bar string                          `json:"bar"`
+	Dep []GetFoobarRequestSharedTypeDep `json:"dep"`
 }
 
 // NewGetFoobarRequestSharedType creates a new GetFoobarRequestSharedType object.
 func NewGetFoobarRequestSharedType() *GetFoobarRequestSharedType {
-	return &GetFoobarRequestSharedType{}
+	return &GetFoobarRequestSharedType{
+		Dep: []GetFoobarRequestSharedTypeDep{},
+	}
+}
+
+type GetFoobarRequestSharedTypeDep struct {
+	Value string `json:"value"`
+}
+
+// NewGetFoobarRequestSharedTypeDep creates a new GetFoobarRequestSharedTypeDep object.
+func NewGetFoobarRequestSharedTypeDep() *GetFoobarRequestSharedTypeDep {
+	return &GetFoobarRequestSharedTypeDep{}
 }
 
 type GetFoobarRequestBody struct {
@@ -25,6 +37,9 @@ func NewGetFoobarRequestBody() *GetFoobarRequestBody {
 }
 func (GetFoobarRequestSharedType) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarRequestSharedType"
+}
+func (GetFoobarRequestSharedTypeDep) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarRequestSharedTypeDep"
 }
 func (GetFoobarRequestBody) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarRequestBody"

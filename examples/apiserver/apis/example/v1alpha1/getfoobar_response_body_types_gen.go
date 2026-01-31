@@ -5,12 +5,25 @@ package v1alpha1
 // Test type for go naming conflicts
 // +k8s:openapi-gen=true
 type GetFoobarSharedType struct {
-	Bar string `json:"bar"`
+	Bar string                   `json:"bar"`
+	Dep []GetFoobarSharedTypeDep `json:"dep"`
 }
 
 // NewGetFoobarSharedType creates a new GetFoobarSharedType object.
 func NewGetFoobarSharedType() *GetFoobarSharedType {
-	return &GetFoobarSharedType{}
+	return &GetFoobarSharedType{
+		Dep: []GetFoobarSharedTypeDep{},
+	}
+}
+
+// +k8s:openapi-gen=true
+type GetFoobarSharedTypeDep struct {
+	Value string `json:"value"`
+}
+
+// NewGetFoobarSharedTypeDep creates a new GetFoobarSharedTypeDep object.
+func NewGetFoobarSharedTypeDep() *GetFoobarSharedTypeDep {
+	return &GetFoobarSharedTypeDep{}
 }
 
 // +k8s:openapi-gen=true
@@ -27,6 +40,9 @@ func NewGetFoobarBody() *GetFoobarBody {
 }
 func (GetFoobarSharedType) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarSharedType"
+}
+func (GetFoobarSharedTypeDep) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarSharedTypeDep"
 }
 func (GetFoobarBody) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarBody"
