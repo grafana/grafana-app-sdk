@@ -70,11 +70,11 @@ const (
 	AppManifestStatusOperatorStateStateFailed     AppManifestStatusOperatorStateState = "failed"
 )
 func (AppManifeststatusApplyStatus) OpenAPIModelName() string {
-	return "appmanifest.v1alpha1.AppManifeststatusApplyStatus"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifeststatusApplyStatus"
 }
 func (AppManifeststatusOperatorState) OpenAPIModelName() string {
-	return "appmanifest.v1alpha1.AppManifeststatusOperatorState"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifeststatusOperatorState"
 }
 func (AppManifestStatus) OpenAPIModelName() string {
-	return "appmanifest.v1alpha1.AppManifestStatus"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestStatus"
 }

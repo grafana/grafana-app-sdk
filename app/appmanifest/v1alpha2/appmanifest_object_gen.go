@@ -244,7 +244,7 @@ func (o *AppManifest) DeepCopyInto(dst *AppManifest) {
 }
 
 func (AppManifest) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifest"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifest"
 }
 
 // Interface compliance compile-time check
@@ -301,7 +301,7 @@ func (o *AppManifestList) DeepCopyInto(dst *AppManifestList) {
 }
 
 func (AppManifestList) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestList"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestList"
 }
 
 // Interface compliance compile-time check

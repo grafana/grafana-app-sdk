@@ -335,50 +335,50 @@ const (
 	AppManifestRoleKindWithPermissionSetPermissionSetAdmin  AppManifestRoleKindWithPermissionSetPermissionSet = "admin"
 )
 func (AppManifestManifestVersion) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestManifestVersion"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersion"
 }
 func (AppManifestManifestVersionKind) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestManifestVersionKind"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKind"
 }
 func (AppManifestAdmissionCapabilities) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestAdmissionCapabilities"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdmissionCapabilities"
 }
 func (AppManifestValidationCapability) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestValidationCapability"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestValidationCapability"
 }
 func (AppManifestMutationCapability) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestMutationCapability"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestMutationCapability"
 }
 func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
 }
 func (AppManifestManifestVersionRoutes) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
 }
 func (AppManifestKindPermission) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestKindPermission"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestKindPermission"
 }
 func (AppManifestOperatorInfo) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestOperatorInfo"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorInfo"
 }
 func (AppManifestOperatorWebhookProperties) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestOperatorWebhookProperties"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorWebhookProperties"
 }
 func (AppManifestRole) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestRole"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRole"
 }
 func (AppManifestRoleKindWithPermissionSet) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestRoleKindWithPermissionSet"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithPermissionSet"
 }
 func (AppManifestRoleKindWithVerbs) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestRoleKindWithVerbs"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestRoleKindWithVerbs"
 }
 func (AppManifestSpec) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestSpec"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSpec"
 }
 func (AppManifestV1alpha2SpecExtraPermissions) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestV1alpha2SpecExtraPermissions"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecExtraPermissions"
 }
 func (AppManifestV1alpha2SpecRoleBindings) OpenAPIModelName() string {
-	return "appmanifest.v1alpha2.AppManifestV1alpha2SpecRoleBindings"
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecRoleBindings"
 }
