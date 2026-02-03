@@ -10,15 +10,15 @@ import (
 
 // +k8s:openapi-gen=true
 type GetTestKindSearchResultResponse struct {
-	metav1.TypeMeta                     `json:",inline"`
-	GetTestKindSearchResultResponseBody `json:",inline"`
+	metav1.TypeMeta             `json:",inline"`
+	GetTestKindSearchResultBody `json:",inline"`
 }
 
 func NewGetTestKindSearchResultResponse() *GetTestKindSearchResultResponse {
 	return &GetTestKindSearchResultResponse{}
 }
 
-func (t *GetTestKindSearchResultResponseBody) DeepCopyInto(dst *GetTestKindSearchResultResponseBody) {
+func (t *GetTestKindSearchResultBody) DeepCopyInto(dst *GetTestKindSearchResultBody) {
 	_ = resource.CopyObjectInto(dst, t)
 }
 
@@ -31,7 +31,7 @@ func (o *GetTestKindSearchResultResponse) DeepCopyObject() runtime.Object {
 func (o *GetTestKindSearchResultResponse) DeepCopyInto(dst *GetTestKindSearchResultResponse) {
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
-	o.GetTestKindSearchResultResponseBody.DeepCopyInto(&dst.GetTestKindSearchResultResponseBody)
+	o.GetTestKindSearchResultBody.DeepCopyInto(&dst.GetTestKindSearchResultBody)
 }
 
 func (GetTestKindSearchResultResponse) OpenAPIModelName() string {

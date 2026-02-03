@@ -200,7 +200,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 	files := make(codejen.Files, 0)
-	bodyName := typeName + "ResponseBody"
+	bodyName := typeName + "Body"
 	goGenTypeName := "Response"
 	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
 		goGenTypeName = "Body"

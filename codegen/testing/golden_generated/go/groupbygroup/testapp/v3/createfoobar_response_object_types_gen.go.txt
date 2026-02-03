@@ -10,15 +10,15 @@ import (
 
 // +k8s:openapi-gen=true
 type CreateFoobarResponse struct {
-	metav1.TypeMeta          `json:",inline"`
-	CreateFoobarResponseBody `json:",inline"`
+	metav1.TypeMeta  `json:",inline"`
+	CreateFoobarBody `json:",inline"`
 }
 
 func NewCreateFoobarResponse() *CreateFoobarResponse {
 	return &CreateFoobarResponse{}
 }
 
-func (t *CreateFoobarResponseBody) DeepCopyInto(dst *CreateFoobarResponseBody) {
+func (t *CreateFoobarBody) DeepCopyInto(dst *CreateFoobarBody) {
 	_ = resource.CopyObjectInto(dst, t)
 }
 
@@ -31,7 +31,7 @@ func (o *CreateFoobarResponse) DeepCopyObject() runtime.Object {
 func (o *CreateFoobarResponse) DeepCopyInto(dst *CreateFoobarResponse) {
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
-	o.CreateFoobarResponseBody.DeepCopyInto(&dst.CreateFoobarResponseBody)
+	o.CreateFoobarBody.DeepCopyInto(&dst.CreateFoobarBody)
 }
 
 func (CreateFoobarResponse) OpenAPIModelName() string {
