@@ -93,5 +93,6 @@ configIntegrationGen2: {
 }
 
 configIntegrationGen3: {
-	manifestSelectors: ["customManifest"]
+	manifestSelectors: ["integrationManifest"]
+	kinds: grouping: "group"
 }

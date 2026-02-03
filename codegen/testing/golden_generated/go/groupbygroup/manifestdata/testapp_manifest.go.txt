@@ -523,11 +523,11 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
 
 var customRouteToGoResponseType = map[string]any{
 
-	"v3|TestKind|reconcile|POST": v3.CreateReconcile{},
+	"v3|TestKind|reconcile|POST": v3.CreateReconcileResponse{},
 
-	"v3|TestKind|search|GET": v3.GetTestKindSearchResult{},
+	"v3|TestKind|search|GET": v3.GetTestKindSearchResultResponse{},
 
-	"v3||<namespace>/foobar|POST": v3.CreateFoobar{},
+	"v3||<namespace>/foobar|POST": v3.CreateFoobarResponse{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.
