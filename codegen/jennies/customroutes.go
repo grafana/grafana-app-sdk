@@ -200,13 +200,15 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 	files := make(codejen.Files, 0)
-	bodyName := typeName
+	bodyName := typeName + "ResponseBody"
+	goGenTypeName := "Response"
 	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
-		bodyName = typeName + "Body"
+		goGenTypeName = "Body"
 	}
+	typeName += "Response"
 	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
 		PackageName:                    packageName,
-		Name:                           "Body",
+		Name:                           goGenTypeName,
 		NamePrefix:                     toExportedFieldName(typeName), // TODO: not sure if we want this set
 		AddKubernetesOpenAPIGenComment: c.AddKubernetesCodegen,
 		AnyAsInterface:                 c.AnyAsInterface,

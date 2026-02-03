@@ -3,30 +3,30 @@
 package v3
 
 // +k8s:openapi-gen=true
-type CreateFoobarKey struct {
+type CreateFoobarResponseKey struct {
 	Name  string  `json:"name"`
 	Match *string `json:"match,omitempty"`
 }
 
-// NewCreateFoobarKey creates a new CreateFoobarKey object.
-func NewCreateFoobarKey() *CreateFoobarKey {
-	return &CreateFoobarKey{}
+// NewCreateFoobarResponseKey creates a new CreateFoobarResponseKey object.
+func NewCreateFoobarResponseKey() *CreateFoobarResponseKey {
+	return &CreateFoobarResponseKey{}
 }
 
 // +k8s:openapi-gen=true
-type CreateFoobarBody struct {
-	Altered []CreateFoobarKey `json:"altered"`
+type CreateFoobarResponseBody struct {
+	Altered []CreateFoobarResponseKey `json:"altered"`
 }
 
-// NewCreateFoobarBody creates a new CreateFoobarBody object.
-func NewCreateFoobarBody() *CreateFoobarBody {
-	return &CreateFoobarBody{
-		Altered: []CreateFoobarKey{},
+// NewCreateFoobarResponseBody creates a new CreateFoobarResponseBody object.
+func NewCreateFoobarResponseBody() *CreateFoobarResponseBody {
+	return &CreateFoobarResponseBody{
+		Altered: []CreateFoobarResponseKey{},
 	}
 }
-func (CreateFoobarKey) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarKey"
+func (CreateFoobarResponseKey) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarResponseKey"
 }
-func (CreateFoobarBody) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarBody"
+func (CreateFoobarResponseBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarResponseBody"
 }
