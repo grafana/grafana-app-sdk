@@ -205,7 +205,6 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
 		goGenTypeName = "Body"
 	}
-	typeName += "Response"
 	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
 		PackageName:                    packageName,
 		Name:                           goGenTypeName,
@@ -216,6 +215,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	if err != nil {
 		return nil, err
 	}
+	typeName += "Response"
 	body := ""
 	if customRoute.Response.Metadata.TypeMeta {
 		body = "body_"
