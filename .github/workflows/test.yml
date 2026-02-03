@@ -158,7 +158,7 @@ jobs:
         run: |
           mkdir -p test-project && cd test-project
           grafana-app-sdk project init "test-project"
-          rm -rf kinds/manifest.cue
+          rm -rf kinds/integration.cue
           rm -rf kinds/config.cue
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
