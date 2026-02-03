@@ -622,7 +622,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, kindGrouping == config.KindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, cfg.Kinds.Grouping == config.KindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -639,7 +639,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, kindGrouping == config.KindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, cfg.Kinds.Grouping == config.KindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}

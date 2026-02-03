@@ -1,7 +1,7 @@
 package testing
 
 integrationManifest: {
-    appName: "integration-test"
+    appName: "integration"
     versions: {
         "v1": integrationV1,
     }
