@@ -73,50 +73,42 @@ var appManifestData = app.ManifestData{
 		},
 	},
 	Roles: map[string]app.ManifestRole{
-		"custom-app:admin": app.ManifestRole{
-			PermissionSet: "admin",
-			Versions: map[string]app.ManifestRoleVersion{
-				"v0-0": {
-					Kinds: []string{
-						"CustomKind",
-					},
+		"custom-app:admin": {
+			Title:       "custom-app Admin",
+			Description: "Allows all actions on CustomKinds",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "CustomKind",
+					PermissionSet: strPtr("admin"),
 				},
-				"v1-0": {
-					Kinds: []string{
-						"CustomKind",
-					},
+				{
+					Kind:          "CustomKind/status",
+					PermissionSet: strPtr("admin"),
 				},
 			},
+			Routes: []string{},
 		},
-		"custom-app:editor": app.ManifestRole{
-			PermissionSet: "editor",
-			Versions: map[string]app.ManifestRoleVersion{
-				"v0-0": {
-					Kinds: []string{
-						"CustomKind",
-					},
-				},
-				"v1-0": {
-					Kinds: []string{
-						"CustomKind",
-					},
+		"custom-app:editor": {
+			Title:       "custom-app Editor",
+			Description: "Create, Read, Update, and Delete CustomKinds",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "CustomKind",
+					PermissionSet: strPtr("editor"),
 				},
 			},
+			Routes: []string{},
 		},
-		"custom-app:reader": app.ManifestRole{
-			PermissionSet: "viewer",
-			Versions: map[string]app.ManifestRoleVersion{
-				"v0-0": {
-					Kinds: []string{
-						"CustomKind",
-					},
-				},
-				"v1-0": {
-					Kinds: []string{
-						"CustomKind",
-					},
+		"custom-app:reader": {
+			Title:       "custom-app Reader",
+			Description: "Read CustomKinds",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "CustomKind",
+					PermissionSet: strPtr("viewer"),
 				},
 			},
+			Routes: []string{},
 		},
 	},
 	RoleBindings: &app.ManifestRoleBindings{
@@ -204,4 +196,7 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 }
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
 	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
+}
+func strPtr(s string) *string {
+	return &s
 }

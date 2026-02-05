@@ -142,42 +142,79 @@
                                                     "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
                                                     "type": "string"
                                                 },
-                                                "permissionSet": {
-                                                    "default": "viewer",
-                                                    "enum": [
-                                                        "viewer",
-                                                        "editor",
-                                                        "admin"
-                                                    ],
-                                                    "type": "string"
-                                                },
-                                                "title": {
-                                                    "description": "Title will be used as the role title in grafana",
-                                                    "type": "string"
-                                                },
-                                                "versions": {
-                                                    "additionalProperties": {
+                                                "kinds": {
+                                                    "items": {
+                                                        "oneOf": [
+                                                            {
+                                                                "not": {
+                                                                    "anyOf": [
+                                                                        {
+                                                                            "required": [
+                                                                                "verbs"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "required": [
+                                                                    "kind",
+                                                                    "permissionSet"
+                                                                ]
+                                                            },
+                                                            {
+                                                                "not": {
+                                                                    "anyOf": [
+                                                                        {
+                                                                            "required": [
+                                                                                "permissionSet"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "required": [
+                                                                    "kind",
+                                                                    "verbs"
+                                                                ]
+                                                            }
+                                                        ],
                                                         "properties": {
-                                                            "kinds": {
+                                                            "kind": {
+                                                                "type": "string"
+                                                            },
+                                                            "permissionSet": {
+                                                                "default": "viewer",
+                                                                "enum": [
+                                                                    "viewer",
+                                                                    "editor",
+                                                                    "admin"
+                                                                ],
+                                                                "type": "string"
+                                                            },
+                                                            "verbs": {
                                                                 "items": {
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
                                                             }
                                                         },
-                                                        "required": [
-                                                            "kinds"
-                                                        ],
                                                         "type": "object"
                                                     },
-                                                    "type": "object"
+                                                    "type": "array"
+                                                },
+                                                "routes": {
+                                                    "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "title": {
+                                                    "description": "Title will be used as the role title in grafana",
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
                                                 "title",
-                                                "description",
-                                                "permissionSet",
-                                                "versions"
+                                                "description"
                                             ],
                                             "type": "object"
                                         },
@@ -572,42 +609,79 @@
                                                     "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
                                                     "type": "string"
                                                 },
-                                                "permissionSet": {
-                                                    "default": "viewer",
-                                                    "enum": [
-                                                        "viewer",
-                                                        "editor",
-                                                        "admin"
-                                                    ],
-                                                    "type": "string"
-                                                },
-                                                "title": {
-                                                    "description": "Title will be used as the role title in grafana",
-                                                    "type": "string"
-                                                },
-                                                "versions": {
-                                                    "additionalProperties": {
+                                                "kinds": {
+                                                    "items": {
+                                                        "oneOf": [
+                                                            {
+                                                                "not": {
+                                                                    "anyOf": [
+                                                                        {
+                                                                            "required": [
+                                                                                "verbs"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "required": [
+                                                                    "kind",
+                                                                    "permissionSet"
+                                                                ]
+                                                            },
+                                                            {
+                                                                "not": {
+                                                                    "anyOf": [
+                                                                        {
+                                                                            "required": [
+                                                                                "permissionSet"
+                                                                            ]
+                                                                        }
+                                                                    ]
+                                                                },
+                                                                "required": [
+                                                                    "kind",
+                                                                    "verbs"
+                                                                ]
+                                                            }
+                                                        ],
                                                         "properties": {
-                                                            "kinds": {
+                                                            "kind": {
+                                                                "type": "string"
+                                                            },
+                                                            "permissionSet": {
+                                                                "default": "viewer",
+                                                                "enum": [
+                                                                    "viewer",
+                                                                    "editor",
+                                                                    "admin"
+                                                                ],
+                                                                "type": "string"
+                                                            },
+                                                            "verbs": {
                                                                 "items": {
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
                                                             }
                                                         },
-                                                        "required": [
-                                                            "kinds"
-                                                        ],
                                                         "type": "object"
                                                     },
-                                                    "type": "object"
+                                                    "type": "array"
+                                                },
+                                                "routes": {
+                                                    "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "title": {
+                                                    "description": "Title will be used as the role title in grafana",
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
                                                 "title",
-                                                "description",
-                                                "permissionSet",
-                                                "versions"
+                                                "description"
                                             ],
                                             "type": "object"
                                         },

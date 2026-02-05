@@ -22,6 +22,10 @@ const (
 	OpenAPIExtensionPrefix                   = "x-grafana-app"
 	OpenAPIExtensionUsesKubernetesObjectMeta = OpenAPIExtensionPrefix + "-uses-kubernetes-object-metadata"
 	OpenAPIExtensionUsesKubernetesListMeta   = OpenAPIExtensionPrefix + "-uses-kubernetes-list-metadata"
+
+	ManifestRolePermissionSetViewer = "viewer"
+	ManifestRolePermissionSetEditor = "editor"
+	ManifestRolePermissionSetAdmin  = "admin"
 )
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
@@ -274,6 +278,42 @@ type ManifestVersionKind struct {
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 }
 
+// Subresources returns a list of all (stored) subresources for the kind.
+// The list of subresources will not include "spec" or "metadata" as they are not subresources.
+// Routes for the kind (subresource routes) will also not be included, as they are not stored.
+//
+//nolint:goconst
+func (m *ManifestVersionKind) Subresources() []string {
+	if m.Schema == nil {
+		return []string{}
+	}
+	mp := m.Schema.AsOpenAPI3SchemasMap()
+	k, ok := mp[m.Kind]
+	if !ok {
+		return []string{}
+	}
+	cast, ok := k.(map[string]any)
+	if !ok {
+		return []string{}
+	}
+	props, ok := cast["properties"]
+	if !ok {
+		return []string{}
+	}
+	cast, ok = props.(map[string]any)
+	if !ok {
+		return []string{}
+	}
+	subresources := make([]string, 0)
+	for k := range cast {
+		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" {
+			continue
+		}
+		subresources = append(subresources, k)
+	}
+	return subresources
+}
+
 type ManifestVersionKindAdditionalPrinterColumn struct {
 	// name is a human readable name for the column.
 	Name string `json:"name"`
@@ -376,15 +416,24 @@ type ManifestOperatorWebhookProperties struct {
 // ManifestRole describes a role used in the ManifestData Roles map.
 // A ManifestRole consists of a PermissionSet (such as "editor") and a set of versions with kinds to apply that permission set to.
 type ManifestRole struct {
-	PermissionSet string                         `json:"permissionSet" yaml:"permissionSet"`
-	Title         string                         `json:"title" yaml:"title"`
-	Description   string                         `json:"description" yaml:"description"`
-	Versions      map[string]ManifestRoleVersion `json:"versions" yaml:"versions"`
+	Title       string             `json:"title" yaml:"title"`
+	Description string             `json:"description" yaml:"description"`
+	Kinds       []ManifestRoleKind `json:"kinds" yaml:"kinds"`
+	// Routes is a list of route names to match.
+	// To match the same route in multiple versions, it should share the same name.
+	Routes []string `json:"routes" yaml:"routes"`
 }
 
-// ManifestRoleVersion is an entry in a ManifestRole item. It describes a set of kinds for a particular version.
-type ManifestRoleVersion struct {
-	Kinds []string `json:"kinds" yaml:"kinds"`
+// ManifestRoleKind is an association between a kind and a set of permissions
+type ManifestRoleKind struct {
+	// Kind is the kind name
+	Kind string `json:"kind" yaml:"kind"`
+	// Verbs is a list of kubernetes verbs (get, list, watch, create, update, patch, delete, deletecollection).
+	// It is mutually exclusive with PermissionSet
+	Verbs []string `json:"verbs,omitempty" yaml:"verbs,omitempty"`
+	// PermissionSet is a permission set (viewer, editor, admin) to associate with the kind.
+	// It is mutually exclusive with Verbs
+	PermissionSet *string `json:"permissionSet,omitempty" yaml:"permissionSet,omitempty"`
 }
 
 // ManifestRoleBindings is the set of RoleBindings for ManifestData.RoleBindings.

@@ -27,15 +27,12 @@ spec:
   roles:
     test-app:reader:
       description: View Test App Resources
-      permissionSet: viewer
+      kinds:
+      - kind: TestKind
+        permissionSet: viewer
+      routes:
+      - createFoobar
       title: Test App Viewer
-      versions:
-        v1:
-          kinds:
-          - TestKind
-        v2:
-          kinds:
-          - TestKind
   versions:
   - kinds:
     - admission:
@@ -230,7 +227,7 @@ spec:
       routes:
         /reconcile:
           post:
-            operationId: createReconcile
+            operationId: createReconcileRequest
             requestBody:
               content:
                 application/json:

@@ -334,53 +334,36 @@
             "custom-app:admin": {
                 "title": "custom-app Admin",
                 "description": "Allows all actions on CustomKinds",
-                "permissionSet": "admin",
-                "versions": {
-                    "v0-0": {
-                        "kinds": [
-                            "CustomKind"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "CustomKind",
+                        "permissionSet": "admin"
                     },
-                    "v1-0": {
-                        "kinds": [
-                            "CustomKind"
-                        ]
+                    {
+                        "kind": "CustomKind/status",
+                        "permissionSet": "admin"
                     }
-                }
+                ]
             },
             "custom-app:editor": {
                 "title": "custom-app Editor",
                 "description": "Create, Read, Update, and Delete CustomKinds",
-                "permissionSet": "editor",
-                "versions": {
-                    "v0-0": {
-                        "kinds": [
-                            "CustomKind"
-                        ]
-                    },
-                    "v1-0": {
-                        "kinds": [
-                            "CustomKind"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "CustomKind",
+                        "permissionSet": "editor"
                     }
-                }
+                ]
             },
             "custom-app:reader": {
                 "title": "custom-app Reader",
                 "description": "Read CustomKinds",
-                "permissionSet": "viewer",
-                "versions": {
-                    "v0-0": {
-                        "kinds": [
-                            "CustomKind"
-                        ]
-                    },
-                    "v1-0": {
-                        "kinds": [
-                            "CustomKind"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "CustomKind",
+                        "permissionSet": "viewer"
                     }
-                }
+                ]
             }
         },
         "roleBindings": {

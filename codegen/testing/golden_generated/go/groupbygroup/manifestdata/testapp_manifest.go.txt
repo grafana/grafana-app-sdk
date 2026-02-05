@@ -138,7 +138,7 @@ var appManifestData = app.ManifestData{
 							Post: &spec3.Operation{
 								OperationProps: spec3.OperationProps{
 
-									OperationId: "createReconcile",
+									OperationId: "createReconcileRequest",
 
 									RequestBody: &spec3.RequestBody{
 										RequestBodyProps: spec3.RequestBodyProps{
@@ -498,19 +498,17 @@ var appManifestData = app.ManifestData{
 		},
 	},
 	Roles: map[string]app.ManifestRole{
-		"test-app:reader": app.ManifestRole{
-			PermissionSet: "viewer",
-			Versions: map[string]app.ManifestRoleVersion{
-				"v1": {
-					Kinds: []string{
-						"TestKind",
-					},
+		"test-app:reader": {
+			Title:       "Test App Viewer",
+			Description: "View Test App Resources",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "TestKind",
+					PermissionSet: strPtr("viewer"),
 				},
-				"v2": {
-					Kinds: []string{
-						"TestKind",
-					},
-				},
+			},
+			Routes: []string{
+				"createFoobar",
 			},
 		},
 	},
@@ -548,7 +546,7 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
 
 var customRouteToGoResponseType = map[string]any{
 
-	"v3|TestKind|reconcile|POST": v3.CreateReconcile{},
+	"v3|TestKind|reconcile|POST": v3.CreateReconcileRequest{},
 
 	"v3|TestKind|search|GET": v3.GetTestKindSearchResult{},
 
@@ -582,7 +580,7 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
 
 var customRouteToGoRequestBodyType = map[string]any{
 
-	"v3|TestKind|reconcile|POST": v3.CreateReconcileRequestBody{},
+	"v3|TestKind|reconcile|POST": v3.CreateReconcileRequestRequestBody{},
 
 	"v3||<namespace>/foobar|POST": v3.CreateFoobarRequestBody{},
 }
@@ -612,4 +610,7 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 }
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
 	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
+}
+func strPtr(s string) *string {
+	return &s
 }

@@ -57,38 +57,60 @@ func TestAppManifestKind_Read(t *testing.T) {
 					Scope:   "Namespaced",
 					Schemas: schema,
 				}},
+				Routes: &AppManifestManifestVersionRoutes{
+					Namespaced: map[string]any{
+						"/foo": map[string]any{
+							"GET": map[string]any{
+								"name": "getFoos",
+								"response": map[string]any{
+									"properties": map[string]any{
+										"foo": map[string]any{
+											"type": "string",
+										},
+									},
+								},
+								"responseMetadata": map[string]any{
+									"objectMeta": false,
+								},
+							},
+						},
+					},
+				},
 			}},
 			DryRunKinds: &dryRunKinds,
 			Roles: map[string]AppManifestRole{
 				"issue-tracker-project:reader": {
-					PermissionSet: AppManifestRolePermissionSetViewer,
-					Title:         "Issue Tracker Reader",
-					Description:   "Read Issues",
-					Versions: map[string]AppManifestRoleVersion{
-						"v1": {
-							Kinds: []string{"Issue"},
+					Title:       "Issue Tracker Reader",
+					Description: "Read Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithPermissionSet{
+							Kind:          "Issue",
+							PermissionSet: "viewer",
 						},
 					},
+					Routes: []string{},
 				},
 				"issue-tracker-project:editor": {
-					PermissionSet: AppManifestRolePermissionSetEditor,
-					Title:         "Issue Tracker Editor",
-					Description:   "Edit Issues",
-					Versions: map[string]AppManifestRoleVersion{
-						"v1": {
-							Kinds: []string{"Issue"},
+					Title:       "Issue Tracker Editor",
+					Description: "Edit Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithVerbs{
+							Kind:  "Issue",
+							Verbs: []string{"get", "list", "watch", "create", "update", "patch", "delete"},
 						},
 					},
+					Routes: []string{},
 				},
 				"issue-tracker-project:admin": {
-					PermissionSet: AppManifestRolePermissionSetAdmin,
-					Title:         "Issue Tracker Admin",
-					Description:   "Administrate Issues",
-					Versions: map[string]AppManifestRoleVersion{
-						"v1": {
-							Kinds: []string{"Issue"},
+					Title:       "Issue Tracker Admin",
+					Description: "Administrate Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithPermissionSet{
+							Kind:          "Issue",
+							PermissionSet: "admin",
 						},
 					},
+					Routes: []string{"getFoos"},
 				},
 			},
 			RoleBindings: &AppManifestV1alpha2SpecRoleBindings{

@@ -17,37 +17,24 @@ spec:
   roles:
     custom-app:admin:
       description: Allows all actions on CustomKinds
-      permissionSet: admin
+      kinds:
+      - kind: CustomKind
+        permissionSet: admin
+      - kind: CustomKind/status
+        permissionSet: admin
       title: custom-app Admin
-      versions:
-        v0-0:
-          kinds:
-          - CustomKind
-        v1-0:
-          kinds:
-          - CustomKind
     custom-app:editor:
       description: Create, Read, Update, and Delete CustomKinds
-      permissionSet: editor
+      kinds:
+      - kind: CustomKind
+        permissionSet: editor
       title: custom-app Editor
-      versions:
-        v0-0:
-          kinds:
-          - CustomKind
-        v1-0:
-          kinds:
-          - CustomKind
     custom-app:reader:
       description: Read CustomKinds
-      permissionSet: viewer
+      kinds:
+      - kind: CustomKind
+        permissionSet: viewer
       title: custom-app Reader
-      versions:
-        v0-0:
-          kinds:
-          - CustomKind
-        v1-0:
-          kinds:
-          - CustomKind
   versions:
   - kinds:
     - conversion: false
