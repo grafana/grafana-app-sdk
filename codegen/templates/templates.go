@@ -18,8 +18,12 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
-//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl
+//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl custom/*
 var templates embed.FS
+
+func GetTemplatesFS() embed.FS {
+	return templates
+}
 
 var (
 	funcMap = template.FuncMap{

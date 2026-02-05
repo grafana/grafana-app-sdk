@@ -16,6 +16,11 @@ func NewGetFoobarSharedType() *GetFoobarSharedType {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for GetFoobarSharedType.
+func (GetFoobarSharedType) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarSharedType"
+}
+
 // +k8s:openapi-gen=true
 type GetFoobarSharedTypeDep struct {
 	Value string `json:"value"`
@@ -24,6 +29,11 @@ type GetFoobarSharedTypeDep struct {
 // NewGetFoobarSharedTypeDep creates a new GetFoobarSharedTypeDep object.
 func NewGetFoobarSharedTypeDep() *GetFoobarSharedTypeDep {
 	return &GetFoobarSharedTypeDep{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for GetFoobarSharedTypeDep.
+func (GetFoobarSharedTypeDep) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarSharedTypeDep"
 }
 
 // +k8s:openapi-gen=true
@@ -38,12 +48,8 @@ func NewGetFoobarBody() *GetFoobarBody {
 		Shared: *NewGetFoobarSharedType(),
 	}
 }
-func (GetFoobarSharedType) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarSharedType"
-}
-func (GetFoobarSharedTypeDep) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarSharedTypeDep"
-}
+
+// OpenAPIModelName returns the OpenAPI model name for GetFoobarBody.
 func (GetFoobarBody) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFoobarBody"
 }
