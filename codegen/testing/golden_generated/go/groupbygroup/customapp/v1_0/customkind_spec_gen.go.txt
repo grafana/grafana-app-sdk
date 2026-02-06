@@ -23,6 +23,11 @@ func NewCustomKindInnerObject1() *CustomKindInnerObject1 {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CustomKindInnerObject1.
+func (CustomKindInnerObject1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject1"
+}
+
 // +k8s:openapi-gen=true
 type CustomKindInnerObject2 struct {
 	Name    string                 `json:"name"`
@@ -36,8 +41,18 @@ func NewCustomKindInnerObject2() *CustomKindInnerObject2 {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CustomKindInnerObject2.
+func (CustomKindInnerObject2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject2"
+}
+
 // +k8s:openapi-gen=true
 type CustomKindUnionType interface{}
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindUnionType.
+func (CustomKindUnionType) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindUnionType"
+}
 
 // +k8s:openapi-gen=true
 type CustomKindType1 struct {
@@ -48,6 +63,11 @@ type CustomKindType1 struct {
 // NewCustomKindType1 creates a new CustomKindType1 object.
 func NewCustomKindType1() *CustomKindType1 {
 	return &CustomKindType1{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindType1.
+func (CustomKindType1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType1"
 }
 
 // +k8s:openapi-gen=true
@@ -63,6 +83,11 @@ func NewCustomKindType2() *CustomKindType2 {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CustomKindType2.
+func (CustomKindType2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType2"
+}
+
 // +k8s:openapi-gen=true
 type CustomKindRecursiveList struct {
 	Val  string                   `json:"val"`
@@ -72,6 +97,11 @@ type CustomKindRecursiveList struct {
 // NewCustomKindRecursiveList creates a new CustomKindRecursiveList object.
 func NewCustomKindRecursiveList() *CustomKindRecursiveList {
 	return &CustomKindRecursiveList{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindRecursiveList.
+func (CustomKindRecursiveList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindRecursiveList"
 }
 
 // +k8s:openapi-gen=true
@@ -101,6 +131,11 @@ func NewCustomKindSpec() *CustomKindSpec {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CustomKindSpec.
+func (CustomKindSpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindSpec"
+}
+
 // +k8s:openapi-gen=true
 type CustomKindSpecEnum string
 
@@ -111,21 +146,8 @@ const (
 	CustomKindSpecEnumVal4    CustomKindSpecEnum = "val4"
 	CustomKindSpecEnumDefault CustomKindSpecEnum = "default"
 )
-func (CustomKindInnerObject1) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject1"
-}
-func (CustomKindInnerObject2) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject2"
-}
-func (CustomKindType1) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType1"
-}
-func (CustomKindType2) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType2"
-}
-func (CustomKindRecursiveList) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindRecursiveList"
-}
-func (CustomKindSpec) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindSpec"
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindSpecEnum.
+func (CustomKindSpecEnum) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindSpecEnum"
 }

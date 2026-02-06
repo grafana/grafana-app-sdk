@@ -15,6 +15,11 @@ func NewGetTestKindSearchResultBody() *GetTestKindSearchResultBody {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for GetTestKindSearchResultBody.
+func (GetTestKindSearchResultBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultBody"
+}
+
 // +k8s:openapi-gen=true
 type GetTestKindSearchResultV3BodyItemsList struct {
 	Foo string `json:"foo"`
@@ -23,6 +28,11 @@ type GetTestKindSearchResultV3BodyItemsList struct {
 // NewGetTestKindSearchResultV3BodyItemsList creates a new GetTestKindSearchResultV3BodyItemsList object.
 func NewGetTestKindSearchResultV3BodyItemsList() *GetTestKindSearchResultV3BodyItemsList {
 	return &GetTestKindSearchResultV3BodyItemsList{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for GetTestKindSearchResultV3BodyItemsList.
+func (GetTestKindSearchResultV3BodyItemsList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultV3BodyItemsList"
 }
 
 // +k8s:openapi-gen=true
@@ -38,12 +48,8 @@ func NewGetTestKindSearchResultV3BodyItems() *GetTestKindSearchResultV3BodyItems
 		List: []GetTestKindSearchResultV3BodyItemsList{},
 	}
 }
-func (GetTestKindSearchResultBody) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultBody"
-}
-func (GetTestKindSearchResultV3BodyItemsList) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultV3BodyItemsList"
-}
+
+// OpenAPIModelName returns the OpenAPI model name for GetTestKindSearchResultV3BodyItems.
 func (GetTestKindSearchResultV3BodyItems) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultV3BodyItems"
 }

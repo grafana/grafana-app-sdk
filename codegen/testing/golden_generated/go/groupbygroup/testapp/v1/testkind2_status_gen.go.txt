@@ -20,6 +20,11 @@ func NewTestKind2statusOperatorState() *TestKind2statusOperatorState {
 	return &TestKind2statusOperatorState{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for TestKind2statusOperatorState.
+func (TestKind2statusOperatorState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2statusOperatorState"
+}
+
 // +k8s:openapi-gen=true
 type TestKind2Status struct {
 	// operatorStates is a map of operator ID to operator state evaluations.
@@ -34,6 +39,11 @@ func NewTestKind2Status() *TestKind2Status {
 	return &TestKind2Status{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for TestKind2Status.
+func (TestKind2Status) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2Status"
+}
+
 // +k8s:openapi-gen=true
 type TestKind2StatusOperatorStateState string
 
@@ -42,9 +52,8 @@ const (
 	TestKind2StatusOperatorStateStateInProgress TestKind2StatusOperatorStateState = "in_progress"
 	TestKind2StatusOperatorStateStateFailed     TestKind2StatusOperatorStateState = "failed"
 )
-func (TestKind2statusOperatorState) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v1.TestKind2statusOperatorState"
-}
-func (TestKind2Status) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v1.TestKind2Status"
+
+// OpenAPIModelName returns the OpenAPI model name for TestKind2StatusOperatorStateState.
+func (TestKind2StatusOperatorStateState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v1.TestKind2StatusOperatorStateState"
 }

@@ -12,6 +12,11 @@ func NewCreateFoobarRequestKey() *CreateFoobarRequestKey {
 	return &CreateFoobarRequestKey{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CreateFoobarRequestKey.
+func (CreateFoobarRequestKey) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarRequestKey"
+}
+
 type CreateFoobarRequestBody struct {
 	Keys []CreateFoobarRequestKey `json:"keys"`
 }
@@ -22,9 +27,8 @@ func NewCreateFoobarRequestBody() *CreateFoobarRequestBody {
 		Keys: []CreateFoobarRequestKey{},
 	}
 }
-func (CreateFoobarRequestKey) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarRequestKey"
-}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateFoobarRequestBody.
 func (CreateFoobarRequestBody) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v3.CreateFoobarRequestBody"
 }
