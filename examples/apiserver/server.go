@@ -84,7 +84,7 @@ func NewApp(config app.Config) (app.App, error) {
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
 					logging.FromContext(ctx).Info("called TestKind /foo subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetFoo{
+					return json.NewEncoder(writer).Encode(v1alpha1.GetFooResponse{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "TestKind.Foo",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
@@ -101,7 +101,7 @@ func NewApp(config app.Config) (app.App, error) {
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
 					logging.FromContext(ctx).Info("called TestKind /bar subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetMessage{
+					return json.NewEncoder(writer).Encode(v1alpha1.GetMessageResponse{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "TestKind.Message",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
@@ -117,7 +117,7 @@ func NewApp(config app.Config) (app.App, error) {
 				}: func(ctx context.Context, writer app.CustomRouteResponseWriter, request *app.CustomRouteRequest) error {
 					logging.FromContext(ctx).Info("called TestKind /recurse subresource", "resource", request.ResourceIdentifier.Name, "namespace", request.ResourceIdentifier.Namespace)
 					writer.WriteHeader(http.StatusOK)
-					return json.NewEncoder(writer).Encode(v1alpha1.GetRecursiveResponse{
+					return json.NewEncoder(writer).Encode(v1alpha1.GetRecursiveResponseResponse{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "TestKind.Message",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
@@ -148,7 +148,7 @@ func NewApp(config app.Config) (app.App, error) {
 					Path:       "foobar",
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
-					return json.NewEncoder(writer).Encode(v1alpha1.GetFoobar{
+					return json.NewEncoder(writer).Encode(v1alpha1.GetFoobarResponse{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "NamespacedFoobar",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
@@ -163,7 +163,7 @@ func NewApp(config app.Config) (app.App, error) {
 					Path:       "foobar",
 					Method:     "GET",
 				}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
-					return json.NewEncoder(writer).Encode(v1alpha1.GetClusterFoobar{
+					return json.NewEncoder(writer).Encode(v1alpha1.GetClusterFoobarResponse{
 						TypeMeta: metav1.TypeMeta{
 							Kind:       "ClusterFoobar",
 							APIVersion: config.ManifestData.Group + "/v1alpha1",
@@ -179,7 +179,7 @@ func NewApp(config app.Config) (app.App, error) {
 				Path:       "example",
 				Method:     "GET",
 			}: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
-				return json.NewEncoder(writer).Encode(v2alpha1.GetExample{
+				return json.NewEncoder(writer).Encode(v2alpha1.GetExampleResponse{
 					TypeMeta: metav1.TypeMeta{
 						Kind:       "Example",
 						APIVersion: config.ManifestData.Group + "/v2alpha1",
