@@ -152,10 +152,18 @@ appManifestv1alpha1: appManifestKind & {
 			}
 		}
 		status: {
+			#ApplyStatusManagedResource: {
+				kind: string
+				apiVersion: string
+				namespace: string
+				name: string
+			}
 			#ApplyStatus: {
 				status: "success" | "failure"
 				// details may contain specific information (such as error message(s)) on the reason for the status
 				details?: string
+				// managedResources contains a list of managed resources (such as roles, CRDs, webhooks, etc.)
+				managedResources?: [...#ApplyStatusManagedResource]
 			}
 			// ObservedGeneration is the last generation which has been applied by the controller.
 			observedGeneration?: int

@@ -440,6 +440,33 @@
                                                     "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                                     "type": "string"
                                                 },
+                                                "managedResources": {
+                                                    "description": "managedResources contains a list of managed resources (such as roles, CRDs, webhooks, etc.)",
+                                                    "items": {
+                                                        "properties": {
+                                                            "apiVersion": {
+                                                                "type": "string"
+                                                            },
+                                                            "kind": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "namespace": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "kind",
+                                                            "apiVersion",
+                                                            "namespace",
+                                                            "name"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
+                                                },
                                                 "status": {
                                                     "enum": [
                                                         "success",
@@ -927,6 +954,33 @@
                                                 "details": {
                                                     "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                                     "type": "string"
+                                                },
+                                                "managedResources": {
+                                                    "description": "managedResources contains a list of managed resources (such as roles, CRDs, webhooks, etc.)",
+                                                    "items": {
+                                                        "properties": {
+                                                            "apiVersion": {
+                                                                "type": "string"
+                                                            },
+                                                            "kind": {
+                                                                "type": "string"
+                                                            },
+                                                            "name": {
+                                                                "type": "string"
+                                                            },
+                                                            "namespace": {
+                                                                "type": "string"
+                                                            }
+                                                        },
+                                                        "required": [
+                                                            "kind",
+                                                            "apiVersion",
+                                                            "namespace",
+                                                            "name"
+                                                        ],
+                                                        "type": "object"
+                                                    },
+                                                    "type": "array"
                                                 },
                                                 "status": {
                                                     "enum": [

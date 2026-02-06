@@ -95,6 +95,13 @@
                                         "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                         "type": "string"
                                     },
+                                    "managedResources": {
+                                        "description": "managedResources contains a list of managed resources (such as roles, CRDs, webhooks, etc.)",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ApplyStatusManagedResource"
+                                        },
+                                        "type": "array"
+                                    },
                                     "status": {
                                         "enum": [
                                             "success",
@@ -105,6 +112,30 @@
                                 },
                                 "required": [
                                     "status"
+                                ],
+                                "type": "object"
+                            },
+                            "ApplyStatusManagedResource": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "apiVersion": {
+                                        "type": "string"
+                                    },
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "namespace": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "apiVersion",
+                                    "namespace",
+                                    "name"
                                 ],
                                 "type": "object"
                             },
@@ -634,6 +665,13 @@
                                         "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                         "type": "string"
                                     },
+                                    "managedResources": {
+                                        "description": "managedResources contains a list of managed resources (such as roles, CRDs, webhooks, etc.)",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ApplyStatusManagedResource"
+                                        },
+                                        "type": "array"
+                                    },
                                     "status": {
                                         "enum": [
                                             "success",
@@ -644,6 +682,30 @@
                                 },
                                 "required": [
                                     "status"
+                                ],
+                                "type": "object"
+                            },
+                            "ApplyStatusManagedResource": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "apiVersion": {
+                                        "type": "string"
+                                    },
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "namespace": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "apiVersion",
+                                    "namespace",
+                                    "name"
                                 ],
                                 "type": "object"
                             },
@@ -1142,53 +1204,36 @@
             "app-manifest:admin": {
                 "title": "app-manifest Admin",
                 "description": "Allows all actions on AppManifests",
-                "permissionSet": "admin",
-                "versions": {
-                    "v1alpha1": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "AppManifest",
+                        "permissionSet": "admin"
                     },
-                    "v1alpha2": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
+                    {
+                        "kind": "AppManifest/status",
+                        "permissionSet": "admin"
                     }
-                }
+                ]
             },
             "app-manifest:editor": {
                 "title": "app-manifest Editor",
                 "description": "Create, Read, Update, and Delete AppManifests",
-                "permissionSet": "editor",
-                "versions": {
-                    "v1alpha1": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    },
-                    "v1alpha2": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "AppManifest",
+                        "permissionSet": "editor"
                     }
-                }
+                ]
             },
             "app-manifest:reader": {
                 "title": "app-manifest Reader",
                 "description": "Read AppManifests",
-                "permissionSet": "viewer",
-                "versions": {
-                    "v1alpha1": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
-                    },
-                    "v1alpha2": {
-                        "kinds": [
-                            "AppManifest"
-                        ]
+                "kinds": [
+                    {
+                        "kind": "AppManifest",
+                        "permissionSet": "viewer"
                     }
-                }
+                ]
             }
         },
         "roleBindings": {
