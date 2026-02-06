@@ -3,10 +3,25 @@
 package v1alpha2
 
 // +k8s:openapi-gen=true
+type AppManifeststatusApplyStatusManagedResource struct {
+	Kind       string `json:"kind"`
+	ApiVersion string `json:"apiVersion"`
+	Namespace  string `json:"namespace"`
+	Name       string `json:"name"`
+}
+
+// NewAppManifeststatusApplyStatusManagedResource creates a new AppManifeststatusApplyStatusManagedResource object.
+func NewAppManifeststatusApplyStatusManagedResource() *AppManifeststatusApplyStatusManagedResource {
+	return &AppManifeststatusApplyStatusManagedResource{}
+}
+
+// +k8s:openapi-gen=true
 type AppManifeststatusApplyStatus struct {
 	Status AppManifestStatusApplyStatusStatus `json:"status"`
 	// details may contain specific information (such as error message(s)) on the reason for the status
 	Details *string `json:"details,omitempty"`
+	// objects contains a list of managed resources (such as roles, CRDs, webhooks, etc.)
+	ManagedResources []AppManifeststatusApplyStatusManagedResource `json:"managedResources,omitempty"`
 }
 
 // NewAppManifeststatusApplyStatus creates a new AppManifeststatusApplyStatus object.
@@ -69,6 +84,9 @@ const (
 	AppManifestStatusOperatorStateStateInProgress AppManifestStatusOperatorStateState = "in_progress"
 	AppManifestStatusOperatorStateStateFailed     AppManifestStatusOperatorStateState = "failed"
 )
+func (AppManifeststatusApplyStatusManagedResource) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifeststatusApplyStatusManagedResource"
+}
 func (AppManifeststatusApplyStatus) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifeststatusApplyStatus"
 }
