@@ -1,4 +1,4 @@
-{{- define "object_custom_methods_all" -}}
+{{- define "object_custom_methods_all_go" -}}
 {{ $objName := .Object.Name|formatObjectName }}
 // OpenAPIModelName returns the OpenAPI model name for {{ $objName }}.
 func ({{ $objName }}) OpenAPIModelName() string {
