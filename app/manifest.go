@@ -1124,16 +1124,17 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			allRequired = append(allRequired, s.Value.Required...)
 		}
 
-		// Preserve oneOf branches directly when no branch has required fields.
-		// This keeps primitive unions valid instead of collapsing branches into empty schemas.
+		// CRD structural schemas do not allow per-branch type constraints in oneOf.
+		// If there are no required fields to discriminate branches, we cannot rewrite oneOf
+		// into structural required/not-required rules. Fall back to schemaless JSON for this field.
 		if len(allRequired) == 0 {
-			for _, s := range sch.Value.OneOf {
-				resolved, err := resolveSchema(s, components, visited)
-				if err != nil {
-					return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
-				}
-				result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", resolved))
+			// Clear oneOf/type to avoid non-structural validation failures, preserving compatibility.
+			result.OneOf = nil
+			result.Type = nil
+			if result.Extensions == nil {
+				result.Extensions = make(map[string]any)
 			}
+			result.Extensions[extKubernetesPreserveUnknownFields] = true
 			return result, nil
 		}
 

@@ -795,7 +795,7 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		name:       "preserve oneOf primitive union",
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"foo":{"oneOf":[{"type":"integer"},{"type":"number"},{"type":"string"},{"type":"boolean"}]}}}}`),
-		outputJSON: []byte(`{"oneOf":[{"type":"integer"},{"type":"number"},{"type":"string"},{"type":"boolean"}]}`),
+		outputJSON: []byte(`{"x-kubernetes-preserve-unknown-fields":true}`),
 	}, {
 		name:       "convert to structural schema: anyOf",
 		schemaName: "foo",
