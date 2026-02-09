@@ -22,7 +22,7 @@ spec:
       validationPath: /validate
   preferredVersion: v1
   roleBindings:
-    anonymous:
+    viewer:
     - test-app:reader
   roles:
     test-app:reader:

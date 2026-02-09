@@ -495,12 +495,6 @@
                                                 },
                                                 "type": "array"
                                             },
-                                            "anonymous": {
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "type": "array"
-                                            },
                                             "editor": {
                                                 "items": {
                                                     "type": "string"
@@ -1093,12 +1087,6 @@
                                                 "type": "object"
                                             },
                                             "admin": {
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "type": "array"
-                                            },
-                                            "anonymous": {
                                                 "items": {
                                                     "type": "string"
                                                 },

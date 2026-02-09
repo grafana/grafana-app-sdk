@@ -542,7 +542,7 @@
             }
         },
         "roleBindings": {
-            "anonymous": [
+            "viewer": [
                 "test-app:reader"
             ]
         }

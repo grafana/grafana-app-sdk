@@ -49,8 +49,6 @@ type AppManifestPropertiesRoleVersion struct {
 }
 
 type AppManifestPropertiesRoleBindings struct {
-	// Anonymous set the role(s) granted to anonymous users.
-	Anonymous []string `json:"anonymous" yaml:"anonymous"`
 	// Viewer sets the role(s) granted to users in the "viewer" group
 	Viewer []string `json:"viewer" yaml:"viewer"`
 	// Editor sets the role(s) granted to users in the "editor" group

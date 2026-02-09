@@ -277,7 +277,6 @@ func NewAppManifestV1alpha1SpecExtraPermissions() *AppManifestV1alpha1SpecExtraP
 
 // +k8s:openapi-gen=true
 type AppManifestV1alpha1SpecRoleBindings struct {
-	Anonymous  []string            `json:"anonymous,omitempty"`
 	Viewer     []string            `json:"viewer,omitempty"`
 	Editor     []string            `json:"editor,omitempty"`
 	Admin      []string            `json:"admin,omitempty"`

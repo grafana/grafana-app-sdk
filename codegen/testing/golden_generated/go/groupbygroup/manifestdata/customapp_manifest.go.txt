@@ -112,7 +112,6 @@ var appManifestData = app.ManifestData{
 		},
 	},
 	RoleBindings: &app.ManifestRoleBindings{
-		Anonymous: []string{},
 		Viewer: []string{
 			"custom-app:reader",
 		},

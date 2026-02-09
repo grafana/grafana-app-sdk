@@ -312,7 +312,6 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		manifest.Roles[k] = converted
 	}
 	manifest.RoleBindings = &app.ManifestRoleBindings{
-		Anonymous:  bindings.Anonymous,
 		Viewer:     bindings.Viewer,
 		Editor:     bindings.Editor,
 		Admin:      bindings.Admin,

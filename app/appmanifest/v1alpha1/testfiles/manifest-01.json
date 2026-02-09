@@ -136,7 +136,6 @@
       }
     },
     "roleBindings": {
-      "anonymous": ["issue-tracker-project:reader"],
       "viewer": ["issue-tracker-project:reader"],
       "editor": ["issue-tracker-project:editor"],
       "admin": ["issue-tracker-project:admin"]

@@ -114,10 +114,9 @@ func TestAppManifestKind_Read(t *testing.T) {
 				},
 			},
 			RoleBindings: &AppManifestV1alpha2SpecRoleBindings{
-				Anonymous: []string{"issue-tracker-project:reader"},
-				Viewer:    []string{"issue-tracker-project:reader"},
-				Editor:    []string{"issue-tracker-project:editor"},
-				Admin:     []string{"issue-tracker-project:admin"},
+				Viewer: []string{"issue-tracker-project:reader"},
+				Editor: []string{"issue-tracker-project:editor"},
+				Admin:  []string{"issue-tracker-project:admin"},
 			},
 		},
 		Status: AppManifestStatus{

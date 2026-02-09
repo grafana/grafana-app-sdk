@@ -262,7 +262,6 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	}
 	if s.RoleBindings != nil {
 		data.RoleBindings = &app.ManifestRoleBindings{
-			Anonymous:  s.RoleBindings.Anonymous,
 			Viewer:     s.RoleBindings.Viewer,
 			Editor:     s.RoleBindings.Editor,
 			Admin:      s.RoleBindings.Admin,
@@ -431,7 +430,6 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	}
 	if data.RoleBindings != nil {
 		manifestSpec.RoleBindings = &AppManifestV1alpha2SpecRoleBindings{
-			Anonymous:  data.RoleBindings.Anonymous,
 			Viewer:     data.RoleBindings.Viewer,
 			Editor:     data.RoleBindings.Editor,
 			Admin:      data.RoleBindings.Admin,

@@ -398,7 +398,6 @@ Manifest: S={
 	// If left empty alongside empty roles, it will automatically assign the default generated roles to their appropriate groups
 	// (none for anonymous, "reader" for viewer, "editor" for editor, and "admin" for admin)
 	roleBindings?: {
-		anonymous: [...string]
 		viewer: [...string]
 		editor: [...string]
 		admin: [...string]

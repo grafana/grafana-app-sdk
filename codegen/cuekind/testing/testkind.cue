@@ -31,7 +31,7 @@ testManifest: {
 		}
 	}
 	roleBindings: {
-		anonymous: ["test-app:reader"]
+		viewer: ["test-app:reader"]
 	}
 }
 

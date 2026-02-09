@@ -287,9 +287,6 @@ var appManifestData = app.ManifestData{
         },
     {{ end }} },{{ end }}{{ if .ManifestData.RoleBindings }}
     RoleBindings: &app.ManifestRoleBindings{
-        Anonymous: []string{ {{ if .ManifestData.RoleBindings.Anonymous }}
-            {{ range .ManifestData.RoleBindings.Anonymous }}"{{ . }}",
-        {{ end }}{{ end }} },
         Viewer: []string{ {{ if .ManifestData.RoleBindings.Viewer }}
             {{ range .ManifestData.RoleBindings.Viewer }}"{{ . }}",
         {{ end }}{{ end }} },
