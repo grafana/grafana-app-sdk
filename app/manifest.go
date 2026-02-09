@@ -1123,6 +1123,20 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		for _, s := range sch.Value.OneOf {
 			allRequired = append(allRequired, s.Value.Required...)
 		}
+
+		// Preserve oneOf branches directly when no branch has required fields.
+		// This keeps primitive unions valid instead of collapsing branches into empty schemas.
+		if len(allRequired) == 0 {
+			for _, s := range sch.Value.OneOf {
+				resolved, err := resolveSchema(s, components, visited)
+				if err != nil {
+					return nil, fmt.Errorf("failed to resolve oneOf schema: %w", err)
+				}
+				result.OneOf = append(result.OneOf, openapi3.NewSchemaRef("", resolved))
+			}
+			return result, nil
+		}
+
 		for _, s := range sch.Value.OneOf {
 			resolved, err := resolveSchema(s, components, visited)
 			if err != nil {
