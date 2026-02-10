@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"go/format"
 	"path"
 	"regexp"
 	"strings"
@@ -289,7 +290,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		files[0].Data = append(files[0].Data, appendBytes.Bytes()...)
 	}
 
-	return files[0].Data, nil
+	return format.Source(files[0].Data)
 }
 
 // SanitizeLabelString strips characters from a string that are not allowed for

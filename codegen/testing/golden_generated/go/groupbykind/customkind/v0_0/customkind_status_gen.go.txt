@@ -42,6 +42,7 @@ const (
 	StatusOperatorStateStateInProgress StatusOperatorStateState = "in_progress"
 	StatusOperatorStateStateFailed     StatusOperatorStateState = "failed"
 )
+
 func (StatusOperatorState) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v0_0.StatusOperatorState"
 }

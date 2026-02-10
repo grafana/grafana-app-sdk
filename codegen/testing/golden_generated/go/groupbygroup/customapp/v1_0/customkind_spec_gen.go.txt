@@ -111,6 +111,7 @@ const (
 	CustomKindSpecEnumVal4    CustomKindSpecEnum = "val4"
 	CustomKindSpecEnumDefault CustomKindSpecEnum = "default"
 )
+
 func (CustomKindInnerObject1) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject1"
 }
