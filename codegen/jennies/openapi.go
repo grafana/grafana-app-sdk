@@ -116,7 +116,7 @@ type GoFile struct {
 	FixMetaV1Refs      bool
 }
 
-var metav1regexp = regexp.MustCompile(`"k8s.io/apimachinery/pkg/apis/meta/v1\.([A-Za-z0-9]+)"`)
+var metav1regexp = regexp.MustCompile(`"k8s\.io/apimachinery/pkg/apis/meta/v1\.([A-Za-z0-9]+)"`)
 
 //nolint:revive
 func (g *GoFile) AssembleFile(f *generator.File, _ string) error {
