@@ -14,6 +14,11 @@ func NewAppManifeststatusApplyStatus() *AppManifeststatusApplyStatus {
 	return &AppManifeststatusApplyStatus{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifeststatusApplyStatus.
+func (AppManifeststatusApplyStatus) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifeststatusApplyStatus"
+}
+
 // +k8s:openapi-gen=true
 type AppManifeststatusOperatorState struct {
 	// lastEvaluation is the ResourceVersion last evaluated
@@ -30,6 +35,11 @@ type AppManifeststatusOperatorState struct {
 // NewAppManifeststatusOperatorState creates a new AppManifeststatusOperatorState object.
 func NewAppManifeststatusOperatorState() *AppManifeststatusOperatorState {
 	return &AppManifeststatusOperatorState{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifeststatusOperatorState.
+func (AppManifeststatusOperatorState) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifeststatusOperatorState"
 }
 
 // +k8s:openapi-gen=true
@@ -53,6 +63,11 @@ func NewAppManifestStatus() *AppManifestStatus {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestStatus.
+func (AppManifestStatus) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestStatus"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestStatusApplyStatusStatus string
 
@@ -60,6 +75,11 @@ const (
 	AppManifestStatusApplyStatusStatusSuccess AppManifestStatusApplyStatusStatus = "success"
 	AppManifestStatusApplyStatusStatusFailure AppManifestStatusApplyStatusStatus = "failure"
 )
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestStatusApplyStatusStatus.
+func (AppManifestStatusApplyStatusStatus) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestStatusApplyStatusStatus"
+}
 
 // +k8s:openapi-gen=true
 type AppManifestStatusOperatorStateState string
@@ -69,12 +89,8 @@ const (
 	AppManifestStatusOperatorStateStateInProgress AppManifestStatusOperatorStateState = "in_progress"
 	AppManifestStatusOperatorStateStateFailed     AppManifestStatusOperatorStateState = "failed"
 )
-func (AppManifeststatusApplyStatus) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifeststatusApplyStatus"
-}
-func (AppManifeststatusOperatorState) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifeststatusOperatorState"
-}
-func (AppManifestStatus) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestStatus"
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestStatusOperatorStateState.
+func (AppManifestStatusOperatorStateState) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestStatusOperatorStateState"
 }
