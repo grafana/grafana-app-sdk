@@ -136,6 +136,72 @@ func TestManifestData_Validate(t *testing.T) {
 		expectedErr: multierror.Append(nil,
 			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
 			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
+	}, {
+		name: "rolebindings for missing roles (no roles in manifest)",
+		data: ManifestData{
+			AppName: "myapp",
+			RoleBindings: &ManifestRoleBindings{
+				Viewer: []string{"viewer-role"},
+				Editor: []string{"editor-role"},
+				Admin:  []string{"admin-role"},
+				Additional: map[string][]string{
+					"extra": []string{"extra-role"},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("viewer: cannot bind role 'viewer-role' as no roles are present in the manifest"),
+			errors.New("editor: cannot bind role 'editor-role' as no roles are present in the manifest"),
+			errors.New("admin: cannot bind role 'admin-role' as no roles are present in the manifest"),
+			errors.New("extra: cannot bind role 'extra-role' as no roles are present in the manifest")),
+	}, {
+		name: "rolebindings for missing roles (no matching role)",
+		data: ManifestData{
+			AppName: "myapp",
+			Roles: map[string]ManifestRole{
+				"viewer-role": {
+					Title: "Viewer Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get"},
+					}},
+				},
+				"editor-role": {
+					Title: "Editor Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get", "create"},
+					}},
+				},
+				"admin-role": {
+					Title: "Admin Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get", "create", "delete"},
+					}},
+				},
+				"extra-role": {
+					Title: "Viewer Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"list"},
+					}},
+				},
+			},
+			RoleBindings: &ManifestRoleBindings{
+				Viewer: []string{"viewer-role", "other-viewer-role"},
+				Editor: []string{"editor-role", "other-editor-role"},
+				Admin:  []string{"admin-role", "other-admin-role"},
+				Additional: map[string][]string{
+					"extra": []string{"extra-role", "other-extra-role"},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("viewer: cannot bind role 'other-viewer-role' as it is not present in manifest roles"),
+			errors.New("editor: cannot bind role 'other-editor-role' as it is not present in manifest roles"),
+			errors.New("admin: cannot bind role 'other-admin-role' as it is not present in manifest roles"),
+			errors.New("extra: cannot bind role 'other-extra-role' as it is not present in manifest roles")),
 	}}
 
 	for _, test := range tests {

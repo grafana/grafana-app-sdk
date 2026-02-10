@@ -120,6 +120,8 @@ func (m *ManifestData) IsEmpty() bool {
 }
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
+//
+//nolint:gocognit
 func (m *ManifestData) Validate() error {
 	type kindData struct {
 		kind       string
@@ -170,6 +172,40 @@ func (m *ManifestData) Validate() error {
 			key := strings.Trim(strings.ToLower(rpath), "/")
 			if _, ok := clusterRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
+			}
+		}
+	}
+	// checkRoleBinding adds to `errs` if there are issues with a rolebinding
+	// it exists to avoid duplicating this code for each rolebinding
+	checkRoleBinding := func(rb string, boundRoles []string) {
+		for _, role := range boundRoles {
+			role = strings.Trim(role, " ")
+			if role == "" {
+				continue
+			}
+			if m.Roles == nil {
+				errs = multierror.Append(errs, fmt.Errorf("%s: cannot bind role '%s' as no roles are present in the manifest", rb, role))
+				continue
+			}
+
+			if _, ok := m.Roles[role]; !ok {
+				errs = multierror.Append(errs, fmt.Errorf("%s: cannot bind role '%s' as it is not present in manifest roles", rb, role))
+			}
+		}
+	}
+	if m.RoleBindings != nil {
+		if len(m.RoleBindings.Viewer) > 0 {
+			checkRoleBinding("viewer", m.RoleBindings.Viewer)
+		}
+		if len(m.RoleBindings.Editor) > 0 {
+			checkRoleBinding("editor", m.RoleBindings.Editor)
+		}
+		if len(m.RoleBindings.Admin) > 0 {
+			checkRoleBinding("admin", m.RoleBindings.Admin)
+		}
+		for k, v := range m.RoleBindings.Additional {
+			if len(v) > 0 {
+				checkRoleBinding(k, v)
 			}
 		}
 	}
@@ -440,8 +476,6 @@ type ManifestRoleKind struct {
 // ManifestRoleBindings is the set of RoleBindings for ManifestData.RoleBindings.
 // It binds a grafana group to one or more roles as described by ManifestData.Roles (or other role strings defined by other apps).
 type ManifestRoleBindings struct {
-	// Anonymous set the role(s) granted to anonymous users.
-	Anonymous []string `json:"anonymous" yaml:"anonymous"`
 	// Viewer sets the role(s) granted to users in the "viewer" group
 	Viewer []string `json:"viewer" yaml:"viewer"`
 	// Editor sets the role(s) granted to users in the "editor" group
