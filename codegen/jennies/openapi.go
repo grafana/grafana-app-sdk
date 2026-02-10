@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/format"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/grafana/codejen"
@@ -47,11 +48,12 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 					continue
 				}
 
+				relativePkg := filepath.Join(o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version))
 				err := gengo.Execute(generators.NameSystems(),
 					generators.DefaultNameSystem(),
-					o.getTargetsFunc(filepath.Join(o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version)), fs),
+					o.getTargetsFunc(relativePkg, fs),
 					gengo.StdBuildTag,
-					[]string{fmt.Sprintf("%s/%s/%s", o.GoModName, o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version))},
+					[]string{filepath.Join(o.GoModName, filepath.ToSlash(relativePkg))},
 				)
 				if err != nil {
 					return nil, err
@@ -73,11 +75,12 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 			}
 		}
 		for gv := range gvs {
+			relativePkg := filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(gv.Group)), ToPackageName(gv.Version))
 			err := gengo.Execute(generators.NameSystems(),
 				generators.DefaultNameSystem(),
-				o.getTargetsFunc(filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(gv.Group)), ToPackageName(gv.Version)), fs),
+				o.getTargetsFunc(relativePkg, fs),
 				gengo.StdBuildTag,
-				[]string{filepath.Join(o.GoModName, o.GoGenPath, ToPackageName(gv.Group), ToPackageName(gv.Version))},
+				[]string{filepath.Join(o.GoModName, filepath.ToSlash(relativePkg))},
 			)
 			if err != nil {
 				return nil, err
@@ -88,24 +91,32 @@ func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
 	return fs.AsFiles(), nil
 }
 
-func (o *OpenAPI) getTargetsFunc(packagePath string, fs *codejen.FS) func(context *generator.Context) []generator.Target {
+func (o *OpenAPI) getTargetsFunc(relativePkgPath string, fs *codejen.FS) func(context *generator.Context) []generator.Target {
 	return func(context *generator.Context) []generator.Target {
 		context.FileTypes[generator.GoFileType] = &GoFile{
-			FS:     fs,
-			Source: o,
+			FS:                 fs,
+			Source:             o,
+			OutputRelativePath: relativePkgPath,
+			FixMetaV1Refs:      true,
 		}
 		arguments := args.New()
-		arguments.OutputPkg = packagePath
-		arguments.OutputDir = packagePath
+		// Use full import path so openapi-gen matches the context package and does not add
+		// a self-import or package-qualified type names (kube-openapi/gengo compare by path).
+		arguments.OutputPkg = filepath.Join(o.GoModName, filepath.ToSlash(relativePkgPath))
+		arguments.OutputDir = relativePkgPath
 		arguments.OutputFile = "zz_openapi_gen.go"
 		return generators.GetOpenAPITargets(context, arguments, nil)
 	}
 }
 
 type GoFile struct {
-	FS     *codejen.FS
-	Source codejen.NamedJenny
+	FS                 *codejen.FS
+	Source             codejen.NamedJenny
+	OutputRelativePath string
+	FixMetaV1Refs      bool
 }
+
+var metav1regexp = regexp.MustCompile(`"k8s.io/apimachinery/pkg/apis/meta/v1\.([A-Za-z0-9]+)"`)
 
 //nolint:revive
 func (g *GoFile) AssembleFile(f *generator.File, _ string) error {
@@ -115,7 +126,6 @@ func (g *GoFile) AssembleFile(f *generator.File, _ string) error {
 	// (https://github.com/kubernetes/gengo/blob/master/generator/execute.go#L128)
 	buf.Write(f.Header)
 	fmt.Fprintf(buf, "package %v\n\n", f.PackageName)
-
 	if len(f.Imports) > 0 {
 		fmt.Fprint(buf, "import (\n")
 		for i := range f.Imports {
@@ -126,6 +136,9 @@ func (g *GoFile) AssembleFile(f *generator.File, _ string) error {
 			} else {
 				fmt.Fprintf(buf, "\t%q\n", i)
 			}
+		}
+		if g.FixMetaV1Refs {
+			fmt.Fprintf(buf, "\tmetav1 \"k8s.io/apimachinery/pkg/apis/meta/v1\"\n")
 		}
 		fmt.Fprint(buf, ")\n\n")
 	}
@@ -142,19 +155,21 @@ func (g *GoFile) AssembleFile(f *generator.File, _ string) error {
 		fmt.Fprint(buf, ")\n\n")
 	}
 
-	buf.Write(f.Body.Bytes())
+	bodyBytes := f.Body.Bytes()
+	if g.FixMetaV1Refs {
+		bodyBytes = metav1regexp.ReplaceAll(bodyBytes, []byte("metav1.$1{}.OpenAPIModelName()"))
+	}
+	buf.Write(bodyBytes)
 	formatted, err := format.Source(buf.Bytes())
 	if err != nil {
 		return err
 	}
 
-	path := f.PackagePath
-	pt := filepath.SplitList(f.PackagePath)
-	if len(pt) > 1 {
-		path = filepath.Join(pt[1:]...)
-	}
+	// Use the relative path we passed in so output is under GoGenPath (e.g. codegen/.../v1),
+	// not the full package path the generator may set in f.PackagePath.
+	relativePath := filepath.Join(g.OutputRelativePath, f.Name)
 	return g.FS.Add(codejen.File{
-		RelativePath: filepath.Join(path, f.Name),
+		RelativePath: relativePath,
 		Data:         formatted,
 		From:         []codejen.NamedJenny{g.Source},
 	})
