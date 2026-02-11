@@ -18,6 +18,8 @@ type TestKindSpec struct {
 func NewTestKindSpec() *TestKindSpec {
 	return &TestKindSpec{}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindSpec.
 func (TestKindSpec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v3.TestKindSpec"
 }

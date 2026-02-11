@@ -12,6 +12,11 @@ func NewGetClusterFoobarExtra() *GetClusterFoobarExtra {
 	return &GetClusterFoobarExtra{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for GetClusterFoobarExtra.
+func (GetClusterFoobarExtra) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobarExtra"
+}
+
 // +k8s:openapi-gen=true
 type GetClusterFoobarBody struct {
 	Bar   string                           `json:"bar"`
@@ -24,9 +29,8 @@ func NewGetClusterFoobarBody() *GetClusterFoobarBody {
 		Extra: map[string]GetClusterFoobarExtra{},
 	}
 }
-func (GetClusterFoobarExtra) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobarExtra"
-}
+
+// OpenAPIModelName returns the OpenAPI model name for GetClusterFoobarBody.
 func (GetClusterFoobarBody) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobarBody"
 }
