@@ -1,5 +1,5 @@
 {
-  "apiVersion": "apps.grafana.com/v1alpha2",
+  "apiVersion": "apps.grafana.app/v1alpha2",
   "kind": "AppManifest",
   "metadata": {
     "name": "issue-tracker-project",
