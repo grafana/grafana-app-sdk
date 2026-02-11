@@ -1,11 +1,9 @@
 package jennies
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"path"
-	"regexp"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -13,6 +11,7 @@ import (
 	"github.com/grafana/cog"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 const GoTypesMaxDepth = 5
@@ -251,7 +250,11 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
 		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
 		Golang(cog.GoConfig{
-			AnyAsInterface: cfg.AnyAsInterface,
+			AnyAsInterface:    cfg.AnyAsInterface,
+			CustomTemplatesFS: templates.GetCogTemplates(),
+			CustomTemplatesFuncs: map[string]any{
+				"namerFunc": namerFunc,
+			},
 		})
 
 	if cfg.AddKubernetesOpenAPIGenComment {
@@ -265,28 +268,6 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 
 	if len(files) != 1 {
 		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
-	}
-
-	if namerFunc != nil {
-		// Implement OpenAPIModelNamer for all generated types
-		// TODO: @IfSentient this should probably be accomplished in cog instead, as regex matching isn't the best approach
-		// Using the OpenAPI gives us slightly different naming in some edge cases, so we can't use that
-		appendBytes := bytes.Buffer{}
-		matcher := regexp.MustCompile(`(?m)^type\s+([A-Za-z0-9_]+)\s+struct`)
-		for _, matches := range matcher.FindAllSubmatch(files[0].Data, -1) {
-			if len(matches) != 2 {
-				continue
-			}
-			openAPIName := namerFunc(string(matches[1]))
-			_, err = appendBytes.WriteString(fmt.Sprintf(`func (%s) OpenAPIModelName() string {
-	return "%s"
-}
-`, string(matches[1]), openAPIName))
-			if err != nil {
-				return nil, fmt.Errorf("failed to write OpenAPIModelName() function: %w", err)
-			}
-		}
-		files[0].Data = append(files[0].Data, appendBytes.Bytes()...)
 	}
 
 	return files[0].Data, nil

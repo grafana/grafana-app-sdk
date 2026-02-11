@@ -1,5 +1,5 @@
 {
-    "apiVersion": "apps.grafana.com/v1alpha2",
+    "apiVersion": "apps.grafana.app/v1alpha2",
     "kind": "AppManifest",
     "metadata": {
         "name": "app-manifest"
@@ -7,7 +7,7 @@
     "spec": {
         "appName": "app-manifest",
         "appDisplayName": "",
-        "group": "apps.grafana.com",
+        "group": "apps.grafana.app",
         "versions": [
             {
                 "name": "v1alpha1",
@@ -214,10 +214,7 @@
                                         "type": "string"
                                     },
                                     "routes": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
@@ -248,10 +245,7 @@
                                 "type": "object"
                             },
                             "ManifestVersionKindSchema": {
-                                "additionalProperties": {
-                                    "additionalProperties": {},
-                                    "type": "object"
-                                },
+                                "additionalProperties": true,
                                 "type": "object"
                             },
                             "MutationCapability": {
@@ -291,10 +285,7 @@
                                         "type": "string"
                                     },
                                     "details": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "details contains any extra information that is operator-specific",
                                         "type": "object"
                                     },
@@ -537,10 +528,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
                                         "type": "object"
                                     },
@@ -782,18 +770,12 @@
                                         "type": "string"
                                     },
                                     "routes": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
                                     "schemas": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Schemas is the components.schemas section of an OpenAPI document describing this Kind.\nIt must contain a key named the same as the `kind` field of the Kind.\nOther fields may be present to be referenced by $ref tags in a schema,\nand references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.\nIf route responses in the `routes` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
                                         "type": "object"
                                     },
@@ -824,26 +806,17 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "cluster": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
                                     "namespaced": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
                                     "schemas": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.\nIf route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
                                         "type": "object"
                                     }
@@ -887,10 +860,7 @@
                                         "type": "string"
                                     },
                                     "details": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "details contains any extra information that is operator-specific",
                                         "type": "object"
                                     },
@@ -1134,10 +1104,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
                                         "type": "object"
                                     },

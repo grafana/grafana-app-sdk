@@ -14,6 +14,11 @@ func NewCreateReconcileResponse() *CreateReconcileResponse {
 	return &CreateReconcileResponse{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CreateReconcileResponse.
+func (CreateReconcileResponse) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileResponse"
+}
+
 // +k8s:openapi-gen=true
 type CreateReconcileResponseStatus string
 
@@ -22,6 +27,7 @@ const (
 	CreateReconcileResponseStatusFailure CreateReconcileResponseStatus = "failure"
 )
 
-func (CreateReconcileResponse) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileResponse"
+// OpenAPIModelName returns the OpenAPI model name for CreateReconcileResponseStatus.
+func (CreateReconcileResponseStatus) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileResponseStatus"
 }

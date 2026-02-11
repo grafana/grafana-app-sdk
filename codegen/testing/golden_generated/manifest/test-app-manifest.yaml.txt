@@ -1,4 +1,4 @@
-apiVersion: apps.grafana.com/v1alpha1
+apiVersion: apps.grafana.app/v1alpha1
 kind: AppManifest
 metadata:
   name: test-app

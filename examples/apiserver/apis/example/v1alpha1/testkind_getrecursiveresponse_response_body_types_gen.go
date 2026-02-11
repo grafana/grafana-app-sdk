@@ -13,6 +13,11 @@ func NewGetRecursiveResponseRecursiveType() *GetRecursiveResponseRecursiveType {
 	return &GetRecursiveResponseRecursiveType{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for GetRecursiveResponseRecursiveType.
+func (GetRecursiveResponseRecursiveType) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponseRecursiveType"
+}
+
 // +k8s:openapi-gen=true
 type GetRecursiveResponseBody struct {
 	Message string                             `json:"message"`
@@ -23,9 +28,8 @@ type GetRecursiveResponseBody struct {
 func NewGetRecursiveResponseBody() *GetRecursiveResponseBody {
 	return &GetRecursiveResponseBody{}
 }
-func (GetRecursiveResponseRecursiveType) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponseRecursiveType"
-}
+
+// OpenAPIModelName returns the OpenAPI model name for GetRecursiveResponseBody.
 func (GetRecursiveResponseBody) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponseBody"
 }

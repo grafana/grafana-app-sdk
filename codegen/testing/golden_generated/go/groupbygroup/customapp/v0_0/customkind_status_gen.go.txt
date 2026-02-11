@@ -20,6 +20,11 @@ func NewCustomKindstatusOperatorState() *CustomKindstatusOperatorState {
 	return &CustomKindstatusOperatorState{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CustomKindstatusOperatorState.
+func (CustomKindstatusOperatorState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindstatusOperatorState"
+}
+
 // +k8s:openapi-gen=true
 type CustomKindStatus struct {
 	// operatorStates is a map of operator ID to operator state evaluations.
@@ -34,6 +39,11 @@ func NewCustomKindStatus() *CustomKindStatus {
 	return &CustomKindStatus{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for CustomKindStatus.
+func (CustomKindStatus) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindStatus"
+}
+
 // +k8s:openapi-gen=true
 type CustomKindStatusOperatorStateState string
 
@@ -42,9 +52,8 @@ const (
 	CustomKindStatusOperatorStateStateInProgress CustomKindStatusOperatorStateState = "in_progress"
 	CustomKindStatusOperatorStateStateFailed     CustomKindStatusOperatorStateState = "failed"
 )
-func (CustomKindstatusOperatorState) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindstatusOperatorState"
-}
-func (CustomKindStatus) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindStatus"
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindStatusOperatorStateState.
+func (CustomKindStatusOperatorStateState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v0_0.CustomKindStatusOperatorStateState"
 }

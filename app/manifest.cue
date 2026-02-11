@@ -14,7 +14,7 @@ config: {
 
 manifest: {
 	appName: "app-manifest"
-	groupOverride: "apps.grafana.com"
+	groupOverride: "apps.grafana.app"
 	versions: {
 		"v1alpha1": {
 			codegen: ts: enabled: false

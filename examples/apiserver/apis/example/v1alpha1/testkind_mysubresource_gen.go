@@ -11,6 +11,8 @@ type TestKindMysubresource struct {
 func NewTestKindMysubresource() *TestKindMysubresource {
 	return &TestKindMysubresource{}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindMysubresource.
 func (TestKindMysubresource) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindMysubresource"
 }

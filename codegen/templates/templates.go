@@ -21,6 +21,13 @@ import (
 //go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl
 var templates embed.FS
 
+//go:embed custom/*.tmpl
+var cogTemplates embed.FS
+
+func GetCogTemplates() embed.FS {
+	return cogTemplates
+}
+
 var (
 	funcMap = template.FuncMap{
 		"list": func(items ...any) []any {

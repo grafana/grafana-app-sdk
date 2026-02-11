@@ -8,7 +8,7 @@ This data is primarily split into three groups:
 
 The manifest is a kubernetes object, and a complete one looks something like this:
 ```yaml
-apiVersion: apps.grafana.com/v1alpha1
+apiVersion: apps.grafana.app/v1alpha1
 kind: AppManifest
 metadata:
   name: issue-tracker-project
