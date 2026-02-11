@@ -483,7 +483,7 @@ type ManifestRoleBindings struct {
 	// Admin sets the role(s) granted to users in the "admin" group
 	Admin []string `json:"admin" yaml:"admin"`
 	// Additional is a map of additional group strings to their associated roles
-	Additional map[string][]string `json:"additional" yaml:"additional"`
+	Additional map[string][]string `json:"additional,omitempty" yaml:"additional,omitempty"`
 }
 
 // VersionSchemaFromMap accepts an OpenAPI-shaped map[string]any, where the contents of the map are either a full openAPI document

@@ -214,12 +214,18 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 						}
 						roleKind.PermissionSet = &str
 					} else if verbVals, ok := knd["verbs"]; ok {
-						verbs, ok := verbVals.([]string)
+						verbs, ok := verbVals.([]any)
 						if !ok {
-							return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'verbs' type []string, got %v)", k, idx, reflect.TypeOf(verbVals))
+							return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'verbs' type []any, got %v)", k, idx, reflect.TypeOf(verbVals))
 						}
 						roleKind.Verbs = make([]string, len(verbs))
-						copy(roleKind.Verbs, verbs)
+						for vidx, verb := range verbs {
+							v, ok := verb.(string)
+							if !ok {
+								return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d, verbs index %d (expected element type 'string', got %v)", k, idx, vidx, reflect.TypeOf(verb))
+							}
+							roleKind.Verbs[vidx] = v
+						}
 					}
 					converted.Kinds[idx] = roleKind
 				default:

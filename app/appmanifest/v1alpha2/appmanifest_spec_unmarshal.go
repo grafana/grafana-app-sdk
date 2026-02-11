@@ -5,11 +5,11 @@ import "encoding/json"
 type appManifestRole struct {
 	Title       string                `json:"title"`
 	Description string                `json:"description"`
-	Kinds       []appManifesrRoleKind `json:"kinds"`
+	Kinds       []appManifestRoleKind `json:"kinds"`
 	Routes      []string              `json:"routes"`
 }
 
-type appManifesrRoleKind struct {
+type appManifestRoleKind struct {
 	Kind          string   `json:"kind"`
 	PermissionSet *string  `json:"permissionSet,omitempty"`
 	Verbs         []string `json:"verbs,omitempty"`
