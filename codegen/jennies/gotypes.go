@@ -251,7 +251,7 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
 		Golang(cog.GoConfig{
 			AnyAsInterface:    cfg.AnyAsInterface,
-			CustomTemplatesFS: templates.GetTemplatesFS(),
+			CustomTemplatesFS: templates.GetCogTemplates(),
 			CustomTemplatesFuncs: map[string]any{
 				"namerFunc": namerFunc,
 			},
