@@ -37,7 +37,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 	assert.Equal(t, &AppManifest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AppManifest",
-			APIVersion: "apps.grafana.com/v1alpha1",
+			APIVersion: "apps.grafana.app/v1alpha1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "issue-tracker-project",
@@ -93,14 +93,14 @@ func TestAppManifestKind_Write(t *testing.T) {
 
 func TestAppManifestKind_GroupVersionKind(t *testing.T) {
 	kind := AppManifestKind()
-	assert.Equal(t, "apps.grafana.com", kind.GroupVersionKind().Group)
+	assert.Equal(t, "apps.grafana.app", kind.GroupVersionKind().Group)
 	assert.Equal(t, "v1alpha1", kind.GroupVersionKind().Version)
 	assert.Equal(t, "AppManifest", kind.GroupVersionKind().Kind)
 }
 
 func TestAppManifestKind_GroupVersionResource(t *testing.T) {
 	kind := AppManifestKind()
-	assert.Equal(t, "apps.grafana.com", kind.GroupVersionResource().Group)
+	assert.Equal(t, "apps.grafana.app", kind.GroupVersionResource().Group)
 	assert.Equal(t, "v1alpha1", kind.GroupVersionResource().Version)
 	assert.Equal(t, "appmanifests", kind.GroupVersionResource().Resource)
 }
