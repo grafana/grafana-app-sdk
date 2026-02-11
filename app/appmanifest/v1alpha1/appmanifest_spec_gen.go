@@ -255,11 +255,6 @@ func (AppManifestRole) OpenAPIModelName() string {
 // +k8s:openapi-gen=true
 type AppManifestRoleKind interface{}
 
-// OpenAPIModelName returns the OpenAPI model name for AppManifestRoleKind.
-func (AppManifestRoleKind) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestRoleKind"
-}
-
 // +k8s:openapi-gen=true
 type AppManifestRoleKindWithPermissionSet struct {
 	Kind          string                                            `json:"kind"`
