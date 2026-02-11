@@ -49,11 +49,6 @@ func (CustomKindInnerObject2) OpenAPIModelName() string {
 // +k8s:openapi-gen=true
 type CustomKindUnionType interface{}
 
-// OpenAPIModelName returns the OpenAPI model name for CustomKindUnionType.
-func (CustomKindUnionType) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindUnionType"
-}
-
 // +k8s:openapi-gen=true
 type CustomKindType1 struct {
 	Group   string   `json:"group"`
