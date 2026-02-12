@@ -1062,6 +1062,10 @@ func (r *defaultInstaller) replaceReferencesInSchema(sch *spec.Schema, ref commo
 		d := r.replaceReferencesInSchema(sch.AdditionalProperties.Schema, ref, replaceFunc)
 		deps = append(deps, d...)
 	}
+	if sch.Items != nil && sch.Items.Schema != nil {
+		d := r.replaceReferencesInSchema(sch.Items.Schema, ref, replaceFunc)
+		deps = append(deps, d...)
+	}
 	return deps
 }
 
