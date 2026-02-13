@@ -115,6 +115,7 @@ type InformerController struct {
 	watchers            *ListMap[string, ResourceWatcher]
 	reconcilers         *ListMap[string, Reconciler]
 	toRetry             *ListMap[string, retryInfo]
+	retryProcessor      RetryProcessor
 	retryTickerInterval time.Duration
 	runner              *app.DynamicMultiRunner
 	totalEvents         *prometheus.CounterVec
@@ -147,6 +148,9 @@ type InformerControllerConfig struct {
 	// when one or more retries for the object are still pending. If not present, existing retries are always dequeued.
 	// If left nil, no RetryDequeuePolicy will be used, and retries will only be dequeued when RetryPolicy returns false.
 	RetryDequeuePolicy RetryDequeuePolicy
+	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
+	// When set, retries are handled by a sharded worker pool instead of the legacy ticker-based approach.
+	RetryProcessorConfig *RetryProcessorConfig
 }
 
 // DefaultInformerControllerConfig returns an InformerControllerConfig with default values
@@ -225,6 +229,10 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 	}
 	if cfg.RetryDequeuePolicy != nil {
 		inf.RetryDequeuePolicy = cfg.RetryDequeuePolicy
+	}
+	if cfg.RetryProcessorConfig != nil {
+		retryPolicyFn := func() RetryPolicy { return inf.RetryPolicy }
+		inf.retryProcessor = NewRetryProcessor(*cfg.RetryProcessorConfig, retryPolicyFn)
 	}
 	return inf
 }
@@ -331,7 +339,11 @@ func (c *InformerController) Run(ctx context.Context) error {
 	derivedCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	go c.retryTicker(derivedCtx)
+	if c.retryProcessor != nil {
+		go c.retryProcessor.Run(derivedCtx) //nolint:errcheck
+	} else {
+		go c.retryTicker(derivedCtx)
+	}
 	return c.runner.Run(ctx)
 }
 
@@ -564,6 +576,17 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 }
 
 func (c *InformerController) dequeueIfRequired(retryKey string, currentObjectState resource.Object, action ResourceAction) {
+	if c.retryProcessor != nil {
+		if c.RetryDequeuePolicy != nil {
+			c.retryProcessor.Dequeue(retryKey, func(req RetryRequest) bool {
+				return c.RetryDequeuePolicy(action, currentObjectState, req.Action, req.Object, req.LastError)
+			})
+		} else {
+			c.retryProcessor.DequeueAll(retryKey)
+		}
+		return
+	}
+	// Legacy path
 	if c.RetryDequeuePolicy != nil {
 		c.toRetry.RemoveItems(retryKey, func(info retryInfo) bool {
 			return c.RetryDequeuePolicy(action, currentObjectState, info.action, info.object, info.err)
@@ -598,16 +621,30 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 	}
 	if res.RequeueAfter != nil {
 		// If RequeueAfter is non-nil, add a retry to the queue for now+RequeueAfter
-		c.toRetry.AddItem(retryKey, retryInfo{
-			retryAfter: time.Now().Add(*res.RequeueAfter),
-			retryFunc: func() (*time.Duration, error) {
-				res, err := reconciler.Reconcile(ctx, req)
-				return res.RequeueAfter, err
-			},
-			action: ResourceActionFromReconcileAction(req.Action),
-			object: req.Object,
-			err:    err,
-		})
+		if c.retryProcessor != nil {
+			c.retryProcessor.Enqueue(RetryRequest{
+				Key:        retryKey,
+				RetryAfter: time.Now().Add(*res.RequeueAfter),
+				RetryFunc: func() (*time.Duration, error) {
+					res, err := reconciler.Reconcile(ctx, req)
+					return res.RequeueAfter, err
+				},
+				Action:    ResourceActionFromReconcileAction(req.Action),
+				Object:    req.Object,
+				LastError: err,
+			})
+		} else {
+			c.toRetry.AddItem(retryKey, retryInfo{
+				retryAfter: time.Now().Add(*res.RequeueAfter),
+				retryFunc: func() (*time.Duration, error) {
+					res, err := reconciler.Reconcile(ctx, req)
+					return res.RequeueAfter, err
+				},
+				action: ResourceActionFromReconcileAction(req.Action),
+				object: req.Object,
+				err:    err,
+			})
+		}
 	} else if err != nil {
 		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
 		if c.ErrorHandler != nil {
@@ -724,12 +761,24 @@ func (c *InformerController) queueRetry(key string, err error, toRetry func() (*
 	}
 
 	if ok, after := c.RetryPolicy(err, 0); ok {
-		c.toRetry.AddItem(key, retryInfo{
-			retryAfter: time.Now().Add(after),
-			retryFunc:  toRetry,
-			action:     action,
-			object:     obj,
-			err:        err,
-		})
+		if c.retryProcessor != nil {
+			c.retryProcessor.Enqueue(RetryRequest{
+				Key:        key,
+				RetryAfter: time.Now().Add(after),
+				RetryFunc:  toRetry,
+				Attempt:    0,
+				Action:     action,
+				Object:     obj,
+				LastError:  err,
+			})
+		} else {
+			c.toRetry.AddItem(key, retryInfo{
+				retryAfter: time.Now().Add(after),
+				retryFunc:  toRetry,
+				action:     action,
+				object:     obj,
+				err:        err,
+			})
+		}
 	}
 }

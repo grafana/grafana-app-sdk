@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1259,3 +1260,137 @@ func (ti *testInformer) WaitForSync(ctx context.Context) error {
 }
 
 var emptyObject = &resource.TypedSpecObject[string]{}
+
+// newTestControllerWithProcessor creates an InformerController using the new RetryProcessor path.
+// WorkerPoolSize is set to 1 for deterministic ordering in tests.
+func newTestControllerWithProcessor(retryPolicy RetryPolicy, checkInterval time.Duration) *InformerController {
+	cfg := InformerControllerConfig{
+		RetryPolicy: retryPolicy,
+		RetryProcessorConfig: &RetryProcessorConfig{
+			WorkerPoolSize: 1, // deterministic ordering for tests
+			CheckInterval:  checkInterval,
+		},
+	}
+	return NewInformerController(cfg)
+}
+
+func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
+	t.Run("watcher error, one retry via processor", func(t *testing.T) {
+		kind := "foo"
+		var addCalls int64
+		reconcileCalls := 0
+		inf := &testInformer{}
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			if attempt >= 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 10
+		}, time.Millisecond*50)
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				n := atomic.AddInt64(&addCalls, 1)
+				require.LessOrEqual(t, n, int64(2), "Add should only be retried once based on the RetryPolicy")
+				wg.Done()
+				return errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				reconcileCalls++
+				return ReconcileResult{}, nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		inf.FireAdd(context.Background(), emptyObject)
+		assert.True(t, waitOrTimeout(&wg, 5*time.Second), "timed out waiting for watcher retries via processor")
+		cancel()
+		assert.Equal(t, int64(2), atomic.LoadInt64(&addCalls))
+		assert.Equal(t, 1, reconcileCalls)
+	})
+
+	t.Run("reconciler error, one retry via processor", func(t *testing.T) {
+		kind := "foo"
+		addCalls := 0
+		var reconcileCalls int64
+		inf := &testInformer{}
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			if attempt > 1 {
+				return false, 0
+			}
+			return true, time.Millisecond * 10
+		}, time.Millisecond*50)
+		wg := sync.WaitGroup{}
+		wg.Add(2)
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls++
+				return nil
+			},
+		}, kind)
+		c.AddReconciler(&SimpleReconciler{
+			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
+				n := atomic.AddInt64(&reconcileCalls, 1)
+				_ = n
+				wg.Done()
+				return ReconcileResult{}, errors.New("I AM ERROR")
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		go c.Run(ctx)
+		inf.FireAdd(context.Background(), emptyObject)
+		assert.True(t, waitOrTimeout(&wg, 5*time.Second), "timed out waiting for reconciler retries via processor")
+		cancel()
+		assert.Equal(t, 1, addCalls)
+		assert.Equal(t, int64(2), atomic.LoadInt64(&reconcileCalls))
+	})
+}
+
+func TestInformerController_Run_WithRetryProcessorDequeue(t *testing.T) {
+	t.Run("update dequeues stale add retry", func(t *testing.T) {
+		kind := "foo"
+		addError := errors.New("I AM ERROR")
+		var addCalls atomic.Int64
+		var updateCalls atomic.Int64
+		inf := &testInformer{}
+		// Use a long retry delay so the retry is sitting in the queue when we fire update
+		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
+			return true, time.Second * 10
+		}, time.Millisecond*50)
+		// No RetryDequeuePolicy means all retries are dequeued on new events
+		c.RetryDequeuePolicy = nil
+		c.AddWatcher(&SimpleWatcher{
+			AddFunc: func(ctx context.Context, object resource.Object) error {
+				addCalls.Add(1)
+				return addError
+			},
+			UpdateFunc: func(ctx context.Context, object resource.Object, object2 resource.Object) error {
+				updateCalls.Add(1)
+				return nil
+			},
+		}, kind)
+		c.AddInformer(inf, kind)
+
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		go c.Run(ctx)
+
+		// Fire an add that fails - this queues a retry
+		inf.FireAdd(context.Background(), emptyObject)
+		assert.Equal(t, int64(1), addCalls.Load())
+
+		// Fire an update - this should dequeue the pending add retry
+		inf.FireUpdate(context.Background(), nil, emptyObject)
+		assert.Equal(t, int64(1), updateCalls.Load())
+
+		// Wait a bit and verify no additional add retries fire
+		time.Sleep(200 * time.Millisecond)
+		assert.Equal(t, int64(1), addCalls.Load(), "add retry should have been dequeued by update")
+	})
+}
