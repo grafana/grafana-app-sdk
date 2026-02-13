@@ -11,6 +11,7 @@ import (
 	"github.com/grafana/cog"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
 const GoTypesMaxDepth = 5
@@ -62,6 +63,20 @@ type GoTypes struct {
 	//  }
 	// With an ExcludeFields of `Bar` will only generate a file and go type for `Foo`.
 	ExcludeFields []string
+
+	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
+	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
+	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
+	// apiservers if using the default apiserver.AppInstaller.
+	OpenAPINamer func(OpenAPINamerInfo) string
+}
+
+type OpenAPINamerInfo struct {
+	TypeName   string
+	FullGroup  string
+	ShortGroup string
+	Version    string
+	Kind       string
 }
 
 func (*GoTypes) JennyName() string {
@@ -74,7 +89,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 		if ver == nil {
 			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
 		}
-		return g.generateFiles(ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
+		return g.generateFiles(kind, ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
 	}
 
 	files := make(codejen.Files, 0)
@@ -85,7 +100,7 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 			continue
 		}
 
-		generated, err := g.generateFiles(&ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), GetGeneratedPath(g.GroupByKind, kind, ver.Version))
+		generated, err := g.generateFiles(kind, &ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), GetGeneratedPath(g.GroupByKind, kind, ver.Version))
 		if err != nil {
 			return nil, err
 		}
@@ -95,13 +110,13 @@ func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
 	return files, nil
 }
 
-func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
+func (g *GoTypes) generateFiles(kind codegen.Kind, version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
 	if g.Depth > 0 {
 		namePrefix := ""
 		if !g.GroupByKind {
 			namePrefix = exportField(name)
 		}
-		return g.generateFilesAtDepth(version.Schema, version, 0, machineName, packageName, pathPrefix, namePrefix, g.ExcludeFields)
+		return g.generateFilesAtDepth(version.Schema, kind, version, 0, machineName, packageName, pathPrefix, namePrefix, g.ExcludeFields)
 	}
 
 	codegenPipeline := cog.TypesFromSchema().
@@ -131,7 +146,7 @@ func (g *GoTypes) generateFiles(version *codegen.KindVersion, name string, machi
 }
 
 //nolint:goconst
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeFields []string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeFields []string) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)
 		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
@@ -153,13 +168,29 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 			return codejen.Files{}, nil
 		}
 
+		var namerFunc func(string) string
+		if g.OpenAPINamer != nil {
+			namerFunc = func(name string) string {
+				grp := kind.Properties().ManifestGroup
+				if grp == "" {
+					grp = kind.Properties().Group
+				}
+				return g.OpenAPINamer(OpenAPINamerInfo{
+					TypeName:   name,
+					ShortGroup: grp,
+					Version:    kv.Version,
+					Kind:       kind.Name(),
+				})
+			}
+		}
+
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
 			PackageName:                    packageName,
 			Name:                           exportField(strings.Join(fieldName, "")),
 			NamePrefix:                     namePrefix,
 			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] != "metadata"),
 			AnyAsInterface:                 g.AnyAsInterface,
-		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth))
+		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth), namerFunc)
 		if err != nil {
 			return nil, err
 		}
@@ -178,7 +209,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, cur
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix, excludeFields)
+		f, err := g.generateFilesAtDepth(it.Value(), kind, kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix, excludeFields)
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +229,7 @@ type CUEGoConfig struct {
 	NamePrefix string
 }
 
-func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, error) {
+func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc func(string) string) ([]byte, error) {
 	nameFunc := func(_ cue.Value, definitionPath cue.Path) string {
 		i := 0
 		for ; i < len(definitionPath.Selectors()) && i < len(v.Path().Selectors()); i++ {
@@ -219,7 +250,11 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int) ([]byte, e
 		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
 		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
 		Golang(cog.GoConfig{
-			AnyAsInterface: cfg.AnyAsInterface,
+			AnyAsInterface:    cfg.AnyAsInterface,
+			CustomTemplatesFS: templates.GetCogTemplates(),
+			CustomTemplatesFuncs: map[string]any{
+				"namerFunc": namerFunc,
+			},
 		})
 
 	if cfg.AddKubernetesOpenAPIGenComment {

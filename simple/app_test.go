@@ -18,6 +18,34 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+func TestNewApp(t *testing.T) {
+	t.Run("empty managed kind", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			ManagedKinds: []AppManagedKind{{}},
+		})
+		assert.Nil(t, a)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot manage an empty kind")
+	})
+	t.Run("empty unmanaged kind", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			UnmanagedKinds: []AppUnmanagedKind{{}},
+		})
+		assert.Nil(t, a)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "cannot watch an empty kind")
+	})
+	t.Run("success", func(t *testing.T) {
+		a, err := NewApp(AppConfig{
+			ManagedKinds: []AppManagedKind{{
+				Kind: testKind(),
+			}},
+		})
+		assert.NoError(t, err)
+		assert.NotNil(t, a)
+	})
+}
+
 func TestApp_Convert(t *testing.T) {
 	t.Run("no converter", func(t *testing.T) {
 		a := createTestApp(t, AppConfig{})

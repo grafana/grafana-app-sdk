@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -342,7 +343,13 @@ func TestSchemalessClient_Delete(t *testing.T) {
 			writer.Write(responseBytes)
 			writer.WriteHeader(http.StatusOK)
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, fmt.Sprintf("%ss", id.Kind), id.Name), r.URL.Path)
-			assert.Equal(t, string(resource.DeleteOptionsPropagationPolicyForeground), r.URL.Query().Get("propagationPolicy"))
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			opts := metav1.DeleteOptions{}
+			require.NoError(t, json.Unmarshal(body, &opts))
+			assert.Equal(t, "DeleteOptions", opts.Kind)
+			assert.Equal(t, "meta.k8s.io/v1", opts.APIVersion)
+			assert.Equal(t, metav1.DeletePropagationForeground, *opts.PropagationPolicy)
 		}
 
 		err := client.Delete(ctx, id, resource.DeleteOptions{
@@ -357,8 +364,15 @@ func TestSchemalessClient_Delete(t *testing.T) {
 			writer.Write(responseBytes)
 			writer.WriteHeader(http.StatusOK)
 			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s/%s", id.Namespace, fmt.Sprintf("%ss", id.Kind), id.Name), r.URL.Path)
-			assert.Equal(t, "123", r.URL.Query().Get("preconditions.resourceVersion"))
-			assert.Equal(t, "abc", r.URL.Query().Get("preconditions.uid"))
+			body, err := io.ReadAll(r.Body)
+			require.NoError(t, err)
+			opts := metav1.DeleteOptions{}
+			require.NoError(t, json.Unmarshal(body, &opts))
+			assert.Equal(t, "DeleteOptions", opts.Kind)
+			assert.Equal(t, "meta.k8s.io/v1", opts.APIVersion)
+			assert.NotNil(t, opts.Preconditions)
+			assert.Equal(t, "123", *opts.Preconditions.ResourceVersion)
+			assert.Equal(t, types.UID("abc"), *opts.Preconditions.UID)
 		}
 
 		err := client.Delete(ctx, id, resource.DeleteOptions{

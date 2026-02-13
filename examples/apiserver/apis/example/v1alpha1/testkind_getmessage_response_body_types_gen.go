@@ -11,3 +11,8 @@ type GetMessageBody struct {
 func NewGetMessageBody() *GetMessageBody {
 	return &GetMessageBody{}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for GetMessageBody.
+func (GetMessageBody) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetMessageBody"
+}

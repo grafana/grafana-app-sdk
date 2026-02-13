@@ -27,14 +27,19 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
+const (
+	VersionV1Alpha1 = "v1alpha1"
+	VersionV1Alpha2 = "v1alpha2"
+)
+
 type ManifestOutputEncoder func(any) ([]byte, error)
 
 // ManifestGenerator generates a JSON/YAML App Manifest.
 type ManifestGenerator struct {
-	Encoder        ManifestOutputEncoder
-	FileExtension  string
-	IncludeSchemas bool
-	CRDCompatible  bool
+	Encoder         ManifestOutputEncoder
+	FileExtension   string
+	IncludeSchemas  bool
+	ManifestVersion string
 }
 
 func (*ManifestGenerator) JennyName() string {
@@ -63,11 +68,14 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	// v1alpha2 has a `schemas` section which is an OpenAPI schemas document.
 	var manifestSpec any
 	apiVersion := v1alpha2.GroupVersion
-	if m.CRDCompatible {
+	switch m.ManifestVersion {
+	case VersionV1Alpha1:
 		manifestSpec, err = v1alpha1.SpecFromManifestData(*manifestData)
 		apiVersion = v1alpha1.GroupVersion
-	} else {
+	case VersionV1Alpha2:
 		manifestSpec, err = v1alpha2.SpecFromManifestData(*manifestData)
+	default:
+		return nil, fmt.Errorf("unknown manifest version %q", m.ManifestVersion)
 	}
 	if err != nil {
 		return nil, err

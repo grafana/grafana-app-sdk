@@ -20,6 +20,11 @@ func NewTestKindstatusOperatorState() *TestKindstatusOperatorState {
 	return &TestKindstatusOperatorState{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for TestKindstatusOperatorState.
+func (TestKindstatusOperatorState) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v0alpha1.TestKindstatusOperatorState"
+}
+
 // +k8s:openapi-gen=true
 type TestKindStatus struct {
 	// operatorStates is a map of operator ID to operator state evaluations.
@@ -34,6 +39,11 @@ func NewTestKindStatus() *TestKindStatus {
 	return &TestKindStatus{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for TestKindStatus.
+func (TestKindStatus) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v0alpha1.TestKindStatus"
+}
+
 // +k8s:openapi-gen=true
 type TestKindStatusOperatorStateState string
 
@@ -42,3 +52,8 @@ const (
 	TestKindStatusOperatorStateStateInProgress TestKindStatusOperatorStateState = "in_progress"
 	TestKindStatusOperatorStateStateFailed     TestKindStatusOperatorStateState = "failed"
 )
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindStatusOperatorStateState.
+func (TestKindStatusOperatorStateState) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v0alpha1.TestKindStatusOperatorStateState"
+}

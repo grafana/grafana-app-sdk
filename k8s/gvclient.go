@@ -379,14 +379,32 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 	if strings.TrimSpace(identifier.Namespace) != "" {
 		request = request.Namespace(identifier.Namespace)
 	}
-	if options.Preconditions.ResourceVersion != "" {
-		request = request.Param("preconditions.resourceVersion", options.Preconditions.ResourceVersion)
+	deleteOptions := metav1.DeleteOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "DeleteOptions",
+			APIVersion: "meta.k8s.io/v1",
+		},
 	}
-	if options.Preconditions.UID != "" {
-		request = request.Param("preconditions.uid", options.Preconditions.UID)
+	if options.Preconditions.ResourceVersion != "" || options.Preconditions.UID != "" {
+		deleteOptions.Preconditions = &metav1.Preconditions{}
+		if options.Preconditions.ResourceVersion != "" {
+			deleteOptions.Preconditions.ResourceVersion = &options.Preconditions.ResourceVersion
+		}
+		if options.Preconditions.UID != "" {
+			uid := types.UID(options.Preconditions.UID)
+			deleteOptions.Preconditions.UID = &uid
+		}
 	}
 	if options.PropagationPolicy != "" {
-		request = request.Param("propagationPolicy", string(options.PropagationPolicy))
+		policy := metav1.DeletionPropagation(options.PropagationPolicy)
+		deleteOptions.PropagationPolicy = &policy
+	}
+	if deleteOptions.Preconditions != nil || deleteOptions.PropagationPolicy != nil {
+		opts, err := json.Marshal(deleteOptions)
+		if err != nil {
+			return fmt.Errorf("unable to marshal delete options: %s", err.Error())
+		}
+		request = request.Body(opts)
 	}
 	logging.FromContext(ctx).Debug("executing kubernetes delete request", "method", "DELETE", "url", request.URL().String())
 	start := time.Now()

@@ -12,6 +12,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -687,7 +688,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]any{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -696,7 +697,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		},
 		Dependencies: make([]string, 0),
 	}
-	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+	kind.Dependencies = append(kind.Dependencies, metav1.ObjectMeta{}.OpenAPIModelName())
 	// Add the non-metadata properties
 	for k, v := range kindSchema.Value.Properties {
 		if k == "metadata" || k == "apiVersion" || k == "kind" {
@@ -740,7 +741,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]any{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -761,7 +762,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
+			metav1.ListMeta{}.OpenAPIModelName(), fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
 	}
 
 	return result, nil
@@ -1122,6 +1123,21 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		for _, s := range sch.Value.OneOf {
 			allRequired = append(allRequired, s.Value.Required...)
 		}
+
+		// CRD structural schemas do not allow per-branch type constraints in oneOf.
+		// If there are no required fields to discriminate branches, we cannot rewrite oneOf
+		// into structural required/not-required rules. Fall back to schemaless JSON for this field.
+		if len(allRequired) == 0 {
+			// Clear oneOf/type to avoid non-structural validation failures, preserving compatibility.
+			result.OneOf = nil
+			result.Type = nil
+			if result.Extensions == nil {
+				result.Extensions = make(map[string]any)
+			}
+			result.Extensions[extKubernetesPreserveUnknownFields] = true
+			return result, nil
+		}
+
 		for _, s := range sch.Value.OneOf {
 			resolved, err := resolveSchema(s, components, visited)
 			if err != nil {

@@ -9,9 +9,8 @@ import (
 	"net/http"
 	"net/url"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type TestKindClient struct {
@@ -126,7 +125,7 @@ type GetMessageRequest struct {
 	Headers http.Header
 }
 
-func (c *TestKindClient) GetMessage(ctx context.Context, identifier resource.Identifier, request GetMessageRequest) (*GetMessage, error) {
+func (c *TestKindClient) GetMessage(ctx context.Context, identifier resource.Identifier, request GetMessageRequest) (*GetMessageResponse, error) {
 	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
 		Path:    "/bar",
 		Verb:    "GET",
@@ -135,10 +134,10 @@ func (c *TestKindClient) GetMessage(ctx context.Context, identifier resource.Ide
 	if err != nil {
 		return nil, err
 	}
-	cast := GetMessage{}
+	cast := GetMessageResponse{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into GetMessage: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into GetMessageResponse: %w", err)
 	}
 	return &cast, nil
 }
@@ -149,7 +148,7 @@ type GetFooRequest struct {
 	Headers http.Header
 }
 
-func (c *TestKindClient) GetFoo(ctx context.Context, identifier resource.Identifier, request GetFooRequest) (*GetFoo, error) {
+func (c *TestKindClient) GetFoo(ctx context.Context, identifier resource.Identifier, request GetFooRequest) (*GetFooResponse, error) {
 	params := url.Values{}
 	params.Set("foo", fmt.Sprintf("%v", request.Params.Foo))
 	body, err := json.Marshal(request.Body)
@@ -166,10 +165,10 @@ func (c *TestKindClient) GetFoo(ctx context.Context, identifier resource.Identif
 	if err != nil {
 		return nil, err
 	}
-	cast := GetFoo{}
+	cast := GetFooResponse{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into GetFoo: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into GetFooResponse: %w", err)
 	}
 	return &cast, nil
 }
@@ -178,7 +177,7 @@ type GetRecursiveResponseRequest struct {
 	Headers http.Header
 }
 
-func (c *TestKindClient) GetRecursiveResponse(ctx context.Context, identifier resource.Identifier, request GetRecursiveResponseRequest) (*GetRecursiveResponse, error) {
+func (c *TestKindClient) GetRecursiveResponse(ctx context.Context, identifier resource.Identifier, request GetRecursiveResponseRequest) (*GetRecursiveResponseResponse, error) {
 	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
 		Path:    "/recurse",
 		Verb:    "GET",
@@ -187,10 +186,10 @@ func (c *TestKindClient) GetRecursiveResponse(ctx context.Context, identifier re
 	if err != nil {
 		return nil, err
 	}
-	cast := GetRecursiveResponse{}
+	cast := GetRecursiveResponseResponse{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into GetRecursiveResponse: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into GetRecursiveResponseResponse: %w", err)
 	}
 	return &cast, nil
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
@@ -86,11 +87,13 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
-	projectAddComponentCmd.Flags().String("grouping", kindGroupingKind, `Kind go package grouping.
+	projectAddComponentCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
 Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
+	_ = projectAddComponentCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
 
 	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
 	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
+	_ = projectLocalGenerateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "kinds.perKindVersion"))
 
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
@@ -178,6 +181,15 @@ func projectInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	configFileContents, err := templates.ReadFile("templates/config.cue.tmpl")
+	if err != nil {
+		return err
+	}
+	err = writeFileWithOverwriteConfirm(filepath.Join(path, "kinds", "config.cue"), configFileContents)
+	if err != nil {
+		return err
+	}
+
 	// Initial empty project directory structure
 	err = checkAndMakePath(filepath.Join(path, "pkg"))
 	if err != nil {
@@ -187,7 +199,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	err = checkAndMakePath(filepath.Join(path, "cmd", "operator"))
+	err = checkAndMakePath(filepath.Join(path, "cmd"))
 	if err != nil {
 		return err
 	}
@@ -517,6 +529,12 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Name of the cue object containing the config (optional)
+	configName, err := cmd.Flags().GetString(configFlag)
+	if err != nil {
+		return err
+	}
+
 	// Default overwrite
 	overwrite, err := cmd.Flags().GetBool("overwrite")
 	if err != nil {
@@ -538,33 +556,58 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if kindGrouping != kindGroupingGroup && kindGrouping != kindGroupingKind {
-		return errors.New("--grouping must be one of 'group'|'kind'")
+
+	var genSrc any
+
+	switch format {
+	case FormatCUE:
+		genSrc, err = cuekind.LoadCue(os.DirFS(sourcePath))
+		if err != nil {
+			return err
+		}
+	case FormatNone:
+	default:
+		return fmt.Errorf("unknown format '%s'", format)
+	}
+
+	// HACK: Load base config from CLI flags which will eventually be removed
+	baseConfig := &config.Config{
+		Kinds: &config.KindsConfig{
+			Grouping: kindGrouping,
+		},
+		Codegen: &config.CodegenConfig{
+			EnableOperatorStatusGeneration: genOperatorState,
+		},
+		ManifestSelectors: []string{selector},
+	}
+
+	cfg, err := config.Load(genSrc, configName, baseConfig)
+	if err != nil {
+		return err
 	}
 
 	// Create the generator (used for generating non-static code)
 	var generator any
 	var manifestParser codegen.Parser[codegen.AppManifest]
-	switch format {
-	case FormatCUE:
-		parser, err := cuekind.NewParser()
+	switch v := genSrc.(type) {
+	case *cuekind.Cue:
+		parser, err := cuekind.NewParser(v,
+			cfg.Codegen.EnableOperatorStatusGeneration,
+			cfg.Kinds.PerKindVersion,
+		)
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator[codegen.Kind](parser.KindParser(cuekind.ParseConfig{
-			GenOperatorState: genOperatorState,
-		}), os.DirFS(sourcePath))
+		generator, err = codegen.NewGenerator(parser.KindParser())
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser(cuekind.ParseConfig{
-			GenOperatorState: genOperatorState,
-		})
+		manifestParser = parser.ManifestParser()
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
 
-	manifests, err := manifestParser.Parse(os.DirFS(sourcePath), selector)
+	manifests, err := manifestParser.Parse(cfg.ManifestSelectors...)
 	if err != nil {
 		return fmt.Errorf("error parsing manifest '%s': %v", sourcePath, err)
 	}
@@ -579,7 +622,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, manifest.Properties().Group, kindGrouping == kindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, cfg.Kinds.Grouping == config.KindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -596,7 +639,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), []string{selector}, kindGrouping == kindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, cfg.Kinds.Grouping == config.KindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -626,7 +669,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	if err != nil {
 		return err
 	}
-	var writeFileFunc = writeFile
+	writeFileFunc := writeFile
 	if confirmOverwrite {
 		writeFileFunc = writeFileWithOverwriteConfirm
 	}
@@ -651,7 +694,10 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	default:
 		return fmt.Errorf("unknown generator type: %T", cast)
 	}
-	if err = checkAndMakePath("pkg"); err != nil {
+	if err = checkAndMakePath(filepath.Join(projectRootPath, "cmd", "operator")); err != nil {
+		return err
+	}
+	if err = checkAndMakePath(filepath.Join(projectRootPath, "pkg")); err != nil {
 		return err
 	}
 	for _, f := range files {
@@ -720,7 +766,7 @@ func addComponentBackend[G anyGenerator](projectRootPath string, generator G, se
 	} else {
 		// New plugin.json
 		err = writePluginJSON(pluginJSONPath,
-			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
+			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup, true)
 	}
 	return err
 }
@@ -763,6 +809,19 @@ func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 		return errors.New("yarn must be installed to add the frontend component")
 	}
 
+	// Check backend bits
+	pluginHasBackend := false
+	pluginJSONPath := filepath.Join(projectRootPath, "plugin", "src", "plugin.json")
+	if _, err := os.Stat(pluginJSONPath); err == nil {
+		m := make(map[string]any)
+		b, _ := os.ReadFile(pluginJSONPath)
+		err = json.Unmarshal(b, &m)
+		if err != nil {
+			return err
+		}
+		pluginHasBackend = m["backend"].(bool)
+	}
+
 	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}
 	cmd := exec.Command("yarn", args...)
 	buf := bytes.Buffer{}
@@ -799,13 +858,17 @@ func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 	if err != nil {
 		return err
 	}
+	err = os.Remove("./tmp-tmp-app/Magefile.go")
+	if err != nil {
+		return err
+	}
 	// Move the remaining contents into /plugin
 	err = moveFiles("./tmp-tmp-app/", filepath.Join(projectRootPath, "plugin"))
 	if err != nil {
 		return err
 	}
 	err = writePluginJSON(filepath.Join(projectRootPath, "plugin/src/plugin.json"),
-		fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
+		fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup, pluginHasBackend)
 	if err != nil {
 		return err
 	}
@@ -851,21 +914,23 @@ func isCommandInstalled(command string) bool {
 	return err == nil
 }
 
-func writePluginJSON(fullPath, id, name, author, slug string) error {
+func writePluginJSON(fullPath, id, name, author, slug string, hasBackend bool) error {
 	tmp, err := template.ParseFS(templates, "templates/plugin.json.tmpl")
 	if err != nil {
 		return err
 	}
 	data := struct {
-		ID     string
-		Name   string
-		Author string
-		Slug   string
+		ID      string
+		Name    string
+		Author  string
+		Slug    string
+		Backend bool
 	}{
-		ID:     id,
-		Name:   name,
-		Author: author,
-		Slug:   slug,
+		ID:      id,
+		Name:    name,
+		Author:  author,
+		Slug:    slug,
+		Backend: hasBackend,
 	}
 	b := bytes.Buffer{}
 	err = tmp.Execute(&b, data)

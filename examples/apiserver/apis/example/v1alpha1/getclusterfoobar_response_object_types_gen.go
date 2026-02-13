@@ -9,29 +9,33 @@ import (
 )
 
 // +k8s:openapi-gen=true
-type GetClusterFoobar struct {
+type GetClusterFoobarResponse struct {
 	metav1.TypeMeta      `json:",inline"`
 	GetClusterFoobarBody `json:",inline"`
 }
 
-func NewGetClusterFoobar() *GetClusterFoobar {
-	return &GetClusterFoobar{}
+func NewGetClusterFoobarResponse() *GetClusterFoobarResponse {
+	return &GetClusterFoobarResponse{}
 }
 
 func (t *GetClusterFoobarBody) DeepCopyInto(dst *GetClusterFoobarBody) {
 	_ = resource.CopyObjectInto(dst, t)
 }
 
-func (o *GetClusterFoobar) DeepCopyObject() runtime.Object {
-	dst := NewGetClusterFoobar()
+func (o *GetClusterFoobarResponse) DeepCopyObject() runtime.Object {
+	dst := NewGetClusterFoobarResponse()
 	o.DeepCopyInto(dst)
 	return dst
 }
 
-func (o *GetClusterFoobar) DeepCopyInto(dst *GetClusterFoobar) {
+func (o *GetClusterFoobarResponse) DeepCopyInto(dst *GetClusterFoobarResponse) {
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
 	o.GetClusterFoobarBody.DeepCopyInto(&dst.GetClusterFoobarBody)
 }
 
-var _ runtime.Object = NewGetClusterFoobar()
+func (GetClusterFoobarResponse) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetClusterFoobarResponse"
+}
+
+var _ runtime.Object = NewGetClusterFoobarResponse()

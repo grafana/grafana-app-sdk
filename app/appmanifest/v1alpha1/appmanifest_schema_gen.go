@@ -10,7 +10,7 @@ import (
 
 // schema is unexported to prevent accidental overwrites
 var (
-	schemaAppManifest = resource.NewSimpleSchema("apps.grafana.com", "v1alpha1", NewAppManifest(), &AppManifestList{}, resource.WithKind("AppManifest"),
+	schemaAppManifest = resource.NewSimpleSchema("apps.grafana.app", "v1alpha1", NewAppManifest(), &AppManifestList{}, resource.WithKind("AppManifest"),
 		resource.WithPlural("appmanifests"), resource.WithScope(resource.ClusterScope))
 	kindAppManifest = resource.Kind{
 		Schema: schemaAppManifest,

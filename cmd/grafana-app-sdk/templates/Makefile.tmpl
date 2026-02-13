@@ -50,15 +50,23 @@ endif
 
 .PHONY: build/operator
 build/operator:
-	docker build -t $(OPERATOR_DOCKERIMAGE) -f cmd/operator/Dockerfile .
+ifeq ("$(wildcard cmd/operator/Dockerfile)","cmd/operator/Dockerfile")
+    docker build -t $(OPERATOR_DOCKERIMAGE) -f cmd/operator/Dockerfile .
+else
+	@echo "No cmd/operator/Dockerfile, skipping operator build"
+endif
 
 .PHONY: compile/operator
 compile/operator:
-	@go build -o "target/operator" cmd/operator/*.go
+	if [ ! -d "./cmd/operator" ]; then
+		@echo "cmd/operator does not exist, skipping operator compile"
+	else
+		@go build -o "target/operator" cmd/operator/*.go
+	fi
 
 .PHONY: generate
 generate:
-	@grafana-app-sdk generate --source kinds --format cue --crdmanifest
+	@grafana-app-sdk generate --source kinds --format cue
 
 .PHONY: local/up
 local/up: local/generate

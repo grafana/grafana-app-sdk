@@ -101,7 +101,7 @@ func matchKindFunc(kind resource.Kind) func(label labels.Selector, field fields.
 }
 
 func newRegistryStatusStoreForKind(scheme *runtime.Scheme, kind resource.Kind, specStore *genericregistry.Store) *StatusREST {
-	strategy := newStatusStrategy(scheme, kind.GroupVersionKind().GroupVersion())
+	strategy := newStatusStrategy(scheme, kind.GroupVersionKind().GroupVersion(), kind.Scope() != resource.ClusterScope)
 	return newStatusREST(specStore, strategy)
 }
 

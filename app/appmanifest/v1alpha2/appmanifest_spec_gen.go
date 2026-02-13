@@ -26,6 +26,11 @@ func NewAppManifestManifestVersion() *AppManifestManifestVersion {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersion.
+func (AppManifestManifestVersion) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersion"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKind struct {
 	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
@@ -65,6 +70,11 @@ func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKind.
+func (AppManifestManifestVersionKind) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKind"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestAdmissionCapabilities struct {
 	Validation *AppManifestValidationCapability `json:"validation,omitempty"`
@@ -74,6 +84,11 @@ type AppManifestAdmissionCapabilities struct {
 // NewAppManifestAdmissionCapabilities creates a new AppManifestAdmissionCapabilities object.
 func NewAppManifestAdmissionCapabilities() *AppManifestAdmissionCapabilities {
 	return &AppManifestAdmissionCapabilities{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestAdmissionCapabilities.
+func (AppManifestAdmissionCapabilities) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdmissionCapabilities"
 }
 
 // +k8s:openapi-gen=true
@@ -88,6 +103,11 @@ func NewAppManifestValidationCapability() *AppManifestValidationCapability {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestValidationCapability.
+func (AppManifestValidationCapability) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestValidationCapability"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestAdmissionOperation string
 
@@ -99,6 +119,11 @@ const (
 	AppManifestAdmissionOperationAll     AppManifestAdmissionOperation = "*"
 )
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestAdmissionOperation.
+func (AppManifestAdmissionOperation) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdmissionOperation"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestMutationCapability struct {
 	Operations []AppManifestAdmissionOperation `json:"operations"`
@@ -109,6 +134,11 @@ func NewAppManifestMutationCapability() *AppManifestMutationCapability {
 	return &AppManifestMutationCapability{
 		Operations: []AppManifestAdmissionOperation{},
 	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestMutationCapability.
+func (AppManifestMutationCapability) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestMutationCapability"
 }
 
 // +k8s:openapi-gen=true
@@ -138,6 +168,11 @@ func NewAppManifestAdditionalPrinterColumns() *AppManifestAdditionalPrinterColum
 	return &AppManifestAdditionalPrinterColumns{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestAdditionalPrinterColumns.
+func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionRoutes struct {
 	// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
@@ -159,6 +194,11 @@ func NewAppManifestManifestVersionRoutes() *AppManifestManifestVersionRoutes {
 	return &AppManifestManifestVersionRoutes{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionRoutes.
+func (AppManifestManifestVersionRoutes) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestKindPermission struct {
 	Group    string   `json:"group"`
@@ -171,6 +211,11 @@ func NewAppManifestKindPermission() *AppManifestKindPermission {
 	return &AppManifestKindPermission{
 		Actions: []string{},
 	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestKindPermission.
+func (AppManifestKindPermission) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestKindPermission"
 }
 
 // +k8s:openapi-gen=true
@@ -187,6 +232,11 @@ func NewAppManifestOperatorInfo() *AppManifestOperatorInfo {
 	return &AppManifestOperatorInfo{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestOperatorInfo.
+func (AppManifestOperatorInfo) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorInfo"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestOperatorWebhookProperties struct {
 	ConversionPath *string `json:"conversionPath,omitempty"`
@@ -201,6 +251,11 @@ func NewAppManifestOperatorWebhookProperties() *AppManifestOperatorWebhookProper
 		ValidationPath: (func(input string) *string { return &input })("/validate"),
 		MutationPath:   (func(input string) *string { return &input })("/mutate"),
 	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestOperatorWebhookProperties.
+func (AppManifestOperatorWebhookProperties) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestOperatorWebhookProperties"
 }
 
 // +k8s:openapi-gen=true
@@ -235,6 +290,11 @@ func NewAppManifestSpec() *AppManifestSpec {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSpec.
+func (AppManifestSpec) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSpec"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestV1alpha2SpecExtraPermissions struct {
 	// accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps
@@ -248,6 +308,11 @@ func NewAppManifestV1alpha2SpecExtraPermissions() *AppManifestV1alpha2SpecExtraP
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for AppManifestV1alpha2SpecExtraPermissions.
+func (AppManifestV1alpha2SpecExtraPermissions) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2SpecExtraPermissions"
+}
+
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindScope string
 
@@ -255,3 +320,8 @@ const (
 	AppManifestManifestVersionKindScopeNamespaced AppManifestManifestVersionKindScope = "Namespaced"
 	AppManifestManifestVersionKindScopeCluster    AppManifestManifestVersionKindScope = "Cluster"
 )
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindScope.
+func (AppManifestManifestVersionKindScope) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindScope"
+}
