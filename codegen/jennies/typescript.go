@@ -172,8 +172,9 @@ func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathP
 
 func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, pathPrefix string, prefix string) (codejen.Files, error) {
 	if currDepth == j.Depth {
-		fieldName := make([]string, 0)
-		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
+		selectors := TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors()
+		fieldName := make([]string, 0, len(selectors))
+		for _, s := range selectors {
 			fieldName = append(fieldName, s.String())
 		}
 		tsBytes, err := generateTypescriptBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{

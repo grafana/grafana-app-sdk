@@ -798,7 +798,7 @@ func (r *defaultInstaller) App() (app.App, error) {
 }
 
 func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
-	groupVersions := make([]schema.GroupVersion, 0)
+	groupVersions := make([]schema.GroupVersion, 0, len(r.appConfig.ManifestData.Versions))
 	for _, gv := range r.appConfig.ManifestData.Versions {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}

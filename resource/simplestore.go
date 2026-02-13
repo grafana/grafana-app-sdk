@@ -52,6 +52,7 @@ func WithResourceVersion(resourceVersion string) ObjectMetadataOption {
 // allowing the user to work with the actual type in the Schema Object's spec,
 // without casting in and out of the Object interface.
 // It should be instantiated with NewSimpleStore.
+//
 // Deprecated: prefer using TypedStore instead
 type SimpleStore[SpecType any] struct {
 	client Client
@@ -61,6 +62,7 @@ type SimpleStore[SpecType any] struct {
 // It will error if the type of the Schema.ZeroValue().SpecObject() does not match the provided SpecType.
 // It will also error if a client cannot be created from the generator, as unlike Store, the client is generated once
 // and reused for all subsequent calls.
+//
 // Deprecated: prefer using TypedStore instead
 func NewSimpleStore[SpecType any](kind Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
 	if reflect.TypeOf(kind.Schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {

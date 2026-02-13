@@ -157,11 +157,12 @@ type SchemaMetadataSelectableField struct {
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
-	parts := make([]string, 0)
 	if len(s) > 0 && s[0] == '.' {
 		s = s[1:]
 	}
-	for i, part := range strings.Split(s, ".") {
+	split := strings.Split(s, ".")
+	parts := make([]string, 0, len(split))
+	for i, part := range split {
 		if i == 0 && part == "metadata" {
 			part = "ObjectMeta"
 		}
