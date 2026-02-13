@@ -232,6 +232,12 @@ var appManifestData = app.ManifestData{
 																						"finalizers": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"array"},
+																								Items: &spec.SchemaOrArray{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"string"},
+																										}},
+																								},
 																							},
 																						},
 																						"generateName": {
@@ -260,6 +266,50 @@ var appManifestData = app.ManifestData{
 																						"managedFields": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"array"},
+																								Items: &spec.SchemaOrArray{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"object"},
+																											Properties: map[string]spec.Schema{
+																												"apiVersion": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"fieldsType": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"fieldsV1": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"object"},
+																													},
+																												},
+																												"manager": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"operation": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"subresource": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"time": {
+																													SchemaProps: spec.SchemaProps{
+																														Type:   []string{"string"},
+																														Format: "date-time",
+																													},
+																												},
+																											},
+																										}},
+																								},
 																							},
 																						},
 																						"name": {
@@ -275,6 +325,50 @@ var appManifestData = app.ManifestData{
 																						"ownerReferences": {
 																							SchemaProps: spec.SchemaProps{
 																								Type: []string{"array"},
+																								Items: &spec.SchemaOrArray{
+																									Schema: &spec.Schema{
+																										SchemaProps: spec.SchemaProps{
+																											Type: []string{"object"},
+																											Properties: map[string]spec.Schema{
+																												"apiVersion": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"blockOwnerDeletion": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"boolean"},
+																													},
+																												},
+																												"controller": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"boolean"},
+																													},
+																												},
+																												"kind": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"name": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																												"uid": {
+																													SchemaProps: spec.SchemaProps{
+																														Type: []string{"string"},
+																													},
+																												},
+																											},
+																											Required: []string{
+																												"apiVersion",
+																												"kind",
+																												"name",
+																												"uid",
+																											},
+																										}},
+																								},
 																							},
 																						},
 																						"resourceVersion": {
@@ -578,9 +672,37 @@ var appManifestData = app.ManifestData{
 										Type: []string{"string"},
 									},
 								},
+								"dep": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"array"},
+										Items: &spec.SchemaOrArray{
+											Schema: &spec.Schema{
+												SchemaProps: spec.SchemaProps{
+
+													Ref: spec.MustCreateRef("#/components/schemas/getFoobarSharedTypeDep"),
+												}},
+										},
+									},
+								},
 							},
 							Required: []string{
 								"bar",
+								"dep",
+							},
+						},
+					},
+					"getFoobarSharedTypeDep": {
+						SchemaProps: spec.SchemaProps{
+							Type: []string{"object"},
+							Properties: map[string]spec.Schema{
+								"value": {
+									SchemaProps: spec.SchemaProps{
+										Type: []string{"string"},
+									},
+								},
+							},
+							Required: []string{
+								"value",
 							},
 						},
 					},
@@ -674,16 +796,16 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
 
 var customRouteToGoResponseType = map[string]any{
 
-	"v1alpha1|TestKind|bar|GET": v1alpha1.GetMessage{},
+	"v1alpha1|TestKind|bar|GET": v1alpha1.GetMessageResponse{},
 
-	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFoo{},
+	"v1alpha1|TestKind|foo|GET": v1alpha1.GetFooResponse{},
 
-	"v1alpha1|TestKind|recurse|GET": v1alpha1.GetRecursiveResponse{},
+	"v1alpha1|TestKind|recurse|GET": v1alpha1.GetRecursiveResponseResponse{},
 
-	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobar{},
-	"v1alpha1||foobar|GET":             v1alpha1.GetClusterFoobar{},
+	"v1alpha1||<namespace>/foobar|GET": v1alpha1.GetFoobarResponse{},
+	"v1alpha1||foobar|GET":             v1alpha1.GetClusterFoobarResponse{},
 
-	"v2alpha1||<namespace>/example|GET": v2alpha1.GetExample{},
+	"v2alpha1||<namespace>/example|GET": v2alpha1.GetExampleResponse{},
 }
 
 // ManifestCustomRouteResponsesAssociator returns the associated response go type for a given kind, version, custom route path, and method, if one exists.

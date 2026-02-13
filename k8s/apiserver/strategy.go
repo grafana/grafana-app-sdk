@@ -127,16 +127,17 @@ type genericStatusStrategy struct {
 	runtime.ObjectTyper
 	names.NameGenerator
 
-	gv schema.GroupVersion
+	gv         schema.GroupVersion
+	namespaced bool
 }
 
 // NewStatusStrategy creates a new genericStatusStrategy.
-func newStatusStrategy(typer runtime.ObjectTyper, gv schema.GroupVersion) *genericStatusStrategy {
-	return &genericStatusStrategy{typer, names.SimpleNameGenerator, gv}
+func newStatusStrategy(typer runtime.ObjectTyper, gv schema.GroupVersion, namespaced bool) *genericStatusStrategy {
+	return &genericStatusStrategy{typer, names.SimpleNameGenerator, gv, namespaced}
 }
 
-func (*genericStatusStrategy) NamespaceScoped() bool {
-	return true
+func (g *genericStatusStrategy) NamespaceScoped() bool {
+	return g.namespaced
 }
 
 func (g *genericStatusStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {

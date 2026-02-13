@@ -4,7 +4,7 @@ etcd:
 
 .PHONY: generate
 generate:
-	@go run ../../cmd/grafana-app-sdk/*.go generate -g ./apis --grouping=group --defencoding=none
+	@go run ../../cmd/grafana-app-sdk/*.go generate
 
 .PHONY: run
 run:

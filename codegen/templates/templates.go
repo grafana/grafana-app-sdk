@@ -21,6 +21,13 @@ import (
 //go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl
 var templates embed.FS
 
+//go:embed custom/*.tmpl
+var cogTemplates embed.FS
+
+func GetCogTemplates() embed.FS {
+	return cogTemplates
+}
+
 var (
 	funcMap = template.FuncMap{
 		"list": func(items ...any) []any {
@@ -102,6 +109,7 @@ type ResourceObjectTemplateMetadata struct {
 	SpecTypeName         string
 	ObjectTypeName       string
 	ObjectShortName      string
+	OpenAPIModelName     string
 	Subresources         []SubresourceMetadata
 	CustomMetadataFields []ObjectMetadataField
 }
@@ -618,6 +626,7 @@ type RuntimeObjectWrapperMetadata struct {
 	PackageName               string
 	WrapperTypeName           string
 	TypeName                  string
+	OpenAPIModelName          string
 	HasObjectMeta             bool
 	HasListMeta               bool
 	AddDeepCopyForTypeName    bool

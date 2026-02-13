@@ -9,29 +9,33 @@ import (
 )
 
 // +k8s:openapi-gen=true
-type GetMessage struct {
+type GetMessageResponse struct {
 	metav1.TypeMeta `json:",inline"`
 	GetMessageBody  `json:",inline"`
 }
 
-func NewGetMessage() *GetMessage {
-	return &GetMessage{}
+func NewGetMessageResponse() *GetMessageResponse {
+	return &GetMessageResponse{}
 }
 
 func (t *GetMessageBody) DeepCopyInto(dst *GetMessageBody) {
 	_ = resource.CopyObjectInto(dst, t)
 }
 
-func (o *GetMessage) DeepCopyObject() runtime.Object {
-	dst := NewGetMessage()
+func (o *GetMessageResponse) DeepCopyObject() runtime.Object {
+	dst := NewGetMessageResponse()
 	o.DeepCopyInto(dst)
 	return dst
 }
 
-func (o *GetMessage) DeepCopyInto(dst *GetMessage) {
+func (o *GetMessageResponse) DeepCopyInto(dst *GetMessageResponse) {
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
 	o.GetMessageBody.DeepCopyInto(&dst.GetMessageBody)
 }
 
-var _ runtime.Object = NewGetMessage()
+func (GetMessageResponse) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetMessageResponse"
+}
+
+var _ runtime.Object = NewGetMessageResponse()

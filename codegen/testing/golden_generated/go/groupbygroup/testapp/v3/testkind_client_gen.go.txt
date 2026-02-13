@@ -109,7 +109,7 @@ type CreateReconcileRequest struct {
 	Headers http.Header
 }
 
-func (c *TestKindClient) CreateReconcile(ctx context.Context, identifier resource.Identifier, request CreateReconcileRequest) (*CreateReconcile, error) {
+func (c *TestKindClient) CreateReconcile(ctx context.Context, identifier resource.Identifier, request CreateReconcileRequest) (*CreateReconcileResponse, error) {
 	body, err := json.Marshal(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
@@ -123,10 +123,10 @@ func (c *TestKindClient) CreateReconcile(ctx context.Context, identifier resourc
 	if err != nil {
 		return nil, err
 	}
-	cast := CreateReconcile{}
+	cast := CreateReconcileResponse{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into CreateReconcile: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into CreateReconcileResponse: %w", err)
 	}
 	return &cast, nil
 }
@@ -136,7 +136,7 @@ type GetTestKindSearchResultRequest struct {
 	Headers http.Header
 }
 
-func (c *TestKindClient) GetTestKindSearchResult(ctx context.Context, identifier resource.Identifier, request GetTestKindSearchResultRequest) (*GetTestKindSearchResult, error) {
+func (c *TestKindClient) GetTestKindSearchResult(ctx context.Context, identifier resource.Identifier, request GetTestKindSearchResultRequest) (*GetTestKindSearchResultResponse, error) {
 	params := url.Values{}
 	params.Set("q", fmt.Sprintf("%v", request.Params.Q))
 	resp, err := c.client.SubresourceRequest(ctx, identifier, resource.CustomRouteRequestOptions{
@@ -148,10 +148,10 @@ func (c *TestKindClient) GetTestKindSearchResult(ctx context.Context, identifier
 	if err != nil {
 		return nil, err
 	}
-	cast := GetTestKindSearchResult{}
+	cast := GetTestKindSearchResultResponse{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into GetTestKindSearchResult: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into GetTestKindSearchResultResponse: %w", err)
 	}
 	return &cast, nil
 }

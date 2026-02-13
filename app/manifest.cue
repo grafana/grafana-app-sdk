@@ -1,8 +1,20 @@
 package app
 
+config: {
+	codegen: {
+		goGenPath: "app"
+	}
+	definitions: {
+		path: "app/definitions"
+	}
+	kinds: {
+		grouping: "group"
+	}
+}
+
 manifest: {
 	appName: "app-manifest"
-	groupOverride: "apps.grafana.com"
+	groupOverride: "apps.grafana.app"
 	versions: {
 		"v1alpha1": {
 			codegen: ts: enabled: false

@@ -1,8 +1,6 @@
 package codegen
 
 import (
-	"io/fs"
-
 	"github.com/grafana/codejen"
 )
 
@@ -11,19 +9,17 @@ type JennyList[T any] interface {
 }
 
 type Parser[T any] interface {
-	Parse(fs.FS, ...string) ([]T, error)
+	Parse(selectors ...string) ([]T, error)
 }
 
-func NewGenerator[T any](parser Parser[T], files fs.FS) (*Generator[T], error) {
+func NewGenerator[T any](parser Parser[T]) (*Generator[T], error) {
 	return &Generator[T]{
-		p:     parser,
-		files: files,
+		p: parser,
 	}, nil
 }
 
 type Generator[T any] struct {
-	files fs.FS
-	p     Parser[T]
+	p Parser[T]
 }
 
 func (g *Generator[T]) Generate(jennies JennyList[T], selectors ...string) (codejen.Files, error) {
@@ -33,7 +29,7 @@ func (g *Generator[T]) Generate(jennies JennyList[T], selectors ...string) (code
 }
 
 func (g *Generator[T]) FilteredGenerate(jennies JennyList[T], filterFunc func(T) bool, selectors ...string) (codejen.Files, error) {
-	kinds, err := g.p.Parse(g.files, selectors...)
+	kinds, err := g.p.Parse(selectors...)
 	if err != nil {
 		return nil, err
 	}

@@ -23,6 +23,11 @@ func NewInnerObject1() *InnerObject1 {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for InnerObject1.
+func (InnerObject1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.InnerObject1"
+}
+
 // +k8s:openapi-gen=true
 type InnerObject2 struct {
 	Name    string                 `json:"name"`
@@ -34,6 +39,11 @@ func NewInnerObject2() *InnerObject2 {
 	return &InnerObject2{
 		Details: map[string]interface{}{},
 	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for InnerObject2.
+func (InnerObject2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.InnerObject2"
 }
 
 // +k8s:openapi-gen=true
@@ -50,6 +60,11 @@ func NewType1() *Type1 {
 	return &Type1{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for Type1.
+func (Type1) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Type1"
+}
+
 // +k8s:openapi-gen=true
 type Type2 struct {
 	Group   string                 `json:"group"`
@@ -63,6 +78,11 @@ func NewType2() *Type2 {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for Type2.
+func (Type2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Type2"
+}
+
 // +k8s:openapi-gen=true
 type RecursiveList struct {
 	Val  string         `json:"val"`
@@ -72,6 +92,11 @@ type RecursiveList struct {
 // NewRecursiveList creates a new RecursiveList object.
 func NewRecursiveList() *RecursiveList {
 	return &RecursiveList{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for RecursiveList.
+func (RecursiveList) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.RecursiveList"
 }
 
 // +k8s:openapi-gen=true
@@ -101,6 +126,11 @@ func NewSpec() *Spec {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for Spec.
+func (Spec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Spec"
+}
+
 // +k8s:openapi-gen=true
 type SpecEnum string
 
@@ -111,3 +141,8 @@ const (
 	SpecEnumVal4    SpecEnum = "val4"
 	SpecEnumDefault SpecEnum = "default"
 )
+
+// OpenAPIModelName returns the OpenAPI model name for SpecEnum.
+func (SpecEnum) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.SpecEnum"
+}

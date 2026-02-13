@@ -15,3 +15,8 @@ func NewGetTestKindSearchResultRequestParams() *GetTestKindSearchResultRequestPa
 		Offset: (func(input int64) *int64 { return &input })(0),
 	}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for GetTestKindSearchResultRequestParams.
+func (GetTestKindSearchResultRequestParams) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.GetTestKindSearchResultRequestParams"
+}

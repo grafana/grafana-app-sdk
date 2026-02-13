@@ -16,6 +16,11 @@ func NewTestKindFoo() *TestKindFoo {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for TestKindFoo.
+func (TestKindFoo) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindFoo"
+}
+
 // +k8s:openapi-gen=true
 type TestKindBar struct {
 	Value string      `json:"value"`
@@ -30,6 +35,11 @@ func NewTestKindBar() *TestKindBar {
 	}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for TestKindBar.
+func (TestKindBar) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindBar"
+}
+
 // +k8s:openapi-gen=true
 type TestKindBaz struct {
 	Value int64 `json:"value"`
@@ -40,6 +50,11 @@ func NewTestKindBaz() *TestKindBaz {
 	return &TestKindBaz{
 		Value: 10,
 	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindBaz.
+func (TestKindBaz) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindBaz"
 }
 
 // +k8s:openapi-gen=true
@@ -54,4 +69,9 @@ func NewTestKindSpec() *TestKindSpec {
 		TestField: "default value",
 		Foo:       *NewTestKindFoo(),
 	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindSpec.
+func (TestKindSpec) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.TestKindSpec"
 }

@@ -110,6 +110,7 @@ linters:
       - examples$
       - k8s/client
       - k8s/cache
+      - .*_gen\.go$
 formatters:
   enable:
     - gofmt
@@ -128,3 +129,4 @@ formatters:
       - examples$
       - k8s/client
       - k8s/cache
+      - .*_gen\.go$
