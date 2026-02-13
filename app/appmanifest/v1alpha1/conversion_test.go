@@ -48,4 +48,54 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 			Versions: []app.ManifestVersion{},
 		}, md)
 	})
+
+	t.Run("Roles not cast", func(t *testing.T) {
+		roleKind1 := AppManifestRoleKindWithPermissionSet{
+			Kind:          "Kind1",
+			PermissionSet: "viewer",
+		}
+		roleKind1Json, err := json.Marshal(roleKind1)
+		require.Nil(t, err)
+		var roleKind1Unmarshaled any
+		assert.Nil(t, json.Unmarshal(roleKind1Json, &roleKind1Unmarshaled))
+		roleKind2 := AppManifestRoleKindWithVerbs{
+			Kind:  "Kind2",
+			Verbs: []string{"get", "list"},
+		}
+		roleKind2Json, err := json.Marshal(roleKind2)
+		require.Nil(t, err)
+		var roleKind2Unmarshaled any
+		assert.Nil(t, json.Unmarshal(roleKind2Json, &roleKind2Unmarshaled))
+		v1alpha1 := AppManifestSpec{
+			AppName: "foo",
+			Roles: map[string]AppManifestRole{
+				"foo": {
+					Title:       "Foo",
+					Description: "Bar",
+					Kinds:       []AppManifestRoleKind{roleKind1Unmarshaled, roleKind2Unmarshaled},
+				},
+			},
+		}
+		md, err := v1alpha1.ToManifestData()
+		require.NoError(t, err)
+		permSet := string(roleKind1.PermissionSet)
+		assert.Equal(t, app.ManifestData{
+			AppName:  "foo",
+			Versions: []app.ManifestVersion{},
+			Roles: map[string]app.ManifestRole{
+				"foo": {
+					Title:       "Foo",
+					Description: "Bar",
+					Kinds: []app.ManifestRoleKind{{
+						Kind:          roleKind1.Kind,
+						PermissionSet: &permSet,
+					}, {
+						Kind:  roleKind2.Kind,
+						Verbs: roleKind2.Verbs,
+					}},
+					Routes: []string{},
+				},
+			},
+		}, md)
+	})
 }

@@ -277,7 +277,218 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	return &manifest, nil
+	// Roles and RoleBindings
+	// Generate default Roles and RoleBindings if none were specified
+	// TODO: should this be in the jenny, or the parser?
+	roles := m.Properties().Roles
+	bindings := m.Properties().RoleBindings
+	if m.Properties().Roles == nil {
+		var err error
+		var defaultBindings codegen.AppManifestPropertiesRoleBindings
+		roles, defaultBindings, err = buildDefaultManifestRolesAndBindings(m)
+		if err != nil {
+			return nil, err
+		}
+		if bindings == nil {
+			bindings = &defaultBindings
+		}
+	}
+	manifest.Roles = make(map[string]app.ManifestRole)
+	for k, v := range roles {
+		converted := app.ManifestRole{
+			Title:       v.Title,
+			Description: v.Description,
+			Kinds:       make([]app.ManifestRoleKind, len(v.Kinds)),
+			Routes:      make([]string, len(v.Routes)),
+		}
+		for idx, kind := range v.Kinds {
+			converted.Kinds[idx] = app.ManifestRoleKind{
+				Kind:          kind.Kind,
+				PermissionSet: kind.PermissionSet,
+				Verbs:         kind.Verbs,
+			}
+		}
+		copy(converted.Routes, v.Routes)
+		manifest.Roles[k] = converted
+	}
+	manifest.RoleBindings = &app.ManifestRoleBindings{
+		Viewer:     bindings.Viewer,
+		Editor:     bindings.Editor,
+		Admin:      bindings.Admin,
+		Additional: bindings.Additional,
+	}
+
+	return &manifest, validateManifestRoles(manifest)
+}
+
+func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings, error) {
+	viewer := app.ManifestRolePermissionSetViewer
+	editor := app.ManifestRolePermissionSetEditor
+	admin := app.ManifestRolePermissionSetAdmin
+	readerKinds := make(map[string]struct{})
+	editorKinds := make(map[string]struct{})
+	adminKinds := make(map[string]struct{})
+	readerRoleKinds := make([]codegen.AppManifestPropertiesRoleKind, 0)
+	editorRoleKinds := make([]codegen.AppManifestPropertiesRoleKind, 0)
+	adminRoleKinds := make([]codegen.AppManifestPropertiesRoleKind, 0)
+	kindListMap := make(map[string]struct{}, 0)
+	for _, v := range m.Versions() {
+		for _, k := range v.Kinds() {
+			if _, ok := readerKinds[k.Kind]; !ok {
+				readerKinds[k.Kind] = struct{}{}
+				readerRoleKinds = append(readerRoleKinds, codegen.AppManifestPropertiesRoleKind{
+					Kind:          k.Kind,
+					PermissionSet: &viewer,
+				})
+			}
+			if _, ok := editorKinds[k.Kind]; !ok {
+				editorKinds[k.Kind] = struct{}{}
+				editorRoleKinds = append(editorRoleKinds, codegen.AppManifestPropertiesRoleKind{
+					Kind:          k.Kind,
+					PermissionSet: &editor,
+				})
+			}
+			if _, ok := adminKinds[k.Kind]; !ok {
+				adminKinds[k.Kind] = struct{}{}
+				adminRoleKinds = append(adminRoleKinds, codegen.AppManifestPropertiesRoleKind{
+					Kind:          k.Kind,
+					PermissionSet: &admin,
+				})
+			}
+			// subresources
+			it, err := k.Schema.Fields()
+			if err != nil {
+				return nil, codegen.AppManifestPropertiesRoleBindings{}, err
+			}
+			for it.Next() {
+				if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+					continue
+				}
+				sr := fmt.Sprintf("%s/%s", k.Kind, it.Selector().String())
+				if _, ok := adminKinds[sr]; !ok {
+					adminKinds[sr] = struct{}{}
+					adminRoleKinds = append(adminRoleKinds, codegen.AppManifestPropertiesRoleKind{
+						Kind:          sr,
+						PermissionSet: &admin,
+					})
+				}
+			}
+
+			kindListMap[k.PluralName] = struct{}{}
+		}
+	}
+	readerKey := fmt.Sprintf("%s:reader", strings.ToLower(m.Name()))
+	editorKey := fmt.Sprintf("%s:editor", strings.ToLower(m.Name()))
+	adminKey := fmt.Sprintf("%s:admin", strings.ToLower(m.Name()))
+	kindList := make([]string, 0, len(kindListMap))
+	for k := range kindListMap {
+		kindList = append(kindList, k)
+	}
+	allKindsDesc := strings.Builder{}
+	for i, k := range kindList {
+		if i > 0 {
+			if len(kindList) > 2 {
+				allKindsDesc.WriteString(", ")
+			}
+			if i == len(kindList)-1 {
+				allKindsDesc.WriteString("and ")
+			}
+		}
+		allKindsDesc.WriteString(k)
+	}
+	roles := map[string]codegen.AppManifestPropertiesRole{
+		readerKey: {
+			Title:       fmt.Sprintf("%s Reader", m.Properties().AppDisplayName),
+			Description: fmt.Sprintf("Read %s", allKindsDesc.String()),
+			Kinds:       readerRoleKinds,
+		},
+		editorKey: {
+			Title:       fmt.Sprintf("%s Editor", m.Properties().AppDisplayName),
+			Description: fmt.Sprintf("Create, Read, Update, and Delete %s", allKindsDesc.String()),
+			Kinds:       editorRoleKinds,
+		},
+		adminKey: {
+			Title:       fmt.Sprintf("%s Admin", m.Properties().AppDisplayName),
+			Description: fmt.Sprintf("Allows all actions on %s", allKindsDesc.String()),
+			Kinds:       adminRoleKinds,
+		},
+	}
+
+	bindings := codegen.AppManifestPropertiesRoleBindings{
+		Viewer: []string{readerKey},
+		Editor: []string{editorKey},
+		Admin:  []string{adminKey},
+	}
+
+	return roles, bindings, nil
+}
+
+func getRouteNames(p *spec3.PathProps) []string {
+	routes := make([]string, 0)
+	if p.Get != nil {
+		routes = append(routes, p.Get.OperationId)
+	}
+	if p.Post != nil {
+		routes = append(routes, p.Post.OperationId)
+	}
+	if p.Put != nil {
+		routes = append(routes, p.Put.OperationId)
+	}
+	if p.Patch != nil {
+		routes = append(routes, p.Patch.OperationId)
+	}
+	if p.Delete != nil {
+		routes = append(routes, p.Delete.OperationId)
+	}
+	if p.Options != nil {
+		routes = append(routes, p.Options.OperationId)
+	}
+	if p.Head != nil {
+		routes = append(routes, p.Head.OperationId)
+	}
+	return routes
+}
+
+func validateManifestRoles(manifest app.ManifestData) error {
+	kinds := make(map[string]struct{})
+	routes := make(map[string]struct{})
+	for _, v := range manifest.Versions {
+		for _, k := range v.Kinds {
+			kinds[strings.ToLower(k.Kind)] = struct{}{}
+			for _, sr := range k.Subresources() {
+				kinds[fmt.Sprintf("%s/%s", strings.ToLower(k.Kind), strings.ToLower(sr))] = struct{}{}
+			}
+			for _, r := range k.Routes {
+				for _, rr := range getRouteNames(&r) {
+					routes[rr] = struct{}{}
+				}
+			}
+		}
+		for _, r := range v.Routes.Namespaced {
+			for _, rr := range getRouteNames(&r) {
+				routes[rr] = struct{}{}
+			}
+		}
+		for _, r := range v.Routes.Cluster {
+			for _, rr := range getRouteNames(&r) {
+				routes[rr] = struct{}{}
+			}
+		}
+	}
+	var errs error
+	for name, role := range manifest.Roles {
+		for _, k := range role.Kinds {
+			if _, ok := kinds[strings.ToLower(k.Kind)]; !ok {
+				errs = errors.Join(errs, fmt.Errorf("invalid role %s: kind %s does not exist in manifest", name, k.Kind))
+			}
+		}
+		for _, r := range role.Routes {
+			if _, ok := routes[r]; !ok {
+				errs = errors.Join(errs, fmt.Errorf("invalid role %s: route %s does not exist in manifest", name, r))
+			}
+		}
+	}
+	return errs
 }
 
 type simpleOpenAPIDoc[T any] struct {
@@ -371,7 +582,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
-			if field == "metadata" || field == "apiVersion" || field == "kind" {
+			if field == "metadata" || field == "apiVersion" || field == "kind" { //nolint:goconst
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
 			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
