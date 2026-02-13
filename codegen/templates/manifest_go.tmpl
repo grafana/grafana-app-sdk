@@ -18,6 +18,7 @@ import (
     {{ end }}
 )
 
+{{ $needs_str_ptr_func := false }}
 {{ define "schema" }}
 SchemaProps: spec.SchemaProps{
     {{ if .Type }}Type: []string{ {{ range $index, $type := .Type }}{{ if $index }}, {{ end }}"{{$type}}"{{ end }} },{{ end }}{{ if .Format }}
@@ -266,6 +267,35 @@ var appManifestData = app.ManifestData{
             ValidationPath: "{{.ManifestData.Operator.Webhooks.ValidationPath}}",
             MutationPath: "{{.ManifestData.Operator.Webhooks.MutationPath}}",
         },{{ end }}
+    },{{ end }}{{ if .ManifestData.Roles }}
+    Roles: map[string]app.ManifestRole{
+        {{ range $key, $val := .ManifestData.Roles }}"{{ $key }}": {
+            Title: "{{ $val.Title }}",
+            Description: "{{ $val.Description }}",
+            Kinds: []app.ManifestRoleKind{ {{ range $val.Kinds }}
+                {
+                    Kind: "{{ .Kind }}",{{ if .PermissionSet }}{{ $needs_str_ptr_func = true }}
+                    PermissionSet: strPtr("{{ .PermissionSet }}"),{{ else }}
+                    Verbs: []string{ 
+                    {{ range .Verbs }}"{{ . }}",
+                    {{ end }} },{{ end }}
+                },{{ end }} 
+            },
+            Routes: []string{ {{ range $val.Routes }}
+                "{{ . }}",{{ end }} 
+            },
+        },
+    {{ end }} },{{ end }}{{ if .ManifestData.RoleBindings }}
+    RoleBindings: &app.ManifestRoleBindings{
+        Viewer: []string{ {{ if .ManifestData.RoleBindings.Viewer }}
+            {{ range .ManifestData.RoleBindings.Viewer }}"{{ . }}",
+        {{ end }}{{ end }} },
+        Editor: []string{ {{ if .ManifestData.RoleBindings.Editor }}
+            {{ range .ManifestData.RoleBindings.Editor }}"{{ . }}",
+        {{ end }}{{ end }} },
+        Admin: []string{ {{ if .ManifestData.RoleBindings.Admin }}
+            {{ range .ManifestData.RoleBindings.Admin }}"{{ . }}",
+        {{ end }}{{ end }} },
     },{{ end }}
 }
 
@@ -397,3 +427,7 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
     return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
+{{ if $needs_str_ptr_func }}func strPtr(s string) *string {
+    return &s
+}
+{{ end }}

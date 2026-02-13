@@ -19,6 +19,20 @@ testManifest: {
 		}]
 	}
 	operatorURL: "https://foo.bar:8443"
+	roles: {
+		"test-app:reader": {
+			title: "Test App Viewer"
+			description: "View Test App Resources"
+			kinds: [{
+				kind: "TestKind"
+				permissionSet: "viewer"
+			}]
+			routes: ["createFoobar"]
+		}
+	}
+	roleBindings: {
+		viewer: ["test-app:reader"]
+	}
 }
 
 testManifestV1: {
@@ -40,6 +54,7 @@ testManifestV3: {
 	routes: namespaced: {
 		"/foobar": {
 			"POST": {
+				name: "createFoobar"
 				#Key: {
 					name: string
 					match?: string
@@ -102,6 +117,7 @@ testKind: {
 			routes: {
 				"/reconcile": {
 					POST: {
+						name: "createReconcileRequest"
 						request: {
 							body: {
 								force: bool | *false 
