@@ -61,6 +61,9 @@ func NewRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolic
 	if cfg.CheckInterval <= 0 {
 		cfg.CheckInterval = time.Second
 	}
+	if retryPolicyFn == nil {
+		retryPolicyFn = func() RetryPolicy { return nil }
+	}
 
 	workers := make([]*retryWorker, cfg.WorkerPoolSize)
 	for i := range workers {
@@ -101,6 +104,10 @@ func (p *defaultRetryProcessor) Enqueue(req RetryRequest) {
 
 // Dequeue removes items for the given key that match the predicate.
 func (p *defaultRetryProcessor) Dequeue(key string, predicate func(RetryRequest) bool) {
+	if predicate == nil {
+		p.DequeueAll(key)
+		return
+	}
 	w := p.workers[xxhash.Sum64([]byte(key))%p.workerCount]
 	w.mu.Lock()
 	defer w.mu.Unlock()
