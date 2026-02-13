@@ -19,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           persist-credentials: false
 
       - name: Set go version
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
         with:
           go-version-file: 'go.mod'
 
@@ -44,20 +44,20 @@ jobs:
     steps:
     # git checkout
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       with:
         fetch-depth: 0
         persist-credentials: false
     # go env
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
       with:
         go-version-file: 'go.mod'
     # make lint
     - name: Lint
-      uses: golangci/golangci-lint-action@3a919529898de77ec3da873e3063ca4b10e7f5cc
+      uses: golangci/golangci-lint-action@b002b6ecfcabe6ac0e2c6cba1bcc779eb34ac51f # v9
       with:
-        version: v1.64.5
+        version: v2.5.0
         only-new-issues: true
         args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   test:

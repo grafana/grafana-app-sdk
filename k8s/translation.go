@@ -123,6 +123,7 @@ func unmarshalKubernetesAdmissionReview(raw []byte, format resource.WireFormat) 
 	return &rev, nil
 }
 
+//nolint:revive
 func translateKubernetesAdmissionRequest(req *admission.AdmissionRequest, sch resource.Kind) (*resource.AdmissionRequest, error) {
 	var err error
 	var obj, old resource.Object

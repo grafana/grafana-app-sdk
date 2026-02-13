@@ -377,6 +377,8 @@ func newInformer(
 // as it is required by the newInformer call.
 // Multiplexes updates in the form of a list of Deltas into a Store, and informs
 // a given handler of events OnUpdate, OnAdd, OnDelete.
+//
+//nolint:revive
 func processDeltas(
 	// Object which receives event notifications from the given deltas
 	handler cache.ResourceEventHandler,

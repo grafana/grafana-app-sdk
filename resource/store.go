@@ -183,6 +183,8 @@ func (s *Store) UpdateSubresource(
 // It is usually best to use the result of a Get call, change the appropriate values, and then call Update with that.
 // The update will fail if no ResourceVersion is provided, or if the ResourceVersion does not match the current one.
 // It returns the updated/created Object from the storage system.
+//
+//nolint:revive
 func (s *Store) Upsert(ctx context.Context, obj Object) (Object, error) {
 	if obj.GetStaticMetadata().Kind == "" {
 		return nil, errors.New("obj.GetStaticMetadata().Kind must not be empty")
