@@ -579,7 +579,7 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
 
 var customRouteToGoRequestBodyType = map[string]any{
 
-	"v3|TestKind|reconcile|POST": v3.CreateReconcileRequestRequestBody{},
+	"v3|TestKind|reconcile|POST": &v3.CreateReconcileRequestRequestBody{},
 
 	"v3||<namespace>/foobar|POST": v3.CreateFoobarRequestBody{},
 }

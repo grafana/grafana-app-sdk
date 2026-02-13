@@ -582,7 +582,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
-			if field == "metadata" || field == "apiVersion" || field == "kind" {
+			if field == "metadata" || field == "apiVersion" || field == "kind" { //nolint:goconst
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
 			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
