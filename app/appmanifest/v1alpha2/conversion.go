@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"reflect"
 	"strings"
 
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -17,9 +18,10 @@ import (
 // nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
-		AppName:  s.AppName,
-		Group:    s.Group,
-		Versions: make([]app.ManifestVersion, len(s.Versions)),
+		AppName:        s.AppName,
+		AppDisplayName: s.AppDisplayName,
+		Group:          s.Group,
+		Versions:       make([]app.ManifestVersion, len(s.Versions)),
 	}
 	// Versions
 	for idx, version := range s.Versions {
@@ -198,17 +200,92 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			data.Operator.Webhooks = &webhooks
 		}
 	}
+	// Roles and RoleBindings
+	if s.Roles != nil {
+		data.Roles = make(map[string]app.ManifestRole)
+		for k, v := range s.Roles {
+			converted := app.ManifestRole{
+				Title:       v.Title,
+				Description: v.Description,
+				Kinds:       make([]app.ManifestRoleKind, len(v.Kinds)),
+				Routes:      make([]string, len(v.Routes)),
+			}
+			for idx, k2 := range v.Kinds {
+				switch knd := k2.(type) {
+				case AppManifestRoleKindWithPermissionSet:
+					perms := string(knd.PermissionSet)
+					converted.Kinds[idx] = app.ManifestRoleKind{
+						Kind:          knd.Kind,
+						PermissionSet: &perms,
+					}
+				case AppManifestRoleKindWithVerbs:
+					verbs := make([]string, len(knd.Verbs))
+					copy(verbs, knd.Verbs)
+					converted.Kinds[idx] = app.ManifestRoleKind{
+						Kind:  knd.Kind,
+						Verbs: verbs,
+					}
+				case map[string]any:
+					kindVal, ok := knd["kind"]
+					if !ok {
+						return app.ManifestData{}, fmt.Errorf("unable to parse roles: missing kind in role %s, kind index %d", k, idx)
+					}
+					kindStr, ok := kindVal.(string)
+					if !ok {
+						return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'kind' type string, got %v)", k, idx, reflect.TypeOf(kindVal))
+					}
+					roleKind := app.ManifestRoleKind{
+						Kind: kindStr,
+					}
+					if permSetVal, ok := knd["permissionSet"]; ok {
+						str, ok := permSetVal.(string)
+						if !ok {
+							return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'permissionSet' type string, got %v)", k, idx, reflect.TypeOf(permSetVal))
+						}
+						roleKind.PermissionSet = &str
+					} else if verbVals, ok := knd["verbs"]; ok {
+						verbs, ok := verbVals.([]any)
+						if !ok {
+							return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d (expected 'verbs' type []any, got %v)", k, idx, reflect.TypeOf(verbVals))
+						}
+						roleKind.Verbs = make([]string, len(verbs))
+						for vidx, verb := range verbs {
+							v, ok := verb.(string)
+							if !ok {
+								return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind in role %s, kind index %d, verbs index %d (expected element type 'string', got %v)", k, idx, vidx, reflect.TypeOf(verb))
+							}
+							roleKind.Verbs[vidx] = v
+						}
+					}
+					converted.Kinds[idx] = roleKind
+				default:
+					return app.ManifestData{}, fmt.Errorf("unable to parse roles: invalid kind type %v for role %s, kind index %d", reflect.TypeOf(knd), k, idx)
+				}
+			}
+			copy(converted.Routes, v.Routes)
+			data.Roles[k] = converted
+		}
+	}
+	if s.RoleBindings != nil {
+		data.RoleBindings = &app.ManifestRoleBindings{
+			Viewer:     s.RoleBindings.Viewer,
+			Editor:     s.RoleBindings.Editor,
+			Admin:      s.RoleBindings.Admin,
+			Additional: s.RoleBindings.Additional,
+		}
+	}
 	return data, data.Validate()
 }
 
 // SpecFromManifestData is a function which converts an instance of app.ManifestData
 // to this specific version of the AppManifestSpec (v1alpha1).
-// nolint:gocognit,funlen
+// nolint:gocognit,funlen,gocyclo
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	manifestSpec := AppManifestSpec{
-		AppName:  data.AppName,
-		Group:    data.Group,
-		Versions: make([]AppManifestManifestVersion, 0),
+		AppName:        data.AppName,
+		AppDisplayName: data.AppDisplayName,
+		Group:          data.Group,
+		Versions:       make([]AppManifestManifestVersion, 0),
 	}
 	if data.PreferredVersion != "" {
 		manifestSpec.PreferredVersion = &data.PreferredVersion
@@ -328,5 +405,43 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 		}
 	}
+	// Roles and RoleBindings
+	if data.Roles != nil {
+		manifestSpec.Roles = make(map[string]AppManifestRole)
+		for k, v := range data.Roles {
+			converted := AppManifestRole{
+				Title:       v.Title,
+				Description: v.Description,
+				Kinds:       make([]AppManifestRoleKind, len(v.Kinds)),
+				Routes:      make([]string, len(v.Routes)),
+			}
+			for idx, knd := range v.Kinds {
+				if knd.PermissionSet != nil {
+					converted.Kinds[idx] = AppManifestRoleKindWithPermissionSet{
+						Kind:          knd.Kind,
+						PermissionSet: AppManifestRoleKindWithPermissionSetPermissionSet(*knd.PermissionSet),
+					}
+					continue
+				}
+				verbs := make([]string, len(knd.Verbs))
+				copy(verbs, knd.Verbs)
+				converted.Kinds[idx] = AppManifestRoleKindWithVerbs{
+					Kind:  knd.Kind,
+					Verbs: verbs,
+				}
+			}
+			copy(converted.Routes, v.Routes)
+			manifestSpec.Roles[k] = converted
+		}
+	}
+	if data.RoleBindings != nil {
+		manifestSpec.RoleBindings = &AppManifestV1alpha2SpecRoleBindings{
+			Viewer:     data.RoleBindings.Viewer,
+			Editor:     data.RoleBindings.Editor,
+			Admin:      data.RoleBindings.Admin,
+			Additional: data.RoleBindings.Additional,
+		}
+	}
+
 	return &manifestSpec, nil
 }

@@ -223,7 +223,7 @@ func (g *genericSubresourceStrategy) NamespaceScoped() bool {
 }
 
 func (g *genericSubresourceStrategy) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
-	paths := make([]fieldpath.Path, 0)
+	paths := make([]fieldpath.Path, 0, len(g.resetFields))
 	for _, path := range g.resetFields {
 		paths = append(paths, fieldpath.MakePathOrDie(path))
 	}

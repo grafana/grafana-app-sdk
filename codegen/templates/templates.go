@@ -157,11 +157,12 @@ type SchemaMetadataSelectableField struct {
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
-	parts := make([]string, 0)
 	if len(s) > 0 && s[0] == '.' {
 		s = s[1:]
 	}
-	for i, part := range strings.Split(s, ".") {
+	split := strings.Split(s, ".")
+	parts := make([]string, 0, len(split))
+	for i, part := range split {
 		if i == 0 && part == "metadata" {
 			part = "ObjectMeta"
 		}
@@ -456,6 +457,13 @@ func (ManifestGoFileMetadata) KindToPackageName(input string) string {
 	return ToPackageName(strings.ToLower(input))
 }
 
+func (m ManifestGoFileMetadata) GetPackageName(kind, version string) string {
+	if m.KindsAreGrouped {
+		return ToPackageName(version)
+	}
+	return fmt.Sprintf("%s%s", m.KindToPackageName(kind), ToPackageName(version))
+}
+
 func (ManifestGoFileMetadata) GroupToPackageName(input string) string {
 	return ToPackageName(strings.Split(input, ".")[0])
 }
@@ -489,6 +497,9 @@ func (m ManifestGoFileMetadata) Packages() []string {
 		for _, v := range m.ManifestData.Versions {
 			for _, k := range v.Kinds {
 				pkgs = append(pkgs, fmt.Sprintf("%s%s \"%s\"", m.KindToPackageName(k.Kind), ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.KindToPackageName(k.Kind), ToPackageName(v.Name))))
+			}
+			if len(v.Routes.Namespaced) > 0 || len(v.Routes.Cluster) > 0 {
+				pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))))
 			}
 		}
 	}

@@ -132,7 +132,7 @@ SchemaWithOperatorState: Schema & {
 	objectMeta: bool | *false
 }
 #CustomRoute: {
-	name?:    =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	name:    =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
 	request:  #CustomRouteRequest
 	response: #CustomRouteResponse
 	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
@@ -316,8 +316,25 @@ Version: S={
 	actions: [...string]
 }
 
+#RoleKind: {
+	kind: string
+	// permissionSet is a permission set (viewer, editor, admin) to associate with the kind.
+	// It is mutually exclusive with verbs
+	permissionSet?: string
+	// verbs is a list of kubernetes verbs (get, list, watch, create, update, patch, delete, deletecollection).
+	// It is mutually exclusive with PermissionSet
+	verbs: [...string]
+}
+
+#Role: {
+	permissionSet: *"viewer" | "editor" | "admin"
+	kinds: [...#RoleKind]
+}
+
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	// appDisplayName is the display name of the app. Unlike the appName, it can contain any printable characters and will be shown in the UI.
+	appDisplayName: string | *S.appName
 	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	versions: {
 		[V=string]: {
@@ -367,6 +384,27 @@ Manifest: S={
 			}
 		},
 	]
+
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	// If unspecified, roles will be created for "reader", "editor", and "admin" automatically that include all kinds.
+	// A role name must begin with the app name and a colon before (e.g. "<myapp>:editor")
+	roles?: {
+		[string & =~"^(S.appName):[a-z0-9]+$"]: #Role
+	}
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// Additional groups are specified under "additional".
+	// If left empty alongside empty roles, it will automatically assign the default generated roles to their appropriate groups
+	// (none for anonymous, "reader" for viewer, "editor" for editor, and "admin" for admin)
+	roleBindings?: {
+		viewer: [...string]
+		editor: [...string]
+		admin: [...string]
+		additional: {
+			[string]: [...string]
+		}
+	}
 }
 
 //

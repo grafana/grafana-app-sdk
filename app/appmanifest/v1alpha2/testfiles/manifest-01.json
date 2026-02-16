@@ -7,6 +7,7 @@
   },
   "spec": {
     "appName": "issue-tracker-project",
+    "appDisplayName": "Issue Tracker",
     "group": "issuetrackerproject.ext.grafana.com",
     "preferredVersion": "v1",
     "versions": [
@@ -92,9 +93,60 @@
               }
             }
           }
-        ]
+        ],
+        "routes": {
+          "namespaced": {
+            "/foo": {
+              "GET": {
+                "name": "getFoos",
+                "response": {
+                  "properties": {
+                    "foo": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "responseMetadata": {
+                  "objectMeta": false
+                }
+              }
+            }
+          }
+        }
       }
-    ]
+    ],
+    "roles": {
+      "issue-tracker-project:reader": {
+        "title": "Issue Tracker Reader",
+        "description": "Read Issues",
+        "kinds": [{
+          "kind": "Issue",
+          "permissionSet": "viewer"
+        }]
+      },
+      "issue-tracker-project:editor": {
+        "title": "Issue Tracker Editor",
+        "description": "Edit Issues",
+        "kinds": [{
+          "kind": "Issue",
+          "verbs": ["get","list","watch","create","update","patch","delete"]
+        }]
+      },
+      "issue-tracker-project:admin": {
+        "title": "Issue Tracker Admin",
+        "description": "Administrate Issues",
+        "kinds": [{
+          "kind": "Issue",
+          "permissionSet": "admin"
+        }],
+        "routes": ["getFoos"]
+      }
+    },
+    "roleBindings": {
+      "viewer": ["issue-tracker-project:reader"],
+      "editor": ["issue-tracker-project:editor"],
+      "admin": ["issue-tracker-project:admin"]
+    }
   },
   "status": {
     "resources": {
