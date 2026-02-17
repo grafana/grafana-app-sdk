@@ -58,8 +58,8 @@ All of these behaviors (except `Runner()` and `ManagedKinds()`) are actions take
 For example, when a new resource is created for a kind which the app manages, `Mutate` and `Validate` will both be called if supported. 
 `Convert` may be called if the stored version is different from the version used in the create request.
 
-`CallResourceCustomRoute` is currently unsupported in the operator runner (as it is not a supported action for a standalone kubernetes operator), 
-but is to be used on custom subroutes for resources (unsupported by kubernetes CRDs). This will be further elaborated on when new runners are released.
+`CallResourceCustomRoute` is currently unsupported in the operator runner (as it is not a supported action for a standalone kubernetes operator),
+but is to be used on custom subroutes for resources (unsupported by kubernetes CRDs). If you need custom API endpoints, consider using an [Extension API Server](./extension-api-server.md) instead.
 
 `ManagedKinds()` is used by the runner to get the go types for kinds managed by the app (as the manifest is data and does not contain the go types used).
 
@@ -201,5 +201,7 @@ and making sure the `MyKind` CRD exists by applying the generated `definitions/m
 
 You can expand on this to add Validation or Mutation (or conversion), but keep in mind you'll need to add a WebhookConfig 
 to the `operator.RunnerConfig`, and set up the webhook configurations in your kubernetes API server. 
-Unless you're already familiar with how to set up webhooks, the easier way to do this is to 
+Unless you're already familiar with how to set up webhooks, the easier way to do this is to
 [follow the tutorial](tutorials/issue-tracker/README.md) which [sets up validation and mutation in part 8](tutorials/issue-tracker/08-adding-admission-control.md).
+
+For guidance on deploying your app as a standalone operator, see [Running as an Operator](./running-as-operator.md).
