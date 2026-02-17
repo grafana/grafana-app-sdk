@@ -293,6 +293,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			bindings = &defaultBindings
 		}
 	}
+	if bindings == nil {
+		bindings = &codegen.AppManifestPropertiesRoleBindings{}
+	}
 	manifest.Roles = make(map[string]app.ManifestRole)
 	for k, v := range roles {
 		converted := app.ManifestRole{
