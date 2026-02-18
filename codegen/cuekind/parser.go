@@ -110,6 +110,18 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 	if err != nil {
 		return nil, err
 	}
+	if len(manifestProps.Roles) > 0 {
+		// Validate that roles have titles (for some reason the CUE & != "" isn't doing this)
+		var errs error
+		for roleName, role := range manifestProps.Roles {
+			if role.Title == "" {
+				errs = errors.Join(errs, fmt.Errorf("role '%s' is invalid: title is required", roleName))
+			}
+		}
+		if errs != nil {
+			return nil, errs
+		}
+	}
 
 	manifest := &codegen.SimpleManifest{
 		Props: manifestProps,
