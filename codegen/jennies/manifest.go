@@ -321,7 +321,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		Additional: bindings.Additional,
 	}
 
-	return &manifest, validateManifestRoles(manifest)
+	return &manifest, validateManifestRoles(manifest, includeSchemas)
 }
 
 func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings, error) {
@@ -452,7 +452,8 @@ func getRouteNames(p *spec3.PathProps) []string {
 	return routes
 }
 
-func validateManifestRoles(manifest app.ManifestData) error {
+//nolint:revive
+func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) error {
 	kinds := make(map[string]struct{})
 	routes := make(map[string]struct{})
 	for _, v := range manifest.Versions {
@@ -481,6 +482,10 @@ func validateManifestRoles(manifest app.ManifestData) error {
 	var errs error
 	for name, role := range manifest.Roles {
 		for _, k := range role.Kinds {
+			// If this is a subresource of a kind and we're not checking subresources, skip
+			if idx := strings.Index(k.Kind, "/"); idx > 0 && idx < len(k.Kind) && !checkSubresources {
+				continue
+			}
 			if _, ok := kinds[strings.ToLower(k.Kind)]; !ok {
 				errs = errors.Join(errs, fmt.Errorf("invalid role %s: kind %s does not exist in manifest", name, k.Kind))
 			}
