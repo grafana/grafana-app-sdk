@@ -293,9 +293,6 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			bindings = &defaultBindings
 		}
 	}
-	if bindings == nil {
-		bindings = &codegen.AppManifestPropertiesRoleBindings{}
-	}
 	manifest.Roles = make(map[string]app.ManifestRole)
 	for k, v := range roles {
 		converted := app.ManifestRole{
@@ -314,11 +311,13 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		copy(converted.Routes, v.Routes)
 		manifest.Roles[k] = converted
 	}
-	manifest.RoleBindings = &app.ManifestRoleBindings{
-		Viewer:     bindings.Viewer,
-		Editor:     bindings.Editor,
-		Admin:      bindings.Admin,
-		Additional: bindings.Additional,
+	if bindings != nil {
+		manifest.RoleBindings = &app.ManifestRoleBindings{
+			Viewer:     bindings.Viewer,
+			Editor:     bindings.Editor,
+			Admin:      bindings.Admin,
+			Additional: bindings.Additional,
+		}
 	}
 
 	return &manifest, validateManifestRoles(manifest, includeSchemas)
