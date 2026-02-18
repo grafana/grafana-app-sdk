@@ -37,7 +37,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 	assert.Equal(t, &AppManifest{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "AppManifest",
-			APIVersion: "apps.grafana.com/v1alpha2",
+			APIVersion: "apps.grafana.app/v1alpha2",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:              "issue-tracker-project",
@@ -45,6 +45,7 @@ func TestAppManifestKind_Read(t *testing.T) {
 		},
 		Spec: AppManifestSpec{
 			AppName:          "issue-tracker-project",
+			AppDisplayName:   "Issue Tracker",
 			Group:            "issuetrackerproject.ext.grafana.com",
 			PreferredVersion: &preferred,
 			Versions: []AppManifestManifestVersion{{
@@ -56,8 +57,67 @@ func TestAppManifestKind_Read(t *testing.T) {
 					Scope:   "Namespaced",
 					Schemas: schema,
 				}},
+				Routes: &AppManifestManifestVersionRoutes{
+					Namespaced: map[string]any{
+						"/foo": map[string]any{
+							"GET": map[string]any{
+								"name": "getFoos",
+								"response": map[string]any{
+									"properties": map[string]any{
+										"foo": map[string]any{
+											"type": "string",
+										},
+									},
+								},
+								"responseMetadata": map[string]any{
+									"objectMeta": false,
+								},
+							},
+						},
+					},
+				},
 			}},
 			DryRunKinds: &dryRunKinds,
+			Roles: map[string]AppManifestRole{
+				"issue-tracker-project:reader": {
+					Title:       "Issue Tracker Reader",
+					Description: "Read Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithPermissionSet{
+							Kind:          "Issue",
+							PermissionSet: "viewer",
+						},
+					},
+					Routes: []string{},
+				},
+				"issue-tracker-project:editor": {
+					Title:       "Issue Tracker Editor",
+					Description: "Edit Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithVerbs{
+							Kind:  "Issue",
+							Verbs: []string{"get", "list", "watch", "create", "update", "patch", "delete"},
+						},
+					},
+					Routes: []string{},
+				},
+				"issue-tracker-project:admin": {
+					Title:       "Issue Tracker Admin",
+					Description: "Administrate Issues",
+					Kinds: []AppManifestRoleKind{
+						AppManifestRoleKindWithPermissionSet{
+							Kind:          "Issue",
+							PermissionSet: "admin",
+						},
+					},
+					Routes: []string{"getFoos"},
+				},
+			},
+			RoleBindings: &AppManifestV1alpha2SpecRoleBindings{
+				Viewer: []string{"issue-tracker-project:reader"},
+				Editor: []string{"issue-tracker-project:editor"},
+				Admin:  []string{"issue-tracker-project:admin"},
+			},
 		},
 		Status: AppManifestStatus{
 			Resources: map[string]AppManifeststatusApplyStatus{
@@ -93,14 +153,14 @@ func TestAppManifestKind_Write(t *testing.T) {
 
 func TestAppManifestKind_GroupVersionKind(t *testing.T) {
 	kind := AppManifestKind()
-	assert.Equal(t, "apps.grafana.com", kind.GroupVersionKind().Group)
+	assert.Equal(t, "apps.grafana.app", kind.GroupVersionKind().Group)
 	assert.Equal(t, "v1alpha2", kind.GroupVersionKind().Version)
 	assert.Equal(t, "AppManifest", kind.GroupVersionKind().Kind)
 }
 
 func TestAppManifestKind_GroupVersionResource(t *testing.T) {
 	kind := AppManifestKind()
-	assert.Equal(t, "apps.grafana.com", kind.GroupVersionResource().Group)
+	assert.Equal(t, "apps.grafana.app", kind.GroupVersionResource().Group)
 	assert.Equal(t, "v1alpha2", kind.GroupVersionResource().Version)
 	assert.Equal(t, "appmanifests", kind.GroupVersionResource().Resource)
 }

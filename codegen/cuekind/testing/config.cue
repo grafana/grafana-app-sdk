@@ -67,6 +67,7 @@ configIntegrationGen1: {
 	codegen: {
 		goGenPath: "pkg/gen1"
 		tsGenPath: "ts/gen1"
+		goModGenPath: "pkg/generated"
 	}
 	kinds: {
 		grouping: "kind"
@@ -83,6 +84,7 @@ configIntegrationGen2: {
 	codegen: {
 		goGenPath: "pkg/gen2"
 		tsGenPath: "ts/gen2"
+		goModGenPath: "pkg/generated"
 	}
 	kinds: {
 		grouping: "group"
@@ -91,5 +93,6 @@ configIntegrationGen2: {
 }
 
 configIntegrationGen3: {
-	manifestSelectors: ["customManifest"]
+	manifestSelectors: ["integrationManifest"]
+	kinds: grouping: "group"
 }

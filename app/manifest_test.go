@@ -136,11 +136,128 @@ func TestManifestData_Validate(t *testing.T) {
 		expectedErr: multierror.Append(nil,
 			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
 			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
+	}, {
+		name: "rolebindings for missing roles (no roles in manifest)",
+		data: ManifestData{
+			AppName: "myapp",
+			RoleBindings: &ManifestRoleBindings{
+				Viewer: []string{"viewer-role"},
+				Editor: []string{"editor-role"},
+				Admin:  []string{"admin-role"},
+				Additional: map[string][]string{
+					"extra": []string{"extra-role"},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("viewer: cannot bind role 'viewer-role' as no roles are present in the manifest"),
+			errors.New("editor: cannot bind role 'editor-role' as no roles are present in the manifest"),
+			errors.New("admin: cannot bind role 'admin-role' as no roles are present in the manifest"),
+			errors.New("extra: cannot bind role 'extra-role' as no roles are present in the manifest")),
+	}, {
+		name: "rolebindings for missing roles (no matching role)",
+		data: ManifestData{
+			AppName: "myapp",
+			Roles: map[string]ManifestRole{
+				"viewer-role": {
+					Title: "Viewer Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get"},
+					}},
+				},
+				"editor-role": {
+					Title: "Editor Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get", "create"},
+					}},
+				},
+				"admin-role": {
+					Title: "Admin Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"get", "create", "delete"},
+					}},
+				},
+				"extra-role": {
+					Title: "Viewer Role",
+					Kinds: []ManifestRoleKind{{
+						Kind:  "Foo",
+						Verbs: []string{"list"},
+					}},
+				},
+			},
+			RoleBindings: &ManifestRoleBindings{
+				Viewer: []string{"viewer-role", "other-viewer-role"},
+				Editor: []string{"editor-role", "other-editor-role"},
+				Admin:  []string{"admin-role", "other-admin-role"},
+				Additional: map[string][]string{
+					"extra": []string{"extra-role", "other-extra-role"},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("viewer: cannot bind role 'other-viewer-role' as it is not present in manifest roles"),
+			errors.New("editor: cannot bind role 'other-editor-role' as it is not present in manifest roles"),
+			errors.New("admin: cannot bind role 'other-admin-role' as it is not present in manifest roles"),
+			errors.New("extra: cannot bind role 'other-extra-role' as it is not present in manifest roles")),
 	}}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			assert.Equal(t, test.expectedErr, test.data.Validate())
+		})
+	}
+}
+
+func TestManifestVersionKind_Subresources(t *testing.T) {
+	sch1, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{}}`)), "Foo")
+	sch2, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{},"status":{}}`)), "Foo")
+
+	tests := []struct {
+		name     string
+		kind     ManifestVersionKind
+		expected []string
+	}{{
+		name:     "empty kind",
+		expected: []string{},
+	}, {
+		name: "empty schema",
+		kind: ManifestVersionKind{
+			Kind: "Foo",
+			Schema: &VersionSchema{
+				raw: map[string]any{},
+			},
+		},
+		expected: []string{},
+	}, {
+		name: "invalid schema",
+		kind: ManifestVersionKind{
+			Kind: "Foo",
+			Schema: &VersionSchema{
+				raw: jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}}}`)),
+			},
+		},
+		expected: []string{},
+	}, {
+		name: "no subresources",
+		kind: ManifestVersionKind{
+			Kind:   "Foo",
+			Schema: sch1,
+		},
+		expected: []string{},
+	}, {
+		name: "status subresource",
+		kind: ManifestVersionKind{
+			Kind:   "Foo",
+			Schema: sch2,
+		},
+		expected: []string{"status"},
+	}}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.kind.Subresources())
 		})
 	}
 }
@@ -792,6 +909,11 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		jsonData:   []byte(`{"components":{"schemas":{"foo":{"oneOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{}]}}}}`),
 		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"}},"oneOf":[{"required":["foo"]},{"not":{"anyOf":[{"required":["foo"]}]}}]}`),
 	}, {
+		name:       "preserve oneOf primitive union",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"oneOf":[{"type":"integer"},{"type":"number"},{"type":"string"},{"type":"boolean"}]}}}}`),
+		outputJSON: []byte(`{"x-kubernetes-preserve-unknown-fields":true}`),
+	}, {
 		name:       "convert to structural schema: anyOf",
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"foo":{"anyOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{"properties":{"bar":{"type":"string"}},"required":["bar"]}]}}}}`),
@@ -847,7 +969,7 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"),
 						},
 					},
 				},
@@ -856,7 +978,7 @@ func kubeOpenAPIKindWithProps(gvk schema.GroupVersionKind, ref common.ReferenceC
 		},
 		Dependencies: make([]string, 0),
 	}
-	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+	kind.Dependencies = append(kind.Dependencies, "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta")
 	for k, prop := range props {
 		kind.Schema.Properties[k] = spec.Schema{
 			SchemaProps: prop,
@@ -897,7 +1019,7 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]interface{}{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref("io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta"),
 						},
 					},
 					"items": {
@@ -918,7 +1040,7 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
+			"io.k8s.apimachinery.pkg.apis.meta.v1.ListMeta", fmt.Sprintf("%s/%s.%s", gvk.Group, gvk.Version, gvk.Kind)},
 	}
 }
 

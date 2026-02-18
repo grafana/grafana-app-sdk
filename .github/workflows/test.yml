@@ -9,7 +9,7 @@ jobs:
     steps:
       # git checkout
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -27,7 +27,7 @@ jobs:
     steps:
       # git checkout
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
           persist-credentials: false
@@ -47,7 +47,7 @@ jobs:
     steps:
       # git checkout
       - name: Checkout code
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
           path: "grafana-app-sdk"
@@ -75,10 +75,10 @@ jobs:
         run: |
           cd codegen-tests
           # NOTE: These four are here for backwards compatibility testing using now deprecated cli flags
-          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=customManifest --crdmanifest 
-          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --defencoding=json --manifest=testManifest --crdmanifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=customManifest --crdmanifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --defencoding=yaml --manifest=testManifest --crdmanifest
+          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=customManifest --crdmanifest
+          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=testManifest --crdmanifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=customManifest --crdmanifest
+          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=testManifest --crdmanifest
           sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/manifestdata/*.go
           diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
           sed -i '/^Common subdirectories/d' diff.txt
@@ -163,7 +163,7 @@ jobs:
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
-          cp ../grafana-app-sdk/codegen/cuekind/testing/customkind.cue kinds/customkind.cue
+          cp ../grafana-app-sdk/codegen/cuekind/testing/integration.cue kinds/integration.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/config.cue kinds/config.cue
           grafana-app-sdk generate --config configIntegrationGen3
           grafana-app-sdk project component add frontend backend operator --config configIntegrationGen3

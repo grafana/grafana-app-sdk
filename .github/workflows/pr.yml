@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
 
@@ -45,7 +45,7 @@ jobs:
     steps:
     # git checkout
     - name: Checkout code
-      uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         fetch-depth: 0
         persist-credentials: false
@@ -58,7 +58,7 @@ jobs:
     - name: Lint
       uses: golangci/golangci-lint-action@b002b6ecfcabe6ac0e2c6cba1bcc779eb34ac51f # v9
       with:
-        version: v2.5.0
+        version: v2.9.0
         only-new-issues: true
         args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
   test:

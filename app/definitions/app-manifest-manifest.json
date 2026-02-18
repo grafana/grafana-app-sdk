@@ -1,12 +1,13 @@
 {
-    "apiVersion": "apps.grafana.com/v1alpha2",
+    "apiVersion": "apps.grafana.app/v1alpha2",
     "kind": "AppManifest",
     "metadata": {
         "name": "app-manifest"
     },
     "spec": {
         "appName": "app-manifest",
-        "group": "apps.grafana.com",
+        "appDisplayName": "",
+        "group": "apps.grafana.app",
         "versions": [
             {
                 "name": "v1alpha1",
@@ -94,6 +95,13 @@
                                         "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                         "type": "string"
                                     },
+                                    "managedResources": {
+                                        "description": "objects contains a list of managed resources (such as roles, CRDs, webhooks, etc.)",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ApplyStatusManagedResource"
+                                        },
+                                        "type": "array"
+                                    },
                                     "status": {
                                         "enum": [
                                             "success",
@@ -104,6 +112,30 @@
                                 },
                                 "required": [
                                     "status"
+                                ],
+                                "type": "object"
+                            },
+                            "ApplyStatusManagedResource": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "apiVersion": {
+                                        "type": "string"
+                                    },
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "namespace": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "apiVersion",
+                                    "namespace",
+                                    "name"
                                 ],
                                 "type": "object"
                             },
@@ -182,10 +214,7 @@
                                         "type": "string"
                                     },
                                     "routes": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
@@ -216,10 +245,7 @@
                                 "type": "object"
                             },
                             "ManifestVersionKindSchema": {
-                                "additionalProperties": {
-                                    "additionalProperties": {},
-                                    "type": "object"
-                                },
+                                "additionalProperties": true,
                                 "type": "object"
                             },
                             "MutationCapability": {
@@ -259,10 +285,7 @@
                                         "type": "string"
                                     },
                                     "details": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "details contains any extra information that is operator-specific",
                                         "type": "object"
                                     },
@@ -304,6 +327,88 @@
                                 },
                                 "type": "object"
                             },
+                            "Role": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "description": {
+                                        "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
+                                        "type": "string"
+                                    },
+                                    "kinds": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/RoleKind"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "routes": {
+                                        "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "title": {
+                                        "description": "Title will be used as the role title in grafana",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "title",
+                                    "description"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleKind": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithPermissionSet"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithVerbs"
+                                    }
+                                ]
+                            },
+                            "RoleKindWithPermissionSet": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "permissionSet": {
+                                        "default": "viewer",
+                                        "enum": [
+                                            "viewer",
+                                            "editor",
+                                            "admin"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "permissionSet"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleKindWithVerbs": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "verbs": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "verbs"
+                                ],
+                                "type": "object"
+                            },
                             "ValidationCapability": {
                                 "additionalProperties": false,
                                 "properties": {
@@ -322,6 +427,10 @@
                             "spec": {
                                 "additionalProperties": false,
                                 "properties": {
+                                    "appDisplayName": {
+                                        "description": "AppDisplayName is the display name of the app, which can contain any printable characters",
+                                        "type": "string"
+                                    },
                                     "appName": {
                                         "type": "string"
                                     },
@@ -358,6 +467,47 @@
                                         "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
                                         "type": "string"
                                     },
+                                    "roleBindings": {
+                                        "additionalProperties": false,
+                                        "description": "RoleBindings binds the roles specified in Roles to groups.\nBasic groups are \"anonymous\", \"viewer\", \"editor\", and \"admin\".\nAdditional groups are specified under \"additional\"",
+                                        "properties": {
+                                            "additional": {
+                                                "additionalProperties": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "type": "object"
+                                            },
+                                            "admin": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "editor": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "viewer": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "roles": {
+                                        "additionalProperties": {
+                                            "$ref": "#/components/schemas/Role"
+                                        },
+                                        "description": "Roles contains information for new user roles associated with this app.\nIt is a map of the role name (e.g. \"dashboard:reader\") to the set of permissions on resources managed by this app.",
+                                        "type": "object"
+                                    },
                                     "versions": {
                                         "description": "Versions is the list of versions for this manifest, in order.",
                                         "items": {
@@ -368,6 +518,7 @@
                                 },
                                 "required": [
                                     "appName",
+                                    "appDisplayName",
                                     "group",
                                     "versions"
                                 ],
@@ -377,10 +528,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
                                         "type": "object"
                                     },
@@ -499,6 +647,13 @@
                                         "description": "details may contain specific information (such as error message(s)) on the reason for the status",
                                         "type": "string"
                                     },
+                                    "managedResources": {
+                                        "description": "objects contains a list of managed resources (such as roles, CRDs, webhooks, etc.)",
+                                        "items": {
+                                            "$ref": "#/components/schemas/ApplyStatusManagedResource"
+                                        },
+                                        "type": "array"
+                                    },
                                     "status": {
                                         "enum": [
                                             "success",
@@ -509,6 +664,30 @@
                                 },
                                 "required": [
                                     "status"
+                                ],
+                                "type": "object"
+                            },
+                            "ApplyStatusManagedResource": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "apiVersion": {
+                                        "type": "string"
+                                    },
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "type": "string"
+                                    },
+                                    "namespace": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "apiVersion",
+                                    "namespace",
+                                    "name"
                                 ],
                                 "type": "object"
                             },
@@ -591,18 +770,12 @@
                                         "type": "string"
                                     },
                                     "routes": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
                                     "schemas": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Schemas is the components.schemas section of an OpenAPI document describing this Kind.\nIt must contain a key named the same as the `kind` field of the Kind.\nOther fields may be present to be referenced by $ref tags in a schema,\nand references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.\nIf route responses in the `routes` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
                                         "type": "object"
                                     },
@@ -633,26 +806,17 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "cluster": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
                                     "namespaced": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
                                         "type": "object"
                                     },
                                     "schemas": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.\nIf route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
                                         "type": "object"
                                     }
@@ -696,10 +860,7 @@
                                         "type": "string"
                                     },
                                     "details": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "details contains any extra information that is operator-specific",
                                         "type": "object"
                                     },
@@ -741,6 +902,88 @@
                                 },
                                 "type": "object"
                             },
+                            "Role": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "description": {
+                                        "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
+                                        "type": "string"
+                                    },
+                                    "kinds": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/RoleKind"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "routes": {
+                                        "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "title": {
+                                        "description": "Title will be used as the role title in grafana",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "title",
+                                    "description"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleKind": {
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithPermissionSet"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/RoleKindWithVerbs"
+                                    }
+                                ]
+                            },
+                            "RoleKindWithPermissionSet": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "permissionSet": {
+                                        "default": "viewer",
+                                        "enum": [
+                                            "viewer",
+                                            "editor",
+                                            "admin"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "permissionSet"
+                                ],
+                                "type": "object"
+                            },
+                            "RoleKindWithVerbs": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "type": "string"
+                                    },
+                                    "verbs": {
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "verbs"
+                                ],
+                                "type": "object"
+                            },
                             "ValidationCapability": {
                                 "additionalProperties": false,
                                 "properties": {
@@ -759,7 +1002,12 @@
                             "spec": {
                                 "additionalProperties": false,
                                 "properties": {
+                                    "appDisplayName": {
+                                        "description": "AppDisplayName is the display name of the app, which can contain any printable characters",
+                                        "type": "string"
+                                    },
                                     "appName": {
+                                        "description": "AppName is the unique ID of the app",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -795,6 +1043,47 @@
                                         "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
                                         "type": "string"
                                     },
+                                    "roleBindings": {
+                                        "additionalProperties": false,
+                                        "description": "RoleBindings binds the roles specified in Roles to groups.\nBasic groups are \"anonymous\", \"viewer\", \"editor\", and \"admin\".\nAdditional groups are specified under \"additional\"",
+                                        "properties": {
+                                            "additional": {
+                                                "additionalProperties": {
+                                                    "items": {
+                                                        "type": "string"
+                                                    },
+                                                    "type": "array"
+                                                },
+                                                "type": "object"
+                                            },
+                                            "admin": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "editor": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            },
+                                            "viewer": {
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "type": "array"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "roles": {
+                                        "additionalProperties": {
+                                            "$ref": "#/components/schemas/Role"
+                                        },
+                                        "description": "Roles contains information for new user roles associated with this app.\nIt is a map of the role name (e.g. \"dashboard:reader\") to the set of permissions on resources managed by this app.",
+                                        "type": "object"
+                                    },
                                     "versions": {
                                         "description": "Versions is the list of versions for this manifest, in order.",
                                         "items": {
@@ -805,6 +1094,7 @@
                                 },
                                 "required": [
                                     "appName",
+                                    "appDisplayName",
                                     "group",
                                     "versions"
                                 ],
@@ -814,10 +1104,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
-                                        "additionalProperties": {
-                                            "additionalProperties": {},
-                                            "type": "object"
-                                        },
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
                                         "type": "object"
                                     },
@@ -866,6 +1153,29 @@
                         "watch"
                     ]
                 }
+            ]
+        },
+        "roles": {
+            "appmanifest:viewer": {
+                "title": "AppManifest Viewer",
+                "description": "Get, List, and Watch AppManifests",
+                "kinds": [
+                    {
+                        "kind": "AppManifest",
+                        "permissionSet": "viewer"
+                    }
+                ]
+            }
+        },
+        "roleBindings": {
+            "viewer": [
+                "appmanifest:viewer"
+            ],
+            "editor": [
+                "appmanifest:viewer"
+            ],
+            "admin": [
+                "appmanifest:viewer"
             ]
         }
     }

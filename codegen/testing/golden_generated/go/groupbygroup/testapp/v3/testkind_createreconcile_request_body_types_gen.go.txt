@@ -13,3 +13,8 @@ func NewCreateReconcileRequestBody() *CreateReconcileRequestBody {
 		Force: false,
 	}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for CreateReconcileRequestBody.
+func (CreateReconcileRequestBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileRequestBody"
+}

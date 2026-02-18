@@ -199,7 +199,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	err = checkAndMakePath(filepath.Join(path, "cmd", "operator"))
+	err = checkAndMakePath(filepath.Join(path, "cmd"))
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 func projectWriteGoModule(path, moduleName string, overwrite bool) (string, error) {
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
-	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.22\n", moduleName))
+	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.26\n", moduleName))
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {
@@ -476,7 +476,7 @@ func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, 
 	if err != nil {
 		return nil, err
 	}
-	files := make(codejen.Files, 2)
+	files := make(codejen.Files, 2, 4)
 	files[0] = codejen.File{
 		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
 		Data:         buf.Bytes(),
@@ -622,7 +622,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, kindGrouping == config.KindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, cfg.Kinds.Grouping == config.KindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -639,7 +639,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, kindGrouping == config.KindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, cfg.Kinds.Grouping == config.KindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -694,7 +694,10 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 	default:
 		return fmt.Errorf("unknown generator type: %T", cast)
 	}
-	if err = checkAndMakePath("pkg"); err != nil {
+	if err = checkAndMakePath(filepath.Join(projectRootPath, "cmd", "operator")); err != nil {
+		return err
+	}
+	if err = checkAndMakePath(filepath.Join(projectRootPath, "pkg")); err != nil {
 		return err
 	}
 	for _, f := range files {
@@ -763,7 +766,7 @@ func addComponentBackend[G anyGenerator](projectRootPath string, generator G, se
 	} else {
 		// New plugin.json
 		err = writePluginJSON(pluginJSONPath,
-			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
+			fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup, true)
 	}
 	return err
 }
@@ -806,6 +809,19 @@ func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 		return errors.New("yarn must be installed to add the frontend component")
 	}
 
+	// Check backend bits
+	pluginHasBackend := false
+	pluginJSONPath := filepath.Join(projectRootPath, "plugin", "src", "plugin.json")
+	if _, err := os.Stat(pluginJSONPath); err == nil {
+		m := make(map[string]any)
+		b, _ := os.ReadFile(pluginJSONPath)
+		err = json.Unmarshal(b, &m)
+		if err != nil {
+			return err
+		}
+		pluginHasBackend = m["backend"].(bool)
+	}
+
 	args := []string{"create", "@grafana/plugin", "--pluginType=app", "--hasBackend=true", "--pluginName=tmp", "--orgName=tmp"}
 	cmd := exec.Command("yarn", args...)
 	buf := bytes.Buffer{}
@@ -842,13 +858,17 @@ func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 	if err != nil {
 		return err
 	}
+	err = os.Remove("./tmp-tmp-app/Magefile.go")
+	if err != nil {
+		return err
+	}
 	// Move the remaining contents into /plugin
 	err = moveFiles("./tmp-tmp-app/", filepath.Join(projectRootPath, "plugin"))
 	if err != nil {
 		return err
 	}
 	err = writePluginJSON(filepath.Join(projectRootPath, "plugin/src/plugin.json"),
-		fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup)
+		fmt.Sprintf("%s-app", manifestGroup), "NAME", "AUTHOR", manifestGroup, pluginHasBackend)
 	if err != nil {
 		return err
 	}
@@ -894,21 +914,23 @@ func isCommandInstalled(command string) bool {
 	return err == nil
 }
 
-func writePluginJSON(fullPath, id, name, author, slug string) error {
+func writePluginJSON(fullPath, id, name, author, slug string, hasBackend bool) error {
 	tmp, err := template.ParseFS(templates, "templates/plugin.json.tmpl")
 	if err != nil {
 		return err
 	}
 	data := struct {
-		ID     string
-		Name   string
-		Author string
-		Slug   string
+		ID      string
+		Name    string
+		Author  string
+		Slug    string
+		Backend bool
 	}{
-		ID:     id,
-		Name:   name,
-		Author: author,
-		Slug:   slug,
+		ID:      id,
+		Name:    name,
+		Author:  author,
+		Slug:    slug,
+		Backend: hasBackend,
 	}
 	b := bytes.Buffer{}
 	err = tmp.Execute(&b, data)

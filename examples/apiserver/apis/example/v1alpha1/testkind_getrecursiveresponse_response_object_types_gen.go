@@ -9,29 +9,33 @@ import (
 )
 
 // +k8s:openapi-gen=true
-type GetRecursiveResponse struct {
+type GetRecursiveResponseResponse struct {
 	metav1.TypeMeta          `json:",inline"`
 	GetRecursiveResponseBody `json:",inline"`
 }
 
-func NewGetRecursiveResponse() *GetRecursiveResponse {
-	return &GetRecursiveResponse{}
+func NewGetRecursiveResponseResponse() *GetRecursiveResponseResponse {
+	return &GetRecursiveResponseResponse{}
 }
 
 func (t *GetRecursiveResponseBody) DeepCopyInto(dst *GetRecursiveResponseBody) {
 	_ = resource.CopyObjectInto(dst, t)
 }
 
-func (o *GetRecursiveResponse) DeepCopyObject() runtime.Object {
-	dst := NewGetRecursiveResponse()
+func (o *GetRecursiveResponseResponse) DeepCopyObject() runtime.Object {
+	dst := NewGetRecursiveResponseResponse()
 	o.DeepCopyInto(dst)
 	return dst
 }
 
-func (o *GetRecursiveResponse) DeepCopyInto(dst *GetRecursiveResponse) {
+func (o *GetRecursiveResponseResponse) DeepCopyInto(dst *GetRecursiveResponseResponse) {
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
 	o.GetRecursiveResponseBody.DeepCopyInto(&dst.GetRecursiveResponseBody)
 }
 
-var _ runtime.Object = NewGetRecursiveResponse()
+func (GetRecursiveResponseResponse) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponseResponse"
+}
+
+var _ runtime.Object = NewGetRecursiveResponseResponse()

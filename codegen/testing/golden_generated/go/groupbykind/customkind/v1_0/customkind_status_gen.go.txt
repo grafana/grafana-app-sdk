@@ -20,6 +20,11 @@ func NewStatusOperatorState() *StatusOperatorState {
 	return &StatusOperatorState{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for StatusOperatorState.
+func (StatusOperatorState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.StatusOperatorState"
+}
+
 // +k8s:openapi-gen=true
 type Status struct {
 	StatusField1 string `json:"statusField1"`
@@ -35,6 +40,11 @@ func NewStatus() *Status {
 	return &Status{}
 }
 
+// OpenAPIModelName returns the OpenAPI model name for Status.
+func (Status) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Status"
+}
+
 // +k8s:openapi-gen=true
 type StatusOperatorStateState string
 
@@ -43,3 +53,8 @@ const (
 	StatusOperatorStateStateInProgress StatusOperatorStateState = "in_progress"
 	StatusOperatorStateStateFailed     StatusOperatorStateState = "failed"
 )
+
+// OpenAPIModelName returns the OpenAPI model name for StatusOperatorStateState.
+func (StatusOperatorStateState) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.StatusOperatorStateState"
+}

@@ -21,10 +21,10 @@ import (
 )
 
 var (
-	rawSchemaCustomKindv0_0     = []byte(`{"CustomKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"deprecatedField":{"type":"string"},"field1":{"type":"string"}},"required":["field1","deprecatedField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	rawSchemaCustomKindv0_0     = []byte(`{"CustomKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"deprecatedField":{"type":"string"},"field1":{"type":"string"}},"required":["field1","deprecatedField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaCustomKindv0_0 app.VersionSchema
 	_                           = json.Unmarshal(rawSchemaCustomKindv0_0, &versionSchemaCustomKindv0_0)
-	rawSchemaCustomKindv1_0     = []byte(`{"CustomKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"InnerObject1":{"additionalProperties":false,"properties":{"innerField1":{"type":"string"},"innerField2":{"items":{"type":"string"},"type":"array"},"innerField3":{"items":{"$ref":"#/components/schemas/InnerObject2"},"type":"array"},"innerField4":{"items":{"additionalProperties":{"additionalProperties":{},"type":"object"},"type":"object"},"type":"array"}},"required":["innerField1","innerField2","innerField3","innerField4"],"type":"object"},"InnerObject2":{"additionalProperties":false,"properties":{"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"type":"object"},"name":{"type":"string"}},"required":["name","details"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"RecursiveList":{"additionalProperties":false,"properties":{"next":{"$ref":"#/components/schemas/RecursiveList"},"val":{"type":"string"}},"required":["val"],"type":"object"},"Type1":{"additionalProperties":false,"properties":{"group":{"type":"string"},"options":{"items":{"type":"string"},"type":"array"}},"required":["group"],"type":"object"},"Type2":{"additionalProperties":false,"properties":{"details":{"additionalProperties":{"additionalProperties":{},"type":"object"},"type":"object"},"group":{"type":"string"}},"required":["group","details"],"type":"object"},"UnionType":{"oneOf":[{"$ref":"#/components/schemas/Type1"},{"$ref":"#/components/schemas/Type2"}]},"spec":{"additionalProperties":false,"properties":{"boolField":{"default":false,"type":"boolean"},"enum":{"default":"default","enum":["val1","val2","val3","val4","default"],"type":"string"},"exclusiveInt":{"exclusiveMaximum":true,"exclusiveMinimum":true,"maximum":100,"minimum":10,"type":"integer"},"field1":{"type":"string"},"floatField":{"type":"number"},"i32":{"maximum":123456,"type":"integer"},"i64":{"minimum":123456,"type":"integer"},"inner":{"$ref":"#/components/schemas/InnerObject1"},"linkedList":{"$ref":"#/components/schemas/RecursiveList"},"map":{"additionalProperties":{"$ref":"#/components/schemas/Type2"},"type":"object"},"timestamp":{"format":"date-time","type":"string"},"union":{"$ref":"#/components/schemas/UnionType"}},"required":["field1","inner","union","map","timestamp","enum","i32","i64","boolField","floatField","linkedList","exclusiveInt"],"type":"object"},"status":{"additionalProperties":{},"properties":{"additionalFields":{"additionalProperties":{"additionalProperties":{},"type":"object"},"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"},"statusField1":{"type":"string"}},"required":["statusField1"],"type":"object"}}`)
+	rawSchemaCustomKindv1_0     = []byte(`{"CustomKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"InnerObject1":{"additionalProperties":false,"properties":{"innerField1":{"type":"string"},"innerField2":{"items":{"type":"string"},"type":"array"},"innerField3":{"items":{"$ref":"#/components/schemas/InnerObject2"},"type":"array"},"innerField4":{"items":{"additionalProperties":true,"type":"object"},"type":"array"}},"required":["innerField1","innerField2","innerField3","innerField4"],"type":"object"},"InnerObject2":{"additionalProperties":false,"properties":{"details":{"additionalProperties":true,"type":"object"},"name":{"type":"string"}},"required":["name","details"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"RecursiveList":{"additionalProperties":false,"properties":{"next":{"$ref":"#/components/schemas/RecursiveList"},"val":{"type":"string"}},"required":["val"],"type":"object"},"Type1":{"additionalProperties":false,"properties":{"group":{"type":"string"},"options":{"items":{"type":"string"},"type":"array"}},"required":["group"],"type":"object"},"Type2":{"additionalProperties":false,"properties":{"details":{"additionalProperties":true,"type":"object"},"group":{"type":"string"}},"required":["group","details"],"type":"object"},"UnionType":{"oneOf":[{"$ref":"#/components/schemas/Type1"},{"$ref":"#/components/schemas/Type2"}]},"spec":{"additionalProperties":false,"properties":{"boolField":{"default":false,"type":"boolean"},"enum":{"default":"default","enum":["val1","val2","val3","val4","default"],"type":"string"},"exclusiveInt":{"exclusiveMaximum":true,"exclusiveMinimum":true,"maximum":100,"minimum":10,"type":"integer"},"field1":{"type":"string"},"floatField":{"type":"number"},"i32":{"maximum":123456,"type":"integer"},"i64":{"minimum":123456,"type":"integer"},"inner":{"$ref":"#/components/schemas/InnerObject1"},"linkedList":{"$ref":"#/components/schemas/RecursiveList"},"map":{"additionalProperties":{"$ref":"#/components/schemas/Type2"},"type":"object"},"timestamp":{"format":"date-time","type":"string"},"union":{"$ref":"#/components/schemas/UnionType"}},"required":["field1","inner","union","map","timestamp","enum","i32","i64","boolField","floatField","linkedList","exclusiveInt"],"type":"object"},"status":{"additionalProperties":{},"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"},"statusField1":{"type":"string"}},"required":["statusField1"],"type":"object"}}`)
 	versionSchemaCustomKindv1_0 app.VersionSchema
 	_                           = json.Unmarshal(rawSchemaCustomKindv1_0, &versionSchemaCustomKindv1_0)
 )
@@ -70,6 +70,56 @@ var appManifestData = app.ManifestData{
 				Cluster:    map[string]spec3.PathProps{},
 				Schemas:    map[string]spec.Schema{},
 			},
+		},
+	},
+	Roles: map[string]app.ManifestRole{
+		"custom-app:admin": {
+			Title:       "custom-app Admin",
+			Description: "Allows all actions on CustomKinds",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "CustomKind",
+					PermissionSet: strPtr("admin"),
+				},
+				{
+					Kind:          "CustomKind/status",
+					PermissionSet: strPtr("admin"),
+				},
+			},
+			Routes: []string{},
+		},
+		"custom-app:editor": {
+			Title:       "custom-app Editor",
+			Description: "Create, Read, Update, and Delete CustomKinds",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "CustomKind",
+					PermissionSet: strPtr("editor"),
+				},
+			},
+			Routes: []string{},
+		},
+		"custom-app:reader": {
+			Title:       "custom-app Reader",
+			Description: "Read CustomKinds",
+			Kinds: []app.ManifestRoleKind{
+				{
+					Kind:          "CustomKind",
+					PermissionSet: strPtr("viewer"),
+				},
+			},
+			Routes: []string{},
+		},
+	},
+	RoleBindings: &app.ManifestRoleBindings{
+		Viewer: []string{
+			"custom-app:reader",
+		},
+		Editor: []string{
+			"custom-app:editor",
+		},
+		Admin: []string{
+			"custom-app:admin",
 		},
 	},
 }
@@ -145,4 +195,7 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 }
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
 	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
+}
+func strPtr(s string) *string {
+	return &s
 }

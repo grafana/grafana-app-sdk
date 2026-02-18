@@ -1,11 +1,12 @@
 {
-    "apiVersion": "apps.grafana.com/v1alpha1",
+    "apiVersion": "apps.grafana.app/v1alpha1",
     "kind": "AppManifest",
     "metadata": {
         "name": "custom-app"
     },
     "spec": {
         "appName": "custom-app",
+        "appDisplayName": "",
         "group": "customapp.ext.grafana.com",
         "versions": [
             {
@@ -328,6 +329,53 @@
                 ]
             }
         ],
-        "preferredVersion": "v1-0"
+        "preferredVersion": "v1-0",
+        "roles": {
+            "custom-app:admin": {
+                "title": "custom-app Admin",
+                "description": "Allows all actions on CustomKinds",
+                "kinds": [
+                    {
+                        "kind": "CustomKind",
+                        "permissionSet": "admin"
+                    },
+                    {
+                        "kind": "CustomKind/status",
+                        "permissionSet": "admin"
+                    }
+                ]
+            },
+            "custom-app:editor": {
+                "title": "custom-app Editor",
+                "description": "Create, Read, Update, and Delete CustomKinds",
+                "kinds": [
+                    {
+                        "kind": "CustomKind",
+                        "permissionSet": "editor"
+                    }
+                ]
+            },
+            "custom-app:reader": {
+                "title": "custom-app Reader",
+                "description": "Read CustomKinds",
+                "kinds": [
+                    {
+                        "kind": "CustomKind",
+                        "permissionSet": "viewer"
+                    }
+                ]
+            }
+        },
+        "roleBindings": {
+            "viewer": [
+                "custom-app:reader"
+            ],
+            "editor": [
+                "custom-app:editor"
+            ],
+            "admin": [
+                "custom-app:admin"
+            ]
+        }
     }
 }

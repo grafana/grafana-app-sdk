@@ -1,0 +1,33 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type CreateReconcileRequestResponse struct {
+	Status CreateReconcileRequestResponseStatus `json:"status"`
+	// A comment containing "quotes" should not break anything
+	Message string `json:"message"`
+}
+
+// NewCreateReconcileRequestResponse creates a new CreateReconcileRequestResponse object.
+func NewCreateReconcileRequestResponse() *CreateReconcileRequestResponse {
+	return &CreateReconcileRequestResponse{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateReconcileRequestResponse.
+func (CreateReconcileRequestResponse) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileRequestResponse"
+}
+
+// +k8s:openapi-gen=true
+type CreateReconcileRequestResponseStatus string
+
+const (
+	CreateReconcileRequestResponseStatusSuccess CreateReconcileRequestResponseStatus = "success"
+	CreateReconcileRequestResponseStatusFailure CreateReconcileRequestResponseStatus = "failure"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for CreateReconcileRequestResponseStatus.
+func (CreateReconcileRequestResponseStatus) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateReconcileRequestResponseStatus"
+}

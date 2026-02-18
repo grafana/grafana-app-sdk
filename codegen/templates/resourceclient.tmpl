@@ -111,7 +111,7 @@ type {{.TypeName}}Request struct { {{ if .HasParams }}
 	Headers http.Header
 }
 
-func (c *{{$.KindName}}Client) {{.TypeName}}(ctx context.Context, identifier resource.Identifier, request {{.TypeName}}Request) (*{{.TypeName}}, error) { {{ if .HasParams }}
+func (c *{{$.KindName}}Client) {{.TypeName}}(ctx context.Context, identifier resource.Identifier, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
 	params := url.Values{}{{ range .ParamValues }}
 	params.Set("{{.Key}}", fmt.Sprintf("%v", request.Params.{{.FieldName}})){{ end }}{{ end }}{{ if .HasBody }}
     body, err := json.Marshal(request.Body)
@@ -128,10 +128,10 @@ func (c *{{$.KindName}}Client) {{.TypeName}}(ctx context.Context, identifier res
 	if err != nil {
 		return nil, err
 	}
-	cast := {{.TypeName}}{}
+	cast := {{.TypeName}}Response{}
 	err = json.Unmarshal(resp, &cast)
 	if err != nil {
-		return nil, fmt.Errorf("unable to unmarshal response bytes into {{.TypeName}}: %w", err)
+		return nil, fmt.Errorf("unable to unmarshal response bytes into {{.TypeName}}Response: %w", err)
 	}
 	return &cast, nil
 }

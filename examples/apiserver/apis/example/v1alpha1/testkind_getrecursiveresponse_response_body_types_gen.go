@@ -3,23 +3,33 @@
 package v1alpha1
 
 // +k8s:openapi-gen=true
-type VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType struct {
-	Message string                                                       `json:"message"`
-	Next    *VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType `json:"next,omitempty"`
+type GetRecursiveResponseRecursiveType struct {
+	Message string                             `json:"message"`
+	Next    *GetRecursiveResponseRecursiveType `json:"next,omitempty"`
 }
 
-// NewVersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType creates a new VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType object.
-func NewVersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType() *VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType {
-	return &VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType{}
+// NewGetRecursiveResponseRecursiveType creates a new GetRecursiveResponseRecursiveType object.
+func NewGetRecursiveResponseRecursiveType() *GetRecursiveResponseRecursiveType {
+	return &GetRecursiveResponseRecursiveType{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for GetRecursiveResponseRecursiveType.
+func (GetRecursiveResponseRecursiveType) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponseRecursiveType"
 }
 
 // +k8s:openapi-gen=true
 type GetRecursiveResponseBody struct {
-	Message string                                                       `json:"message"`
-	Next    *VersionsV1alpha1Kinds0RoutesRecurseGETResponseRecursiveType `json:"next,omitempty"`
+	Message string                             `json:"message"`
+	Next    *GetRecursiveResponseRecursiveType `json:"next,omitempty"`
 }
 
 // NewGetRecursiveResponseBody creates a new GetRecursiveResponseBody object.
 func NewGetRecursiveResponseBody() *GetRecursiveResponseBody {
 	return &GetRecursiveResponseBody{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for GetRecursiveResponseBody.
+func (GetRecursiveResponseBody) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetRecursiveResponseBody"
 }

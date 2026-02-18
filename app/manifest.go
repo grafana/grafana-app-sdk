@@ -12,6 +12,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -22,6 +23,10 @@ const (
 	OpenAPIExtensionPrefix                   = "x-grafana-app"
 	OpenAPIExtensionUsesKubernetesObjectMeta = OpenAPIExtensionPrefix + "-uses-kubernetes-object-metadata"
 	OpenAPIExtensionUsesKubernetesListMeta   = OpenAPIExtensionPrefix + "-uses-kubernetes-list-metadata"
+
+	ManifestRolePermissionSetViewer = "viewer"
+	ManifestRolePermissionSetEditor = "editor"
+	ManifestRolePermissionSetAdmin  = "admin"
 )
 
 // NewEmbeddedManifest returns a Manifest which has the ManifestData embedded in it
@@ -83,6 +88,8 @@ const (
 type ManifestData struct {
 	// AppName is the unique identifier for the App
 	AppName string `json:"appName" yaml:"appName"`
+	// AppDisplayName is the human-readable display name of the app. Unlike the AppName, any printable characters are allowed in this field
+	AppDisplayName string `json:"appDisplayName" yaml:"appDisplayName"`
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.com"
 	Group string `json:"group" yaml:"group"`
@@ -99,6 +106,13 @@ type ManifestData struct {
 	// This is only required if you run your app as an operator and any of your kinds support webhooks for validation,
 	// mutation, or conversion.
 	Operator *ManifestOperatorInfo `json:"operator,omitempty" yaml:"operator,omitempty"`
+	// Roles contains information for new user roles associated with this app.
+	// It is a map of the role name (e.g. "dashboard:reader") to the set of permissions on resources managed by this app.
+	Roles map[string]ManifestRole `json:"roles,omitempty" yaml:"roles,omitempty"`
+	// RoleBindings binds the roles specified in Roles to groups.
+	// Basic groups are "anonymous", "viewer", "editor", and "admin".
+	// At this time, only these are supported.
+	RoleBindings *ManifestRoleBindings `json:"roleBindings,omitempty" yaml:"roleBindings,omitempty"`
 }
 
 func (m *ManifestData) IsEmpty() bool {
@@ -106,6 +120,8 @@ func (m *ManifestData) IsEmpty() bool {
 }
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
+//
+//nolint:gocognit
 func (m *ManifestData) Validate() error {
 	type kindData struct {
 		kind       string
@@ -159,10 +175,45 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
+	// checkRoleBinding adds to `errs` if there are issues with a rolebinding
+	// it exists to avoid duplicating this code for each rolebinding
+	checkRoleBinding := func(rb string, boundRoles []string) {
+		for _, role := range boundRoles {
+			role = strings.Trim(role, " ")
+			if role == "" {
+				continue
+			}
+			if m.Roles == nil {
+				errs = multierror.Append(errs, fmt.Errorf("%s: cannot bind role '%s' as no roles are present in the manifest", rb, role))
+				continue
+			}
+
+			if _, ok := m.Roles[role]; !ok {
+				errs = multierror.Append(errs, fmt.Errorf("%s: cannot bind role '%s' as it is not present in manifest roles", rb, role))
+			}
+		}
+	}
+	if m.RoleBindings != nil {
+		if len(m.RoleBindings.Viewer) > 0 {
+			checkRoleBinding("viewer", m.RoleBindings.Viewer)
+		}
+		if len(m.RoleBindings.Editor) > 0 {
+			checkRoleBinding("editor", m.RoleBindings.Editor)
+		}
+		if len(m.RoleBindings.Admin) > 0 {
+			checkRoleBinding("admin", m.RoleBindings.Admin)
+		}
+		for k, v := range m.RoleBindings.Additional {
+			if len(v) > 0 {
+				checkRoleBinding(k, v)
+			}
+		}
+	}
 	return errs
 }
 
 // Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
+//
 // Deprecated: this exists to support current workflows, and should not be used for new ones.
 func (m *ManifestData) Kinds() []ManifestKind {
 	kinds := make(map[string]ManifestKind)
@@ -194,6 +245,7 @@ func (m *ManifestData) Kinds() []ManifestKind {
 
 // ManifestKind is the manifest for a particular kind, including its Kind, Scope, and Versions.
 // The values for Kind, Plural, Scope, and Conversion are hoisted up from their namesakes in Versions entries
+//
 // Deprecated: this is used only for the deprecated method ManifestData.Kinds()
 type ManifestKind struct {
 	// Kind is the name of the kind
@@ -209,6 +261,7 @@ type ManifestKind struct {
 }
 
 // ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
+//
 // Deprecated: this type if used only as part of the deprecated method ManifestData.Kinds()
 type ManifestKindVersion struct {
 	ManifestVersionKind `json:",inline" yaml:",inline"`
@@ -263,6 +316,42 @@ type ManifestVersionKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
+}
+
+// Subresources returns a list of all (stored) subresources for the kind.
+// The list of subresources will not include "spec" or "metadata" as they are not subresources.
+// Routes for the kind (subresource routes) will also not be included, as they are not stored.
+//
+//nolint:goconst
+func (m *ManifestVersionKind) Subresources() []string {
+	if m.Schema == nil {
+		return []string{}
+	}
+	mp := m.Schema.AsOpenAPI3SchemasMap()
+	k, ok := mp[m.Kind]
+	if !ok {
+		return []string{}
+	}
+	cast, ok := k.(map[string]any)
+	if !ok {
+		return []string{}
+	}
+	props, ok := cast["properties"]
+	if !ok {
+		return []string{}
+	}
+	cast, ok = props.(map[string]any)
+	if !ok {
+		return []string{}
+	}
+	subresources := make([]string, 0)
+	for k := range cast {
+		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" {
+			continue
+		}
+		subresources = append(subresources, k)
+	}
+	return subresources
 }
 
 type ManifestVersionKindAdditionalPrinterColumn struct {
@@ -362,6 +451,42 @@ type ManifestOperatorWebhookProperties struct {
 	ConversionPath string `json:"conversionPath" yaml:"conversionPath"`
 	ValidationPath string `json:"validationPath" yaml:"validationPath"`
 	MutationPath   string `json:"mutationPath" yaml:"mutationPath"`
+}
+
+// ManifestRole describes a role used in the ManifestData Roles map.
+// A ManifestRole consists of a PermissionSet (such as "editor") and a set of versions with kinds to apply that permission set to.
+type ManifestRole struct {
+	Title       string             `json:"title" yaml:"title"`
+	Description string             `json:"description" yaml:"description"`
+	Kinds       []ManifestRoleKind `json:"kinds" yaml:"kinds"`
+	// Routes is a list of route names to match.
+	// To match the same route in multiple versions, it should share the same name.
+	Routes []string `json:"routes" yaml:"routes"`
+}
+
+// ManifestRoleKind is an association between a kind and a set of permissions
+type ManifestRoleKind struct {
+	// Kind is the kind name
+	Kind string `json:"kind" yaml:"kind"`
+	// Verbs is a list of kubernetes verbs (get, list, watch, create, update, patch, delete, deletecollection).
+	// It is mutually exclusive with PermissionSet
+	Verbs []string `json:"verbs,omitempty" yaml:"verbs,omitempty"`
+	// PermissionSet is a permission set (viewer, editor, admin) to associate with the kind.
+	// It is mutually exclusive with Verbs
+	PermissionSet *string `json:"permissionSet,omitempty" yaml:"permissionSet,omitempty"`
+}
+
+// ManifestRoleBindings is the set of RoleBindings for ManifestData.RoleBindings.
+// It binds a grafana group to one or more roles as described by ManifestData.Roles (or other role strings defined by other apps).
+type ManifestRoleBindings struct {
+	// Viewer sets the role(s) granted to users in the "viewer" group
+	Viewer []string `json:"viewer" yaml:"viewer"`
+	// Editor sets the role(s) granted to users in the "editor" group
+	Editor []string `json:"editor" yaml:"editor"`
+	// Admin sets the role(s) granted to users in the "admin" group
+	Admin []string `json:"admin" yaml:"admin"`
+	// Additional is a map of additional group strings to their associated roles
+	Additional map[string][]string `json:"additional,omitempty" yaml:"additional,omitempty"`
 }
 
 // VersionSchemaFromMap accepts an OpenAPI-shaped map[string]any, where the contents of the map are either a full openAPI document
@@ -687,7 +812,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]any{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta"),
+							Ref:     ref(metav1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
 				},
@@ -696,7 +821,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		},
 		Dependencies: make([]string, 0),
 	}
-	kind.Dependencies = append(kind.Dependencies, "k8s.io/apimachinery/pkg/apis/meta/v1.ObjectMeta")
+	kind.Dependencies = append(kind.Dependencies, metav1.ObjectMeta{}.OpenAPIModelName())
 	// Add the non-metadata properties
 	for k, v := range kindSchema.Value.Properties {
 		if k == "metadata" || k == "apiVersion" || k == "kind" {
@@ -740,7 +865,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Default: map[string]any{},
-							Ref:     ref("k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta"),
+							Ref:     ref(metav1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
 					"items": {
@@ -761,7 +886,7 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			},
 		},
 		Dependencies: []string{
-			"k8s.io/apimachinery/pkg/apis/meta/v1.ListMeta", fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
+			metav1.ListMeta{}.OpenAPIModelName(), fmt.Sprintf("%s.%s", pkgPrefix, gvk.Kind)},
 	}
 
 	return result, nil
@@ -1122,6 +1247,21 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		for _, s := range sch.Value.OneOf {
 			allRequired = append(allRequired, s.Value.Required...)
 		}
+
+		// CRD structural schemas do not allow per-branch type constraints in oneOf.
+		// If there are no required fields to discriminate branches, we cannot rewrite oneOf
+		// into structural required/not-required rules. Fall back to schemaless JSON for this field.
+		if len(allRequired) == 0 {
+			// Clear oneOf/type to avoid non-structural validation failures, preserving compatibility.
+			result.OneOf = nil
+			result.Type = nil
+			if result.Extensions == nil {
+				result.Extensions = make(map[string]any)
+			}
+			result.Extensions[extKubernetesPreserveUnknownFields] = true
+			return result, nil
+		}
+
 		for _, s := range sch.Value.OneOf {
 			resolved, err := resolveSchema(s, components, visited)
 			if err != nil {

@@ -1,11 +1,12 @@
 {
-    "apiVersion": "apps.grafana.com/v1alpha1",
+    "apiVersion": "apps.grafana.app/v1alpha1",
     "kind": "AppManifest",
     "metadata": {
         "name": "test-app"
     },
     "spec": {
         "appName": "test-app",
+        "appDisplayName": "",
         "group": "testapp.ext.grafana.com",
         "versions": [
             {
@@ -340,7 +341,7 @@
                         "routes": {
                             "/reconcile": {
                                 "post": {
-                                    "operationId": "createReconcile",
+                                    "operationId": "createReconcileRequest",
                                     "requestBody": {
                                         "content": {
                                             "application/json": {
@@ -524,6 +525,26 @@
                 "validationPath": "/validate",
                 "mutationPath": "/mutate"
             }
+        },
+        "roles": {
+            "test-app:reader": {
+                "title": "Test App Viewer",
+                "description": "View Test App Resources",
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "permissionSet": "viewer"
+                    }
+                ],
+                "routes": [
+                    "createFoobar"
+                ]
+            }
+        },
+        "roleBindings": {
+            "viewer": [
+                "test-app:reader"
+            ]
         }
     }
 }

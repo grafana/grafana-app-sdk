@@ -14,7 +14,7 @@ config: {
 
 manifest: {
 	appName: "app-manifest"
-	groupOverride: "apps.grafana.com"
+	groupOverride: "apps.grafana.app"
 	versions: {
 		"v1alpha1": {
 			codegen: ts: enabled: false
@@ -31,6 +31,21 @@ manifest: {
 			resource: "customresourcedefinitions",
 			actions: ["get","list","create","update","delete","watch"],
 		}]
+	}
+	roles: {
+		"appmanifest:viewer": {
+			title: "AppManifest Viewer"
+			description: "Get, List, and Watch AppManifests"
+			kinds: [{
+				kind: "AppManifest",
+				permissionSet: "viewer",
+			}],
+		},
+	}
+	roleBindings: {
+		viewer: ["appmanifest:viewer"]
+		editor: ["appmanifest:viewer"]
+		admin: ["appmanifest:viewer"]
 	}
 }
 

@@ -408,7 +408,7 @@ func (a *App) ValidateManifest(manifest app.ManifestData) error {
 
 // ManagedKinds returns a slice of all Kinds managed by this App
 func (a *App) ManagedKinds() []resource.Kind {
-	kinds := make([]resource.Kind, 0)
+	kinds := make([]resource.Kind, 0, len(a.kinds))
 	for _, k := range a.kinds {
 		kinds = append(kinds, k.Kind)
 	}
@@ -430,6 +430,9 @@ func (a *App) AddRunnable(runner app.Runnable) {
 
 // manageKind introduces a new kind to manage.
 func (a *App) manageKind(kind AppManagedKind) error {
+	if kind.Kind.Schema == nil {
+		return errors.New("cannot manage an empty kind")
+	}
 	a.gvrToGVK[gvr(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Plural())] = gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())
 	a.kinds[gvk(kind.Kind.Group(), kind.Kind.Version(), kind.Kind.Kind())] = kind
 	// If there are custom routes, validate them
@@ -466,6 +469,9 @@ func (a *App) manageKind(kind AppManagedKind) error {
 }
 
 func (a *App) watchKind(kind AppUnmanagedKind) error {
+	if kind.Kind.Schema == nil {
+		return errors.New("cannot watch an empty kind")
+	}
 	if kind.Reconciler != nil && kind.Watcher != nil {
 		return errors.New("please provide either Watcher or Reconciler, not both")
 	}
@@ -543,7 +549,7 @@ func (a *App) PrometheusCollectors() []prometheus.Collector {
 }
 
 func (a *App) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, 2)
 
 	checks = append(checks, a.runner.HealthChecks()...)
 	checks = append(checks, a.informerController.HealthChecks()...)

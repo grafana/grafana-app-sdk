@@ -12,3 +12,8 @@ type Spec struct {
 func NewSpec() *Spec {
 	return &Spec{}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for Spec.
+func (Spec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v0_0.Spec"
+}

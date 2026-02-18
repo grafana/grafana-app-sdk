@@ -10,3 +10,8 @@ type GetFooRequestBody struct {
 func NewGetFooRequestBody() *GetFooRequestBody {
 	return &GetFooRequestBody{}
 }
+
+// OpenAPIModelName returns the OpenAPI model name for GetFooRequestBody.
+func (GetFooRequestBody) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v1alpha1.GetFooRequestBody"
+}

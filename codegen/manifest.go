@@ -11,11 +11,14 @@ type AppManifest interface {
 
 type AppManifestProperties struct {
 	AppName          string                                `json:"appName"`
+	AppDisplayName   string                                `json:"appDisplayName"`
 	Group            string                                `json:"group"`
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
 	OperatorURL      *string                               `json:"operatorURL,omitempty"`
 	PreferredVersion string                                `json:"preferredVersion"`
+	Roles            map[string]AppManifestPropertiesRole  `json:"roles"`
+	RoleBindings     *AppManifestPropertiesRoleBindings    `json:"roleBindings"`
 }
 
 type AppManifestPropertiesExtraPermissions struct {
@@ -26,6 +29,34 @@ type AppManifestKindPermission struct {
 	Group    string   `json:"group"`
 	Resource string   `json:"resource"`
 	Actions  []string `json:"actions"`
+}
+
+type AppManifestPropertiesRole struct {
+	Title       string                          `json:"title"`
+	Description string                          `json:"description"`
+	Kinds       []AppManifestPropertiesRoleKind `json:"kinds"`
+	Routes      []string                        `json:"routes"`
+}
+
+type AppManifestPropertiesRoleKind struct {
+	Kind          string   `json:"kind"`
+	Verbs         []string `json:"verbs"`
+	PermissionSet *string  `json:"permissionSet"`
+}
+
+type AppManifestPropertiesRoleVersion struct {
+	Kinds []string `json:"kinds" yaml:"kinds"`
+}
+
+type AppManifestPropertiesRoleBindings struct {
+	// Viewer sets the role(s) granted to users in the "viewer" group
+	Viewer []string `json:"viewer" yaml:"viewer"`
+	// Editor sets the role(s) granted to users in the "editor" group
+	Editor []string `json:"editor" yaml:"editor"`
+	// Admin sets the role(s) granted to users in the "admin" group
+	Admin []string `json:"admin" yaml:"admin"`
+	// Additional is a map of additional group strings to their associated roles
+	Additional map[string][]string `json:"additional" yaml:"additional"`
 }
 
 type SimpleManifest struct {

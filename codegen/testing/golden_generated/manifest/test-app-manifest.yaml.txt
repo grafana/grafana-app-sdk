@@ -1,8 +1,9 @@
-apiVersion: apps.grafana.com/v1alpha1
+apiVersion: apps.grafana.app/v1alpha1
 kind: AppManifest
 metadata:
   name: test-app
 spec:
+  appDisplayName: ""
   appName: test-app
   extraPermissions:
     accessKinds:
@@ -20,6 +21,18 @@ spec:
       mutationPath: /mutate
       validationPath: /validate
   preferredVersion: v1
+  roleBindings:
+    viewer:
+    - test-app:reader
+  roles:
+    test-app:reader:
+      description: View Test App Resources
+      kinds:
+      - kind: TestKind
+        permissionSet: viewer
+      routes:
+      - createFoobar
+      title: Test App Viewer
   versions:
   - kinds:
     - admission:
@@ -214,7 +227,7 @@ spec:
       routes:
         /reconcile:
           post:
-            operationId: createReconcile
+            operationId: createReconcileRequest
             requestBody:
               content:
                 application/json:
