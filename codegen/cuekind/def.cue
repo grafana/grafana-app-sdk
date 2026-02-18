@@ -327,7 +327,8 @@ Version: S={
 }
 
 #Role: {
-	permissionSet: *"viewer" | "editor" | "admin"
+	title: string & != ""
+	description: string | *""
 	kinds: [...#RoleKind]
 }
 
