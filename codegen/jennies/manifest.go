@@ -452,6 +452,7 @@ func getRouteNames(p *spec3.PathProps) []string {
 	return routes
 }
 
+//nolint:revive
 func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) error {
 	kinds := make(map[string]struct{})
 	routes := make(map[string]struct{})
