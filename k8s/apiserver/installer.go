@@ -122,7 +122,7 @@ func (k *KubernetesGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiser
 		}
 		if !found {
 			ws := new(restful.WebService)
-			ws.Path(fmt.Sprintf("/apis/%s/%s", gv.Group, gv.Version))
+			ws.Path(fmt.Sprintf("/apis/%s/%s", gv.Group, gv.Version)).Produces("application/json")
 			k.Handler.GoRestfulContainer.Add(ws)
 		}
 	}
