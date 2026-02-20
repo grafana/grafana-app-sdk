@@ -3,6 +3,7 @@ package jennies
 import (
 	"context"
 	"fmt"
+	"go/format"
 	"path"
 	"strings"
 
@@ -138,8 +139,13 @@ func (g *GoTypes) generateFiles(kind codegen.Kind, version *codegen.KindVersion,
 		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
 	}
 
+	formatted, err := format.Source(files[0].Data)
+	if err != nil {
+		return nil, err
+	}
+
 	return codejen.Files{codejen.File{
-		Data:         files[0].Data,
+		Data:         formatted,
 		RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_gen.go"), strings.ToLower(machineName)),
 		From:         []codejen.NamedJenny{g},
 	}}, nil
@@ -270,7 +276,12 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
 	}
 
-	return files[0].Data, nil
+	formatted, err := format.Source(files[0].Data)
+	if err != nil {
+		return nil, err
+	}
+
+	return formatted, nil
 }
 
 // SanitizeLabelString strips characters from a string that are not allowed for
