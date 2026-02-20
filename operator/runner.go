@@ -321,6 +321,7 @@ func (*Runner) translateMutatingResponse(response *app.MutatingResponse) *resour
 }
 
 func toWebhookConverter(a app.App) k8s.Converter {
+	// FIXME: port over to resource.ObjectOrRaw
 	return &simpleK8sConverter{
 		convertFunc: func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
 			converted, err := a.Convert(context.Background(), app.ConversionRequest{
@@ -343,8 +344,15 @@ type simpleK8sConverter struct {
 	convertFunc func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error)
 }
 
-func (s *simpleK8sConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-	return s.convertFunc(obj, targetAPIVersion)
+func (s *simpleK8sConverter) Convert(obj resource.ObjectOrRaw, targetAPIVersion string) ([]byte, error) {
+	gvk := schema.FromAPIVersionAndKind(obj.APIVersion, obj.Kind)
+	return s.convertFunc(k8s.RawKind{
+		Kind:       obj.Kind,
+		APIVersion: obj.APIVersion,
+		Group:      gvk.Group,
+		Version:    gvk.Version,
+		Raw:        obj.Raw,
+	}, targetAPIVersion)
 }
 
 func newWebhookServerRunner(ws *k8s.WebhookServer) *webhookServerRunner {

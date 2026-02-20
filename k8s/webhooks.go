@@ -397,11 +397,9 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 		}
 		// Do the conversion
 		// Partial unmarshal to get kind and APIVersion
-		res, err := conv.Convert(RawKind{
+		res, err := conv.Convert(resource.ObjectOrRaw{
 			Kind:       tm.Kind,
 			APIVersion: tm.APIVersion,
-			Group:      tm.GroupVersionKind().Group,
-			Version:    tm.GroupVersionKind().Version,
 			Raw:        obj.Raw,
 		}, rev.Request.DesiredAPIVersion)
 		if err != nil {

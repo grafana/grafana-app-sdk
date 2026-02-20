@@ -1,0 +1,65 @@
+package conversion
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+
+	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/resource"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+{{- range .Versions }}
+    {{ .PackageName }} "{{ .PackagePath }}"
+{{ end }}
+)
+
+var _ k8s.Converter = &{{ .KindTypeName }}Converter{}
+
+type {{ .KindTypeName }}Converter struct{}
+
+func (c {{ .KindTypeName }}Converter) Convert(obj resource.ObjectOrRaw, targetAPIVersion string) ([]byte, error) {
+	gvk := schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind)
+	encoding := obj.Encoding
+	if encoding == "" {
+		encoding = resource.KindEncodingJSON
+	}
+	var internal *resource.ObjectOrRaw
+	var err error
+	switch gvk.Version {
+	{{- range .Versions }}
+	case {{ .PackageName }}.APIVersion:
+	    internal, err = Convert{{ $.ExportField .PackageName }}{{ $.KindTypeName }}ToInternal(obj)
+	{{ end }}
+	default:
+		return nil, fmt.Errorf("unsupported api version: %s", gvk.Version)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert object to internal version: %w", err)
+	}
+	if internal == nil {
+		return nil, fmt.Errorf("failed to convert object to internal version: not found")
+	}
+	targetGVK := schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind)
+	switch targetGVK.Version {
+	{{- range .Versions }}
+	case {{ .PackageName }}.APIVersion:
+	    result, err := ConvertInternalTo{{ $.ExportField .PackageName }}{{ $.KindTypeName }}(*internal)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert object to %s from internal version: %w", {{ .PackageName }}.APIVersion, err)
+		}
+		if result.Raw == nil {
+			k := {{ .PackageName }}.{{ $.KindTypeName }}Kind()
+			writer := bytes.Buffer{}
+			err = k.Write(result.Object, &writer, encoding)
+			if err != nil {
+				return nil, fmt.Errorf("failed to write object bytes: %w", err)
+			}
+			result.Raw = writer.Bytes()
+		}
+		return result.Raw, nil
+	{{ end }}
+	default:
+		return nil, fmt.Errorf("unsupported api version: %s", gvk.String())
+	}
+}

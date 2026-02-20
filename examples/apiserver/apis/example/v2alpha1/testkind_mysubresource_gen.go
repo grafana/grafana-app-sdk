@@ -1,0 +1,18 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v2alpha1
+
+// +k8s:openapi-gen=true
+type TestKindMysubresource struct {
+	ExtraValue string `json:"extraValue"`
+}
+
+// NewTestKindMysubresource creates a new TestKindMysubresource object.
+func NewTestKindMysubresource() *TestKindMysubresource {
+	return &TestKindMysubresource{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindMysubresource.
+func (TestKindMysubresource) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.examples.apiserver.apis.example.v2alpha1.TestKindMysubresource"
+}

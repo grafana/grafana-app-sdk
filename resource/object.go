@@ -333,3 +333,15 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 	}
 	return nil
 }
+
+// ObjectOrRaw contains an unmarshalled Object, its raw unmarshalled bytes (and encoding), or both.
+type ObjectOrRaw struct {
+	APIVersion string
+	Kind       string
+	// Raw is the raw bytes of the object. If present, Encoding should also be set to indicate the encoding of the bytes.
+	Raw []byte
+	// Encoding is the encoding or Raw, if Raw is non-nil. If Raw is present, Encoding should always be set.
+	Encoding KindEncoding
+	// Object is the unmarshalled object. If both it and Raw are non-nil, they should both correlate to the same object.
+	Object Object
+}

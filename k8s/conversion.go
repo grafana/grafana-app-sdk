@@ -1,5 +1,7 @@
 package k8s
 
+import "github.com/grafana/grafana-app-sdk/resource"
+
 // Converter describes a type which can convert a kubernetes kind from one API version to another.
 // Typically there is one converter per-kind, but a single converter can also handle multiple kinds.
 type Converter interface {
@@ -7,7 +9,7 @@ type Converter interface {
 	// The RawKind argument will contain kind information and the raw kubernetes object,
 	// and the returned bytes are expected to be a raw kubernetes object of the same kind and targetAPIVersion
 	// APIVersion. The returned kubernetes object MUST have an apiVersion that matches targetAPIVersion.
-	Convert(obj RawKind, targetAPIVersion string) ([]byte, error)
+	Convert(obj resource.ObjectOrRaw, targetAPIVersion string) ([]byte, error)
 }
 
 // RawKind represents a raw kubernetes object with basic kind information parsed out of it

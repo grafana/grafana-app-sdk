@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/getkin/kin-openapi/openapi3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
@@ -18,7 +19,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
-//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl
+//go:embed *.tmpl plugin/*.tmpl secure/*.tmpl operator/*.tmpl app/*.tmpl conversion/*.tmpl
 var templates embed.FS
 
 //go:embed custom/*.tmpl
@@ -65,6 +66,10 @@ var (
 	templateOperatorConfig, _     = template.ParseFS(templates, "operator/config.tmpl")
 
 	templateManifestGoFile, _ = template.New("manifest_go.tmpl").Funcs(funcMap).ParseFS(templates, "manifest_go.tmpl")
+
+	templateConversionConverter, _            = template.ParseFS(templates, "conversion/converter.tmpl")
+	templateConversionKindConverter, _        = template.ParseFS(templates, "conversion/kind_converter.tmpl")
+	templateConversionVersionKindConverter, _ = template.ParseFS(templates, "conversion/version_kind_converter.tmpl")
 )
 
 var (
@@ -658,6 +663,58 @@ type RuntimeObjectWrapperMetadata struct {
 
 func WriteRuntimeObjectWrapper(metadata RuntimeObjectWrapperMetadata, out io.Writer) error {
 	return templateRuntimeObject.Execute(out, metadata)
+}
+
+type ConversionKindConverterMetadata struct {
+	KindTypeName string
+	Versions     []ConversionKindConverterMetadataVersion
+}
+
+func (ConversionKindConverterMetadata) ExportField(s string) string {
+	sanitized := regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(s, "")
+	if len(sanitized) > 1 {
+		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
+	}
+	return strings.ToUpper(sanitized)
+}
+
+type ConversionKindConverterMetadataVersion struct {
+	PackageName string
+	PackagePath string
+}
+
+func WriteConversionKindConverter(metadata ConversionKindConverterMetadata, out io.Writer) error {
+	return templateConversionKindConverter.Execute(out, metadata)
+}
+
+type ConversionConverterMetadata struct{}
+
+func WriteConversionConverter(metadata ConversionConverterMetadata, out io.Writer) error {
+	return templateConversionConverter.Execute(out, metadata)
+}
+
+type ConversionVersionKindConverterMetadata struct {
+	VersionPackage               string
+	VersionPackagePath           string
+	InternalPackage              string
+	InternalPackagePath          string
+	KindTypeName                 string
+	VersionOpenAPI               openapi3.Components
+	InternalOpenAPI              openapi3.Components
+	VersionOpenAPIKindComponent  string
+	InternalOpenAPIKindComponent string
+}
+
+func (ConversionVersionKindConverterMetadata) ExportField(s string) string {
+	sanitized := regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(s, "")
+	if len(sanitized) > 1 {
+		return strings.ToUpper(sanitized[:1]) + sanitized[1:]
+	}
+	return strings.ToUpper(sanitized)
+}
+
+func WriteConversionVersionKindConverter(metadata ConversionVersionKindConverterMetadata, out io.Writer) error {
+	return templateConversionVersionKindConverter.Execute(out, metadata)
 }
 
 // goKeywords is the set of Go reserved keywords that cannot be used as package names

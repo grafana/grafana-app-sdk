@@ -41,6 +41,7 @@ testKindv1alpha1: testKind & {
 	routes: {
 		"/foo": {
 			"GET": {
+				name: "getFoo"
 				request: {
 					query: {
 						foo: string
@@ -78,6 +79,33 @@ testKindv1alpha1: testKind & {
 					next?:   #RecursiveType
 				}
 			}
+		}
+	}
+}
+
+testKindv2alpha1: testKind & {
+	validation: operations: ["CREATE", "UPDATE"]
+	selectableFields: [".spec.testField"]
+	schema: {
+		#Foo: {
+			foo: string | *"foo"
+			bar: #Bar
+		}
+		#Bar: {
+			value: string | *"bar"
+			baz:   #Baz
+			bat:   bool
+		}
+		#Baz: {
+			value: string & =~ "[0-9]+[smhd]{1}" | *"10s"
+		}
+		spec: {
+			testField: string | *"default value"
+			foo:       #Foo
+			extraVal:  _
+		}
+		mysubresource: {
+			extraValue: string
 		}
 	}
 }

@@ -85,6 +85,7 @@ v1alpha1: {
 	routes: namespaced: {
 		"/foobar": {
 			"GET": {
+				name: "getFoobar"
 				response: {
 					foo:    string
 					shared: #SharedType
@@ -121,7 +122,7 @@ v1alpha1: {
 
 // Version with only custom resource routes, no kinds
 v2alpha1: {
-	kinds: []
+	kinds: [testKindv2alpha1]
 	routes: {
 		namespaced: {
 			"/example": {

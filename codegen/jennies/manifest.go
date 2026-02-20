@@ -49,7 +49,7 @@ func (*ManifestGenerator) JennyName() string {
 // Generate creates one or more codec go files for the provided Kind
 // nolint:dupl
 func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	manifestData, err := buildManifestData(appManifest, m.IncludeSchemas)
+	manifestData, err := manifests.GetManifest(appManifest, m.IncludeSchemas)
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func (*ManifestGoGenerator) JennyName() string {
 }
 
 func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	manifestData, err := buildManifestData(appManifest, g.IncludeSchemas)
+	manifestData, err := manifests.GetManifest(appManifest, g.IncludeSchemas)
 	if err != nil {
 		return nil, err
 	}

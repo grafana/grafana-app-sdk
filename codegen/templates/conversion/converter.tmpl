@@ -1,0 +1,44 @@
+package conversion
+
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+// TypedObjectOrRaw exists to create compile errors for custom conversion implementation when the internal version changes,
+// to ensure custom conversion code gets updated.
+type TypedObjectOrRaw[T resource.Object] struct {
+	Raw      []byte
+	Encoding resource.KindEncoding
+	Object   T
+}
+
+func getObjectFromRawType[T resource.Object](raw resource.ObjectOrRaw, kind resource.Kind) (T, error) {
+	var obj T
+	if raw.Object == nil {
+		if raw.Raw == nil {
+			return obj, fmt.Errorf("cannot convert object: neither Object nor Raw is present")
+		}
+		encoding := raw.Encoding
+		if encoding == "" {
+			encoding = resource.KindEncodingJSON
+		}
+		codec := kind.Codec(encoding)
+		if codec == nil {
+			return obj, fmt.Errorf("unknown encoding %q", encoding)
+		}
+		err := codec.Read(bytes.NewReader(raw.Raw), obj)
+		if err != nil {
+			return obj, fmt.Errorf("error decoding object: %w", err)
+		}
+	} else {
+		var ok bool
+		obj, ok = raw.Object.(T)
+		if !ok {
+			return obj, fmt.Errorf("invalid object type %T", raw.Object)
+		}
+	}
+	return obj, nil
+}
