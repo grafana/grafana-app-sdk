@@ -146,7 +146,7 @@ VendorExtensible: spec.VendorExtensible{
     },
 },{{ end }}{{ end }}
 
-{{- if .ManifestData.Versions }}
+{{- if .HasVersionSchemas }}
 var ({{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{ if .Schema }}
     rawSchema{{.Kind}}{{$.ToPackageName $v.Name}} = []byte({{$.ToJSONBacktickString .Schema}})
     versionSchema{{.Kind}}{{$.ToPackageName $v.Name}} app.VersionSchema

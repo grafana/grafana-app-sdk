@@ -2,6 +2,7 @@ package jennies
 
 import (
 	"bytes"
+	"go/format"
 	"strings"
 
 	"github.com/grafana/codejen"
@@ -46,7 +47,11 @@ func (m *backendPluginMainGenerator) Generate(decls ...codegen.Kind) (*codejen.F
 	if err != nil {
 		return nil, err
 	}
-	return codejen.NewFile("../plugin/pkg/main.go", b.Bytes(), m), nil
+	formatted, err := format.Source(b.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return codejen.NewFile("../plugin/pkg/main.go", formatted, m), nil
 }
 
 func (*backendPluginMainGenerator) JennyName() string {

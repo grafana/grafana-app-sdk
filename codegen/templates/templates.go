@@ -514,6 +514,19 @@ func (ManifestGoFileMetadata) StripLeadingSlash(path string) string {
 	return path
 }
 
+// HasVersionSchemas returns true if any kind in any version has a non-nil schema.
+// Used by the manifest Go template to avoid emitting an empty var () block.
+func (m ManifestGoFileMetadata) HasVersionSchemas() bool {
+	for _, v := range m.ManifestData.Versions {
+		for _, k := range v.Kinds {
+			if k.Schema != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func WriteManifestGoFile(metadata ManifestGoFileMetadata, out io.Writer) error {
 	return templateManifestGoFile.Execute(out, metadata)
 }
