@@ -2,6 +2,9 @@
 
 This document provides detailed visual representations of the reconciliation code paths in the grafana-app-sdk, tracing the complete flow from application startup through event processing.
 
+> **Related**: When implementing reconciliation logic that performs runtime validation (e.g., checking external systems, validating dynamic state), 
+> populate `fieldErrors` in the resource status. See [Validation Patterns](./validation-patterns.md) for the recommended convention.
+
 ## Overview
 
 The reconciliation system in grafana-app-sdk follows a Kubernetes-inspired operator pattern with two primary flows:
