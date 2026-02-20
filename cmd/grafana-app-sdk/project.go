@@ -235,7 +235,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 func projectWriteGoModule(path, moduleName string, overwrite bool) (string, error) {
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
-	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.26\n", moduleName))
+	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.22\n", moduleName))
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {
@@ -476,7 +476,7 @@ func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, 
 	if err != nil {
 		return nil, err
 	}
-	files := make(codejen.Files, 2, 4)
+	files := make(codejen.Files, 2)
 	files[0] = codejen.File{
 		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
 		Data:         buf.Bytes(),
