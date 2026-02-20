@@ -408,7 +408,7 @@ func (a *App) ValidateManifest(manifest app.ManifestData) error {
 
 // ManagedKinds returns a slice of all Kinds managed by this App
 func (a *App) ManagedKinds() []resource.Kind {
-	kinds := make([]resource.Kind, 0, len(a.kinds))
+	kinds := make([]resource.Kind, 0)
 	for _, k := range a.kinds {
 		kinds = append(kinds, k.Kind)
 	}
@@ -549,7 +549,7 @@ func (a *App) PrometheusCollectors() []prometheus.Collector {
 }
 
 func (a *App) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0, 2)
+	checks := make([]health.Check, 0)
 
 	checks = append(checks, a.runner.HealthChecks()...)
 	checks = append(checks, a.informerController.HealthChecks()...)

@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk/plugin
 
-go 1.26.0
+go 1.25.6
 
 retract (
 	v0.18.4 // Errors in release pipeline didn't allow the binaries to be built for this release, which can break automated workflows that depend on them
@@ -8,8 +8,8 @@ retract (
 )
 
 require (
-	github.com/grafana/grafana-app-sdk v0.51.1
-	github.com/grafana/grafana-app-sdk/logging v0.51.1
+	github.com/grafana/grafana-app-sdk v0.50.4
+	github.com/grafana/grafana-app-sdk/logging v0.50.4
 	github.com/grafana/grafana-plugin-sdk-go v0.288.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1

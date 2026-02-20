@@ -76,7 +76,6 @@ type TracingConfig struct {
 }
 
 // NewOperator creates a new Operator
-//
 // Deprecated: please use simple.NewApp and operator.NewRunner to create a simple operator app.
 func NewOperator(cfg OperatorConfig) (*Operator, error) {
 	cg := k8s.NewClientRegistry(cfg.KubeConfig, k8s.ClientConfig{})
@@ -166,7 +165,6 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 // use WatchKind to add a watcher for a specific kind (schema) and configuration (such as namespace, label filters),
 // ReconcileKind to add a reconciler for a specific kind (schema) and configuration (such as namespace, label filers),
 // and ValidateKind or MutateKind to add admission control for a kind (schema).
-//
 // Deprecated: use simple.App in conjunction with operator.Runner instead.
 type Operator struct {
 	Name string

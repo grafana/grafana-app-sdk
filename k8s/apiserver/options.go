@@ -29,7 +29,7 @@ func NewOptions(installers []AppInstaller) *Options {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
 
-	gvs := make([]schema.GroupVersion, 0, len(installers))
+	gvs := []schema.GroupVersion{}
 	for _, installer := range installers {
 		gvs = append(gvs, installer.GroupVersions()...)
 	}
@@ -47,7 +47,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (o *Options) Validate() error {
-	errs := make([]error, 0, 1)
+	errs := []error{}
 	errs = append(errs, o.RecommendedOptions.Validate()...)
 	return utilerrors.NewAggregate(errs)
 }

@@ -102,15 +102,12 @@ linters:
           - gocognit
           - mnd
         path: _test\.go
-      - linters:
-          - revive
-        text: "var-naming: avoid package names that conflict with Go standard library"
     paths:
       - test/
       - internal/deepmap/
       - third_party$
       - builtin$
-      - examples/
+      - examples$
       - k8s/client
       - k8s/cache
       - .*_gen\.go$
@@ -129,7 +126,7 @@ formatters:
       - internal/deepmap/
       - third_party$
       - builtin$
-      - examples/
+      - examples$
       - k8s/client
       - k8s/cache
       - .*_gen\.go$

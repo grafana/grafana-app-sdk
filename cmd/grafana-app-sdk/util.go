@@ -92,24 +92,20 @@ func promptYN(prompt string, defaultAnswer bool) bool {
 	input := make([]byte, 1)
 	for {
 		fmt.Printf("%s [%s/%s]: ", prompt, y, n)
-		nRead, err := bufio.NewReader(os.Stdin).Read(input)
+		_, err := bufio.NewReader(os.Stdin).Read(input)
 		if err != nil {
 			panic(err)
 		}
-		if nRead == 0 {
+		if input[0] == '\n' || input[0] == '\r' {
 			return defaultAnswer
 		}
-		b := input[0]
-		if b == '\n' || b == '\r' {
-			return defaultAnswer
-		}
-		if b == 'y' || b == 'Y' {
+		if input[0] == 'y' || input[0] == 'Y' {
 			return true
 		}
-		if b == 'n' || b == 'N' {
+		if input[0] == 'n' || input[0] == 'N' {
 			return false
 		}
-		fmt.Printf("Could not parse input beginning with '%s', please try again:\n", string(b))
+		fmt.Printf("Could not parse input beginning with '%s', please try again:\n", string(input[0]))
 	}
 }
 

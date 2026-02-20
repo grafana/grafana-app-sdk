@@ -90,7 +90,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	}
 	output["spec"] = manifestSpec
 
-	files := make(codejen.Files, 0, 1)
+	files := make(codejen.Files, 0)
 	out, err := m.Encoder(output)
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 		return nil, err
 	}
 
-	files := make(codejen.Files, 0, 1)
+	files := make(codejen.Files, 0)
 	files = append(files, codejen.File{
 		Data:         formatted,
 		RelativePath: filepath.Join(g.DestinationPath, fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group)),
