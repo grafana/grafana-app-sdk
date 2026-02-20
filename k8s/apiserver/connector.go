@@ -81,7 +81,7 @@ func (*SubresourceConnector) Destroy() {
 }
 
 func (r *SubresourceConnector) ConnectMethods() []string {
-	methods := make([]string, 0, len(r.Methods))
+	methods := make([]string, 0)
 	for method := range r.Methods {
 		methods = append(methods, method)
 	}

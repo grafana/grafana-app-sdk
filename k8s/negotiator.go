@@ -144,7 +144,7 @@ type KindNegotiatedSerializer struct {
 
 // SupportedMediaTypes returns the JSON supported media type with a GenericJSONDecoder and kubernetes JSON Framer.
 func (k *KindNegotiatedSerializer) SupportedMediaTypes() []runtime.SerializerInfo {
-	supported := make([]runtime.SerializerInfo, 0, len(k.Kind.Codecs))
+	supported := make([]runtime.SerializerInfo, 0)
 	for encoding, codec := range k.Kind.Codecs {
 		serializer := &CodecDecoder{
 			SampleObject: k.Kind.ZeroValue(),

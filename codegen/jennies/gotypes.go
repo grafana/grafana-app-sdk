@@ -148,9 +148,8 @@ func (g *GoTypes) generateFiles(kind codegen.Kind, version *codegen.KindVersion,
 //nolint:goconst
 func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeFields []string) (codejen.Files, error) {
 	if currDepth == g.Depth {
-		selectors := TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors()
-		fieldName := make([]string, 0, len(selectors))
-		for _, s := range selectors {
+		fieldName := make([]string, 0)
+		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
 		exclude := false

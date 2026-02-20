@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.26.0
+go 1.25.0
 
 retract (
 	v0.48.6 // CUE version mismatch between app-sdk and cog caused some strange codegen errors involving list defaults

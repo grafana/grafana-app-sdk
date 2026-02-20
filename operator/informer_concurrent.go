@@ -39,7 +39,6 @@ type ConcurrentInformerOptions struct {
 }
 
 // NewConcurrentInformer creates a new ConcurrentInformer wrapping the provided Informer.
-//
 // Deprecated: Use NewConcurrentInformerFromOptions instead, which accepts InformerOptions.
 func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 	*ConcurrentInformer, error) {

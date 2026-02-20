@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk/examples/apiserver
 
-go 1.26.0
+go 1.25.0
 
 replace github.com/grafana/grafana-app-sdk => ../../
 

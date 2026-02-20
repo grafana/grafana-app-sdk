@@ -30,7 +30,7 @@ make build                 # Output: target/grafana-app-sdk
 make install
 
 # Run linter
-make lint                  # Uses golangci-lint v2.9.0
+make lint                  # Uses golangci-lint v2.5.0
 
 # Update go.mod and go.work files
 make update-workspace

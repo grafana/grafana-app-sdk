@@ -148,9 +148,8 @@ func getCUEValueKindString(v cue.Value) (string, error) {
 // getOptionalFieldsInPath returns a list of all optional fields found along the provided fieldPath.
 // This is used to generate nil checks on optional fields ensuring safe access to the selectable field.
 func getOptionalFieldsInPath(v cue.Value, fieldPath string) []string {
-	n := strings.Count(fieldPath, ".") + 1
-	optionalFields := make([]string, 0, n)
-	currentPath := make([]string, 0, n)
+	optionalFields := make([]string, 0)
+	currentPath := make([]string, 0)
 
 	for part := range strings.SplitSeq(fieldPath, ".") {
 		currentPath = append(currentPath, part)
