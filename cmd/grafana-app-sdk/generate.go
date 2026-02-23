@@ -345,7 +345,7 @@ func postGenerateFilesCue(parser *cuekind.Parser, cfg *config.Config) (codejen.F
 	if err != nil {
 		return nil, err
 	}
-	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser())
+	generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser())
 	if err != nil {
 		return nil, err
 	}

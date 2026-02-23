@@ -127,8 +127,8 @@ func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, gr
 	return g
 }
 
-func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.OpenAPI{
 		GoModName:   projectRepo,
 		GoGenPath:   goGenPath,
