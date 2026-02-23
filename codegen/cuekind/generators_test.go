@@ -23,7 +23,7 @@ func TestCRDGenerator(t *testing.T) {
 
 	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
-	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
+	kinds, err := parser.ManifestParser().Parse("customManifest", "testManifest")
 	require.NoError(t, err)
 
 	t.Run("JSON", func(t *testing.T) {

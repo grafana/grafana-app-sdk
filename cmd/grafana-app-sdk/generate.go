@@ -287,7 +287,7 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 		if cfg.Definitions.Encoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.Definitions.Encoding), cfg.ManifestSelectors...)
+		crdFiles, err = generatorForManifest.Generate(cuekind.CRDGenerator(encFunc, cfg.Definitions.Encoding), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}

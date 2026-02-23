@@ -15,8 +15,8 @@ import (
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
-func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
+func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(jennies.CRDGenerator(outputEncoder, outputExtension))
 	return g
 }

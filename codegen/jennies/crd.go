@@ -21,7 +21,7 @@ import (
 // CRDOutputEncoder is a function which marshals an object into a desired output format
 type CRDOutputEncoder func(any) ([]byte, error)
 
-func CRDGenerator(encoder CRDOutputEncoder, extension string) codejen.OneToOne[codegen.Kind] {
+func CRDGenerator(encoder CRDOutputEncoder, extension string) codejen.OneToMany[codegen.AppManifest] {
 	return &crdGenerator{
 		outputEncoder:   encoder,
 		outputExtension: extension,
@@ -37,72 +37,104 @@ func (*crdGenerator) JennyName() string {
 	return "CRD Generator"
 }
 
-func (c *crdGenerator) Generate(kind codegen.Kind) (*codejen.File, error) {
-	props := kind.Properties()
+type kindWithVersion struct {
+	version string
+	kind    codegen.VersionedKind
+}
 
-	resource := customResourceDefinition{
-		APIVersion: "apiextensions.k8s.io/v1",
-		Kind:       "CustomResourceDefinition",
-		Metadata: customResourceDefinitionMetadata{
-			Name: fmt.Sprintf("%s.%s", props.PluralMachineName, props.Group),
-		},
-		Spec: k8s.CustomResourceDefinitionSpec{
-			Group: props.Group,
-			Scope: props.Scope,
-			Names: k8s.CustomResourceDefinitionSpecNames{
-				Kind:   props.Kind,
-				Plural: props.PluralMachineName,
-			},
-			Versions: make([]k8s.CustomResourceDefinitionSpecVersion, 0),
-		},
+func (c *crdGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0)
+
+	// Need to group all versions of a kind together to make a CRD (each CRD contains schemas for all versions)
+	kinds := make(map[string][]kindWithVersion)
+	for _, version := range appManifest.Versions() {
+		for _, kind := range version.Kinds() {
+			kv, ok := kinds[kind.Kind]
+			if !ok {
+				kv = make([]kindWithVersion, 0)
+			}
+			kv = append(kv, kindWithVersion{
+				version: version.Name(),
+				kind:    kind,
+			})
+			kinds[kind.Kind] = kv
+		}
 	}
 
-	if kind.Properties().Conversion && kind.Properties().ConversionWebhookProps.URL != "" {
-		webhookURL, err := url.Parse(kind.Properties().ConversionWebhookProps.URL)
-		if err != nil {
-			return nil, fmt.Errorf("invalid conversion webhook URL: %w", err)
+	for _, kv := range kinds {
+		// Edge case that should never happen, but just in case
+		if len(kv) == 0 {
+			continue
 		}
-		resource.Spec.Conversion = &k8s.CustomResourceDefinitionSpecConversion{
-			Strategy: "webhook",
-			Webhook: &k8s.CustomResourceDefinitionSpecConversionWebhook{
-				ConversionReviewVersions: []string{"v1"},
-				ClientConfig: k8s.CustomResourceDefinitionClientConfig{
-					URL: webhookURL.String(),
+		resource := customResourceDefinition{
+			APIVersion: "apiextensions.k8s.io/v1",
+			Kind:       "CustomResourceDefinition",
+			Metadata: customResourceDefinitionMetadata{
+				Name: fmt.Sprintf("%s.%s", kv[0].kind.PluralMachineName, appManifest.Properties().FullGroup),
+			},
+			Spec: k8s.CustomResourceDefinitionSpec{
+				Group: appManifest.Properties().FullGroup,
+				Scope: kv[0].kind.Scope,
+				Names: k8s.CustomResourceDefinitionSpecNames{
+					Kind:   kv[0].kind.Kind,
+					Plural: kv[0].kind.PluralMachineName,
 				},
+				Versions: make([]k8s.CustomResourceDefinitionSpecVersion, 0),
 			},
 		}
-	}
 
-	for _, ver := range kind.Versions() {
-		v, err := KindVersionToCRDSpecVersion(ver, kind.Properties().Kind, ver.Version == kind.Properties().Current)
+		if kv[0].kind.Conversion && kv[0].kind.ConversionWebhookProps.URL != "" {
+			webhookURL, err := url.Parse(kv[0].kind.ConversionWebhookProps.URL)
+			if err != nil {
+				return nil, fmt.Errorf("invalid conversion webhook URL: %w", err)
+			}
+			resource.Spec.Conversion = &k8s.CustomResourceDefinitionSpecConversion{
+				Strategy: "webhook",
+				Webhook: &k8s.CustomResourceDefinitionSpecConversionWebhook{
+					ConversionReviewVersions: []string{"v1"},
+					ClientConfig: k8s.CustomResourceDefinitionClientConfig{
+						URL: webhookURL.String(),
+					},
+				},
+			}
+		}
+
+		for _, vs := range kv {
+			v, err := KindVersionToCRDSpecVersion(vs.kind.Schema, vs.kind, vs.version, vs.version == appManifest.Properties().PreferredVersion)
+			if err != nil {
+				return nil, err
+			}
+
+			// Check for edge case that results in CRDs that may not work with discovery, but should still be allowed to work.
+			// If there is only one version, storage must always be true.
+			if len(kv) == 1 {
+				v.Storage = true
+			}
+			resource.Spec.Versions = append(resource.Spec.Versions, v)
+		}
+
+		contents, err := c.outputEncoder(resource)
 		if err != nil {
 			return nil, err
 		}
-
-		// Check for edge case that results in CRDs that may not work with discovery, but should still be allowed to work.
-		// If there is only one version, storage must always be true.
-		if len(kind.Versions()) == 1 {
-			v.Storage = true
-		}
-		resource.Spec.Versions = append(resource.Spec.Versions, v)
+		files = append(files, codejen.File{
+			Data:         contents,
+			RelativePath: fmt.Sprintf("%s.%s.%s", kv[0].kind.MachineName, appManifest.Properties().FullGroup, c.outputExtension),
+			From:         []codejen.NamedJenny{c},
+		})
 	}
 
-	contents, err := c.outputEncoder(resource)
-	if err != nil {
-		return nil, err
-	}
-
-	return codejen.NewFile(fmt.Sprintf("%s.%s.%s", kind.Properties().MachineName, kind.Properties().Group, c.outputExtension), contents, c), nil
+	return files, nil
 }
 
-func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {
-	props, err := cueToCRDOpenAPI(kv.Schema, kindName)
+func KindVersionToCRDSpecVersion(schema cue.Value, kind codegen.VersionedKind, version string, stored bool) (k8s.CustomResourceDefinitionSpecVersion, error) {
+	props, err := cueToCRDOpenAPI(schema, kind.Kind)
 	if err != nil {
 		return k8s.CustomResourceDefinitionSpecVersion{}, err
 	}
 
 	def := k8s.CustomResourceDefinitionSpecVersion{
-		Name:    kv.Version,
+		Name:    version,
 		Served:  true,
 		Storage: stored,
 		Schema: map[string]any{
@@ -116,9 +148,9 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 		},
 		Subresources: make(map[string]any),
 	}
-	if len(kv.SelectableFields) > 0 {
-		sf := make([]k8s.CustomResourceDefinitionSelectableField, len(kv.SelectableFields))
-		for i, field := range kv.SelectableFields {
+	if len(kind.SelectableFields) > 0 {
+		sf := make([]k8s.CustomResourceDefinitionSelectableField, len(kind.SelectableFields))
+		for i, field := range kind.SelectableFields {
 			field = strings.Trim(field, " ")
 			if field == "" {
 				continue
@@ -133,9 +165,9 @@ func KindVersionToCRDSpecVersion(kv codegen.KindVersion, kindName string, stored
 		def.SelectableFields = sf
 	}
 
-	if len(kv.AdditionalPrinterColumns) > 0 {
-		apc := make([]k8s.CustomResourceDefinitionAdditionalPrinterColumn, len(kv.AdditionalPrinterColumns))
-		for i, col := range kv.AdditionalPrinterColumns {
+	if len(kind.AdditionalPrinterColumns) > 0 {
+		apc := make([]k8s.CustomResourceDefinitionAdditionalPrinterColumn, len(kind.AdditionalPrinterColumns))
+		for i, col := range kind.AdditionalPrinterColumns {
 			apc[i] = k8s.CustomResourceDefinitionAdditionalPrinterColumn{
 				Name:        col.Name,
 				Type:        col.Type,
