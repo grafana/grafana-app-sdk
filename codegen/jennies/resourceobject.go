@@ -70,40 +70,36 @@ func (*ResourceObjectGenerator) JennyName() string {
 	return "ResourceObjectGenerator"
 }
 
-func (r *ResourceObjectGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
+func (r *ResourceObjectGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	allVersions := kind.Versions()
-	for i := range len(allVersions) {
-		ver := allVersions[i]
-		openAPIName := ""
-		if r.OpenAPINamer != nil {
-			grp := kind.Properties().ManifestGroup
-			if grp == "" {
-				grp = kind.Properties().Group
+	for _, version := range appManifest.Versions() {
+		for _, kind := range version.Kinds() {
+			openAPIName := ""
+			if r.OpenAPINamer != nil {
+				openAPIName = r.OpenAPINamer(OpenAPINamerInfo{
+					TypeName:   kind.Kind,
+					ShortGroup: appManifest.Properties().Group,
+					Version:    version.Name(),
+					Kind:       kind.Kind,
+				})
 			}
-			openAPIName = r.OpenAPINamer(OpenAPINamerInfo{
-				TypeName:   kind.Name(),
-				ShortGroup: grp,
-				Version:    ver.Version,
-				Kind:       kind.Name(),
+			b, err := r.generateObjectFile(kind, ToPackageName(version.Name()), openAPIName)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, codejen.File{
+				RelativePath: filepath.Join(GetGeneratedGoTypePath(r.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.MachineName))),
+				Data:         b,
+				From:         []codejen.NamedJenny{r},
 			})
 		}
-		b, err := r.generateObjectFile(kind, &ver, ToPackageName(ver.Version), openAPIName)
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, codejen.File{
-			RelativePath: filepath.Join(GetGeneratedPath(r.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.Properties().MachineName))),
-			Data:         b,
-			From:         []codejen.NamedJenny{r},
-		})
 	}
 	return files, nil
 }
 
-func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, pkg string, openAPIName string) ([]byte, error) {
+func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind, pkg string, openAPIName string) ([]byte, error) {
 	customMetadataFields := make([]templates.ObjectMetadataField, 0)
-	mdv := version.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
+	mdv := kind.Schema.LookupPath(cue.MakePath(cue.Str("metadata")))
 	if mdv.Exists() {
 		mit, err := mdv.Fields()
 		if err != nil {
@@ -137,12 +133,11 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 
 	typePrefix := ""
 	if r.SubresourceTypesArePrefixed {
-		typePrefix = exportField(kind.Name())
+		typePrefix = exportField(kind.Kind)
 	}
-	meta := kind.Properties()
 	md := templates.ResourceObjectTemplateMetadata{
 		Package:              pkg,
-		TypeName:             meta.Kind,
+		TypeName:             kind.Kind,
 		SpecTypeName:         typePrefix + "Spec",
 		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object
 		ObjectShortName:      "o",
@@ -150,7 +145,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.Kind, version 
 		CustomMetadataFields: customMetadataFields,
 		OpenAPIModelName:     openAPIName,
 	}
-	it, err := version.Schema.Fields()
+	it, err := kind.Schema.Fields()
 	if err != nil {
 		return nil, err
 	}

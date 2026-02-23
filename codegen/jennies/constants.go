@@ -28,15 +28,15 @@ type constantsFileParams struct {
 	path    string
 }
 
-func (c *Constants) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
+func (c *Constants) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	m := make(map[string]constantsFileParams)
-	for _, k := range kinds {
-		for _, v := range k.Versions() {
-			path := GetGeneratedPath(c.GroupByKind, k, v.Version)
+	for _, v := range appManifest.Versions() {
+		for _, k := range v.Kinds() {
+			path := GetGeneratedGoTypePath(c.GroupByKind, appManifest.Properties().Group, v.Name(), k.MachineName)
 			if _, ok := m[path]; !ok {
 				m[path] = constantsFileParams{
-					group:   k.Properties().Group,
-					version: v.Version,
+					group:   appManifest.Properties().FullGroup,
+					version: v.Name(),
 					path:    filepath.Join(path, "constants.go"),
 				}
 			}

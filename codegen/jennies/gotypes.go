@@ -84,82 +84,89 @@ func (*GoTypes) JennyName() string {
 	return "GoTypes"
 }
 
-func (g *GoTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
-	if g.GenerateOnlyCurrent {
-		ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
-		}
-		return g.generateFiles(kind, ver, kind.Name(), kind.Properties().MachineName, kind.Properties().MachineName, kind.Properties().MachineName)
-	}
-
+func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	versions := kind.Versions()
-	for i := range len(versions) {
-		ver := versions[i]
-		if !ver.Codegen.Go.Enabled {
-			continue
-		}
+	for _, version := range appManifest.Versions() {
+		for _, kind := range version.Kinds() {
+			if g.GenerateOnlyCurrent && appManifest.Properties().PreferredVersion != version.Name() {
+				continue
+			}
 
-		generated, err := g.generateFiles(kind, &ver, kind.Name(), kind.Properties().MachineName, ToPackageName(ver.Version), GetGeneratedPath(g.GroupByKind, kind, ver.Version))
-		if err != nil {
-			return nil, err
+			genCfg := goTypesGenerateFilesConfig{
+				VersionName:   version.Name(),
+				KindName:      kind.Kind,
+				MachineName:   kind.MachineName,
+				Group:         appManifest.Properties().Group,
+				PackageName:   ToPackageName(version.Name()),
+				PathPrefix:    GetGeneratedGoTypePath(g.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
+				ExcludeFields: g.ExcludeFields,
+			}
+			if g.Depth > 0 {
+				if !g.GroupByKind {
+					genCfg.NamePrefix = exportField(kind.Kind)
+				}
+				generated, err := g.generateFilesAtDepth(kind.Schema, kind.Schema.Path(), 0, genCfg)
+				if err != nil {
+					return nil, err
+				}
+				files = append(files, generated...)
+				continue
+			}
+
+			codegenPipeline := cog.TypesFromSchema().
+				CUEValue(genCfg.PackageName, kind.Schema, cog.ForceEnvelope(kind.Kind)).
+				Golang(cog.GoConfig{
+					AnyAsInterface: g.AnyAsInterface,
+				})
+
+			if g.AddKubernetesCodegen {
+				codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
+			}
+
+			generated, err := codegenPipeline.Run(context.Background())
+			if err != nil {
+				return nil, err
+			}
+
+			if len(generated) != 1 {
+				return nil, fmt.Errorf("expected one file to be generated, got %d", len(generated))
+			}
+
+			formatted, err := format.Source(generated[0].Data)
+			if err != nil {
+				return nil, err
+			}
+
+			files = append(files, codejen.File{
+				Data:         formatted,
+				RelativePath: fmt.Sprintf(path.Join(genCfg.PathPrefix, "%s_gen.go"), strings.ToLower(genCfg.MachineName)),
+				From:         []codejen.NamedJenny{g},
+			})
 		}
-		files = append(files, generated...)
 	}
-
 	return files, nil
 }
 
-func (g *GoTypes) generateFiles(kind codegen.Kind, version *codegen.KindVersion, name string, machineName string, packageName string, pathPrefix string) (codejen.Files, error) {
-	if g.Depth > 0 {
-		namePrefix := ""
-		if !g.GroupByKind {
-			namePrefix = exportField(name)
-		}
-		return g.generateFilesAtDepth(version.Schema, kind, version, 0, machineName, packageName, pathPrefix, namePrefix, g.ExcludeFields)
-	}
-
-	codegenPipeline := cog.TypesFromSchema().
-		CUEValue(packageName, version.Schema, cog.ForceEnvelope(name)).
-		Golang(cog.GoConfig{
-			AnyAsInterface: g.AnyAsInterface,
-		})
-
-	if g.AddKubernetesCodegen {
-		codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
-	}
-
-	files, err := codegenPipeline.Run(context.Background())
-	if err != nil {
-		return nil, err
-	}
-
-	if len(files) != 1 {
-		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
-	}
-
-	formatted, err := format.Source(files[0].Data)
-	if err != nil {
-		return nil, err
-	}
-
-	return codejen.Files{codejen.File{
-		Data:         formatted,
-		RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_gen.go"), strings.ToLower(machineName)),
-		From:         []codejen.NamedJenny{g},
-	}}, nil
+type goTypesGenerateFilesConfig struct {
+	VersionName   string
+	KindName      string
+	MachineName   string
+	PackageName   string
+	PathPrefix    string
+	NamePrefix    string
+	Group         string
+	ExcludeFields []string
 }
 
 //nolint:goconst
-func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codegen.KindVersion, currDepth int, machineName string, packageName string, pathPrefix string, namePrefix string, excludeFields []string) (codejen.Files, error) {
+func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDepth int, cfg goTypesGenerateFilesConfig) (codejen.Files, error) {
 	if currDepth == g.Depth {
 		fieldName := make([]string, 0)
-		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
+		for _, s := range TrimPathPrefix(v.Path(), schemaPath).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
 		exclude := false
-		for _, s := range excludeFields {
+		for _, s := range cfg.ExcludeFields {
 			// Check if the exclude name matches either the final element of the path, or the joined path
 			if len(fieldName) > 0 && strings.EqualFold(fieldName[len(fieldName)-1], s) {
 				exclude = true
@@ -177,23 +184,19 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codeg
 		var namerFunc func(string) string
 		if g.OpenAPINamer != nil {
 			namerFunc = func(name string) string {
-				grp := kind.Properties().ManifestGroup
-				if grp == "" {
-					grp = kind.Properties().Group
-				}
 				return g.OpenAPINamer(OpenAPINamerInfo{
 					TypeName:   name,
-					ShortGroup: grp,
-					Version:    kv.Version,
-					Kind:       kind.Name(),
+					ShortGroup: cfg.Group,
+					Version:    cfg.VersionName,
+					Kind:       cfg.KindName,
 				})
 			}
 		}
 
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
-			PackageName:                    packageName,
+			PackageName:                    cfg.PackageName,
 			Name:                           exportField(strings.Join(fieldName, "")),
-			NamePrefix:                     namePrefix,
+			NamePrefix:                     cfg.NamePrefix,
 			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] != "metadata"),
 			AnyAsInterface:                 g.AnyAsInterface,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth), namerFunc)
@@ -203,7 +206,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codeg
 
 		return codejen.Files{codejen.File{
 			Data:         goBytes,
-			RelativePath: fmt.Sprintf(path.Join(pathPrefix, "%s_%s_gen.go"), strings.ToLower(machineName), strings.Join(fieldName, "_")),
+			RelativePath: fmt.Sprintf(path.Join(cfg.PathPrefix, "%s_%s_gen.go"), strings.ToLower(cfg.MachineName), strings.Join(fieldName, "_")),
 			From:         []codejen.NamedJenny{g},
 		}}, nil
 	}
@@ -215,7 +218,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, kind codegen.Kind, kv *codeg
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), kind, kv, currDepth+1, machineName, packageName, pathPrefix, namePrefix, excludeFields)
+		f, err := g.generateFilesAtDepth(it.Value(), schemaPath, currDepth+1, cfg)
 		if err != nil {
 			return nil, err
 		}

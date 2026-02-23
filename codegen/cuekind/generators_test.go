@@ -51,9 +51,9 @@ func TestResourceGenerator(t *testing.T) {
 
 	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
-	kinds, err := parser.KindParser().Parse("customManifest")
+	kinds, err := parser.ManifestParser().Parse("customManifest")
 	require.NoError(t, err)
-	sameGroupKinds, err := parser.KindParser().Parse("testManifest")
+	sameGroupKinds, err := parser.ManifestParser().Parse("testManifest")
 	require.NoError(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
