@@ -12,7 +12,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
-func WatcherJenny(projectRepo, codegenPath string, groupByKind bool) codejen.OneToOne[codegen.Kind] {
+func WatcherJenny(projectRepo, codegenPath string, groupByKind bool) codejen.OneToMany[codegen.AppManifest] {
 	return &watcherJenny{
 		projectRepo: projectRepo,
 		codegenPath: codegenPath,
@@ -30,32 +30,44 @@ func (*watcherJenny) JennyName() string {
 	return "Watcher"
 }
 
-func (w *watcherJenny) Generate(kind codegen.Kind) (*codejen.File, error) {
-	if !kind.Version(kind.Properties().Current).Codegen.Go.Enabled {
-		return nil, nil
+func (w *watcherJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0)
+	for _, version := range appManifest.Versions() {
+		if version.Name() != appManifest.Properties().PreferredVersion {
+			continue
+		}
+		for _, kind := range version.Kinds() {
+			if !kind.Codegen.Go.Enabled {
+				continue
+			}
+			props := versionedKindToKindProperties(kind, appManifest)
+			b := bytes.Buffer{}
+			err := templates.WriteWatcher(templates.WatcherMetadata{
+				KindProperties:   props,
+				PackageName:      "watchers",
+				Repo:             w.projectRepo,
+				CodegenPath:      w.codegenPath,
+				Version:          version.Name(),
+				KindPackage:      GetGeneratedGoTypePath(w.groupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
+				KindsAreGrouped:  !w.groupByKind,
+				KindPackageAlias: fmt.Sprintf("%s%s", kind.MachineName, version.Name()),
+			}, &b)
+			if err != nil {
+				return nil, err
+			}
+			formatted, err := format.Source(b.Bytes())
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, codejen.File{
+				RelativePath: fmt.Sprintf("pkg/watchers/watcher_%s.go", props.MachineName),
+				Data:         formatted,
+				From:         []codejen.NamedJenny{w},
+			})
+		}
 	}
 
-	ver := kind.Properties().Current
-	props := kind.Properties()
-	b := bytes.Buffer{}
-	err := templates.WriteWatcher(templates.WatcherMetadata{
-		KindProperties:   props,
-		PackageName:      "watchers",
-		Repo:             w.projectRepo,
-		CodegenPath:      w.codegenPath,
-		Version:          ver,
-		KindPackage:      GetGeneratedPath(w.groupByKind, kind, ver),
-		KindsAreGrouped:  !w.groupByKind,
-		KindPackageAlias: fmt.Sprintf("%s%s", kind.Properties().MachineName, kind.Properties().Current),
-	}, &b)
-	if err != nil {
-		return nil, err
-	}
-	formatted, err := format.Source(b.Bytes())
-	if err != nil {
-		return nil, err
-	}
-	return codejen.NewFile(fmt.Sprintf("pkg/watchers/watcher_%s.go", props.MachineName), formatted, w), nil
+	return files, nil
 }
 
 type OperatorKubeConfigJenny struct {
@@ -65,7 +77,7 @@ func (*OperatorKubeConfigJenny) JennyName() string {
 	return "OperatorKubeConfig"
 }
 
-func (o *OperatorKubeConfigJenny) Generate(_ ...codegen.Kind) (*codejen.File, error) {
+func (o *OperatorKubeConfigJenny) Generate(_ codegen.AppManifest) (*codejen.File, error) {
 	b := bytes.Buffer{}
 	err := templates.WriteOperatorKubeConfig(&b)
 	if err != nil {
@@ -85,7 +97,7 @@ func (*OperatorConfigJenny) JennyName() string {
 	return "OperatorConfig"
 }
 
-func (o *OperatorConfigJenny) Generate(_ ...codegen.Kind) (*codejen.File, error) {
+func (o *OperatorConfigJenny) Generate(_ codegen.AppManifest) (*codejen.File, error) {
 	// TODO: combine this with kubeconfig?
 	b := bytes.Buffer{}
 	err := templates.WriteOperatorConfig(&b)
@@ -99,7 +111,7 @@ func (o *OperatorConfigJenny) Generate(_ ...codegen.Kind) (*codejen.File, error)
 	return codejen.NewFile("cmd/operator/config.go", formatted, o), nil
 }
 
-func OperatorMainJenny(projectRepo, codegenPath string, groupByKind bool) codejen.ManyToOne[codegen.Kind] {
+func OperatorMainJenny(projectRepo, codegenPath string, groupByKind bool) codejen.OneToOne[codegen.AppManifest] {
 	parts := strings.Split(projectRepo, "/")
 	if len(parts) == 0 {
 		parts = []string{""}
@@ -123,7 +135,7 @@ func (*operatorMainJenny) JennyName() string {
 	return "OperatorMain"
 }
 
-func (o *operatorMainJenny) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
+func (o *operatorMainJenny) Generate(_ codegen.AppManifest) (*codejen.File, error) {
 	tmd := templates.OperatorMainMetadata{
 		Repo:            o.projectRepo,
 		ProjectName:     o.projectName,
@@ -132,10 +144,6 @@ func (o *operatorMainJenny) Generate(kinds ...codegen.Kind) (*codejen.File, erro
 		WatcherPackage:  "watchers",
 		Resources:       make([]codegen.KindProperties, 0),
 		KindsAreGrouped: !o.groupByKind,
-	}
-
-	for _, kind := range kinds {
-		tmd.Resources = append(tmd.Resources, kind.Properties())
 	}
 
 	b := bytes.Buffer{}

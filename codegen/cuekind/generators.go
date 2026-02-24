@@ -63,10 +63,10 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 }
 
 // BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
 	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
 
-	g := codejen.JennyListWithNamer(namerFunc)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(
 		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, !groupKinds),
 		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{

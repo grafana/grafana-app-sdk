@@ -12,7 +12,7 @@ import (
 )
 
 // BackendPluginMainGenerator returns a many-to-one jenny which generates the `main.go` file needed to run the backend plugin.
-func BackendPluginMainGenerator(projectRepo, apiCodegenPath string, groupByKind bool) codejen.ManyToOne[codegen.Kind] {
+func BackendPluginMainGenerator(projectRepo, apiCodegenPath string, groupByKind bool) codejen.OneToOne[codegen.AppManifest] {
 	return &backendPluginMainGenerator{
 		projectRepo:    projectRepo,
 		apiCodegenPath: apiCodegenPath,
@@ -26,7 +26,7 @@ type backendPluginMainGenerator struct {
 	groupByKind    bool
 }
 
-func (m *backendPluginMainGenerator) Generate(decls ...codegen.Kind) (*codejen.File, error) {
+func (m *backendPluginMainGenerator) Generate(appManifest codegen.AppManifest) (*codejen.File, error) {
 	tmd := templates.BackendPluginRouterTemplateMetadata{
 		Repo:            m.projectRepo,
 		APICodegenPath:  m.apiCodegenPath,
@@ -35,10 +35,12 @@ func (m *backendPluginMainGenerator) Generate(decls ...codegen.Kind) (*codejen.F
 		KindsAreGrouped: !m.groupByKind,
 	}
 
-	for _, decl := range decls {
-		tmd.Resources = append(tmd.Resources, decl.Properties())
-		if decl.Properties().Group != "" {
-			tmd.PluginID = strings.Split(decl.Properties().Group, ".")[0]
+	for _, version := range appManifest.Versions() {
+		for _, kind := range version.Kinds() {
+			tmd.Resources = append(tmd.Resources, versionedKindToKindProperties(kind, appManifest))
+			if appManifest.Properties().FullGroup != "" {
+				tmd.PluginID = strings.Split(appManifest.Properties().FullGroup, ".")[0]
+			}
 		}
 	}
 

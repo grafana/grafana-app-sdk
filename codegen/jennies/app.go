@@ -3,6 +3,8 @@ package jennies
 import (
 	"bytes"
 	"go/format"
+	"slices"
+	"strings"
 
 	"github.com/grafana/codejen"
 
@@ -22,7 +24,7 @@ func (*AppGenerator) JennyName() string {
 	return "App"
 }
 
-func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
+func (a *AppGenerator) Generate(appManifest codegen.AppManifest) (*codejen.File, error) {
 	tmd := templates.AppMetadata{
 		Repo:                a.ProjectRepo,
 		ProjectName:         a.ProjectName,
@@ -34,16 +36,32 @@ func (a *AppGenerator) Generate(kinds ...codegen.Kind) (*codejen.File, error) {
 		ManifestPackagePath: a.ManifestPackagePath,
 	}
 
-	for _, kind := range kinds {
-		vers := make([]string, len(kind.Versions()))
-		for i, ver := range kind.Versions() {
-			vers[i] = ver.Version
+	appMetadataByKind := make(map[string]templates.AppMetadataKind)
+
+	for _, version := range appManifest.Versions() {
+		for _, kind := range version.Kinds() {
+			meta, ok := appMetadataByKind[kind.Kind]
+			if !ok {
+				meta = templates.AppMetadataKind{
+					KindProperties: versionedKindToKindProperties(kind, appManifest),
+					Versions:       make([]string, 0),
+				}
+			}
+			meta.Versions = append(meta.Versions, version.Name())
+			if version.Name() == appManifest.Properties().PreferredVersion {
+				meta.KindProperties = versionedKindToKindProperties(kind, appManifest)
+			}
+			appMetadataByKind[kind.Kind] = meta
 		}
-		tmd.Resources = append(tmd.Resources, templates.AppMetadataKind{
-			KindProperties: kind.Properties(),
-			Versions:       vers,
-		})
 	}
+
+	for _, meta := range appMetadataByKind {
+		tmd.Resources = append(tmd.Resources, meta)
+	}
+	// Sort for deterministic output
+	slices.SortFunc(tmd.Resources, func(a, b templates.AppMetadataKind) int {
+		return strings.Compare(a.Kind, b.Kind)
+	})
 
 	b := bytes.Buffer{}
 	err := templates.WriteAppGoFile(tmd, &b)

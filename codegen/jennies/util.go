@@ -52,3 +52,21 @@ func GetGeneratedGoTypePath(groupByKind bool, shortGroup string, version string,
 	}
 	return filepath.Join(ToPackageName(shortGroup), ToPackageName(version))
 }
+
+func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codegen.AppManifest) codegen.KindProperties {
+	return codegen.KindProperties{
+		Kind:                   kind.Kind,
+		Group:                  appManifest.Properties().FullGroup,
+		ManifestGroup:          appManifest.Properties().Group,
+		MachineName:            kind.MachineName,
+		PluralMachineName:      kind.PluralMachineName,
+		PluralName:             kind.PluralName,
+		Current:                appManifest.Properties().PreferredVersion,
+		Scope:                  kind.Scope,
+		Validation:             kind.Validation,
+		Mutation:               kind.Mutation,
+		Conversion:             kind.Conversion,
+		ConversionWebhookProps: kind.ConversionWebhookProps,
+		Codegen:                kind.Codegen,
+	}
+}
