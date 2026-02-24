@@ -268,6 +268,9 @@ func preflightGeneratedGoCodeCompiles(cfg *config.Config, files codejen.Files) e
 	if goModule == "" {
 		return preflightGeneratedGoCodeCompilesWithOverlay(files)
 	}
+	if currentModule != "" && goModule == currentModule {
+		return preflightGeneratedGoCodeCompilesWithOverlay(files)
+	}
 
 	goGenRoot := cfg.Codegen.GoGenPath
 	if goGenRoot == "" {
@@ -420,7 +423,10 @@ func preflightGeneratedGoCodeCompiles(cfg *config.Config, files codejen.Files) e
 
 	buildCmd := exec.Command("go", "build", "-mod=mod", "./...")
 	buildCmd.Dir = moduleRoot
-	buildCmd.Env = append(os.Environ(), "GOSUMDB=off")
+	buildCmd.Env = append(os.Environ(),
+		"GOSUMDB=off",
+		fmt.Sprintf("GOCACHE=%s", filepath.Join(tempDir, "gocache")),
+	)
 	out, err := buildCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk. If you'd like to bypass the compilation check, please set skipPreflightCompilationCheck to true.\n\n%s\n%w", strings.TrimSpace(string(out)), err)
@@ -488,7 +494,10 @@ func preflightGeneratedGoCodeCompilesWithOverlay(files codejen.Files) error {
 
 	buildArgs := append([]string{"build", "-overlay", overlayPath}, packages...)
 	buildCmd := exec.Command("go", buildArgs...)
-	buildCmd.Env = append(os.Environ(), "GOSUMDB=off")
+	buildCmd.Env = append(os.Environ(),
+		"GOSUMDB=off",
+		fmt.Sprintf("GOCACHE=%s", filepath.Join(tempDir, "gocache")),
+	)
 	out, err := buildCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk. If you'd like to bypass the compilation check, please set skipPreflightCompilationCheck to true.\n\n%s\n%w", strings.TrimSpace(string(out)), err)
