@@ -17,48 +17,59 @@ type generatedGoFile struct {
 	data    []byte
 }
 
-type tempModuleContext struct {
-	cwd                 string
-	currentModule       string
-	goModule            string
-	goGenRoot           string
-	moduleGenRoot       string
-	generatedFiles      []generatedGoFile
-	generatedPackageDir map[string]struct{}
+type packageCopySpec struct {
+	srcDir string
+	dstDir string
 }
 
-func buildTempModuleContext(cfg *config.Config, cwd, currentModule, goModule string, files codejen.Files) (tempModuleContext, bool, error) {
+type tempModuleContext struct {
+	cwd            string
+	currentModule  string
+	goModule       string
+	generatedFiles []generatedGoFile
+	packageCopies  []packageCopySpec
+}
+
+func buildTempModuleContext(cfg *config.Config, cwd, currentModule, goModule string, files codejen.Files) (tempModuleContext, error) {
+	goGenRoot := normalizeAbsolutePath(cfg.Codegen.GoGenPath, cwd)
 	moduleGenRoot := cfg.Codegen.GoModGenPath
 	if moduleGenRoot == "" {
 		moduleGenRoot = cfg.Codegen.GoGenPath
 	}
 	moduleGenRoot = normalizeRelativePath(moduleGenRoot)
 	if filepath.IsAbs(moduleGenRoot) {
-		return tempModuleContext{}, false, nil
+		return tempModuleContext{}, errUseOverlayStrategy
 	}
 
-	ctx := tempModuleContext{
-		cwd:                 cwd,
-		currentModule:       currentModule,
-		goModule:            goModule,
-		goGenRoot:           normalizeAbsolutePath(cfg.Codegen.GoGenPath, cwd),
-		moduleGenRoot:       moduleGenRoot,
-		generatedPackageDir: make(map[string]struct{}),
-	}
-
-	ok, err := collectGeneratedFilesForTempModule(&ctx, files)
+	generatedFiles, packageDirs, err := collectGeneratedFiles(files, cwd, goGenRoot, moduleGenRoot)
 	if err != nil {
-		return tempModuleContext{}, false, err
+		return tempModuleContext{}, err
 	}
-	if !ok {
-		return tempModuleContext{}, false, nil
+	if len(generatedFiles) == 0 {
+		return tempModuleContext{
+			cwd:            cwd,
+			currentModule:  currentModule,
+			goModule:       goModule,
+			generatedFiles: nil,
+			packageCopies:  nil,
+		}, nil
 	}
 
-	filterOutConflictingManifestPackages(&ctx)
-	return ctx, true, nil
+	packageCopies, err := buildPackageCopySpecs(packageDirs, goGenRoot, moduleGenRoot)
+	if err != nil {
+		return tempModuleContext{}, err
+	}
+
+	return tempModuleContext{
+		cwd:            cwd,
+		currentModule:  currentModule,
+		goModule:       goModule,
+		generatedFiles: generatedFiles,
+		packageCopies:  packageCopies,
+	}, nil
 }
 
-func collectGeneratedFilesForTempModule(ctx *tempModuleContext, files codejen.Files) (bool, error) {
+func collectGeneratedFiles(files codejen.Files, cwd, goGenRoot, moduleGenRoot string) ([]generatedGoFile, map[string]int, error) {
 	manifestFileCountByDir := make(map[string]int)
 	generatedFiles := make([]generatedGoFile, 0, len(files))
 
@@ -67,47 +78,73 @@ func collectGeneratedFilesForTempModule(ctx *tempModuleContext, files codejen.Fi
 			continue
 		}
 
-		absTargetPath := normalizeAbsolutePath(f.RelativePath, ctx.cwd)
-		relPath, err := filepath.Rel(ctx.goGenRoot, absTargetPath)
+		absTargetPath := normalizeAbsolutePath(f.RelativePath, cwd)
+		relPath, err := filepath.Rel(goGenRoot, absTargetPath)
 		if err != nil || strings.HasPrefix(relPath, "..") {
-			return false, nil
+			return nil, nil, errUseOverlayStrategy
 		}
 
 		dir := filepath.Dir(absTargetPath)
 		generatedFiles = append(generatedFiles, generatedGoFile{
 			absDir:  dir,
-			relPath: filepath.Join(ctx.moduleGenRoot, relPath),
+			relPath: filepath.Join(moduleGenRoot, relPath),
 			data:    f.Data,
 		})
-		ctx.generatedPackageDir[dir] = struct{}{}
-		if strings.HasSuffix(absTargetPath, "_manifest.go") {
-			manifestFileCountByDir[dir]++
+		manifestFileCountByDir[dir]++
+	}
+
+	if len(generatedFiles) == 0 {
+		return nil, nil, nil
+	}
+
+	conflictingDirs := conflictingManifestDirs(generatedFiles)
+	if len(conflictingDirs) > 0 {
+		filtered := generatedFiles[:0]
+		for _, f := range generatedFiles {
+			if _, skip := conflictingDirs[f.absDir]; skip {
+				continue
+			}
+			filtered = append(filtered, f)
+		}
+		generatedFiles = filtered
+		for dir := range conflictingDirs {
+			delete(manifestFileCountByDir, dir)
 		}
 	}
 
-	ctx.generatedFiles = generatedFiles
-	for dir, count := range manifestFileCountByDir {
-		if count > 1 {
-			delete(ctx.generatedPackageDir, dir)
-		}
-	}
-
-	return true, nil
+	return generatedFiles, manifestFileCountByDir, nil
 }
 
-func filterOutConflictingManifestPackages(ctx *tempModuleContext) {
-	if len(ctx.generatedFiles) == 0 {
-		return
+func conflictingManifestDirs(files []generatedGoFile) map[string]struct{} {
+	manifestCounts := make(map[string]int)
+	for _, f := range files {
+		if strings.HasSuffix(f.relPath, "_manifest.go") {
+			manifestCounts[f.absDir]++
+		}
 	}
 
-	filtered := ctx.generatedFiles[:0]
-	for _, f := range ctx.generatedFiles {
-		if _, keep := ctx.generatedPackageDir[f.absDir]; !keep {
-			continue
+	conflicting := make(map[string]struct{})
+	for dir, count := range manifestCounts {
+		if count > 1 {
+			conflicting[dir] = struct{}{}
 		}
-		filtered = append(filtered, f)
 	}
-	ctx.generatedFiles = filtered
+	return conflicting
+}
+
+func buildPackageCopySpecs(packageDirs map[string]int, goGenRoot, moduleGenRoot string) ([]packageCopySpec, error) {
+	specs := make([]packageCopySpec, 0, len(packageDirs))
+	for dir := range packageDirs {
+		relDir, err := filepath.Rel(goGenRoot, dir)
+		if err != nil || strings.HasPrefix(relDir, "..") {
+			return nil, errUseOverlayStrategy
+		}
+		specs = append(specs, packageCopySpec{
+			srcDir: dir,
+			dstDir: filepath.Join(moduleGenRoot, relDir),
+		})
+	}
+	return specs, nil
 }
 
 func compileGeneratedGoCodeWithTempModule(ctx tempModuleContext) error {
@@ -117,7 +154,7 @@ func compileGeneratedGoCodeWithTempModule(ctx tempModuleContext) error {
 	}
 	defer os.RemoveAll(tempDir)
 
-	if err := copyExistingGoFilesIntoTempModule(ctx, moduleRoot); err != nil {
+	if err := copyExistingGoFilesIntoTempModule(ctx.packageCopies, moduleRoot); err != nil {
 		return err
 	}
 	if err := writeGeneratedFilesIntoTempModule(ctx.generatedFiles, moduleRoot); err != nil {
@@ -147,17 +184,13 @@ func createTempModuleRoot() (string, string, error) {
 	return tempDir, moduleRoot, nil
 }
 
-func copyExistingGoFilesIntoTempModule(ctx tempModuleContext, moduleRoot string) error {
-	for packageDir := range ctx.generatedPackageDir {
-		relDir, err := filepath.Rel(ctx.goGenRoot, packageDir)
-		if err != nil || strings.HasPrefix(relDir, "..") {
-			return fmt.Errorf("unable to map generated package directory '%s' into temp module root", packageDir)
-		}
-		tempPackageDir := filepath.Join(moduleRoot, ctx.moduleGenRoot, relDir)
+func copyExistingGoFilesIntoTempModule(specs []packageCopySpec, moduleRoot string) error {
+	for _, spec := range specs {
+		tempPackageDir := filepath.Join(moduleRoot, spec.dstDir)
 		if err := os.MkdirAll(tempPackageDir, 0o755); err != nil {
 			return err
 		}
-		if err := copyGoFilesInDirectory(packageDir, tempPackageDir); err != nil {
+		if err := copyGoFilesInDirectory(spec.srcDir, tempPackageDir); err != nil {
 			return err
 		}
 	}

@@ -10,13 +10,8 @@ import (
 	"github.com/grafana/codejen"
 )
 
-func compileGeneratedGoCodeWithOverlay(files codejen.Files) error {
+func compileGeneratedGoCodeWithOverlay(files codejen.Files, cwd string) error {
 	overlay := goBuildOverlay{Replace: make(map[string]string)}
-
-	cwd, err := getWorkingDirectory()
-	if err != nil {
-		return err
-	}
 
 	tempDir, err := os.MkdirTemp("", preflightTempDirPattern)
 	if err != nil {

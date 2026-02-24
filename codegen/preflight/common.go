@@ -12,11 +12,9 @@ import (
 
 const preflightTempDirPattern = "grafana-app-sdk-generate-preflight-*"
 
-func getWorkingDirectory() (string, error) {
-	return os.Getwd()
-}
+var errUseOverlayStrategy = errors.New("use overlay strategy")
 
-func useOverlayCompilationPreflight(goModule, currentModule string) bool {
+func shouldUseOverlayStrategy(goModule, currentModule string) bool {
 	if goModule == "" {
 		return true
 	}
