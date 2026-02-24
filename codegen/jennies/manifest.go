@@ -390,13 +390,13 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 	for i, k := range kindList {
 		if i > 0 {
 			if len(kindList) > 2 {
-				allKindsDesc.WriteString(", ")
+				_, _ = allKindsDesc.WriteString(", ")
 			}
 			if i == len(kindList)-1 {
-				allKindsDesc.WriteString("and ")
+				_, _ = allKindsDesc.WriteString("and ")
 			}
 		}
-		allKindsDesc.WriteString(k)
+		_, _ = allKindsDesc.WriteString(k)
 	}
 	roles := map[string]codegen.AppManifestPropertiesRole{
 		readerKey: {

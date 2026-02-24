@@ -74,7 +74,7 @@ func collectGeneratedFiles(files codejen.Files, cwd, goGenRoot, moduleGenRoot st
 	generatedFiles := make([]generatedGoFile, 0, len(files))
 
 	for _, f := range files {
-		if filepath.Ext(f.RelativePath) != ".go" {
+		if filepath.Ext(f.RelativePath) != goSourceFileExtension {
 			continue
 		}
 
@@ -171,12 +171,12 @@ func compileGeneratedGoCodeWithTempModule(ctx tempModuleContext) error {
 	return nil
 }
 
-func createTempModuleRoot() (string, string, error) {
-	tempDir, err := os.MkdirTemp("", preflightTempDirPattern)
+func createTempModuleRoot() (tempDir string, moduleRoot string, err error) {
+	tempDir, err = os.MkdirTemp("", preflightTempDirPattern)
 	if err != nil {
 		return "", "", err
 	}
-	moduleRoot := filepath.Join(tempDir, "module")
+	moduleRoot = filepath.Join(tempDir, "module")
 	if err := os.MkdirAll(moduleRoot, 0o755); err != nil {
 		_ = os.RemoveAll(tempDir)
 		return "", "", err
@@ -206,7 +206,7 @@ func copyGoFilesInDirectory(srcDir, dstDir string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".go" {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != goSourceFileExtension {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(srcDir, entry.Name()))

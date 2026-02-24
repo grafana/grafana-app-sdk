@@ -75,7 +75,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.SilenceUsage = true
 }
 
-//nolint:funlen,revive,gocyclo
+//nolint:funlen,revive,gocyclo,gocognit
 func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	// Global flags
 	sourcePath, err := cmd.Flags().GetString(sourceFlag)

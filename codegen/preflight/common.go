@@ -11,6 +11,7 @@ import (
 )
 
 const preflightTempDirPattern = "grafana-app-sdk-generate-preflight-*"
+const goSourceFileExtension = ".go"
 
 var errUseOverlayStrategy = errors.New("use overlay strategy")
 
