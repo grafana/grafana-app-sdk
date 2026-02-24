@@ -17,7 +17,7 @@ import (
 
 const GoTypesMaxDepth = 5
 
-// GoTypes is a Jenny for turning a codegen.Kind into go types according to its codegen settings.
+// GoTypes is a Jenny for turning a codegen.AppManifest into go types according to its codegen settings.
 type GoTypes struct {
 	// GenerateOnlyCurrent should be set to true if you only want to generate code for the kind.Properties().Current version.
 	// This will affect the package and path(s) of the generated file(s).
