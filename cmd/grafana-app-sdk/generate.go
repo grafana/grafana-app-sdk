@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
@@ -210,6 +213,9 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 
+		if err := preflightGeneratedGoCodeCompiles(files); err != nil {
+			return err
+		}
 		for _, f := range files {
 			err = writeFile(f.RelativePath, f.Data)
 			if err != nil {
@@ -221,6 +227,9 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		if cfg.Codegen.EnableK8sPostProcessing {
 			files, err = postGenerateFilesCue(parser, cfg)
 			if err != nil {
+				return err
+			}
+			if err := preflightGeneratedGoCodeCompiles(files); err != nil {
 				return err
 			}
 			for _, f := range files {
@@ -235,6 +244,83 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func preflightGeneratedGoCodeCompiles(files codejen.Files) error {
+	overlay := goBuildOverlay{
+		Replace: make(map[string]string),
+	}
+	generatedPackages := make(map[string]struct{})
+	tempDir, err := os.MkdirTemp("", "grafana-app-sdk-generate-preflight-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(tempDir)
+
+	fileIndex := 0
+	for _, f := range files {
+		if filepath.Ext(f.RelativePath) != ".go" {
+			continue
+		}
+
+		pkgDir := filepath.Dir(f.RelativePath)
+		generatedPackages[toLocalGoPackagePath(pkgDir)] = struct{}{}
+
+		absTargetPath, err := filepath.Abs(f.RelativePath)
+		if err != nil {
+			return err
+		}
+		tempFilePath := filepath.Join(tempDir, fmt.Sprintf("file-%06d.go", fileIndex))
+		fileIndex++
+
+		if err := os.WriteFile(tempFilePath, f.Data, 0o666); err != nil {
+			return err
+		}
+		overlay.Replace[absTargetPath] = tempFilePath
+	}
+
+	if len(generatedPackages) == 0 {
+		return nil
+	}
+
+	packages := make([]string, 0, len(generatedPackages))
+	for pkg := range generatedPackages {
+		packages = append(packages, pkg)
+	}
+	sort.Strings(packages)
+
+	overlayBytes, err := json.Marshal(overlay)
+	if err != nil {
+		return err
+	}
+	overlayPath := filepath.Join(tempDir, "overlay.json")
+	if err := os.WriteFile(overlayPath, overlayBytes, 0o600); err != nil {
+		return err
+	}
+
+	buildArgs := append([]string{"build", "-overlay", overlayPath}, packages...)
+	buildCmd := exec.Command("go", buildArgs...)
+	out, err := buildCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk: %w\n%s", err, strings.TrimSpace(string(out)))
+	}
+
+	return nil
+}
+
+type goBuildOverlay struct {
+	Replace map[string]string `json:"Replace"`
+}
+
+func toLocalGoPackagePath(path string) string {
+	cleaned := filepath.Clean(path)
+	if cleaned == "" || cleaned == "." {
+		return "."
+	}
+	if filepath.IsAbs(cleaned) || strings.HasPrefix(cleaned, ".") {
+		return cleaned
+	}
+	return "." + string(filepath.Separator) + cleaned
 }
 
 //nolint:funlen,goconst
