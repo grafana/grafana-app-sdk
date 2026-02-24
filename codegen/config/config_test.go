@@ -30,6 +30,7 @@ func TestParseConfigOverridesDefaults(t *testing.T) {
 	assert.Equal(t, "alt/ts/", cfg.Codegen.TsGenPath)
 	assert.True(t, cfg.Codegen.EnableK8sPostProcessing)
 	assert.False(t, cfg.Codegen.EnableOperatorStatusGeneration)
+	assert.True(t, cfg.Codegen.SkipPreflightCompilationCheck)
 }
 
 func TestParseConfigDefaultFallback(t *testing.T) {
@@ -50,6 +51,7 @@ func TestParseConfigDefaultFallback(t *testing.T) {
 	assert.Equal(t, "plugin/src/generated/", cfg.Codegen.TsGenPath)
 	assert.False(t, cfg.Codegen.EnableK8sPostProcessing)
 	assert.True(t, cfg.Codegen.EnableOperatorStatusGeneration)
+	assert.False(t, cfg.Codegen.SkipPreflightCompilationCheck)
 
 	assert.Equal(t, "github.com/example/module", cfg.Codegen.GoModule)
 	assert.Equal(t, "", cfg.Codegen.GoModGenPath)

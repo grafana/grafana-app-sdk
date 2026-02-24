@@ -57,6 +57,8 @@ _kubeObjectMetadata: {
 	enableK8sPostProcessing:        bool | *false
 	// enableOperatorStatusGeneration replaces the root --genoperatorstate flag and toggles status helpers in generated code.
 	enableOperatorStatusGeneration: bool | *true
+	// skipPreflightCompilationCheck disables the generated Go preflight compile check before files are written.
+	skipPreflightCompilationCheck:  bool | *false
 }
 
 Config: {

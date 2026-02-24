@@ -35,6 +35,7 @@ type CodegenConfig struct {
 	TsGenPath                      string
 	EnableK8sPostProcessing        bool
 	EnableOperatorStatusGeneration bool
+	SkipPreflightCompilationCheck  bool
 }
 
 type Config struct {

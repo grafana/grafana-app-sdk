@@ -213,8 +213,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 
-		if err := preflightGeneratedGoCodeCompiles(files); err != nil {
-			return err
+		if !cfg.Codegen.SkipPreflightCompilationCheck {
+			if err := preflightGeneratedGoCodeCompiles(files); err != nil {
+				return err
+			}
 		}
 		for _, f := range files {
 			err = writeFile(f.RelativePath, f.Data)
@@ -229,8 +231,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return err
 			}
-			if err := preflightGeneratedGoCodeCompiles(files); err != nil {
-				return err
+			if !cfg.Codegen.SkipPreflightCompilationCheck {
+				if err := preflightGeneratedGoCodeCompiles(files); err != nil {
+					return err
+				}
 			}
 			for _, f := range files {
 				err = writeFile(f.RelativePath, f.Data)
@@ -251,6 +255,10 @@ func preflightGeneratedGoCodeCompiles(files codejen.Files) error {
 		Replace: make(map[string]string),
 	}
 	generatedPackages := make(map[string]struct{})
+	cwd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
 	tempDir, err := os.MkdirTemp("", "grafana-app-sdk-generate-preflight-*")
 	if err != nil {
 		return err
@@ -263,17 +271,18 @@ func preflightGeneratedGoCodeCompiles(files codejen.Files) error {
 			continue
 		}
 
-		pkgDir := filepath.Dir(f.RelativePath)
-		generatedPackages[toLocalGoPackagePath(pkgDir)] = struct{}{}
-
-		absTargetPath, err := filepath.Abs(f.RelativePath)
-		if err != nil {
-			return err
+		absTargetPath := f.RelativePath
+		if !filepath.IsAbs(absTargetPath) {
+			absTargetPath = filepath.Join(cwd, absTargetPath)
 		}
+		absTargetPath = filepath.Clean(absTargetPath)
+
+		generatedPackages[filepath.Dir(absTargetPath)] = struct{}{}
+
 		tempFilePath := filepath.Join(tempDir, fmt.Sprintf("file-%06d.go", fileIndex))
 		fileIndex++
 
-		if err := os.WriteFile(tempFilePath, f.Data, 0o666); err != nil {
+		if err := os.WriteFile(tempFilePath, f.Data, 0o600); err != nil {
 			return err
 		}
 		overlay.Replace[absTargetPath] = tempFilePath
@@ -302,7 +311,7 @@ func preflightGeneratedGoCodeCompiles(files codejen.Files) error {
 	buildCmd := exec.Command("go", buildArgs...)
 	out, err := buildCmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk: %w\n%s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk. If you'd like to bypass the compilation check, please set skipPreflightCompilationCheck to true.\n\n%s\n%w", strings.TrimSpace(string(out)), err)
 	}
 
 	return nil
@@ -310,17 +319,6 @@ func preflightGeneratedGoCodeCompiles(files codejen.Files) error {
 
 type goBuildOverlay struct {
 	Replace map[string]string `json:"Replace"`
-}
-
-func toLocalGoPackagePath(path string) string {
-	cleaned := filepath.Clean(path)
-	if cleaned == "" || cleaned == "." {
-		return "."
-	}
-	if filepath.IsAbs(cleaned) || strings.HasPrefix(cleaned, ".") {
-		return cleaned
-	}
-	return "." + string(filepath.Separator) + cleaned
 }
 
 //nolint:funlen,goconst
