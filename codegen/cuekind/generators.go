@@ -69,15 +69,15 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(
 		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, !groupKinds),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
+		jennies.StaticManyToOneGenerator[codegen.AppManifest](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
 		}),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
+		jennies.StaticManyToOneGenerator[codegen.AppManifest](codejen.File{
 			RelativePath: "plugin/secure/middleware.go",
 			Data:         pluginSecurePkgFiles["middleware.go"],
 		}),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
+		jennies.StaticManyToOneGenerator[codegen.AppManifest](codejen.File{
 			RelativePath: "plugin/secure/retriever.go",
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
@@ -98,8 +98,8 @@ func TypeScriptResourceGenerator() *codejen.JennyList[codegen.Kind] {
 
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
-func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(
 		&jennies.OperatorKubeConfigJenny{},
 		jennies.OperatorMainJenny(projectRepo, codegenPath, !groupKinds),
@@ -108,12 +108,12 @@ func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codeje
 	return g
 }
 
-func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
 	parts := strings.Split(projectRepo, "/")
 	if len(parts) == 0 {
 		parts = []string{""}
 	}
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(
 		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.AppGenerator{

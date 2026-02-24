@@ -36,6 +36,9 @@ func (m *backendPluginMainGenerator) Generate(appManifest codegen.AppManifest) (
 	}
 
 	for _, version := range appManifest.Versions() {
+		if version.Name() != appManifest.Properties().PreferredVersion {
+			continue
+		}
 		for _, kind := range version.Kinds() {
 			tmd.Resources = append(tmd.Resources, versionedKindToKindProperties(kind, appManifest))
 			if appManifest.Properties().FullGroup != "" {

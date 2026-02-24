@@ -598,11 +598,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		manifestParser = parser.ManifestParser()
 		generator, err = codegen.NewGenerator(manifestParser)
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser()
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
@@ -681,7 +681,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 
 	var files codejen.Files
 	switch cast := any(generator).(type) {
-	case *codegen.Generator[codegen.Kind]:
+	case *codegen.Generator[codegen.AppManifest]:
 		files, err = cast.Generate(cuekind.OperatorGenerator(repo, "pkg/generated", groupKinds), selectors...)
 		if err != nil {
 			return err
