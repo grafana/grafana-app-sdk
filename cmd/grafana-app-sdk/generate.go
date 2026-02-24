@@ -265,40 +265,22 @@ func preflightGeneratedGoCodeCompiles(cfg *config.Config, files codejen.Files) e
 	if goModule == "" {
 		goModule = currentModule
 	}
-	if goModule == "" {
-		return preflightGeneratedGoCodeCompilesWithOverlay(files)
-	}
-	if currentModule != "" && goModule == currentModule {
+	if useOverlayCompilationPreflight(goModule, currentModule) {
 		return preflightGeneratedGoCodeCompilesWithOverlay(files)
 	}
 
-	goGenRoot := cfg.Codegen.GoGenPath
-	if goGenRoot == "" {
-		goGenRoot = "."
-	}
-	if !filepath.IsAbs(goGenRoot) {
-		goGenRoot = filepath.Join(cwd, goGenRoot)
-	}
-	goGenRoot = filepath.Clean(goGenRoot)
+	goGenRoot := normalizeAbsolutePath(cfg.Codegen.GoGenPath, cwd)
 
 	moduleGenRoot := cfg.Codegen.GoModGenPath
 	if moduleGenRoot == "" {
 		moduleGenRoot = cfg.Codegen.GoGenPath
 	}
-	if moduleGenRoot == "" {
-		moduleGenRoot = "."
-	}
+	moduleGenRoot = normalizeRelativePath(moduleGenRoot)
 	if filepath.IsAbs(moduleGenRoot) {
 		return preflightGeneratedGoCodeCompilesWithOverlay(files)
 	}
-	moduleGenRoot = filepath.Clean(moduleGenRoot)
 
-	type generatedGoFile struct {
-		absDir  string
-		relPath string
-		data    []byte
-	}
-	generatedFiles := make([]generatedGoFile, 0, len(files))
+	generatedFiles := make([]preflightGeneratedGoFile, 0, len(files))
 	generatedPackageDirs := make(map[string]struct{})
 	manifestFileCountByDir := make(map[string]int)
 
@@ -307,18 +289,14 @@ func preflightGeneratedGoCodeCompiles(cfg *config.Config, files codejen.Files) e
 			continue
 		}
 
-		absTargetPath := f.RelativePath
-		if !filepath.IsAbs(absTargetPath) {
-			absTargetPath = filepath.Join(cwd, absTargetPath)
-		}
-		absTargetPath = filepath.Clean(absTargetPath)
+		absTargetPath := normalizeAbsolutePath(f.RelativePath, cwd)
 
 		relPath, err := filepath.Rel(goGenRoot, absTargetPath)
 		if err != nil || strings.HasPrefix(relPath, "..") {
 			return preflightGeneratedGoCodeCompilesWithOverlay(files)
 		}
 
-		generatedFiles = append(generatedFiles, generatedGoFile{
+		generatedFiles = append(generatedFiles, preflightGeneratedGoFile{
 			absDir:  filepath.Dir(absTargetPath),
 			relPath: filepath.Join(moduleGenRoot, relPath),
 			data:    f.Data,
@@ -421,15 +399,9 @@ func preflightGeneratedGoCodeCompiles(cfg *config.Config, files codejen.Files) e
 		return err
 	}
 
-	buildCmd := exec.Command("go", "build", "-mod=mod", "./...")
-	buildCmd.Dir = moduleRoot
-	buildCmd.Env = append(os.Environ(),
-		"GOSUMDB=off",
-		fmt.Sprintf("GOCACHE=%s", filepath.Join(tempDir, "gocache")),
-	)
-	out, err := buildCmd.CombinedOutput()
+	out, err := runPreflightGoBuild(tempDir, moduleRoot, "build", "-mod=mod", "./...")
 	if err != nil {
-		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk. If you'd like to bypass the compilation check, please set skipPreflightCompilationCheck to true.\n\n%s\n%w", strings.TrimSpace(string(out)), err)
+		return preflightBuildError(out, err)
 	}
 
 	return nil
@@ -456,11 +428,7 @@ func preflightGeneratedGoCodeCompilesWithOverlay(files codejen.Files) error {
 			continue
 		}
 
-		absTargetPath := f.RelativePath
-		if !filepath.IsAbs(absTargetPath) {
-			absTargetPath = filepath.Join(cwd, absTargetPath)
-		}
-		absTargetPath = filepath.Clean(absTargetPath)
+		absTargetPath := normalizeAbsolutePath(f.RelativePath, cwd)
 
 		generatedPackages[filepath.Dir(absTargetPath)] = struct{}{}
 
@@ -493,21 +461,60 @@ func preflightGeneratedGoCodeCompilesWithOverlay(files codejen.Files) error {
 	}
 
 	buildArgs := append([]string{"build", "-overlay", overlayPath}, packages...)
-	buildCmd := exec.Command("go", buildArgs...)
-	buildCmd.Env = append(os.Environ(),
-		"GOSUMDB=off",
-		fmt.Sprintf("GOCACHE=%s", filepath.Join(tempDir, "gocache")),
-	)
-	out, err := buildCmd.CombinedOutput()
+	out, err := runPreflightGoBuild(tempDir, "", buildArgs...)
 	if err != nil {
-		return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk. If you'd like to bypass the compilation check, please set skipPreflightCompilationCheck to true.\n\n%s\n%w", strings.TrimSpace(string(out)), err)
+		return preflightBuildError(out, err)
 	}
 
 	return nil
 }
 
+type preflightGeneratedGoFile struct {
+	absDir  string
+	relPath string
+	data    []byte
+}
+
 type goBuildOverlay struct {
 	Replace map[string]string `json:"Replace"`
+}
+
+func useOverlayCompilationPreflight(goModule, currentModule string) bool {
+	if goModule == "" {
+		return true
+	}
+	return currentModule != "" && goModule == currentModule
+}
+
+func normalizeAbsolutePath(path, cwd string) string {
+	if path == "" {
+		path = "."
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(cwd, path)
+	}
+	return filepath.Clean(path)
+}
+
+func normalizeRelativePath(path string) string {
+	if path == "" {
+		return "."
+	}
+	return filepath.Clean(path)
+}
+
+func runPreflightGoBuild(tempDir, dir string, args ...string) ([]byte, error) {
+	buildCmd := exec.Command("go", args...)
+	buildCmd.Dir = dir
+	buildCmd.Env = append(os.Environ(),
+		"GOSUMDB=off",
+		fmt.Sprintf("GOCACHE=%s", filepath.Join(tempDir, "gocache")),
+	)
+	return buildCmd.CombinedOutput()
+}
+
+func preflightBuildError(out []byte, err error) error {
+	return fmt.Errorf("generated code contains compilation errors, this is likely a bug in sdk. If you'd like to bypass the compilation check, please set skipPreflightCompilationCheck to true.\n\n%s\n%w", strings.TrimSpace(string(out)), err)
 }
 
 //nolint:funlen,goconst
