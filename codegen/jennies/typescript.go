@@ -21,38 +21,34 @@ type TypeScriptResourceTypes struct {
 
 func (*TypeScriptResourceTypes) JennyName() string { return "TypeScriptResourceTypes" }
 
-func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
+func (t *TypeScriptResourceTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	if t.GenerateOnlyCurrent {
-		ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("no version for %s", kind.Properties().Current)
-		}
-		if !ver.Codegen.TS.Enabled {
-			return nil, nil
-		}
-		b, err := t.generateObjectFile(kind, ver, strings.ToLower(kind.Properties().MachineName)+"_")
-		if err != nil {
-			return nil, err
-		}
-		files = append(files, codejen.File{
-			RelativePath: fmt.Sprintf("%s/%s_object_gen.ts", kind.Properties().MachineName, kind.Properties().MachineName),
-			Data:         b,
-			From:         []codejen.NamedJenny{t},
-		})
-	} else {
-		allVersions := kind.Versions()
-		for i := 0; i < len(allVersions); i++ {
-			ver := allVersions[i]
-			if !ver.Codegen.TS.Enabled {
-				continue
+		for _, kind := range codegen.PreferredVersionKinds(appManifest) {
+			if !kind.Codegen.TS.Enabled {
+				return nil, nil
 			}
-			b, err := t.generateObjectFile(kind, &ver, "")
+			b, err := t.generateObjectFile(&kind, strings.ToLower(kind.MachineName)+"_")
 			if err != nil {
 				return nil, err
 			}
 			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.ts", kind.Properties().MachineName, ver.Version, kind.Properties().MachineName),
+				RelativePath: fmt.Sprintf("%s/%s_object_gen.ts", kind.MachineName, kind.MachineName),
+				Data:         b,
+				From:         []codejen.NamedJenny{t},
+			})
+		}
+	} else {
+		for version, kind := range codegen.VersionedKinds(appManifest) {
+			if !kind.Codegen.TS.Enabled {
+				continue
+			}
+			b, err := t.generateObjectFile(&kind, "")
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, codejen.File{
+				RelativePath: fmt.Sprintf("%s/%s/%s_object_gen.ts", kind.MachineName, version.Name(), kind.MachineName),
 				Data:         b,
 				From:         []codejen.NamedJenny{t},
 			})
@@ -61,14 +57,14 @@ func (t *TypeScriptResourceTypes) Generate(kind codegen.Kind) (codejen.Files, er
 	return files, nil
 }
 
-func (*TypeScriptResourceTypes) generateObjectFile(kind codegen.Kind, version *codegen.KindVersion, tsTypePrefix string) ([]byte, error) {
+func (*TypeScriptResourceTypes) generateObjectFile(vk *codegen.VersionedKind, tsTypePrefix string) ([]byte, error) {
 	metadata := templates.ResourceTSTemplateMetadata{
-		TypeName:     exportField(kind.Name()),
+		TypeName:     exportField(vk.Kind),
 		Subresources: make([]templates.SubresourceMetadata, 0),
 		FilePrefix:   tsTypePrefix,
 	}
 
-	it, err := version.Schema.Fields()
+	it, err := vk.Schema.Fields()
 	if err != nil {
 		return nil, err
 	}
@@ -114,51 +110,50 @@ type TypeScriptTypes struct {
 	NamingDepth int
 }
 
-var _ codejen.OneToMany[codegen.Kind] = &TypeScriptTypes{}
+var _ codejen.OneToMany[codegen.AppManifest] = &TypeScriptTypes{}
 
 func (TypeScriptTypes) JennyName() string {
 	return "TypeScriptTypes"
 }
 
-func (j TypeScriptTypes) Generate(kind codegen.Kind) (codejen.Files, error) {
-	if j.GenerateOnlyCurrent {
-		ver := kind.Version(kind.Properties().Current)
-		if ver == nil {
-			return nil, fmt.Errorf("version '%s' of kind '%s' does not exist", kind.Properties().Current, kind.Name())
-		}
-		if !ver.Codegen.TS.Enabled {
-			return nil, nil
-		}
-
-		return j.generateFiles(ver, kind.Name(), "", strings.ToLower(kind.Properties().MachineName)+"_")
-	}
-
+func (j TypeScriptTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	// For each version, check if we need to codegen
-	allVersions := kind.Versions()
-	for i := 0; i < len(allVersions); i++ {
-		v := allVersions[i]
-		if !v.Codegen.TS.Enabled {
-			continue
-		}
+	if j.GenerateOnlyCurrent {
+		for version, kind := range codegen.PreferredVersionKinds(appManifest) {
+			if !kind.Codegen.TS.Enabled {
+				return nil, nil
+			}
 
-		generated, err := j.generateFiles(&v, kind.Name(), fmt.Sprintf("%s/%s", kind.Properties().MachineName, v.Version), "")
-		if err != nil {
-			return nil, err
+			generated, err := j.generateFiles(version.Name(), &kind, kind.Kind, "", strings.ToLower(kind.MachineName)+"_")
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, generated...)
 		}
-		files = append(files, generated...)
+	} else {
+		for version, kind := range codegen.VersionedKinds(appManifest) {
+			if !kind.Codegen.TS.Enabled {
+				continue
+			}
+
+			generated, err := j.generateFiles(version.Name(), &kind, kind.Kind, fmt.Sprintf("%s/%s", kind.MachineName, version.Name()), "")
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, generated...)
+		}
 	}
 	return files, nil
 }
 
-func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathPrefix, prefix string) (codejen.Files, error) {
+func (j TypeScriptTypes) generateFiles(version string, kind *codegen.VersionedKind, name, pathPrefix, prefix string) (codejen.Files, error) {
 	if j.Depth > 0 {
-		return j.generateFilesAtDepth(version.Schema, version, 0, pathPrefix, prefix)
+		return j.generateFilesAtDepth(kind.Schema, version, kind, 0, pathPrefix, prefix)
 	}
 
-	tsBytes, err := generateTypescriptBytes(version.Schema, ToPackageName(version.Version), exportField(sanitizeLabelString(name)), cog.TypescriptConfig{
-		ImportsMap:        version.Codegen.TS.Config.ImportsMap,
-		EnumsAsUnionTypes: version.Codegen.TS.Config.EnumsAsUnionTypes,
+	tsBytes, err := generateTypescriptBytes(kind.Schema, ToPackageName(version), exportField(sanitizeLabelString(name)), cog.TypescriptConfig{
+		ImportsMap:        kind.Codegen.TS.Config.ImportsMap,
+		EnumsAsUnionTypes: kind.Codegen.TS.Config.EnumsAsUnionTypes,
 	})
 	if err != nil {
 		return nil, err
@@ -170,15 +165,15 @@ func (j TypeScriptTypes) generateFiles(version *codegen.KindVersion, name, pathP
 	}}, nil
 }
 
-func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersion, currDepth int, pathPrefix string, prefix string) (codejen.Files, error) {
+func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, version string, vk *codegen.VersionedKind, currDepth int, pathPrefix string, prefix string) (codejen.Files, error) {
 	if currDepth == j.Depth {
 		fieldName := make([]string, 0)
-		for _, s := range TrimPathPrefix(v.Path(), kv.Schema.Path()).Selectors() {
+		for _, s := range TrimPathPrefix(v.Path(), vk.Schema.Path()).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
-		tsBytes, err := generateTypescriptBytes(v, ToPackageName(kv.Version), exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
-			ImportsMap:        kv.Codegen.TS.Config.ImportsMap,
-			EnumsAsUnionTypes: kv.Codegen.TS.Config.EnumsAsUnionTypes,
+		tsBytes, err := generateTypescriptBytes(v, ToPackageName(version), exportField(strings.Join(fieldName, "")), cog.TypescriptConfig{
+			ImportsMap:        vk.Codegen.TS.Config.ImportsMap,
+			EnumsAsUnionTypes: vk.Codegen.TS.Config.EnumsAsUnionTypes,
 		})
 		if err != nil {
 			return nil, err
@@ -197,7 +192,7 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, kv *codegen.KindVersi
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := j.generateFilesAtDepth(it.Value(), kv, currDepth+1, pathPrefix, prefix)
+		f, err := j.generateFilesAtDepth(it.Value(), version, vk, currDepth+1, pathPrefix, prefix)
 		if err != nil {
 			return nil, err
 		}

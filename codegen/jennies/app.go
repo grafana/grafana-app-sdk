@@ -38,21 +38,19 @@ func (a *AppGenerator) Generate(appManifest codegen.AppManifest) (*codejen.File,
 
 	appMetadataByKind := make(map[string]templates.AppMetadataKind)
 
-	for _, version := range appManifest.Versions() {
-		for _, kind := range version.Kinds() {
-			meta, ok := appMetadataByKind[kind.Kind]
-			if !ok {
-				meta = templates.AppMetadataKind{
-					KindProperties: versionedKindToKindProperties(kind, appManifest),
-					Versions:       make([]string, 0),
-				}
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		meta, ok := appMetadataByKind[kind.Kind]
+		if !ok {
+			meta = templates.AppMetadataKind{
+				KindProperties: versionedKindToKindProperties(kind, appManifest),
+				Versions:       make([]string, 0),
 			}
-			meta.Versions = append(meta.Versions, version.Name())
-			if version.Name() == appManifest.Properties().PreferredVersion {
-				meta.KindProperties = versionedKindToKindProperties(kind, appManifest)
-			}
-			appMetadataByKind[kind.Kind] = meta
 		}
+		meta.Versions = append(meta.Versions, version.Name())
+		if version.Name() == appManifest.Properties().PreferredVersion {
+			meta.KindProperties = versionedKindToKindProperties(kind, appManifest)
+		}
+		appMetadataByKind[kind.Kind] = meta
 	}
 
 	for _, meta := range appMetadataByKind {

@@ -88,8 +88,8 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 }
 
 // TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
-func TypeScriptResourceGenerator() *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
+func TypeScriptResourceGenerator() *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.TypeScriptTypes{
 		Depth: 1,
 	}, &jennies.TypeScriptResourceTypes{})
@@ -182,13 +182,6 @@ func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath
 			GroupByKind: !groupKinds,
 		})
 	return g
-}
-
-func namerFunc(k codegen.Kind) string {
-	if k == nil {
-		return "nil"
-	}
-	return k.Properties().Kind
 }
 
 func namerFuncManifest(m codegen.AppManifest) string {

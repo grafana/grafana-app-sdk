@@ -239,12 +239,6 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 
 //nolint:funlen,goconst
 func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files, error) {
-	// Slightly hacky multiple generators as an intermediary while we move to a better system.
-	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
-	generatorForKinds, err := codegen.NewGenerator(parser.KindParser())
-	if err != nil {
-		return nil, err
-	}
 	generatorForManifest, err := codegen.NewGenerator(parser.ManifestParser())
 	if err != nil {
 		return nil, err
@@ -271,7 +265,7 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	for i, f := range resourceFiles {
 		resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
 	}
-	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelectors...)
+	tsResourceFiles, err := generatorForManifest.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}

@@ -72,27 +72,25 @@ func (*ResourceObjectGenerator) JennyName() string {
 
 func (r *ResourceObjectGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, version := range appManifest.Versions() {
-		for _, kind := range version.Kinds() {
-			openAPIName := ""
-			if r.OpenAPINamer != nil {
-				openAPIName = r.OpenAPINamer(OpenAPINamerInfo{
-					TypeName:   kind.Kind,
-					ShortGroup: appManifest.Properties().Group,
-					Version:    version.Name(),
-					Kind:       kind.Kind,
-				})
-			}
-			b, err := r.generateObjectFile(kind, ToPackageName(version.Name()), openAPIName)
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				RelativePath: filepath.Join(GetGeneratedGoTypePath(r.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.MachineName))),
-				Data:         b,
-				From:         []codejen.NamedJenny{r},
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		openAPIName := ""
+		if r.OpenAPINamer != nil {
+			openAPIName = r.OpenAPINamer(OpenAPINamerInfo{
+				TypeName:   kind.Kind,
+				ShortGroup: appManifest.Properties().Group,
+				Version:    version.Name(),
+				Kind:       kind.Kind,
 			})
 		}
+		b, err := r.generateObjectFile(kind, ToPackageName(version.Name()), openAPIName)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			RelativePath: filepath.Join(GetGeneratedGoTypePath(r.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_object_gen.go", strings.ToLower(kind.MachineName))),
+			Data:         b,
+			From:         []codejen.NamedJenny{r},
+		})
 	}
 	return files, nil
 }

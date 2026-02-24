@@ -40,22 +40,20 @@ func (o *OpenAPI) Generate(appManifest codegen.AppManifest) (codejen.Files, erro
 
 	// Group kinds by package name
 	if o.GroupByKind {
-		for _, v := range appManifest.Versions() {
-			for _, k := range v.Kinds() {
-				if !k.Codegen.Go.Enabled {
-					continue
-				}
+		for v, k := range codegen.VersionedKinds(appManifest) {
+			if !k.Codegen.Go.Enabled {
+				continue
+			}
 
-				relativePkg := filepath.Join(o.GoGenPath, GetGeneratedGoTypePath(o.GroupByKind, appManifest.Properties().Group, v.Name(), k.MachineName))
-				err := gengo.Execute(generators.NameSystems(),
-					generators.DefaultNameSystem(),
-					o.getTargetsFunc(relativePkg, fs),
-					gengo.StdBuildTag,
-					[]string{filepath.Join(o.GoModName, filepath.ToSlash(relativePkg))},
-				)
-				if err != nil {
-					return nil, err
-				}
+			relativePkg := filepath.Join(o.GoGenPath, GetGeneratedGoTypePath(o.GroupByKind, appManifest.Properties().Group, v.Name(), k.MachineName))
+			err := gengo.Execute(generators.NameSystems(),
+				generators.DefaultNameSystem(),
+				o.getTargetsFunc(relativePkg, fs),
+				gengo.StdBuildTag,
+				[]string{filepath.Join(o.GoModName, filepath.ToSlash(relativePkg))},
+			)
+			if err != nil {
+				return nil, err
 			}
 		}
 	} else {

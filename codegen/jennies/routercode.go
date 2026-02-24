@@ -29,13 +29,8 @@ func (r *routerCodeGenerator) Generate(appManifest codegen.AppManifest) (*codeje
 		KindsAreGrouped: !r.groupByKind,
 	}
 
-	for _, version := range appManifest.Versions() {
-		if version.Name() != appManifest.Properties().PreferredVersion {
-			continue
-		}
-		for _, kind := range version.Kinds() {
-			tmd.Resources = append(tmd.Resources, versionedKindToKindProperties(kind, appManifest))
-		}
+	for _, kind := range codegen.PreferredVersionKinds(appManifest) {
+		tmd.Resources = append(tmd.Resources, versionedKindToKindProperties(kind, appManifest))
 	}
 
 	b := bytes.Buffer{}
@@ -70,35 +65,30 @@ type routerHandlerCodeGenerator struct {
 
 func (h *routerHandlerCodeGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, version := range appManifest.Versions() {
-		if version.Name() != appManifest.Properties().PreferredVersion {
-			continue
+	for version, kind := range codegen.PreferredVersionKinds(appManifest) {
+		b := bytes.Buffer{}
+		err := templates.WriteBackendPluginHandler(templates.BackendPluginHandlerTemplateMetadata{
+			KindProperties:  versionedKindToKindProperties(kind, appManifest),
+			Repo:            h.projectRepo,
+			APICodegenPath:  h.apiCodegenPath,
+			TypeName:        exportField(kind.Kind),
+			IsResource:      true,
+			Version:         version.Name(),
+			KindPackage:     GetGeneratedGoTypePath(h.groupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
+			KindsAreGrouped: !h.groupByKind,
+		}, &b)
+		if err != nil {
+			return nil, err
 		}
-		for _, kind := range version.Kinds() {
-			b := bytes.Buffer{}
-			err := templates.WriteBackendPluginHandler(templates.BackendPluginHandlerTemplateMetadata{
-				KindProperties:  versionedKindToKindProperties(kind, appManifest),
-				Repo:            h.projectRepo,
-				APICodegenPath:  h.apiCodegenPath,
-				TypeName:        exportField(kind.Kind),
-				IsResource:      true,
-				Version:         version.Name(),
-				KindPackage:     GetGeneratedGoTypePath(h.groupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
-				KindsAreGrouped: !h.groupByKind,
-			}, &b)
-			if err != nil {
-				return nil, err
-			}
-			formatted, err := format.Source(b.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("plugin/handler_%s.go", kind.MachineName),
-				Data:         formatted,
-				From:         []codejen.NamedJenny{h},
-			})
+		formatted, err := format.Source(b.Bytes())
+		if err != nil {
+			return nil, err
 		}
+		files = append(files, codejen.File{
+			RelativePath: fmt.Sprintf("plugin/handler_%s.go", kind.MachineName),
+			Data:         formatted,
+			From:         []codejen.NamedJenny{h},
+		})
 	}
 	return files, nil
 }

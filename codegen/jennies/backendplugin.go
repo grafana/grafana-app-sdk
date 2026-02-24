@@ -11,7 +11,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
-// BackendPluginMainGenerator returns a many-to-one jenny which generates the `main.go` file needed to run the backend plugin.
+// BackendPluginMainGenerator returns a one-to-one jenny which generates the `main.go` file needed to run the backend plugin.
 func BackendPluginMainGenerator(projectRepo, apiCodegenPath string, groupByKind bool) codejen.OneToOne[codegen.AppManifest] {
 	return &backendPluginMainGenerator{
 		projectRepo:    projectRepo,
@@ -35,15 +35,10 @@ func (m *backendPluginMainGenerator) Generate(appManifest codegen.AppManifest) (
 		KindsAreGrouped: !m.groupByKind,
 	}
 
-	for _, version := range appManifest.Versions() {
-		if version.Name() != appManifest.Properties().PreferredVersion {
-			continue
-		}
-		for _, kind := range version.Kinds() {
-			tmd.Resources = append(tmd.Resources, versionedKindToKindProperties(kind, appManifest))
-			if appManifest.Properties().FullGroup != "" {
-				tmd.PluginID = strings.Split(appManifest.Properties().FullGroup, ".")[0]
-			}
+	for _, kind := range codegen.PreferredVersionKinds(appManifest) {
+		tmd.Resources = append(tmd.Resources, versionedKindToKindProperties(kind, appManifest))
+		if appManifest.Properties().FullGroup != "" {
+			tmd.PluginID = strings.Split(appManifest.Properties().FullGroup, ".")[0]
 		}
 	}
 

@@ -32,39 +32,34 @@ func (*watcherJenny) JennyName() string {
 
 func (w *watcherJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, version := range appManifest.Versions() {
-		if version.Name() != appManifest.Properties().PreferredVersion {
+	for version, kind := range codegen.PreferredVersionKinds(appManifest) {
+		if !kind.Codegen.Go.Enabled {
 			continue
 		}
-		for _, kind := range version.Kinds() {
-			if !kind.Codegen.Go.Enabled {
-				continue
-			}
-			props := versionedKindToKindProperties(kind, appManifest)
-			b := bytes.Buffer{}
-			err := templates.WriteWatcher(templates.WatcherMetadata{
-				KindProperties:   props,
-				PackageName:      "watchers",
-				Repo:             w.projectRepo,
-				CodegenPath:      w.codegenPath,
-				Version:          version.Name(),
-				KindPackage:      GetGeneratedGoTypePath(w.groupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
-				KindsAreGrouped:  !w.groupByKind,
-				KindPackageAlias: fmt.Sprintf("%s%s", kind.MachineName, version.Name()),
-			}, &b)
-			if err != nil {
-				return nil, err
-			}
-			formatted, err := format.Source(b.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				RelativePath: fmt.Sprintf("pkg/watchers/watcher_%s.go", props.MachineName),
-				Data:         formatted,
-				From:         []codejen.NamedJenny{w},
-			})
+		props := versionedKindToKindProperties(kind, appManifest)
+		b := bytes.Buffer{}
+		err := templates.WriteWatcher(templates.WatcherMetadata{
+			KindProperties:   props,
+			PackageName:      "watchers",
+			Repo:             w.projectRepo,
+			CodegenPath:      w.codegenPath,
+			Version:          version.Name(),
+			KindPackage:      GetGeneratedGoTypePath(w.groupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
+			KindsAreGrouped:  !w.groupByKind,
+			KindPackageAlias: fmt.Sprintf("%s%s", kind.MachineName, version.Name()),
+		}, &b)
+		if err != nil {
+			return nil, err
 		}
+		formatted, err := format.Source(b.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			RelativePath: fmt.Sprintf("pkg/watchers/watcher_%s.go", props.MachineName),
+			Data:         formatted,
+			From:         []codejen.NamedJenny{w},
+		})
 	}
 
 	return files, nil
@@ -142,7 +137,6 @@ func (o *operatorMainJenny) Generate(_ codegen.AppManifest) (*codejen.File, erro
 		CodegenPath:     o.codegenPath,
 		PackageName:     "main",
 		WatcherPackage:  "watchers",
-		Resources:       make([]codegen.KindProperties, 0),
 		KindsAreGrouped: !o.groupByKind,
 	}
 

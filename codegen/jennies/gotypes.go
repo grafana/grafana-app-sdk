@@ -86,63 +86,61 @@ func (*GoTypes) JennyName() string {
 
 func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, version := range appManifest.Versions() {
-		for _, kind := range version.Kinds() {
-			if g.GenerateOnlyCurrent && appManifest.Properties().PreferredVersion != version.Name() {
-				continue
-			}
-
-			genCfg := goTypesGenerateFilesConfig{
-				VersionName:   version.Name(),
-				KindName:      kind.Kind,
-				MachineName:   kind.MachineName,
-				Group:         appManifest.Properties().Group,
-				PackageName:   ToPackageName(version.Name()),
-				PathPrefix:    GetGeneratedGoTypePath(g.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
-				ExcludeFields: g.ExcludeFields,
-			}
-			if g.Depth > 0 {
-				if !g.GroupByKind {
-					genCfg.NamePrefix = exportField(kind.Kind)
-				}
-				generated, err := g.generateFilesAtDepth(kind.Schema, kind.Schema.Path(), 0, genCfg)
-				if err != nil {
-					return nil, err
-				}
-				files = append(files, generated...)
-				continue
-			}
-
-			codegenPipeline := cog.TypesFromSchema().
-				CUEValue(genCfg.PackageName, kind.Schema, cog.ForceEnvelope(kind.Kind)).
-				Golang(cog.GoConfig{
-					AnyAsInterface: g.AnyAsInterface,
-				})
-
-			if g.AddKubernetesCodegen {
-				codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
-			}
-
-			generated, err := codegenPipeline.Run(context.Background())
-			if err != nil {
-				return nil, err
-			}
-
-			if len(generated) != 1 {
-				return nil, fmt.Errorf("expected one file to be generated, got %d", len(generated))
-			}
-
-			formatted, err := format.Source(generated[0].Data)
-			if err != nil {
-				return nil, err
-			}
-
-			files = append(files, codejen.File{
-				Data:         formatted,
-				RelativePath: fmt.Sprintf(path.Join(genCfg.PathPrefix, "%s_gen.go"), strings.ToLower(genCfg.MachineName)),
-				From:         []codejen.NamedJenny{g},
-			})
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		if g.GenerateOnlyCurrent && appManifest.Properties().PreferredVersion != version.Name() {
+			continue
 		}
+
+		genCfg := goTypesGenerateFilesConfig{
+			VersionName:   version.Name(),
+			KindName:      kind.Kind,
+			MachineName:   kind.MachineName,
+			Group:         appManifest.Properties().Group,
+			PackageName:   ToPackageName(version.Name()),
+			PathPrefix:    GetGeneratedGoTypePath(g.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName),
+			ExcludeFields: g.ExcludeFields,
+		}
+		if g.Depth > 0 {
+			if !g.GroupByKind {
+				genCfg.NamePrefix = exportField(kind.Kind)
+			}
+			generated, err := g.generateFilesAtDepth(kind.Schema, kind.Schema.Path(), 0, genCfg)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, generated...)
+			continue
+		}
+
+		codegenPipeline := cog.TypesFromSchema().
+			CUEValue(genCfg.PackageName, kind.Schema, cog.ForceEnvelope(kind.Kind)).
+			Golang(cog.GoConfig{
+				AnyAsInterface: g.AnyAsInterface,
+			})
+
+		if g.AddKubernetesCodegen {
+			codegenPipeline = codegenPipeline.SchemaTransformations(cog.AppendCommentToObjects("+k8s:openapi-gen=true"))
+		}
+
+		generated, err := codegenPipeline.Run(context.Background())
+		if err != nil {
+			return nil, err
+		}
+
+		if len(generated) != 1 {
+			return nil, fmt.Errorf("expected one file to be generated, got %d", len(generated))
+		}
+
+		formatted, err := format.Source(generated[0].Data)
+		if err != nil {
+			return nil, err
+		}
+
+		files = append(files, codejen.File{
+			Data:         formatted,
+			RelativePath: fmt.Sprintf(path.Join(genCfg.PathPrefix, "%s_gen.go"), strings.ToLower(genCfg.MachineName)),
+			From:         []codejen.NamedJenny{g},
+		})
 	}
 	return files, nil
 }

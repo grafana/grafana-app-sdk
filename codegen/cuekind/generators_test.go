@@ -94,7 +94,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
-		kinds, err := parser.KindParser().Parse("customManifest")
+		kinds, err := parser.ManifestParser().Parse("customManifest")
 		require.NoError(t, err)
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
 		require.NoError(t, err)

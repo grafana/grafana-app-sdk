@@ -33,45 +33,43 @@ func (*CodecGenerator) JennyName() string {
 // nolint:dupl
 func (c *CodecGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, version := range appManifest.Versions() {
-		for _, kind := range version.Kinds() {
-			if c.OnlyUseCurrentVersion && appManifest.Properties().PreferredVersion != version.Name() {
-				continue
-			}
-
-			if kind.Scope != string(resource.NamespacedScope) && kind.Scope != string(resource.ClusterScope) {
-				return nil, fmt.Errorf("scope '%s' is invalid, must be one of: '%s', '%s'",
-					kind.Scope, resource.ClusterScope, resource.NamespacedScope)
-			}
-
-			prefix := ""
-			if !c.GroupByKind {
-				prefix = exportField(kind.Kind)
-			}
-
-			b := bytes.Buffer{}
-			err := templates.WriteCodec(templates.SchemaMetadata{
-				Package:    ToPackageName(version.Name()),
-				Group:      appManifest.Properties().Group,
-				Version:    version.Name(),
-				Kind:       kind.Kind,
-				Plural:     kind.PluralMachineName,
-				Scope:      kind.Scope,
-				FuncPrefix: prefix,
-			}, &b)
-			if err != nil {
-				return nil, err
-			}
-			formatted, err := format.Source(b.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				Data:         formatted,
-				RelativePath: filepath.Join(GetGeneratedGoTypePath(c.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_codec_gen.go", kind.MachineName)),
-				From:         []codejen.NamedJenny{c},
-			})
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		if c.OnlyUseCurrentVersion && appManifest.Properties().PreferredVersion != version.Name() {
+			continue
 		}
+
+		if kind.Scope != string(resource.NamespacedScope) && kind.Scope != string(resource.ClusterScope) {
+			return nil, fmt.Errorf("scope '%s' is invalid, must be one of: '%s', '%s'",
+				kind.Scope, resource.ClusterScope, resource.NamespacedScope)
+		}
+
+		prefix := ""
+		if !c.GroupByKind {
+			prefix = exportField(kind.Kind)
+		}
+
+		b := bytes.Buffer{}
+		err := templates.WriteCodec(templates.SchemaMetadata{
+			Package:    ToPackageName(version.Name()),
+			Group:      appManifest.Properties().Group,
+			Version:    version.Name(),
+			Kind:       kind.Kind,
+			Plural:     kind.PluralMachineName,
+			Scope:      kind.Scope,
+			FuncPrefix: prefix,
+		}, &b)
+		if err != nil {
+			return nil, err
+		}
+		formatted, err := format.Source(b.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			Data:         formatted,
+			RelativePath: filepath.Join(GetGeneratedGoTypePath(c.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_codec_gen.go", kind.MachineName)),
+			From:         []codejen.NamedJenny{c},
+		})
 	}
 	return files, nil
 }

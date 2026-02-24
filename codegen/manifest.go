@@ -1,6 +1,10 @@
 package codegen
 
-import "cuelang.org/go/cue"
+import (
+	"iter"
+
+	"cuelang.org/go/cue"
+)
 
 type AppManifest interface {
 	Name() string
@@ -185,4 +189,51 @@ type VersionedKind struct {
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
 	Routes map[string]map[string]CustomRoute `json:"routes"`
+}
+
+// VersionedKinds returns a sequence of all VersionedKinds in version order.
+// It can be used with the range operator to make the operation:
+//
+//	for _, version := range m.Versions() {
+//	    for _, kind := range version.Kinds() {
+//	        ...
+//	    }
+//	}
+//
+// simplified to:
+//
+//	for version, kind := range m.VersionedKinds() {
+//	    ...
+//	}
+func VersionedKinds(manifest AppManifest) iter.Seq2[Version, VersionedKind] {
+	return func(yield func(Version, VersionedKind) bool) {
+		for _, version := range manifest.Versions() {
+			for _, kind := range version.Kinds() {
+				if !yield(version, kind) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// PreferredVersionKinds returns a sequence of all VersionedKinds for the preferred version.
+// It can be used with the range operator to make the operation:
+//
+//	for version, kind := range m.PreferredVersionKinds() {
+//	    ...
+//	}
+func PreferredVersionKinds(manifest AppManifest) iter.Seq2[Version, VersionedKind] {
+	return func(yield func(Version, VersionedKind) bool) {
+		for _, version := range manifest.Versions() {
+			if version.Name() != manifest.Properties().PreferredVersion {
+				continue
+			}
+			for _, kind := range version.Kinds() {
+				if !yield(version, kind) {
+					return
+				}
+			}
+		}
+	}
 }

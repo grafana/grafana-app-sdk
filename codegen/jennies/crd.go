@@ -47,18 +47,16 @@ func (c *crdGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files,
 
 	// Need to group all versions of a kind together to make a CRD (each CRD contains schemas for all versions)
 	kinds := make(map[string][]kindWithVersion)
-	for _, version := range appManifest.Versions() {
-		for _, kind := range version.Kinds() {
-			kv, ok := kinds[kind.Kind]
-			if !ok {
-				kv = make([]kindWithVersion, 0)
-			}
-			kv = append(kv, kindWithVersion{
-				version: version.Name(),
-				kind:    kind,
-			})
-			kinds[kind.Kind] = kv
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		kv, ok := kinds[kind.Kind]
+		if !ok {
+			kv = make([]kindWithVersion, 0)
 		}
+		kv = append(kv, kindWithVersion{
+			version: version.Name(),
+			kind:    kind,
+		})
+		kinds[kind.Kind] = kv
 	}
 
 	for _, kv := range kinds {

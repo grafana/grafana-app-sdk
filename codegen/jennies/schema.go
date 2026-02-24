@@ -13,6 +13,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type SchemaGenerator struct {
@@ -30,40 +31,42 @@ func (*SchemaGenerator) JennyName() string {
 // Generate creates one or more schema go files for the provided Kind
 func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, version := range appManifest.Versions() {
-		for _, kind := range version.Kinds() {
-			prefix := ""
-			if !s.GroupByKind {
-				prefix = exportField(kind.Kind)
-			}
-			sf, err := s.getSelectableFields(&kind)
-			if err != nil {
-				return nil, err
-			}
-			b := bytes.Buffer{}
-			err = templates.WriteSchema(templates.SchemaMetadata{
-				Package:          ToPackageName(version.Name()),
-				Group:            appManifest.Properties().FullGroup,
-				Version:          version.Name(),
-				Kind:             kind.Kind,
-				Plural:           kind.PluralMachineName,
-				Scope:            kind.Scope,
-				SelectableFields: sf,
-				FuncPrefix:       prefix,
-			}, &b)
-			if err != nil {
-				return nil, err
-			}
-			formatted, err := format.Source(b.Bytes())
-			if err != nil {
-				return nil, err
-			}
-			files = append(files, codejen.File{
-				Data:         formatted,
-				RelativePath: filepath.Join(GetGeneratedGoTypePath(s.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_schema_gen.go", kind.MachineName)),
-				From:         []codejen.NamedJenny{s},
-			})
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		if kind.Scope != string(resource.NamespacedScope) && kind.Scope != string(resource.ClusterScope) {
+			return nil, fmt.Errorf("%s/%s: scope '%s' is invalid, must be one of: '%s', '%s'",
+				version.Name(), kind.Kind, kind.Scope, resource.ClusterScope, resource.NamespacedScope)
 		}
+		prefix := ""
+		if !s.GroupByKind {
+			prefix = exportField(kind.Kind)
+		}
+		sf, err := s.getSelectableFields(&kind)
+		if err != nil {
+			return nil, err
+		}
+		b := bytes.Buffer{}
+		err = templates.WriteSchema(templates.SchemaMetadata{
+			Package:          ToPackageName(version.Name()),
+			Group:            appManifest.Properties().FullGroup,
+			Version:          version.Name(),
+			Kind:             kind.Kind,
+			Plural:           kind.PluralMachineName,
+			Scope:            kind.Scope,
+			SelectableFields: sf,
+			FuncPrefix:       prefix,
+		}, &b)
+		if err != nil {
+			return nil, err
+		}
+		formatted, err := format.Source(b.Bytes())
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{
+			Data:         formatted,
+			RelativePath: filepath.Join(GetGeneratedGoTypePath(s.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_schema_gen.go", kind.MachineName)),
+			From:         []codejen.NamedJenny{s},
+		})
 	}
 	return files, nil
 }
