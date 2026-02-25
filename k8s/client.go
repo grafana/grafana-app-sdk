@@ -114,6 +114,8 @@ func NewClientWithRESTInterface(
 	}, nil
 }
 
+// NewClientConfigWithExternalClients creates a ClientConfig that will use the provided map of rest.Configs to route
+// requests to different API servers based on the group of the resource.Kind being requested.
 func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*rest.Config) ClientConfig {
 	config := DefaultClientConfig()
 	config.KubeConfigProvider = func(kind resource.Kind, kubeConfig rest.Config) rest.Config {
@@ -137,6 +139,7 @@ func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*res
 	return config
 }
 
+// overlayRemoteRestConfig takes the provided kubeConfig and overlays the Host, TLSClientConfig, and WrapTransport
 func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *rest.Config) rest.Config {
 	kubeConfig.Host = remoteCfg.Host
 	kubeConfig.TLSClientConfig = remoteCfg.TLSClientConfig
