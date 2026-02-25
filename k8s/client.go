@@ -114,7 +114,7 @@ func NewClientWithRESTInterface(
 	}, nil
 }
 
-func NewClientCOnfigWithExternalClients(remoteRestConfigsByGroup map[string]*rest.Config) ClientConfig {
+func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*rest.Config) ClientConfig {
 	config := DefaultClientConfig()
 	config.KubeConfigProvider = func(kind resource.Kind, kubeConfig rest.Config) rest.Config {
 		if kubeConfig.APIPath != "" {
