@@ -29,34 +29,29 @@ func (*SchemaGenerator) JennyName() string {
 }
 
 // Generate creates one or more schema go files for the provided Kind
-// nolint:dupl
-func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
-	meta := kind.Properties()
-
-	if meta.Scope != string(resource.NamespacedScope) && meta.Scope != string(resource.ClusterScope) {
-		return nil, fmt.Errorf("scope '%s' is invalid, must be one of: '%s', '%s'",
-			meta.Scope, resource.ClusterScope, resource.NamespacedScope)
-	}
-
-	prefix := ""
-	if !s.GroupByKind {
-		prefix = exportField(kind.Name())
-	}
-
+func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	for _, ver := range kind.Versions() {
-		sf, err := s.getSelectableFields(&ver)
+	for version, kind := range codegen.VersionedKinds(appManifest) {
+		if kind.Scope != string(resource.NamespacedScope) && kind.Scope != string(resource.ClusterScope) {
+			return nil, fmt.Errorf("%s/%s: scope '%s' is invalid, must be one of: '%s', '%s'",
+				version.Name(), kind.Kind, kind.Scope, resource.ClusterScope, resource.NamespacedScope)
+		}
+		prefix := ""
+		if !s.GroupByKind {
+			prefix = exportField(kind.Kind)
+		}
+		sf, err := s.getSelectableFields(&kind)
 		if err != nil {
 			return nil, err
 		}
 		b := bytes.Buffer{}
 		err = templates.WriteSchema(templates.SchemaMetadata{
-			Package:          ToPackageName(ver.Version),
-			Group:            meta.Group,
-			Version:          ver.Version,
-			Kind:             meta.Kind,
-			Plural:           meta.PluralMachineName,
-			Scope:            meta.Scope,
+			Package:          ToPackageName(version.Name()),
+			Group:            appManifest.Properties().FullGroup,
+			Version:          version.Name(),
+			Kind:             kind.Kind,
+			Plural:           kind.PluralMachineName,
+			Scope:            kind.Scope,
 			SelectableFields: sf,
 			FuncPrefix:       prefix,
 		}, &b)
@@ -69,21 +64,20 @@ func (s *SchemaGenerator) Generate(kind codegen.Kind) (codejen.Files, error) {
 		}
 		files = append(files, codejen.File{
 			Data:         formatted,
-			RelativePath: filepath.Join(GetGeneratedPath(s.GroupByKind, kind, ver.Version), fmt.Sprintf("%s_schema_gen.go", meta.MachineName)),
+			RelativePath: filepath.Join(GetGeneratedGoTypePath(s.GroupByKind, appManifest.Properties().Group, version.Name(), kind.MachineName), fmt.Sprintf("%s_schema_gen.go", kind.MachineName)),
 			From:         []codejen.NamedJenny{s},
 		})
 	}
-
 	return files, nil
 }
 
-func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templates.SchemaMetadataSelectableField, error) {
+func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]templates.SchemaMetadataSelectableField, error) {
 	fields := make([]templates.SchemaMetadataSelectableField, 0)
-	if len(ver.SelectableFields) == 0 {
+	if len(kind.SelectableFields) == 0 {
 		return fields, nil
 	}
 	// Check each field in the CUE (TODO: make this OpenAPI instead?) to check if the field is optional
-	for _, s := range ver.SelectableFields {
+	for _, s := range kind.SelectableFields {
 		fieldPath := s
 		if len(s) > 1 && s[0] == '.' {
 			fieldPath = s[1:]
@@ -98,7 +92,7 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 		for _, p := range parts {
 			path = append(path, cue.Str(p))
 		}
-		if val := ver.Schema.LookupPath(cue.MakePath(path...).Optional()); val.Err() == nil {
+		if val := kind.Schema.LookupPath(cue.MakePath(path...).Optional()); val.Err() == nil {
 			var lookup cue.Value
 			var optional bool
 
@@ -122,7 +116,7 @@ func (*SchemaGenerator) getSelectableFields(ver *codegen.KindVersion) ([]templat
 				Field:                s,
 				Optional:             optional,
 				Type:                 typeStr,
-				OptionalFieldsInPath: getOptionalFieldsInPath(ver.Schema, fieldPath),
+				OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, fieldPath),
 			})
 		}
 	}

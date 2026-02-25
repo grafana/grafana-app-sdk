@@ -15,8 +15,8 @@ import (
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
-func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
+func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(jennies.CRDGenerator(outputEncoder, outputExtension))
 	return g
 }
@@ -27,8 +27,8 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // If `groupKinds` is true, kinds within the same group will exist in the same package.
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
-func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
+func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(
 		&jennies.GoTypes{
 			Depth:                1,
@@ -63,21 +63,21 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 }
 
 // BackendPluginGenerator returns a Generator which will produce boilerplate backend plugin code
-func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
 	pluginSecurePkgFiles, _ := templates.GetBackendPluginSecurePackageFiles()
 
-	g := codejen.JennyListWithNamer(namerFunc)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(
 		jennies.RouterHandlerCodeGenerator(projectRepo, generatedAPIPath, !groupKinds),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
+		jennies.StaticManyToOneGenerator[codegen.AppManifest](codejen.File{
 			RelativePath: "plugin/secure/data.go",
 			Data:         pluginSecurePkgFiles["data.go"],
 		}),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
+		jennies.StaticManyToOneGenerator[codegen.AppManifest](codejen.File{
 			RelativePath: "plugin/secure/middleware.go",
 			Data:         pluginSecurePkgFiles["middleware.go"],
 		}),
-		jennies.StaticManyToOneGenerator[codegen.Kind](codejen.File{
+		jennies.StaticManyToOneGenerator[codegen.AppManifest](codejen.File{
 			RelativePath: "plugin/secure/retriever.go",
 			Data:         pluginSecurePkgFiles["retriever.go"],
 		}),
@@ -88,8 +88,8 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 }
 
 // TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
-func TypeScriptResourceGenerator() *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer(namerFunc)
+func TypeScriptResourceGenerator() *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.TypeScriptTypes{
 		Depth: 1,
 	}, &jennies.TypeScriptResourceTypes{})
@@ -98,8 +98,8 @@ func TypeScriptResourceGenerator() *codejen.JennyList[codegen.Kind] {
 
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
-func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(
 		&jennies.OperatorKubeConfigJenny{},
 		jennies.OperatorMainJenny(projectRepo, codegenPath, !groupKinds),
@@ -108,12 +108,12 @@ func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codeje
 	return g
 }
 
-func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
+func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
 	parts := strings.Split(projectRepo, "/")
 	if len(parts) == 0 {
 		parts = []string{""}
 	}
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(
 		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.AppGenerator{
@@ -127,8 +127,8 @@ func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, gr
 	return g
 }
 
-func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.Kind] {
-	g := codejen.JennyListWithNamer[codegen.Kind](namerFunc)
+func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.OpenAPI{
 		GoModName:   projectRepo,
 		GoGenPath:   goGenPath,
@@ -182,13 +182,6 @@ func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath
 			GroupByKind: !groupKinds,
 		})
 	return g
-}
-
-func namerFunc(k codegen.Kind) string {
-	if k == nil {
-		return "nil"
-	}
-	return k.Properties().Kind
 }
 
 func namerFuncManifest(m codegen.AppManifest) string {

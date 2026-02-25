@@ -598,11 +598,11 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		generator, err = codegen.NewGenerator(parser.KindParser())
+		manifestParser = parser.ManifestParser()
+		generator, err = codegen.NewGenerator(manifestParser)
 		if err != nil {
 			return err
 		}
-		manifestParser = parser.ManifestParser()
 	default:
 		return fmt.Errorf("unknown kind format '%s'", format)
 	}
@@ -622,7 +622,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "backend":
 			switch format {
 			case FormatCUE:
-				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, manifest.Properties().Group, cfg.Kinds.Grouping == config.KindGroupingGroup)
+				err = addComponentBackend(path, generator.(*codegen.Generator[codegen.AppManifest]), cfg.ManifestSelectors, manifest.Properties().Group, cfg.Kinds.Grouping == config.KindGroupingGroup)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -639,7 +639,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		case "operator":
 			switch format {
 			case FormatCUE:
-				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.Kind]), cfg.ManifestSelectors, cfg.Kinds.Grouping == config.KindGroupingGroup, !overwrite)
+				err = addComponentOperator(path, generator.(*codegen.Generator[codegen.AppManifest]), cfg.ManifestSelectors, cfg.Kinds.Grouping == config.KindGroupingGroup, !overwrite)
 			default:
 				return fmt.Errorf("unknown kind format '%s'", format)
 			}
@@ -659,7 +659,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 }
 
 type anyGenerator interface {
-	*codegen.Generator[codegen.Kind]
+	*codegen.Generator[codegen.AppManifest]
 }
 
 //nolint:revive
@@ -681,7 +681,7 @@ func addComponentOperator[G anyGenerator](projectRootPath string, generator G, s
 
 	var files codejen.Files
 	switch cast := any(generator).(type) {
-	case *codegen.Generator[codegen.Kind]:
+	case *codegen.Generator[codegen.AppManifest]:
 		files, err = cast.Generate(cuekind.OperatorGenerator(repo, "pkg/generated", groupKinds), selectors...)
 		if err != nil {
 			return err
@@ -776,7 +776,7 @@ func projectAddPluginAPI[G anyGenerator](generator G, repo, generatedAPIModelsPa
 	var files codejen.Files
 	var err error
 	switch cast := any(generator).(type) {
-	case *codegen.Generator[codegen.Kind]:
+	case *codegen.Generator[codegen.AppManifest]:
 		files, err = cast.Generate(cuekind.BackendPluginGenerator(repo, generatedAPIModelsPath, groupKinds), selectors...)
 		if err != nil {
 			return err

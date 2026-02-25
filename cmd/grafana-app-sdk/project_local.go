@@ -275,7 +275,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			generator, err := codegen.NewGenerator(parser.KindParser())
+			generator, err := codegen.NewGenerator(parser.ManifestParser())
 			if err != nil {
 				return nil, err
 			}
