@@ -7,6 +7,7 @@ import (
 // Kind is a common interface declaration for code generation.
 // Any type parser should be able to parse a kind into this definition to supply
 // to various common Jennies in the codegen package.
+// Deprecated: use AppManifest instead
 type Kind interface {
 	Name() string
 	Properties() KindProperties

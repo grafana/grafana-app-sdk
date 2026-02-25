@@ -51,7 +51,7 @@ endif
 .PHONY: build/operator
 build/operator:
 ifeq ("$(wildcard cmd/operator/Dockerfile)","cmd/operator/Dockerfile")
-    docker build -t $(OPERATOR_DOCKERIMAGE) -f cmd/operator/Dockerfile .
+	docker build -t $(OPERATOR_DOCKERIMAGE) -f cmd/operator/Dockerfile .
 else
 	@echo "No cmd/operator/Dockerfile, skipping operator build"
 endif

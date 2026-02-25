@@ -23,7 +23,7 @@ func TestCRDGenerator(t *testing.T) {
 
 	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
-	kinds, err := parser.KindParser().Parse("customManifest", "testManifest")
+	kinds, err := parser.ManifestParser().Parse("customManifest", "testManifest")
 	require.NoError(t, err)
 
 	t.Run("JSON", func(t *testing.T) {
@@ -51,9 +51,9 @@ func TestResourceGenerator(t *testing.T) {
 
 	parser, err := NewParser(testingCue(t), true, false)
 	require.NoError(t, err)
-	kinds, err := parser.KindParser().Parse("customManifest")
+	kinds, err := parser.ManifestParser().Parse("customManifest")
 	require.NoError(t, err)
-	sameGroupKinds, err := parser.KindParser().Parse("testManifest")
+	sameGroupKinds, err := parser.ManifestParser().Parse("testManifest")
 	require.NoError(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
-		kinds, err := parser.KindParser().Parse("customManifest")
+		kinds, err := parser.ManifestParser().Parse("customManifest")
 		require.NoError(t, err)
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
 		require.NoError(t, err)

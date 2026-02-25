@@ -17,6 +17,7 @@ func ToPackageName(input string) string {
 // generated code should be grouped by kind or by GroupVersion.
 // When groupByKind is true, the path will be <kind>/<version>.
 // When groupByKind is false, the path will be <group>/<version>.
+// Deprecated: Use GetGeneratedGoTypePath instead.
 //
 //nolint:revive
 func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) string {
@@ -51,4 +52,22 @@ func GetGeneratedGoTypePath(groupByKind bool, shortGroup string, version string,
 		return filepath.Join(ToPackageName(kindMachineName), ToPackageName(version))
 	}
 	return filepath.Join(ToPackageName(shortGroup), ToPackageName(version))
+}
+
+func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codegen.AppManifest) codegen.KindProperties {
+	return codegen.KindProperties{
+		Kind:                   kind.Kind,
+		Group:                  appManifest.Properties().FullGroup,
+		ManifestGroup:          appManifest.Properties().Group,
+		MachineName:            kind.MachineName,
+		PluralMachineName:      kind.PluralMachineName,
+		PluralName:             kind.PluralName,
+		Current:                appManifest.Properties().PreferredVersion,
+		Scope:                  kind.Scope,
+		Validation:             kind.Validation,
+		Mutation:               kind.Mutation,
+		Conversion:             kind.Conversion,
+		ConversionWebhookProps: kind.ConversionWebhookProps,
+		Codegen:                kind.Codegen,
+	}
 }
