@@ -47,7 +47,7 @@ jobs:
         persist-credentials: true
 
     - name: Set go version
-      uses: actions/setup-go@19bb51245e9c80abacb2e91cc42b33fa478b8639 # v4
+      uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6
       with:
         go-version-file: go.mod
     
