@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"k8s.io/utils/strings/slices"
 
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -137,6 +139,7 @@ func NewOpinionatedReconciler(client PatchClient, finalizer string) (*Opinionate
 	return &OpinionatedReconciler{
 		finalizer:        finalizer,
 		finalizerUpdater: newFinalizerUpdater(client),
+		collectors:       make([]prometheus.Collector, 0),
 	}, nil
 }
 
@@ -147,6 +150,7 @@ type OpinionatedReconciler struct {
 	Reconciler       Reconciler
 	finalizer        string
 	finalizerUpdater FinalizerUpdater
+	collectors       []prometheus.Collector
 }
 
 const (
@@ -284,6 +288,21 @@ func (o *OpinionatedReconciler) wrappedReconcile(ctx context.Context, request Re
 // Wrap wraps the provided Reconciler's Reconcile function with this OpinionatedReconciler
 func (o *OpinionatedReconciler) Wrap(reconciler Reconciler) {
 	o.Reconciler = reconciler
+
+	if cast, ok := reconciler.(metrics.Provider); ok {
+		o.collectors = append(o.collectors, cast.PrometheusCollectors()...)
+	}
+}
+
+// RegisterMetricsCollectors registers additional prometheus collectors for the OpinionatedReconciler,
+// in addition to those provided by any wrapped Reconciler via Wrap().
+// These additional prometheus collectors are exposed as a part of the list returned by PrometheusCollectors().
+func (o *OpinionatedReconciler) RegisterMetricsCollectors(collectors ...prometheus.Collector) {
+	o.collectors = append(o.collectors, collectors...)
+}
+
+func (o *OpinionatedReconciler) PrometheusCollectors() []prometheus.Collector {
+	return o.collectors
 }
 
 // Compile-time interface compliance check
