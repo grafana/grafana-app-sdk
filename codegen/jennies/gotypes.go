@@ -238,6 +238,10 @@ type CUEGoConfig struct {
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc func(string) string) ([]byte, error) {
 	nameFunc := func(_ cue.Value, definitionPath cue.Path) string {
+		prefix := ""
+		if typePrefix := getTypePrefix(v); typePrefix != "" {
+			prefix = typePrefix
+		}
 		i := 0
 		for ; i < len(definitionPath.Selectors()) && i < len(v.Path().Selectors()); i++ {
 			if maxNamingDepth > 0 && i >= maxNamingDepth {
@@ -250,9 +254,12 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		if i > 0 {
 			definitionPath = cue.MakePath(definitionPath.Selectors()[i:]...)
 		}
-		return strings.Trim(definitionPath.String(), "?#")
+		name := strings.Trim(definitionPath.String(), "?#")
+		if prefix != "" {
+			return fmt.Sprintf("%s.%s", prefix, name)
+		}
+		return name
 	}
-
 	codegenPipeline := cog.TypesFromSchema().
 		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
 		SchemaTransformations(cog.PrefixObjectsNames(cfg.NamePrefix)).
