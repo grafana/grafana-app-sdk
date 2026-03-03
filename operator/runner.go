@@ -33,6 +33,7 @@ type Runner struct {
 	healthCheck         health.Check
 	metricsServer       *MetricsServer
 	metricsServerRunner *app.SingletonRunner
+	sharedRunner        *app.SingletonRunner
 	startMux            sync.Mutex
 	running             bool
 	runningWG           sync.WaitGroup
@@ -79,6 +80,15 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 	if cfg.MetricsConfig.Enabled {
 		op.metricsExporter = metrics.NewExporter(cfg.MetricsConfig.ExporterConfig)
 	}
+
+	// Create a shared runner for webhook and metrics servers
+	sharedMultiRunner := app.NewMultiRunner()
+	if op.webhookServer != nil {
+		sharedMultiRunner.AddRunnable(op.webhookServer)
+	}
+	sharedMultiRunner.AddRunnable(op.metricsServerRunner)
+	// Wrap in SingletonRunner to handle multiple Run() calls gracefully
+	op.sharedRunner = app.NewSingletonRunner(sharedMultiRunner, false)
 
 	return &op, nil
 }
@@ -167,8 +177,11 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 		return err
 	}
 
-	// Build the operator
+	// Build the operator for this specific app
 	runner := app.NewMultiRunner()
+	// Add shared runner (webhook + metrics servers) to this app's runner
+	// SingletonRunner ensures they only start once across all apps
+	runner.AddRunnable(s.sharedRunner)
 
 	// Admission control
 	anyWebhooks := false
@@ -225,7 +238,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 				})
 			}
 		}
-		runner.AddRunnable(s.webhookServer)
+		// Webhook server is managed by shared runner, not per-app runner
 	}
 
 	// Main loop
@@ -256,7 +269,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	s.metricsServer.RegisterHealthChecks(s)
 	s.metricsServer.RegisterHealthChecks(runner.HealthChecks()...)
 	s.metricsServer.RegisterHealthChecks(a.HealthChecks()...)
-	runner.AddRunnable(s.metricsServerRunner)
+	// Metrics server is managed by shared runner, not per-app runner
 
 	return runner.Run(ctx)
 }
