@@ -539,13 +539,12 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 	if len(vk.Routes) > 0 {
 		mver.Routes = make(map[string]spec3.PathProps)
 		for sourcePath, sourceMethodsMap := range vk.Routes {
-			var targetPathProps spec3.PathProps
-			var err error
-			targetPathProps, additionalSchemas, err = buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
+			targetPathProps, newAdditionalSchemas, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 			if err != nil {
 				return app.ManifestVersionKind{}, fmt.Errorf("custom routes error for path '%s': %w", sourcePath, err)
 			}
 			mver.Routes[sourcePath] = targetPathProps
+			maps.Copy(additionalSchemas, newAdditionalSchemas)
 		}
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
