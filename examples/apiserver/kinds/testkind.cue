@@ -39,6 +39,7 @@ testKindv1alpha1: testKind & {
 		}
 		foo: {
 			someVal: string
+			bar:     #Foo
 		} @grafanaappsdk(prefix="Subresource") // If we don't include the Subresource prefix this will generate conflicting types with the #Foo type used in spec
 	}
 	routes: {

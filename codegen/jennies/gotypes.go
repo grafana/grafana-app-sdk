@@ -146,14 +146,15 @@ func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, erro
 }
 
 type goTypesGenerateFilesConfig struct {
-	VersionName   string
-	KindName      string
-	MachineName   string
-	PackageName   string
-	PathPrefix    string
-	NamePrefix    string
-	Group         string
-	ExcludeFields []string
+	VersionName           string
+	KindName              string
+	MachineName           string
+	PackageName           string
+	PathPrefix            string
+	NamePrefix            string
+	Group                 string
+	ExcludeFields         []string
+	SubresourceTypePrefix string // type prefix from @grafanaappsdk(prefix=...) annotation, handled at depth handler
 }
 
 //nolint:goconst
@@ -191,10 +192,21 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 			}
 		}
 
+		name := exportField(strings.Join(fieldName, ""))
+		definitionNamePrefix := ""
+		if cfg.SubresourceTypePrefix != "" {
+			// Include the annotation prefix in the envelope name (e.g., "Subresource" + "Foo" = "SubresourceFoo").
+			// Also prefix all CUE definitions with the full subresource type name to prevent
+			// collisions between the envelope and definitions with the same base name.
+			name = cfg.SubresourceTypePrefix + name
+			definitionNamePrefix = cfg.SubresourceTypePrefix + exportField(strings.Join(fieldName, ""))
+		}
+
 		goBytes, err := GoTypesFromCUE(v, CUEGoConfig{
 			PackageName:                    cfg.PackageName,
-			Name:                           exportField(strings.Join(fieldName, "")),
+			Name:                           name,
 			NamePrefix:                     cfg.NamePrefix,
+			DefinitionNamePrefix:           definitionNamePrefix,
 			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] != "metadata"),
 			AnyAsInterface:                 g.AnyAsInterface,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth), namerFunc)
@@ -218,7 +230,16 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 	for it.Next() {
 		nextCfg := cfg
 		sch := it.Value()
-		nextCfg.NamePrefix = fmt.Sprintf("%s%s", nextCfg.NamePrefix, getTypePrefix(sch))
+		prefix := getTypePrefix(sch)
+		if currDepth+1 == g.Depth && prefix != "" {
+			// At the level feeding directly into the depth handler,
+			// pass the prefix separately so the depth handler can
+			// apply it to the Name and DefinitionNamePrefix independently,
+			// preventing collisions between the envelope type and CUE definitions.
+			nextCfg.SubresourceTypePrefix = prefix
+		} else {
+			nextCfg.NamePrefix = fmt.Sprintf("%s%s", nextCfg.NamePrefix, prefix)
+		}
 		f, err := g.generateFilesAtDepth(sch, schemaPath, currDepth+1, nextCfg)
 		if err != nil {
 			return nil, err
@@ -237,6 +258,10 @@ type CUEGoConfig struct {
 
 	// NamePrefix prefixes all generated types with the provided NamePrefix
 	NamePrefix string
+
+	// DefinitionNamePrefix is prepended to CUE definition names (e.g., #Foo) to prevent
+	// collisions with the envelope type when a subresource type prefix is specified.
+	DefinitionNamePrefix string
 }
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc func(string) string) ([]byte, error) {
@@ -253,7 +278,11 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		if i > 0 {
 			definitionPath = cue.MakePath(definitionPath.Selectors()[i:]...)
 		}
-		return strings.Trim(definitionPath.String(), "?#")
+		defName := strings.Trim(definitionPath.String(), "?#")
+		if cfg.DefinitionNamePrefix != "" {
+			return cfg.DefinitionNamePrefix + defName
+		}
+		return defName
 	}
 
 	codegenPipeline := cog.TypesFromSchema().
