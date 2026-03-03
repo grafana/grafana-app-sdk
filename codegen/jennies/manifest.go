@@ -592,7 +592,8 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 			if field == "metadata" || field == "apiVersion" || field == "kind" { //nolint:goconst
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
-			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
+			prefix := getTypePrefix(it.Value())
+			oapiBytes, err := cueToOpenAPIBytes(it.Value(), prefix+field)
 			if err != nil {
 				return app.ManifestVersionKind{}, err
 			}
@@ -611,7 +612,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 				schemas[k] = v
 			}
 			props[field] = map[string]any{
-				"$ref": "#/components/schemas/" + field,
+				"$ref": "#/components/schemas/" + prefix + field,
 			}
 		}
 		schemas[vk.Kind] = map[string]any{

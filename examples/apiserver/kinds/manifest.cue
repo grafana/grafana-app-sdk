@@ -85,6 +85,7 @@ v1alpha1: {
 	routes: namespaced: {
 		"/foobar": {
 			"GET": {
+				name: "getFoobar"
 				response: {
 					foo:    string
 					shared: #SharedType

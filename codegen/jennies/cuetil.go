@@ -187,3 +187,13 @@ func (*cueFmtState) Precision() (prec int, ok bool) {
 func (*cueFmtState) Flag(flag int) bool {
 	return flag == '#' || flag == '+'
 }
+
+func getTypePrefix(val cue.Value) string {
+	if attr := val.Attribute("grafanaappsdk"); attr.Err() == nil {
+		prefix, ok, _ := attr.Lookup(0, "prefix")
+		if ok {
+			return exportField(prefix)
+		}
+	}
+	return ""
+}

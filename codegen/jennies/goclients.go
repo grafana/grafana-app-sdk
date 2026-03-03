@@ -47,9 +47,11 @@ func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen
 			if sr == "metadata" || sr == "spec" { //nolint:goconst
 				continue
 			}
+			srPrefix := getTypePrefix(it.Value())
 			subresources = append(subresources, templates.GoResourceClientSubresource{
 				FieldName:   exportField(sr),
 				Subresource: sr,
+				TypeName:    prefix + srPrefix + exportField(sr),
 			})
 		}
 		// Sort for consistent output in the template

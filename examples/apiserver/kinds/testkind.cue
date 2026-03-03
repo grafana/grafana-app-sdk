@@ -37,10 +37,14 @@ testKindv1alpha1: testKind & {
 		mysubresource: {
 			extraValue: string
 		}
+		foo: {
+			someVal: string
+		} @grafanaappsdk(prefix="Subresource") // If we don't include the Subresource prefix this will generate conflicting types with the #Foo type used in spec
 	}
 	routes: {
 		"/foo": {
 			"GET": {
+				name: "getFoo"
 				request: {
 					query: {
 						foo: string

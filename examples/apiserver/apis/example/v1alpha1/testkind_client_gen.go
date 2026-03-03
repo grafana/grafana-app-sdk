@@ -82,6 +82,23 @@ func (c *TestKindClient) Patch(ctx context.Context, identifier resource.Identifi
 	return c.client.Patch(ctx, identifier, req, opts)
 }
 
+func (c *TestKindClient) UpdateFoo(ctx context.Context, identifier resource.Identifier, newFoo TestKindSubresourceFoo, opts resource.UpdateOptions) (*TestKind, error) {
+	return c.client.Update(ctx, &TestKind{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       TestKindKind().Kind(),
+			APIVersion: GroupVersion.Identifier(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			ResourceVersion: opts.ResourceVersion,
+			Namespace:       identifier.Namespace,
+			Name:            identifier.Name,
+		},
+		Foo: newFoo,
+	}, resource.UpdateOptions{
+		Subresource:     "foo",
+		ResourceVersion: opts.ResourceVersion,
+	})
+}
 func (c *TestKindClient) UpdateMysubresource(ctx context.Context, identifier resource.Identifier, newMysubresource TestKindMysubresource, opts resource.UpdateOptions) (*TestKind, error) {
 	return c.client.Update(ctx, &TestKind{
 		TypeMeta: metav1.TypeMeta{

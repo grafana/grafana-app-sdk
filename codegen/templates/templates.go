@@ -608,6 +608,7 @@ type GoResourceClientParamValues struct {
 type GoResourceClientSubresource struct {
 	FieldName   string
 	Subresource string
+	TypeName    string
 }
 
 func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) error {

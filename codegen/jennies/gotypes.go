@@ -216,7 +216,10 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 
 	files := make(codejen.Files, 0)
 	for it.Next() {
-		f, err := g.generateFilesAtDepth(it.Value(), schemaPath, currDepth+1, cfg)
+		nextCfg := cfg
+		sch := it.Value()
+		nextCfg.NamePrefix = fmt.Sprintf("%s%s", nextCfg.NamePrefix, getTypePrefix(sch))
+		f, err := g.generateFilesAtDepth(sch, schemaPath, currDepth+1, nextCfg)
 		if err != nil {
 			return nil, err
 		}
