@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -22,7 +21,6 @@ var rootCmd = &cobra.Command{
 const (
 	sourceFlag           = "source"
 	formatFlag           = "format"
-	selectorFlag         = "manifest"
 	genOperatorStateFlag = "genoperatorstate"
 	configFlag           = "config"
 )
@@ -34,12 +32,6 @@ func main() {
 	rootCmd.PersistentFlags().StringP(configFlag, "c", "config", "Path selector of the config object within the manifest")
 	rootCmd.PersistentFlags().StringP(sourceFlag, "s", "kinds", "Path to directory with your codegen source files (such as a CUE module)")
 	rootCmd.PersistentFlags().StringP(formatFlag, "f", FormatCUE, "Format in which kinds are written for this project (currently allowed values are 'cue')")
-
-	rootCmd.PersistentFlags().String(selectorFlag, "manifest", "Path selector to use for the manifest")
-	_ = rootCmd.PersistentFlags().MarkDeprecated(selectorFlag, fmt.Sprintf(deprecationMessage, "manifestSelectors"))
-
-	rootCmd.PersistentFlags().Bool(genOperatorStateFlag, true, "Generate operator state code")
-	_ = rootCmd.PersistentFlags().MarkDeprecated(genOperatorStateFlag, fmt.Sprintf(deprecationMessage, "codegen.enableOperatorStatusGeneration"))
 
 	setupVersionCmd()
 	setupGenerateCmd()
