@@ -170,7 +170,7 @@ func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
 			arg = arg[:idx]
 		}
 		if configKey, ok := removedFlagConfigCueKeyByName[arg]; ok {
-			removedFlags = append(removedFlags, fmt.Sprintf("%s -> %s", arg, configKey))
+			removedFlags = append(removedFlags, fmt.Sprintf(" %s -> %s", arg, configKey))
 		}
 	}
 
