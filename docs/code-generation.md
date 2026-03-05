@@ -14,7 +14,7 @@ Kind codegen uses `grafana-app-sdk generate` as its base command. Generation set
 config: {
 	definitions: {
 		manifestSchemas: true
-		manifestVersion: "v1alpha1"
+		manifestVersion: "v1alpha2"
 		path:            "definitions"
 		encoding:        "json"
 	}
