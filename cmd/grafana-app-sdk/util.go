@@ -139,7 +139,7 @@ func getGoModule(goModPath string) (string, error) {
 	return "", errors.New("unable to locate module in go.mod file")
 }
 
-const flagErrorMsgTemplate = "the CLI flags you are trying to use have been removed in favor of a cue-defined configuration block:\n%s\nSet these values in config CUE instead, see https://github.com/grafana/grafana/pull/119543 as an example"
+const flagErrorMsgTemplate = "CLI flags have been replaced by CUE defined config values:\n%s\nSee https://github.com/grafana/grafana/pull/119543 as an example of how to migrate your CLI flags to the CUE config"
 
 func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
 	removedFlags := make([]string, 0)
@@ -151,7 +151,7 @@ func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
 		"-g":                    "codegen.goGenPath",
 		"--tsgenpath":           "codegen.tsGenPath",
 		"-t":                    "codegen.tsGenPath",
-		"--defencoding":         "definitions.encoding",
+		"--defencoding":         "definitions.encoding (if set to 'none' -> definitions.genManifest=false, definitions.genCRDs=false)",
 		"--defpath":             "definitions.path",
 		"--grouping":            "kinds.grouping",
 		"--postprocess":         "codegen.enableK8sPostProcessing",
