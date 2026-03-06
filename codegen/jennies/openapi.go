@@ -35,44 +35,41 @@ func (*OpenAPI) JennyName() string {
 	return "OpenAPI"
 }
 
-func (o *OpenAPI) Generate(kinds ...codegen.Kind) (codejen.Files, error) {
+func (o *OpenAPI) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	fs := codejen.NewFS()
 
 	// Group kinds by package name
 	if o.GroupByKind {
-		for _, k := range kinds {
-			versions := k.Versions()
-			for i := 0; i < len(versions); i++ {
-				ver := versions[i]
-				if !ver.Codegen.Go.Enabled {
-					continue
-				}
+		for v, k := range codegen.VersionedKinds(appManifest) {
+			if !k.Codegen.Go.Enabled {
+				continue
+			}
 
-				relativePkg := filepath.Join(o.GoGenPath, GetGeneratedPath(o.GroupByKind, k, ver.Version))
-				err := gengo.Execute(generators.NameSystems(),
-					generators.DefaultNameSystem(),
-					o.getTargetsFunc(relativePkg, fs),
-					gengo.StdBuildTag,
-					[]string{filepath.Join(o.GoModName, filepath.ToSlash(relativePkg))},
-				)
-				if err != nil {
-					return nil, err
-				}
+			relativePkg := filepath.Join(o.GoGenPath, GetGeneratedGoTypePath(o.GroupByKind, appManifest.Properties().Group, v.Name(), k.MachineName))
+			err := gengo.Execute(generators.NameSystems(),
+				generators.DefaultNameSystem(),
+				o.getTargetsFunc(relativePkg, fs),
+				gengo.StdBuildTag,
+				[]string{filepath.Join(o.GoModName, filepath.ToSlash(relativePkg))},
+			)
+			if err != nil {
+				return nil, err
 			}
 		}
 	} else {
 		gvs := make(map[schema.GroupVersion]struct{})
-		for _, k := range kinds {
-			for _, v := range k.Versions() {
-				if !v.Codegen.Go.Enabled {
-					continue
+		for _, v := range appManifest.Versions() {
+			codegenEnabled := false
+			for _, k := range v.Kinds() {
+				if k.Codegen.Go.Enabled {
+					codegenEnabled = true
+					break
 				}
-				grp := k.Properties().ManifestGroup
-				if grp == "" {
-					grp = k.Properties().Group
-				}
-				gvs[schema.GroupVersion{Group: grp, Version: v.Version}] = struct{}{}
 			}
+			if !codegenEnabled {
+				continue
+			}
+			gvs[schema.GroupVersion{Group: appManifest.Properties().Group, Version: v.Name()}] = struct{}{}
 		}
 		for gv := range gvs {
 			relativePkg := filepath.Join(o.GoGenPath, ToPackageName(strings.ToLower(gv.Group)), ToPackageName(gv.Version))

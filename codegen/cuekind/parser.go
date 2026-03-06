@@ -64,6 +64,7 @@ func (p *Parser) ManifestParser() codegen.Parser[codegen.AppManifest] {
 // KindParser returns a Parser that returns a list of codegen.Kind.
 // If useManifest is true, it will load kinds from a manifest provided by the selector(s) in Parse (or DefaultManifestSelector if no selectors are present),
 // rather than loading the selector(s) as kinds.
+// Deprecated: Use ManifestParser instead, Kind is deprecated
 //
 //nolint:revive
 func (p *Parser) KindParser() codegen.Parser[codegen.Kind] {

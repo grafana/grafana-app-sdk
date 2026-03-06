@@ -250,12 +250,6 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 
 //nolint:funlen,goconst
 func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files, error) {
-	// Slightly hacky multiple generators as an intermediary while we move to a better system.
-	// Both still source from a Manifest, but generatorForKinds supplies []Kind to jennies, vs AppManifest
-	generatorForKinds, err := codegen.NewGenerator(parser.KindParser())
-	if err != nil {
-		return nil, err
-	}
 	generatorForManifest, err := codegen.NewGenerator(parser.ManifestParser())
 	if err != nil {
 		return nil, err
@@ -275,14 +269,14 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	}
 
 	// Resource
-	resourceFiles, err := generatorForKinds.Generate(cuekind.ResourceGenerator(goModule, goModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
+	resourceFiles, err := generatorForManifest.Generate(cuekind.ResourceGenerator(goModule, goModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
 	for i, f := range resourceFiles {
 		resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
 	}
-	tsResourceFiles, err := generatorForKinds.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelectors...)
+	tsResourceFiles, err := generatorForManifest.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +292,7 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 		if cfg.Definitions.Encoding == "yaml" {
 			encFunc = yaml.Marshal
 		}
-		crdFiles, err = generatorForKinds.Generate(cuekind.CRDGenerator(encFunc, cfg.Definitions.Encoding), cfg.ManifestSelectors...)
+		crdFiles, err = generatorForManifest.Generate(cuekind.CRDGenerator(encFunc, cfg.Definitions.Encoding), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
@@ -356,7 +350,7 @@ func postGenerateFilesCue(parser *cuekind.Parser, cfg *config.Config) (codejen.F
 	if err != nil {
 		return nil, err
 	}
-	generator, err := codegen.NewGenerator[codegen.Kind](parser.KindParser())
+	generator, err := codegen.NewGenerator[codegen.AppManifest](parser.ManifestParser())
 	if err != nil {
 		return nil, err
 	}

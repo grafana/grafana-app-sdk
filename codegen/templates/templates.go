@@ -371,12 +371,6 @@ type OperatorMainMetadata struct {
 	CodegenPath     string
 	WatcherPackage  string
 	KindsAreGrouped bool
-	Resources       []codegen.KindProperties
-}
-
-type extendedOperatorMainMetadata struct {
-	OperatorMainMetadata
-	GVToKind map[schema.GroupVersion][]codegen.KindProperties
 }
 
 func (OperatorMainMetadata) ToPackageName(input string) string {
@@ -392,20 +386,7 @@ func (OperatorMainMetadata) GroupToPackageName(input string) string {
 }
 
 func WriteOperatorMain(metadata OperatorMainMetadata, out io.Writer) error {
-	md := extendedOperatorMainMetadata{
-		OperatorMainMetadata: metadata,
-		GVToKind:             make(map[schema.GroupVersion][]codegen.KindProperties),
-	}
-	for _, k := range md.Resources {
-		gv := schema.GroupVersion{Group: k.Group, Version: k.Current}
-		l, ok := md.GVToKind[gv]
-		if !ok {
-			l = make([]codegen.KindProperties, 0)
-		}
-		l = append(l, k)
-		md.GVToKind[gv] = l
-	}
-	return templateOperatorMain.Execute(out, md)
+	return templateOperatorMain.Execute(out, metadata)
 }
 
 func WriteOperatorConfig(out io.Writer) error {
