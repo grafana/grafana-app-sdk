@@ -121,7 +121,7 @@ type RemoteRestConfig struct {
 	WrapTransport   func(rt http.RoundTripper) http.RoundTripper
 }
 
-// NewClientConfigWithExternalClients creates a ClientConfig that will use the provided map of rest.Configs to route
+// NewClientConfigWithExternalClients creates a ClientConfig that will use the RemoteRestConfig map to route
 // requests to different API servers based on the group of the resource.Kind being requested.
 func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*RemoteRestConfig) ClientConfig {
 	config := DefaultClientConfig()
