@@ -14,6 +14,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
+	"github.com/grafana/grafana-app-sdk/codegen/preflight"
 )
 
 const (
@@ -74,7 +75,7 @@ Allowed values are 'group' and 'kind'. Dictates the packaging of go kinds, where
 	generateCmd.SilenceUsage = true
 }
 
-//nolint:funlen,revive,gocyclo
+//nolint:funlen,revive,gocyclo,gocognit
 func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	// Global flags
 	sourcePath, err := cmd.Flags().GetString(sourceFlag)
@@ -210,6 +211,11 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 
+		if !cfg.Codegen.SkipPreflightCompilationCheck {
+			if err := preflight.GeneratedGoCodeCompiles(cfg, files); err != nil {
+				return err
+			}
+		}
 		for _, f := range files {
 			err = writeFile(f.RelativePath, f.Data)
 			if err != nil {
@@ -222,6 +228,11 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			files, err = postGenerateFilesCue(parser, cfg)
 			if err != nil {
 				return err
+			}
+			if !cfg.Codegen.SkipPreflightCompilationCheck {
+				if err := preflight.GeneratedGoCodeCompiles(cfg, files); err != nil {
+					return err
+				}
 			}
 			for _, f := range files {
 				err = writeFile(f.RelativePath, f.Data)

@@ -18,6 +18,7 @@ configA: {
 		tsGenPath:                      "alt/ts/"
 		enableK8sPostProcessing:        true
 		enableOperatorStatusGeneration: false
+		skipPreflightCompilationCheck:  true
 	}
 }
 

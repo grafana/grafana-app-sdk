@@ -42,6 +42,21 @@ config: {
 
 Please see [Writing Kinds](./custom-kinds/writing-kinds.md) for a more detailed look at kind code generation from CUE.
 
+### SkipPreflightCompilationCheck
+
+By default, `grafana-app-sdk generate` performs a preflight compile check on generated Go files before writing them.
+This catches generation problems early and should remain enabled for normal development.
+
+If it is causing any issues, you can disable this check in `config.cue` with:
+
+```cue
+config: {
+	codegen: {
+		skipPreflightCompilationCheck: true
+	}
+}
+```
+
 ## Project Component Generation
 
 Project component generation is used to add boilerplate code for a "component" of your app. Components understood by the SDK are:
