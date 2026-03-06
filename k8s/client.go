@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -114,9 +115,15 @@ func NewClientWithRESTInterface(
 	}, nil
 }
 
+type RemoteRestConfig struct {
+	Host            string
+	TLSClientConfig rest.TLSClientConfig
+	WrapTransport   func(rt http.RoundTripper) http.RoundTripper
+}
+
 // NewClientConfigWithExternalClients creates a ClientConfig that will use the provided map of rest.Configs to route
 // requests to different API servers based on the group of the resource.Kind being requested.
-func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*rest.Config) ClientConfig {
+func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*RemoteRestConfig) ClientConfig {
 	config := DefaultClientConfig()
 	config.KubeConfigProvider = func(kind resource.Kind, kubeConfig rest.Config) rest.Config {
 		if kubeConfig.APIPath != "" {
@@ -144,7 +151,7 @@ func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*res
 // local loopback which doesn't serve remote resources.
 // We overlay the remote connection details (host, TLS, auth) onto the
 // base kubeConfig to preserve SDK-set fields like ContentConfig.GroupVersion.
-func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *rest.Config) rest.Config {
+func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig) rest.Config {
 	kubeConfig.Host = remoteCfg.Host
 	kubeConfig.TLSClientConfig = remoteCfg.TLSClientConfig
 	kubeConfig.WrapTransport = remoteCfg.WrapTransport

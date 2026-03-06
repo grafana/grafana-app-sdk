@@ -91,7 +91,7 @@ func TestNewClientConfigWithExternalClients(t *testing.T) {
 		remoteWrapTransportInvoked = true
 		return rt
 	}
-	remoteByGroup := map[string]*rest.Config{
+	remoteByGroup := map[string]*RemoteRestConfig{
 		testKind.Group(): {
 			Host: "https://remote.example.com",
 			TLSClientConfig: rest.TLSClientConfig{
