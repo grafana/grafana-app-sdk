@@ -108,22 +108,22 @@ jobs:
             }
             diff = '';
 
-            core.startGroup('Go --grouping=kind Diff');
+            core.startGroup('Go kind-grouping Diff');
             await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/customkind'], options);
             console.log(diff);
             core.endGroup();
             if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-              core.error('Generated go with --groupbykind=kind comparison to codegen/testing/golden_generated failed, see diff for details');
+              core.error('Generated go with kind grouping comparison to codegen/testing/golden_generated failed, see diff for details');
               anyFailed = true;
             }
             diff = '';
 
-            core.startGroup('Go --grouping=group Diff');
+            core.startGroup('Go group-grouping Diff');
             await exec.exec('diff', ['codegen-tests/cmp/go/groupbygroup', 'codegen-tests/pkg/gen2'], options);
             console.log(diff);
             core.endGroup();
             if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-              core.error('Generated go with --groupbykind=group comparison to codegen/testing/golden_generated failed, see diff for details');
+              core.error('Generated go with group grouping comparison to codegen/testing/golden_generated failed, see diff for details');
               anyFailed = true;
             }
             diff = '';

@@ -45,7 +45,6 @@ type Config struct {
 }
 
 // Load loads configuration from the given source into a Config struct.
-// HACK: Base config is only used for backwards compatibilit with CLI flags.
 func Load(src any, selector string) (*Config, error) {
 	if selector == "" {
 		selector = DefaultConfigSelector
