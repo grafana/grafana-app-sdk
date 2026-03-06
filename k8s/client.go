@@ -140,6 +140,10 @@ func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*res
 }
 
 // overlayRemoteRestConfig takes the provided kubeConfig and overlays the Host, TLSClientConfig, and WrapTransport
+// In standalone apiserver mode, the default KubeConfig points to the
+// local loopback which doesn't serve remote resources.
+// We overlay the remote connection details (host, TLS, auth) onto the
+// base kubeConfig to preserve SDK-set fields like ContentConfig.GroupVersion.
 func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *rest.Config) rest.Config {
 	kubeConfig.Host = remoteCfg.Host
 	kubeConfig.TLSClientConfig = remoteCfg.TLSClientConfig
