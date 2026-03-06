@@ -139,7 +139,7 @@ func getGoModule(goModPath string) (string, error) {
 	return "", errors.New("unable to locate module in go.mod file")
 }
 
-const flagErrorMsgTemplate = "CLI flags have been replaced by CUE defined config values:\n%s\nSee https://github.com/grafana/grafana/pull/119543 as an example of how to migrate your CLI flags to the CUE config"
+const flagErrorMsgTemplate = "CLI flags have been replaced by CUE defined config values:\n%s\nFollow this migration guide https://github.com/grafana/grafana-app-sdk/blob/main/docs/migrations/v0.52.md to migrate your usage of CLI flags to the new CUE config values"
 
 func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
 	removedFlags := make([]string, 0)
