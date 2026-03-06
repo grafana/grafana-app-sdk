@@ -98,6 +98,7 @@ func TestNewClientConfigWithExternalClients(t *testing.T) {
 				Insecure: true,
 			},
 			WrapTransport: remoteWrapTransport,
+			OverrideAuth:  true,
 		},
 	}
 	config := NewClientConfigWithExternalClients(remoteByGroup)
@@ -173,6 +174,40 @@ func TestNewClientConfigWithExternalClients(t *testing.T) {
 
 		provided := config.KubeConfigProvider(testKind, existing)
 		assert.Equal(t, existing, provided)
+	})
+
+	t.Run("keeps inherited auth when OverrideAuth is false", func(t *testing.T) {
+		configNoAuthOverride := NewClientConfigWithExternalClients(map[string]*RemoteRestConfig{
+			testKind.Group(): {
+				Host: "https://remote.example.com",
+				TLSClientConfig: rest.TLSClientConfig{
+					Insecure: true,
+				},
+			},
+		})
+
+		base := rest.Config{
+			Host:            "https://local.example.com",
+			BearerToken:     "token",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := configNoAuthOverride.KubeConfigProvider(testKind, base)
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.Equal(t, "token", provided.BearerToken)
+		assert.Equal(t, "/tmp/token", provided.BearerTokenFile)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
 	})
 }
 

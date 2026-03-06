@@ -119,6 +119,8 @@ type RemoteRestConfig struct {
 	Host            string
 	TLSClientConfig rest.TLSClientConfig
 	WrapTransport   func(rt http.RoundTripper) http.RoundTripper
+	// OverrideAuth, when set to true, will cause the kubeConfig fields related to authentication (BearerToken, BearerTokenFile, CertData, CertFile, KeyData, KeyFile) to be cleared when overlaying the RemoteRestConfig onto the base kubeConfig. This is useful in cases where the remote API server uses a different authentication mechanism than the local kubeConfig.
+	OverrideAuth bool
 }
 
 // NewClientConfigWithExternalClients creates a ClientConfig that will use the RemoteRestConfig map to route
@@ -157,12 +159,14 @@ func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig
 	kubeConfig.WrapTransport = remoteCfg.WrapTransport
 
 	// Clear inherited auth that doesn't apply to the remote target.
-	kubeConfig.BearerToken = ""
-	kubeConfig.BearerTokenFile = ""
-	kubeConfig.CertData = nil
-	kubeConfig.CertFile = ""
-	kubeConfig.KeyData = nil
-	kubeConfig.KeyFile = ""
+	if remoteCfg.OverrideAuth {
+		kubeConfig.BearerToken = ""
+		kubeConfig.BearerTokenFile = ""
+		kubeConfig.CertData = nil
+		kubeConfig.CertFile = ""
+		kubeConfig.KeyData = nil
+		kubeConfig.KeyFile = ""
+	}
 
 	return kubeConfig
 }
