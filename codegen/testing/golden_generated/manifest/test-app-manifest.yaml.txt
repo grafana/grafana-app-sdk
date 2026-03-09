@@ -3,7 +3,7 @@ kind: AppManifest
 metadata:
   name: test-app
 spec:
-  appDisplayName: ""
+  appDisplayName: test-app
   appName: test-app
   extraPermissions:
     accessKinds:

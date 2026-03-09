@@ -3,7 +3,7 @@ kind: AppManifest
 metadata:
   name: custom-app
 spec:
-  appDisplayName: ""
+  appDisplayName: custom-app
   appName: custom-app
   group: customapp.ext.grafana.com
   preferredVersion: v1-0
