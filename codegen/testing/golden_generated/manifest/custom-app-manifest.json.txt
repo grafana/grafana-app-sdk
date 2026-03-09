@@ -6,7 +6,7 @@
     },
     "spec": {
         "appName": "custom-app",
-        "appDisplayName": "",
+        "appDisplayName": "custom-app",
         "group": "customapp.ext.grafana.com",
         "versions": [
             {

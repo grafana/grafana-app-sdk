@@ -6,7 +6,7 @@
     },
     "spec": {
         "appName": "test-app",
-        "appDisplayName": "",
+        "appDisplayName": "test-app",
         "group": "testapp.ext.grafana.com",
         "versions": [
             {
