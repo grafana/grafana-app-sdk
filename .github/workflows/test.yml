@@ -71,19 +71,6 @@ jobs:
           mkdir -p cmp && cp -R ../grafana-app-sdk/codegen/testing/golden_generated/* cmp/
           mv cmp/manifest/*.txt cmp/crd/
           find ./cmp -iname '*.txt' -exec bash -c 'mv -- "$1" "${1%.txt}"' bash {} \;
-      - name: Generate code (backwards compatibility)
-        run: |
-          cd codegen-tests
-          # NOTE: These four are here for backwards compatibility testing using now deprecated cli flags
-          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=customManifest --crdmanifest
-          grafana-app-sdk generate --grouping=kind --gogenpath=pkg/gen1 --tsgenpath=ts/gen1 --gomodgenpath="pkg/generated" --defencoding=json --manifest=testManifest --crdmanifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=customManifest --crdmanifest
-          grafana-app-sdk generate --grouping=group --gogenpath=pkg/gen2 --tsgenpath=ts/gen2 --gomodgenpath="pkg/generated" --defencoding=yaml --manifest=testManifest --crdmanifest
-          sed -i 's/codegen\-tests\/pkg\/gen2/codegen\-tests\/pkg\/generated/g' pkg/gen2/manifestdata/*.go
-          diff pkg/gen1/customkind cmp/go/groupbykind/customkind > diff.txt
-          sed -i '/^Common subdirectories/d' diff.txt
-          difflines=$(wc -l diff.txt | awk '{ print $1 }')
-          echo "GoGroupByKindDiff=${difflines}" >> $GITHUB_ENV
       - name: Generate code
         run: |
           cd codegen-tests
@@ -121,22 +108,22 @@ jobs:
             }
             diff = '';
 
-            core.startGroup('Go --grouping=kind Diff');
+            core.startGroup('Go kind-grouping Diff');
             await exec.exec('diff', ['codegen-tests/cmp/go/groupbykind/customkind', 'codegen-tests/pkg/gen1/customkind'], options);
             console.log(diff);
             core.endGroup();
             if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-              core.error('Generated go with --groupbykind=kind comparison to codegen/testing/golden_generated failed, see diff for details');
+              core.error('Generated go with kind grouping comparison to codegen/testing/golden_generated failed, see diff for details');
               anyFailed = true;
             }
             diff = '';
 
-            core.startGroup('Go --grouping=group Diff');
+            core.startGroup('Go group-grouping Diff');
             await exec.exec('diff', ['codegen-tests/cmp/go/groupbygroup', 'codegen-tests/pkg/gen2'], options);
             console.log(diff);
             core.endGroup();
             if(diff.replace(/^Common subdirectories.*$/gm, '').trim().length > 0) {
-              core.error('Generated go with --groupbykind=group comparison to codegen/testing/golden_generated failed, see diff for details');
+              core.error('Generated go with group grouping comparison to codegen/testing/golden_generated failed, see diff for details');
               anyFailed = true;
             }
             diff = '';

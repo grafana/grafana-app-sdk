@@ -87,14 +87,6 @@ func setupProjectCmd() {
 	projectCmd.PersistentFlags().Bool("overwrite", false, "Overwrite existing files instead of prompting")
 	projectCmd.PersistentFlags().Lookup("overwrite").NoOptDefVal = "true"
 
-	projectAddComponentCmd.Flags().String("grouping", config.KindGroupingKind, `Kind go package grouping.
-Allowed values are 'group' and 'kind'. This should match the flag used in the 'generate' command`)
-	_ = projectAddComponentCmd.Flags().MarkDeprecated("grouping", fmt.Sprintf(deprecationMessage, "kinds.grouping"))
-
-	projectLocalGenerateCmd.Flags().Bool("useoldmanifestkinds", false, "Whether to use the legacy manifest style of 'kinds' in the manifest, and 'versions' in each kind. This is a deprecated feature that will be removed in a future release.")
-	projectLocalGenerateCmd.Flags().Lookup("useoldmanifestkinds").NoOptDefVal = "true"
-	_ = projectLocalGenerateCmd.Flags().MarkDeprecated("useoldmanifestkinds", fmt.Sprintf(deprecationMessage, "kinds.perKindVersion"))
-
 	projectCmd.AddCommand(projectInitCmd)
 	projectCmd.AddCommand(projectComponentCmd)
 	projectCmd.AddCommand(projectKindCmd)
@@ -523,12 +515,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Selector (optional)
-	selector, err := cmd.Flags().GetString(selectorFlag)
-	if err != nil {
-		return err
-	}
-
 	// Name of the cue object containing the config (optional)
 	configName, err := cmd.Flags().GetString(configFlag)
 	if err != nil {
@@ -547,16 +533,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
-	if err != nil {
-		return err
-	}
-
-	kindGrouping, err := cmd.Flags().GetString("grouping")
-	if err != nil {
-		return err
-	}
-
 	var genSrc any
 
 	switch format {
@@ -570,18 +546,7 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unknown format '%s'", format)
 	}
 
-	// HACK: Load base config from CLI flags which will eventually be removed
-	baseConfig := &config.Config{
-		Kinds: &config.KindsConfig{
-			Grouping: kindGrouping,
-		},
-		Codegen: &config.CodegenConfig{
-			EnableOperatorStatusGeneration: genOperatorState,
-		},
-		ManifestSelectors: []string{selector},
-	}
-
-	cfg, err := config.Load(genSrc, configName, baseConfig)
+	cfg, err := config.Load(genSrc, configName)
 	if err != nil {
 		return err
 	}

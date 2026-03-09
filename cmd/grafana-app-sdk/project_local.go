@@ -186,19 +186,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	selector, err := cmd.Flags().GetString(selectorFlag)
-	if err != nil {
-		return err
-	}
 	configName, err := cmd.Flags().GetString(configFlag)
-	if err != nil {
-		return err
-	}
-	genOperatorState, err := cmd.Flags().GetBool(genOperatorStateFlag)
-	if err != nil {
-		return err
-	}
-	useOldManifestKinds, err := cmd.Flags().GetBool("useoldmanifestkinds")
 	if err != nil {
 		return err
 	}
@@ -240,18 +228,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// HACK: Load base config from CLI flags which will eventually be removed
-	baseConfig := &config.Config{
-		Kinds: &config.KindsConfig{
-			PerKindVersion: useOldManifestKinds,
-		},
-		Codegen: &config.CodegenConfig{
-			EnableOperatorStatusGeneration: genOperatorState,
-		},
-		ManifestSelectors: []string{selector},
-	}
-
-	err = updateLocalConfigFromManifest(envCfg, baseConfig, format, sourcePath, configName)
+	err = updateLocalConfigFromManifest(envCfg, format, sourcePath, configName)
 	if err != nil {
 		return err
 	}
@@ -264,7 +241,7 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			if err != nil {
 				return nil, err
 			}
-			cfg, err := config.Load(cue, configName, baseConfig)
+			cfg, err := config.Load(cue, configName)
 			if err != nil {
 				return nil, err
 			}
@@ -888,7 +865,7 @@ func generateCerts(dnsName string) (*certBundle, error) {
 	}, nil
 }
 
-func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Config, format, cuePath, configName string) error {
+func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, configName string) error {
 	type manifest struct {
 		Kind string           `json:"kind"`
 		Spec app.ManifestData `json:"spec"`
@@ -898,7 +875,7 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, baseConfig *config.Co
 		if err != nil {
 			return err
 		}
-		cfg, err := config.Load(cue, configName, baseConfig)
+		cfg, err := config.Load(cue, configName)
 		if err != nil {
 			return err
 		}
