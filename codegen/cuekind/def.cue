@@ -27,7 +27,7 @@ _kubeObjectMetadata: {
 	// Allowed values are "group" and "kind". Dictates the packaging of go kinds, where "group" places all kinds
 	// with the same group in the same package, and "kind" creates separate packages per kind
 	// (packaging will always end with the version).
-	grouping:       "group" | *"kind"
+	grouping: "group" | *"kind"
 	// Whether to use the legacy manifest style of "kinds" in the manifest, and "versions" in each kind.
 	// This is a deprecated feature that will be removed in a future release.
 	perKindVersion: bool | *false
@@ -35,15 +35,15 @@ _kubeObjectMetadata: {
 
 #DefinitionsConfig: {
 	// Whether to generate app manifest files.
-	genManifest:     bool | *true
+	genManifest: bool | *true
 	// Whether to generate CRD definition files.
-	genCRDs:         bool | *true
-	// Path where Custom Resource Definitions will be created.
-	// Only applicable if type=kubernetes.
-	path:            string | *"definitions"
-	// Encoding for Custom Resource Definition files.
-	// Allowed values are "json" and "yaml".
-	encoding:        *"json" | "yaml"
+	genCRDs: bool | *true
+	// Path where kubernetes manifests will be created (AppManifest and/or CRDs).
+	// Only applicable if genManifest and/or genCRDs is true.
+	path: string | *"definitions"
+	// Encoding for kubernetes manifest files.
+	// Allowed values are "json" and "yaml"
+	encoding: *"json" | "yaml"
 	// Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents.
 	// Use "v1alpha1" for legacy CRD-compatible schemas and "v1alpha2" for the default format.
 	manifestVersion: "v1alpha1" | *"v1alpha2"
@@ -55,18 +55,18 @@ _kubeObjectMetadata: {
 #CodegenConfig: {
 	// Module name found in go.mod.
 	// If absent it will be inferred from ./go.mod.
-	goModule:                       string | *""
+	goModule: string | *""
 	// Relative path for generated Go code from the Go module root.
 	// It only needs to be present if goGenPath is an absolute path, or is not a relative path from the module root.
-	goModGenPath:                   string | *""
+	goModGenPath: string | *""
 	// Path to directory where generated Go code will reside.
-	goGenPath:                      string | *"pkg/generated/"
+	goGenPath: string | *"pkg/generated/"
 	// Path to directory where generated TypeScript code will reside.
-	tsGenPath:                      string | *"plugin/src/generated/"
+	tsGenPath: string | *"plugin/src/generated/"
 	// Whether to run post-processing on generated files after they are written to disk.
 	// Post-processing includes code generation based on +k8s comments on types.
 	// This can fail if dependencies required by the generated code are absent from go.mod.
-	enableK8sPostProcessing:        bool | *false
+	enableK8sPostProcessing: bool | *false
 	// Generate operator state code.
 	enableOperatorStatusGeneration: bool | *true
 }
@@ -145,7 +145,7 @@ SchemaWithOperatorState: Schema & {
 	objectMeta: bool | *false
 }
 #CustomRoute: {
-	name:    =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	name:     =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
 	request:  #CustomRouteRequest
 	response: #CustomRouteResponse
 	// responseMetadata allows codegen to include kubernetes metadata in the generated response object.
@@ -340,7 +340,7 @@ Version: S={
 }
 
 #Role: {
-	title: string & != ""
+	title:       string & !=""
 	description: string | *""
 	kinds: [...#RoleKind]
 }
@@ -349,7 +349,7 @@ Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
 	// appDisplayName is the display name of the app. Unlike the appName, it can contain any printable characters and will be shown in the UI.
 	appDisplayName: string | *S.appName
-	group:   strings.ToLower(strings.Replace(S.appName, "-", "", -1))
+	group:          strings.ToLower(strings.Replace(S.appName, "-", "", -1))
 	versions: {
 		[V=string]: {
 			name:          V
