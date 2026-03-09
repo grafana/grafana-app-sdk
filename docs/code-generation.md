@@ -9,12 +9,12 @@ Code generation done by the grafana-app-sdk can be broadly split into two bucket
 Code generation turns kinds written in CUE into go and TypeScript code which can be used to write your app logic. 
 A full breakdown on writing CUE kinds and using them with the CLI's code generation can be found in the [Writing Kinds](./custom-kinds/writing-kinds.md) document.
 
-Kind codegen uses `grafana-app-sdk generate` as its base command. Generation settings can be supplied through CLI flags or, preferably, via `config.cue`. The following is an example `config.cue` for kind code generation:
+Kind codegen uses `grafana-app-sdk generate` as its base command. Generation settings are supplied via `config.cue`. The following is an example `config.cue` for kind code generation:
 ```cue
 config: {
 	definitions: {
 		manifestSchemas: true
-		manifestVersion: "v1alpha1"
+		manifestVersion: "v1alpha2"
 		path:            "definitions"
 		encoding:        "json"
 	}
@@ -35,7 +35,7 @@ config: {
 `grafana-app-sdk generate` scans the `source` directory for CUE files, and parses all top-level fields in all present CUE files as CUE kinds. If kind validation encounters any errors, no files will be written, and the validation error(s) will be printed out. On successful generation: 
 * kind go code will be written to the path in `config.codegen.goGenPath`, with a package for each unique kind-version combination
 * kind TypeScript code will be written to the path in `config.codegen.tsGenPath`, with a folder for each unique kind-version combination
-* kind CRD files and app manifest will be written to `config.definitions.path`, encoded according to `config.definitions.format` (set it to `"none"` to disable CRD output)
+* kind CRD files and app manifest will be written to `config.definitions.path`, encoded according to `config.definitions.encoding`
 
 > [!IMPORTANT]
 > Because the interfaces that the grafana-app-sdk libraries use can change, be sure to run kind code generation using a version of the `grafana-app-sdk` CLI that matches the version of the dependency you use in your project. Whenever you update the dependency, make sure you re-run the kind code generation as well.

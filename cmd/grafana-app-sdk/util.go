@@ -9,9 +9,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/spf13/cobra"
 )
 
-const mkDirPerms = 0755
+const mkDirPerms = 0o755
 
 // checkAndMakePath makes a path if it doesn't already exist. If the path already exists but is not a directory,
 // it will error.
@@ -39,7 +41,7 @@ func writeFile(path string, contents []byte) error {
 		}
 	}
 	fmt.Printf(" * Writing file %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o666)
 	if err != nil {
 		return err
 	}
@@ -68,7 +70,7 @@ func writeExecutableFile(path string, contents []byte) error {
 		}
 	}
 	fmt.Printf(" * Writing file %s\n", path)
-	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o777)
 	if err != nil {
 		return err
 	}
@@ -135,4 +137,46 @@ func getGoModule(goModPath string) (string, error) {
 	}
 
 	return "", errors.New("unable to locate module in go.mod file")
+}
+
+const flagErrorMsgTemplate = "CLI flags have been replaced by CUE defined config values:\n%s\nFollow this migration guide https://github.com/grafana/grafana-app-sdk/blob/main/docs/migrations/v0.52.md to migrate your usage of CLI flags to the new CUE config values"
+
+func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
+	removedFlags := make([]string, 0)
+
+	removedFlagConfigCueKeyByName := map[string]string{
+		"--manifest":            "manifestSelectors",
+		"--genoperatorstate":    "codegen.enableOperatorStatusGeneration",
+		"--gogenpath":           "codegen.goGenPath",
+		"-g":                    "codegen.goGenPath",
+		"--tsgenpath":           "codegen.tsGenPath",
+		"-t":                    "codegen.tsGenPath",
+		"--defencoding":         "definitions.encoding (if set to 'none' -> definitions.genManifest=false, definitions.genCRDs=false)",
+		"--defpath":             "definitions.path",
+		"--grouping":            "kinds.grouping",
+		"--postprocess":         "codegen.enableK8sPostProcessing",
+		"--noschemasinmanifest": "definitions.manifestSchemas",
+		"--gomodule":            "codegen.goModule",
+		"--gomodgenpath":        "codegen.goModGenPath",
+		"--useoldmanifestkinds": "kinds.perKindVersion",
+		"--crdmanifest":         "definitions.manifestVersion",
+	}
+
+	for _, arg := range os.Args[1:] {
+		if arg == "--" {
+			break
+		}
+		if idx := strings.Index(arg, "="); idx >= 0 {
+			arg = arg[:idx]
+		}
+		if configKey, ok := removedFlagConfigCueKeyByName[arg]; ok {
+			removedFlags = append(removedFlags, fmt.Sprintf(" %s -> %s", arg, configKey))
+		}
+	}
+
+	if len(removedFlags) == 0 {
+		return err
+	}
+
+	return fmt.Errorf(flagErrorMsgTemplate, strings.Join(removedFlags, "\n"))
 }
