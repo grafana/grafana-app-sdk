@@ -171,6 +171,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
+		AppDisplayName:   m.Properties().AppDisplayName,
 		Group:            m.Properties().FullGroup,
 		Versions:         make([]app.ManifestVersion, 0),
 		PreferredVersion: m.Properties().PreferredVersion,
