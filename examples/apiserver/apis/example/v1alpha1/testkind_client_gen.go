@@ -99,6 +99,23 @@ func (c *TestKindClient) UpdateMysubresource(ctx context.Context, identifier res
 		ResourceVersion: opts.ResourceVersion,
 	})
 }
+func (c *TestKindClient) UpdateOther(ctx context.Context, identifier resource.Identifier, newOther TestKindOther, opts resource.UpdateOptions) (*TestKind, error) {
+	return c.client.Update(ctx, &TestKind{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       TestKindKind().Kind(),
+			APIVersion: GroupVersion.Identifier(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			ResourceVersion: opts.ResourceVersion,
+			Namespace:       identifier.Namespace,
+			Name:            identifier.Name,
+		},
+		Other: newOther,
+	}, resource.UpdateOptions{
+		Subresource:     "other",
+		ResourceVersion: opts.ResourceVersion,
+	})
+}
 func (c *TestKindClient) UpdateStatus(ctx context.Context, identifier resource.Identifier, newStatus TestKindStatus, opts resource.UpdateOptions) (*TestKind, error) {
 	return c.client.Update(ctx, &TestKind{
 		TypeMeta: metav1.TypeMeta{
