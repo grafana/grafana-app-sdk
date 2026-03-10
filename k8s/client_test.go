@@ -85,6 +85,132 @@ func TestDefaultClientConfig(t *testing.T) {
 	})
 }
 
+func TestNewClientConfigWithExternalClients(t *testing.T) {
+	remoteWrapTransportInvoked := false
+	remoteWrapTransport := func(rt http.RoundTripper) http.RoundTripper {
+		remoteWrapTransportInvoked = true
+		return rt
+	}
+	remoteByGroup := map[string]*RemoteRestConfig{
+		testKind.Group(): {
+			Host: "https://remote.example.com",
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: true,
+			},
+			WrapTransport: remoteWrapTransport,
+			OverrideAuth:  true,
+		},
+	}
+	config := NewClientConfigWithExternalClients(remoteByGroup)
+
+	t.Run("sets APIPath to /apis for custom kinds without remote entry", func(t *testing.T) {
+		otherKind := resource.Kind{
+			Schema: resource.NewSimpleSchema(
+				"other.group",
+				"v1",
+				&resource.UntypedObject{},
+				&resource.UntypedList{},
+				resource.WithKind("Other"),
+			),
+		}
+
+		provided := config.KubeConfigProvider(otherKind, rest.Config{})
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Empty(t, provided.Host)
+	})
+
+	t.Run("sets APIPath to /api for empty-group kinds", func(t *testing.T) {
+		legacyKind := resource.Kind{
+			Schema: resource.NewSimpleSchema("", "v1", &resource.UntypedObject{}, &resource.UntypedList{}),
+		}
+
+		provided := config.KubeConfigProvider(legacyKind, rest.Config{})
+		assert.Equal(t, "/api", provided.APIPath)
+		assert.Empty(t, provided.Host)
+	})
+
+	t.Run("overlays remote config for mapped group and clears inherited auth", func(t *testing.T) {
+		base := rest.Config{
+			Host:            "https://local.example.com",
+			BearerToken:     "token",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := config.KubeConfigProvider(testKind, base)
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		require.NotNil(t, provided.WrapTransport)
+		assert.Empty(t, provided.BearerToken)
+		assert.Empty(t, provided.BearerTokenFile)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
+
+		_ = provided.WrapTransport(http.DefaultTransport)
+		assert.True(t, remoteWrapTransportInvoked)
+	})
+
+	t.Run("does not modify config when APIPath already set", func(t *testing.T) {
+		existing := rest.Config{
+			APIPath:         "/already-configured",
+			Host:            "https://local.example.com",
+			BearerToken:     "keep-me",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := config.KubeConfigProvider(testKind, existing)
+		assert.Equal(t, existing, provided)
+	})
+
+	t.Run("keeps inherited auth when OverrideAuth is false", func(t *testing.T) {
+		configNoAuthOverride := NewClientConfigWithExternalClients(map[string]*RemoteRestConfig{
+			testKind.Group(): {
+				Host: "https://remote.example.com",
+				TLSClientConfig: rest.TLSClientConfig{
+					Insecure: true,
+				},
+			},
+		})
+
+		base := rest.Config{
+			Host:            "https://local.example.com",
+			BearerToken:     "token",
+			BearerTokenFile: "/tmp/token",
+			TLSClientConfig: rest.TLSClientConfig{
+				CertData: []byte("cert"),
+				CertFile: "/tmp/cert",
+				KeyData:  []byte("key"),
+				KeyFile:  "/tmp/key",
+			},
+		}
+
+		provided := configNoAuthOverride.KubeConfigProvider(testKind, base)
+		assert.Equal(t, "/apis", provided.APIPath)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.Equal(t, "token", provided.BearerToken)
+		assert.Equal(t, "/tmp/token", provided.BearerTokenFile)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
+	})
+}
+
 func TestClient_Get(t *testing.T) {
 	client, server := getClientTestSetup(testKind)
 	defer server.Close()

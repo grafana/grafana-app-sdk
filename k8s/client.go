@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -14,9 +15,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-var (
-	_ resource.Client = &Client{}
-)
+var _ resource.Client = &Client{}
 
 // Client is a kubernetes-specific implementation of resource.Client, using custom resource definitions.
 // A Client is specific to the Schema it was created with.
@@ -116,10 +115,67 @@ func NewClientWithRESTInterface(
 	}, nil
 }
 
+type RemoteRestConfig struct {
+	Host            string
+	TLSClientConfig rest.TLSClientConfig
+	WrapTransport   func(rt http.RoundTripper) http.RoundTripper
+	// OverrideAuth, when set to true, will cause the kubeConfig fields related to authentication (BearerToken, BearerTokenFile, CertData, CertFile, KeyData, KeyFile) to be cleared when overlaying the RemoteRestConfig onto the base kubeConfig. This is useful in cases where the remote API server uses a different authentication mechanism than the local kubeConfig.
+	OverrideAuth bool
+}
+
+// NewClientConfigWithExternalClients creates a ClientConfig that will use the RemoteRestConfig map to route
+// requests to different API servers based on the group of the resource.Kind being requested.
+func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*RemoteRestConfig) ClientConfig {
+	config := DefaultClientConfig()
+	config.KubeConfigProvider = func(kind resource.Kind, kubeConfig rest.Config) rest.Config {
+		if kubeConfig.APIPath != "" {
+			return kubeConfig // Don't modify the kubeConfig if the APIPath is already configured
+		}
+		// If it isn't configured, set the APIPath based on the kind's group
+		if kind.Group() == "" {
+			kubeConfig.APIPath = "/api"
+		} else {
+			kubeConfig.APIPath = "/apis"
+		}
+
+		if remoteCfg, ok := remoteRestConfigsByGroup[kind.Group()]; ok && remoteCfg != nil {
+			kubeConfig = overlayRemoteRestConfig(kubeConfig, remoteCfg)
+		}
+
+		return kubeConfig
+	}
+
+	return config
+}
+
+// overlayRemoteRestConfig takes the provided kubeConfig and overlays the Host, TLSClientConfig, and WrapTransport
+// In standalone apiserver mode, the default KubeConfig points to the
+// local loopback which doesn't serve remote resources.
+// We overlay the remote connection details (host, TLS, auth) onto the
+// base kubeConfig to preserve SDK-set fields like ContentConfig.GroupVersion.
+func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig) rest.Config {
+	kubeConfig.Host = remoteCfg.Host
+	kubeConfig.TLSClientConfig = remoteCfg.TLSClientConfig
+	kubeConfig.WrapTransport = remoteCfg.WrapTransport
+
+	// Clear inherited auth that doesn't apply to the remote target.
+	if remoteCfg.OverrideAuth {
+		kubeConfig.BearerToken = ""
+		kubeConfig.BearerTokenFile = ""
+		kubeConfig.CertData = nil
+		kubeConfig.CertFile = ""
+		kubeConfig.KeyData = nil
+		kubeConfig.KeyFile = ""
+	}
+
+	return kubeConfig
+}
+
 // List lists resources in the provided namespace.
 // For resources with a schema.Scope() of ClusterScope, `namespace` must be resource.NamespaceAll
 func (c *Client) List(ctx context.Context, namespace string, options resource.ListOptions) (
-	resource.ListObject, error) {
+	resource.ListObject, error,
+) {
 	into := c.schema.ZeroListValue()
 	err := c.client.list(ctx, namespace, c.schema.Plural(), into, options, func(raw []byte) (resource.Object, error) {
 		into := c.schema.ZeroValue()
@@ -134,7 +190,8 @@ func (c *Client) List(ctx context.Context, namespace string, options resource.Li
 
 // ListInto lists resources in the provided namespace, and unmarshals the response into the provided resource.ListObject
 func (c *Client) ListInto(ctx context.Context, namespace string, options resource.ListOptions,
-	into resource.ListObject) error {
+	into resource.ListObject,
+) error {
 	if c.schema.Scope() == resource.ClusterScope && namespace != resource.NamespaceAll {
 		return fmt.Errorf("cannot list resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
 			resource.ClusterScope, namespace, resource.NamespaceAll)
@@ -212,7 +269,8 @@ func (c *Client) CreateInto(
 
 // Update updates the provided resource, and returns the updated resource from kubernetes
 func (c *Client) Update(ctx context.Context, identifier resource.Identifier, obj resource.Object,
-	options resource.UpdateOptions) (resource.Object, error) {
+	options resource.UpdateOptions,
+) (resource.Object, error) {
 	if obj == nil {
 		return nil, errors.New("obj cannot be nil")
 	}
@@ -226,7 +284,8 @@ func (c *Client) Update(ctx context.Context, identifier resource.Identifier, obj
 
 // UpdateInto updates the provided resource, and marshals the updated resource from kubernetes into `into`
 func (c *Client) UpdateInto(ctx context.Context, identifier resource.Identifier, obj resource.Object,
-	options resource.UpdateOptions, into resource.Object) error {
+	options resource.UpdateOptions, into resource.Object,
+) error {
 	if obj == nil {
 		return errors.New("obj cannot be nil")
 	}
@@ -260,7 +319,8 @@ func (c *Client) UpdateInto(ctx context.Context, identifier resource.Identifier,
 
 // Patch performs a JSON Patch on the provided resource, and returns the updated object
 func (c *Client) Patch(ctx context.Context, identifier resource.Identifier, patch resource.PatchRequest,
-	options resource.PatchOptions) (resource.Object, error) {
+	options resource.PatchOptions,
+) (resource.Object, error) {
 	into := c.schema.ZeroValue()
 	err := c.PatchInto(ctx, identifier, patch, options, into)
 	if err != nil {
@@ -271,7 +331,8 @@ func (c *Client) Patch(ctx context.Context, identifier resource.Identifier, patc
 
 // PatchInto performs a JSON Patch on the provided resource, and marshals the updated version into the `into` field
 func (c *Client) PatchInto(ctx context.Context, identifier resource.Identifier, patch resource.PatchRequest,
-	options resource.PatchOptions, into resource.Object) error {
+	options resource.PatchOptions, into resource.Object,
+) error {
 	return c.client.patch(ctx, identifier, c.schema.Plural(), patch, into, options, c.codec)
 }
 
@@ -283,7 +344,8 @@ func (c *Client) Delete(ctx context.Context, identifier resource.Identifier, opt
 // Watch makes a watch request for the namespace, and returns a WatchResponse which wraps a kubernetes
 // watch.Interface. The underlying watch.Interface can be accessed using KubernetesWatch()
 func (c *Client) Watch(ctx context.Context, namespace string, options resource.WatchOptions) (
-	resource.WatchResponse, error) {
+	resource.WatchResponse, error,
+) {
 	if c.schema.Scope() == resource.ClusterScope && namespace != resource.NamespaceAll {
 		return nil, fmt.Errorf("cannot watch resources with schema scope \"%s\" in namespace \"%s\", must be NamespaceAll (\"%s\")",
 			resource.ClusterScope, namespace, resource.NamespaceAll)
