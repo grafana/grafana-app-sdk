@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const NamespaceAll = ""
@@ -262,9 +264,16 @@ type SchemalessClient interface {
 	Watch(ctx context.Context, identifier FullIdentifier, options WatchOptions, example Object) (WatchResponse, error)
 }
 
+type GroupVersionClient interface {
+	CustomRouteRequest(ctx context.Context, namespace, plural, name string, request CustomRouteRequestOptions) ([]byte, error)
+}
+
 // ClientGenerator is used for creating clients to interface with given schemas
 type ClientGenerator interface {
 	// ClientFor returns a Client for the provided Schema. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientFor calls.
 	ClientFor(Kind) (Client, error)
+	// ClientForGV returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
+	// and can be shared by other ClientForGV calls.
+	ClientForGV(schema.GroupVersion) (GroupVersionClient, error)
 }

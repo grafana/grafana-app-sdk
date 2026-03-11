@@ -44,7 +44,8 @@ type groupVersionClient struct {
 }
 
 func (g *groupVersionClient) get(ctx context.Context, identifier resource.Identifier, plural string,
-	into resource.Object, codec resource.Codec) error {
+	into resource.Object, codec resource.Codec,
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-get")
 	defer span.End()
 	sc := 0
@@ -84,7 +85,8 @@ type metadataObject struct {
 // dryRun=All
 
 func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resource.Identifier, plural string) (
-	*metadataObject, error) {
+	*metadataObject, error,
+) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-getmetadata")
 	defer span.End()
 	sc := 0
@@ -120,7 +122,8 @@ func (g *groupVersionClient) getMetadata(ctx context.Context, identifier resourc
 
 //nolint:unused
 func (g *groupVersionClient) exists(ctx context.Context, identifier resource.Identifier, plural string) (
-	bool, error) {
+	bool, error,
+) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-exists")
 	defer span.End()
 	statusCode := 0
@@ -425,7 +428,8 @@ func (g *groupVersionClient) delete(ctx context.Context, identifier resource.Ide
 }
 
 func (g *groupVersionClient) list(ctx context.Context, namespace, plural string, into resource.ListObject,
-	options resource.ListOptions, itemParser func([]byte) (resource.Object, error)) error {
+	options resource.ListOptions, itemParser func([]byte) (resource.Object, error),
+) error {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-list")
 	defer span.End()
 	req := g.client.Get().Resource(plural)
@@ -468,7 +472,7 @@ func (g *groupVersionClient) list(ctx context.Context, namespace, plural string,
 	return rawToListWithParser(raw, into, itemParser)
 }
 
-func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, plural, name string, request resource.CustomRouteRequestOptions) ([]byte, error) {
+func (g *groupVersionClient) CustomRouteRequest(ctx context.Context, namespace, plural, name string, request resource.CustomRouteRequestOptions) ([]byte, error) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-custom-route")
 	defer span.End()
 	req := g.client.Verb(request.Verb)
@@ -518,7 +522,8 @@ func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, 
 
 //nolint:revive
 func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string,
-	exampleObject resource.Object, options resource.WatchOptions, codec resource.Codec) (*WatchResponse, error) {
+	exampleObject resource.Object, options resource.WatchOptions, codec resource.Codec,
+) (*WatchResponse, error) {
 	ctx, span := GetTracer().Start(ctx, "kubernetes-watch")
 	defer span.End()
 	g.client.Get()

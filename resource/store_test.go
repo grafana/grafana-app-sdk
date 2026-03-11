@@ -934,11 +934,19 @@ func TestStore_RegisterGroup(t *testing.T) {
 
 type mockClientGenerator struct {
 	ClientForFunc func(Kind) (Client, error)
+	ClientForGVFunc func(schema.GroupVersion) (GroupVersionClient, error)
 }
 
 func (g *mockClientGenerator) ClientFor(s Kind) (Client, error) {
 	if g.ClientForFunc != nil {
 		return g.ClientForFunc(s)
+	}
+	return nil, nil
+}
+
+func (g *mockClientGenerator) ClientForGV(s schema.GroupVersion) (GroupVersionClient, error) {
+	if g.ClientForGVFunc != nil {
+		return g.ClientForGVFunc(s)
 	}
 	return nil, nil
 }

@@ -1,0 +1,57 @@
+package v3
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+type GroupVersionClient struct {
+	client resource.GroupVersionClient
+}
+
+func NewGroupVersionClient(client resource.GroupVersionClient) *GroupVersionClient {
+	return &GroupVersionClient{
+		client: client,
+	}
+}
+
+func NewGroupVersionClientFromGenerator(generator resource.ClientGenerator) (*GroupVersionClient, error) {
+	client, err := generator.ClientForGV(GroupVersion)
+	if err != nil {
+		return nil, err
+	}
+	return NewGroupVersionClient(client), nil
+}
+
+type CreateFoobarRequest struct {
+	Body    CreateFoobarRequestBody
+	Headers http.Header
+}
+
+func (c *GroupVersionClient) CreateFoobar(ctx context.Context, namespace string, request CreateFoobarRequest) (*CreateFoobarResponse, error) {
+	body, err := json.Marshal(request.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
+	}
+	resp, err := c.client.CustomRouteRequest(ctx, namespace, "", "", resource.CustomRouteRequestOptions{
+		Path:    "/foobar",
+		Verb:    "POST",
+		Body:    io.NopCloser(bytes.NewReader(body)),
+		Headers: request.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cast := CreateFoobarResponse{}
+	err = json.Unmarshal(resp, &cast)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response bytes into CreateFoobarResponse: %w", err)
+	}
+	return &cast, nil
+}

@@ -180,7 +180,7 @@ func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath
 		},
 		&jennies.ResourceClientJenny{
 			GroupByKind: !groupKinds,
-		})
+		}, &jennies.GroupVersionClientJenny{})
 	return g
 }
 

@@ -39,6 +39,18 @@ func (c *Constants) Generate(appManifest codegen.AppManifest) (codejen.Files, er
 				path:    filepath.Join(path, "constants.go"),
 			}
 		}
+		if !c.GroupByKind {
+			continue
+		}
+		appPath := GetGeneratedGoTypePath(false, appManifest.Properties().Group, v.Name(), k.MachineName)
+		if _, ok := m[appPath]; ok {
+			continue
+		}
+		m[appPath] = constantsFileParams{
+			group:   appManifest.Properties().FullGroup,
+			version: v.Name(),
+			path:    filepath.Join(appPath, "constants.go"),
+		}
 	}
 	files := make(codejen.Files, 0)
 	for _, v := range m {

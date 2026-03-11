@@ -1,0 +1,94 @@
+package {{.PackageName}}
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+type {{.ClientName}} struct {
+	client resource.GroupVersionClient
+}
+
+func New{{.ClientName}}(client resource.GroupVersionClient) *{{.ClientName}} {
+	return &{{.ClientName}}{
+		client: client,
+	}
+}
+
+func New{{.ClientName}}FromGenerator(generator resource.ClientGenerator) (*{{.ClientName}}, error) {
+	client, err := generator.ClientForGV(GroupVersion)
+	if err != nil {
+		return nil, err
+	}
+	return New{{.ClientName}}(client), nil
+}
+{{ range .NamespacedRoutes }}
+type {{.TypeName}}Request struct { {{ if .HasParams }}
+	Params {{.TypeName}}RequestParams{{ end }}{{ if .HasBody }}
+	Body {{.TypeName}}RequestBody{{ end }}
+	Headers http.Header
+}
+
+func (c *{{$.ClientName}}) {{.TypeName}}(ctx context.Context, namespace string, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
+	params := url.Values{}{{ range .ParamValues }}
+	params.Set("{{.Key}}", fmt.Sprintf("%v", request.Params.{{.FieldName}})){{ end }}{{ end }}{{ if .HasBody }}
+	body, err := json.Marshal(request.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
+	}{{ end }}
+	resp, err := c.client.CustomRouteRequest(ctx, namespace, "", "", resource.CustomRouteRequestOptions{
+		Path:    "{{.Path}}",
+		Verb:    "{{.Method}}",{{ if .HasParams }}
+		Query:   params,{{ end }}{{ if .HasBody }}
+		Body:    io.NopCloser(bytes.NewReader(body)),{{ end }}
+		Headers: request.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cast := {{.TypeName}}Response{}
+	err = json.Unmarshal(resp, &cast)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response bytes into {{.TypeName}}Response: %w", err)
+	}
+	return &cast, nil
+}
+{{ end }}{{ range .ClusterRoutes }}
+type {{.TypeName}}Request struct { {{ if .HasParams }}
+	Params {{.TypeName}}RequestParams{{ end }}{{ if .HasBody }}
+	Body {{.TypeName}}RequestBody{{ end }}
+	Headers http.Header
+}
+
+func (c *{{$.ClientName}}) {{.TypeName}}(ctx context.Context, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
+	params := url.Values{}{{ range .ParamValues }}
+	params.Set("{{.Key}}", fmt.Sprintf("%v", request.Params.{{.FieldName}})){{ end }}{{ end }}{{ if .HasBody }}
+	body, err := json.Marshal(request.Body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
+	}{{ end }}
+	resp, err := c.client.CustomRouteRequest(ctx, "", "", "", resource.CustomRouteRequestOptions{
+		Path:    "{{.Path}}",
+		Verb:    "{{.Method}}",{{ if .HasParams }}
+		Query:   params,{{ end }}{{ if .HasBody }}
+		Body:    io.NopCloser(bytes.NewReader(body)),{{ end }}
+		Headers: request.Headers,
+	})
+	if err != nil {
+		return nil, err
+	}
+	cast := {{.TypeName}}Response{}
+	err = json.Unmarshal(resp, &cast)
+	if err != nil {
+		return nil, fmt.Errorf("unable to unmarshal response bytes into {{.TypeName}}Response: %w", err)
+	}
+	return &cast, nil
+}
+{{ end }}

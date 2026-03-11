@@ -294,3 +294,7 @@ func (m *mockClientGeneratorWithK8sClient) ClientFor(kind resource.Kind) (resour
 		k8s.DefaultClientConfig(),
 	)
 }
+
+func (m *mockClientGeneratorWithK8sClient) ClientForGV(gv schema.GroupVersion) (resource.GroupVersionClient, error) {
+	return nil, nil
+}
