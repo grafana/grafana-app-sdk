@@ -30,6 +30,14 @@ type constantsFileParams struct {
 
 func (c *Constants) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
 	m := make(map[string]constantsFileParams)
+	for _, v := range appManifest.Versions() {
+		path := filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(v.Name()))
+		m[path] = constantsFileParams{
+			group:   appManifest.Properties().FullGroup,
+			version: v.Name(),
+			path:    filepath.Join(path, "constants.go"),
+		}
+	}
 	for v, k := range codegen.VersionedKinds(appManifest) {
 		path := GetGeneratedGoTypePath(c.GroupByKind, appManifest.Properties().Group, v.Name(), k.MachineName)
 		if _, ok := m[path]; !ok {
@@ -38,18 +46,6 @@ func (c *Constants) Generate(appManifest codegen.AppManifest) (codejen.Files, er
 				version: v.Name(),
 				path:    filepath.Join(path, "constants.go"),
 			}
-		}
-		if !c.GroupByKind {
-			continue
-		}
-		appPath := GetGeneratedGoTypePath(false, appManifest.Properties().Group, v.Name(), k.MachineName)
-		if _, ok := m[appPath]; ok {
-			continue
-		}
-		m[appPath] = constantsFileParams{
-			group:   appManifest.Properties().FullGroup,
-			version: v.Name(),
-			path:    filepath.Join(appPath, "constants.go"),
 		}
 	}
 	files := make(codejen.Files, 0)
