@@ -178,9 +178,9 @@ func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath
 				return apiserver.ToOpenAPIName(path)
 			},
 		},
-		&jennies.ResourceClientJenny{
+		&jennies.ClientJenny{
 			GroupByKind: !groupKinds,
-		}, &jennies.GroupVersionClientJenny{})
+		})
 	return g
 }
 

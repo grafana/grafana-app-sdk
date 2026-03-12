@@ -15,7 +15,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
 
-type ResourceClientJenny struct {
+type ClientJenny struct {
 	// GroupByKind determines whether kinds are grouped by GroupVersionKind or just GroupVersion.
 	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
 	// When GroupByKind is false, subresource types (such as spec and status) are prefixed with the kind name,
@@ -23,11 +23,29 @@ type ResourceClientJenny struct {
 	GroupByKind bool
 }
 
-func (*ResourceClientJenny) JennyName() string {
-	return "ResourceClientJenny"
+func (*ClientJenny) JennyName() string {
+	return "ClientJenny"
 }
 
-func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+func (r *ClientJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0)
+
+	groupVersionFiles, err := r.generateCustomRouteClients(appManifest)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, groupVersionFiles...)
+
+	resourceFiles, err := r.generateResourceClients(appManifest)
+	if err != nil {
+		return nil, err
+	}
+	files = append(files, resourceFiles...)
+
+	return files, nil
+}
+
+func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		if !kind.Codegen.Go.Enabled {
@@ -105,41 +123,15 @@ func (r *ResourceClientJenny) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-func getCustomRouteInfo(customRoute codegen.CustomRoute) (templates.GoClientCustomRoute, error) {
-	md := templates.GoClientCustomRoute{
-		TypeName:  toExportedFieldName(customRoute.Name),
-		HasParams: customRoute.Request.Query.Exists(),
-		HasBody:   customRoute.Request.Body.Exists(),
-	}
-	if md.HasParams {
-		md.ParamValues = make([]templates.GoCustomRouteParamValues, 0)
-		it, err := customRoute.Request.Query.Fields()
-		if err != nil {
-			return md, err
-		}
-		for it.Next() {
-			md.ParamValues = append(md.ParamValues, templates.GoCustomRouteParamValues{
-				Key:       it.Selector().String(),
-				FieldName: exportField(it.Selector().String()),
-			})
-		}
-	}
-	return md, nil
-}
-
-type GroupVersionClientJenny struct{}
-
-func (*GroupVersionClientJenny) JennyName() string {
-	return "GroupVersionClientJenny"
-}
-
-func (r *GroupVersionClientJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
 	for _, version := range appManifest.Versions() {
-		md := templates.GoGroupVersionClientMetadata{
+		md := templates.GoCustomRouteClientMetadata{
 			PackageName:      ToPackageName(version.Name()),
 			NamespacedRoutes: make([]templates.GoClientCustomRoute, 0),
 			ClusterRoutes:    make([]templates.GoClientCustomRoute, 0),
+			Group:            appManifest.Properties().FullGroup,
+			Version:          version.Name(),
 		}
 
 		for cpath, methods := range version.Routes().Namespaced {
@@ -177,7 +169,7 @@ func (r *GroupVersionClientJenny) Generate(appManifest codegen.AppManifest) (cod
 		}
 
 		b := bytes.Buffer{}
-		err := templates.WriteGroupVersionClient(md, &b)
+		err := templates.WriteCustomRouteClient(md, &b)
 		if err != nil {
 			return nil, err
 		}
@@ -198,4 +190,26 @@ func (r *GroupVersionClientJenny) Generate(appManifest codegen.AppManifest) (cod
 		})
 	}
 	return files, nil
+}
+
+func getCustomRouteInfo(customRoute codegen.CustomRoute) (templates.GoClientCustomRoute, error) {
+	md := templates.GoClientCustomRoute{
+		TypeName:  toExportedFieldName(customRoute.Name),
+		HasParams: customRoute.Request.Query.Exists(),
+		HasBody:   customRoute.Request.Body.Exists(),
+	}
+	if md.HasParams {
+		md.ParamValues = make([]templates.GoCustomRouteParamValues, 0)
+		it, err := customRoute.Request.Query.Fields()
+		if err != nil {
+			return md, err
+		}
+		for it.Next() {
+			md.ParamValues = append(md.ParamValues, templates.GoCustomRouteParamValues{
+				Key:       it.Selector().String(),
+				FieldName: exportField(it.Selector().String()),
+			})
+		}
+	}
+	return md, nil
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 
+    "k8s.io/apimachinery/pkg/runtime/schema"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -21,7 +22,10 @@ func NewCustomRouteClient(client resource.CustomRouteClient) *CustomRouteClient 
 }
 
 func NewCustomRouteClientFromGenerator(generator resource.ClientGenerator, defaultNamespace string) (*CustomRouteClient, error) {
-	client, err := generator.GetClient(GroupVersion, defaultNamespace)
+	client, err := generator.GetClient(schema.GroupVersion{
+		Group:   "{{.Group}}",
+		Version: "{{.Version}}",
+	}, defaultNamespace)
 	if err != nil {
 		return nil, err
 	}

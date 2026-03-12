@@ -627,13 +627,15 @@ func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) err
 	return templateGoResourceClient.Execute(out, metadata)
 }
 
-type GoGroupVersionClientMetadata struct {
+type GoCustomRouteClientMetadata struct {
 	PackageName      string
 	NamespacedRoutes []GoClientCustomRoute
 	ClusterRoutes    []GoClientCustomRoute
+	Group            string
+	Version          string
 }
 
-func WriteGroupVersionClient(metadata GoGroupVersionClientMetadata, out io.Writer) error {
+func WriteGoCustomRouteClient(metadata GoCustomRouteClientMetadata, out io.Writer) error {
 	slices.SortFunc(metadata.NamespacedRoutes, func(a, b GoClientCustomRoute) int {
 		return strings.Compare(fmt.Sprintf("%s|%s", a.Path, a.Method), fmt.Sprintf("%s|%s", b.Path, b.Method))
 	})
