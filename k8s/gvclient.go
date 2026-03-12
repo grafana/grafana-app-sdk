@@ -472,11 +472,10 @@ func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, 
 	ctx, span := GetTracer().Start(ctx, "kubernetes-custom-route")
 	defer span.End()
 	req := g.client.Verb(request.Verb)
-	path := strings.Split(strings.Trim(request.Path, "/"), "/")
 	if plural != "" {
 		req = req.Resource(plural).Name(name)
 	}
-	req = req.SubResource(path...)
+	req = req.SubResource(strings.Split(strings.Trim(request.Path, "/"), "/")...)
 	if namespace != "" {
 		req = req.Namespace(namespace)
 	}
