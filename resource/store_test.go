@@ -944,7 +944,7 @@ func (g *mockClientGenerator) ClientFor(s Kind) (Client, error) {
 	return nil, nil
 }
 
-func (g *mockClientGenerator) GetClient(s schema.GroupVersion, defaultNamespace string) (CustomRouteClient, error) {
+func (g *mockClientGenerator) GetCustomRouteClient(s schema.GroupVersion, defaultNamespace string) (CustomRouteClient, error) {
 	if g.GetClientFunc != nil {
 		return g.GetClientFunc(s, defaultNamespace)
 	}

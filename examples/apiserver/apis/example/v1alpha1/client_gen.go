@@ -22,7 +22,7 @@ func NewCustomRouteClient(client resource.CustomRouteClient) *CustomRouteClient 
 }
 
 func NewCustomRouteClientFromGenerator(generator resource.ClientGenerator, defaultNamespace string) (*CustomRouteClient, error) {
-	client, err := generator.GetClient(schema.GroupVersion{
+	client, err := generator.GetCustomRouteClient(schema.GroupVersion{
 		Group:   "example.ext.grafana.com",
 		Version: "v1alpha1",
 	}, defaultNamespace)

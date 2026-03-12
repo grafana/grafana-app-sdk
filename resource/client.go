@@ -277,7 +277,7 @@ type ClientGenerator interface {
 	// ClientFor returns a Client for the provided Schema. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientFor calls.
 	ClientFor(Kind) (Client, error)
-	// GetClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
+	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientForGV calls.
-	GetClient(schema.GroupVersion, string) (CustomRouteClient, error)
+	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
 }

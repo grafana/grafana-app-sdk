@@ -27,7 +27,7 @@ func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *Clie
 
 	return &ClientRegistry{
 		clients:      make(map[schema.GroupVersionKind]rest.Interface),
-		gvClients:    make(map[schema.GroupVersion]rest.Interface),
+		crClients:    make(map[schema.GroupVersion]rest.Interface),
 		cfg:          kubeCconfig,
 		clientConfig: clientConfig,
 		requestDurations: prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -65,7 +65,7 @@ func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *Clie
 // GroupVersion (the largest unit a kubernetes rest.RESTClient can work with).
 type ClientRegistry struct {
 	clients          map[schema.GroupVersionKind]rest.Interface
-	gvClients        map[schema.GroupVersion]rest.Interface
+	crClients        map[schema.GroupVersion]rest.Interface
 	cfg              rest.Config
 	clientConfig     ClientConfig
 	mutex            sync.Mutex
@@ -102,11 +102,11 @@ func (c *ClientRegistry) ClientFor(sch resource.Kind) (resource.Client, error) {
 	}, nil
 }
 
-// GetClient returns a Client with the underlying rest.Interface being a cached one for the provided GroupVersion.
+// GetCustomRouteClient returns a Client with the underlying rest.Interface being a cached one for the provided GroupVersion.
 // If no such client is cached, it creates a new one with the stored config. This method is used for generating
 // clients that are not tied to a specific schema.
-func (c *ClientRegistry) GetClient(gv schema.GroupVersion, defaultNamespace string) (resource.CustomRouteClient, error) {
-	client, err := c.getClient(gv)
+func (c *ClientRegistry) GetCustomRouteClient(gv schema.GroupVersion, defaultNamespace string) (resource.CustomRouteClient, error) {
+	client, err := c.getCustomRouteClient(gv)
 	if err != nil {
 		return nil, err
 	}
@@ -131,10 +131,10 @@ func (c *ClientRegistry) PrometheusCollectors() []prometheus.Collector {
 	}
 }
 
-func (c *ClientRegistry) getClient(gv schema.GroupVersion) (rest.Interface, error) {
+func (c *ClientRegistry) getCustomRouteClient(gv schema.GroupVersion) (rest.Interface, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	if c, ok := c.gvClients[gv]; ok {
+	if c, ok := c.crClients[gv]; ok {
 		return c, nil
 	}
 
@@ -144,7 +144,7 @@ func (c *ClientRegistry) getClient(gv schema.GroupVersion) (rest.Interface, erro
 	if err != nil {
 		return nil, err
 	}
-	c.gvClients[gv] = restClient
+	c.crClients[gv] = restClient
 	return restClient, nil
 }
 
