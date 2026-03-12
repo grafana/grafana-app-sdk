@@ -6,6 +6,8 @@ rootdir="$(git rev-parse --show-toplevel)"
 testdir="${rootdir}/codegen/testing/golden_generated"
 
 echo "Regenerating golden test files from current codegen output"
+echo "Removing existing files from ${testdir}"
+find "${testdir}" -type f -delete
 
 # Group by group
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configJson"
