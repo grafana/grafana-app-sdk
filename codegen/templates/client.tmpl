@@ -12,22 +12,20 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type {{.ClientName}} struct {
-	client resource.GroupVersionClient
+type CustomRouteClient struct {
+	 resource.CustomRouteClient
 }
 
-func New{{.ClientName}}(client resource.GroupVersionClient) *{{.ClientName}} {
-	return &{{.ClientName}}{
-		client: client,
-	}
+func NewCustomRouteClient(client resource.CustomRouteClient) *CustomRouteClient {
+	return &CustomRouteClient{client}
 }
 
-func New{{.ClientName}}FromGenerator(generator resource.ClientGenerator) (*{{.ClientName}}, error) {
-	client, err := generator.ClientForGV(GroupVersion)
+func NewCustomRouteClientFromGenerator(generator resource.ClientGenerator, defaultNamespace string) (*CustomRouteClient, error) {
+	client, err := generator.GetClient(GroupVersion, defaultNamespace)
 	if err != nil {
 		return nil, err
 	}
-	return New{{.ClientName}}(client), nil
+	return NewCustomRouteClient(client), nil
 }
 {{ range .NamespacedRoutes }}
 type {{.TypeName}}Request struct { {{ if .HasParams }}
@@ -36,14 +34,14 @@ type {{.TypeName}}Request struct { {{ if .HasParams }}
 	Headers http.Header
 }
 
-func (c *{{$.ClientName}}) {{.TypeName}}(ctx context.Context, namespace string, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
+func (c *CustomRouteClient) {{.TypeName}}(ctx context.Context, namespace string, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
 	params := url.Values{}{{ range .ParamValues }}
 	params.Set("{{.Key}}", fmt.Sprintf("%v", request.Params.{{.FieldName}})){{ end }}{{ end }}{{ if .HasBody }}
 	body, err := json.Marshal(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
 	}{{ end }}
-	resp, err := c.client.CustomRouteRequest(ctx, namespace, "", "", resource.CustomRouteRequestOptions{
+	resp, err := c.NamespacedRequest(ctx, namespace, resource.CustomRouteRequestOptions{
 		Path:    "{{.Path}}",
 		Verb:    "{{.Method}}",{{ if .HasParams }}
 		Query:   params,{{ end }}{{ if .HasBody }}
@@ -67,14 +65,14 @@ type {{.TypeName}}Request struct { {{ if .HasParams }}
 	Headers http.Header
 }
 
-func (c *{{$.ClientName}}) {{.TypeName}}(ctx context.Context, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
+func (c *CustomRouteClient) {{.TypeName}}(ctx context.Context, request {{.TypeName}}Request) (*{{.TypeName}}Response, error) { {{ if .HasParams }}
 	params := url.Values{}{{ range .ParamValues }}
 	params.Set("{{.Key}}", fmt.Sprintf("%v", request.Params.{{.FieldName}})){{ end }}{{ end }}{{ if .HasBody }}
 	body, err := json.Marshal(request.Body)
 	if err != nil {
 		return nil, fmt.Errorf("unable to marshal body to JSON: %w", err)
 	}{{ end }}
-	resp, err := c.client.CustomRouteRequest(ctx, "", "", "", resource.CustomRouteRequestOptions{
+	resp, err := c.ClusteredRequest(ctx, resource.CustomRouteRequestOptions{
 		Path:    "{{.Path}}",
 		Verb:    "{{.Method}}",{{ if .HasParams }}
 		Query:   params,{{ end }}{{ if .HasBody }}

@@ -138,7 +138,6 @@ func (r *GroupVersionClientJenny) Generate(appManifest codegen.AppManifest) (cod
 	for _, version := range appManifest.Versions() {
 		md := templates.GoGroupVersionClientMetadata{
 			PackageName:      ToPackageName(version.Name()),
-			ClientName:       "GroupVersionClient",
 			NamespacedRoutes: make([]templates.GoClientCustomRoute, 0),
 			ClusterRoutes:    make([]templates.GoClientCustomRoute, 0),
 		}

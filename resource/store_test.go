@@ -934,7 +934,7 @@ func TestStore_RegisterGroup(t *testing.T) {
 
 type mockClientGenerator struct {
 	ClientForFunc func(Kind) (Client, error)
-	ClientForGVFunc func(schema.GroupVersion) (GroupVersionClient, error)
+	GetClientFunc func(schema.GroupVersion, string) (CustomRouteClient, error)
 }
 
 func (g *mockClientGenerator) ClientFor(s Kind) (Client, error) {
@@ -944,9 +944,9 @@ func (g *mockClientGenerator) ClientFor(s Kind) (Client, error) {
 	return nil, nil
 }
 
-func (g *mockClientGenerator) ClientForGV(s schema.GroupVersion) (GroupVersionClient, error) {
-	if g.ClientForGVFunc != nil {
-		return g.ClientForGVFunc(s)
+func (g *mockClientGenerator) GetClient(s schema.GroupVersion, defaultNamespace string) (CustomRouteClient, error) {
+	if g.GetClientFunc != nil {
+		return g.GetClientFunc(s, defaultNamespace)
 	}
 	return nil, nil
 }
@@ -973,72 +973,84 @@ func (c *mockClient) Get(ctx context.Context, identifier Identifier) (Object, er
 	}
 	return nil, nil
 }
+
 func (c *mockClient) GetInto(ctx context.Context, identifier Identifier, into Object) error {
 	if c.GetIntoFunc != nil {
 		return c.GetIntoFunc(ctx, identifier, into)
 	}
 	return nil
 }
+
 func (c *mockClient) Create(ctx context.Context, identifier Identifier, obj Object, options CreateOptions) (Object, error) {
 	if c.CreateFunc != nil {
 		return c.CreateFunc(ctx, identifier, obj, options)
 	}
 	return nil, nil
 }
+
 func (c *mockClient) CreateInto(ctx context.Context, identifier Identifier, obj Object, options CreateOptions, into Object) error {
 	if c.CreateIntoFunc != nil {
 		return c.CreateIntoFunc(ctx, identifier, obj, options, into)
 	}
 	return nil
 }
+
 func (c *mockClient) Update(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions) (Object, error) {
 	if c.UpdateFunc != nil {
 		return c.UpdateFunc(ctx, identifier, obj, options)
 	}
 	return nil, nil
 }
+
 func (c *mockClient) UpdateInto(ctx context.Context, identifier Identifier, obj Object, options UpdateOptions, into Object) error {
 	if c.UpdateIntoFunc != nil {
 		return c.UpdateIntoFunc(ctx, identifier, obj, options, into)
 	}
 	return nil
 }
+
 func (c *mockClient) Patch(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions) (Object, error) {
 	if c.PatchFunc != nil {
 		return c.PatchFunc(ctx, identifier, patch, options)
 	}
 	return nil, nil
 }
+
 func (c *mockClient) PatchInto(ctx context.Context, identifier Identifier, patch PatchRequest, options PatchOptions, into Object) error {
 	if c.PatchIntoFunc != nil {
 		return c.PatchIntoFunc(ctx, identifier, patch, options, into)
 	}
 	return nil
 }
+
 func (c *mockClient) Delete(ctx context.Context, identifier Identifier, options DeleteOptions) error {
 	if c.DeleteFunc != nil {
 		return c.DeleteFunc(ctx, identifier, options)
 	}
 	return nil
 }
+
 func (c *mockClient) List(ctx context.Context, namespace string, options ListOptions) (ListObject, error) {
 	if c.ListFunc != nil {
 		return c.ListFunc(ctx, namespace, options)
 	}
 	return nil, nil
 }
+
 func (c *mockClient) ListInto(ctx context.Context, namespace string, options ListOptions, into ListObject) error {
 	if c.ListIntoFunc != nil {
 		return c.ListIntoFunc(ctx, namespace, options, into)
 	}
 	return nil
 }
+
 func (c *mockClient) Watch(ctx context.Context, namespace string, options WatchOptions) (WatchResponse, error) {
 	if c.WatchFunc != nil {
 		return c.WatchFunc(ctx, namespace, options)
 	}
 	return nil, nil
 }
+
 func (c *mockClient) SubresourceRequest(ctx context.Context, identifier Identifier, options CustomRouteRequestOptions) ([]byte, error) {
 	if c.SubresourceRequestFunc != nil {
 		return c.SubresourceRequestFunc(ctx, identifier, options)

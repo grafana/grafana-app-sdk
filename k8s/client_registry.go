@@ -82,7 +82,7 @@ func (c *ClientRegistry) ClientFor(sch resource.Kind) (resource.Client, error) {
 	if codec == nil {
 		return nil, errors.New("no codec for KindEncodingJSON")
 	}
-	client, err := c.getClient(sch)
+	client, err := c.getClientFor(sch)
 	if err != nil {
 		return nil, err
 	}
@@ -102,22 +102,25 @@ func (c *ClientRegistry) ClientFor(sch resource.Kind) (resource.Client, error) {
 	}, nil
 }
 
-// ClientForGV returns a Client with the underlying rest.Interface being a cached one for the provided GroupVersion.
+// GetClient returns a Client with the underlying rest.Interface being a cached one for the provided GroupVersion.
 // If no such client is cached, it creates a new one with the stored config. This method is used for generating
 // clients that are not tied to a specific schema.
-func (c *ClientRegistry) ClientForGV(gv schema.GroupVersion) (resource.GroupVersionClient, error) {
-	client, err := c.getClientForGV(gv)
+func (c *ClientRegistry) GetClient(gv schema.GroupVersion, defaultNamespace string) (resource.CustomRouteClient, error) {
+	client, err := c.getClient(gv)
 	if err != nil {
 		return nil, err
 	}
-	return &groupVersionClient{
-		client:           client,
-		version:          gv.Version,
-		config:           c.clientConfig,
-		requestDurations: c.requestDurations,
-		totalRequests:    c.totalRequests,
-		watchEventsTotal: c.watchEventsTotal,
-		watchErrorsTotal: c.watchErrorsTotal,
+	return &CustomRouteClient{
+		DefaultNamespace: defaultNamespace,
+		groupVersionClient: &groupVersionClient{
+			client:           client,
+			version:          gv.Version,
+			config:           c.clientConfig,
+			requestDurations: c.requestDurations,
+			totalRequests:    c.totalRequests,
+			watchEventsTotal: c.watchEventsTotal,
+			watchErrorsTotal: c.watchErrorsTotal,
+		},
 	}, nil
 }
 
@@ -128,7 +131,7 @@ func (c *ClientRegistry) PrometheusCollectors() []prometheus.Collector {
 	}
 }
 
-func (c *ClientRegistry) getClientForGV(gv schema.GroupVersion) (rest.Interface, error) {
+func (c *ClientRegistry) getClient(gv schema.GroupVersion) (rest.Interface, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	if c, ok := c.gvClients[gv]; ok {
@@ -145,7 +148,7 @@ func (c *ClientRegistry) getClientForGV(gv schema.GroupVersion) (rest.Interface,
 	return restClient, nil
 }
 
-func (c *ClientRegistry) getClient(sch resource.Kind) (rest.Interface, error) {
+func (c *ClientRegistry) getClientFor(sch resource.Kind) (rest.Interface, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	gvk := schema.GroupVersionKind{

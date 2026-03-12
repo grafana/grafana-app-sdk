@@ -366,7 +366,7 @@ func (c *Client) SubresourceRequest(ctx context.Context, identifier resource.Ide
 	if opts.Verb == "" {
 		return nil, errors.New("request Verb is required")
 	}
-	return c.client.CustomRouteRequest(ctx, identifier.Namespace, c.schema.Plural(), identifier.Name, opts)
+	return c.client.customRouteRequest(ctx, identifier.Namespace, c.schema.Plural(), identifier.Name, opts)
 }
 
 // Metrics returns the prometheus collectors used by this Client for registration with a prometheus exporter

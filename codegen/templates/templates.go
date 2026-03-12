@@ -629,7 +629,6 @@ func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) err
 
 type GoGroupVersionClientMetadata struct {
 	PackageName      string
-	ClientName       string
 	NamespacedRoutes []GoClientCustomRoute
 	ClusterRoutes    []GoClientCustomRoute
 }

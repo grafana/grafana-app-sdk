@@ -9,30 +9,28 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-type GroupVersionClient struct {
-	client resource.GroupVersionClient
+type CustomRouteClient struct {
+	resource.CustomRouteClient
 }
 
-func NewGroupVersionClient(client resource.GroupVersionClient) *GroupVersionClient {
-	return &GroupVersionClient{
-		client: client,
-	}
+func NewCustomRouteClient(client resource.CustomRouteClient) *CustomRouteClient {
+	return &CustomRouteClient{client}
 }
 
-func NewGroupVersionClientFromGenerator(generator resource.ClientGenerator) (*GroupVersionClient, error) {
-	client, err := generator.ClientForGV(GroupVersion)
+func NewCustomRouteClientFromGenerator(generator resource.ClientGenerator, defaultNamespace string) (*CustomRouteClient, error) {
+	client, err := generator.GetClient(GroupVersion, defaultNamespace)
 	if err != nil {
 		return nil, err
 	}
-	return NewGroupVersionClient(client), nil
+	return NewCustomRouteClient(client), nil
 }
 
 type GetExampleRequest struct {
 	Headers http.Header
 }
 
-func (c *GroupVersionClient) GetExample(ctx context.Context, namespace string, request GetExampleRequest) (*GetExampleResponse, error) {
-	resp, err := c.client.CustomRouteRequest(ctx, namespace, "", "", resource.CustomRouteRequestOptions{
+func (c *CustomRouteClient) GetExample(ctx context.Context, namespace string, request GetExampleRequest) (*GetExampleResponse, error) {
+	resp, err := c.NamespacedRequest(ctx, namespace, resource.CustomRouteRequestOptions{
 		Path:    "/example",
 		Verb:    "GET",
 		Headers: request.Headers,
