@@ -476,7 +476,7 @@ func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, 
 	if plural != "" {
 		req = req.Resource(plural).Name(name)
 	}
-	req.SubResource(path...)
+	req = req.SubResource(path...)
 	if namespace != "" {
 		req = req.Namespace(namespace)
 	}
