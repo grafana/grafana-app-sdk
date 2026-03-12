@@ -80,7 +80,6 @@ func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (
 			KindName:     exportField(kind.Kind),
 			KindPrefix:   prefix,
 			Subresources: subresources,
-			CustomRoutes: make([]templates.GoClientCustomRoute, 0),
 		}
 
 		md.CustomRoutes, err = getCustomRoutes(kind.Routes)
@@ -119,11 +118,9 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 	files := make(codejen.Files, 0)
 	for _, version := range appManifest.Versions() {
 		md := templates.GoCustomRouteClientMetadata{
-			PackageName:      ToPackageName(version.Name()),
-			NamespacedRoutes: make([]templates.GoClientCustomRoute, 0),
-			ClusterRoutes:    make([]templates.GoClientCustomRoute, 0),
-			Group:            appManifest.Properties().FullGroup,
-			Version:          version.Name(),
+			PackageName: ToPackageName(version.Name()),
+			Group:       appManifest.Properties().FullGroup,
+			Version:     version.Name(),
 		}
 
 		var err error
@@ -189,7 +186,7 @@ func getCustomRouteInfo(customRoute codegen.CustomRoute) (templates.GoClientCust
 
 func getCustomRoutes(routes map[string]map[string]codegen.CustomRoute) ([]templates.GoClientCustomRoute, error) {
 	var errs error
-	var md []templates.GoClientCustomRoute
+	md := make([]templates.GoClientCustomRoute, 0)
 	for cpath, methods := range routes {
 		for method, route := range methods {
 			if route.Name == "" {
