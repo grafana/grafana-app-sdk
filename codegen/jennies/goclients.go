@@ -184,10 +184,10 @@ func getCustomRouteInfo(customRoute codegen.CustomRoute) (templates.GoClientCust
 	return md, nil
 }
 
-func getCustomRoutes(routes map[string]map[string]codegen.CustomRoute) ([]templates.GoClientCustomRoute, error) {
+func getCustomRoutes(routeMap map[string]map[string]codegen.CustomRoute) ([]templates.GoClientCustomRoute, error) {
 	var errs error
-	md := make([]templates.GoClientCustomRoute, 0)
-	for cpath, methods := range routes {
+	routes := make([]templates.GoClientCustomRoute, 0)
+	for cpath, methods := range routeMap {
 		for method, route := range methods {
 			if route.Name == "" {
 				route.Name = defaultRouteName(method, cpath)
@@ -199,8 +199,8 @@ func getCustomRoutes(routes map[string]map[string]codegen.CustomRoute) ([]templa
 			}
 			crmd.Path = cpath
 			crmd.Method = method
-			md = append(md, crmd)
+			routes = append(routes, crmd)
 		}
 	}
-	return md, errs
+	return routes, errs
 }
