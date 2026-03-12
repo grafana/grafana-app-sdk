@@ -2,6 +2,7 @@ package jennies
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"go/format"
 	"path/filepath"
@@ -81,19 +82,10 @@ func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (
 			Subresources: subresources,
 			CustomRoutes: make([]templates.GoClientCustomRoute, 0),
 		}
-		for cpath, methods := range kind.Routes {
-			for method, route := range methods {
-				if route.Name == "" {
-					route.Name = defaultRouteName(method, cpath)
-				}
-				crmd, err := getCustomRouteInfo(route)
-				if err != nil {
-					return nil, err
-				}
-				crmd.Path = cpath
-				crmd.Method = method
-				md.CustomRoutes = append(md.CustomRoutes, crmd)
-			}
+
+		md.CustomRoutes, err = getCustomRoutes(kind.Routes)
+		if err != nil {
+			return nil, fmt.Errorf("getting custom routes for kind %s: %w", kind.Kind, err)
 		}
 		slices.SortFunc(md.CustomRoutes, func(a, b templates.GoClientCustomRoute) int {
 			return strings.Compare(a.TypeName, b.TypeName)
@@ -134,34 +126,15 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 			Version:          version.Name(),
 		}
 
-		for cpath, methods := range version.Routes().Namespaced {
-			for method, route := range methods {
-				if route.Name == "" {
-					route.Name = defaultRouteName(method, cpath)
-				}
-				crmd, err := getCustomRouteInfo(route)
-				if err != nil {
-					return nil, err
-				}
-				crmd.Path = cpath
-				crmd.Method = method
-				md.NamespacedRoutes = append(md.NamespacedRoutes, crmd)
-			}
+		var err error
+		md.NamespacedRoutes, err = getCustomRoutes(version.Routes().Namespaced)
+		if err != nil {
+			return nil, err
 		}
 
-		for cpath, methods := range version.Routes().Cluster {
-			for method, route := range methods {
-				if route.Name == "" {
-					route.Name = defaultRouteName(method, cpath)
-				}
-				crmd, err := getCustomRouteInfo(route)
-				if err != nil {
-					return nil, err
-				}
-				crmd.Path = cpath
-				crmd.Method = method
-				md.ClusterRoutes = append(md.ClusterRoutes, crmd)
-			}
+		md.ClusterRoutes, err = getCustomRoutes(version.Routes().Cluster)
+		if err != nil {
+			return nil, err
 		}
 
 		if len(md.NamespacedRoutes) == 0 && len(md.ClusterRoutes) == 0 {
@@ -169,7 +142,7 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 		}
 
 		b := bytes.Buffer{}
-		err := templates.WriteGoCustomRouteClient(md, &b)
+		err = templates.WriteGoCustomRouteClient(md, &b)
 		if err != nil {
 			return nil, err
 		}
@@ -212,4 +185,25 @@ func getCustomRouteInfo(customRoute codegen.CustomRoute) (templates.GoClientCust
 		}
 	}
 	return md, nil
+}
+
+func getCustomRoutes(routes map[string]map[string]codegen.CustomRoute) ([]templates.GoClientCustomRoute, error) {
+	var errs error
+	var md []templates.GoClientCustomRoute
+	for cpath, methods := range routes {
+		for method, route := range methods {
+			if route.Name == "" {
+				route.Name = defaultRouteName(method, cpath)
+			}
+			crmd, err := getCustomRouteInfo(route)
+			if err != nil {
+				errs = errors.Join(errs, err)
+				continue
+			}
+			crmd.Path = cpath
+			crmd.Method = method
+			md = append(md, crmd)
+		}
+	}
+	return md, errs
 }
