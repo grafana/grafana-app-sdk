@@ -169,7 +169,7 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 		}
 
 		b := bytes.Buffer{}
-		err := templates.WriteCustomRouteClient(md, &b)
+		err := templates.WriteGoCustomRouteClient(md, &b)
 		if err != nil {
 			return nil, err
 		}
