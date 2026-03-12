@@ -111,7 +111,7 @@ func (c *ClientRegistry) GetClient(gv schema.GroupVersion, defaultNamespace stri
 		return nil, err
 	}
 	return &CustomRouteClient{
-		DefaultNamespace: defaultNamespace,
+		defaultNamespace: defaultNamespace,
 		groupVersionClient: &groupVersionClient{
 			client:           client,
 			version:          gv.Version,

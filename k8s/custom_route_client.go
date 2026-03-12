@@ -10,12 +10,12 @@ var _ resource.CustomRouteClient = &CustomRouteClient{}
 
 type CustomRouteClient struct {
 	groupVersionClient *groupVersionClient
-	DefaultNamespace   string
+	defaultNamespace   string
 }
 
 func (c *CustomRouteClient) NamespacedRequest(ctx context.Context, namespace string, opts resource.CustomRouteRequestOptions) ([]byte, error) {
 	if namespace == "" {
-		namespace = c.DefaultNamespace
+		namespace = c.defaultNamespace
 	}
 	return c.groupVersionClient.customRouteRequest(ctx, namespace, "", "", opts)
 }
