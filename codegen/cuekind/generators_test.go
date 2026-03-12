@@ -60,8 +60,8 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator("codegen-tests", "pkg/generated", false).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 14 = 12 resource files across 2 versions plus 2 app package constants files for the gv client packages
-		assert.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
+		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
+		assert.Len(t, files, 12, "should be 12 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbykind")
 	})
