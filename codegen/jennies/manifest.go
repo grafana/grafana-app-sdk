@@ -336,15 +336,15 @@ func joinKindNames(names []string) string {
 	for i, k := range names {
 		if i > 0 {
 			if len(names) > 2 {
-				b.WriteString(",")
+				_, _ = b.WriteString(",")
 			}
 			if i == len(names)-1 {
-				b.WriteString(" and ")
+				_, _ = b.WriteString(" and ")
 			} else {
-				b.WriteString(" ")
+				_, _ = b.WriteString(" ")
 			}
 		}
-		b.WriteString(k)
+		_, _ = b.WriteString(k)
 	}
 	return b.String()
 }
