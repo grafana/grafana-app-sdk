@@ -3,6 +3,7 @@ package cuekind
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/grafana/codejen"
@@ -132,8 +133,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 14 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), +1 client per version (3)
-		require.Len(t, files, 14, "should be 14 files generated, got %d", len(files))
+		// 15 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), the resource clients for v1-v3 (3), and the version-level client for v3 routes (1)
+		require.Len(t, files, 15, "should be 15 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
@@ -153,6 +154,82 @@ func TestManifestGoGenerator(t *testing.T) {
 			compareToGolden(t, codejen.Files{file}, "go/groupbykind")
 		}
 	})
+}
+
+func TestManifestGoGenerator_Deterministic(t *testing.T) {
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
+
+	t.Run("group by group", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+
+		var reference codejen.Files
+		for i := 0; i < 20; i++ {
+			files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
+			require.NoError(t, err)
+			if i == 0 {
+				reference = files
+				continue
+			}
+			for j, f := range files {
+				assert.Equal(t, string(reference[j].Data), string(f.Data),
+					"non-deterministic output on iteration %d for file %s", i, f.RelativePath)
+			}
+		}
+	})
+
+	t.Run("group by kind", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("customManifest")
+		require.NoError(t, err)
+
+		var reference codejen.Files
+		for i := 0; i < 20; i++ {
+			files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
+			require.NoError(t, err)
+			if i == 0 {
+				reference = files
+				continue
+			}
+			for j, f := range files {
+				assert.Equal(t, string(reference[j].Data), string(f.Data),
+					"non-deterministic output on iteration %d for file %s", i, f.RelativePath)
+			}
+		}
+	})
+}
+
+func TestManifestGoGenerator_RolesAreSorted(t *testing.T) {
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
+
+	kinds, err := parser.ManifestParser().Parse("testManifest")
+	require.NoError(t, err)
+	files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+
+	manifest := string(files[0].Data)
+	idx := strings.Index(manifest, "Roles: map[string]app.ManifestRole{")
+	if idx == -1 {
+		t.Skip("no Roles map found in generated manifest")
+	}
+	rolesSection := manifest[idx:]
+
+	// Find all quoted role keys in order of appearance
+	var keys []string
+	for _, line := range strings.Split(rolesSection, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, `"`) && strings.Contains(trimmed, `": {`) {
+			key := strings.SplitN(trimmed, `"`, 3)[1]
+			keys = append(keys, key)
+		}
+		if trimmed == "}," && len(keys) > 0 {
+			break
+		}
+	}
+	require.NotEmpty(t, keys, "should find role keys in generated manifest")
+	assert.IsNonDecreasing(t, keys, "role keys should appear in sorted order")
 }
 
 func compareToGolden(t *testing.T, files codejen.Files, pathPrefix string) {

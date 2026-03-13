@@ -6,7 +6,7 @@
     },
     "spec": {
         "appName": "app-manifest",
-        "appDisplayName": "",
+        "appDisplayName": "app-manifest",
         "group": "apps.grafana.app",
         "versions": [
             {

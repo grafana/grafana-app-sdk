@@ -324,6 +324,31 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	return &manifest, validateManifestRoles(manifest, includeSchemas)
 }
 
+// joinKindNames joins a sorted list of kind plural names into a
+// human-readable English string with correct punctuation:
+//
+//	[]              -> ""
+//	["As"]          -> "As"
+//	["As", "Bs"]    -> "As and Bs"
+//	["As","Bs","Cs"] -> "As, Bs, and Cs"
+func joinKindNames(names []string) string {
+	var b strings.Builder
+	for i, k := range names {
+		if i > 0 {
+			if len(names) > 2 {
+				b.WriteString(",")
+			}
+			if i == len(names)-1 {
+				b.WriteString(" and ")
+			} else {
+				b.WriteString(" ")
+			}
+		}
+		b.WriteString(k)
+	}
+	return b.String()
+}
+
 func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings, error) {
 	viewer := app.ManifestRolePermissionSetViewer
 	editor := app.ManifestRolePermissionSetEditor
@@ -387,32 +412,22 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 	for k := range kindListMap {
 		kindList = append(kindList, k)
 	}
-	allKindsDesc := strings.Builder{}
-	for i, k := range kindList {
-		if i > 0 {
-			if len(kindList) > 2 {
-				allKindsDesc.WriteString(", ")
-			}
-			if i == len(kindList)-1 {
-				allKindsDesc.WriteString("and ")
-			}
-		}
-		allKindsDesc.WriteString(k)
-	}
+	sort.Strings(kindList)
+	allKindsDesc := joinKindNames(kindList)
 	roles := map[string]codegen.AppManifestPropertiesRole{
 		readerKey: {
 			Title:       fmt.Sprintf("%s Reader", m.Properties().AppDisplayName),
-			Description: fmt.Sprintf("Read %s", allKindsDesc.String()),
+			Description: fmt.Sprintf("Read %s", allKindsDesc),
 			Kinds:       readerRoleKinds,
 		},
 		editorKey: {
 			Title:       fmt.Sprintf("%s Editor", m.Properties().AppDisplayName),
-			Description: fmt.Sprintf("Create, Read, Update, and Delete %s", allKindsDesc.String()),
+			Description: fmt.Sprintf("Create, Read, Update, and Delete %s", allKindsDesc),
 			Kinds:       editorRoleKinds,
 		},
 		adminKey: {
 			Title:       fmt.Sprintf("%s Admin", m.Properties().AppDisplayName),
-			Description: fmt.Sprintf("Allows all actions on %s", allKindsDesc.String()),
+			Description: fmt.Sprintf("Allows all actions on %s", allKindsDesc),
 			Kinds:       adminRoleKinds,
 		},
 	}

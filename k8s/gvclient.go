@@ -473,14 +473,9 @@ func (g *groupVersionClient) customRouteRequest(ctx context.Context, namespace, 
 	defer span.End()
 	req := g.client.Verb(request.Verb)
 	if plural != "" {
-		sr := request.Path
-		for len(sr) > 0 && sr[0] == '/' {
-			sr = sr[1:]
-		}
-		req = req.Resource(plural).Name(name).SubResource(sr)
-	} else {
-		req = req.Resource(request.Path)
+		req = req.Resource(plural).Name(name)
 	}
+	req = req.SubResource(strings.Split(strings.Trim(request.Path, "/"), "/")...)
 	if namespace != "" {
 		req = req.Namespace(namespace)
 	}
