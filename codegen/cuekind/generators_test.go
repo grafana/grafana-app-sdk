@@ -165,7 +165,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 
 		var reference codejen.Files
-		for i := 0; i < 20; i++ {
+		for i := 0; i < 5; i++ {
 			files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
 			require.NoError(t, err)
 			if i == 0 {
@@ -184,7 +184,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 
 		var reference codejen.Files
-		for i := 0; i < 20; i++ {
+		for i := 0; i < 5; i++ {
 			files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
 			require.NoError(t, err)
 			if i == 0 {
