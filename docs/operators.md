@@ -108,5 +108,11 @@ func main() {
 }
 ```
 
-For more details, see [Writing an App](writing-an-app.md), which goes into more details on writing an app, or [Writing a Reconciler](writing-a-reconciler.md) for details on how to write a reconciler. 
+For more details, see [Writing an App](writing-an-app.md), which goes into more details on writing an app, or [Writing a Reconciler](writing-a-reconciler.md) for details on how to write a reconciler.
 There are also the [Operator Examples](../examples/operator), which contain two examples, a [reconciler-based operator](../examples/operator/simple/reconciler/) and a [watcher-based one](../examples/operator/simple/watcher/).
+
+### Further Reading
+
+* [Running as an Operator](./running-as-operator.md) -- Operator runner lifecycle, configuration, and production deployment
+* [Advanced Operator Features](./advanced-operator-features.md) -- Informer strategies, retry processing, and advanced patterns
+* [Observability](./observability.md) -- Metrics, tracing, logging, and health checks for your operator
