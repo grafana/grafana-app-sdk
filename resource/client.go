@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 const NamespaceAll = ""
@@ -262,9 +264,20 @@ type SchemalessClient interface {
 	Watch(ctx context.Context, identifier FullIdentifier, options WatchOptions, example Object) (WatchResponse, error)
 }
 
+// CustomRouteClient is an interface for making requests to custom routes that are not covered by the standard CRUD operations of Client.
+type CustomRouteClient interface {
+	// NamespacedRequest makes a request to a namespaced custom route, using the provided verb and body, and returns the raw bytes of the response
+	NamespacedRequest(ctx context.Context, namespace string, opts CustomRouteRequestOptions) ([]byte, error)
+	// ClusteredRequest makes a request to a clustered custom route, using the provided verb and body, and returns the raw bytes of the response
+	ClusteredRequest(ctx context.Context, opts CustomRouteRequestOptions) ([]byte, error)
+}
+
 // ClientGenerator is used for creating clients to interface with given schemas
 type ClientGenerator interface {
 	// ClientFor returns a Client for the provided Schema. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientFor calls.
 	ClientFor(Kind) (Client, error)
+	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
+	// and can be shared by other ClientForGV calls.
+	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
 }

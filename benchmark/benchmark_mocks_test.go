@@ -294,3 +294,7 @@ func (m *mockClientGeneratorWithK8sClient) ClientFor(kind resource.Kind) (resour
 		k8s.DefaultClientConfig(),
 	)
 }
+
+func (m *mockClientGeneratorWithK8sClient) GetCustomRouteClient(gv schema.GroupVersion, defaultNamespace string) (resource.CustomRouteClient, error) {
+	return nil, nil
+}
