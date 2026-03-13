@@ -11,6 +11,7 @@ import (
 
     "github.com/grafana/grafana-app-sdk/app"
     "github.com/grafana/grafana-app-sdk/resource"
+    "k8s.io/apimachinery/pkg/runtime"
     "k8s.io/kube-openapi/pkg/spec3"
     "k8s.io/kube-openapi/pkg/validation/spec"
 
@@ -272,7 +273,7 @@ var appManifestData = app.ManifestData{
         },{{ end }}
     },{{ end }}{{ if .ManifestData.Roles }}
     Roles: map[string]app.ManifestRole{
-        {{ range $key, $val := .ManifestData.Roles }}"{{ $key }}": {
+        {{ range $key := $.SortedRoleKeys }}{{ $val := index $.ManifestData.Roles $key }}"{{ $key }}": {
             Title: "{{ $val.Title }}",
             Description: "{{ $val.Description }}",
             Kinds: []app.ManifestRoleKind{ {{ range $val.Kinds }}
