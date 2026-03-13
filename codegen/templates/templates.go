@@ -511,10 +511,7 @@ func (m ManifestGoFileMetadata) HasVersionSchemas() bool {
 // SortedRoleKeys returns the keys of ManifestData.Roles in sorted order
 // so the template produces deterministic output.
 func (m ManifestGoFileMetadata) SortedRoleKeys() []string {
-	keys := make([]string, 0, len(m.ManifestData.Roles))
-	for k := range m.ManifestData.Roles {
-		keys = append(keys, k)
-	}
+	keys := slices.Collect(maps.Keys(m.ManifestData.Roles))
 	slices.Sort(keys)
 	return keys
 }
