@@ -344,7 +344,7 @@ func joinKindNames(names []string) string {
 				_, _ = b.WriteString(" ")
 			}
 		}
-		b.WriteString(k)
+		_, _ = b.WriteString(k)
 	}
 	return b.String()
 }
