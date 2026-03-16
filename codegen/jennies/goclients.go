@@ -21,7 +21,8 @@ type ClientJenny struct {
 	// If GroupByKind is true, generated paths are <kind>/<version>/<file>, instead of the default <version>/<file>.
 	// When GroupByKind is false, subresource types (such as spec and status) are prefixed with the kind name,
 	// i.e. generating FooSpec instead of Spec for kind.Name() = "Foo" and Depth=1
-	GroupByKind bool
+	GroupByKind        bool
+	SkipImportsProcess bool
 }
 
 func (*ClientJenny) JennyName() string {
@@ -99,11 +100,13 @@ func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (
 		if err != nil {
 			return nil, err
 		}
-		formatted, err = imports.Process("", formatted, &imports.Options{
-			Comments: true,
-		})
-		if err != nil {
-			return nil, err
+		if !r.SkipImportsProcess {
+			formatted, err = imports.Process("", formatted, &imports.Options{
+				Comments: true,
+			})
+			if err != nil {
+				return nil, err
+			}
 		}
 		files = append(files, codejen.File{
 			RelativePath: filepath.Join(getGeneratedPathForKind(r.GroupByKind, appManifest.Properties().Group, kind, version.Name()), fmt.Sprintf("%s_client_gen.go", kind.MachineName)),
@@ -147,11 +150,13 @@ func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest
 		if err != nil {
 			return nil, err
 		}
-		formatted, err = imports.Process("", formatted, &imports.Options{
-			Comments: true,
-		})
-		if err != nil {
-			return nil, err
+		if !r.SkipImportsProcess {
+			formatted, err = imports.Process("", formatted, &imports.Options{
+				Comments: true,
+			})
+			if err != nil {
+				return nil, err
+			}
 		}
 		files = append(files, codejen.File{
 			RelativePath: filepath.Join(ToPackageName(appManifest.Properties().Group), ToPackageName(version.Name()), "client_gen.go"),

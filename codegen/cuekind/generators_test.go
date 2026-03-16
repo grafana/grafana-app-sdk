@@ -130,7 +130,14 @@ func TestManifestGoGenerator(t *testing.T) {
 	t.Run("group by group", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
+		files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
+			Package:            "manifestdata",
+			IncludeSchemas:     true,
+			ProjectRepo:        "codegen-tests",
+			GoGenPath:          "pkg/generated",
+			ManifestGoFilePath: "manifestdata",
+			GroupKinds:         true,
+		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 15 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), the resource clients for v1-v3 (3), and the version-level client for v3 routes (1)
@@ -144,7 +151,13 @@ func TestManifestGoGenerator(t *testing.T) {
 	t.Run("group by kind", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("customManifest")
 		require.NoError(t, err)
-		files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
+		files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
+			Package:            "manifestdata",
+			IncludeSchemas:     true,
+			ProjectRepo:        "codegen-tests",
+			GoGenPath:          "pkg/generated",
+			ManifestGoFilePath: "manifestdata",
+		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 3 -> manifest, client v0_0, client v1_0
@@ -156,50 +169,63 @@ func TestManifestGoGenerator(t *testing.T) {
 	})
 }
 
-// TODO: These cause GitHub Actions to flake due to timeouts during code generation.
-// Removing for now, but we should re-enable and fix the underlying issue.
-// func TestManifestGoGenerator_Deterministic(t *testing.T) {
-// 	parser, err := NewParser(testingCue(t), true, false)
-// 	require.NoError(t, err)
-//
-// 	t.Run("group by group", func(t *testing.T) {
-// 		kinds, err := parser.ManifestParser().Parse("testManifest")
-// 		require.NoError(t, err)
-//
-// 		var reference codejen.Files
-// 		for i := 0; i < 5; i++ {
-// 			files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
-// 			require.NoError(t, err)
-// 			if i == 0 {
-// 				reference = files
-// 				continue
-// 			}
-// 			for j, f := range files {
-// 				assert.Equal(t, string(reference[j].Data), string(f.Data),
-// 					"non-deterministic output on iteration %d for file %s", i, f.RelativePath)
-// 			}
-// 		}
-// 	})
-//
-// 	t.Run("group by kind", func(t *testing.T) {
-// 		kinds, err := parser.ManifestParser().Parse("customManifest")
-// 		require.NoError(t, err)
-//
-// 		var reference codejen.Files
-// 		for i := 0; i < 5; i++ {
-// 			files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", false).Generate(kinds...)
-// 			require.NoError(t, err)
-// 			if i == 0 {
-// 				reference = files
-// 				continue
-// 			}
-// 			for j, f := range files {
-// 				assert.Equal(t, string(reference[j].Data), string(f.Data),
-// 					"non-deterministic output on iteration %d for file %s", i, f.RelativePath)
-// 			}
-// 		}
-// 	})
-// }
+func TestManifestGoGenerator_Deterministic(t *testing.T) {
+	parser, err := NewParser(testingCue(t), true, false)
+	require.NoError(t, err)
+
+	t.Run("group by group", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+
+		var reference codejen.Files
+		for i := 0; i < 5; i++ {
+			files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
+				Package:            "manifestdata",
+				IncludeSchemas:     true,
+				ProjectRepo:        "codegen-tests",
+				GoGenPath:          "pkg/generated",
+				ManifestGoFilePath: "manifestdata",
+				GroupKinds:         true,
+				SkipImportsProcess: true,
+			}).Generate(kinds...)
+			require.NoError(t, err)
+			if i == 0 {
+				reference = files
+				continue
+			}
+			for j, f := range files {
+				assert.Equal(t, string(reference[j].Data), string(f.Data),
+					"non-deterministic output on iteration %d for file %s", i, f.RelativePath)
+			}
+		}
+	})
+
+	t.Run("group by kind", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("customManifest")
+		require.NoError(t, err)
+
+		var reference codejen.Files
+		for i := 0; i < 5; i++ {
+			files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
+				Package:            "manifestdata",
+				IncludeSchemas:     true,
+				ProjectRepo:        "codegen-tests",
+				GoGenPath:          "pkg/generated",
+				ManifestGoFilePath: "manifestdata",
+				SkipImportsProcess: true,
+			}).Generate(kinds...)
+			require.NoError(t, err)
+			if i == 0 {
+				reference = files
+				continue
+			}
+			for j, f := range files {
+				assert.Equal(t, string(reference[j].Data), string(f.Data),
+					"non-deterministic output on iteration %d for file %s", i, f.RelativePath)
+			}
+		}
+	})
+}
 
 func TestManifestGoGenerator_RolesAreSorted(t *testing.T) {
 	parser, err := NewParser(testingCue(t), true, false)
@@ -207,7 +233,14 @@ func TestManifestGoGenerator_RolesAreSorted(t *testing.T) {
 
 	kinds, err := parser.ManifestParser().Parse("testManifest")
 	require.NoError(t, err)
-	files, err := ManifestGoGenerator("manifestdata", true, "codegen-tests", "pkg/generated", "manifestdata", true).Generate(kinds...)
+	files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
+		Package:            "manifestdata",
+		IncludeSchemas:     true,
+		ProjectRepo:        "codegen-tests",
+		GoGenPath:          "pkg/generated",
+		ManifestGoFilePath: "manifestdata",
+		GroupKinds:         true,
+	}).Generate(kinds...)
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
 

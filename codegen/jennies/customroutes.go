@@ -38,7 +38,8 @@ type CustomRouteGoTypesJenny struct {
 	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
 	// apiservers if using the default apiserver.AppInstaller.
 	// gvk.Kind may be empty when called if the custom route is a resource route without a kind.
-	OpenAPINamer func(OpenAPINamerInfo) string
+	OpenAPINamer       func(OpenAPINamerInfo) string
+	SkipImportsProcess bool
 }
 
 func (*CustomRouteGoTypesJenny) JennyName() string {
@@ -220,7 +221,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	if customRoute.Response.Metadata.TypeMeta {
 		body = "body_"
 	}
-	formattedResponseTypes, err := formatGoBytes(responseTypes)
+	formattedResponseTypes, err := c.formatGoBytes(responseTypes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to format custom route types: %w", err)
 	}
@@ -248,7 +249,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		if err != nil {
 			return nil, fmt.Errorf("failed to write runtime.Object for custom route types: %w", err)
 		}
-		formatted, err := formatGoBytes(buf.Bytes())
+		formatted, err := c.formatGoBytes(buf.Bytes())
 		if err != nil {
 			return nil, fmt.Errorf("failed to format custom route types: %w", err)
 		}
@@ -291,17 +292,19 @@ func toExportedFieldName(name string) string {
 	return strings.ToUpper(sanitized)
 }
 
-func formatGoBytes(b []byte) ([]byte, error) {
+func (c *CustomRouteGoTypesJenny) formatGoBytes(b []byte) ([]byte, error) {
 	formatted, err := format.Source(b)
 	if err != nil {
 		return nil, err
 	}
 
-	formatted, err = imports.Process("", formatted, &imports.Options{
-		Comments: true,
-	})
-	if err != nil {
-		return nil, err
+	if !c.SkipImportsProcess {
+		formatted, err = imports.Process("", formatted, &imports.Options{
+			Comments: true,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	return formatted, nil
 }
