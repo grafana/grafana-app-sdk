@@ -66,20 +66,6 @@ testManifestV3: {
 				}
 			}
 		}
-		"/one/two/three": {
-			"POST": {
-				#Key: {
-					name:   string
-					match?: string
-				}
-				request: body: {
-					keys: [...#Key]
-				}
-				response: {
-					altered: [...#Key]
-				}
-			}
-		}
 	}
 }
 
