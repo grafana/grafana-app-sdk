@@ -1,0 +1,36 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type CreateOneTwoThreeKey struct {
+	Name  string  `json:"name"`
+	Match *string `json:"match,omitempty"`
+}
+
+// NewCreateOneTwoThreeKey creates a new CreateOneTwoThreeKey object.
+func NewCreateOneTwoThreeKey() *CreateOneTwoThreeKey {
+	return &CreateOneTwoThreeKey{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateOneTwoThreeKey.
+func (CreateOneTwoThreeKey) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateOneTwoThreeKey"
+}
+
+// +k8s:openapi-gen=true
+type CreateOneTwoThreeBody struct {
+	Altered []CreateOneTwoThreeKey `json:"altered"`
+}
+
+// NewCreateOneTwoThreeBody creates a new CreateOneTwoThreeBody object.
+func NewCreateOneTwoThreeBody() *CreateOneTwoThreeBody {
+	return &CreateOneTwoThreeBody{
+		Altered: []CreateOneTwoThreeKey{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateOneTwoThreeBody.
+func (CreateOneTwoThreeBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateOneTwoThreeBody"
+}

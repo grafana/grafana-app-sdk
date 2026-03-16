@@ -277,11 +277,18 @@ func defaultRouteName(method string, route string) string {
 	for len(route) > 1 && route[0] == '/' {
 		route = route[1:]
 	}
-	ucFirstPath := strings.ToUpper(route)
-	if len(route) > 1 {
-		ucFirstPath = ucFirstPath[:1] + route[1:]
+	nonAlphanumeric := regexp.MustCompile("[^A-Za-z0-9_]")
+	segments := strings.Split(route, "/")
+	var sb strings.Builder
+	for _, seg := range segments {
+		seg = nonAlphanumeric.ReplaceAllString(seg, "")
+		if len(seg) > 1 {
+			_, _ = sb.WriteString(strings.ToUpper(seg[:1]) + seg[1:])
+		} else {
+			_, _ = sb.WriteString(strings.ToUpper(seg))
+		}
 	}
-	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], regexp.MustCompile("[^A-Za-z0-9_]").ReplaceAllString(ucFirstPath, ""))
+	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], sb.String())
 }
 
 func toExportedFieldName(name string) string {
