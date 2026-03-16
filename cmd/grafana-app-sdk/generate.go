@@ -172,7 +172,14 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	}
 
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(manifestPkg, cfg.Definitions.ManifestSchemas, goModule, goModGenPath, manifestPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
+	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(cuekind.ManifestGoGeneratorConfig{
+		Package:            manifestPkg,
+		IncludeSchemas:     cfg.Definitions.ManifestSchemas,
+		ProjectRepo:        goModule,
+		GoGenPath:          goModGenPath,
+		ManifestGoFilePath: manifestPath,
+		GroupKinds:         cfg.GroupKinds(),
+	}), cfg.ManifestSelectors...)
 	if err != nil {
 		return nil, err
 	}

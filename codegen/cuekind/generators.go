@@ -159,27 +159,43 @@ func ManifestGenerator(extension string, includeSchemas bool, version string) *c
 	return g
 }
 
-func ManifestGoGenerator(pkg string, includeSchemas bool, projectRepo, goGenPath string, manifestGoFilePath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+// ManifestGoGeneratorConfig configures the ManifestGoGenerator JennyList.
+type ManifestGoGeneratorConfig struct {
+	Package            string
+	IncludeSchemas     bool
+	ProjectRepo        string
+	GoGenPath          string
+	ManifestGoFilePath string
+	GroupKinds         bool
+	// SkipImportsProcess skips the imports.Process calls in the generated code.
+	// This is useful in tests where import resolution is unnecessary and slow.
+	SkipImportsProcess bool
+}
+
+func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
-		Package:         pkg,
-		IncludeSchemas:  includeSchemas,
-		ProjectRepo:     projectRepo,
-		CodegenPath:     goGenPath,
-		GroupByKind:     !groupKinds,
-		DestinationPath: manifestGoFilePath,
+		Package:            cfg.Package,
+		IncludeSchemas:     cfg.IncludeSchemas,
+		ProjectRepo:        cfg.ProjectRepo,
+		CodegenPath:        cfg.GoGenPath,
+		GroupByKind:        !cfg.GroupKinds,
+		DestinationPath:    cfg.ManifestGoFilePath,
+		SkipImportsProcess: cfg.SkipImportsProcess,
 	},
 		&jennies.CustomRouteGoTypesJenny{
 			AddKubernetesCodegen: true,
-			GroupByKind:          !groupKinds,
+			GroupByKind:          !cfg.GroupKinds,
 			AnyAsInterface:       true, // This is for compatibility with kube openAPI generator, which has issues with map[string]any
+			SkipImportsProcess:   cfg.SkipImportsProcess,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
-				path := filepath.Join(projectRepo, goGenPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
+				path := filepath.Join(cfg.ProjectRepo, cfg.GoGenPath, jennies.GetGeneratedGoTypePath(!cfg.GroupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
 				return apiserver.ToOpenAPIName(path)
 			},
 		},
 		&jennies.ClientJenny{
-			GroupByKind: !groupKinds,
+			GroupByKind:        !cfg.GroupKinds,
+			SkipImportsProcess: cfg.SkipImportsProcess,
 		})
 	return g
 }

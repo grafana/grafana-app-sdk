@@ -105,12 +105,13 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 }
 
 type ManifestGoGenerator struct {
-	Package         string
-	ProjectRepo     string
-	CodegenPath     string
-	DestinationPath string
-	GroupByKind     bool
-	IncludeSchemas  bool
+	Package            string
+	ProjectRepo        string
+	CodegenPath        string
+	DestinationPath    string
+	GroupByKind        bool
+	IncludeSchemas     bool
+	SkipImportsProcess bool
 }
 
 func (*ManifestGoGenerator) JennyName() string {
@@ -150,11 +151,13 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 		return nil, err
 	}
 
-	formatted, err = imports.Process("", formatted, &imports.Options{
-		Comments: true,
-	})
-	if err != nil {
-		return nil, err
+	if !g.SkipImportsProcess {
+		formatted, err = imports.Process("", formatted, &imports.Options{
+			Comments: true,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	files := make(codejen.Files, 0)
