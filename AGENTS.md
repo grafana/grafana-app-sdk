@@ -2,19 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Required Claude Plugin
+## Grafana App SDK Plugin
 
-Before working in this repository, install the grafana-app-sdk plugin:
-
-```bash
-claude plugin install grafana-app-sdk@grafana-ai-kit
-```
-
-This plugin provides skills and context specific to the grafana-app-sdk. Use relevant skills from this plugin when working in this directory.
+In .claude/settings.json, you'll notice that we have installed the grafana-ai-kit marketplace and the grafana-app-sdk plugin. This plugin provides skills and context specific to the grafana-app-sdk. Please make sure to leverage this plugin when working within this project.
 
 ## Project Overview
 
 The `grafana-app-sdk` is an SDK for developing apps for the Grafana App Platform. It provides:
+
 - A CLI (`grafana-app-sdk`) for generating code and projects
 - Libraries for building Kubernetes operator-based applications
 - Integration with Kubernetes API machinery and client-go
@@ -155,6 +150,7 @@ All patterns assume resources can be modified outside your UI (kubectl, gitops t
 ## Go Workspace Configuration
 
 This repository uses Go workspaces (`go.work`) for multi-module development. The workspace includes:
+
 - Main SDK module
 - `logging/` submodule
 
@@ -242,6 +238,7 @@ The SDK follows these core principles:
 **Purpose**: Defines fundamental types for working with custom resources
 
 **Key Files**:
+
 - `object.go` - `Object` interface (combines k8s interfaces + SDK methods)
 - `kind.go` - `Kind` struct (Schema + Codecs for serialization)
 - `schema.go` - `Schema` interface (Group/Version/Kind metadata)
@@ -250,6 +247,7 @@ The SDK follows these core principles:
 - `admission.go` - Admission control interfaces (Validator, Mutator, Converter)
 
 **Key Pattern**: `TypedStore[T]` - Type-safe wrapper around generic Store:
+
 ```go
 store := resource.NewTypedStore[*MyKind](untypedStore)
 obj, err := store.Get(ctx, identifier)  // Returns *MyKind directly
@@ -262,6 +260,7 @@ obj, err := store.Get(ctx, identifier)  // Returns *MyKind directly
 **Purpose**: Implements controller/operator patterns for reacting to resource changes
 
 **Key Files**:
+
 - `operator.go` - Top-level `Operator` managing multiple controllers
 - `informer_customcache.go` - Optimized informer with pluggable cache (PRIMARY OPTIMIZATION TARGET)
 - `informer_kubernetes.go` - Standard client-go SharedInformer wrapper
@@ -272,8 +271,9 @@ obj, err := store.Get(ctx, identifier)  // Returns *MyKind directly
 - `runner.go` - Operator lifecycle management
 
 **Key Pattern**: Informer + Reconciler/Watcher pipeline:
+
 ```
-k8s Watch Event → Reflector → DeltaFIFO → Controller → 
+k8s Watch Event → Reflector → DeltaFIFO → Controller →
     CustomCacheInformer.processDeltas() → processor.distribute() →
         [Reconciler.Reconcile() | Watcher.Add/Update/Delete()]
 ```
@@ -287,6 +287,7 @@ k8s Watch Event → Reflector → DeltaFIFO → Controller →
 **Purpose**: Bridges SDK abstractions to actual Kubernetes API machinery
 
 **Key Files**:
+
 - `client.go` - `Client` implementation using client-go dynamic client
 - `cache/reflector.go` - Watch/list implementation (supports watch-list feature)
 - `cache/controller.go` - Cache controller managing reflector + DeltaFIFO
@@ -295,6 +296,7 @@ k8s Watch Event → Reflector → DeltaFIFO → Controller →
 - `apiserver/` - Extension API server support for custom endpoints
 
 **Key Pattern**: Watch-list protocol for memory efficiency:
+
 - Traditional: LIST all objects (high memory), then WATCH for changes
 - Watch-list: Streaming LIST that seamlessly transitions to WATCH
 - Requires Kubernetes 1.27+ with feature gate enabled
@@ -306,10 +308,12 @@ k8s Watch Event → Reflector → DeltaFIFO → Controller →
 **Purpose**: Provides opinionated, easy-to-use application builder
 
 **Key Files**:
+
 - `app.go` - `App` struct with fluent configuration API
 - `operator.go` - Simplified operator creation
 
 **Key Pattern**: Declarative app configuration:
+
 ```go
 app, err := simple.NewApp(simple.AppConfig{
     Name: "myapp",
@@ -330,17 +334,20 @@ app, err := simple.NewApp(simple.AppConfig{
 **Purpose**: Generates type-safe Go code from CUE schemas
 
 **Key Files**:
+
 - `generator.go` - Generation orchestration
 - `cuekind/` - CUE parsing logic
 - `jennies/` - Individual code generators (Object, Schema, CRD, Client, etc.)
 - `templates/` - Go code templates
 
 **Key Pattern**: Jenny pipeline:
+
 ```
 CUE Schema → Parser → Generator(JennyList) → Generated Files
 ```
 
 **Generated Artifacts**:
+
 - Go types implementing `resource.Object`
 - CRD YAML manifests
 - OpenAPI v3 schemas
@@ -354,11 +361,13 @@ CUE Schema → Parser → Generator(JennyList) → Generated Files
 **Purpose**: Application manifest and lifecycle management
 
 **Key Files**:
+
 - `manifest.go` - CUE-based app manifest parsing
 - `runner.go` - Multi-component application runner
 - `appmanifest/v1alpha1/`, `appmanifest/v1alpha2/` - Versioned manifest types
 
 **Key Pattern**: Provider pattern for app initialization:
+
 ```go
 provider := simple.NewAppProvider(manifest, specificConfig, newAppFunc)
 runner, err := app.NewRunner(provider, config)
@@ -376,11 +385,13 @@ The SDK supports three architectural patterns:
 **Use case**: Simple apps with basic validation, no backend logic
 
 **Components**:
+
 - CUE kind definitions
 - Frontend plugin code
 - Grafana platform handles storage via CRDs
 
 **Capabilities**:
+
 - CRUD via Grafana UI
 - kubectl/gitops support automatically
 - Basic CUE schema validation
@@ -392,11 +403,13 @@ The SDK supports three architectural patterns:
 **Use case**: Apps needing validation, mutation, conversion, or reconciliation
 
 **Components**:
+
 - CUE kind definitions
 - Operator backend (validation/mutation/conversion webhooks + reconcilers)
 - Optional frontend plugin
 
 **Capabilities**:
+
 - Custom validation beyond schema
 - Default value injection via mutation
 - Multi-version support via conversion
@@ -412,11 +425,13 @@ The SDK supports three architectural patterns:
 **Use case**: Apps needing custom endpoints or storage strategies
 
 **Components**:
+
 - Extension API server (implements k8s aggregation API)
 - Custom routing and storage logic
 - Optional frontend plugin
 
 **Capabilities**:
+
 - Custom subresources (e.g., `/rollback`, `/scale`)
 - Custom storage backends
 - Full control over authorization
@@ -437,7 +452,7 @@ Understanding the event flow is critical for debugging and optimization.
    ↓
 3. For each Informer:
    ├─ Start Reflector goroutine
-   ├─ Start Controller goroutine  
+   ├─ Start Controller goroutine
    └─ Start Processor goroutines
    ↓
 4. Reflector.ListAndWatch()
@@ -498,6 +513,7 @@ Understanding the event flow is critical for debugging and optimization.
 ```
 
 **Performance Bottlenecks** (identified in profiling):
+
 - Line 6: `processor.distribute()` - RWMutex on every event
 - Line 5: Object copying in `toResourceObject()` - reflection allocations
 - Line 5: `JSONCodec.Write()` in metrics/logging - map allocations
@@ -551,11 +567,13 @@ appConfig := simple.AppConfig{
 Multiple strategies available:
 
 **Default** (KubernetesBasedInformer):
+
 ```go
 supplier := simple.DefaultInformerSupplier
 ```
 
 **Optimized** (CustomCacheInformer with watch-list):
+
 ```go
 supplier := simple.OptimizedInformerSupplier
 config.UseWatchList = true
@@ -563,6 +581,7 @@ config.WatchListPageSize = 500
 ```
 
 **Memcached** (distributed cache):
+
 ```go
 supplier := func(kind resource.Kind, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
     return operator.NewMemcachedInformer(kind, client, operator.MemcachedInformerOptions{
@@ -601,20 +620,20 @@ type MyReconciler struct {
 
 func (r *MyReconciler) Reconcile(ctx context.Context, req operator.ReconcileRequest) (operator.ReconcileResult, error) {
     logger := logging.FromContext(ctx)
-    
+
     // Cast to typed object (or use operator.TypedReconciler[T])
     obj, ok := req.Object.(*v1.MyKind)
     if !ok {
         return operator.ReconcileResult{}, fmt.Errorf("unexpected type")
     }
-    
+
     logger.Info("Reconciling", "name", obj.GetName(), "generation", obj.GetGeneration())
-    
+
     // Check if already reconciled
     if obj.Status.LastAppliedGeneration == obj.GetGeneration() {
         return operator.ReconcileResult{}, nil
     }
-    
+
     // Perform business logic
     if err := r.doSomething(ctx, obj); err != nil {
         if isRetryable(err) {
@@ -624,12 +643,12 @@ func (r *MyReconciler) Reconcile(ctx context.Context, req operator.ReconcileRequ
         // Let RetryPolicy handle it
         return operator.ReconcileResult{}, err
     }
-    
+
     // Update status subresource
     obj.Status.LastAppliedGeneration = obj.GetGeneration()
     obj.Status.ObservedTime = time.Now().Unix()
     _, err := r.store.UpdateSubresource(ctx, obj.GetStaticMetadata().Identifier(), resource.SubresourceStatus, obj)
-    
+
     return operator.ReconcileResult{}, err
 }
 ```
@@ -637,6 +656,7 @@ func (r *MyReconciler) Reconcile(ctx context.Context, req operator.ReconcileRequ
 #### Debugging Techniques
 
 **Enable verbose logging**:
+
 ```go
 import "github.com/grafana/grafana-app-sdk/logging"
 
@@ -645,6 +665,7 @@ logger.Debug("Processing event", "key", key, "action", action)
 ```
 
 **Check informer sync**:
+
 ```go
 if !informer.HasSynced() {
     logger.Warn("Informer not synced, may be missing events")
@@ -652,6 +673,7 @@ if !informer.HasSynced() {
 ```
 
 **Profile hot paths**:
+
 ```bash
 # Generate profiles
 make bench-profile
@@ -670,6 +692,7 @@ go tool pprof target/profiles/mem.out
 ```
 
 **Trace reconciliation flow**:
+
 ```bash
 # Enable OpenTelemetry tracing
 export OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4317"
@@ -712,20 +735,20 @@ func TestReconcile(t *testing.T) {
             wantErr: true,
         },
     }
-    
+
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             reconciler := NewMyReconciler(...)
             result, err := reconciler.Reconcile(ctx, operator.ReconcileRequest{
                 Object: tt.input,
             })
-            
+
             if tt.wantErr {
                 require.Error(t, err)
             } else {
                 require.NoError(t, err)
             }
-            
+
             if tt.wantRequeue {
                 assert.True(t, result.RequeueAfter > 0)
             }
@@ -741,10 +764,10 @@ func BenchmarkReconcile(b *testing.B) {
     reconciler := setupReconciler()
     obj := createTestObject()
     req := operator.ReconcileRequest{Object: obj}
-    
+
     b.ResetTimer()
     b.ReportAllocs()
-    
+
     for i := 0; i < b.N; i++ {
         _, err := reconciler.Reconcile(context.Background(), req)
         if err != nil {
@@ -761,6 +784,7 @@ func BenchmarkReconcile(b *testing.B) {
 **Problem**: Updating spec in reconciler triggers another reconcile event
 
 **Solution**: Only update status subresource or check `metadata.generation`:
+
 ```go
 // BAD: Updates spec, triggers loop
 obj.Spec.ComputedField = calculate()
@@ -781,6 +805,7 @@ if obj.Status.LastAppliedGeneration == obj.GetGeneration() {
 **Problem**: Operator was down, missed delete events, leaked resources
 
 **Solution**: Use OpinionatedWatcher/OpinionatedReconciler with finalizers:
+
 ```go
 watcher := operator.NewOpinionatedWatcher(
     operator.OpinionatedWatcherConfig{
@@ -801,6 +826,7 @@ func (w *MyWatcher) Sync(ctx context.Context, obj resource.Object) error {
 **Problem**: Webhook calls external service, times out, blocks all API requests
 
 **Solution**: Keep webhooks fast (<1s), defer work to reconciler:
+
 ```go
 // BAD: Slow webhook
 func (v *Validator) Validate(ctx context.Context, req *app.AdmissionRequest) error {
@@ -829,6 +855,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ReconcileRequest) (Recon
 **Problem**: Concurrent updates cause "resource version conflict" errors
 
 **Solution**: Implement retry logic with fresh GET:
+
 ```go
 const maxRetries = 3
 
@@ -838,16 +865,16 @@ for i := 0; i < maxRetries; i++ {
     if err != nil {
         return ReconcileResult{}, err
     }
-    
+
     // Make changes
     obj.Status.Value = newValue
-    
+
     // Update (may conflict)
     _, err = store.UpdateSubresource(ctx, identifier, resource.SubresourceStatus, obj)
     if err == nil {
         break // Success
     }
-    
+
     if !isConflict(err) {
         return ReconcileResult{}, err
     }
@@ -860,6 +887,7 @@ for i := 0; i < maxRetries; i++ {
 **Problem**: Informer caches all objects in memory, OOM in large clusters
 
 **Solution**: Use CustomCacheInformer with memcached or watch-list:
+
 ```go
 // Option 1: Memcached (distributed cache)
 informer, err := operator.NewMemcachedInformer(kind, client, operator.MemcachedInformerOptions{
@@ -885,7 +913,6 @@ The codebase is actively being optimized for production scale (10k-50k resources
 1. **Memory allocations in JSONCodec.Write** (41.85% of allocations)
    - Pooling metadata maps
    - Reducing reflection overhead
-   
 2. **Object copying via reflection** (28.94% of allocations)
    - Implementing custom MarshalJSON
    - Code generation for known types
@@ -899,11 +926,13 @@ The codebase is actively being optimized for production scale (10k-50k resources
    - Batching events
 
 **Recent Achievements**:
+
 - 34.8% memory reduction (503.7 MB → 328.6 MB)
 - 43.5% fewer allocations (10.88M → 6.15M)
 - 16% faster execution (1114ms → 936ms)
 
 **Implications**:
+
 - Performance-critical code may change
 - Always run benchmarks before/after changes
 - Consult performance docs before optimizing
@@ -917,11 +946,13 @@ The codebase is actively being optimized for production scale (10k-50k resources
 **Migration guides**: `/docs/migrations/README.md`
 
 **Retracted versions**:
+
 - v0.20.0 (binary build errors)
 - v0.18.4 (binary build errors)
 - v0.18.3 (GOPROXY conflicts)
 
 **Best practices**:
+
 - Pin specific versions in go.mod
 - Read migration guides when upgrading
 - Test thoroughly after upgrades
@@ -930,6 +961,7 @@ The codebase is actively being optimized for production scale (10k-50k resources
 ### Additional Resources
 
 **Essential Documentation**:
+
 - Tutorial: `/docs/tutorials/issue-tracker/README.md` (start here!)
 - Platform concepts: `/docs/application-design/platform-concepts.md`
 - Operators: `/docs/operators.md`
@@ -941,11 +973,13 @@ The codebase is actively being optimized for production scale (10k-50k resources
 - Architecture diagrams: `/docs/architecture/reconciliation.md`
 
 **Examples**:
+
 - Simple operator: `/examples/operator/simple/`
 - API server: `/examples/apiserver/`
 - Resource usage: `/examples/resource/`
 
 **Community**:
+
 - GitHub: https://github.com/grafana/grafana-app-sdk
 - Issues: https://github.com/grafana/grafana-app-sdk/issues
 - Contributing: `/CONTRIBUTING`
@@ -955,6 +989,7 @@ The codebase is actively being optimized for production scale (10k-50k resources
 All file paths are absolute from repository root `/Users/igor/Code/grafana/grafana-app-sdk/`:
 
 **Core Interfaces**:
+
 - `resource.Object`: `/resource/object.go`
 - `resource.Kind`: `/resource/kind.go`
 - `operator.Informer`: `/operator/informer_*.go`
@@ -962,21 +997,24 @@ All file paths are absolute from repository root `/Users/igor/Code/grafana/grafa
 - `simple.App`: `/simple/app.go`
 
 **Implementations**:
+
 - CustomCacheInformer: `/operator/informer_customcache.go`
 - k8s Client: `/k8s/client.go`
 - Reflector: `/k8s/cache/reflector.go`
 - JSONCodec: `/resource/kind.go:113-207`
 
 **CLI**:
+
 - Main: `/cmd/grafana-app-sdk/main.go`
 - Generate: `/cmd/grafana-app-sdk/generate.go`
 - Project: `/cmd/grafana-app-sdk/project.go`
 
 **Configuration**:
+
 - Makefile: `/Makefile`
 - Linter config: `/.golangci.yml`
 - Go modules: `/go.mod`, `/go.work`
 
 ---
 
-*This analysis was generated on 2025-10-27 based on the codebase state at commit 61bc84a (branch: chore/watchlist-page-size).*
+_This analysis was generated on 2025-10-27 based on the codebase state at commit 61bc84a (branch: chore/watchlist-page-size)._
