@@ -131,7 +131,7 @@ type VersionProperties struct {
 	Served  bool                  `json:"served"`
 	Codegen KindCodegenProperties `json:"codegen"`
 	// HACK: This is unused, but we provide it so that cue validation is applied when decoding
-	Routes  VersionCustomRoutes   `json:"routes"`
+	Routes VersionCustomRoutes `json:"routes"`
 }
 
 type VersionCustomRoutes struct {
