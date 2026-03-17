@@ -11,12 +11,17 @@ find "${testdir}" -type f -delete
 
 # Group by group
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configJson"
+# Add a sleep so that any lingering resources are fully cleaned up (executing these in rapid succession sometimes causes hangs)
+sleep 1
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configYaml"
+
 # Move the manifest files
 echo "Moving generated Manifest files to ${testdir}/manifest/"
 mv ${testdir}/crd/test-app-manifest.* "${testdir}/manifest/"
 mv ${testdir}/crd/custom-app-manifest.* "${testdir}/manifest/"
 
+# Add a sleep so that any lingering resources are fully cleaned up (executing these in rapid succession sometimes causes hangs)
+sleep 1
 # Group by kind (only customKind)
 go run ./cmd/grafana-app-sdk/*.go generate -s="${rootdir}/codegen/cuekind/testing" --config "configKind"
 
