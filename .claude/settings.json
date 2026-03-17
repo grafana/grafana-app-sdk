@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "grafana-ai-kit": {
+      "source": {
+        "source": "github",
+        "repo": "grafana/ai-kit"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "grafana-app-sdk@grafana-ai-kit": true
+  }
+}
