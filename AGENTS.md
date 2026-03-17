@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Required Claude Plugin
+
+Before working in this repository, install the grafana-app-sdk plugin:
+
+```bash
+claude plugin install grafana-app-sdk@grafana-ai-kit
+```
+
+This plugin provides skills and context specific to the grafana-app-sdk. Use relevant skills from this plugin when working in this directory.
+
 ## Project Overview
 
 The `grafana-app-sdk` is an SDK for developing apps for the Grafana App Platform. It provides:
