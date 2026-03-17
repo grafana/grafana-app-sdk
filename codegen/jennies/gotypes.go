@@ -263,9 +263,9 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 	// Force CUE to evaluate the value tree without setting isData
 	// This speeds up subsequent Subsume() and Equals() calls being done by cog, as otherwise this jenny's cost can become prohibitive.
 	// TODO: this should probably be a fix in cog rather than here
-	err := v.Validate()
+	err := v.Validate(cue.All())
 	if err != nil {
-		return nil, fmt.Errorf("invalid CUE value: %w", err)
+		return nil, fmt.Errorf("invalid CUE value at %s: %w", v.Path(), err)
 	}
 	codegenPipeline := cog.TypesFromSchema().
 		CUEValue(cfg.PackageName, v, cog.ForceEnvelope(cfg.Name), cog.NameFunc(nameFunc)).
