@@ -89,3 +89,15 @@ Get OpenAPI doc:
 ```shell
 curl -k https://127.0.0.1:6443/openapi/v2
 ```
+
+You can also use the provided `kubeconfig` file to make `kubectl` requests:
+```shell
+kubectl --kubeconfig=kubeconfig get testkinds
+```
+Example response:
+```
+NAME       TEST FIELD
+foo        foo
+foo2
+foo3
+```

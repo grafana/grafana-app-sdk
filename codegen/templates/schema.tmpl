@@ -3,10 +3,11 @@
 //
 
 package {{.Package}}
-{{$sfl := len .SelectableFields}}
+{{$sfl := len .SelectableFields}}{{$tcl := len .TableColumns}}
 {{$needsFmt := false}}{{range .SelectableFields}}{{if ne .Type "string"}}{{$needsFmt = true}}{{end}}{{end}}
+{{$needsErrors := false}}{{if gt $sfl 0}}{{$needsErrors = true}}{{end}}{{if gt $tcl 0}}{{$needsErrors = true}}{{end}}
 import (
-    {{if gt $sfl 0}}
+    {{if $needsErrors}}
     "errors"{{if $needsFmt}}
     "fmt"{{end}}
     {{end}}
@@ -34,6 +35,19 @@ var (
                 return cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
                 return fmt.Sprintf("%v", cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ end }}
+            },
+        },
+        {{ end }} }){{ end }}{{if gt $tcl 0}}, resource.WithTableColumns([]resource.TableColumn{ {{ range .TableColumns }}{
+            Name: "{{.Name}}", Type: "{{.Type}}"{{if .Format}}, Format: "{{.Format}}"{{end}}{{if .Description}}, Description: "{{.Description}}"{{end}}{{if .Priority}}, Priority: {{.Priority}}{{end}}, JSONPath: "{{.JSONPath}}",
+            ValueFunc: func(o resource.Object) (any, error) {
+                cast, ok := o.(*{{$root.Kind}})
+                if !ok {
+                    return nil, errors.New("provided object must be of type *{{$root.Kind}}")
+                }{{ range .OptionalFieldsInPath }}
+                if cast.{{$root.ToObjectPath .}} == nil {
+                    return nil, nil
+                }{{ end }}
+                {{ if .Optional }}return *cast.{{$root.ToObjectPath .JSONPath}}, nil{{ else }}return cast.{{$root.ToObjectPath .JSONPath}}, nil{{ end }}
             },
         },
         {{ end }} }){{ end }})

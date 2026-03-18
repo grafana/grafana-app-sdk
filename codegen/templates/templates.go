@@ -148,6 +148,7 @@ type SchemaMetadata struct {
 	Plural           string
 	Scope            string
 	SelectableFields []SchemaMetadataSelectableField
+	TableColumns     []SchemaMetadataTableColumn
 	FuncPrefix       string
 }
 
@@ -155,6 +156,19 @@ type SchemaMetadataSelectableField struct {
 	Field                string
 	Optional             bool
 	Type                 string
+	OptionalFieldsInPath []string
+}
+
+// SchemaMetadataTableColumn contains metadata for generating a resource.TableColumn with a ValueFunc.
+type SchemaMetadataTableColumn struct {
+	Name                 string
+	Type                 string // OpenAPI type: "string", "integer", "number", "boolean", "date"
+	Format               string
+	Description          string
+	Priority             int32
+	JSONPath             string // e.g., ".spec.stringField"
+	GoValueType          string // Go type of the field: "string", "int", "bool", "time"
+	Optional             bool
 	OptionalFieldsInPath []string
 }
 
