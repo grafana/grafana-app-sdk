@@ -101,10 +101,10 @@ github.com/google/pprof v0.0.0-20250403155104-27863c87afa6 h1:BHT72Gu3keYf3ZEu2J
 github.com/google/pprof v0.0.0-20250403155104-27863c87afa6/go.mod h1:boTsfXsheKC2y+lKOCMpSfarhxDeIzfZG1jqGcPl3cA=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
-github.com/grafana/grafana-app-sdk v0.52.0 h1:67jWzMqg0/J7JleY655EzczVF0+HXNJme5wXor76FAs=
-github.com/grafana/grafana-app-sdk v0.52.0/go.mod h1:NTp4JNVXCxcBLHInkrEI0jZV42feJidxOpWpmGPB6jY=
-github.com/grafana/grafana-app-sdk/logging v0.52.0 h1:dY9LfAgdePAyfsHZ8bGHRV/TXdu3WuUKhqbLxcWmCGQ=
-github.com/grafana/grafana-app-sdk/logging v0.52.0/go.mod h1:nC9fLZHZPZFSbGF135ucVbOkMymBB23grTK6uKiNyJo=
+github.com/grafana/grafana-app-sdk v0.52.1 h1:zRSVZKnolIAU0VSM0aZnWh39bzkhecFwkfhREyPJiJc=
+github.com/grafana/grafana-app-sdk v0.52.1/go.mod h1:VNw5MbxQNqmM4mI5txSaW3/Jx6FNFfjbYEN8A/abvRE=
+github.com/grafana/grafana-app-sdk/logging v0.52.1 h1:JHZIbmwtNCSNKakmrNcwyo1UjTVYjD+bVa4k3I34KaA=
+github.com/grafana/grafana-app-sdk/logging v0.52.1/go.mod h1:nC9fLZHZPZFSbGF135ucVbOkMymBB23grTK6uKiNyJo=
 github.com/grafana/grafana-plugin-sdk-go v0.290.1 h1:wNX4R8sHxEAmtmFhmV05IsLGznzdMKvN94v+2Pz8Wkw=
 github.com/grafana/grafana-plugin-sdk-go v0.290.1/go.mod h1:KDkcxp1XqbKz0WD/q9p98Cf5Wp50LG0NkoPlVlptSWs=
 github.com/grafana/otel-profiling-go v0.5.1 h1:stVPKAFZSa7eGiqbYuG25VcqYksR6iWvF3YH66t4qL8=
