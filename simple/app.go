@@ -322,6 +322,8 @@ type AppVersionRouteHandlers map[AppVersionRoute]AppCustomRouteHandler
 // NewApp creates a new instance of App, managing the kinds provided in AppConfig.ManagedKinds.
 // AppConfig MUST contain a valid KubeConfig to be valid.
 // Watcher/Reconciler error handling, retry, and dequeue logic can be managed with AppConfig.InformerConfig.
+//
+//nolint:funlen
 func NewApp(config AppConfig) (*App, error) {
 	clients := config.ClientGenerator
 	if clients == nil {
@@ -677,9 +679,9 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	start := time.Now()
 	err := k.Validator.Validate(ctx, req)
 	a.admissionInflight.With(inflightLabels).Dec()
-	status := "success"
+	status := "success" //nolint:goconst
 	if err != nil {
-		status = "error"
+		status = "error" //nolint:goconst
 	}
 	labels := prometheus.Labels{
 		"operation": "validate",
@@ -714,9 +716,9 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	start := time.Now()
 	resp, err := k.Mutator.Mutate(ctx, req)
 	a.admissionInflight.With(inflightLabels).Dec()
-	status := "success"
+	status := "success" //nolint:goconst
 	if err != nil {
-		status = "error"
+		status = "error" //nolint:goconst
 	}
 	labels := prometheus.Labels{
 		"operation": "mutate",
@@ -756,9 +758,9 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
 	a.conversionInflight.With(inflightLabels).Dec()
-	status := "success"
+	status := "success" //nolint:goconst
 	if err != nil {
-		status = "error"
+		status = "error" //nolint:goconst
 	}
 	labels := prometheus.Labels{
 		"group":          req.SourceGVK.Group,
@@ -814,7 +816,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 	return app.ErrCustomRouteNotFound
 }
 
-func (a *App) customRouteInflightLabels(req *app.CustomRouteRequest) prometheus.Labels {
+func (*App) customRouteInflightLabels(req *app.CustomRouteRequest) prometheus.Labels {
 	return prometheus.Labels{
 		"group":  req.ResourceIdentifier.Group,
 		"method": req.Method,
@@ -828,13 +830,8 @@ func (a *App) observeCustomRoute(start time.Time, req *app.CustomRouteRequest, e
 	if err != nil {
 		status = "error"
 	}
-	labels := prometheus.Labels{
-		"group":  req.ResourceIdentifier.Group,
-		"method": req.Method,
-		"path":   req.Path,
-		"kind":   req.ResourceIdentifier.Kind,
-		"status": status,
-	}
+	labels := a.customRouteInflightLabels(req)
+	labels["status"] = status
 	a.customRouteLatency.With(labels).Observe(time.Since(start).Seconds())
 	a.customRouteTotal.With(labels).Inc()
 }
