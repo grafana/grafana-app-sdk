@@ -639,7 +639,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		if handler, ok := a.customRoutes[a.customRouteHandlerKey(schema.GroupVersionKind{
 			Version: req.ResourceIdentifier.Version,
 		}, req.Method, req.Path, scope)]; ok {
-			return handler(ctx, writer, req)
+			return handleCustomRouteWithLogging(ctx, handler, writer, req)
 		}
 	}
 	key := gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)
@@ -652,7 +652,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		return app.ErrCustomRouteNotFound
 	}
 	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope())]; ok {
-		return handler(ctx, writer, req)
+		return handleCustomRouteWithLogging(ctx, handler, writer, req)
 	}
 	return app.ErrCustomRouteNotFound
 }
