@@ -575,7 +575,7 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	logger := admissionLoggerFromContext(ctx, req)
 	err := k.Validator.Validate(ctx, req)
 	if err != nil {
-		logger.Error("validation failed: %v", err)
+		logger.With("error", err).Error("validation failed")
 		return err
 	}
 	logger.Info("validation succeeded")
@@ -595,7 +595,7 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	logger := admissionLoggerFromContext(ctx, req)
 	res, err := k.Mutator.Mutate(ctx, req)
 	if err != nil {
-		logger.Error("mutation failed: %v", err)
+		logger.With("error", err).Error("mutation failed")
 		return nil, err
 	}
 	logger.Info("mutation succeeded")
@@ -620,7 +620,7 @@ func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawO
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
 	if err != nil {
-		logger.Error("conversion failed: %v", err)
+		logger.With("error", err).Error("conversion failed")
 		return nil, err
 	}
 	logger.Info("conversion succeeded")
