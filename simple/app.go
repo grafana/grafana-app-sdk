@@ -55,9 +55,7 @@ func NewAppProvider(manifest app.Manifest, cfg app.SpecificConfig, newAppFunc fu
 	}
 }
 
-var (
-	_ app.App = &App{}
-)
+var _ app.App = &App{}
 
 // KindMutator is an interface which describes an object which can mutate a kind, used in AppManagedKind
 type KindMutator interface {
@@ -574,7 +572,11 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
-	return k.Validator.Validate(ctx, req)
+	err := k.Validator.Validate(ctx, req)
+	if err != nil {
+		admissionLoggerFromContext(ctx, req).Error("validation failed: %v", err)
+	}
+	return err
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
@@ -587,11 +589,15 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
-	return k.Mutator.Mutate(ctx, req)
+	res, err := k.Mutator.Mutate(ctx, req)
+	if err != nil {
+		admissionLoggerFromContext(ctx, req).Error("mutation failed: %v", err)
+	}
+	return res, err
 }
 
 // Convert implements app.App and handles resource conversion requests
-func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
@@ -606,6 +612,9 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 		Version:    req.SourceGVK.Version,
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
+	if err != nil {
+		conversionLoggerFromContext(ctx, req).Error("conversion failed: %v", err)
+	}
 	return &app.RawObject{
 		Raw: converted,
 	}, err
