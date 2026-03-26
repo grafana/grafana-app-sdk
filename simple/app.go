@@ -572,11 +572,14 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
+	logger := admissionLoggerFromContext(ctx, req)
 	err := k.Validator.Validate(ctx, req)
 	if err != nil {
-		admissionLoggerFromContext(ctx, req).Error("validation failed: %v", err)
+		logger.Error("validation failed: %v", err)
+		return err
 	}
-	return err
+	logger.Info("validation succeeded")
+	return nil
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
@@ -589,11 +592,14 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
+	logger := admissionLoggerFromContext(ctx, req)
 	res, err := k.Mutator.Mutate(ctx, req)
 	if err != nil {
-		admissionLoggerFromContext(ctx, req).Error("mutation failed: %v", err)
+		logger.Error("mutation failed: %v", err)
+		return nil, err
 	}
-	return res, err
+	logger.Info("mutation succeeded")
+	return res, nil
 }
 
 // Convert implements app.App and handles resource conversion requests
@@ -603,6 +609,7 @@ func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawO
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
+	logger := conversionLoggerFromContext(ctx, req)
 	srcAPIVersion, _ := req.SourceGVK.ToAPIVersionAndKind()
 	dstAPIVersion, _ := req.TargetGVK.ToAPIVersionAndKind()
 	converted, err := converter.Convert(k8s.RawKind{
@@ -613,11 +620,13 @@ func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawO
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
 	if err != nil {
-		conversionLoggerFromContext(ctx, req).Error("conversion failed: %v", err)
+		logger.Error("conversion failed: %v", err)
+		return nil, err
 	}
+	logger.Info("conversion succeeded")
 	return &app.RawObject{
 		Raw: converted,
-	}, err
+	}, nil
 }
 
 // CallCustomRoute implements app.App and handles custom resource route requests
