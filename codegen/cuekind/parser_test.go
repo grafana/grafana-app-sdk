@@ -10,7 +10,7 @@ import (
 )
 
 func TestParseManifestTestApp(t *testing.T) {
-	parser, err := NewParser(testingCue(t), false, false)
+	parser, err := NewParser(testingCue(t), false)
 	require.NoError(t, err)
 
 	manifest, err := parser.ParseManifest("testManifest")
@@ -50,20 +50,8 @@ func TestParseManifestTestApp(t *testing.T) {
 	assert.Len(t, versions[2].Kinds(), 1)
 }
 
-func TestParseManifestPerKindVersion(t *testing.T) {
-	parser, err := NewParser(testingCue(t), false, true)
-	require.NoError(t, err)
-
-	manifest, err := parser.ParseManifest("testManifest")
-	require.NoError(t, err)
-
-	assert.Equal(t, "test-app", manifest.Properties().AppName)
-	require.NotEmpty(t, manifest.Versions())
-	require.NotEmpty(t, manifest.Kinds())
-}
-
 func TestParseManifestKindProperties(t *testing.T) {
-	parser, err := NewParser(testingCue(t), false, false)
+	parser, err := NewParser(testingCue(t), false)
 	require.NoError(t, err)
 
 	manifest, err := parser.ParseManifest("testManifest")
@@ -94,7 +82,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 }
 
 func TestParseManifestRoutes(t *testing.T) {
-	parser, err := NewParser(testingCue(t), false, false)
+	parser, err := NewParser(testingCue(t), false)
 	require.NoError(t, err)
 
 	t.Run("testManifest v3", func(t *testing.T) {
@@ -144,7 +132,7 @@ func TestParseManifestRoutes(t *testing.T) {
 }
 
 func TestParseManifestCustomApp(t *testing.T) {
-	parser, err := NewParser(testingCue(t), false, false)
+	parser, err := NewParser(testingCue(t), false)
 	require.NoError(t, err)
 
 	manifest, err := parser.ParseManifest("customManifest")
@@ -163,7 +151,7 @@ func TestParseManifestCustomApp(t *testing.T) {
 }
 
 func TestParseManifestInvalidCases(t *testing.T) {
-	parser, err := NewParser(testingCue(t), false, false)
+	parser, err := NewParser(testingCue(t), false)
 	require.NoError(t, err)
 
 	tests := []struct {

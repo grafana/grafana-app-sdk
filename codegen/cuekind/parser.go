@@ -12,31 +12,24 @@ import (
 const DefaultManifestSelector = "manifest"
 
 type Parser struct {
-	root                 cue.Value
-	perKindVersion       bool
-	loadedCUEDefinitions *cueDefinitions
+	root        cue.Value
+	manifestDef cue.Value
 }
 
 type parser[T any] struct {
 	parseFunc func(selectors ...string) ([]T, error)
 }
 
-type cueDefinitions struct {
-	Manifest    cue.Value
-	OldManifest cue.Value
-}
-
 // NewParser creates a new parser instance for the provided CUE value and config.
-func NewParser(c *Cue, enableOperatorStatusGeneration, perKindVersion bool) (*Parser, error) {
-	defs, err := getCUEDefinitions(c.Defs, enableOperatorStatusGeneration)
+func NewParser(c *Cue, enableOperatorStatusGeneration bool) (*Parser, error) {
+	manifestDef, err := getManifestDefinition(c.Defs, enableOperatorStatusGeneration)
 	if err != nil {
-		return nil, fmt.Errorf("could not load internal kind definition: %w", err)
+		return nil, fmt.Errorf("could not load manifest definition: %w", err)
 	}
 
 	return &Parser{
-		root:                 c.Root,
-		perKindVersion:       perKindVersion,
-		loadedCUEDefinitions: defs,
+		root:        c.Root,
+		manifestDef: manifestDef,
 	}, nil
 }
 
@@ -71,19 +64,7 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 		val = val.LookupPath(cue.MakePath(cue.Str(manifestSelector)))
 	}
 
-	if p.perKindVersion {
-		val = val.Unify(p.loadedCUEDefinitions.OldManifest)
-		if val.Err() != nil {
-			return nil, val.Err()
-		}
-		manifest := OldManifest{}
-		if err := val.Decode(&manifest); err != nil {
-			return nil, err
-		}
-		return manifest.toSimpleManifest(), nil
-	}
-
-	val = val.Unify(p.loadedCUEDefinitions.Manifest)
+	val = val.Unify(p.manifestDef)
 	if val.Err() != nil {
 		return nil, val.Err()
 	}
@@ -95,11 +76,10 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 	return manifest, nil
 }
 
-// getCUEDefinitions loads CUE definitions for various types if not yet loaded,
-// and returns a cueDefinitions object with the CUE values for them.
+// getManifestDefinition loads the manifest CUE definition
 // revive complains about the usage of control flag, but it's not a problem here.
 // nolint:revive
-func getCUEDefinitions(defs cue.Value, genOperatorState bool) (*cueDefinitions, error) {
+func getManifestDefinition(defs cue.Value, genOperatorState bool) (cue.Value, error) {
 	var schemaDef cue.Value
 	if genOperatorState {
 		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("SchemaWithOperatorState")))
@@ -107,20 +87,15 @@ func getCUEDefinitions(defs cue.Value, genOperatorState bool) (*cueDefinitions, 
 		schemaDef = defs.LookupPath(cue.MakePath(cue.Str("Schema")))
 	}
 
-	// Bake the schema constraint into Kind and KindOld within defs so that
-	// Manifest/ManifestOld (which reference them) inherit the correct schema.
+	// Bake the schema constraint into Kind within defs so that
+	// Manifest (which references it) inherits the correct schema.
 	defs = defs.FillPath(cue.MakePath(cue.Str("Kind"), cue.Str("schema")), schemaDef)
-	defs = defs.FillPath(cue.MakePath(cue.Str("KindOld"), cue.Str("versions"), cue.AnyString, cue.Str("schema")), schemaDef)
 
 	manifestDef := defs.LookupPath(cue.MakePath(cue.Str("Manifest")))
-	oldManifestDef := defs.LookupPath(cue.MakePath(cue.Str("ManifestOld")))
 
-	return &cueDefinitions{
-			Manifest:    manifestDef,
-			OldManifest: oldManifestDef,
-		}, errors.Join(
+	return manifestDef,
+		errors.Join(
 			schemaDef.Err(),
 			manifestDef.Err(),
-			oldManifestDef.Err(),
 		)
 }

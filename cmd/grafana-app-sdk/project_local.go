@@ -247,7 +247,6 @@ func projectLocalEnvGenerate(cmd *cobra.Command, _ []string) error {
 			}
 			parser, err := cuekind.NewParser(cue,
 				cfg.Codegen.EnableOperatorStatusGeneration,
-				cfg.Kinds.PerKindVersion,
 			)
 			if err != nil {
 				return nil, err
@@ -881,7 +880,6 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, conf
 		}
 		parser, err := cuekind.NewParser(cue,
 			cfg.Codegen.EnableOperatorStatusGeneration,
-			cfg.Kinds.PerKindVersion,
 		)
 		if err != nil {
 			return err
