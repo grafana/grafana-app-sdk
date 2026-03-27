@@ -612,7 +612,7 @@ func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawO
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
-	logger := conversionLoggerFromContext(ctx, req).With("action", "convert")
+	logger := conversionLoggerFromContext(ctx, req)
 	srcAPIVersion, _ := req.SourceGVK.ToAPIVersionAndKind()
 	dstAPIVersion, _ := req.TargetGVK.ToAPIVersionAndKind()
 	converted, err := converter.Convert(k8s.RawKind{
