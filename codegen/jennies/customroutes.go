@@ -118,10 +118,10 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 
 func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute, openAPINamer func(string) string) (codejen.Files, error) {
 	files := make(codejen.Files, 0)
-	if !customRoute.Response.Schema.Exists() {
+	if !customRoute.Response.Exists() {
 		return nil, errors.New("custom route response is required")
 	}
-	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
+	if !customRoute.ResponseMetadata.TypeMeta && (customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.ObjectMeta) {
 		return nil, errors.New("custom route response metadata must have TypeMeta if ListMeta or ObjectMeta are present")
 	}
 	if filenamePrefix != "" {
@@ -197,16 +197,16 @@ func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, pack
 }
 
 func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.CustomRoute, typeName, packageName, filenamePrefix, fileBasePath string, openAPINamer func(string) string) (codejen.Files, error) {
-	if !customRoute.Response.Metadata.TypeMeta && (customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.ObjectMeta) {
+	if !customRoute.ResponseMetadata.TypeMeta && (customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.ObjectMeta) {
 		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 	files := make(codejen.Files, 0)
 	bodyName := typeName + "Body"
 	goGenTypeName := "Response"
-	if customRoute.Response.Metadata.ListMeta || customRoute.Response.Metadata.TypeMeta || customRoute.Response.Metadata.ObjectMeta {
+	if customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.TypeMeta || customRoute.ResponseMetadata.ObjectMeta {
 		goGenTypeName = "Body"
 	}
-	responseTypes, err := GoTypesFromCUE(customRoute.Response.Schema, CUEGoConfig{
+	responseTypes, err := GoTypesFromCUE(customRoute.Response, CUEGoConfig{
 		PackageName:                    packageName,
 		Name:                           goGenTypeName,
 		NamePrefix:                     toExportedFieldName(typeName), // TODO: not sure if we want this set
@@ -218,7 +218,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	}
 	typeName += "Response"
 	body := ""
-	if customRoute.Response.Metadata.TypeMeta {
+	if customRoute.ResponseMetadata.TypeMeta {
 		body = "body_"
 	}
 	formattedResponseTypes, err := c.formatGoBytes(responseTypes)
@@ -230,7 +230,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 		RelativePath: fmt.Sprintf(path.Join(fileBasePath, "%s%s_response_%stypes_gen.go"), filenamePrefix, strings.ToLower(customRoute.Name), body),
 		From:         []codejen.NamedJenny{c},
 	})
-	if customRoute.Response.Metadata.TypeMeta {
+	if customRoute.ResponseMetadata.TypeMeta {
 		wrapperOpenAPIName := ""
 		if openAPINamer != nil {
 			wrapperOpenAPIName = openAPINamer(typeName)
@@ -240,8 +240,8 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 			PackageName:               packageName,
 			TypeName:                  toExportedFieldName(bodyName),
 			WrapperTypeName:           typeName,
-			HasObjectMeta:             customRoute.Response.Metadata.ObjectMeta,
-			HasListMeta:               customRoute.Response.Metadata.ListMeta,
+			HasObjectMeta:             customRoute.ResponseMetadata.ObjectMeta,
+			HasListMeta:               customRoute.ResponseMetadata.ListMeta,
 			OpenAPIModelName:          wrapperOpenAPIName,
 			AddDeepCopyForTypeName:    true,
 			KubernetesCodegenComments: true,

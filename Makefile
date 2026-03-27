@@ -30,7 +30,7 @@ check-go-version:
 		exit 1; \
 	fi
 
-LINTER_VERSION := 2.5.0
+LINTER_VERSION := 2.11.4
 LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint

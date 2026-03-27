@@ -309,8 +309,8 @@ Version: S={
 		}
 	}
 	kinds: [...{
-		group:         S.fullGroup
-		manifestGroup: S.group
+		group:         S.group
+		manifestGroup: S.manifestGroup
 		_codegen:      S.codegen
 	} & Kind]
 	// routes is a map of path patterns to custom routes that will be exposed as resources for this version.
@@ -343,6 +343,7 @@ Version: S={
 	title:       string & !=""
 	description: string | *""
 	kinds: [...#RoleKind]
+	routes: [...string]
 }
 
 Manifest: S={
@@ -404,7 +405,7 @@ Manifest: S={
 	// If unspecified, roles will be created for "reader", "editor", and "admin" automatically that include all kinds.
 	// A role name must begin with the app name and a colon before (e.g. "<myapp>:editor")
 	roles?: {
-		[string & =~"^(S.appName):[a-z0-9]+$"]: #Role
+		[string & =~"^\(S.appName):[a-z0-9]+$"]: #Role
 	}
 	// RoleBindings binds the roles specified in Roles to groups.
 	// Basic groups are "anonymous", "viewer", "editor", and "admin".

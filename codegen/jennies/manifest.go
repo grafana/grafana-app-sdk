@@ -703,7 +703,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting body schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
 		maps.Copy(additionalSchemas, additional)
-		targetResponses, additional, err := customRouteResponseToSpec3Responses(sourceRoute.Response, operationID)
+		targetResponses, additional, err := customRouteResponseToSpec3Responses(sourceRoute.Response, sourceRoute.ResponseMetadata, operationID)
 		if err != nil {
 			return spec3.PathProps{}, nil, fmt.Errorf("error converting response schema for %s %s: %w", sourceMethod, sourcePath, err)
 		}
@@ -814,34 +814,33 @@ func cueSchemaToRequestBody(v cue.Value, refPrefix string) (*spec3.RequestBody, 
 	return requestBody, additionalSchemas, nil
 }
 
-func customRouteResponseToSpec3Responses(customRouteResponse codegen.CustomRouteResponse, refPrefix string) (*spec3.Responses, map[string]spec.SchemaProps, error) {
-	v := customRouteResponse.Schema
-	if !v.Exists() {
+func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata codegen.CustomRouteResponseMetadata, refPrefix string) (*spec3.Responses, map[string]spec.SchemaProps, error) {
+	if !responseSchema.Exists() {
 		return nil, nil, nil
 	}
-	if err := v.Err(); err != nil {
+	if err := responseSchema.Err(); err != nil {
 		return nil, nil, fmt.Errorf("input CUE value for response has error: %w", err)
 	}
-	if !customRouteResponse.Metadata.TypeMeta && (customRouteResponse.Metadata.ListMeta || customRouteResponse.Metadata.ObjectMeta) {
+	if !metadata.TypeMeta && (metadata.ListMeta || metadata.ObjectMeta) {
 		return nil, nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
 
-	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(v, refPrefix)
+	schemaProps, additionalSchemas, err := cueSchemaToSpecSchemaProps(responseSchema, refPrefix)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
-	if customRouteResponse.Metadata.TypeMeta {
+	if metadata.TypeMeta {
 		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
 		schemaProps.Properties["kind"] = kindPropSchema
 		schemaProps.Required = append(schemaProps.Required, "apiVersion", "kind")
 	}
-	if customRouteResponse.Metadata.ObjectMeta {
+	if metadata.ObjectMeta {
 		if _, exists := schemaProps.Properties["metadata"]; exists {
 			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
 		}
 		schemaProps.Properties["metadata"] = objectMetaPropSchema
 		schemaProps.Required = append(schemaProps.Required, "metadata")
-	} else if customRouteResponse.Metadata.ListMeta {
+	} else if metadata.ListMeta {
 		if _, exists := schemaProps.Properties["metadata"]; exists {
 			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
 		}
