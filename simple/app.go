@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -572,7 +573,8 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
-	logger := admissionLoggerFromContext(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "validate")
+	ctx = logging.Context(ctx, logger)
 	err := k.Validator.Validate(ctx, req)
 	if err != nil {
 		logger.With("error", err).Error("validation failed")
@@ -592,7 +594,8 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
-	logger := admissionLoggerFromContext(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "mutate")
+	ctx = logging.Context(ctx, logger)
 	res, err := k.Mutator.Mutate(ctx, req)
 	if err != nil {
 		logger.With("error", err).Error("mutation failed")
@@ -609,7 +612,7 @@ func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawO
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
-	logger := conversionLoggerFromContext(ctx, req)
+	logger := conversionLoggerFromContext(ctx, req).With("action", "convert")
 	srcAPIVersion, _ := req.SourceGVK.ToAPIVersionAndKind()
 	dstAPIVersion, _ := req.TargetGVK.ToAPIVersionAndKind()
 	converted, err := converter.Convert(k8s.RawKind{
