@@ -81,7 +81,7 @@ testKind: {
 		"v1": {
 			schema: {
 				spec: {
-					stringField: string
+					stringField: string & =~"^[a-zA-Z_][a-zA-Z0-9_-]*$"
 				}
 			}
 		}
