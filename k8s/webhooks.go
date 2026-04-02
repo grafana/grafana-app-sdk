@@ -159,6 +159,9 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+	logging.DefaultLogger.Info("Serving HTTPS Webhooks", "port", w.port,
+		"validatingControllers", len(w.validatingControllers),
+		"mutatingControllers", len(w.mutatingControllers))
 	errCh := make(chan error, 1)
 	go func() {
 		errCh <- server.ListenAndServeTLS(w.tlsConfig.CertPath, w.tlsConfig.KeyPath)
@@ -279,6 +282,12 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
+
+	logging.FromContext(req.Context()).Debug("Handling mutate for kind",
+		"group", admRev.Request.RequestKind.Group,
+		"version", admRev.Request.RequestKind.Version,
+		"kind", admRev.Request.RequestKind.Kind,
+	)
 
 	// Look up the schema and controller
 	var schema resource.Kind

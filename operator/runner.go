@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -130,6 +131,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
 	}
+	logger := logging.FromContext(ctx)
 
 	// Get capabilities from manifest
 	manifestData, err := s.getManifestData(provider)
@@ -198,12 +200,14 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 		if s.webhookServer == nil {
 			return errors.New("app has capabilities that require webhooks, but webhook server was not provided TLS config")
 		}
+		logger.Info("Configuring webhook server")
 		for _, kind := range a.ManagedKinds() {
 			c, ok := vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind(), kind.Version())]
 			if !ok {
 				continue
 			}
 			if c.validation {
+				logger.Info("Adding validating webhook for kind", "group", kind.Group(), "version", kind.Version(), "kind", kind.Kind())
 				s.webhookServer.AddValidatingAdmissionController(&resource.SimpleValidatingAdmissionController{
 					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
 						return a.Validate(ctx, s.translateAdmissionRequest(request))
@@ -211,6 +215,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 				}, kind)
 			}
 			if c.mutation {
+				logger.Info("Adding mutating webhook for kind", "group", kind.Group(), "version", kind.Version(), "kind", kind.Kind())
 				s.webhookServer.AddMutatingAdmissionController(&resource.SimpleMutatingAdmissionController{
 					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
 						resp, err := a.Mutate(ctx, s.translateAdmissionRequest(request))
@@ -219,6 +224,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 				}, kind)
 			}
 			if c.conversion {
+				logger.Info("Adding conversion webhook for kind", "group", kind.Group(), "kind", kind.Kind())
 				s.webhookServer.AddConverter(toWebhookConverter(a), metav1.GroupKind{
 					Group: kind.Group(),
 					Kind:  kind.Kind(),
