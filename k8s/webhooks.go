@@ -222,7 +222,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	// If we didn't get a controller, return a failure
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "validating", resolvedKind.Group, resolvedKind.Kind)
+		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "validating", resolvedKind.Group, resolvedKind.Version, resolvedKind.Kind)
 		logging.FromContext(req.Context()).Error("No controller", "error", err)
 		return
 	}
@@ -302,7 +302,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// If we didn't get a controller, return a failure
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "mutating", resolvedKind.Group, resolvedKind.Kind)
+		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "mutating", resolvedKind.Group, resolvedKind.Version, resolvedKind.Kind)
 		return
 	}
 

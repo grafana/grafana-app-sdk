@@ -289,7 +289,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			serverConfig:       WebhookServerConfig{},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
-			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo', version 'v1', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 		{
@@ -418,7 +418,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytesConverted,
-			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo', version 'v2', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 	}
@@ -481,7 +481,7 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			serverConfig:       WebhookServerConfig{},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
-			expectedResponse:   []byte(`no validating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no validating admission controller defined for group 'foo', version 'v1', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 		{
@@ -563,7 +563,7 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytesConverted,
-			expectedResponse:   []byte(`no validating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no validating admission controller defined for group 'foo', version 'v2', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 	}
