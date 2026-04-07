@@ -197,6 +197,11 @@ var _ = resource.NewJSONCodec().Write(admissionRequestObjectBytes, admissionRequ
 var admissionRequestBytes = []byte(`{
 	"request": {
 		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
 		"requestKind": {
 			"group": "foo",
 			"version": "v1",
@@ -208,6 +213,11 @@ var admissionRequestBytes = []byte(`{
 var admissionRequestBytesNoDefaults = []byte(`{
 	"request": {
 		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
 		"requestKind": {
 			"group": "foo",
 			"version": "v1",
