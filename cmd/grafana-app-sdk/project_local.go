@@ -73,6 +73,10 @@ type localEnvWebhookConfig struct {
 	Validating bool `json:"validating" yaml:"validating"`
 	Converting bool `json:"converting" yaml:"converting"`
 	Port       int  `json:"port" yaml:"port"`
+	// MutatingKindVersions maps lowercase kind name to the versions that have mutation configured.
+	MutatingKindVersions map[string][]string `json:"-" yaml:"-"`
+	// ValidatingKindVersions maps lowercase kind name to the versions that have validation configured.
+	ValidatingKindVersions map[string][]string `json:"-" yaml:"-"`
 }
 
 type additionalMountedVolume struct {
@@ -377,10 +381,12 @@ type yamlGenProperties struct {
 }
 
 type yamlGenPropsCRD struct {
-	MachineName       string
-	PluralMachineName string
-	Group             string
-	Versions          []string
+	MachineName        string
+	PluralMachineName  string
+	Group              string
+	Versions           []string
+	MutatingVersions   []string
+	ValidatingVersions []string
 }
 
 type yamlGenPropsService struct {
@@ -535,11 +541,14 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 				}
 			}
 		}
+		kindKey := strings.ToLower(yml.Spec.Names.Kind)
 		props.CRDs = append(props.CRDs, yamlGenPropsCRD{
-			MachineName:       strings.ToLower(yml.Spec.Names.Kind),
-			PluralMachineName: strings.ToLower(yml.Spec.Names.Plural),
-			Group:             yml.Spec.Group,
-			Versions:          versions,
+			MachineName:        kindKey,
+			PluralMachineName:  strings.ToLower(yml.Spec.Names.Plural),
+			Group:              yml.Spec.Group,
+			Versions:           versions,
+			MutatingVersions:   config.Webhooks.MutatingKindVersions[kindKey],
+			ValidatingVersions: config.Webhooks.ValidatingKindVersions[kindKey],
 		})
 		props.APIGroups[yml.Spec.Group] = groupVersions
 	}
@@ -924,16 +933,25 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, conf
 			if md.Kind != "AppManifest" {
 				continue
 			}
+			if envCfg.Webhooks.MutatingKindVersions == nil {
+				envCfg.Webhooks.MutatingKindVersions = make(map[string][]string)
+			}
+			if envCfg.Webhooks.ValidatingKindVersions == nil {
+				envCfg.Webhooks.ValidatingKindVersions = make(map[string][]string)
+			}
 			for _, v := range md.Spec.Versions {
 				for _, k := range v.Kinds {
 					if k.Conversion {
 						envCfg.Webhooks.Converting = true
 					}
+					kindKey := strings.ToLower(k.Kind)
 					if k.Admission != nil && k.Admission.SupportsAnyValidation() {
 						envCfg.Webhooks.Validating = true
+						envCfg.Webhooks.ValidatingKindVersions[kindKey] = append(envCfg.Webhooks.ValidatingKindVersions[kindKey], v.Name)
 					}
 					if k.Admission != nil && k.Admission.SupportsAnyMutation() {
 						envCfg.Webhooks.Mutating = true
+						envCfg.Webhooks.MutatingKindVersions[kindKey] = append(envCfg.Webhooks.MutatingKindVersions[kindKey], v.Name)
 					}
 				}
 			}
