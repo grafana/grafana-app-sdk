@@ -108,6 +108,7 @@ func projectLocalEnvInit(cmd *cobra.Command, _ []string) error {
 }
 
 func initializeLocalEnvFiles(basePath, clusterName, operatorImageName string) error {
+	clusterName = sanitizeClusterName(clusterName)
 	localPath := filepath.Join(basePath, "local")
 
 	// Write the default local config file
@@ -719,6 +720,22 @@ func generateTiltfile() ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), err
+}
+
+// sanitizeClusterName converts a Go module path into a valid RFC 1123 hostname
+// for use as a k3d cluster name. It extracts the last two path segments (org/repo)
+// and replaces any invalid characters with hyphens.
+// e.g. "github.com/grafana/app" -> "grafana-app"
+func sanitizeClusterName(name string) string {
+	parts := strings.Split(name, "/")
+	if len(parts) > 2 {
+		parts = parts[len(parts)-2:]
+	}
+	name = strings.Join(parts, "-")
+	name = strings.ToLower(name)
+	name = kubeReplaceRegexp.ReplaceAllString(name, "-")
+	name = strings.Trim(name, "-")
+	return name
 }
 
 // expandPath expands a path, handling ~ for home directory and relative paths.
