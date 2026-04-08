@@ -69,10 +69,79 @@ type dataSourceConfig struct {
 }
 
 type localEnvWebhookConfig struct {
-	Mutating   bool `json:"mutating" yaml:"mutating"`
-	Validating bool `json:"validating" yaml:"validating"`
-	Converting bool `json:"converting" yaml:"converting"`
-	Port       int  `json:"port" yaml:"port"`
+	Port int `json:"port" yaml:"port"`
+	// Manifests holds parsed AppManifest data used to derive webhook configuration.
+	// This is the single source of truth for which kinds/versions have webhooks.
+	Manifests []app.ManifestData `json:"-" yaml:"-"`
+}
+
+func (c localEnvWebhookConfig) hasConverting() bool {
+	for _, m := range c.Manifests {
+		for _, v := range m.Versions {
+			for _, k := range v.Kinds {
+				if k.Conversion {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (c localEnvWebhookConfig) hasMutating() bool {
+	for _, m := range c.Manifests {
+		for _, v := range m.Versions {
+			for _, k := range v.Kinds {
+				if k.Admission != nil && k.Admission.SupportsAnyMutation() {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (c localEnvWebhookConfig) hasValidating() bool {
+	for _, m := range c.Manifests {
+		for _, v := range m.Versions {
+			for _, k := range v.Kinds {
+				if k.Admission != nil && k.Admission.SupportsAnyValidation() {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// mutatingVersions returns the versions that have mutation configured for the given lowercase kind name.
+func (c localEnvWebhookConfig) mutatingVersions(kindLower string) []string {
+	var versions []string
+	for _, m := range c.Manifests {
+		for _, v := range m.Versions {
+			for _, k := range v.Kinds {
+				if strings.ToLower(k.Kind) == kindLower && k.Admission != nil && k.Admission.SupportsAnyMutation() {
+					versions = append(versions, v.Name)
+				}
+			}
+		}
+	}
+	return versions
+}
+
+// validatingVersions returns the versions that have validation configured for the given lowercase kind name.
+func (c localEnvWebhookConfig) validatingVersions(kindLower string) []string {
+	var versions []string
+	for _, m := range c.Manifests {
+		for _, v := range m.Versions {
+			for _, k := range v.Kinds {
+				if strings.ToLower(k.Kind) == kindLower && k.Admission != nil && k.Admission.SupportsAnyValidation() {
+					versions = append(versions, v.Name)
+				}
+			}
+		}
+	}
+	return versions
 }
 
 type additionalMountedVolume struct {
@@ -382,10 +451,12 @@ type yamlGenPropsProxyCert struct {
 }
 
 type yamlGenPropsCRD struct {
-	MachineName       string
-	PluralMachineName string
-	Group             string
-	Versions          []string
+	MachineName        string
+	PluralMachineName  string
+	Group              string
+	Versions           []string
+	MutatingVersions   []string
+	ValidatingVersions []string
 }
 
 type yamlGenPropsService struct {
@@ -433,7 +504,7 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		SecureJSONData:            make(map[string]string),
 		OperatorImage:             config.OperatorImage,
 		WebhookProperties: yamlGenPropsWebhooks{
-			Enabled: config.Webhooks.Mutating || config.Webhooks.Validating || config.Webhooks.Converting,
+			Enabled: config.Webhooks.hasMutating() || config.Webhooks.hasValidating() || config.Webhooks.hasConverting(),
 		},
 		GenerateGrafanaDeployment: config.GenerateGrafanaDeployment,
 		GrafanaImage:              config.GrafanaImage,
@@ -464,13 +535,13 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		} else {
 			props.WebhookProperties.Port = 8443
 		}
-		if config.Webhooks.Mutating {
+		if config.Webhooks.hasMutating() {
 			props.WebhookProperties.Mutating = "/mutate"
 		}
-		if config.Webhooks.Validating {
+		if config.Webhooks.hasValidating() {
 			props.WebhookProperties.Validating = "/validate"
 		}
-		if config.Webhooks.Converting {
+		if config.Webhooks.hasConverting() {
 			props.WebhookProperties.Converting = "/convert"
 		}
 		// Generate cert bundle
@@ -540,11 +611,14 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 				}
 			}
 		}
+		kindKey := strings.ToLower(yml.Spec.Names.Kind)
 		props.CRDs = append(props.CRDs, yamlGenPropsCRD{
-			MachineName:       strings.ToLower(yml.Spec.Names.Kind),
-			PluralMachineName: strings.ToLower(yml.Spec.Names.Plural),
-			Group:             yml.Spec.Group,
-			Versions:          versions,
+			MachineName:        kindKey,
+			PluralMachineName:  strings.ToLower(yml.Spec.Names.Plural),
+			Group:              yml.Spec.Group,
+			Versions:           versions,
+			MutatingVersions:   config.Webhooks.mutatingVersions(kindKey),
+			ValidatingVersions: config.Webhooks.validatingVersions(kindKey),
 		})
 		props.APIGroups[yml.Spec.Group] = groupVersions
 	}
@@ -980,19 +1054,7 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, conf
 			if md.Kind != "AppManifest" {
 				continue
 			}
-			for _, v := range md.Spec.Versions {
-				for _, k := range v.Kinds {
-					if k.Conversion {
-						envCfg.Webhooks.Converting = true
-					}
-					if k.Admission != nil && k.Admission.SupportsAnyValidation() {
-						envCfg.Webhooks.Validating = true
-					}
-					if k.Admission != nil && k.Admission.SupportsAnyMutation() {
-						envCfg.Webhooks.Mutating = true
-					}
-				}
-			}
+			envCfg.Webhooks.Manifests = append(envCfg.Webhooks.Manifests, md.Spec)
 		}
 	}
 	return nil
