@@ -373,6 +373,11 @@ type yamlGenProperties struct {
 	APIGroups                 map[string][]string // map of group -> list of supported versions
 	GrafanaEnvVars            []grafanaEnvVar
 	GrafanaVolumeMounts       []grafanaVolumeMount
+	ProxyClientCert           yamlGenPropsProxyCert
+}
+
+type yamlGenPropsProxyCert struct {
+	Enabled bool
 }
 
 type yamlGenPropsCRD struct {
@@ -566,6 +571,13 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		return nil, props, err
 	}
 	output.Write([]byte("\n---\n"))
+
+	// Enable proxy client cert mount for Grafana >= 12.0.0.
+	// Uses k3s's own request-header proxy client certs from the node filesystem via hostPath,
+	// so the certs are already trusted by the API server's --requestheader-client-ca-file.
+	if config.GenerateGrafanaDeployment && grafanaImageVersionAtLeast(config.GrafanaImage, 12, 0, 0) {
+		props.ProxyClientCert = yamlGenPropsProxyCert{Enabled: true}
+	}
 
 	// Datasources
 	addedDeps := make(map[string]struct{})
@@ -862,6 +874,50 @@ func generateCerts(dnsName string) (*certBundle, error) {
 		key:  certPrivKeyPEM.Bytes(),
 		ca:   caPEM.Bytes(),
 	}, nil
+}
+
+// grafanaImageVersionAtLeast checks if the Grafana image tag version is >= major.minor.patch.
+// Returns true for non-semver tags (e.g., "latest", "main") as a safe default.
+func grafanaImageVersionAtLeast(image string, major, minor, patch int) bool {
+	// Extract tag from image string (e.g., "grafana/grafana-enterprise:12.0.0" -> "12.0.0")
+	parts := strings.SplitN(image, ":", 2)
+	if len(parts) < 2 || parts[1] == "" {
+		// No tag specified, assume latest
+		return true
+	}
+	tag := parts[1]
+
+	// Try to parse as semver (major.minor.patch, with optional pre-release suffix)
+	vParts := strings.SplitN(tag, ".", 3)
+	if len(vParts) < 3 {
+		// Not a semver tag (e.g., "latest", "main"), assume latest
+		return true
+	}
+	tagMajor, err := strconv.Atoi(vParts[0])
+	if err != nil {
+		return true
+	}
+	tagMinor, err := strconv.Atoi(vParts[1])
+	if err != nil {
+		return true
+	}
+	// Strip any pre-release suffix from patch (e.g., "0-beta1" -> "0")
+	patchStr := vParts[2]
+	if idx := strings.IndexAny(patchStr, "-+"); idx >= 0 {
+		patchStr = patchStr[:idx]
+	}
+	tagPatch, err := strconv.Atoi(patchStr)
+	if err != nil {
+		return true
+	}
+
+	if tagMajor != major {
+		return tagMajor > major
+	}
+	if tagMinor != minor {
+		return tagMinor > minor
+	}
+	return tagPatch >= patch
 }
 
 func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, configName string) error {
