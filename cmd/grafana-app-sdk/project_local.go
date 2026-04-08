@@ -26,6 +26,7 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/semver"
 	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -976,39 +977,20 @@ func grafanaImageVersionAtLeast(image string, major, minor, patch int) bool {
 		// No tag specified, assume latest
 		return true
 	}
-	tag := parts[1]
+	tag := "v" + parts[1]
 
-	// Try to parse as semver (major.minor.patch, with optional pre-release suffix)
-	vParts := strings.SplitN(tag, ".", 3)
-	if len(vParts) < 3 {
-		// Not a semver tag (e.g., "latest", "main"), assume latest
+	if !semver.IsValid(tag) {
+		// Not semver, return true
 		return true
 	}
-	tagMajor, err := strconv.Atoi(vParts[0])
-	if err != nil {
-		return true
-	}
-	tagMinor, err := strconv.Atoi(vParts[1])
-	if err != nil {
-		return true
-	}
-	// Strip any pre-release suffix from patch (e.g., "0-beta1" -> "0")
-	patchStr := vParts[2]
-	if idx := strings.IndexAny(patchStr, "-+"); idx >= 0 {
-		patchStr = patchStr[:idx]
-	}
-	tagPatch, err := strconv.Atoi(patchStr)
-	if err != nil {
+	cmp := fmt.Sprintf("v%d.%d.%d", major, minor, patch)
+	if !semver.IsValid(cmp) {
+		// Shouldn't be able to happen, but just in case
 		return true
 	}
 
-	if tagMajor != major {
-		return tagMajor > major
-	}
-	if tagMinor != minor {
-		return tagMinor > minor
-	}
-	return tagPatch >= patch
+	// Do a semver comparison
+	return semver.Compare(tag, cmp) >= 0
 }
 
 func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, configName string) error {
