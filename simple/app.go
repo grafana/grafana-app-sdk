@@ -16,11 +16,8 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
-<<<<<<< HEAD
-	"github.com/grafana/grafana-app-sdk/metrics"
-=======
 	"github.com/grafana/grafana-app-sdk/logging"
->>>>>>> main
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
