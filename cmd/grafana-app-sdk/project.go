@@ -558,7 +558,6 @@ func projectAddComponent(cmd *cobra.Command, args []string) error {
 	case *cuekind.Cue:
 		parser, err := cuekind.NewParser(v,
 			cfg.Codegen.EnableOperatorStatusGeneration,
-			cfg.Kinds.PerKindVersion,
 		)
 		if err != nil {
 			return err

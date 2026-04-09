@@ -158,7 +158,7 @@ func errorOnDeprecatedFlags(_ *cobra.Command, err error) error {
 		"--noschemasinmanifest": "definitions.manifestSchemas",
 		"--gomodule":            "codegen.goModule",
 		"--gomodgenpath":        "codegen.goModGenPath",
-		"--useoldmanifestkinds": "kinds.perKindVersion",
+		"--useoldmanifestkinds": "REMOVED",
 		"--crdmanifest":         "definitions.manifestVersion",
 	}
 

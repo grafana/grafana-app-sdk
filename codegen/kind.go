@@ -61,13 +61,18 @@ type KindAdmissionCapability struct {
 
 // KindCodegenProperties contains code generation directives for a Kind or KindVersion
 type KindCodegenProperties struct {
-	TS KindCodegenLanguageProperties[KindCodegenTSConfig] `json:"ts"`
-	Go KindCodegenLanguageProperties[KindCodegenGoConfig] `json:"go"`
+	TS KindCodegenTSProperties `json:"ts"`
+	Go KindCodegenGoProperties `json:"go"`
 }
 
-type KindCodegenLanguageProperties[T any] struct {
-	Enabled bool `json:"enabled"`
-	Config  T    `json:"config"`
+type KindCodegenTSProperties struct {
+	Enabled bool                `json:"enabled"`
+	Config  KindCodegenTSConfig `json:"config"`
+}
+
+type KindCodegenGoProperties struct {
+	Enabled bool           `json:"enabled"`
+	Config  map[string]any `json:"config"`
 }
 
 // KindCodegenTSConfig is the TypeScript configuration options for codegen,
@@ -75,11 +80,6 @@ type KindCodegenLanguageProperties[T any] struct {
 type KindCodegenTSConfig struct {
 	ImportsMap        map[string]string `json:"importsMap"`
 	EnumsAsUnionTypes bool              `json:"enumsAsUnionTypes"`
-}
-
-// KindCodegenGoConfig is the Go configuration options for codegen,
-// modeled after the cog Go codegen options.
-type KindCodegenGoConfig struct {
 }
 
 type AdditionalPrinterColumn struct {
@@ -97,12 +97,6 @@ type CustomRouteRequest struct {
 	Body  cue.Value `json:"body,omitempty"`
 }
 
-// CustomRouteResponse represents the response part of a custom route definition.
-type CustomRouteResponse struct {
-	Schema   cue.Value                   `json:"schema,omitempty"`
-	Metadata CustomRouteResponseMetadata `json:"metadata,omitempty"`
-}
-
 type CustomRouteResponseMetadata struct {
 	TypeMeta   bool `json:"typeMeta"`
 	ListMeta   bool `json:"listMeta"`
@@ -111,10 +105,11 @@ type CustomRouteResponseMetadata struct {
 
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
-	Name       string              `json:"name"`
-	Request    CustomRouteRequest  `json:"request"`
-	Response   CustomRouteResponse `json:"response"`
-	Extensions map[string]any      `json:"extensions,omitempty"`
+	Name             string                      `json:"name"`
+	Request          CustomRouteRequest          `json:"request"`
+	Response         cue.Value                   `json:"response"`
+	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
+	Extensions       map[string]any              `json:"extensions,omitempty"`
 }
 
 type KindVersion struct {
@@ -128,7 +123,7 @@ type KindVersion struct {
 	Validation               KindAdmissionCapability           `json:"validation"`
 	Mutation                 KindAdmissionCapability           `json:"mutation"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
-	Routes                   map[string]map[string]CustomRoute `json:"routes"`
+	Routes                   map[string]map[string]CustomRoute `json:"routes,omitempty"`
 }
 
 // AnyKind is a simple implementation of Kind

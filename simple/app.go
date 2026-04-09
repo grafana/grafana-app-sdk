@@ -16,7 +16,11 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+<<<<<<< HEAD
 	"github.com/grafana/grafana-app-sdk/metrics"
+=======
+	"github.com/grafana/grafana-app-sdk/logging"
+>>>>>>> main
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -56,9 +60,7 @@ func NewAppProvider(manifest app.Manifest, cfg app.SpecificConfig, newAppFunc fu
 	}
 }
 
-var (
-	_ app.App = &App{}
-)
+var _ app.App = &App{}
 
 // KindMutator is an interface which describes an object which can mutate a kind, used in AppManagedKind
 type KindMutator interface {
@@ -669,6 +671,8 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
+	logger := admissionLoggerFromContext(ctx, req).With("action", "validate")
+	ctx = logging.Context(ctx, logger)
 	inflightLabels := prometheus.Labels{
 		"operation": "validate",
 		"group":     req.Group,
@@ -693,7 +697,12 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	}
 	a.admissionLatency.With(labels).Observe(time.Since(start).Seconds())
 	a.admissionTotal.With(labels).Inc()
-	return err
+	if err != nil {
+		logger.With("error", err).Error("validation failed")
+		return err
+	}
+	logger.Info("validation succeeded")
+	return nil
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
@@ -706,6 +715,8 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
+	logger := admissionLoggerFromContext(ctx, req).With("action", "mutate")
+	ctx = logging.Context(ctx, logger)
 	inflightLabels := prometheus.Labels{
 		"operation": "mutate",
 		"group":     req.Group,
@@ -730,16 +741,22 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	}
 	a.admissionLatency.With(labels).Observe(time.Since(start).Seconds())
 	a.admissionTotal.With(labels).Inc()
-	return resp, err
+	if err != nil {
+		logger.With("error", err).Error("mutation failed")
+		return nil, err
+	}
+	logger.Info("mutation succeeded")
+	return resp, nil
 }
 
 // Convert implements app.App and handles resource conversion requests
-func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
+	logger := conversionLoggerFromContext(ctx, req)
 	inflightLabels := prometheus.Labels{
 		"group":          req.SourceGVK.Group,
 		"kind":           req.SourceGVK.Kind,
@@ -771,9 +788,14 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 	}
 	a.conversionLatency.With(labels).Observe(time.Since(start).Seconds())
 	a.conversionTotal.With(labels).Inc()
+	if err != nil {
+		logger.With("error", err).Error("conversion failed")
+		return nil, err
+	}
+	logger.Info("conversion succeeded")
 	return &app.RawObject{
 		Raw: converted,
-	}, err
+	}, nil
 }
 
 // CallCustomRoute implements app.App and handles custom resource route requests
@@ -789,7 +811,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 			inflightLabels := a.customRouteInflightLabels(req)
 			a.customRouteInflight.With(inflightLabels).Inc()
 			start := time.Now()
-			err := handler(ctx, writer, req)
+			err := handleCustomRouteWithLogging(ctx, handler, writer, req)
 			a.customRouteInflight.With(inflightLabels).Dec()
 			a.observeCustomRoute(start, req, err)
 			return err
@@ -808,7 +830,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		inflightLabels := a.customRouteInflightLabels(req)
 		a.customRouteInflight.With(inflightLabels).Inc()
 		start := time.Now()
-		err := handler(ctx, writer, req)
+		err := handleCustomRouteWithLogging(ctx, handler, writer, req)
 		a.customRouteInflight.With(inflightLabels).Dec()
 		a.observeCustomRoute(start, req, err)
 		return err

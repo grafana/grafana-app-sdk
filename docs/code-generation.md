@@ -20,8 +20,7 @@ config: {
 	}
 
 	kinds: {
-		grouping:       "kind"
-		perKindVersion: false
+		grouping: "kind"
 	}
 
 	codegen: {

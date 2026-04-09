@@ -9,8 +9,7 @@ config: {
 	}
 
 	kinds: {
-		grouping:       "group"
-		perKindVersion: false
+		grouping: "group"
 	}
 
 	codegen: {

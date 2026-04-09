@@ -17,7 +17,6 @@ func TestParseConfigOverridesDefaults(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "group", cfg.Kinds.Grouping)
-	assert.True(t, cfg.Kinds.PerKindVersion)
 
 	assert.False(t, cfg.Definitions.ManifestSchemas)
 	assert.Equal(t, "yaml", cfg.Definitions.Encoding)
@@ -39,7 +38,6 @@ func TestParseConfigDefaultFallback(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "kind", cfg.Kinds.Grouping)
-	assert.False(t, cfg.Kinds.PerKindVersion)
 
 	assert.True(t, cfg.Definitions.ManifestSchemas)
 	assert.Equal(t, "json", cfg.Definitions.Encoding)

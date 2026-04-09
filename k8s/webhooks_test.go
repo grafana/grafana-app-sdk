@@ -197,6 +197,11 @@ var _ = resource.NewJSONCodec().Write(admissionRequestObjectBytes, admissionRequ
 var admissionRequestBytes = []byte(`{
 	"request": {
 		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
 		"requestKind": {
 			"group": "foo",
 			"version": "v1",
@@ -208,6 +213,11 @@ var admissionRequestBytes = []byte(`{
 var admissionRequestBytesNoDefaults = []byte(`{
 	"request": {
 		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
 		"requestKind": {
 			"group": "foo",
 			"version": "v1",
@@ -223,6 +233,25 @@ var admissionRequestBytesNoDefaults = []byte(`{
 				"foo": "bar"
 			}
 		}
+	}
+}`)
+
+// admissionRequestBytesConverted simulates a converted resource where the resolved kind (v2)
+// differs from the original request kind (v1), as happens with CRD webhook conversion.
+var admissionRequestBytesConverted = []byte(`{
+	"request": {
+		"uid": "foo",
+		"kind": {
+			"group": "foo",
+			"version": "v2",
+			"kind": "bar"
+		},
+		"requestKind": {
+			"group": "foo",
+			"version": "v1",
+			"kind": "bar"
+		},
+		"object": ` + admissionRequestObjectBytes.String() + `
 	}
 }`)
 
@@ -260,7 +289,7 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			serverConfig:       WebhookServerConfig{},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
-			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo', version 'v1', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 		{
@@ -352,6 +381,46 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			payload:            []byte("{"),
 			expectedStatusCode: http.StatusBadRequest,
 		},
+		{
+			name: "converted resource uses resolved kind for lookup",
+			serverConfig: WebhookServerConfig{
+				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v2", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testMutatingAdmissionController{
+						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+							return &resource.MutatingResponse{
+								UpdatedObject: request.Object,
+							}, nil
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true,"patchType":"JSONPatch","patch":"W10="}}`),
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "converted resource no controller for resolved version",
+			serverConfig: WebhookServerConfig{
+				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testMutatingAdmissionController{
+						MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
+							return nil, NewAdmissionError(fmt.Errorf("wrong controller"), http.StatusConflict, "err_reason")
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`no mutating admission controller defined for group 'foo', version 'v2', and kind 'bar'`),
+			expectedStatusCode: http.StatusInternalServerError,
+		},
 	}
 
 	for _, test := range tests {
@@ -412,7 +481,7 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			serverConfig:       WebhookServerConfig{},
 			reqMethod:          http.MethodPost,
 			payload:            admissionRequestBytes,
-			expectedResponse:   []byte(`no validating admission controller defined for group 'foo' and kind 'bar'`),
+			expectedResponse:   []byte(`no validating admission controller defined for group 'foo', version 'v1', and kind 'bar'`),
 			expectedStatusCode: http.StatusInternalServerError,
 		},
 		{
@@ -458,6 +527,44 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			reqMethod:          http.MethodPost,
 			payload:            []byte("{"),
 			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name: "converted resource uses resolved kind for lookup",
+			serverConfig: WebhookServerConfig{
+				ValidatingControllers: map[*resource.Kind]resource.ValidatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v2", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testValidatingAdmissionController{
+						ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+							return nil
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`{"response":{"uid":"foo","allowed":true}}`),
+			expectedStatusCode: http.StatusOK,
+		},
+		{
+			name: "converted resource no controller for resolved version",
+			serverConfig: WebhookServerConfig{
+				ValidatingControllers: map[*resource.Kind]resource.ValidatingAdmissionController{
+					&resource.Kind{
+						Schema: resource.NewSimpleSchema("foo", "v1", &TestResourceObject{}, &TestResourceObjectList{}, resource.WithKind("bar")),
+						Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
+					}: &testValidatingAdmissionController{
+						ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
+							return NewAdmissionError(fmt.Errorf("wrong controller"), http.StatusConflict, "err_reason")
+						},
+					},
+				},
+			},
+			reqMethod:          http.MethodPost,
+			payload:            admissionRequestBytesConverted,
+			expectedResponse:   []byte(`no validating admission controller defined for group 'foo', version 'v2', and kind 'bar'`),
+			expectedStatusCode: http.StatusInternalServerError,
 		},
 	}
 

@@ -70,7 +70,6 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 	case *cuekind.Cue:
 		parser, err := cuekind.NewParser(v,
 			cfg.Codegen.EnableOperatorStatusGeneration,
-			cfg.Kinds.PerKindVersion,
 		)
 		if err != nil {
 			return err

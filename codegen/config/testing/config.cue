@@ -2,8 +2,7 @@ package testing
 
 configA: {
 	kinds: {
-		grouping:       "group"
-		perKindVersion: true
+		grouping: "group"
 	}
 	definitions: {
 		manifestSchemas: false
