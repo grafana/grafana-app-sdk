@@ -206,12 +206,15 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	// Look up the schema and controller
 	var schema resource.Kind
 	var controller resource.ValidatingAdmissionController
-	if tpl, ok := w.validatingControllers[gvk(admRev.Request.RequestKind)]; ok {
+	// Use Kind (the resolved GVK after conversion) rather than RequestKind (the original request GVK),
+	// so that the lookup matches the version the controller was registered with.
+	resolvedKind := &admRev.Request.Kind
+	if tpl, ok := w.validatingControllers[gvk(resolvedKind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
 	} else if w.DefaultValidatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, &resource.TypedList[*resource.TypedSpecObject[any]]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Schema = resource.NewSimpleSchema(resolvedKind.Group, resolvedKind.Version, &resource.TypedSpecObject[any]{}, &resource.TypedList[*resource.TypedSpecObject[any]]{}, resource.WithKind(resolvedKind.Kind))
 		schema.Codecs = map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()}
 		controller = w.DefaultValidatingController
 	}
@@ -219,7 +222,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	// If we didn't get a controller, return a failure
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "validating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)
+		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "validating", resolvedKind.Group, resolvedKind.Version, resolvedKind.Kind)
 		logging.FromContext(req.Context()).Error("No controller", "error", err)
 		return
 	}
@@ -283,12 +286,15 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// Look up the schema and controller
 	var schema resource.Kind
 	var controller resource.MutatingAdmissionController
-	if tpl, ok := w.mutatingControllers[gvk(admRev.Request.RequestKind)]; ok {
+	// Use Kind (the resolved GVK after conversion) rather than RequestKind (the original request GVK),
+	// so that the lookup matches the version the controller was registered with.
+	resolvedKind := &admRev.Request.Kind
+	if tpl, ok := w.mutatingControllers[gvk(resolvedKind)]; ok {
 		schema = tpl.schema
 		controller = tpl.controller
 	} else if w.DefaultMutatingController != nil {
 		// If we have a default controller, create a SimpleObject schema and use the default controller
-		schema.Schema = resource.NewSimpleSchema(admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Version, &resource.TypedSpecObject[any]{}, &resource.TypedList[*resource.TypedSpecObject[any]]{}, resource.WithKind(admRev.Request.RequestKind.Kind))
+		schema.Schema = resource.NewSimpleSchema(resolvedKind.Group, resolvedKind.Version, &resource.TypedSpecObject[any]{}, &resource.TypedList[*resource.TypedSpecObject[any]]{}, resource.WithKind(resolvedKind.Kind))
 		schema.Codecs = map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()}
 		controller = w.DefaultMutatingController
 	}
@@ -296,7 +302,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// If we didn't get a controller, return a failure
 	if controller == nil {
 		writer.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "mutating", admRev.Request.RequestKind.Group, admRev.Request.RequestKind.Kind)
+		fmt.Fprintf(writer, errStringNoAdmissionControllerDefined, "mutating", resolvedKind.Group, resolvedKind.Version, resolvedKind.Kind)
 		return
 	}
 
