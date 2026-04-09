@@ -159,8 +159,9 @@ type goTypesGenerateFilesConfig struct {
 //nolint:goconst
 func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDepth int, cfg goTypesGenerateFilesConfig) (codejen.Files, error) {
 	if currDepth == g.Depth {
-		fieldName := make([]string, 0)
-		for _, s := range TrimPathPrefix(v.Path(), schemaPath).Selectors() {
+		selectors := TrimPathPrefix(v.Path(), schemaPath).Selectors()
+		fieldName := make([]string, 0, len(selectors))
+		for _, s := range selectors {
 			fieldName = append(fieldName, s.String())
 		}
 		exclude := false

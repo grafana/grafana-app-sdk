@@ -76,7 +76,7 @@ func NewRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolic
 
 	return &defaultRetryProcessor{
 		workers:       workers,
-		workerCount:   uint64(cfg.WorkerPoolSize),
+		workerCount:   uint64(cfg.WorkerPoolSize), //nolint:gosec
 		retryPolicyFn: retryPolicyFn,
 	}
 }

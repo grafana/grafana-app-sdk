@@ -10,7 +10,6 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -90,7 +89,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	}
 	output["spec"] = manifestSpec
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	out, err := m.Encoder(output)
 	if err != nil {
 		return nil, err
@@ -160,7 +159,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 		}
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	files = append(files, codejen.File{
 		Data:         formatted,
 		RelativePath: filepath.Join(g.DestinationPath, fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group)),
@@ -415,7 +414,7 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 	for k := range kindListMap {
 		kindList = append(kindList, k)
 	}
-	sort.Strings(kindList)
+	slices.Sort(kindList)
 	allKindsDesc := joinKindNames(kindList)
 	roles := map[string]codegen.AppManifestPropertiesRole{
 		readerKey: {
@@ -766,7 +765,7 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 	for name := range schemaProps.Properties {
 		paramNames = append(paramNames, name)
 	}
-	sort.Strings(paramNames)
+	slices.Sort(paramNames)
 
 	parameters := make([]*spec3.Parameter, 0, len(paramNames))
 	// Iterate through sorted names
