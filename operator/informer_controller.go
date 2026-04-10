@@ -350,17 +350,43 @@ func (c *InformerController) Run(ctx context.Context) error {
 // PrometheusCollectors returns the prometheus metric collectors used by this informer, as well as collectors used by
 // any registered informer or watcher which implements metrics.Provider, to allow for registration
 func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
-	collectors := []prometheus.Collector{
-		c.totalEvents, c.reconcileLatency, c.inflightEvents, c.inflightActions, c.reconcilerLatency, c.watcherLatency,
+	collectors := make([]prometheus.Collector, 0)
+	seen := make(map[prometheus.Collector]struct{})
+	addCollector := func(collector prometheus.Collector) {
+		if collector == nil {
+			return
+		}
+		if _, ok := seen[collector]; ok {
+			return
+		}
+		seen[collector] = struct{}{}
+		collectors = append(collectors, collector)
 	}
+	addCollector(c.totalEvents)
+	addCollector(c.reconcileLatency)
+	addCollector(c.inflightEvents)
+	addCollector(c.inflightActions)
+	addCollector(c.reconcilerLatency)
+	addCollector(c.watcherLatency)
 	c.informers.RangeAll(func(_ string, _ int, value Informer) {
 		if cast, ok := value.(metrics.Provider); ok {
-			collectors = append(collectors, cast.PrometheusCollectors()...)
+			for _, collector := range cast.PrometheusCollectors() {
+				addCollector(collector)
+			}
 		}
 	})
 	c.watchers.RangeAll(func(_ string, _ int, value ResourceWatcher) {
 		if cast, ok := value.(metrics.Provider); ok {
-			collectors = append(collectors, cast.PrometheusCollectors()...)
+			for _, collector := range cast.PrometheusCollectors() {
+				addCollector(collector)
+			}
+		}
+	})
+	c.reconcilers.RangeAll(func(_ string, _ int, value Reconciler) {
+		if cast, ok := value.(metrics.Provider); ok {
+			for _, collector := range cast.PrometheusCollectors() {
+				addCollector(collector)
+			}
 		}
 	})
 	return collectors

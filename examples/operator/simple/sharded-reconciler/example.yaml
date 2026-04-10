@@ -1,0 +1,15 @@
+apiVersion: example.grafana.app/v1
+kind: BasicCustomResource
+metadata:
+  name: sharded-example-a
+spec:
+  numField: 1
+  stringField: alpha
+---
+apiVersion: example.grafana.app/v1
+kind: BasicCustomResource
+metadata:
+  name: sharded-example-b
+spec:
+  numField: 2
+  stringField: beta

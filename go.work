@@ -3,6 +3,7 @@ go 1.25.7
 use (
 	.
 	./examples/apiserver
+	./examples/operator/simple/sharded-reconciler
 	./logging
 	./plugin
 )
