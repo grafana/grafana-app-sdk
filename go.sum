@@ -125,8 +125,8 @@ github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770 h1:+cFvbhw2O+Wxm
 github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770/go.mod h1:HVKowlidslFhPxKtj5oRrWS+d1u0zl7xC8aeWm7dEUU=
 github.com/grafana/cog v0.1.8 h1:Ht3/c1+2A374kD85dgA548hFPA0+7ndfuyCZlNPKos4=
 github.com/grafana/cog v0.1.8/go.mod h1:NNet/b0MhQ2Z42zzp5D/R0frM/g7O2HzlLQE/SjiLA4=
-github.com/grafana/grafana-app-sdk/logging v0.53.1 h1:pN4cLb0d6GgpgFhT8+Qz2Kdc53Kb138w/cpVxkREiXA=
-github.com/grafana/grafana-app-sdk/logging v0.53.1/go.mod h1:7CS0yLD6hyE00JxUScksaZf3w7jQeMiBIlqLZ1ja86Q=
+github.com/grafana/grafana-app-sdk/logging v0.53.2 h1:FFbPvto2WwWdVElHr9o1SGlOVLWF1n1l7p/YY5zkQ6E=
+github.com/grafana/grafana-app-sdk/logging v0.53.2/go.mod h1:f0r/XriExa4jpUMHnI9aTRYzbbMHiDV+MXSpaSRGqIE=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 h1:QGLs/O40yoNK9vmy4rhUGBVyMf1lISBGtXRpsu/Qu/o=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0/go.mod h1:hM2alZsMUni80N33RBe6J0e423LB+odMj7d3EMP9l20=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 h1:B+8ClL/kCQkRiU82d9xajRPKYMrB7E0MbtzWVi1K4ns=
