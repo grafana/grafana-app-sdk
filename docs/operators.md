@@ -32,6 +32,8 @@ As for the reconciler, the SDK also offers an _Opinionated_ reconciler, designed
 
 Please note that it's enough to specify a Watcher or a Reconciler for a resource. The choice between the two depends on operator needs. 
 
+For HA deployments, `simple.App` also supports event sharding with `simple.ShardFilter`. This lets multiple replicas watch the same objects while only one replica handles a given event. See [Event Sharding](event-sharding.md).
+
 ## Event-Based Design
 
 What this all means is that development using the SDK is geared toward an event-based design. 
@@ -109,4 +111,28 @@ func main() {
 ```
 
 For more details, see [Writing an App](writing-an-app.md), which goes into more details on writing an app, or [Writing a Reconciler](writing-a-reconciler.md) for details on how to write a reconciler. 
-There are also the [Operator Examples](../examples/operator), which contain two examples, a [reconciler-based operator](../examples/operator/simple/reconciler/) and a [watcher-based one](../examples/operator/simple/watcher/).
+There are also the [Operator Examples](../examples/operator), which contain a [reconciler-based operator](../examples/operator/simple/reconciler/), a [watcher-based operator](../examples/operator/simple/watcher/), and a [hash-ring sharding example](../examples/operator/simple/sharded-reconciler/).
+
+## Choosing an Informer
+
+`simple.App` supports three informer backends, selected via `AppConfig.InformerConfig.InformerSupplier`.
+
+**`simple.DefaultInformerSupplier`** (default) uses a `KubernetesBasedInformer` backed by client-go's `SharedIndexInformer`. It does not support `UseWatchList` or `WatchListPageSize`. Use this for simple single-replica deployments where you don't need streaming or explicit page size control.
+
+**`simple.OptimizedInformerSupplier`** uses a `CustomCacheInformer` with an in-memory store. It supports `UseWatchList` (streaming list/watch on Kubernetes 1.27+) and `WatchListPageSize` (explicit LIST page size). Use this for single-replica deployments where you want either of those options.
+
+**`operator.NewMemcachedInformer`** also uses a `CustomCacheInformer`, so it likewise supports `UseWatchList` and `WatchListPageSize`, but stores object state in a memcached cluster instead of local memory. Use this when running multiple replicas that watch the same resources. Replicas share object state through memcached, which reduces per-replica memory usage and keeps cache contents consistent when shard ownership shifts between replicas. This is the recommended backend when pairing with [Event Sharding](event-sharding.md).
+
+```golang
+InformerConfig: simple.AppInformerConfig{
+    InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, opts operator.InformerOptions) (operator.Informer, error) {
+        client, err := clients.ClientFor(kind)
+        if err != nil {
+            return nil, err
+        }
+        return operator.NewMemcachedInformer(kind, client, operator.MemcachedInformerOptions{
+            ServerAddrs: []string{"memcached:11211"},
+        })
+    },
+},
+```

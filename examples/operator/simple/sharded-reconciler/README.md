@@ -10,6 +10,7 @@ Files in this example:
 - `filter.go`: implements the `dskit` ring bootstrap and `simple.ShardFilter`
 - `filter_test.go`: covers the shard-assignment logic
 - `example.yaml`: sample resources to trigger reconciliation
+- `memcached.yaml`: memcached Deployment and Service in the `app-sdk-sharding` namespace
 
 ## Quick Start
 
@@ -21,15 +22,22 @@ k3d kubeconfig get app-sdk-sharding-test > /tmp/app-sdk-sharding-test.kubeconfig
 kubectl --kubeconfig=/tmp/app-sdk-sharding-test.kubeconfig cluster-info
 ```
 
-### 2. Start replica A
-
-From this directory:
+### 2. Deploy memcached
 
 ```sh
-cd /Users/todd/go/src/github.com/grafana/grafana-app-sdk/examples/operator/simple/sharded-reconciler
+kubectl --kubeconfig=/tmp/app-sdk-sharding-test.kubeconfig apply -f memcached.yaml
+kubectl --kubeconfig=/tmp/app-sdk-sharding-test.kubeconfig -n app-sdk-sharding rollout status deployment/memcached
 ```
 
-Run:
+Then forward port `21211` on localhost to the in-cluster service. The non-default host port avoids colliding with any existing local memcached instance:
+
+```sh
+kubectl --kubeconfig=/tmp/app-sdk-sharding-test.kubeconfig -n app-sdk-sharding port-forward svc/memcached 21211:11211 &
+```
+
+### 3. Start replica A
+
+From this directory, run:
 
 ```sh
 go run . \
@@ -42,7 +50,7 @@ go run . \
   --metrics-port=9090
 ```
 
-### 3. Start replica B
+### 4. Start replica B
 
 In a second terminal, from the same directory, run:
 
@@ -63,14 +71,14 @@ Important:
 - Set an explicit `--memberlist-advertise-port` for every replica.
 - Replica B joins replica A with `--memberlist-join=127.0.0.1:7946`.
 
-### 4. Create test resources
+### 5. Create test resources
 
 ```sh
 kubectl --kubeconfig=/tmp/app-sdk-sharding-test.kubeconfig apply -f example.yaml
 kubectl --kubeconfig=/tmp/app-sdk-sharding-test.kubeconfig get basiccustomresources.example.grafana.app -A
 ```
 
-### 5. Watch the logs
+### 6. Watch the logs
 
 Each object should be reconciled by exactly one replica.
 
@@ -105,9 +113,10 @@ That keeps different kinds from colliding while staying simple for a single-vers
 
 ## Cleanup
 
-Stop the running `go run` processes, then delete the cluster:
+Stop the running `go run` processes and the port-forward, then delete the cluster:
 
 ```sh
+kill %1  # or kill the port-forward job by PID
 k3d cluster delete app-sdk-sharding-test
 ```
 

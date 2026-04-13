@@ -18,6 +18,7 @@ Godocs on exported library package code (such as `resource`, `operator`, `plugin
 | [Resource Objects](./resource-objects.md)             | Describes the function and usage of the `resource.Object` interface |
 | [Resource Stores](./resource-stores.md)               | Describes the various "Store" types in the `resource` package, and why you may want to use one or another |
 | [Operators & Event-Based Design](./operators.md)      | A brief primer on what operators/controllers are and working with event-based code |
+| [Event Sharding](./event-sharding.md)                 | How to shard watcher and reconciler work across multiple operator replicas |
 | [Code Generation](./code-generation.md)               | How to use CUE and the CLI for code generation. |
 | [Local Dev Environment Setup](./local-development.md) | How to use the CLI to set up a local development & testing environment |
 | [Kubernetes Concepts](./kubernetes.md)                | A primer on some kubernetes concepts which are relevant to using the SDK backed by a kubernetes API server |
@@ -41,4 +42,3 @@ and the use of a custom API server if additional non-standard routes are needed 
 ## Documentation Improvements
 
 If you notice places where documentation is lacking, confusing, or is out of date, please do not hesitate to create an [issue](https://github.com/grafana/grafana-app-sdk/issues) in this repository noting the specifics of what you found, and we will work to improve it. We also welcome documentation contributions as [Pull Requests](https://github.com/grafana/grafana-app-sdk/pulls).
-

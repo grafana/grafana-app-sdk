@@ -47,11 +47,13 @@ type BasicModel struct {
 }
 
 type ExampleConfig struct {
+	MemcachedAddr     string
 	ShardFilterConfig HashRingShardFilterConfig
 }
 
 func main() {
 	kubeCfgFile := flag.String("kubecfg", "", "kube config path")
+	memcachedAddr := flag.String("memcached-addr", "localhost:21211", "memcached address (host:port)")
 	instanceID := flag.String("instance-id", "", "stable identifier for this replica")
 	instanceAddr := flag.String("instance-addr", "", "instance address stored in the ring; defaults to advertise addr")
 	numTokens := flag.Int("num-tokens", 128, "number of tokens to claim in the ring")
@@ -111,6 +113,7 @@ func main() {
 	}
 
 	specificConfig := ExampleConfig{
+		MemcachedAddr: *memcachedAddr,
 		ShardFilterConfig: HashRingShardFilterConfig{
 			InstanceID:              *instanceID,
 			InstanceAddr:            *instanceAddr,
@@ -171,6 +174,17 @@ func NewApp(config app.Config) (app.App, error) {
 	exampleApp, err := simple.NewApp(simple.AppConfig{
 		Name:       "hash-ring-sharding-example",
 		KubeConfig: config.KubeConfig,
+		InformerConfig: simple.AppInformerConfig{
+			InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, _ operator.InformerOptions) (operator.Informer, error) {
+				client, err := clients.ClientFor(kind)
+				if err != nil {
+					return nil, err
+				}
+				return operator.NewMemcachedInformer(kind, client, operator.MemcachedInformerOptions{
+					ServerAddrs: []string{specific.MemcachedAddr},
+				})
+			},
+		},
 		ManagedKinds: []simple.AppManagedKind{{
 			Kind:       kindDef,
 			Reconciler: reconciler,
