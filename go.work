@@ -7,3 +7,5 @@ use (
 	./logging
 	./plugin
 )
+
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20260401024825-9d38bb4040a9

@@ -7,7 +7,7 @@ Two or more replicas can watch the same Kubernetes resources, but only the repli
 Files in this example:
 
 - `main.go`: starts the operator and wires the shard filter into `simple.NewApp`
-- `filter.go`: implements the `dskit` ring bootstrap and `operator.ShardFilter`
+- `filter.go`: implements the `dskit` ring bootstrap and `simple.ShardFilter`
 - `filter_test.go`: covers the shard-assignment logic
 - `example.yaml`: sample resources to trigger reconciliation
 

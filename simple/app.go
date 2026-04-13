@@ -253,7 +253,7 @@ type UnmanagedKindReconcileOptions struct {
 	FieldSelectors []string
 	// ShardFilter can be used in HA deployments to decide whether the current replica should
 	// process an event before delegating to the configured watcher or reconciler.
-	ShardFilter operator.ShardFilter
+	ShardFilter ShardFilter
 	// UseOpinionated should be set to true to wrap the Watcher or Reconciler in its opinionated variant.
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
@@ -270,7 +270,7 @@ type BasicReconcileOptions struct {
 	FieldSelectors []string
 	// ShardFilter can be used in HA deployments to decide whether the current replica should
 	// process an event before delegating to the configured watcher or reconciler.
-	ShardFilter operator.ShardFilter
+	ShardFilter ShardFilter
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"github.com/grafana/dskit/netutil"
 	"github.com/grafana/dskit/ring"
 	"github.com/grafana/dskit/services"
+
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -177,7 +179,7 @@ func (f *HashRingShardFilter) Run(ctx context.Context) error {
 
 func (f *HashRingShardFilter) ShouldProcess(_ context.Context, obj resource.Object) (bool, error) {
 	if obj == nil {
-		return false, fmt.Errorf("object is required")
+		return false, errors.New("object is required")
 	}
 	if state := f.readRing.State(); state != services.Running {
 		return false, fmt.Errorf("shard ring is not running: %s", state)
@@ -193,16 +195,16 @@ func (f *HashRingShardFilter) ShouldProcess(_ context.Context, obj resource.Obje
 
 func (cfg HashRingShardFilterConfig) validate() error {
 	if cfg.NumTokens <= 0 {
-		return fmt.Errorf("num tokens must be greater than zero")
+		return errors.New("num tokens must be greater than zero")
 	}
 	if cfg.HeartbeatPeriod <= 0 {
-		return fmt.Errorf("heartbeat period must be greater than zero")
+		return errors.New("heartbeat period must be greater than zero")
 	}
 	if cfg.HeartbeatTimeout <= 0 {
-		return fmt.Errorf("heartbeat timeout must be greater than zero")
+		return errors.New("heartbeat timeout must be greater than zero")
 	}
 	if cfg.instancePort() <= 0 {
-		return fmt.Errorf("memberlist port must be greater than zero")
+		return errors.New("memberlist port must be greater than zero")
 	}
 
 	return nil
