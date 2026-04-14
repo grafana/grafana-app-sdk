@@ -50,13 +50,14 @@ func (c *CodecGenerator) Generate(appManifest codegen.AppManifest) (codejen.File
 
 		b := bytes.Buffer{}
 		err := templates.WriteCodec(templates.SchemaMetadata{
-			Package:    ToPackageName(version.Name()),
-			Group:      appManifest.Properties().Group,
-			Version:    version.Name(),
-			Kind:       kind.Kind,
-			Plural:     kind.PluralMachineName,
-			Scope:      kind.Scope,
-			FuncPrefix: prefix,
+			Package:       ToPackageName(version.Name()),
+			Group:         appManifest.Properties().Group,
+			Version:       version.Name(),
+			Kind:          kind.Kind,
+			Plural:        kind.PluralMachineName,
+			Scope:         kind.Scope,
+			FuncPrefix:    prefix,
+			AliasVersions: kind.AliasVersions,
 		}, &b)
 		if err != nil {
 			return nil, err

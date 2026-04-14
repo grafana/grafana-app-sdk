@@ -18,6 +18,7 @@ testKindv0alpha1: testKind & {
 testKindv1alpha1: testKind & {
 	validation: operations: ["CREATE", "UPDATE"]
 	selectableFields: [".spec.testField"]
+	aliasVersions: ["v0alpha1", "v0alpha2"] // also registered with the schema, but not exposed
 	schema: {
 		#Foo: {
 			foo: string | *"foo"
@@ -86,4 +87,3 @@ testKindv1alpha1: testKind & {
 		}
 	}
 }
-

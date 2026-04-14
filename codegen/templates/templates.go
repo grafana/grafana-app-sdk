@@ -147,6 +147,7 @@ type SchemaMetadata struct {
 	Kind             string
 	Plural           string
 	Scope            string
+	AliasVersions    []string
 	SelectableFields []SchemaMetadataSelectableField
 	FuncPrefix       string
 }

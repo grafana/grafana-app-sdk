@@ -22,6 +22,10 @@ type Schema interface {
 	Group() string
 	// Version returns the Schema version
 	Version() string
+	// Additional versions where the kind is registered
+	// This is helpful when graduating to a release version, or removing a development versions
+	// The runtime.Schema will use the same kind for stored resources that may no longer be active apiVersions
+	AliasVersions() []string
 	// Kind returns the Schema kind
 	Kind() string
 	// Plural returns the plural name of the Schema kind
@@ -63,6 +67,7 @@ type SimpleSchema struct {
 	kind             string
 	plural           string
 	scope            SchemaScope
+	aliasVersions    []string
 	selectableFields []SelectableField
 	zero             Object
 	zeroList         ListObject
@@ -76,6 +81,11 @@ func (s *SimpleSchema) Group() string {
 // Version returns the SimpleSchema's Version
 func (s *SimpleSchema) Version() string {
 	return s.version
+}
+
+// AliasVersions returns the SimpleSchema's alias versions
+func (s *SimpleSchema) AliasVersions() []string {
+	return s.aliasVersions
 }
 
 // Kind returns the SimpleSchema's Kind
@@ -155,6 +165,13 @@ func WithKind(kind string) func(*SimpleSchema) {
 func WithScope(scope SchemaScope) func(schema *SimpleSchema) {
 	return func(s *SimpleSchema) {
 		s.scope = scope
+	}
+}
+
+// WithAliasVersions returns a SimpleSchemaOption that sets the SimpleSchema's aliasVersions to the provided versions
+func WithAliasVersions(versions []string) func(schema *SimpleSchema) {
+	return func(s *SimpleSchema) {
+		s.aliasVersions = versions
 	}
 }
 

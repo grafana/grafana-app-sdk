@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -53,6 +54,7 @@ func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Fil
 			Plural:           kind.PluralMachineName,
 			Scope:            kind.Scope,
 			SelectableFields: sf,
+			AliasVersions:    kind.AliasVersions,
 			FuncPrefix:       prefix,
 		}, &b)
 		if err != nil {

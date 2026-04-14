@@ -192,6 +192,7 @@ type VersionedKind struct {
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`
 	ConversionWebhookProps ConversionWebhookProperties `json:"conversionWebhookProps"`
+	AliasVersions          []string                    `json:"aliasVersions,omitempty"`
 	// Codegen contains code-generation directives for the codegen pipeline
 	Codegen                  KindCodegenProperties     `json:"codegen"`
 	Served                   bool                      `json:"served"`
