@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk/logging
 
-go 1.25.0
+go 1.25.9
 
 require (
 	go.opentelemetry.io/otel/trace v1.43.0
