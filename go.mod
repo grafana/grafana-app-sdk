@@ -15,6 +15,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.135.0
+	github.com/grafana/authlib v0.0.0-20260414201248-d766c8627a66
 	github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770
 	github.com/grafana/cog v0.1.8
 	github.com/grafana/grafana-app-sdk/logging v0.53.2
@@ -67,7 +68,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.22.5 // indirect
