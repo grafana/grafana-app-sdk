@@ -175,5 +175,6 @@ func (t *tokenExchangeTransport) RoundTrip(req *http.Request) (*http.Response, e
 	}
 	req = req.Clone(req.Context())
 	req.Header.Set("X-Access-Token", token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	return t.base.RoundTrip(req)
 }
