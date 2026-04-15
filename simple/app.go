@@ -108,6 +108,7 @@ type App struct {
 	customRoutes       map[string]AppCustomRouteHandler
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
+	shardFilterMetrics *prometheus.CounterVec
 }
 
 // AppConfig is the configuration used by App
@@ -250,6 +251,9 @@ type UnmanagedKindReconcileOptions struct {
 	LabelFilters []string
 	// FieldSelectors are any field selector filters to apply to the ListWatch request
 	FieldSelectors []string
+	// ShardFilter can be used in HA deployments to decide whether the current replica should
+	// process an event before delegating to the configured watcher or reconciler.
+	ShardFilter ShardFilter
 	// UseOpinionated should be set to true to wrap the Watcher or Reconciler in its opinionated variant.
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
@@ -264,6 +268,9 @@ type BasicReconcileOptions struct {
 	LabelFilters []string
 	// FieldSelectors are any field selector filters to apply to the ListWatch request
 	FieldSelectors []string
+	// ShardFilter can be used in HA deployments to decide whether the current replica should
+	// process an event before delegating to the configured watcher or reconciler.
+	ShardFilter ShardFilter
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
 }
@@ -307,6 +314,7 @@ func NewApp(config AppConfig) (*App, error) {
 	if clients == nil {
 		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
 	}
+	shardFilterMetrics := newShardFilterDecisions("")
 	a := &App{
 		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
 		runner:             app.NewMultiRunner(),
@@ -318,6 +326,7 @@ func NewApp(config AppConfig) (*App, error) {
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
+		shardFilterMetrics: shardFilterMetrics,
 	}
 	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
@@ -460,6 +469,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 				Namespace:      kind.ReconcileOptions.Namespace,
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,
 				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+				ShardFilter:    kind.ReconcileOptions.ShardFilter,
 				UseOpinionated: !kind.ReconcileOptions.UsePlain,
 			},
 		})
@@ -502,8 +512,11 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 				if err != nil {
 					return err
 				}
-				op.Wrap(kind.Reconciler)
+				op.Wrap(reconciler)
 				reconciler = op
+			}
+			if kind.ReconcileOptions.ShardFilter != nil {
+				reconciler = newShardFilteredReconciler(kind.Kind, a.shardFilterMetrics, kind.ReconcileOptions.ShardFilter, reconciler)
 			}
 			err = a.informerController.AddReconciler(reconciler, kind.Kind.GroupVersionKind().String())
 			if err != nil {
@@ -520,13 +533,16 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 				if err != nil {
 					return err
 				}
-				if cast, ok := kind.Watcher.(syncWatcher); ok {
+				if cast, ok := watcher.(syncWatcher); ok {
 					op.Wrap(cast, false)
 					op.SyncFunc = cast.Sync
 				} else {
-					op.Wrap(kind.Watcher, true)
+					op.Wrap(watcher, true)
 				}
 				watcher = op
+			}
+			if kind.ReconcileOptions.ShardFilter != nil {
+				watcher = newShardFilteredWatcher(kind.Kind, a.shardFilterMetrics, kind.ReconcileOptions.ShardFilter, watcher)
 			}
 			err = a.informerController.AddWatcher(watcher, kind.Kind.GroupVersionKind().String())
 			if err != nil {

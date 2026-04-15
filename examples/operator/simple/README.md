@@ -2,6 +2,8 @@
 
 This example code is a one-file example of a kubernetes custom resource operator with a Watcher or a Reconciler, using the SDK `simple` package.
 
+For a multi-replica example that shards reconcile work with `simple.ShardFilter`, see [`sharded-reconciler`](./sharded-reconciler/).
+
 This example uses an app created using the `simple` package with an operator runner provided by the `operator` package. 
 By default, the simple App uses the "opinionated" logic defined in [operator.OpinionatedWatcher](../../../operator/opinionatedwatcher.go#L38) and [operator.OpinionatedReconciler](../../../operator/reconciler.go#L135), 
 but this can be turned off with configuration, which is noted in the `FIXME` comment in the file(s).

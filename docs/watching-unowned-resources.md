@@ -198,6 +198,14 @@ if you ever _stop_ watching the Kind, you must remove all of your finalizers to 
 to fully process deletes. Before you do this, reach out to the team that maintains that Kind before 
 using the opinionated variants on an Unmanaged Kind.
 
+### Event Sharding
+
+If multiple replicas of your app watch the same unmanaged kind, you can use `simple.UnmanagedKindReconcileOptions.ShardFilter`
+to decide which replica should handle each event. This is useful when every replica should maintain informer state, but only
+one replica should run the watcher or reconciler logic for a given object.
+
+See [Event Sharding](event-sharding.md) for the full behavior and an end-to-end example.
+
 ### Permissions
 
 You'll need to make sure your app has permission to list and watch the other app's kind(s) you're using. 

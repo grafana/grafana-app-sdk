@@ -8,8 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -539,6 +542,310 @@ func TestApp_ManageKind(t *testing.T) {
 		})
 		assert.True(t, supplierCalled, "custom InformerSupplier was not called")
 	})
+	t.Run("reconciler shard filter skips unassigned object", func(t *testing.T) {
+		var handler operator.ResourceWatcher
+		reconcilerCalled := false
+		filterCalled := false
+		kind := testKind()
+
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+					return &mockInformer{
+						AddEventHandlerFunc: func(h operator.ResourceWatcher) error {
+							handler = h
+							return nil
+						},
+					}, nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Reconciler: &operator.SimpleReconciler{
+					ReconcileFunc: func(context.Context, operator.ReconcileRequest) (operator.ReconcileResult, error) {
+						reconcilerCalled = true
+						return operator.ReconcileResult{}, nil
+					},
+				},
+				ReconcileOptions: BasicReconcileOptions{
+					ShardFilter: testShardFilter(func(context.Context, resource.Object) (bool, error) {
+						filterCalled = true
+						return false, nil
+					}),
+				},
+			}},
+		})
+
+		require.NotNil(t, handler)
+		err := handler.Add(context.Background(), testObjectForKind(kind, "default", "test"))
+		require.NoError(t, err)
+		assert.True(t, filterCalled)
+		assert.False(t, reconcilerCalled)
+	})
+	t.Run("watcher shard filter delegates assigned object", func(t *testing.T) {
+		var handler operator.ResourceWatcher
+		watcherCalled := false
+		filterCalled := false
+		kind := testKind()
+
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+					return &mockInformer{
+						AddEventHandlerFunc: func(h operator.ResourceWatcher) error {
+							handler = h
+							return nil
+						},
+					}, nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Watcher: &operator.SimpleWatcher{
+					AddFunc: func(context.Context, resource.Object) error {
+						watcherCalled = true
+						return nil
+					},
+				},
+				ReconcileOptions: BasicReconcileOptions{
+					UsePlain: true,
+					ShardFilter: testShardFilter(func(context.Context, resource.Object) (bool, error) {
+						filterCalled = true
+						return true, nil
+					}),
+				},
+			}},
+		})
+
+		require.NotNil(t, handler)
+		err := handler.Add(context.Background(), testObjectForKind(kind, "default", "test"))
+		require.NoError(t, err)
+		assert.True(t, filterCalled)
+		assert.True(t, watcherCalled)
+	})
+	t.Run("watcher shard filter returns errors", func(t *testing.T) {
+		var handler operator.ResourceWatcher
+		expectedErr := errors.New("lookup failed")
+		var handledErr error
+		kind := testKind()
+
+		a := createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerOptions: operator.InformerOptions{
+					ErrorHandler: func(context.Context, error) {},
+				},
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+					return &mockInformer{
+						AddEventHandlerFunc: func(h operator.ResourceWatcher) error {
+							handler = h
+							return nil
+						},
+					}, nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind:    kind,
+				Watcher: &operator.SimpleWatcher{},
+				ReconcileOptions: BasicReconcileOptions{
+					UsePlain: true,
+					ShardFilter: testShardFilter(func(context.Context, resource.Object) (bool, error) {
+						return false, expectedErr
+					}),
+				},
+			}},
+		})
+		a.informerController.ErrorHandler = func(_ context.Context, err error) {
+			handledErr = err
+		}
+
+		require.NotNil(t, handler)
+		err := handler.Add(context.Background(), testObjectForKind(kind, "default", "test"))
+		require.NoError(t, err)
+		require.ErrorIs(t, handledErr, expectedErr)
+	})
+	t.Run("watcher shard filter preserves sync for opinionated watchers", func(t *testing.T) {
+		var handler operator.ResourceWatcher
+		kind := testKind()
+		addCalled := false
+		syncCalled := false
+
+		createTestApp(t, AppConfig{
+			InformerConfig: AppInformerConfig{
+				InformerSupplier: func(kind resource.Kind, clients resource.ClientGenerator, options operator.InformerOptions) (operator.Informer, error) {
+					return &mockInformer{
+						AddEventHandlerFunc: func(h operator.ResourceWatcher) error {
+							handler = h
+							return nil
+						},
+					}, nil
+				},
+			},
+			ManagedKinds: []AppManagedKind{{
+				Kind: kind,
+				Watcher: &Watcher{
+					AddFunc: func(context.Context, resource.Object) error {
+						addCalled = true
+						return nil
+					},
+					SyncFunc: func(context.Context, resource.Object) error {
+						syncCalled = true
+						return nil
+					},
+				},
+				ReconcileOptions: BasicReconcileOptions{
+					ShardFilter: testShardFilter(func(context.Context, resource.Object) (bool, error) {
+						return true, nil
+					}),
+				},
+			}},
+		})
+
+		obj := testObjectForKind(kind, "default", "test")
+		obj.SetFinalizers([]string{kind.Plural() + "-finalizer"})
+		require.NotNil(t, handler)
+		err := handler.Add(context.Background(), obj)
+		require.NoError(t, err)
+		assert.False(t, addCalled)
+		assert.True(t, syncCalled)
+	})
+	t.Run("reconciler shard filter skip does not invoke opinionated finalizer handling", func(t *testing.T) {
+		kind := testKind()
+		client := &mockPatchClient{}
+		reconcilerCalled := false
+		inner, err := operator.NewOpinionatedReconciler(client, kind.Plural()+"-finalizer")
+		require.NoError(t, err)
+		inner.Wrap(&operator.SimpleReconciler{
+			ReconcileFunc: func(context.Context, operator.ReconcileRequest) (operator.ReconcileResult, error) {
+				reconcilerCalled = true
+				return operator.ReconcileResult{}, nil
+			},
+		})
+		reconciler := newShardFilteredReconciler(kind, newShardFilterDecisions(""), testShardFilter(func(context.Context, resource.Object) (bool, error) {
+			return false, nil
+		}), inner)
+
+		obj := testObjectForKind(kind, "default", "test")
+		now := metav1.Now()
+		obj.SetDeletionTimestamp(&now)
+		obj.SetFinalizers([]string{kind.Plural() + "-finalizer"})
+
+		_, err = reconciler.Reconcile(context.Background(), operator.ReconcileRequest{
+			Action: operator.ReconcileActionUpdated,
+			Object: obj,
+		})
+		require.NoError(t, err)
+		assert.False(t, reconcilerCalled)
+		assert.Zero(t, client.patchCount)
+	})
+	t.Run("watcher shard filter skip does not invoke opinionated finalizer handling", func(t *testing.T) {
+		kind := testKind()
+		client := &mockPatchClient{}
+		deleteCalled := false
+		inner, err := operator.NewOpinionatedWatcher(kind, client, operator.OpinionatedWatcherConfig{
+			Finalizer: func(resource.Schema) string { return kind.Plural() + "-finalizer" },
+		})
+		require.NoError(t, err)
+		inner.Wrap(&operator.SimpleWatcher{
+			DeleteFunc: func(context.Context, resource.Object) error {
+				deleteCalled = true
+				return nil
+			},
+		}, true)
+		watcher := newShardFilteredWatcher(kind, newShardFilterDecisions(""), testShardFilter(func(context.Context, resource.Object) (bool, error) {
+			return false, nil
+		}), inner)
+
+		obj := testObjectForKind(kind, "default", "test")
+		now := metav1.Now()
+		obj.SetDeletionTimestamp(&now)
+		obj.SetFinalizers([]string{kind.Plural() + "-finalizer"})
+
+		err = watcher.Add(context.Background(), obj)
+		require.NoError(t, err)
+		assert.False(t, deleteCalled)
+		assert.Zero(t, client.patchCount)
+	})
+	t.Run("watcher shard filter update falls back to source object when target is nil", func(t *testing.T) {
+		kind := testKind()
+		src := testObjectForKind(kind, "default", "source")
+
+		var filteredObj resource.Object
+		updateCalled := false
+		watcher := newShardFilteredWatcher(kind, newShardFilterDecisions(""), testShardFilter(func(_ context.Context, obj resource.Object) (bool, error) {
+			filteredObj = obj
+			return true, nil
+		}), &operator.SimpleWatcher{
+			UpdateFunc: func(_ context.Context, gotSrc, gotTgt resource.Object) error {
+				updateCalled = true
+				assert.Same(t, src, gotSrc)
+				assert.Nil(t, gotTgt)
+				return nil
+			},
+		})
+
+		err := watcher.Update(context.Background(), src, nil)
+		require.NoError(t, err)
+		assert.True(t, updateCalled)
+		assert.Same(t, src, filteredObj)
+	})
+	t.Run("watcher shard filter delete skip does not delegate", func(t *testing.T) {
+		kind := testKind()
+		deleteCalled := false
+		watcher := newShardFilteredWatcher(kind, newShardFilterDecisions(""), testShardFilter(func(context.Context, resource.Object) (bool, error) {
+			return false, nil
+		}), &operator.SimpleWatcher{
+			DeleteFunc: func(context.Context, resource.Object) error {
+				deleteCalled = true
+				return nil
+			},
+		})
+
+		err := watcher.Delete(context.Background(), testObjectForKind(kind, "default", "test"))
+		require.NoError(t, err)
+		assert.False(t, deleteCalled)
+	})
+	t.Run("shard filter metrics count decisions", func(t *testing.T) {
+		kind := testKind()
+		reconciler := newShardFilteredReconciler(kind, newShardFilterDecisions(""), testShardFilter(func(context.Context, resource.Object) (bool, error) {
+			return false, nil
+		}), &operator.SimpleReconciler{})
+
+		_, err := reconciler.Reconcile(context.Background(), operator.ReconcileRequest{
+			Action: operator.ReconcileActionCreated,
+			Object: testObjectForKind(kind, "default", "test"),
+		})
+		require.NoError(t, err)
+
+		provider, ok := reconciler.(interface{ PrometheusCollectors() []prometheus.Collector })
+		require.True(t, ok)
+
+		var metric dto.Metric
+		found := false
+		for _, collector := range provider.PrometheusCollectors() {
+			ch := make(chan prometheus.Metric, 16)
+			go func(c prometheus.Collector) {
+				c.Collect(ch)
+				close(ch)
+			}(collector)
+			for collected := range ch {
+				if err := collected.Write(&metric); err != nil {
+					t.Fatal(err)
+				}
+				if metric.Counter == nil {
+					continue
+				}
+				labels := metric.GetLabel()
+				if hasMetricLabel(labels, "decision", shardFilterDecisionSkipped) &&
+					hasMetricLabel(labels, "event_type", string(operator.ResourceActionCreate)) &&
+					hasMetricLabel(labels, "group", kind.Group()) &&
+					hasMetricLabel(labels, "version", kind.Version()) &&
+					hasMetricLabel(labels, "resource", kind.Plural()) {
+					found = true
+				}
+			}
+		}
+		assert.True(t, found)
+	})
 }
 
 func TestApp_Runner(t *testing.T) {
@@ -593,4 +900,50 @@ func (m mockInformer) AddEventHandler(handler operator.ResourceWatcher) error {
 
 func (m mockInformer) WaitForSync(ctx context.Context) error {
 	return nil
+}
+
+type testShardFilter func(context.Context, resource.Object) (bool, error)
+
+func (t testShardFilter) ShouldProcess(ctx context.Context, obj resource.Object) (bool, error) {
+	return t(ctx, obj)
+}
+
+func testObjectForKind(kind resource.Kind, namespace, name string) resource.Object {
+	obj := kind.ZeroValue()
+	obj.SetName(name)
+	obj.SetNamespace(namespace)
+	obj.SetGroupVersionKind(kind.GroupVersionKind())
+	obj.SetCreationTimestamp(metav1.Now())
+	return obj
+}
+
+type mockPatchClient struct {
+	patchCount int
+}
+
+func (m *mockPatchClient) PatchInto(ctx context.Context, identifier resource.Identifier, req resource.PatchRequest, options resource.PatchOptions, into resource.Object) error {
+	m.patchCount++
+	finalizers := make([]string, 0)
+	for _, op := range req.Operations {
+		if op.Path == "/metadata/finalizers" {
+			if cast, ok := op.Value.([]string); ok {
+				finalizers = append(finalizers, cast...)
+			}
+		}
+	}
+	into.SetFinalizers(finalizers)
+	return nil
+}
+
+func (*mockPatchClient) GetInto(context.Context, resource.Identifier, resource.Object) error {
+	return nil
+}
+
+func hasMetricLabel(labels []*dto.LabelPair, key string, value string) bool {
+	for _, label := range labels {
+		if label.GetName() == key && label.GetValue() == value {
+			return true
+		}
+	}
+	return false
 }
