@@ -16,6 +16,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -55,9 +56,7 @@ func NewAppProvider(manifest app.Manifest, cfg app.SpecificConfig, newAppFunc fu
 	}
 }
 
-var (
-	_ app.App = &App{}
-)
+var _ app.App = &App{}
 
 // KindMutator is an interface which describes an object which can mutate a kind, used in AppManagedKind
 type KindMutator interface {
@@ -574,7 +573,15 @@ func (a *App) Validate(ctx context.Context, req *app.AdmissionRequest) error {
 	if k.Validator == nil {
 		return app.ErrNotImplemented
 	}
-	return k.Validator.Validate(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "validate")
+	ctx = logging.Context(ctx, logger)
+	err := k.Validator.Validate(ctx, req)
+	if err != nil {
+		logger.With("error", err).Error("validation failed")
+		return err
+	}
+	logger.Info("validation succeeded")
+	return nil
 }
 
 // Mutate implements app.App and handles Mutating Admission Requests
@@ -587,16 +594,25 @@ func (a *App) Mutate(ctx context.Context, req *app.AdmissionRequest) (*app.Mutat
 	if k.Mutator == nil {
 		return nil, app.ErrNotImplemented
 	}
-	return k.Mutator.Mutate(ctx, req)
+	logger := admissionLoggerFromContext(ctx, req).With("action", "mutate")
+	ctx = logging.Context(ctx, logger)
+	res, err := k.Mutator.Mutate(ctx, req)
+	if err != nil {
+		logger.With("error", err).Error("mutation failed")
+		return nil, err
+	}
+	logger.Info("mutation succeeded")
+	return res, nil
 }
 
 // Convert implements app.App and handles resource conversion requests
-func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObject, error) {
+func (a *App) Convert(ctx context.Context, req app.ConversionRequest) (*app.RawObject, error) {
 	converter, ok := a.converters[req.SourceGVK.GroupKind().String()]
 	if !ok {
 		// Default conversion?
 		return nil, app.ErrNotImplemented
 	}
+	logger := conversionLoggerFromContext(ctx, req)
 	srcAPIVersion, _ := req.SourceGVK.ToAPIVersionAndKind()
 	dstAPIVersion, _ := req.TargetGVK.ToAPIVersionAndKind()
 	converted, err := converter.Convert(k8s.RawKind{
@@ -606,9 +622,14 @@ func (a *App) Convert(_ context.Context, req app.ConversionRequest) (*app.RawObj
 		Version:    req.SourceGVK.Version,
 		Raw:        req.Raw.Raw,
 	}, dstAPIVersion)
+	if err != nil {
+		logger.With("error", err).Error("conversion failed")
+		return nil, err
+	}
+	logger.Info("conversion succeeded")
 	return &app.RawObject{
 		Raw: converted,
-	}, err
+	}, nil
 }
 
 // CallCustomRoute implements app.App and handles custom resource route requests
@@ -621,7 +642,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		if handler, ok := a.customRoutes[a.customRouteHandlerKey(schema.GroupVersionKind{
 			Version: req.ResourceIdentifier.Version,
 		}, req.Method, req.Path, scope)]; ok {
-			return handler(ctx, writer, req)
+			return handleCustomRouteWithLogging(ctx, handler, writer, req)
 		}
 	}
 	key := gvk(req.ResourceIdentifier.Group, req.ResourceIdentifier.Version, req.ResourceIdentifier.Kind)
@@ -634,7 +655,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		return app.ErrCustomRouteNotFound
 	}
 	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope())]; ok {
-		return handler(ctx, writer, req)
+		return handleCustomRouteWithLogging(ctx, handler, writer, req)
 	}
 	return app.ErrCustomRouteNotFound
 }

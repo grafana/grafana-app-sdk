@@ -2,6 +2,8 @@ package codegen
 
 import (
 	"iter"
+	"slices"
+	"strings"
 
 	"cuelang.org/go/cue"
 )
@@ -64,16 +66,16 @@ type AppManifestPropertiesRoleBindings struct {
 }
 
 type SimpleManifest struct {
-	Props       AppManifestProperties
-	AllVersions []Version
+	AppManifestProperties
+	AllVersions map[string]*SimpleVersion `json:"versions"`
 }
 
 func (m *SimpleManifest) Name() string {
-	return m.Props.AppName
+	return m.AppName
 }
 
 func (m *SimpleManifest) Properties() AppManifestProperties {
-	return m.Props
+	return m.AppManifestProperties
 }
 
 func (m *SimpleManifest) Kinds() []Kind {
@@ -85,12 +87,12 @@ func (m *SimpleManifest) Kinds() []Kind {
 				k = &AnyKind{
 					Props: KindProperties{
 						Kind:                   kind.Kind,
-						Group:                  m.Props.FullGroup,
-						ManifestGroup:          m.Props.Group,
+						Group:                  m.FullGroup,
+						ManifestGroup:          m.Group,
 						MachineName:            kind.MachineName,
 						PluralMachineName:      kind.PluralMachineName,
 						PluralName:             kind.PluralName,
-						Current:                m.Props.PreferredVersion,
+						Current:                m.PreferredVersion,
 						Scope:                  kind.Scope,
 						Validation:             kind.Validation,
 						Mutation:               kind.Mutation,
@@ -123,15 +125,20 @@ func (m *SimpleManifest) Kinds() []Kind {
 }
 
 func (m *SimpleManifest) Versions() []Version {
-	return m.AllVersions
+	versions := make([]Version, 0, len(m.AllVersions))
+	for _, v := range m.AllVersions {
+		versions = append(versions, v)
+	}
+	slices.SortFunc(versions, func(a, b Version) int {
+		return strings.Compare(a.Name(), b.Name())
+	})
+	return versions
 }
 
 type VersionProperties struct {
 	Name    string                `json:"name"`
 	Served  bool                  `json:"served"`
 	Codegen KindCodegenProperties `json:"codegen"`
-	// HACK: This is unused, but we provide it so that cue validation is applied when decoding
-	Routes VersionCustomRoutes `json:"routes"`
 }
 
 type VersionCustomRoutes struct {
@@ -147,17 +154,17 @@ type Version interface {
 }
 
 type SimpleVersion struct {
-	Props        VersionProperties
-	AllKinds     []VersionedKind
-	CustomRoutes VersionCustomRoutes
+	VersionProperties
+	AllKinds     []VersionedKind      `json:"kinds"`
+	CustomRoutes *VersionCustomRoutes `json:"routes,omitempty"`
 }
 
 func (v *SimpleVersion) Name() string {
-	return v.Props.Name
+	return v.VersionProperties.Name
 }
 
 func (v *SimpleVersion) Properties() VersionProperties {
-	return v.Props
+	return v.VersionProperties
 }
 
 func (v *SimpleVersion) Kinds() []VersionedKind {
@@ -165,7 +172,10 @@ func (v *SimpleVersion) Kinds() []VersionedKind {
 }
 
 func (v *SimpleVersion) Routes() VersionCustomRoutes {
-	return v.CustomRoutes
+	if v.CustomRoutes == nil {
+		return VersionCustomRoutes{}
+	}
+	return *v.CustomRoutes
 }
 
 type VersionedKind struct {
@@ -190,7 +200,7 @@ type VersionedKind struct {
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Routes map[string]map[string]CustomRoute `json:"routes"`
+	Routes map[string]map[string]CustomRoute `json:"routes,omitempty"`
 }
 
 // VersionedKinds returns a sequence of all VersionedKinds in version order.

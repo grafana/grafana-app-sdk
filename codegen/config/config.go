@@ -15,8 +15,7 @@ const (
 )
 
 type KindsConfig struct {
-	Grouping       string
-	PerKindVersion bool
+	Grouping string
 }
 
 type DefinitionsConfig struct {

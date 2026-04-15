@@ -22,7 +22,7 @@ func TestCRDGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 	kinds, err := parser.ManifestParser().Parse("customManifest", "testManifest")
 	require.NoError(t, err)
@@ -50,7 +50,7 @@ func TestResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 	kinds, err := parser.ManifestParser().Parse("customManifest")
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 	// Ideally, we test only that this outputs the right jennies,
 	// but right now we just test the whole pipeline from thema -> written files
 
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 
 	t.Run("versioned", func(t *testing.T) {
@@ -107,7 +107,7 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 }
 
 func TestManifestGenerator(t *testing.T) {
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 
 	t.Run("resource", func(t *testing.T) {
@@ -124,7 +124,7 @@ func TestManifestGenerator(t *testing.T) {
 }
 
 func TestManifestGoGenerator(t *testing.T) {
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
@@ -170,7 +170,7 @@ func TestManifestGoGenerator(t *testing.T) {
 }
 
 func TestManifestGoGenerator_Deterministic(t *testing.T) {
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 
 	t.Run("group by group", func(t *testing.T) {
@@ -228,7 +228,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 }
 
 func TestManifestGoGenerator_RolesAreSorted(t *testing.T) {
-	parser, err := NewParser(testingCue(t), true, false)
+	parser, err := NewParser(testingCue(t), true)
 	require.NoError(t, err)
 
 	kinds, err := parser.ManifestParser().Parse("testManifest")

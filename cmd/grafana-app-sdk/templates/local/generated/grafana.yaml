@@ -4,7 +4,23 @@ metadata:
   name: grafana
   namespace: default
 ---
-{{ range $.CRDs }}apiVersion: rbac.authorization.k8s.io/v1
+{{ if .ProxyClientCert.Enabled }}apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: grafana-local-dev-all-access
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:authenticated
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:unauthenticated
+---
+{{ end }}{{ range $.CRDs }}apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: grafana:{{.MachineName}}-user-rolebinding
@@ -92,7 +108,9 @@ data:
     grafanaAPIServerWithExperimentalAPIs = false
     kubernetesAggregator = true
     [grafana-apiserver]
-    remote_services_file = /app-aggregator/apiservices.yaml
+    remote_services_file = /app-aggregator/apiservices.yaml{{ if .ProxyClientCert.Enabled }}
+    proxy_client_cert_file = /etc/proxy-client-certs/client-auth-proxy.crt
+    proxy_client_key_file = /etc/proxy-client-certs/client-auth-proxy.key{{ end }}
 ---
 apiVersion: v1
 kind: Service
@@ -128,7 +146,19 @@ spec:
     metadata:
       labels:
         name: grafana
-    spec:
+    spec:{{ if .ProxyClientCert.Enabled }}
+      initContainers:
+        - name: copy-proxy-certs
+          image: busybox:stable
+          command: ["sh", "-c", "cp /k3s-tls/client-auth-proxy.crt /k3s-tls/client-auth-proxy.key /proxy-certs/ && chmod 644 /proxy-certs/*"]
+          volumeMounts:
+            - mountPath: /k3s-tls
+              name: k3s-tls
+              readOnly: true
+            - mountPath: /proxy-certs
+              name: proxy-client-certs
+          securityContext:
+            runAsUser: 0{{ end }}
       containers:
         - env:
             - name: GF_INSTALL_PLUGINS
@@ -159,7 +189,10 @@ spec:
               name: grafana-datasources
             - mountPath: /app-aggregator
               name: grafana-apiserver-provisioning
-              readOnly: true{{ range .GrafanaVolumeMounts }}
+              readOnly: true{{ if .ProxyClientCert.Enabled }}
+            - mountPath: /etc/proxy-client-certs
+              name: proxy-client-certs
+              readOnly: true{{ end }}{{ range .GrafanaVolumeMounts }}
             - mountPath: {{.MountPath}}
               name: {{.Name}}
               readOnly: true{{ end }}
@@ -179,7 +212,12 @@ spec:
           name: grafana-datasources
         - configMap:
             name: grafana-apiserver-provisioning
-          name: grafana-apiserver-provisioning{{ range .GrafanaVolumeMounts }}
+          name: grafana-apiserver-provisioning{{ if .ProxyClientCert.Enabled }}
+        - hostPath:
+            path: /var/lib/rancher/k3s/server/tls
+          name: k3s-tls
+        - emptyDir: {}
+          name: proxy-client-certs{{ end }}{{ range .GrafanaVolumeMounts }}
         - hostPath:
             path: {{.HostPath}}
           name: {{.Name}}{{ end }}
