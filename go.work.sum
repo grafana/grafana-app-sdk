@@ -1433,6 +1433,8 @@ github.com/moby/spdystream v0.4.0 h1:Vy79D6mHeJJjiPdFEL2yku1kl0chZpJfZcPpb16BRl8
 github.com/moby/spdystream v0.4.0/go.mod h1:xBAYlnt/ay+11ShkdFKNAG7LsyK/tmNBVvVOwrfMgdI=
 github.com/moby/spdystream v0.5.0 h1:7r0J1Si3QO/kjRitvSLVVFUjxMEb/YLj6S9FF62JBCU=
 github.com/moby/spdystream v0.5.0/go.mod h1:xBAYlnt/ay+11ShkdFKNAG7LsyK/tmNBVvVOwrfMgdI=
+github.com/moby/spdystream v0.5.1 h1:9sNYeYZUcci9R6/w7KDaFWEWeV4LStVG78Mpyq/Zm/Y=
+github.com/moby/spdystream v0.5.1/go.mod h1:xBAYlnt/ay+11ShkdFKNAG7LsyK/tmNBVvVOwrfMgdI=
 github.com/moby/term v0.5.0 h1:xt8Q1nalod/v7BqbG21f8mQPqH+xAaC9C3N3wfWbVP0=
 github.com/moby/term v0.5.0/go.mod h1:8FzsFHVUBGZdbDsJw/ot+X+d5HLUbvklYLJ9uGfcI3Y=
 github.com/modern-go/reflect2 v0.0.0-20180701023420-4b7aa43c6742/go.mod h1:bx2lNnkwVCuqBIxFjflWJWanXIb3RllmbCylyMrvgv0=
@@ -2092,7 +2094,6 @@ golang.org/x/telemetry v0.0.0-20250710130107-8d8967aff50b/go.mod h1:4ZwOYna0/zsO
 golang.org/x/telemetry v0.0.0-20250807160809-1a19826ec488 h1:3doPGa+Gg4snce233aCWnbZVFsyFMo/dR40KK/6skyE=
 golang.org/x/telemetry v0.0.0-20250807160809-1a19826ec488/go.mod h1:fGb/2+tgXXjhjHsTNdVEEMZNWA0quBnfrO+AfoDSAKw=
 golang.org/x/telemetry v0.0.0-20251008203120-078029d740a8/go.mod h1:Pi4ztBfryZoJEkyFTI5/Ocsu2jXyDr6iSdgJiYE/uwE=
-golang.org/x/telemetry v0.0.0-20260409153401-be6f6cb8b1fa/go.mod h1:kHjTxDEnAu6/Nl9lDkzjWpR+bmKfxeiRuSDlsMb70gE=
 golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1/go.mod h1:bj7SfCRtBDWHUb9snDiAeCFNEtKQo2Wmx5Cou7ajbmo=
 golang.org/x/term v0.0.0-20210927222741-03fcf44c2211/go.mod h1:jbD1KX2456YbFQfuXm/mYQcufACuNUgVhRMnK/tPxf8=
 golang.org/x/term v0.21.0/go.mod h1:ooXLefLobQVslOqselCNF4SxFAaoS6KujMbsGzSDmX0=
@@ -2481,6 +2482,8 @@ k8s.io/code-generator v0.35.1 h1:yLKR2la7Z9cWT5qmk67ayx8xXLM4RRKQMnC8YPvTWRI=
 k8s.io/code-generator v0.35.1/go.mod h1:F2Fhm7aA69tC/VkMXLDokdovltXEF026Tb9yfQXQWKg=
 k8s.io/code-generator v0.35.3 h1:NDGCLkEm6Ho65wTdSe2EgErmmtsrezOPwwOchlNc6FQ=
 k8s.io/code-generator v0.35.3/go.mod h1:LAVriRGXQusHQ0Ns64SE1ublSswm1KrK7cXn0GuQETg=
+k8s.io/code-generator v0.35.4 h1:i0FfiXAeUMBlHarjVk5ZWf6Wjsg3YJpNYmOg0nPk6r4=
+k8s.io/code-generator v0.35.4/go.mod h1:rwLDdemFgPK6dGlLFHPUieyekgAlV1x8IVafjAy/ELA=
 k8s.io/component-base v0.30.3 h1:Ci0UqKWf4oiwy8hr1+E3dsnliKnkMLZMVbWzeorlk7s=
 k8s.io/component-base v0.30.3/go.mod h1:C1SshT3rGPCuNtBs14RmVD2xW0EhRSeLvBh7AGk1quA=
 k8s.io/component-base v0.31.0 h1:/KIzGM5EvPNQcYgwq5NwoQBaOlVFrghoVGr8lG6vNRs=
