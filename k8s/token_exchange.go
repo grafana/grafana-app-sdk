@@ -74,7 +74,7 @@ func NewTokenExchangeRestConfig(creds TokenExchangeCredentials, target RemoteSer
 	}
 
 	if len(target.Audiences) == 0 {
-		return nil, errors.New("Audiences are required")
+		return nil, errors.New("audiences are required")
 	}
 
 	return &rest.Config{
@@ -110,7 +110,7 @@ func NewTokenExchangeRemoteRestConfig(creds TokenExchangeCredentials, target Rem
 	}
 
 	if len(target.Audiences) == 0 {
-		return nil, errors.New("Audiences are required")
+		return nil, errors.New("audiences are required")
 	}
 
 	return &RemoteRestConfig{
