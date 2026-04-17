@@ -15,6 +15,12 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+// dynamicPatcherCodecs is shared across all synthesized Kinds inside DynamicPatcher — the
+// JSONCodec is stateless, so reusing one map instance avoids a per-request allocation.
+var dynamicPatcherCodecs = map[resource.KindEncoding]resource.Codec{
+	resource.KindEncodingJSON: resource.NewJSONCodec(),
+}
+
 // DynamicPatcher is a client which will always patch against the current preferred version of a kind.
 // It obtains per-kind clients through the provided ClientGenerator, so installations routing
 // different groups to different API servers (via ClientConfig.KubeConfigProvider) are handled correctly.
@@ -23,6 +29,10 @@ type DynamicPatcher struct {
 
 	preferred  *xsync.MapOf[string, metav1.APIResource] // keyed by schema.GroupKind.String()
 	lastUpdate *xsync.MapOf[string, time.Time]          // keyed by API group
+	// kindCache memoizes the synthesized Kind per (groupKind, preferred version) so hot-path
+	// Get/Patch calls don't allocate a new Schema + codec map each invocation. Keyed by
+	// "groupKind.String()/version".
+	kindCache *xsync.MapOf[string, resource.Kind]
 
 	updateInterval time.Duration
 	group          singleflight.Group
@@ -36,12 +46,13 @@ type DynamicPatcher struct {
 // set this value to <= 0.
 func NewDynamicPatcher(clients resource.ClientGenerator, cacheUpdateInterval time.Duration) (*DynamicPatcher, error) {
 	if clients == nil {
-		return nil, errors.New("ClientGenerator cannot be nil")
+		return nil, errors.New("client generator cannot be nil")
 	}
 	return &DynamicPatcher{
 		clients:        clients,
 		preferred:      xsync.NewMapOf[metav1.APIResource](),
 		lastUpdate:     xsync.NewMapOf[time.Time](),
+		kindCache:      xsync.NewMapOf[resource.Kind](),
 		updateInterval: cacheUpdateInterval,
 	}, nil
 }
@@ -105,19 +116,19 @@ func (d *DynamicPatcher) clientForPreferred(groupKind schema.GroupKind) (resourc
 	if err != nil {
 		return nil, nil, err
 	}
-	scope := resource.NamespacedScope
-	if !preferred.Namespaced {
-		scope = resource.ClusterScope
-	}
-	sch := resource.NewSimpleSchema(groupKind.Group, preferred.Version, &resource.UntypedObject{}, &resource.UntypedList{},
-		resource.WithKind(groupKind.Kind),
-		resource.WithPlural(preferred.Name),
-		resource.WithScope(scope),
-	)
-	kind := resource.Kind{
-		Schema: sch,
-		Codecs: map[resource.KindEncoding]resource.Codec{resource.KindEncodingJSON: resource.NewJSONCodec()},
-	}
+	cacheKey := groupKind.String() + "/" + preferred.Version
+	kind, _ := d.kindCache.LoadOrCompute(cacheKey, func() resource.Kind {
+		scope := resource.NamespacedScope
+		if !preferred.Namespaced {
+			scope = resource.ClusterScope
+		}
+		sch := resource.NewSimpleSchema(groupKind.Group, preferred.Version, &resource.UntypedObject{}, &resource.UntypedList{},
+			resource.WithKind(groupKind.Kind),
+			resource.WithPlural(preferred.Name),
+			resource.WithScope(scope),
+		)
+		return resource.Kind{Schema: sch, Codecs: dynamicPatcherCodecs}
+	})
 	client, err := d.clients.ClientFor(kind)
 	if err != nil {
 		return nil, nil, err

@@ -108,11 +108,24 @@ func (d *DiscoveryClient) getClient(group string) (*discovery.DiscoveryClient, e
 	if c, ok := d.clients.Load(group); ok {
 		return c, nil
 	}
-	cfg := d.kubeConfigForGroup(group)
-	c, err := discovery.NewDiscoveryClientForConfig(&cfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating discovery client for group %q: %w", group, err)
+	// Compute holds the shard lock for `group`, so concurrent first-time callers for the same
+	// group won't both construct a discovery client. On failure we return delete=true so the
+	// failure isn't cached and a subsequent call gets to retry.
+	var createErr error
+	c, _ := d.clients.Compute(group, func(existing *discovery.DiscoveryClient, loaded bool) (*discovery.DiscoveryClient, bool) {
+		if loaded {
+			return existing, false
+		}
+		cfg := d.kubeConfigForGroup(group)
+		newClient, err := discovery.NewDiscoveryClientForConfig(&cfg)
+		if err != nil {
+			createErr = err
+			return nil, true
+		}
+		return newClient, false
+	})
+	if createErr != nil {
+		return nil, fmt.Errorf("error creating discovery client for group %q: %w", group, createErr)
 	}
-	actual, _ := d.clients.LoadOrStore(group, c)
-	return actual, nil
+	return c, nil
 }
