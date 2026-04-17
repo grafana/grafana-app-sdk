@@ -7,6 +7,7 @@ import (
 	"net/url"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/rest"
 )
 
 const NamespaceAll = ""
@@ -280,4 +281,9 @@ type ClientGenerator interface {
 	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientForGV calls.
 	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
+	// KubeConfigForGroup returns the rest.Config to use for clients that operate on the given API group.
+	// Implementations should apply any per-group routing configuration (such as a KubeConfigProvider),
+	// so callers that only know the group (e.g. DynamicPatcher) can still reach the correct API server
+	// in multi-host setups.
+	KubeConfigForGroup(group string) rest.Config
 }

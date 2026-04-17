@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/puzpuzpuz/xsync/v2"
 	"golang.org/x/sync/singleflight"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,34 +21,36 @@ import (
 )
 
 // DynamicPatcher is a client which will always patch against the current preferred version of a kind.
+// It keeps a dynamic client and discovery client per API group, so that installations routing
+// different groups to different API servers (via ClientConfig.KubeConfigProvider) are handled correctly.
 type DynamicPatcher struct {
-	client         *dynamic.DynamicClient
-	discovery      *discovery.DiscoveryClient
-	preferred      map[string]metav1.APIResource
-	mux            sync.RWMutex
-	lastUpdate     time.Time
+	configForGroup func(group string) rest.Config
+
+	dynamicClients   *xsync.MapOf[string, *dynamic.DynamicClient]
+	discoveryClients *xsync.MapOf[string, *discovery.DiscoveryClient]
+	preferred        *xsync.MapOf[string, metav1.APIResource] // keyed by schema.GroupKind.String()
+	lastUpdate       *xsync.MapOf[string, time.Time]          // keyed by API group
+
 	updateInterval time.Duration
 	group          singleflight.Group
 }
 
-// NewDynamicPatcher returns a new DynamicPatcher using the provided rest.Config for its internal client(s),
-// and cacheUpdateInterval as the interval to refresh its preferred version cache from the API server.
+// NewDynamicPatcher returns a new DynamicPatcher that resolves the rest.Config for each API group
+// via ClientGenerator.KubeConfigForGroup, and cacheUpdateInterval as the interval to refresh its
+// preferred version cache from the API server.
 // To disable the cache refresh (and only update on first request and whenever ForceRefresh() is called),
 // set this value to <= 0.
-func NewDynamicPatcher(cfg *rest.Config, cacheUpdateInterval time.Duration) (*DynamicPatcher, error) {
-	client, err := dynamic.NewForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating dynamic client: %w", err)
-	}
-	disc, err := discovery.NewDiscoveryClientForConfig(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("error creating discovery client: %w", err)
+func NewDynamicPatcher(clients resource.ClientGenerator, cacheUpdateInterval time.Duration) (*DynamicPatcher, error) {
+	if clients == nil {
+		return nil, errors.New("ClientGenerator cannot be nil")
 	}
 	return &DynamicPatcher{
-		client:         client,
-		discovery:      disc,
-		preferred:      make(map[string]metav1.APIResource),
-		updateInterval: cacheUpdateInterval,
+		configForGroup:   clients.KubeConfigForGroup,
+		dynamicClients:   xsync.NewMapOf[*dynamic.DynamicClient](),
+		discoveryClients: xsync.NewMapOf[*discovery.DiscoveryClient](),
+		preferred:        xsync.NewMapOf[metav1.APIResource](),
+		lastUpdate:       xsync.NewMapOf[time.Time](),
+		updateInterval:   cacheUpdateInterval,
 	}, nil
 }
 
@@ -75,7 +77,11 @@ func (d *DynamicPatcher) Patch(ctx context.Context, groupKind schema.GroupKind, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal patch: %w", err)
 	}
-	res := d.client.Resource(schema.GroupVersionResource{
+	client, err := d.getDynamicClient(groupKind.Group)
+	if err != nil {
+		return nil, err
+	}
+	res := client.Resource(schema.GroupVersionResource{
 		Group:    preferred.Group,
 		Version:  preferred.Version,
 		Resource: preferred.Name,
@@ -107,8 +113,12 @@ func (d *DynamicPatcher) Get(ctx context.Context, groupKind schema.GroupKind, id
 	if err != nil {
 		return nil, err
 	}
-	logging.FromContext(ctx).Debug("patching with dynamic client", "group", groupKind.Group, "version", preferred.Version, "kind", groupKind.Kind, "plural", preferred.Name)
-	res := d.client.Resource(schema.GroupVersionResource{
+	logging.FromContext(ctx).Debug("getting with dynamic client", "group", groupKind.Group, "version", preferred.Version, "kind", groupKind.Kind, "plural", preferred.Name)
+	client, err := d.getDynamicClient(groupKind.Group)
+	if err != nil {
+		return nil, err
+	}
+	res := client.Resource(schema.GroupVersionResource{
 		Group:    preferred.Group,
 		Version:  preferred.Version,
 		Resource: preferred.Name,
@@ -136,15 +146,25 @@ func (d *DynamicPatcher) ForKind(groupKind schema.GroupKind) *DynamicKindPatcher
 	}
 }
 
-// ForceRefresh forces an update of the DiscoveryClient's cache of preferred versions for kinds
+// ForceRefresh forces an update of the preferred version cache for every API group
+// for which a discovery client has already been created.
 func (d *DynamicPatcher) ForceRefresh() error {
-	return d.updatePreferred()
+	var rangeErr error
+	d.discoveryClients.Range(func(group string, _ *discovery.DiscoveryClient) bool {
+		if err := d.updatePreferred(group); err != nil {
+			rangeErr = err
+			return false
+		}
+		return true
+	})
+	return rangeErr
 }
 
 func (d *DynamicPatcher) getPreferred(kind schema.GroupKind) (*metav1.APIResource, error) {
-	_, err, _ := d.group.Do("check-cache-update", func() (any, error) {
-		if d.preferred == nil || (d.updateInterval >= 0 && d.lastUpdate.Before(now().Add(-d.updateInterval))) {
-			if err := d.updatePreferred(); err != nil {
+	_, err, _ := d.group.Do("check-cache-update:"+kind.Group, func() (any, error) {
+		last, _ := d.lastUpdate.Load(kind.Group)
+		if last.IsZero() || (d.updateInterval >= 0 && last.Before(now().Add(-d.updateInterval))) {
+			if err := d.updatePreferred(kind.Group); err != nil {
 				return nil, err
 			}
 		}
@@ -153,20 +173,19 @@ func (d *DynamicPatcher) getPreferred(kind schema.GroupKind) (*metav1.APIResourc
 	if err != nil {
 		return nil, err
 	}
-	d.mux.RLock()
-	defer d.mux.RUnlock()
-
-	preferred, ok := d.preferred[kind.String()]
+	pref, ok := d.preferred.Load(kind.String())
 	if !ok {
 		return nil, fmt.Errorf("preferred resource not found for kind '%s'", kind)
 	}
-	return &preferred, nil
+	return &pref, nil
 }
 
-func (d *DynamicPatcher) updatePreferred() error {
-	d.mux.Lock()
-	defer d.mux.Unlock()
-	preferred, err := d.discovery.ServerPreferredResources()
+func (d *DynamicPatcher) updatePreferred(group string) error {
+	disc, err := d.getDiscoveryClient(group)
+	if err != nil {
+		return err
+	}
+	preferred, err := disc.ServerPreferredResources()
 	if err != nil {
 		// There are errors that are "partial" errors and still return results.
 		// In those cases, we should check into the error further rather than just returning.
@@ -180,8 +199,8 @@ func (d *DynamicPatcher) updatePreferred() error {
 		}
 		if cast, ok := err.(*discovery.ErrGroupDiscoveryFailed); ok {
 			// Failed discovery for a number of groups. Log the failed groups
-			for group, gerr := range cast.Groups {
-				logging.DefaultLogger.Warn(fmt.Sprintf("discovery failed for GroupVersion %s", group.String()), "groupversion", group, "error", gerr)
+			for g, gerr := range cast.Groups {
+				logging.DefaultLogger.Warn(fmt.Sprintf("discovery failed for GroupVersion %s", g.String()), "groupversion", g, "error", gerr)
 			}
 		} else {
 			// just log the error
@@ -193,6 +212,11 @@ func (d *DynamicPatcher) updatePreferred() error {
 		if err != nil {
 			return err
 		}
+		// Only cache entries for the group we queried. In multi-host setups, a different
+		// API server may be authoritative for another group.
+		if gv.Group != group {
+			continue
+		}
 		for _, res := range pref.APIResources {
 			if res.Version == "" {
 				res.Version = gv.Version
@@ -200,14 +224,37 @@ func (d *DynamicPatcher) updatePreferred() error {
 			if res.Group == "" {
 				res.Group = gv.Group
 			}
-			d.preferred[schema.GroupKind{
-				Group: gv.Group,
-				Kind:  res.Kind,
-			}.String()] = res
+			d.preferred.Store(schema.GroupKind{Group: gv.Group, Kind: res.Kind}.String(), res)
 		}
 	}
-	d.lastUpdate = now()
+	d.lastUpdate.Store(group, now())
 	return nil
+}
+
+func (d *DynamicPatcher) getDynamicClient(group string) (*dynamic.DynamicClient, error) {
+	if client, ok := d.dynamicClients.Load(group); ok {
+		return client, nil
+	}
+	cfg := d.configForGroup(group)
+	client, err := dynamic.NewForConfig(&cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating dynamic client for group %q: %w", group, err)
+	}
+	actual, _ := d.dynamicClients.LoadOrStore(group, client)
+	return actual, nil
+}
+
+func (d *DynamicPatcher) getDiscoveryClient(group string) (*discovery.DiscoveryClient, error) {
+	if disc, ok := d.discoveryClients.Load(group); ok {
+		return disc, nil
+	}
+	cfg := d.configForGroup(group)
+	disc, err := discovery.NewDiscoveryClientForConfig(&cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error creating discovery client for group %q: %w", group, err)
+	}
+	actual, _ := d.discoveryClients.LoadOrStore(group, disc)
+	return actual, nil
 }
 
 func (*DynamicPatcher) parseError(err error) error {

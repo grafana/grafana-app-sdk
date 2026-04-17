@@ -148,6 +148,21 @@ func (c *ClientRegistry) getCustomRouteClient(gv schema.GroupVersion) (rest.Inte
 	return restClient, nil
 }
 
+// KubeConfigForGroup returns the rest.Config the registry would use for clients operating on
+// the given API group, by invoking ClientConfig.KubeConfigProvider with a synthetic Kind that
+// has only the group populated. This assumes KubeConfigProvider implementations inspect only
+// the kind's group for routing (the pattern used by DefaultClientConfig and
+// NewClientConfigWithExternalClients). Callers that only know the group (e.g. DynamicPatcher)
+// can use this to reach the correct API server in per-group routing setups.
+func (c *ClientRegistry) KubeConfigForGroup(group string) rest.Config {
+	cfg := c.cfg
+	if c.clientConfig.KubeConfigProvider != nil {
+		sch := resource.NewSimpleSchema(group, "", &resource.UntypedObject{}, &resource.UntypedList{})
+		cfg = c.clientConfig.KubeConfigProvider(resource.Kind{Schema: sch}, cfg)
+	}
+	return cfg
+}
+
 func (c *ClientRegistry) getClientFor(sch resource.Kind) (rest.Interface, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()

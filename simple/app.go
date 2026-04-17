@@ -332,7 +332,7 @@ func NewApp(config AppConfig) (*App, error) {
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
 	}
-	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, discoveryRefresh)
+	p, err := k8s.NewDynamicPatcher(clients, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}
