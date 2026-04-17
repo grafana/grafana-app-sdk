@@ -11,7 +11,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
 )
 
 type TestGroup struct {
@@ -950,10 +949,6 @@ func (g *mockClientGenerator) GetCustomRouteClient(s schema.GroupVersion, defaul
 		return g.GetClientFunc(s, defaultNamespace)
 	}
 	return nil, nil
-}
-
-func (g *mockClientGenerator) KubeConfigForGroup(string) rest.Config {
-	return rest.Config{}
 }
 
 type mockClient struct {
