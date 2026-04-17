@@ -191,6 +191,98 @@ func TestDiscoveryClient_APIGroupInfo_FiltersToRequestedGroup(t *testing.T) {
 	require.Equal(t, wantVersion, resources[0].Version)
 }
 
+// TestDiscoveryClient_APIGroupInfo_SkipsSubresources ensures subresource entries
+// (e.g. "pods/status") don't get folded into the result set, since they share the parent's
+// Kind and would otherwise overwrite the main resource with a plural containing "/".
+func TestDiscoveryClient_APIGroupInfo_SkipsSubresources(t *testing.T) {
+	const group, version = "alpha.example.com", "v1"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/apis":
+			_ = json.NewEncoder(w).Encode(metav1.APIGroupList{
+				TypeMeta: metav1.TypeMeta{Kind: "APIGroupList", APIVersion: "v1"},
+				Groups: []metav1.APIGroup{{
+					Name:             group,
+					PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: group + "/" + version, Version: version},
+					Versions:         []metav1.GroupVersionForDiscovery{{GroupVersion: group + "/" + version, Version: version}},
+				}},
+			})
+		case "/apis/" + group + "/" + version:
+			_ = json.NewEncoder(w).Encode(metav1.APIResourceList{
+				TypeMeta:     metav1.TypeMeta{Kind: "APIResourceList", APIVersion: "v1"},
+				GroupVersion: group + "/" + version,
+				APIResources: []metav1.APIResource{
+					{Name: "widgets", Kind: "Widget", Namespaced: true, Verbs: metav1.Verbs{"get"}},
+					{Name: "widgets/status", Kind: "Widget", Namespaced: true, Verbs: metav1.Verbs{"get"}},
+					{Name: "widgets/scale", Kind: "Scale", Namespaced: true, Verbs: metav1.Verbs{"get"}},
+				},
+			})
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	dc := NewDiscoveryClient(rest.Config{Host: server.URL}, nil)
+	resources, err := dc.APIGroupInfo(group)
+	require.NoError(t, err)
+	require.Len(t, resources, 1, "subresources must be filtered out")
+	require.Equal(t, "widgets", resources[0].Name)
+	require.Equal(t, "Widget", resources[0].Kind)
+}
+
+// TestDiscoveryClient_APIGroupInfo_PartialErrorWithResults verifies that when
+// ServerPreferredResources reports an ErrGroupDiscoveryFailed but still produced usable
+// resources for the requested group, APIGroupInfo returns the resources with no error
+// (so DynamicPatcher.updatePreferred can proceed on a partial failure).
+func TestDiscoveryClient_APIGroupInfo_PartialErrorWithResults(t *testing.T) {
+	const (
+		wantGroup, wantVersion = "alpha.example.com", "v1"
+		brokenGroup            = "broken.example.com"
+	)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/apis":
+			// Advertise both groups so client-go asks for each version below.
+			_ = json.NewEncoder(w).Encode(metav1.APIGroupList{
+				TypeMeta: metav1.TypeMeta{Kind: "APIGroupList", APIVersion: "v1"},
+				Groups: []metav1.APIGroup{
+					{
+						Name:             wantGroup,
+						PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: wantGroup + "/" + wantVersion, Version: wantVersion},
+						Versions:         []metav1.GroupVersionForDiscovery{{GroupVersion: wantGroup + "/" + wantVersion, Version: wantVersion}},
+					},
+					{
+						Name:             brokenGroup,
+						PreferredVersion: metav1.GroupVersionForDiscovery{GroupVersion: brokenGroup + "/v1", Version: "v1"},
+						Versions:         []metav1.GroupVersionForDiscovery{{GroupVersion: brokenGroup + "/v1", Version: "v1"}},
+					},
+				},
+			})
+		case "/apis/" + wantGroup + "/" + wantVersion:
+			_ = json.NewEncoder(w).Encode(metav1.APIResourceList{
+				TypeMeta:     metav1.TypeMeta{Kind: "APIResourceList", APIVersion: "v1"},
+				GroupVersion: wantGroup + "/" + wantVersion,
+				APIResources: []metav1.APIResource{{Name: "widgets", Kind: "Widget", Namespaced: true, Verbs: metav1.Verbs{"get"}}},
+			})
+		case "/apis/" + brokenGroup + "/v1":
+			// Trigger an ErrGroupDiscoveryFailed entry for a non-target group.
+			http.Error(w, "boom", http.StatusInternalServerError)
+		default:
+			_, _ = w.Write([]byte(`{}`))
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	dc := NewDiscoveryClient(rest.Config{Host: server.URL}, nil)
+	resources, err := dc.APIGroupInfo(wantGroup)
+	require.NoError(t, err, "partial discovery failure for an unrelated group must not fail the target lookup")
+	require.Len(t, resources, 1)
+	require.Equal(t, "Widget", resources[0].Kind)
+}
+
 // TestDynamicPatcher_ForceRefresh verifies that ForceRefresh only refreshes groups that
 // have already been queried, and re-hits the apiserver for each of them.
 func TestDynamicPatcher_ForceRefresh(t *testing.T) {

@@ -3,6 +3,7 @@ package k8s
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/puzpuzpuz/xsync/v2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -82,6 +83,13 @@ func (d *DiscoveryClient) APIGroupInfo(apiGroup string) ([]metav1.APIResource, e
 			continue
 		}
 		for _, res := range pref.APIResources {
+			// ServerPreferredResources returns subresources (e.g. "pods/status") alongside the
+			// main resource. They share the parent's Kind, so if we didn't skip them the map
+			// keyed by Kind would end up with the subresource entry and a plural containing "/",
+			// producing broken request URLs downstream.
+			if strings.Contains(res.Name, "/") {
+				continue
+			}
 			if res.Version == "" {
 				res.Version = gv.Version
 			}
@@ -91,8 +99,13 @@ func (d *DiscoveryClient) APIGroupInfo(apiGroup string) ([]metav1.APIResource, e
 			resources = append(resources, res)
 		}
 	}
-
-	return resources, targetGroupErr
+	// Only propagate the target-group discovery failure when it left us with nothing usable.
+	// If we got partial results, let the caller consume them; otherwise common partial-discovery
+	// scenarios would permanently block the preferred-version cache from updating.
+	if len(resources) == 0 && targetGroupErr != nil {
+		return nil, targetGroupErr
+	}
+	return resources, nil
 }
 
 func (d *DiscoveryClient) kubeConfigForGroup(group string) rest.Config {
