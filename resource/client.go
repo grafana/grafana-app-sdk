@@ -287,9 +287,10 @@ type ClientGenerator interface {
 	DiscoveryClient() (DiscoveryClient, error)
 }
 
-// DiscoveryClient inspects the API groups and resources exposed by the underlying storage system.
+// DiscoveryClient inspects the API groups and resources exposed by the underlying API server.
 type DiscoveryClient interface {
-	// APIGroupInfo returns the preferred-version resources exposed by the given API group.
-	// Each entry's Group and Version fields are populated with the resource's preferred GroupVersion.
-	APIGroupInfo(apiGroup string) ([]metav1.APIResource, error)
+	// PreferredVersion returns the APIResourceList for the preferred version of the given API group.
+	// The returned list's GroupVersion is the preferred GroupVersion; each APIResource entry's
+	// Group and Version fields are also populated with that same GroupVersion for caller convenience.
+	PreferredVersion(apiGroup string) (*metav1.APIResourceList, error)
 }

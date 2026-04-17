@@ -137,10 +137,10 @@ func TestDynamicPatcher_PerGroupDiscoveryRouting(t *testing.T) {
 	require.Equal(t, pluralB, prefB.Name)
 }
 
-// TestDiscoveryClient_APIGroupInfo_FiltersToRequestedGroup exercises APIGroupInfo directly
+// TestDiscoveryClient_PreferredVersion_FiltersToRequestedGroup exercises PreferredVersion directly
 // against a server that advertises multiple groups. We only asked about one, so the
-// returned slice should only contain entries for that group.
-func TestDiscoveryClient_APIGroupInfo_FiltersToRequestedGroup(t *testing.T) {
+// returned list should only contain entries for that group.
+func TestDiscoveryClient_PreferredVersion_FiltersToRequestedGroup(t *testing.T) {
 	const (
 		wantGroup, wantVersion = "alpha.example.com", "v1"
 		otherGroup             = "beta.example.com"
@@ -183,18 +183,19 @@ func TestDiscoveryClient_APIGroupInfo_FiltersToRequestedGroup(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	dc := NewDiscoveryClient(rest.Config{Host: server.URL}, nil)
-	resources, err := dc.APIGroupInfo(wantGroup)
+	list, err := dc.PreferredVersion(wantGroup)
 	require.NoError(t, err)
-	require.Len(t, resources, 1)
-	require.Equal(t, "Widget", resources[0].Kind)
-	require.Equal(t, wantGroup, resources[0].Group)
-	require.Equal(t, wantVersion, resources[0].Version)
+	require.Equal(t, wantGroup+"/"+wantVersion, list.GroupVersion)
+	require.Len(t, list.APIResources, 1)
+	require.Equal(t, "Widget", list.APIResources[0].Kind)
+	require.Equal(t, wantGroup, list.APIResources[0].Group)
+	require.Equal(t, wantVersion, list.APIResources[0].Version)
 }
 
-// TestDiscoveryClient_APIGroupInfo_SkipsSubresources ensures subresource entries
+// TestDiscoveryClient_PreferredVersion_SkipsSubresources ensures subresource entries
 // (e.g. "pods/status") don't get folded into the result set, since they share the parent's
 // Kind and would otherwise overwrite the main resource with a plural containing "/".
-func TestDiscoveryClient_APIGroupInfo_SkipsSubresources(t *testing.T) {
+func TestDiscoveryClient_PreferredVersion_SkipsSubresources(t *testing.T) {
 	const group, version = "alpha.example.com", "v1"
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -225,18 +226,18 @@ func TestDiscoveryClient_APIGroupInfo_SkipsSubresources(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	dc := NewDiscoveryClient(rest.Config{Host: server.URL}, nil)
-	resources, err := dc.APIGroupInfo(group)
+	list, err := dc.PreferredVersion(group)
 	require.NoError(t, err)
-	require.Len(t, resources, 1, "subresources must be filtered out")
-	require.Equal(t, "widgets", resources[0].Name)
-	require.Equal(t, "Widget", resources[0].Kind)
+	require.Len(t, list.APIResources, 1, "subresources must be filtered out")
+	require.Equal(t, "widgets", list.APIResources[0].Name)
+	require.Equal(t, "Widget", list.APIResources[0].Kind)
 }
 
-// TestDiscoveryClient_APIGroupInfo_PartialErrorWithResults verifies that when
+// TestDiscoveryClient_PreferredVersion_PartialErrorWithResults verifies that when
 // ServerPreferredResources reports an ErrGroupDiscoveryFailed but still produced usable
-// resources for the requested group, APIGroupInfo returns the resources with no error
+// resources for the requested group, PreferredVersion returns the resources with no error
 // (so DynamicPatcher.updatePreferred can proceed on a partial failure).
-func TestDiscoveryClient_APIGroupInfo_PartialErrorWithResults(t *testing.T) {
+func TestDiscoveryClient_PreferredVersion_PartialErrorWithResults(t *testing.T) {
 	const (
 		wantGroup, wantVersion = "alpha.example.com", "v1"
 		brokenGroup            = "broken.example.com"
@@ -277,10 +278,10 @@ func TestDiscoveryClient_APIGroupInfo_PartialErrorWithResults(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	dc := NewDiscoveryClient(rest.Config{Host: server.URL}, nil)
-	resources, err := dc.APIGroupInfo(wantGroup)
+	list, err := dc.PreferredVersion(wantGroup)
 	require.NoError(t, err, "partial discovery failure for an unrelated group must not fail the target lookup")
-	require.Len(t, resources, 1)
-	require.Equal(t, "Widget", resources[0].Kind)
+	require.Len(t, list.APIResources, 1)
+	require.Equal(t, "Widget", list.APIResources[0].Kind)
 }
 
 // TestDynamicPatcher_ForceRefresh verifies that ForceRefresh only refreshes groups that

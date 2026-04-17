@@ -39,9 +39,10 @@ func NewDiscoveryClient(cfg rest.Config, kubeConfigProvider func(kind resource.K
 	}
 }
 
-// APIGroupInfo returns the preferred-version resources exposed by the given API group.
-// Each entry's Group and Version fields are populated with the resource's preferred GroupVersion.
-func (d *DiscoveryClient) APIGroupInfo(apiGroup string) ([]metav1.APIResource, error) {
+// PreferredVersion returns the APIResourceList for the preferred version of the given API group.
+// The returned list's GroupVersion is the preferred GroupVersion; each APIResource entry's
+// Group and Version fields are also populated with that same GroupVersion for caller convenience.
+func (d *DiscoveryClient) PreferredVersion(apiGroup string) (*metav1.APIResourceList, error) {
 	client, err := d.getClient(apiGroup)
 	if err != nil {
 		return nil, err
@@ -71,7 +72,7 @@ func (d *DiscoveryClient) APIGroupInfo(apiGroup string) ([]metav1.APIResource, e
 			logging.DefaultLogger.Warn("error getting preferred resources, returned partial results", "error", err)
 		}
 	}
-	var resources []metav1.APIResource
+	result := &metav1.APIResourceList{}
 	for _, pref := range preferred {
 		gv, err := schema.ParseGroupVersion(pref.GroupVersion)
 		if err != nil {
@@ -82,6 +83,7 @@ func (d *DiscoveryClient) APIGroupInfo(apiGroup string) ([]metav1.APIResource, e
 		if gv.Group != apiGroup {
 			continue
 		}
+		result.GroupVersion = pref.GroupVersion
 		for _, res := range pref.APIResources {
 			// ServerPreferredResources returns subresources (e.g. "pods/status") alongside the
 			// main resource. They share the parent's Kind, so if we didn't skip them the map
@@ -96,16 +98,16 @@ func (d *DiscoveryClient) APIGroupInfo(apiGroup string) ([]metav1.APIResource, e
 			if res.Group == "" {
 				res.Group = gv.Group
 			}
-			resources = append(resources, res)
+			result.APIResources = append(result.APIResources, res)
 		}
 	}
 	// Only propagate the target-group discovery failure when it left us with nothing usable.
 	// If we got partial results, let the caller consume them; otherwise common partial-discovery
 	// scenarios would permanently block the preferred-version cache from updating.
-	if len(resources) == 0 && targetGroupErr != nil {
+	if len(result.APIResources) == 0 && targetGroupErr != nil {
 		return nil, targetGroupErr
 	}
-	return resources, nil
+	return result, nil
 }
 
 func (d *DiscoveryClient) kubeConfigForGroup(group string) rest.Config {

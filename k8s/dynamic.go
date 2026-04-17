@@ -161,11 +161,11 @@ func (d *DynamicPatcher) updatePreferred(group string) error {
 	if err != nil {
 		return err
 	}
-	resources, err := client.APIGroupInfo(group)
+	list, err := client.PreferredVersion(group)
 	if err != nil {
 		return err
 	}
-	for _, res := range resources {
+	for _, res := range list.APIResources {
 		d.preferred.Store(schema.GroupKind{Group: group, Kind: res.Kind}.String(), res)
 	}
 	d.lastUpdate.Store(group, now())
