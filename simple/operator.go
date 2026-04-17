@@ -106,8 +106,7 @@ func NewOperator(cfg OperatorConfig) (*Operator, error) {
 		discoveryRefresh = time.Minute * 10
 	}
 
-	discovery := k8s.NewDiscoveryClient(cfg.KubeConfig, nil)
-	patcher, err := k8s.NewDynamicPatcher(cg, discovery, discoveryRefresh)
+	patcher, err := k8s.NewDynamicPatcher(cg, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}

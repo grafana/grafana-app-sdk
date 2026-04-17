@@ -19,8 +19,7 @@ import (
 // It obtains per-kind clients through the provided ClientGenerator, so installations routing
 // different groups to different API servers (via ClientConfig.KubeConfigProvider) are handled correctly.
 type DynamicPatcher struct {
-	clients   resource.ClientGenerator
-	discovery resource.DiscoveryClient
+	clients resource.ClientGenerator
 
 	preferred  *xsync.MapOf[string, metav1.APIResource] // keyed by schema.GroupKind.String()
 	lastUpdate *xsync.MapOf[string, time.Time]          // keyed by API group
@@ -29,24 +28,18 @@ type DynamicPatcher struct {
 	group          singleflight.Group
 }
 
-// NewDynamicPatcher returns a new DynamicPatcher. The ClientGenerator is used to build per-kind
-// clients at the preferred version (via ClientGenerator.ClientFor), and the DiscoveryClient is
-// used to look up the preferred version for each API group. Callers routing different groups to
-// different API servers should provide a DiscoveryClient that mirrors that routing (e.g. via
-// NewDiscoveryClient with a matching KubeConfigProvider).
+// NewDynamicPatcher returns a new DynamicPatcher that uses the provided ClientGenerator for
+// both API group discovery (via ClientGenerator.DiscoveryClient) and building per-kind clients
+// at the preferred version (via ClientGenerator.ClientFor).
 // cacheUpdateInterval is the interval to refresh the preferred version cache from the API server.
 // To disable the cache refresh (and only update on first request and whenever ForceRefresh() is called),
 // set this value to <= 0.
-func NewDynamicPatcher(clients resource.ClientGenerator, discovery resource.DiscoveryClient, cacheUpdateInterval time.Duration) (*DynamicPatcher, error) {
+func NewDynamicPatcher(clients resource.ClientGenerator, cacheUpdateInterval time.Duration) (*DynamicPatcher, error) {
 	if clients == nil {
 		return nil, errors.New("ClientGenerator cannot be nil")
 	}
-	if discovery == nil {
-		return nil, errors.New("DiscoveryClient cannot be nil")
-	}
 	return &DynamicPatcher{
 		clients:        clients,
-		discovery:      discovery,
 		preferred:      xsync.NewMapOf[metav1.APIResource](),
 		lastUpdate:     xsync.NewMapOf[time.Time](),
 		updateInterval: cacheUpdateInterval,
@@ -153,7 +146,11 @@ func (d *DynamicPatcher) getPreferred(kind schema.GroupKind) (*metav1.APIResourc
 }
 
 func (d *DynamicPatcher) updatePreferred(group string) error {
-	resources, err := d.discovery.APIGroupInfo(group)
+	client, err := d.clients.DiscoveryClient()
+	if err != nil {
+		return err
+	}
+	resources, err := client.APIGroupInfo(group)
 	if err != nil {
 		return err
 	}

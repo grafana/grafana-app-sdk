@@ -281,6 +281,10 @@ type ClientGenerator interface {
 	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientForGV calls.
 	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
+	// DiscoveryClient returns a DiscoveryClient that can be used to inspect API groups exposed by the
+	// underlying storage system. Implementations may keep per-group clients internally to handle
+	// setups where different groups are routed to different hosts.
+	DiscoveryClient() (DiscoveryClient, error)
 }
 
 // DiscoveryClient inspects the API groups and resources exposed by the underlying storage system.
