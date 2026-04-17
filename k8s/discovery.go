@@ -29,8 +29,9 @@ type DiscoveryClient struct {
 }
 
 // NewDiscoveryClient returns a new DiscoveryClient. If kubeConfigProvider is non-nil, it is used
-// to resolve the rest.Config for each API group (called with a synthetic Kind whose only
-// populated field is Group, matching the pattern used by DefaultClientConfig).
+// to resolve the rest.Config for each API group (called with a synthetic Kind whose Group is the
+// only field carrying caller intent — Version/Kind/Plural are left as NewSimpleSchema defaults,
+// matching how DefaultClientConfig's KubeConfigProvider only reads kind.Group()).
 func NewDiscoveryClient(cfg rest.Config, kubeConfigProvider func(kind resource.Kind, kubeConfig rest.Config) rest.Config) *DiscoveryClient {
 	return &DiscoveryClient{
 		defaultKubeConfig:  cfg,
@@ -86,9 +87,8 @@ func (d *DiscoveryClient) PreferredVersion(apiGroup string) (*metav1.APIResource
 		result.GroupVersion = pref.GroupVersion
 		for _, res := range pref.APIResources {
 			// ServerPreferredResources returns subresources (e.g. "pods/status") alongside the
-			// main resource. They share the parent's Kind, so if we didn't skip them the map
-			// keyed by Kind would end up with the subresource entry and a plural containing "/",
-			// producing broken request URLs downstream.
+			// main resource. They share the parent's Kind but carry a "/"-containing Name, which
+			// would produce broken request URLs if a caller used them to build a GroupVersionResource.
 			if strings.Contains(res.Name, "/") {
 				continue
 			}
