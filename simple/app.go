@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -206,6 +207,12 @@ type AppInformerConfig struct {
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
 	InformerSupplier InformerSupplier
+	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
+	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
+	RetryProcessorConfig *operator.RetryProcessorConfig
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics.
+	// Metrics are always created; an empty Namespace produces unprefixed metric names.
+	MetricsConfig metrics.Config
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -307,8 +314,13 @@ func NewApp(config AppConfig) (*App, error) {
 	if clients == nil {
 		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
 	}
+	controllerCfg := operator.DefaultInformerControllerConfig()
+	if config.InformerConfig.RetryProcessorConfig != nil {
+		controllerCfg.RetryProcessorConfig = config.InformerConfig.RetryProcessorConfig
+	}
+	controllerCfg.MetricsConfig = config.InformerConfig.MetricsConfig
 	a := &App{
-		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
+		informerController: operator.NewInformerController(controllerCfg),
 		runner:             app.NewMultiRunner(),
 		clientGenerator:    clients,
 		kinds:              make(map[string]AppManagedKind),
@@ -332,7 +344,7 @@ func NewApp(config AppConfig) (*App, error) {
 	if discoveryRefresh == 0 {
 		discoveryRefresh = time.Minute * 10
 	}
-	p, err := k8s.NewDynamicPatcher(&config.KubeConfig, discoveryRefresh)
+	p, err := k8s.NewDynamicPatcher(clients, discoveryRefresh)
 	if err != nil {
 		return nil, err
 	}
@@ -544,7 +556,7 @@ func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Co
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
 func (a *App) PrometheusCollectors() []prometheus.Collector {
-	return a.collectors
+	return append(a.collectors, a.informerController.PrometheusCollectors()...)
 }
 
 func (a *App) HealthChecks() []health.Check {

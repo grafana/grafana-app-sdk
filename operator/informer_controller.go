@@ -124,6 +124,8 @@ type InformerController struct {
 	watcherLatency      *prometheus.HistogramVec
 	inflightActions     *prometheus.GaugeVec
 	inflightEvents      *prometheus.GaugeVec
+	reconcilerErrors    *prometheus.CounterVec
+	watcherErrors       *prometheus.CounterVec
 }
 
 type retryInfo struct {
@@ -220,6 +222,18 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 			Namespace: cfg.MetricsConfig.Namespace,
 			Help:      "Current number of events which have active reconcile processes",
 		}, []string{"event_type", "kind"}),
+		reconcilerErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: cfg.MetricsConfig.Namespace,
+			Subsystem: "reconciler",
+			Name:      "errors_total",
+			Help:      "Total number of reconciler errors, before any retry.",
+		}, []string{"event_type", "kind"}),
+		watcherErrors: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Namespace: cfg.MetricsConfig.Namespace,
+			Subsystem: "watcher",
+			Name:      "errors_total",
+			Help:      "Total number of watcher errors, before any retry.",
+		}, []string{"event_type", "kind"}),
 	}
 	if cfg.ErrorHandler != nil {
 		inf.ErrorHandler = cfg.ErrorHandler
@@ -232,7 +246,10 @@ func NewInformerController(cfg InformerControllerConfig) *InformerController {
 	}
 	if cfg.RetryProcessorConfig != nil {
 		retryPolicyFn := func() RetryPolicy { return inf.RetryPolicy }
-		inf.retryProcessor = NewRetryProcessor(*cfg.RetryProcessorConfig, retryPolicyFn)
+		processorCfg := *cfg.RetryProcessorConfig
+		// Inherit the controller's MetricsConfig so all metrics share a consistent namespace.
+		processorCfg.MetricsConfig = cfg.MetricsConfig
+		inf.retryProcessor = NewRetryProcessor(processorCfg, retryPolicyFn)
 	}
 	return inf
 }
@@ -352,6 +369,10 @@ func (c *InformerController) Run(ctx context.Context) error {
 func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
 	collectors := []prometheus.Collector{
 		c.totalEvents, c.reconcileLatency, c.inflightEvents, c.inflightActions, c.reconcilerLatency, c.watcherLatency,
+		c.reconcilerErrors, c.watcherErrors,
+	}
+	if cast, ok := c.retryProcessor.(metrics.Provider); ok {
+		collectors = append(collectors, cast.PrometheusCollectors()...)
 	}
 	c.informers.RangeAll(func(_ string, _ int, value Informer) {
 		if cast, ok := value.(metrics.Provider); ok {
@@ -424,6 +445,9 @@ func (c *InformerController) informerAddFunc(resourceKind string) func(context.C
 			// Do the watcher's Add, check for error
 			c.wrapWatcherCall(string(ResourceActionCreate), obj.GetStaticMetadata().Kind, func() {
 				err := watcher.Add(ctx, obj)
+				if err != nil {
+					c.watcherErrors.WithLabelValues(string(ResourceActionCreate), obj.GetStaticMetadata().Kind).Inc()
+				}
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 				}
@@ -479,6 +503,9 @@ func (c *InformerController) informerUpdateFunc(resourceKind string) func(contex
 			// Do the watcher's Update, check for error
 			c.wrapWatcherCall(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind, func() {
 				err := watcher.Update(ctx, oldObj, newObj)
+				if err != nil {
+					c.watcherErrors.WithLabelValues(string(ResourceActionUpdate), newObj.GetStaticMetadata().Kind).Inc()
+				}
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(ctx, err)
 				}
@@ -543,6 +570,9 @@ func (c *InformerController) informerDeleteFunc(resourceKind string) func(contex
 			// Do the watcher's Delete, check for error
 			c.wrapWatcherCall(string(ResourceActionDelete), obj.GetStaticMetadata().Kind, func() {
 				err := watcher.Delete(ctx, obj)
+				if err != nil {
+					c.watcherErrors.WithLabelValues(string(ResourceActionDelete), obj.GetStaticMetadata().Kind).Inc()
+				}
 				if err != nil && c.ErrorHandler != nil {
 					c.ErrorHandler(ctx, err) // TODO: improve ErrorHandler
 				}
@@ -647,6 +677,7 @@ func (c *InformerController) doReconcile(ctx context.Context, reconciler Reconci
 		}
 	} else if err != nil {
 		// Otherwise, if err is non-nil, queue a retry according to the RetryPolicy
+		c.reconcilerErrors.WithLabelValues(string(action), req.Object.GetStaticMetadata().Kind).Inc()
 		if c.ErrorHandler != nil {
 			// Call the ErrorHandler function as well if it's set
 			c.ErrorHandler(ctx, err)
