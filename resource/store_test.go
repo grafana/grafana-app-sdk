@@ -951,6 +951,10 @@ func (g *mockClientGenerator) GetCustomRouteClient(s schema.GroupVersion, defaul
 	return nil, nil
 }
 
+func (g *mockClientGenerator) DiscoveryClient() (DiscoveryClient, error) {
+	return nil, nil
+}
+
 type mockClient struct {
 	GetFunc                func(ctx context.Context, identifier Identifier) (Object, error)
 	GetIntoFunc            func(ctx context.Context, identifier Identifier, into Object) error
