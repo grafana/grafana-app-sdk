@@ -144,7 +144,7 @@ $ grafana-app-sdk project local generate
 ```
 
 This generates the kube manifests and k3d config file based on your `local/config.yaml`. The generated manifests and config are placed in `local/generated`.
-_Generally, this directory should not be commited to source control_, as the k3d config requires an absolute path for your mounted volumes, which is user-specific. Additionally, local deployments should be re-generating the kubernetes manifests every time.
+_Generally, this directory should not be committed to source control_, as the k3d config requires an absolute path for your mounted volumes, which is user-specific. Additionally, local deployments should be re-generating the kubernetes manifests every time.
 
 ```
 $ sh local/scripts/cluster.sh create "local/generated/k3d-config.json"
