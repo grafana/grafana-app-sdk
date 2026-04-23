@@ -362,8 +362,9 @@ func newUnsafeCache() *unsafeCache {
 }
 
 type unsafeCache struct {
-	items   map[string]any
-	keyFunc func(any) (string, error)
+	items               map[string]any
+	keyFunc             func(any) (string, error)
+	lastResourceVersion string
 }
 
 func (u *unsafeCache) Add(obj any) error {
@@ -421,4 +422,12 @@ func (u *unsafeCache) Replace([]any, string) error {
 
 func (u *unsafeCache) Resync() error {
 	return nil
+}
+
+func (u *unsafeCache) Bookmark(rv string) {
+	u.lastResourceVersion = rv
+}
+
+func (u *unsafeCache) LastStoreSyncResourceVersion() string {
+	return u.lastResourceVersion
 }
