@@ -108,6 +108,11 @@ func (c *Controller) HasSynced() bool {
 	return c.config.Queue.HasSynced()
 }
 
+// HasSyncedChecker implements [cache.Controller].
+func (c *Controller) HasSyncedChecker() cache.DoneChecker {
+	panic("unimplemented")
+}
+
 // LastSyncResourceVersion returns the last sync resource version of the cache.
 func (c *Controller) LastSyncResourceVersion() string {
 	c.reflectorMutex.RLock()

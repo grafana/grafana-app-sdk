@@ -187,6 +187,7 @@ func (m *MemcachedStore) Add(obj any) error {
 	}
 	return err
 }
+
 func (m *MemcachedStore) Update(obj any) error {
 	key, _, err := m.getKey(obj)
 	if err != nil {
@@ -206,6 +207,7 @@ func (m *MemcachedStore) Update(obj any) error {
 	m.writeLatency.WithLabelValues(m.kind.Kind()).Observe(time.Since(start).Seconds())
 	return err
 }
+
 func (m *MemcachedStore) Delete(obj any) error {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
@@ -253,6 +255,7 @@ func (m *MemcachedStore) List() []any {
 	}
 	return items
 }
+
 func (m *MemcachedStore) ListKeys() []string {
 	if !m.trackKeys {
 		// Not natively supported by memcached, so if the user didn't configure in-mem key tracking, we can't return a list of keys
@@ -265,6 +268,7 @@ func (m *MemcachedStore) ListKeys() []string {
 	})
 	return keys
 }
+
 func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
@@ -276,6 +280,7 @@ func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
 	}
 	return item, exists, err
 }
+
 func (m *MemcachedStore) GetByKey(key string) (item any, exists bool, err error) {
 	item, exists, err = m.getByKey(fmt.Sprintf("%s/%s", m.kind.Plural(), key))
 	if m.trackKeys && exists && err == nil {
@@ -308,8 +313,19 @@ func (m *MemcachedStore) getByKey(key string) (item any, exists bool, err error)
 func (*MemcachedStore) Replace([]any, string) error {
 	return nil
 }
+
 func (*MemcachedStore) Resync() error {
 	return nil
+}
+
+// Bookmark implements [cache.Store].
+func (m *MemcachedStore) Bookmark(rv string) {
+	panic("unimplemented")
+}
+
+// LastStoreSyncResourceVersion implements [cache.Store].
+func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
+	panic("unimplemented")
 }
 
 func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string, err error) {
