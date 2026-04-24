@@ -39,6 +39,7 @@ type ConcurrentInformerOptions struct {
 }
 
 // NewConcurrentInformer creates a new ConcurrentInformer wrapping the provided Informer.
+//
 // Deprecated: Use NewConcurrentInformerFromOptions instead, which accepts InformerOptions.
 func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 	*ConcurrentInformer, error) {
@@ -114,7 +115,7 @@ func (ci *ConcurrentInformer) Run(ctx context.Context) error {
 }
 
 func (ci *ConcurrentInformer) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, 2)
 	if cast, ok := ci.informer.(health.Check); ok {
 		checks = append(checks, cast)
 	}
