@@ -10,6 +10,7 @@ import (
 
 	"cuelang.org/go/cue"
 	"github.com/getkin/kin-openapi/openapi3"
+
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
 
@@ -43,7 +44,7 @@ type kindWithVersion struct {
 }
 
 func (c *crdGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 
 	// Need to group all versions of a kind together to make a CRD (each CRD contains schemas for all versions)
 	kinds := make(map[string][]kindWithVersion)

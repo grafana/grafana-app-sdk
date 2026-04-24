@@ -389,7 +389,7 @@ func (c *InformerController) PrometheusCollectors() []prometheus.Collector {
 
 // HealthChecks
 func (c *InformerController) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, c.informers.Size()+c.watchers.Size()+c.reconcilers.Size())
 
 	c.informers.RangeAll(func(_ string, _ int, value Informer) {
 		if cast, ok := value.(health.Check); ok {
