@@ -224,7 +224,7 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 
 	internalKinds := map[string]resource.Kind{}
 	kindsByGroup := map[string][]resource.Kind{}
-	groupVersions := make([]schema.GroupVersion, 0)
+	groupVersions := make([]schema.GroupVersion, 0) // nolint:prealloc
 	kindVersionPriorities := make(map[string][]string)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {

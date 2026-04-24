@@ -115,7 +115,7 @@ func (ci *ConcurrentInformer) Run(ctx context.Context) error {
 }
 
 func (ci *ConcurrentInformer) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, 2)
 	if cast, ok := ci.informer.(health.Check); ok {
 		checks = append(checks, cast)
 	}

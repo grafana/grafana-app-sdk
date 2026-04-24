@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
 
@@ -22,7 +23,7 @@ type TypeScriptResourceTypes struct {
 func (*TypeScriptResourceTypes) JennyName() string { return "TypeScriptResourceTypes" }
 
 func (t *TypeScriptResourceTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	if t.GenerateOnlyCurrent {
 		for _, kind := range codegen.PreferredVersionKinds(appManifest) {
 			if !kind.Codegen.TS.Enabled {
@@ -117,7 +118,7 @@ func (TypeScriptTypes) JennyName() string {
 }
 
 func (j TypeScriptTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	if j.GenerateOnlyCurrent {
 		for version, kind := range codegen.PreferredVersionKinds(appManifest) {
 			if !kind.Codegen.TS.Enabled {
@@ -191,7 +192,7 @@ func (j TypeScriptTypes) generateFilesAtDepth(v cue.Value, version string, vk *c
 		return nil, err
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for it.Next() {
 		f, err := j.generateFilesAtDepth(it.Value(), version, vk, currDepth+1, pathPrefix, prefix)
 		if err != nil {

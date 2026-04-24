@@ -11,8 +11,9 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
-	"github.com/grafana/codejen"
 	k8sversion "k8s.io/apimachinery/pkg/version"
+
+	"github.com/grafana/codejen"
 )
 
 var errNoVersions = errors.New("no versions found")

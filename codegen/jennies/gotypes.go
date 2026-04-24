@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
 
@@ -85,7 +86,7 @@ func (*GoTypes) JennyName() string {
 }
 
 func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		if g.GenerateOnlyCurrent && appManifest.Properties().PreferredVersion != version.Name() {
 			continue
@@ -215,7 +216,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 		return nil, err
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for it.Next() {
 		f, err := g.generateFilesAtDepth(it.Value(), schemaPath, currDepth+1, cfg)
 		if err != nil {

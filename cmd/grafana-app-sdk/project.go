@@ -14,8 +14,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/config"

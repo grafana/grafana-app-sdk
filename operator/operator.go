@@ -57,7 +57,7 @@ func (o *Operator) PrometheusCollectors() []prometheus.Collector {
 }
 
 func (o *Operator) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, len(o.controllers)*2)
 	for _, c := range o.controllers {
 		if cast, ok := c.(health.Checker); ok {
 			checks = append(checks, cast.HealthChecks()...)

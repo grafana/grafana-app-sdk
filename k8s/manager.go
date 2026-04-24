@@ -60,7 +60,7 @@ func (m *ResourceManager) WaitForAvailability(ctx context.Context, schema resour
 			if err == nil {
 				return nil
 			}
-			if err != nil && sc != http.StatusNotFound {
+			if sc != http.StatusNotFound {
 				return err
 			}
 		case <-ctx.Done():
