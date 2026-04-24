@@ -32,8 +32,10 @@ const (
 )
 
 const (
-	keyMetadata = "metadata"
-	keySpec     = "spec"
+	keyAPIVersion = "apiVersion"
+	keyKind       = "kind"
+	keyMetadata   = "metadata"
+	keySpec       = "spec"
 )
 
 type ManifestOutputEncoder func(any) ([]byte, error)
@@ -87,8 +89,8 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = apiVersion.String()
-	output["kind"] = "AppManifest"
+	output[keyAPIVersion] = apiVersion.String()
+	output[keyKind] = "AppManifest"
 	output[keyMetadata] = map[string]string{
 		"name": manifestData.AppName,
 	}
@@ -611,7 +613,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
-			if field == keyMetadata || field == "apiVersion" || field == "kind" { //nolint:goconst
+			if field == keyMetadata || field == keyAPIVersion || field == keyKind { //nolint:goconst
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
 			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
@@ -834,9 +836,9 @@ func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata code
 		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
 	if metadata.TypeMeta {
-		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
-		schemaProps.Properties["kind"] = kindPropSchema
-		schemaProps.Required = append(schemaProps.Required, "apiVersion", "kind")
+		schemaProps.Properties[keyAPIVersion] = apiVersionPropSchema
+		schemaProps.Properties[keyKind] = kindPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyAPIVersion, keyKind)
 	}
 	if metadata.ObjectMeta {
 		if _, exists := schemaProps.Properties[keyMetadata]; exists {
@@ -1039,12 +1041,12 @@ var (
 								SchemaProps: spec.SchemaProps{
 									Type: []string{"object"},
 									Properties: map[string]spec.Schema{
-										"apiVersion": {
+										keyAPIVersion: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
 										},
-										"kind": {
+										keyKind: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
@@ -1070,7 +1072,7 @@ var (
 											},
 										},
 									},
-									Required: []string{"apiVersion", "kind", "name", "uid"},
+									Required: []string{keyAPIVersion, keyKind, "name", "uid"},
 								},
 							},
 						},
@@ -1106,7 +1108,7 @@ var (
 												Type: []string{"string"},
 											},
 										},
-										"apiVersion": {
+										keyAPIVersion: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
