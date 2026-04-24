@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -41,11 +42,14 @@ type Exporter struct {
 }
 
 // RegisterCollectors registers the provided collectors with the Exporter's Registerer.
-// If there is an error registering any of the provided collectors, registration is halted and an error is returned.
+// Already-registered collectors are silently skipped.
 func (e *Exporter) RegisterCollectors(metrics ...prometheus.Collector) error {
 	for _, m := range metrics {
-		err := e.Registerer.Register(m)
-		if err != nil {
+		if err := e.Registerer.Register(m); err != nil {
+			var already prometheus.AlreadyRegisteredError
+			if errors.As(err, &already) {
+				continue
+			}
 			return err
 		}
 	}

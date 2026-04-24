@@ -32,7 +32,7 @@ func (*CodecGenerator) JennyName() string {
 // Generate creates one or more codec go files for the provided Kind
 // nolint:dupl
 func (c *CodecGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		if c.OnlyUseCurrentVersion && appManifest.Properties().PreferredVersion != version.Name() {
 			continue

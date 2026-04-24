@@ -790,7 +790,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 				continue
 			}
 			// Check that the time since the last call is not less than (retry attempt)^2 seconds. Retry attempt is attempt-1 (as we're tracking attempts including the first one in this test)
-			assert.GreaterOrEqual(t, time.Now().Sub(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
+			assert.GreaterOrEqual(t, time.Since(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
 		}
 	}()
 	updateWG := sync.WaitGroup{}
@@ -804,7 +804,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 				continue
 			}
 			// Check that the time since the last call is not less than (retry attempt)^2 seconds. Retry attempt is attempt-1 (as we're tracking attempts including the first one in this test)
-			assert.GreaterOrEqual(t, time.Now().Sub(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
+			assert.GreaterOrEqual(t, time.Since(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
 		}
 	}()
 

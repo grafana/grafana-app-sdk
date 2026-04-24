@@ -81,7 +81,7 @@ func NewRetryProcessor(cfg RetryProcessorConfig, retryPolicyFn func() RetryPolic
 
 	p := &defaultRetryProcessor{
 		workers:       workers,
-		workerCount:   uint64(cfg.WorkerPoolSize),
+		workerCount:   uint64(cfg.WorkerPoolSize), //nolint:gosec
 		retryPolicyFn: retryPolicyFn,
 	}
 
@@ -287,7 +287,8 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 	w.mu.Lock()
 	policy := retryPolicyFn()
 	for _, res := range results {
-		if res.requeue != nil {
+		switch {
+		case res.requeue != nil:
 			w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultRequeue)
 			heap.Push(&w.queue, RetryRequest{
 				Key:        res.req.Key,
@@ -298,7 +299,7 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 				Object:     res.req.Object,
 				LastError:  res.err,
 			})
-		} else if res.err != nil {
+		case res.err != nil:
 			ok, after := false, time.Duration(0)
 			if policy != nil {
 				ok, after = policy(res.err, res.req.Attempt+1)
@@ -317,7 +318,7 @@ func (w *retryWorker) processReady(retryPolicyFn func() RetryPolicy) {
 			} else {
 				w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultFailed)
 			}
-		} else {
+		default:
 			w.processorMetrics.incExecutionsTotal(res.req.Action, retryResultSuccess)
 		}
 	}
