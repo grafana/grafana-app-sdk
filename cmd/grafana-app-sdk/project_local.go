@@ -26,6 +26,7 @@ import (
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/semver"
 	"sigs.k8s.io/yaml"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -443,6 +444,11 @@ type yamlGenProperties struct {
 	APIGroups                 map[string][]string // map of group -> list of supported versions
 	GrafanaEnvVars            []grafanaEnvVar
 	GrafanaVolumeMounts       []grafanaVolumeMount
+	ProxyClientCert           yamlGenPropsProxyCert
+}
+
+type yamlGenPropsProxyCert struct {
+	Enabled bool
 }
 
 type yamlGenPropsCRD struct {
@@ -641,6 +647,13 @@ func generateKubernetesYAML(crdGenFunc func() (codejen.Files, error), pluginID s
 		return nil, props, err
 	}
 	output.Write([]byte("\n---\n"))
+
+	// Enable proxy client cert mount for Grafana >= 12.0.0.
+	// Uses k3s's own request-header proxy client certs from the node filesystem via hostPath,
+	// so the certs are already trusted by the API server's --requestheader-client-ca-file.
+	if config.GenerateGrafanaDeployment && grafanaImageVersionAtLeast(config.GrafanaImage, 12, 0, 0) {
+		props.ProxyClientCert = yamlGenPropsProxyCert{Enabled: true}
+	}
 
 	// Datasources
 	addedDeps := make(map[string]struct{})
@@ -953,6 +966,31 @@ func generateCerts(dnsName string) (*certBundle, error) {
 		key:  certPrivKeyPEM.Bytes(),
 		ca:   caPEM.Bytes(),
 	}, nil
+}
+
+// grafanaImageVersionAtLeast checks if the Grafana image tag version is >= major.minor.patch.
+// Returns true for non-semver tags (e.g., "latest", "main") as a safe default.
+func grafanaImageVersionAtLeast(image string, major, minor, patch int) bool {
+	// Extract tag from image string (e.g., "grafana/grafana-enterprise:12.0.0" -> "12.0.0")
+	parts := strings.SplitN(image, ":", 2)
+	if len(parts) < 2 || parts[1] == "" {
+		// No tag specified, assume latest
+		return true
+	}
+	tag := "v" + parts[1]
+
+	if !semver.IsValid(tag) {
+		// Not semver, return true
+		return true
+	}
+	cmp := fmt.Sprintf("v%d.%d.%d", major, minor, patch)
+	if !semver.IsValid(cmp) {
+		// Shouldn't be able to happen, but just in case
+		return true
+	}
+
+	// Do a semver comparison
+	return semver.Compare(tag, cmp) >= 0
 }
 
 func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, configName string) error {

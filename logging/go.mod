@@ -1,10 +1,10 @@
 module github.com/grafana/grafana-app-sdk/logging
 
-go 1.25.0
+go 1.25.9
 
 require (
 	go.opentelemetry.io/otel/trace v1.43.0
-	k8s.io/klog/v2 v2.130.1
+	k8s.io/klog/v2 v2.140.0
 )
 
 require (

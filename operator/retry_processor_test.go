@@ -8,8 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
 func TestRetryProcessor_HashDistribution(t *testing.T) {
@@ -17,9 +21,9 @@ func TestRetryProcessor_HashDistribution(t *testing.T) {
 	// and different keys can coexist. We verify this indirectly: enqueue several items
 	// with the same key and different keys, then check Len().
 	tests := []struct {
-		name         string
-		enqueue      []RetryRequest
-		expectedLen  int
+		name        string
+		enqueue     []RetryRequest
+		expectedLen int
 	}{
 		{
 			name: "single key, multiple items",
@@ -434,6 +438,190 @@ func TestRetryProcessor_DequeueDoesNotBlockOnExecution(t *testing.T) {
 	elapsed := time.Since(start)
 
 	assert.Less(t, elapsed, 50*time.Millisecond, "Dequeue should return quickly, not block on executing retry")
+}
+
+func TestRetryProcessor_PrometheusCollectors(t *testing.T) {
+	p := NewRetryProcessor(RetryProcessorConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+	}, nil).(*defaultRetryProcessor)
+
+	assert.ElementsMatch(t, []prometheus.Collector{
+		p.processorMetrics.enqueuedTotal,
+		p.processorMetrics.executionsTotal,
+		p.processorMetrics.pendingTotal,
+		p.processorMetrics.waitDuration,
+	}, p.PrometheusCollectors())
+}
+
+func TestRetryProcessor_Metrics_EnqueuedTotal(t *testing.T) {
+	p := NewRetryProcessor(RetryProcessorConfig{
+		WorkerPoolSize: 1,
+		CheckInterval:  time.Hour, // prevent firing
+		MetricsConfig:  metrics.DefaultConfig("test"),
+	}, nil).(*defaultRetryProcessor)
+
+	noop := func() (*time.Duration, error) { return nil, nil }
+	p.Enqueue(RetryRequest{Key: "a", RetryAfter: time.Now().Add(time.Hour), Action: ResourceActionCreate, RetryFunc: noop})
+	p.Enqueue(RetryRequest{Key: "b", RetryAfter: time.Now().Add(time.Hour), Action: ResourceActionCreate, RetryFunc: noop})
+	p.Enqueue(RetryRequest{Key: "c", RetryAfter: time.Now().Add(time.Hour), Action: ResourceActionUpdate, RetryFunc: noop})
+
+	assert.Equal(t, 2.0, counterValue(t, p.processorMetrics.enqueuedTotal, string(ResourceActionCreate)))
+	assert.Equal(t, 1.0, counterValue(t, p.processorMetrics.enqueuedTotal, string(ResourceActionUpdate)))
+}
+
+func TestRetryProcessor_Metrics_ExecutionResults(t *testing.T) {
+	tests := []struct {
+		name        string
+		retryFunc   func(done chan struct{}) func() (*time.Duration, error)
+		retryPolicy RetryPolicy
+		wantResult  string
+	}{
+		{
+			name: "success",
+			retryFunc: func(done chan struct{}) func() (*time.Duration, error) {
+				return func() (*time.Duration, error) {
+					close(done)
+					return nil, nil
+				}
+			},
+			retryPolicy: func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+			wantResult:  retryResultSuccess,
+		},
+		{
+			name: "failed",
+			retryFunc: func(done chan struct{}) func() (*time.Duration, error) {
+				return func() (*time.Duration, error) {
+					close(done)
+					return nil, fmt.Errorf("boom")
+				}
+			},
+			retryPolicy: func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+			wantResult:  retryResultFailed,
+		},
+		{
+			name: "retry",
+			retryFunc: func(done chan struct{}) func() (*time.Duration, error) {
+				var calls atomic.Int64
+				return func() (*time.Duration, error) {
+					if calls.Add(1) == 1 {
+						return nil, fmt.Errorf("transient")
+					}
+					close(done)
+					return nil, nil
+				}
+			},
+			retryPolicy: func(_ error, attempt int) (bool, time.Duration) { return attempt <= 1, time.Millisecond },
+			wantResult:  retryResultRetry,
+		},
+		{
+			name: "requeue",
+			retryFunc: func(done chan struct{}) func() (*time.Duration, error) {
+				var calls atomic.Int64
+				return func() (*time.Duration, error) {
+					if calls.Add(1) == 1 {
+						d := time.Millisecond
+						return &d, nil
+					}
+					close(done)
+					return nil, nil
+				}
+			},
+			retryPolicy: func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+			wantResult:  retryResultRequeue,
+		},
+		{
+			name: "failed with nil policy",
+			retryFunc: func(done chan struct{}) func() (*time.Duration, error) {
+				return func() (*time.Duration, error) {
+					close(done)
+					return nil, fmt.Errorf("boom")
+				}
+			},
+			retryPolicy: nil,
+			wantResult:  retryResultFailed,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			done := make(chan struct{})
+
+			p := NewRetryProcessor(RetryProcessorConfig{
+				WorkerPoolSize: 1,
+				CheckInterval:  5 * time.Millisecond,
+				MetricsConfig:  metrics.DefaultConfig("test"),
+			}, func() RetryPolicy { return tt.retryPolicy }).(*defaultRetryProcessor)
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			go p.Run(ctx)
+
+			p.Enqueue(RetryRequest{
+				Key:        "obj",
+				Action:     ResourceActionCreate,
+				RetryAfter: time.Now(),
+				RetryFunc:  tt.retryFunc(done),
+			})
+
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("timed out waiting for execution to complete")
+			}
+
+			// incExecutionsTotal is recorded in Phase 3, after RetryFunc returns. Poll until it lands.
+			assert.Eventually(t, func() bool {
+				return counterValue(t, p.processorMetrics.executionsTotal, string(ResourceActionCreate), tt.wantResult) == 1.0
+			}, time.Second, time.Millisecond, "executionsTotal[%s]", tt.wantResult)
+		})
+	}
+}
+
+func TestRetryProcessor_Metrics_WaitDurationObserved(t *testing.T) {
+	done := make(chan struct{})
+
+	p := NewRetryProcessor(RetryProcessorConfig{
+		WorkerPoolSize: 1,
+		CheckInterval:  5 * time.Millisecond,
+		MetricsConfig:  metrics.DefaultConfig("test"),
+	}, nil).(*defaultRetryProcessor)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go p.Run(ctx)
+
+	p.Enqueue(RetryRequest{
+		Key:        "obj",
+		Action:     ResourceActionCreate,
+		RetryAfter: time.Now(),
+		RetryFunc: func() (*time.Duration, error) {
+			close(done)
+			return nil, nil
+		},
+	})
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for execution")
+	}
+
+	// observeWaitDuration is called before RetryFunc in Phase 2, so it's already recorded.
+	m, err := p.processorMetrics.waitDuration.GetMetricWithLabelValues(string(ResourceActionCreate))
+	require.NoError(t, err)
+	var pb dto.Metric
+	require.NoError(t, m.(prometheus.Metric).Write(&pb))
+	assert.EqualValues(t, 1, pb.GetHistogram().GetSampleCount(), "waitDuration should have one observation")
+}
+
+// counterValue reads the current float64 value of a CounterVec for the given label values.
+func counterValue(t *testing.T, cv *prometheus.CounterVec, labelValues ...string) float64 {
+	t.Helper()
+	m, err := cv.GetMetricWithLabelValues(labelValues...)
+	require.NoError(t, err)
+	var pb dto.Metric
+	require.NoError(t, m.Write(&pb))
+	return pb.GetCounter().GetValue()
 }
 
 // --- Benchmarks ---

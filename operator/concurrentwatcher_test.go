@@ -314,7 +314,7 @@ func TestConcurrentWatcher(t *testing.T) {
 		assert.Equal(t, int64(2), mock.updateAttempts.Load())
 		assert.Equal(t, int64(1), mock.deleteAttempts.Load())
 		assert.Equal(t, int64(0), errCount.Load())
-		// Events recieved should be in the same order of events triggered always.
+		// Events received should be in the same order of events triggered always.
 		assert.Equal(t, []string{"add", "update", "update", "delete"}, events)
 	})
 

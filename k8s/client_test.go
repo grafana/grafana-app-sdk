@@ -158,7 +158,7 @@ func TestNewClientConfigWithExternalClients(t *testing.T) {
 		assert.True(t, remoteWrapTransportInvoked)
 	})
 
-	t.Run("does not modify config when APIPath already set", func(t *testing.T) {
+	t.Run("preserves APIPath but still applies remote overlay when APIPath already set", func(t *testing.T) {
 		existing := rest.Config{
 			APIPath:         "/already-configured",
 			Host:            "https://local.example.com",
@@ -173,6 +173,36 @@ func TestNewClientConfigWithExternalClients(t *testing.T) {
 		}
 
 		provided := config.KubeConfigProvider(testKind, existing)
+		// APIPath is preserved
+		assert.Equal(t, "/already-configured", provided.APIPath)
+		// Remote overlay is applied (host, TLS, auth cleared via OverrideAuth)
+		assert.Equal(t, "https://remote.example.com", provided.Host)
+		assert.True(t, provided.TLSClientConfig.Insecure)
+		assert.Empty(t, provided.BearerToken)
+		assert.Empty(t, provided.BearerTokenFile)
+		assert.Nil(t, provided.CertData)
+		assert.Empty(t, provided.CertFile)
+		assert.Nil(t, provided.KeyData)
+		assert.Empty(t, provided.KeyFile)
+	})
+
+	t.Run("preserves APIPath without overlay for unmapped group", func(t *testing.T) {
+		otherKind := resource.Kind{
+			Schema: resource.NewSimpleSchema(
+				"other.group",
+				"v1",
+				&resource.UntypedObject{},
+				&resource.UntypedList{},
+				resource.WithKind("Other"),
+			),
+		}
+
+		existing := rest.Config{
+			APIPath: "/already-configured",
+			Host:    "https://local.example.com",
+		}
+
+		provided := config.KubeConfigProvider(otherKind, existing)
 		assert.Equal(t, existing, provided)
 	})
 
