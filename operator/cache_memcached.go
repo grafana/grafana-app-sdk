@@ -326,7 +326,7 @@ func (m *MemcachedStore) Bookmark(rv string) {
 
 // LastStoreSyncResourceVersion returns the latest resource version the store has seen.
 func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
-	rv, _ := m.lastResourceVersion.Load().(string)
+	rv, _ := m.lastResourceVersion.Load().(string) //nolint:revive
 	return rv
 }
 
