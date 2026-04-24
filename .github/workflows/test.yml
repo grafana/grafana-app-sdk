@@ -154,6 +154,11 @@ jobs:
           cp ../grafana-app-sdk/codegen/cuekind/testing/config.cue kinds/config.cue
           grafana-app-sdk generate --config configIntegrationGen3
           grafana-app-sdk project component add frontend backend operator --config configIntegrationGen3
+          go get k8s.io/api@v0.35.3
+	        go get k8s.io/apiextensions-apiserver@v0.35.3
+	        go get k8s.io/apimachinery@v0.35.3
+	        go get k8s.io/apiserver@v0.35.3
+	        go get k8s.io/client-go@v0.35.3
           go mod tidy
           go build cmd/operator/*.go
           go build plugin/pkg/*.go
