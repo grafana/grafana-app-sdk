@@ -422,3 +422,13 @@ func (u *unsafeCache) Replace([]any, string) error {
 func (u *unsafeCache) Resync() error {
 	return nil
 }
+
+// Bookmark implements [cache.Store].
+func (u *unsafeCache) Bookmark(rv string) {
+	panic("unimplemented")
+}
+
+// LastStoreSyncResourceVersion implements [cache.Store].
+func (u *unsafeCache) LastStoreSyncResourceVersion() string {
+	panic("unimplemented")
+}

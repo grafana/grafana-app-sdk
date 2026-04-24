@@ -103,6 +103,11 @@ func (c *Controller) RunWithContext(ctx context.Context) {
 	wg.Wait()
 }
 
+// HasSyncedChecker implements [cache.Controller].
+func (c *Controller) HasSyncedChecker() cache.DoneChecker {
+	panic("unimplemented")
+}
+
 // HasSynced returns true once this cache has completed an initial resource listing.
 func (c *Controller) HasSynced() bool {
 	return c.config.Queue.HasSynced()

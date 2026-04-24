@@ -269,6 +269,16 @@ func (m *MemcachedStore) ListKeys() []string {
 	return keys
 }
 
+// Bookmark implements [cache.Store].
+func (m *MemcachedStore) Bookmark(rv string) {
+	panic("unimplemented")
+}
+
+// LastStoreSyncResourceVersion implements [cache.Store].
+func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
+	panic("unimplemented")
+}
+
 func (m *MemcachedStore) Get(obj any) (item any, exists bool, err error) {
 	key, trackKey, err := m.getKey(obj)
 	if err != nil {
