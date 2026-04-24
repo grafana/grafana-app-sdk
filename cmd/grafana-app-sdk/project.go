@@ -468,7 +468,7 @@ func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, 
 	if err != nil {
 		return nil, err
 	}
-	files := make(codejen.Files, 2)
+	files := make(codejen.Files, 2) //nolint:prealloc
 	files[0] = codejen.File{
 		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
 		Data:         buf.Bytes(),
@@ -856,19 +856,19 @@ func moveFiles(srcDir, destDir string) error {
 				if err != nil {
 					return err
 				}
-				if err = os.Remove(path); err != nil {
+				if err = os.Remove(path); err != nil { //nolint:gosec
 					return err
 				}
 				return fs.SkipDir
 			}
-			err = os.Rename(path, filepath.Join(destDir, d.Name()))
+			err = os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 			if err != nil {
 				return err
 			}
 			return fs.SkipDir
 		}
 
-		return os.Rename(path, filepath.Join(destDir, d.Name()))
+		return os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 	})
 }
 

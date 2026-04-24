@@ -403,7 +403,7 @@ func (d *DynamicMultiRunner) HealthChecks() []health.Check {
 }
 func (d *DynamicMultiRunner) runTuple(tpl *dynamicMultiRunnerTuple) {
 	d.wg.Add(1)
-	ctx, cancel := context.WithCancel(d.runCtx)
+	ctx, cancel := context.WithCancel(d.runCtx) //nolint:gosec
 	tpl.cancelFunc = cancel
 	go func() {
 		err := tpl.runner.Run(ctx)
