@@ -11,8 +11,9 @@ import (
 	"cuelang.org/go/cue"
 	"cuelang.org/go/cue/cuecontext"
 	"cuelang.org/go/cue/load"
-	"github.com/grafana/codejen"
 	k8sversion "k8s.io/apimachinery/pkg/version"
+
+	"github.com/grafana/codejen"
 )
 
 var errNoVersions = errors.New("no versions found")
@@ -49,7 +50,7 @@ func getManifestLatestVersion(manifestDir string) (string, error) {
 	if len(versions) == 0 {
 		return "", errNoVersions
 	}
-	sort.Slice(versions, func(i, j int) bool {
+	sort.Slice(versions, func(i, j int) bool { // nolint:revive
 		return k8sversion.CompareKubeAwareVersionStrings(versions[i], versions[j]) > 0
 	})
 	return versions[0], nil

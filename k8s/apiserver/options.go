@@ -47,8 +47,7 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (o *Options) Validate() error {
-	errs := []error{}
-	errs = append(errs, o.RecommendedOptions.Validate()...)
+	errs := o.RecommendedOptions.Validate()
 	return utilerrors.NewAggregate(errs)
 }
 

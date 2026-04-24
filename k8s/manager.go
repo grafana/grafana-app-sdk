@@ -60,7 +60,7 @@ func (m *ResourceManager) WaitForAvailability(ctx context.Context, schema resour
 			if err == nil {
 				return nil
 			}
-			if err != nil && sc != http.StatusNotFound {
+			if sc != http.StatusNotFound {
 				return err
 			}
 		case <-ctx.Done():
@@ -109,7 +109,7 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 		existing.Spec.Versions = append(existing.Spec.Versions, toVersion(schema))
 	}
 	// Make sure the latest is the one with storage = true
-	sort.Slice(existing.Spec.Versions, func(i, j int) bool {
+	sort.Slice(existing.Spec.Versions, func(i, j int) bool { // nolint:revive
 		return existing.Spec.Versions[i].Name > existing.Spec.Versions[j].Name
 	})
 	for i := 0; i < len(existing.Spec.Versions); i++ {

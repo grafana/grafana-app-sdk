@@ -211,7 +211,8 @@ func TestResourceManager_WaitForAvailability(t *testing.T) {
 		server.responseFunc = func(writer http.ResponseWriter, request *http.Request) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), time.Second)
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+		defer cancel()
 		err := manager.WaitForAvailability(ctx, testSchema)
 		assert.NotNil(t, err)
 	})
@@ -222,7 +223,8 @@ func TestResourceManager_WaitForAvailability(t *testing.T) {
 			requestCount++
 			writer.WriteHeader(http.StatusNotFound)
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), time.Second*2)
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*2)
+		defer cancel()
 		err := manager.WaitForAvailability(ctx, testSchema)
 		assert.NotNil(t, err)
 		assert.Contains(t, err.Error(), "context deadline exceeded")
@@ -241,7 +243,8 @@ func TestResourceManager_WaitForAvailability(t *testing.T) {
 			}
 			requestCount++
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*5)
+		defer cancel()
 		err := manager.WaitForAvailability(ctx, testSchema)
 		assert.Nil(t, err)
 		assert.GreaterOrEqual(t, 2, requestCount)
@@ -277,7 +280,7 @@ func TestToOpenAPIV3(t *testing.T) {
 			Inner string `json:"inner"`
 		}
 		type L1 struct {
-			l2 *L2 `json:"next"`
+			L2 *L2 `json:"next"`
 		}
 		res := toOpenAPIV3(reflect.TypeOf(&L1{}))
 		assert.Equal(t, res, map[string]any{
@@ -310,7 +313,7 @@ func TestToOpenAPIV3(t *testing.T) {
 		type Spec struct {
 			M map[string]any `json:"map"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"map": map[string]any{
 				"type":                                 "object",

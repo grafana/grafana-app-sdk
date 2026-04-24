@@ -225,7 +225,7 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 
 	internalKinds := map[string]resource.Kind{}
 	kindsByGroup := map[string][]resource.Kind{}
-	groupVersions := make([]schema.GroupVersion, 0)
+	groupVersions := make([]schema.GroupVersion, 0) // nolint:prealloc
 	kindVersionPriorities := make(map[string][]string)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
@@ -305,7 +305,7 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		}
 	}
 
-	sort.Slice(groupVersions, func(i, j int) bool {
+	sort.Slice(groupVersions, func(i, j int) bool { // nolint:revive
 		if groupVersions[i].Version == r.appConfig.ManifestData.PreferredVersion {
 			return true
 		}
@@ -798,7 +798,7 @@ func (r *defaultInstaller) App() (app.App, error) {
 }
 
 func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
-	groupVersions := make([]schema.GroupVersion, 0)
+	groupVersions := make([]schema.GroupVersion, 0, len(r.appConfig.ManifestData.Versions))
 	for _, gv := range r.appConfig.ManifestData.Versions {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}

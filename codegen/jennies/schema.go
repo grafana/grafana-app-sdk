@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -30,7 +31,7 @@ func (*SchemaGenerator) JennyName() string {
 
 // Generate creates one or more schema go files for the provided Kind
 func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		if kind.Scope != string(resource.NamespacedScope) && kind.Scope != string(resource.ClusterScope) {
 			return nil, fmt.Errorf("%s/%s: scope '%s' is invalid, must be one of: '%s', '%s'",

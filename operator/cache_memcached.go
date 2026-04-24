@@ -319,12 +319,12 @@ func (*MemcachedStore) Resync() error {
 }
 
 // Bookmark implements [cache.Store].
-func (m *MemcachedStore) Bookmark(rv string) {
+func (*MemcachedStore) Bookmark(_ string) {
 	panic("unimplemented")
 }
 
 // LastStoreSyncResourceVersion implements [cache.Store].
-func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
+func (*MemcachedStore) LastStoreSyncResourceVersion() string {
 	panic("unimplemented")
 }
 

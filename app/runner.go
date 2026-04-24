@@ -123,7 +123,7 @@ func (m *MultiRunner) PrometheusCollectors() []prometheus.Collector {
 
 // HealthChecks implements health.Checker
 func (m *MultiRunner) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, len(m.Runners)*2)
 
 	for _, runner := range m.Runners {
 		if cast, ok := runner.(health.Checker); ok {
@@ -236,7 +236,7 @@ func (s *SingletonRunner) PrometheusCollectors() []prometheus.Collector {
 
 // HealthChecks
 func (s *SingletonRunner) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, 2)
 	if cast, ok := s.Wrapped.(health.Check); ok {
 		checks = append(checks, cast)
 	}
@@ -387,7 +387,7 @@ func (d *DynamicMultiRunner) PrometheusCollectors() []prometheus.Collector {
 
 // HealthChecks implements health.Checker
 func (d *DynamicMultiRunner) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, len(d.runners)*2)
 
 	for _, tpl := range d.runners {
 		if cast, ok := tpl.runner.(health.Checker); ok {
@@ -403,7 +403,7 @@ func (d *DynamicMultiRunner) HealthChecks() []health.Check {
 }
 func (d *DynamicMultiRunner) runTuple(tpl *dynamicMultiRunnerTuple) {
 	d.wg.Add(1)
-	ctx, cancel := context.WithCancel(d.runCtx)
+	ctx, cancel := context.WithCancel(d.runCtx) // nolint:gosec
 	tpl.cancelFunc = cancel
 	go func() {
 		err := tpl.runner.Run(ctx)

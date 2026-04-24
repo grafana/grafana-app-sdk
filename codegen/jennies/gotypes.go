@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
 	"github.com/grafana/codejen"
 	"github.com/grafana/cog"
 
@@ -85,7 +86,7 @@ func (*GoTypes) JennyName() string {
 }
 
 func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		if g.GenerateOnlyCurrent && appManifest.Properties().PreferredVersion != version.Name() {
 			continue
@@ -159,7 +160,7 @@ type goTypesGenerateFilesConfig struct {
 //nolint:goconst
 func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDepth int, cfg goTypesGenerateFilesConfig) (codejen.Files, error) {
 	if currDepth == g.Depth {
-		fieldName := make([]string, 0)
+		fieldName := make([]string, 0, 10)
 		for _, s := range TrimPathPrefix(v.Path(), schemaPath).Selectors() {
 			fieldName = append(fieldName, s.String())
 		}
@@ -214,7 +215,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 		return nil, err
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for it.Next() {
 		f, err := g.generateFilesAtDepth(it.Value(), schemaPath, currDepth+1, cfg)
 		if err != nil {

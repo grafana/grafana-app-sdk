@@ -159,7 +159,7 @@ type SchemaMetadataSelectableField struct {
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
-	parts := make([]string, 0)
+	parts := make([]string, 0, 5)
 	if len(s) > 0 && s[0] == '.' {
 		s = s[1:]
 	}
