@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/grafana/codejen"
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/config"
+	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
+	"github.com/spf13/cobra"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,11 +18,6 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
-	"github.com/spf13/cobra"
-	"github.com/grafana/codejen"
-	"github.com/grafana/grafana-app-sdk/codegen"
-	"github.com/grafana/grafana-app-sdk/codegen/config"
-	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
 )
 
 //go:embed templates/*.tmpl
