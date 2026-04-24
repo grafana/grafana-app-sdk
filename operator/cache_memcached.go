@@ -270,12 +270,12 @@ func (m *MemcachedStore) ListKeys() []string {
 }
 
 // Bookmark implements [cache.Store].
-func (m *MemcachedStore) Bookmark(rv string) {
-	panic("unimplemented")
+func (*MemcachedStore) Bookmark(rv string) {
+	panic("unimplemented: rv: " + rv)
 }
 
 // LastStoreSyncResourceVersion implements [cache.Store].
-func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
+func (*MemcachedStore) LastStoreSyncResourceVersion() string {
 	panic("unimplemented")
 }
 

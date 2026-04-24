@@ -424,11 +424,11 @@ func (u *unsafeCache) Resync() error {
 }
 
 // Bookmark implements [cache.Store].
-func (u *unsafeCache) Bookmark(rv string) {
-	panic("unimplemented")
+func (*unsafeCache) Bookmark(rv string) {
+	panic("unimplemented: rv: " + rv)
 }
 
 // LastStoreSyncResourceVersion implements [cache.Store].
-func (u *unsafeCache) LastStoreSyncResourceVersion() string {
+func (*unsafeCache) LastStoreSyncResourceVersion() string {
 	panic("unimplemented")
 }
