@@ -47,7 +47,8 @@ func (o *Options) AddFlags(fs *pflag.FlagSet) {
 }
 
 func (o *Options) Validate() error {
-	errs := o.RecommendedOptions.Validate()
+	errs := []error{} //nolint:prealloc
+	errs = append(errs, o.RecommendedOptions.Validate()...)
 	return utilerrors.NewAggregate(errs)
 }
 

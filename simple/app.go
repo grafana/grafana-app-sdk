@@ -560,7 +560,7 @@ func (a *App) PrometheusCollectors() []prometheus.Collector {
 }
 
 func (a *App) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0) // nolint:prealloc
+	checks := make([]health.Check, 0) //nolint:prealloc
 
 	checks = append(checks, a.runner.HealthChecks()...)
 	checks = append(checks, a.informerController.HealthChecks()...)

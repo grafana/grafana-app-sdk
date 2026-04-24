@@ -14,8 +14,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/config"
@@ -468,7 +469,7 @@ func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, 
 	if err != nil {
 		return nil, err
 	}
-	files := make(codejen.Files, 2) // nolint:prealloc
+	files := make(codejen.Files, 2) //nolint:prealloc
 	files[0] = codejen.File{
 		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
 		Data:         buf.Bytes(),
@@ -856,19 +857,19 @@ func moveFiles(srcDir, destDir string) error {
 				if err != nil {
 					return err
 				}
-				if err = os.Remove(path); err != nil { // nolint:gosec
+				if err = os.Remove(path); err != nil { //nolint:gosec
 					return err
 				}
 				return fs.SkipDir
 			}
-			err = os.Rename(path, filepath.Join(destDir, d.Name())) // nolint:gosec
+			err = os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 			if err != nil {
 				return err
 			}
 			return fs.SkipDir
 		}
 
-		return os.Rename(path, filepath.Join(destDir, d.Name())) // nolint:gosec
+		return os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 	})
 }
 

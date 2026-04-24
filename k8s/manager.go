@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 
@@ -109,8 +109,8 @@ func (m *ResourceManager) RegisterSchema(ctx context.Context, schema resource.Sc
 		existing.Spec.Versions = append(existing.Spec.Versions, toVersion(schema))
 	}
 	// Make sure the latest is the one with storage = true
-	sort.Slice(existing.Spec.Versions, func(i, j int) bool { // nolint:revive
-		return existing.Spec.Versions[i].Name > existing.Spec.Versions[j].Name
+	slices.SortFunc(existing.Spec.Versions, func(a, b CustomResourceDefinitionSpecVersion) int {
+		return strings.Compare(b.Name, a.Name)
 	})
 	for i := 0; i < len(existing.Spec.Versions); i++ {
 		existing.Spec.Versions[i].Storage = false

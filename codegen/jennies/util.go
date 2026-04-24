@@ -20,7 +20,7 @@ func ToPackageName(input string) string {
 //
 // Deprecated: Use GetGeneratedGoTypePath instead.
 //
-//nolint:revive
+//nolint:revive,staticcheck
 func GetGeneratedPath(groupByKind bool, kind codegen.Kind, version string) string {
 	if groupByKind {
 		return filepath.Join(ToPackageName(kind.Properties().MachineName), ToPackageName(version))
