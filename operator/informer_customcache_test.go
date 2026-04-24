@@ -366,16 +366,6 @@ type unsafeCache struct {
 	keyFunc func(any) (string, error)
 }
 
-// Bookmark implements [cache.Store].
-func (u *unsafeCache) Bookmark(rv string) {
-	panic("unimplemented")
-}
-
-// LastStoreSyncResourceVersion implements [cache.Store].
-func (u *unsafeCache) LastStoreSyncResourceVersion() string {
-	panic("unimplemented")
-}
-
 func (u *unsafeCache) Add(obj any) error {
 	key, err := u.keyFunc(obj)
 	if err != nil {

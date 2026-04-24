@@ -318,16 +318,6 @@ func (*MemcachedStore) Resync() error {
 	return nil
 }
 
-// Bookmark implements [cache.Store].
-func (*MemcachedStore) Bookmark(_ string) {
-	panic("unimplemented")
-}
-
-// LastStoreSyncResourceVersion implements [cache.Store].
-func (*MemcachedStore) LastStoreSyncResourceVersion() string {
-	panic("unimplemented")
-}
-
 func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string, err error) {
 	if m.keyFunc == nil {
 		return "", "", errors.New("no KeyFunc defined")
