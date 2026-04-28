@@ -14,10 +14,10 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20250403215159-8d39553ac7cf
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.13.0
-	github.com/getkin/kin-openapi v0.135.0
+	github.com/getkin/kin-openapi v0.137.0
 	github.com/grafana/authlib v0.0.0-20260414201248-d766c8627a66
 	github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770
-	github.com/grafana/cog v0.1.8
+	github.com/grafana/cog v0.1.10
 	github.com/grafana/grafana-app-sdk/logging v0.53.2
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.23.2
@@ -47,7 +47,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
-	sigs.k8s.io/structured-merge-diff/v6 v6.3.2
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -113,7 +113,7 @@ require (
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oasdiff/yaml v0.0.9 // indirect
-	github.com/oasdiff/yaml3 v0.0.9 // indirect
+	github.com/oasdiff/yaml3 v0.0.12 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
