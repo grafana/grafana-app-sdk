@@ -97,8 +97,8 @@ github.com/grafana/grafana-app-sdk v0.53.2 h1:1ZWR0bwbYzj4skpjz0c2+C3P24b1xeXnyy
 github.com/grafana/grafana-app-sdk v0.53.2/go.mod h1:uZNvGR1LPa6TI4VelpcHofhMEGL9sdV4XZgCbII41GI=
 github.com/grafana/grafana-app-sdk/logging v0.53.2 h1:FFbPvto2WwWdVElHr9o1SGlOVLWF1n1l7p/YY5zkQ6E=
 github.com/grafana/grafana-app-sdk/logging v0.53.2/go.mod h1:f0r/XriExa4jpUMHnI9aTRYzbbMHiDV+MXSpaSRGqIE=
-github.com/grafana/grafana-plugin-sdk-go v0.291.1 h1:Z/zhv2EXiBE1oT/IGjE0CnN+MfW7zaCTJ7QB5eotjBU=
-github.com/grafana/grafana-plugin-sdk-go v0.291.1/go.mod h1:qTjY9ymtF0ughH8xdXk8WNejJvwB2J2epeMBdauaIB0=
+github.com/grafana/grafana-plugin-sdk-go v0.292.0 h1:HaFIbBmPX9K+BVsVemid+poDEbja+HJ8VE+6tVnZKLU=
+github.com/grafana/grafana-plugin-sdk-go v0.292.0/go.mod h1:lnWyfzENuIU+N2EzivEe9YJob8AAqPl7HBMXMbPyv3k=
 github.com/grafana/otel-profiling-go v0.5.1 h1:stVPKAFZSa7eGiqbYuG25VcqYksR6iWvF3YH66t4qL8=
 github.com/grafana/otel-profiling-go v0.5.1/go.mod h1:ftN/t5A/4gQI19/8MoWurBEtC6gFw8Dns1sJZ9W4Tls=
 github.com/grafana/pyroscope-go/godeltaprof v0.1.9 h1:c1Us8i6eSmkW+Ez05d3co8kasnuOY813tbMN8i/a3Og=
