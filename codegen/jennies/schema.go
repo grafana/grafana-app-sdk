@@ -125,19 +125,22 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 }
 
 func getCUEValueKindString(v cue.Value) (string, error) {
-	// This is a kind of messy way of guessing type without having to actually parse the AST
+	// Check for time.Time first via string representation (it's a struct kind in CUE)
 	roughType := CUEValueToString(v)
-	switch {
-	case strings.Contains(roughType, "time.Time"):
+	if strings.Contains(roughType, "time.Time") {
 		return "time", nil
-	case strings.Contains(roughType, "string"):
+	}
+	// Use IncompleteKind to resolve the base kind for wrapper/constrained types
+	// (e.g. a string with a regex constraint formats without the word "string")
+	switch v.IncompleteKind() {
+	case cue.StringKind:
 		return "string", nil
-	case strings.Contains(roughType, "bool"):
+	case cue.BoolKind:
 		return "bool", nil
-	case strings.Contains(roughType, "int"):
+	case cue.IntKind:
 		return "int", nil
 	}
-	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, int and time.Time", v.Kind())
+	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, int and time.Time", v.IncompleteKind())
 }
 
 // getOptionalFieldsInPath returns a list of all optional fields found along the provided fieldPath.
