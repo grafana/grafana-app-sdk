@@ -39,17 +39,18 @@ type MemcachedServerSelector interface {
 // MemcachedStore implements cache.Store using memcached as the store for objects.
 // It should be instantiated with NewMemcachedStore.
 type MemcachedStore struct {
-	client          *memcache.Client
-	keyFunc         func(any) (string, error)
-	kind            resource.Kind
-	readLatency     *prometheus.HistogramVec
-	writeLatency    *prometheus.HistogramVec
-	keys            sync.Map
-	trackKeys       bool
-	syncTicker      *time.Ticker
-	pageSize        int
-	cacheKeysKey    string
-	serverRefresher *memcachedServerRefresher
+	client              *memcache.Client
+	keyFunc             func(any) (string, error)
+	kind                resource.Kind
+	readLatency         *prometheus.HistogramVec
+	writeLatency        *prometheus.HistogramVec
+	keys                sync.Map
+	trackKeys           bool
+	syncTicker          *time.Ticker
+	pageSize            int
+	cacheKeysKey        string
+	serverRefresher     *memcachedServerRefresher
+	lastResourceVersion atomic.Value
 }
 
 // MemcachedStoreConfig is a collection of config values for a MemcachedStore
@@ -316,6 +317,17 @@ func (*MemcachedStore) Replace([]any, string) error {
 
 func (*MemcachedStore) Resync() error {
 	return nil
+}
+
+// Bookmark records the latest resource version observed from the API server.
+func (m *MemcachedStore) Bookmark(rv string) {
+	m.lastResourceVersion.Store(rv)
+}
+
+// LastStoreSyncResourceVersion returns the latest resource version the store has seen.
+func (m *MemcachedStore) LastStoreSyncResourceVersion() string {
+	rv, _ := m.lastResourceVersion.Load().(string) //nolint:revive
+	return rv
 }
 
 func (m *MemcachedStore) getKey(obj any) (prefixedKey string, externalKey string, err error) {

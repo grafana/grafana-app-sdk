@@ -108,6 +108,11 @@ func (c *Controller) HasSynced() bool {
 	return c.config.Queue.HasSynced()
 }
 
+// HasSyncedChecker returns a DoneChecker that enables waiting for syncing without polling.
+func (c *Controller) HasSyncedChecker() cache.DoneChecker {
+	return c.config.Queue.HasSyncedChecker()
+}
+
 // LastSyncResourceVersion returns the last sync resource version of the cache.
 func (c *Controller) LastSyncResourceVersion() string {
 	c.reflectorMutex.RLock()
