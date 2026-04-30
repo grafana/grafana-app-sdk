@@ -5,13 +5,26 @@
 package v1
 
 import (
+	"errors"
+
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // schema is unexported to prevent accidental overwrites
 var (
 	schemaTestKind = resource.NewSimpleSchema("testapp.ext.grafana.com", "v1", NewTestKind(), &TestKindList{}, resource.WithKind("TestKind"),
-		resource.WithPlural("testkinds"), resource.WithScope(resource.NamespacedScope))
+		resource.WithPlural("testkinds"), resource.WithScope(resource.NamespacedScope), resource.WithSelectableFields([]resource.SelectableField{resource.SelectableField{
+			FieldSelector: ".spec.stringField",
+			FieldValueFunc: func(o resource.Object) (string, error) {
+				cast, ok := o.(*TestKind)
+				if !ok {
+					return "", errors.New("provided object must be of type *TestKind")
+				}
+
+				return string(cast.Spec.StringField), nil
+			},
+		},
+		}))
 	kindTestKind = resource.Kind{
 		Schema: schemaTestKind,
 		Codecs: map[resource.KindEncoding]resource.Codec{

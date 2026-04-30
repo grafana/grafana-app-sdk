@@ -60,6 +60,9 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv1,
+					SelectableFields: []string{
+						".spec.stringField",
+					},
 				},
 
 				{
@@ -101,6 +104,10 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv2,
+					SelectableFields: []string{
+						".spec.stringField",
+						".spec.intField",
+					},
 				},
 			},
 			Routes: app.ManifestVersionRoutes{
@@ -134,6 +141,11 @@ var appManifestData = app.ManifestData{
 						},
 					},
 					Schema: &versionSchemaTestKindv3,
+					SelectableFields: []string{
+						".spec.stringField",
+						".spec.intField",
+						".spec.boolField",
+					},
 					Routes: map[string]spec3.PathProps{
 						"/reconcile": {
 							Post: &spec3.Operation{
