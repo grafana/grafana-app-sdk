@@ -6,16 +6,161 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/templates"
 )
+
+func TestGetSelectableFields(t *testing.T) {
+	ctx := cuecontext.New()
+
+	tests := []struct {
+		name    string
+		kind    codegen.VersionedKind
+		want    []templates.SchemaMetadataSelectableField
+		wantErr bool
+	}{
+		{
+			name: "required string field",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {name: string}}`),
+				SelectableFields: []string{".spec.name"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.name", Optional: false, Type: "string", OptionalFieldsInPath: []string{}},
+			},
+		},
+		{
+			name: "optional string field",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {name?: string}}`),
+				SelectableFields: []string{".spec.name"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.name", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.name"}},
+			},
+		},
+		{
+			// CUE does not support direct field lookup on disjunction values, so the variant
+			// fallback is always used — meaning fields through a disjunction are always optional.
+			name: "inline: field in all variants",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {routing: {type: "A", x: string} | {type: "B", y: string} | {type: "C", z: string}}}`),
+				SelectableFields: []string{".spec.routing.type"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.routing.type", Optional: true, Type: "string", OptionalFieldsInPath: []string{}},
+			},
+		},
+		{
+			name: "inline: field in only one variant",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {routing?: {type: "A", x: string} | {type: "B", y: string} | {type: "C", z: string}}}`),
+				SelectableFields: []string{".spec.routing.x"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+			},
+		},
+		{
+			// Named CUE definitions (#Foo | #Bar) rather than inline struct literals
+			name: "named definitions: field in only some variants",
+			kind: codegen.VersionedKind{
+				Schema: ctx.CompileString(`
+					#A: {type: "A", x: string}
+					#B: {type: "B", y: string}
+					#C: {type: "C", z: string}
+					#Union: #A | #B | #C
+					{spec: {routing?: #Union}}
+				`),
+				SelectableFields: []string{".spec.routing.x"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+			},
+		},
+		{
+			// Named CUE definitions (#Foo | #Bar) rather than inline struct literals
+			name: "named definitions: field in all variants",
+			kind: codegen.VersionedKind{
+				Schema: ctx.CompileString(`
+					#A: {type: "A", x: string}
+					#B: {type: "B", y: string}
+					#C: {type: "C", z: string}
+					#Union: #A | #B | #C
+					{spec: {routing?: #Union}}
+				`),
+				SelectableFields: []string{".spec.routing.type"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.routing.type", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+			},
+		},
+		{
+			name: "inline: field in two of three variants",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {routing?: {type: "A", x: string} | {type: "B", x: string} | {type: "C", z: string}}}`),
+				SelectableFields: []string{".spec.routing.x"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+			},
+		},
+		{
+			name: "named definitions: field in two of three variants",
+			kind: codegen.VersionedKind{
+				Schema: ctx.CompileString(`
+					#A: {type: "A", x: string}
+					#B: {type: "B", x: string}
+					#C: {type: "C", z: string}
+					#Union: #A | #B | #C
+					{spec: {routing?: #Union}}
+				`),
+				SelectableFields: []string{".spec.routing.x"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+			},
+		},
+		{
+			name: "invalid path — field does not exist",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {name: string}}`),
+				SelectableFields: []string{".spec.missing"},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid path — too short",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {name: string}}`),
+				SelectableFields: []string{".spec"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := (&SchemaGenerator{}).getSelectableFields(&tt.kind)
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
 
 func TestGetCUEValueKindString(t *testing.T) {
 	ctx := cuecontext.New()
 
 	tests := []struct {
-		name      string
-		cue       string
-		want      string
-		wantErr   bool
+		name    string
+		cue     string
+		want    string
+		wantErr bool
 	}{
 		{
 			name: "plain string",
@@ -63,13 +208,13 @@ func TestGetCUEValueKindString(t *testing.T) {
 			want: "int",
 		},
 		{
-			name: "unsupported float",
-			cue:  `float`,
+			name:    "unsupported float",
+			cue:     `float`,
 			wantErr: true,
 		},
 		{
-			name: "unsupported struct",
-			cue:  `{field: string}`,
+			name:    "unsupported struct",
+			cue:     `{field: string}`,
 			wantErr: true,
 		},
 	}

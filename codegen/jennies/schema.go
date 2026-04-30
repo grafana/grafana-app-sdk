@@ -93,19 +93,21 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 		for _, p := range parts {
 			path = append(path, cue.Str(p))
 		}
-		if val := kind.Schema.LookupPath(cue.MakePath(path...).Optional()); val.Err() == nil {
-			var lookup cue.Value
-			var optional bool
-
+		val := kind.Schema.LookupPath(cue.MakePath(path...).Optional())
+		valErr := val.Err()
+		if valErr == nil {
 			cuePath := cue.MakePath(cue.Str(field))
+			lookup, optional := lookupInValue(val, cuePath)
+			if !lookup.Exists() {
+				// The value may be a disjunction where the field only exists in some variants;
+				// if so the field is implicitly optional.
+				if lookup = lookupInDisjunction(val, cuePath, field); lookup.Exists() {
+					optional = true
+				}
+			}
 
-			// Simplest way to check if it's an optional field is to try to look it up as non-optional, then try optional
-			if lookup = val.LookupPath(cuePath); lookup.Exists() {
-				optional = false
-			} else if lookup = val.LookupPath(cuePath.Optional()); lookup.Exists() {
-				optional = true
-			} else {
-				return nil, fmt.Errorf("invalid selectable field path: %s", fieldPath)
+			if !lookup.Exists() {
+				return nil, fmt.Errorf("invalid selectable field path: %s, %s", fieldPath, val)
 			}
 
 			typeStr, err := getCUEValueKindString(lookup)
@@ -119,9 +121,66 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 				Type:                 typeStr,
 				OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, fieldPath),
 			})
+		} else {
+			return nil, fmt.Errorf("invalid selectable field path: %s, error: %w", s, valErr)
 		}
 	}
 	return fields, nil
+}
+
+// lookupInDisjunction searches for path in each variant of a disjunction.
+// Three strategies are needed to cover all cases:
+//
+//  1. Inline disjunctions ({A}|{B}): val.Expr() returns OrOp; iterate variants directly.
+//  2. Named definitions (#A|#B), field in some variants: val.Expr() returns SelectorOp so
+//     iterate doesn't work; instead unify with {field: _} to narrow to only the variants
+//     that contain the field, then look up on the narrowed (single-variant) result.
+//  3. Named definitions, field in ALL variants: strategy 2 still leaves a disjunction, so
+//     the lookup still fails. Unify with typed constraints ({field: string} etc.) — closed
+//     definitions reject non-existent fields with an error, so the constraint that succeeds
+//     tells us the type. The And-constraint variant of the narrowed result carries the type.
+func lookupInDisjunction(v cue.Value, path cue.Path, field string) cue.Value {
+	// Strategy 1: inline disjunction.
+	if op, variants := v.Expr(); op == cue.OrOp {
+		for _, variant := range variants {
+			if l, _ := lookupInValue(variant, path); l.Exists() {
+				return l
+			}
+		}
+	}
+	// Strategy 2: named definitions, field in some variants.
+	constraint := v.Context().CompileString(fmt.Sprintf("{%s: _}", field))
+	if narrowed := v.Unify(constraint); narrowed.Err() == nil {
+		if l, _ := lookupInValue(narrowed, path); l.Exists() {
+			return l
+		}
+		// Strategy 3: named definitions, field in all variants. The narrowed value is still
+		// a disjunction, so try scalar-typed constraints to identify the type. Closed
+		// definitions produce an error for wrong types or non-existent fields, so only the
+		// correct type constraint will succeed and expose the field via the And-constraint variant.
+		for _, typeStr := range []string{"string", "bool", "int"} {
+			typedConstraint := v.Context().CompileString(fmt.Sprintf("{%s: %s}", field, typeStr))
+			if typedNarrowed := v.Unify(typedConstraint); typedNarrowed.Err() == nil {
+				_, variants := typedNarrowed.Expr()
+				for _, variant := range variants {
+					if l, _ := lookupInValue(variant, path); l.Exists() {
+						return l
+					}
+				}
+			}
+		}
+	}
+	return cue.Value{}
+}
+
+func lookupInValue(v cue.Value, path cue.Path) (lookup cue.Value, isOptional bool) {
+	if l := v.LookupPath(path); l.Exists() {
+		return l, false
+	}
+	if l := v.LookupPath(path.Optional()); l.Exists() {
+		return l, true
+	}
+	return cue.Value{}, false
 }
 
 func getCUEValueKindString(v cue.Value) (string, error) {
