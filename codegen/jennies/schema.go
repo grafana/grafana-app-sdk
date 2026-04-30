@@ -223,6 +223,8 @@ func variantsFromValue(v cue.Value) []cue.Value {
 				return variants
 			}
 		}
+	default:
+		// fall through to ReferencePath resolution
 	}
 	if root, ref := v.ReferencePath(); len(ref.Selectors()) > 0 {
 		referenced := root.LookupPath(ref)
