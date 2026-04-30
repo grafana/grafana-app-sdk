@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+	"cuelang.org/go/cue/ast"
 
 	"github.com/grafana/codejen"
 
@@ -94,83 +95,226 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 			path = append(path, cue.Str(p))
 		}
 		val := kind.Schema.LookupPath(cue.MakePath(path...).Optional())
-		valErr := val.Err()
-		if valErr == nil {
-			cuePath := cue.MakePath(cue.Str(field))
-			lookup, optional := lookupInValue(val, cuePath)
-			if !lookup.Exists() {
-				// The value may be a disjunction where the field only exists in some variants;
-				// if so the field is implicitly optional.
-				if lookup = lookupInDisjunction(val, cuePath, field); lookup.Exists() {
-					optional = true
-				}
-			}
+		if err := val.Err(); err != nil {
+			return nil, fmt.Errorf("invalid selectable field path: %s, error: %w", s, err)
+		}
 
-			if !lookup.Exists() {
-				return nil, fmt.Errorf("invalid selectable field path: %s, %s", fieldPath, val)
-			}
+		cuePath := cue.MakePath(cue.Str(field))
+		lookup, optional := lookupInValue(val, cuePath)
 
-			typeStr, err := getCUEValueKindString(lookup)
+		// Lookup fails when the parent is a disjunction (CUE rejects field
+		// access on union values); fall back to per-variant access metadata.
+		if !lookup.Exists() {
+			unionOptional := isFieldOptional(kind.Schema, parts)
+			union, typeStr, err := buildUnionFieldAccess(val, parts, field, unionOptional)
 			if err != nil {
 				return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
 			}
-
-			fields = append(fields, templates.SchemaMetadataSelectableField{
-				Field:                s,
-				Optional:             optional,
-				Type:                 typeStr,
-				OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, fieldPath),
-			})
-		} else {
-			return nil, fmt.Errorf("invalid selectable field path: %s, error: %w", s, valErr)
+			if union != nil {
+				fields = append(fields, templates.SchemaMetadataSelectableField{
+					Field:                s,
+					Optional:             true,
+					Type:                 typeStr,
+					OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, strings.Join(parts[:len(parts)-1], ".")),
+					Union:                union,
+				})
+				continue
+			}
+			return nil, fmt.Errorf("invalid selectable field path: %s, %s", fieldPath, val)
 		}
+
+		typeStr, err := getCUEValueKindString(lookup)
+		if err != nil {
+			return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
+		}
+
+		fields = append(fields, templates.SchemaMetadataSelectableField{
+			Field:                s,
+			Optional:             optional,
+			Type:                 typeStr,
+			OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, fieldPath),
+		})
 	}
 	return fields, nil
 }
 
-// lookupInDisjunction searches for path in each variant of a disjunction.
-// Three strategies are needed to cover all cases:
-//
-//  1. Inline disjunctions ({A}|{B}): val.Expr() returns OrOp; iterate variants directly.
-//  2. Named definitions (#A|#B), field in some variants: val.Expr() returns SelectorOp so
-//     iterate doesn't work; instead unify with {field: _} to narrow to only the variants
-//     that contain the field, then look up on the narrowed (single-variant) result.
-//  3. Named definitions, field in ALL variants: strategy 2 still leaves a disjunction, so
-//     the lookup still fails. Unify with typed constraints ({field: string} etc.) — closed
-//     definitions reject non-existent fields with an error, so the constraint that succeeds
-//     tells us the type. The And-constraint variant of the narrowed result carries the type.
-func lookupInDisjunction(v cue.Value, path cue.Path, field string) cue.Value {
-	// Strategy 1: inline disjunction.
-	if op, variants := v.Expr(); op == cue.OrOp {
-		for _, variant := range variants {
-			if l, _ := lookupInValue(variant, path); l.Exists() {
-				return l
-			}
-		}
+// buildUnionFieldAccess returns metadata for accessing field through a CUE
+// disjunction. Concrete-string variant fields become ConstantValue (resolved at
+// codegen); typed variant fields become FieldInVariant (read at runtime).
+func buildUnionFieldAccess(val cue.Value, parts []string, field string, unionOptional bool) (*templates.UnionFieldAccess, string, error) {
+	variants := disjunctionVariants(val)
+	if len(variants) == 0 {
+		return nil, "", nil
 	}
-	// Strategy 2: named definitions, field in some variants.
-	constraint := v.Context().CompileString(fmt.Sprintf("{%s: _}", field))
-	if narrowed := v.Unify(constraint); narrowed.Err() == nil {
-		if l, _ := lookupInValue(narrowed, path); l.Exists() {
-			return l
+
+	access := &templates.UnionFieldAccess{
+		UnionFieldPath: strings.Join(parts, "."),
+		UnionOptional:  unionOptional,
+	}
+
+	cuePath := cue.MakePath(cue.Str(field))
+	var typeStr string
+	for _, variant := range variants {
+		fieldVal, fieldOptional := lookupInValue(variant, cuePath)
+		if !fieldVal.Exists() {
+			continue
 		}
-		// Strategy 3: named definitions, field in all variants. The narrowed value is still
-		// a disjunction, so try scalar-typed constraints to identify the type. Closed
-		// definitions produce an error for wrong types or non-existent fields, so only the
-		// correct type constraint will succeed and expose the field via the And-constraint variant.
-		for _, typeStr := range []string{"string", "bool", "int"} {
-			typedConstraint := v.Context().CompileString(fmt.Sprintf("{%s: %s}", field, typeStr))
-			if typedNarrowed := v.Unify(typedConstraint); typedNarrowed.Err() == nil {
-				_, variants := typedNarrowed.Expr()
-				for _, variant := range variants {
-					if l, _ := lookupInValue(variant, path); l.Exists() {
-						return l
-					}
+
+		goName := variantGoName(variant)
+		if goName == "" {
+			return nil, "", fmt.Errorf("could not determine Go name for disjunction variant containing field %q", field)
+		}
+
+		v := templates.UnionVariantAccess{VariantField: goName}
+		if fieldVal.Kind() == cue.StringKind {
+			if literal, err := fieldVal.String(); err == nil {
+				v.ConstantValue = literal
+				if typeStr == "" {
+					typeStr = "string"
 				}
+				access.Variants = append(access.Variants, v)
+				continue
+			}
+		}
+
+		ts, err := getCUEValueKindString(fieldVal)
+		if err != nil {
+			return nil, "", err
+		}
+		if typeStr == "" {
+			typeStr = ts
+		}
+		v.FieldInVariant = upperCamelCase(field)
+		v.FieldInVariantOptional = fieldOptional
+		access.Variants = append(access.Variants, v)
+	}
+
+	if len(access.Variants) == 0 {
+		return nil, "", nil
+	}
+	return access, typeStr, nil
+}
+
+// disjunctionVariants returns the OrOp branches of a CUE disjunction value.
+// In the post-Decode codegen pipeline the value often arrives wrapped in an
+// AndOp (intersection with a manifest open-struct constraint) whose operand
+// still carries the ReferencePath to the named disjunction; unwrap AndOp and
+// follow references before falling back to evaluation.
+func disjunctionVariants(v cue.Value) []cue.Value {
+	if variants := variantsFromValue(v); len(variants) > 0 {
+		return variants
+	}
+	if eval := v.Eval(); eval.Err() == nil && !sameValue(eval, v) {
+		if variants := variantsFromValue(eval); len(variants) > 0 {
+			return variants
+		}
+	}
+	return nil
+}
+
+func variantsFromValue(v cue.Value) []cue.Value {
+	op, args := v.Expr()
+	switch op {
+	case cue.OrOp:
+		return args
+	case cue.AndOp:
+		for _, arg := range args {
+			if variants := variantsFromValue(arg); len(variants) > 0 {
+				return variants
 			}
 		}
 	}
-	return cue.Value{}
+	if root, ref := v.ReferencePath(); len(ref.Selectors()) > 0 {
+		referenced := root.LookupPath(ref)
+		if referenced.Exists() && !sameValue(referenced, v) {
+			return variantsFromValue(referenced)
+		}
+	}
+	return nil
+}
+
+// sameValue guards against ReferencePath resolving back to v itself.
+func sameValue(a, b cue.Value) bool {
+	return a.Path().String() == b.Path().String()
+}
+
+// variantGoName returns the cog-generated Go field name for a disjunction
+// variant: the definition name for #Foo, or
+// UpperCamelCase(discField)+UpperCamelCase(discValue) for anonymous variants
+// (matches cog's DisjunctionOfAnonymousStructsToExplicit pass).
+func variantGoName(variant cue.Value) string {
+	if name := definitionName(variant); name != "" {
+		return name
+	}
+	iter, err := variant.Fields(cue.Optional(true))
+	if err != nil {
+		return ""
+	}
+	for iter.Next() {
+		fv := iter.Value()
+		if !fv.IsConcrete() || fv.Kind() != cue.StringKind {
+			continue
+		}
+		if s, err := fv.String(); err == nil {
+			return upperCamelCase(iter.Selector().String()) + upperCamelCase(s)
+		}
+	}
+	return ""
+}
+
+// definitionName extracts a CUE definition name (#Foo → "Foo") from a variant.
+// Variants of a named disjunction (#Union: #A | #B) report Path()=#Union but
+// ReferencePath()=#A; check ReferencePath first, fall back to Source AST.
+func definitionName(variant cue.Value) string {
+	if _, ref := variant.ReferencePath(); len(ref.Selectors()) > 0 {
+		sels := ref.Selectors()
+		if name := defNameFromSelector(sels[len(sels)-1]); name != "" {
+			return name
+		}
+	}
+	if id, ok := variant.Source().(*ast.Ident); ok {
+		if strings.HasPrefix(id.Name, "#") {
+			return id.Name[1:]
+		}
+	}
+	return ""
+}
+
+func defNameFromSelector(sel cue.Selector) string {
+	s := sel.String()
+	if strings.HasPrefix(s, "#") {
+		return s[1:]
+	}
+	return ""
+}
+
+func upperCamelCase(s string) string {
+	if s == "" {
+		return ""
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// isFieldOptional reports whether parts' final selector was declared optional
+// (CUE `?:`). Works on fully-evaluated schemas where source AST is unavailable
+// by comparing the parent's lookup with and without the optional marker.
+func isFieldOptional(schema cue.Value, parts []string) bool {
+	if len(parts) == 0 {
+		return false
+	}
+	parentSels := make([]cue.Selector, 0, len(parts)-1)
+	for _, p := range parts[:len(parts)-1] {
+		parentSels = append(parentSels, cue.Str(p))
+	}
+	parent := schema.LookupPath(cue.MakePath(parentSels...).Optional())
+	if !parent.Exists() {
+		return false
+	}
+	leaf := cue.MakePath(cue.Str(parts[len(parts)-1]))
+	if parent.LookupPath(leaf).Exists() {
+		return false
+	}
+	return parent.LookupPath(leaf.Optional()).Exists()
 }
 
 func lookupInValue(v cue.Value, path cue.Path) (lookup cue.Value, isOptional bool) {

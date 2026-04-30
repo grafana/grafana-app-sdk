@@ -42,30 +42,49 @@ func TestGetSelectableFields(t *testing.T) {
 			},
 		},
 		{
-			// CUE does not support direct field lookup on disjunction values, so the variant
-			// fallback is always used — meaning fields through a disjunction are always optional.
-			name: "inline: field in all variants",
+			name: "inline: discriminator field (case 1)",
 			kind: codegen.VersionedKind{
 				Schema:           ctx.CompileString(`{spec: {routing: {type: "A", x: string} | {type: "B", y: string} | {type: "C", z: string}}}`),
 				SelectableFields: []string{".spec.routing.type"},
 			},
 			want: []templates.SchemaMetadataSelectableField{
-				{Field: ".spec.routing.type", Optional: true, Type: "string", OptionalFieldsInPath: []string{}},
+				{
+					Field: ".spec.routing.type", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  false,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "TypeA", ConstantValue: "A"},
+							{VariantField: "TypeB", ConstantValue: "B"},
+							{VariantField: "TypeC", ConstantValue: "C"},
+						},
+					},
+				},
 			},
 		},
 		{
-			name: "inline: field in only one variant",
+			name: "inline: field in only one variant (case 2)",
 			kind: codegen.VersionedKind{
 				Schema:           ctx.CompileString(`{spec: {routing?: {type: "A", x: string} | {type: "B", y: string} | {type: "C", z: string}}}`),
 				SelectableFields: []string{".spec.routing.x"},
 			},
 			want: []templates.SchemaMetadataSelectableField{
-				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+				{
+					Field: ".spec.routing.x", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "TypeA", FieldInVariant: "X"},
+						},
+					},
+				},
 			},
 		},
 		{
-			// Named CUE definitions (#Foo | #Bar) rather than inline struct literals
-			name: "named definitions: field in only some variants",
+			name: "named definitions: field in only one variant (case 2)",
 			kind: codegen.VersionedKind{
 				Schema: ctx.CompileString(`
 					#A: {type: "A", x: string}
@@ -77,12 +96,21 @@ func TestGetSelectableFields(t *testing.T) {
 				SelectableFields: []string{".spec.routing.x"},
 			},
 			want: []templates.SchemaMetadataSelectableField{
-				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+				{
+					Field: ".spec.routing.x", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "A", FieldInVariant: "X"},
+						},
+					},
+				},
 			},
 		},
 		{
-			// Named CUE definitions (#Foo | #Bar) rather than inline struct literals
-			name: "named definitions: field in all variants",
+			name: "named definitions: discriminator field (case 1)",
 			kind: codegen.VersionedKind{
 				Schema: ctx.CompileString(`
 					#A: {type: "A", x: string}
@@ -94,21 +122,44 @@ func TestGetSelectableFields(t *testing.T) {
 				SelectableFields: []string{".spec.routing.type"},
 			},
 			want: []templates.SchemaMetadataSelectableField{
-				{Field: ".spec.routing.type", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+				{
+					Field: ".spec.routing.type", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "A", ConstantValue: "A"},
+							{VariantField: "B", ConstantValue: "B"},
+							{VariantField: "C", ConstantValue: "C"},
+						},
+					},
+				},
 			},
 		},
 		{
-			name: "inline: field in two of three variants",
+			name: "inline: field in two of three variants (case 3)",
 			kind: codegen.VersionedKind{
 				Schema:           ctx.CompileString(`{spec: {routing?: {type: "A", x: string} | {type: "B", x: string} | {type: "C", z: string}}}`),
 				SelectableFields: []string{".spec.routing.x"},
 			},
 			want: []templates.SchemaMetadataSelectableField{
-				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+				{
+					Field: ".spec.routing.x", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "TypeA", FieldInVariant: "X"},
+							{VariantField: "TypeB", FieldInVariant: "X"},
+						},
+					},
+				},
 			},
 		},
 		{
-			name: "named definitions: field in two of three variants",
+			name: "named definitions: field in two of three variants (case 3)",
 			kind: codegen.VersionedKind{
 				Schema: ctx.CompileString(`
 					#A: {type: "A", x: string}
@@ -120,7 +171,18 @@ func TestGetSelectableFields(t *testing.T) {
 				SelectableFields: []string{".spec.routing.x"},
 			},
 			want: []templates.SchemaMetadataSelectableField{
-				{Field: ".spec.routing.x", Optional: true, Type: "string", OptionalFieldsInPath: []string{"spec.routing"}},
+				{
+					Field: ".spec.routing.x", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "A", FieldInVariant: "X"},
+							{VariantField: "B", FieldInVariant: "X"},
+						},
+					},
+				},
 			},
 		},
 		{
@@ -290,6 +352,109 @@ func TestSchemaTemplateSelectableFieldCast(t *testing.T) {
 			contains: []string{
 				`cast.Spec.Nested == nil`,
 				`string(*cast.Spec.Nested.Name)`,
+			},
+		},
+		{
+			name: "union case 1: discriminator returns constant per variant",
+			fields: []templates.SchemaMetadataSelectableField{{
+				Field: ".spec.routing.type", Optional: true, Type: "string",
+				OptionalFieldsInPath: []string{},
+				Union: &templates.UnionFieldAccess{
+					UnionFieldPath: "spec.routing",
+					UnionOptional:  true,
+					Variants: []templates.UnionVariantAccess{
+						{VariantField: "A", ConstantValue: "A"},
+						{VariantField: "B", ConstantValue: "B"},
+						{VariantField: "C", ConstantValue: "C"},
+					},
+				},
+			}},
+			contains: []string{
+				`if cast.Spec.Routing == nil`,
+				`if cast.Spec.Routing.A != nil`,
+				`return "A", nil`,
+				`if cast.Spec.Routing.B != nil`,
+				`return "B", nil`,
+				`if cast.Spec.Routing.C != nil`,
+				`return "C", nil`,
+			},
+		},
+		{
+			name: "union case 2: field in single variant — pointer check + access",
+			fields: []templates.SchemaMetadataSelectableField{{
+				Field: ".spec.routing.x", Optional: true, Type: "string",
+				OptionalFieldsInPath: []string{},
+				Union: &templates.UnionFieldAccess{
+					UnionFieldPath: "spec.routing",
+					UnionOptional:  true,
+					Variants: []templates.UnionVariantAccess{
+						{VariantField: "A", FieldInVariant: "X"},
+					},
+				},
+			}},
+			contains: []string{
+				`if cast.Spec.Routing == nil`,
+				`if cast.Spec.Routing.A != nil`,
+				`return string(cast.Spec.Routing.A.X), nil`,
+			},
+		},
+		{
+			name: "union case 3: field in multiple variants — try each",
+			fields: []templates.SchemaMetadataSelectableField{{
+				Field: ".spec.routing.x", Optional: true, Type: "string",
+				OptionalFieldsInPath: []string{},
+				Union: &templates.UnionFieldAccess{
+					UnionFieldPath: "spec.routing",
+					UnionOptional:  true,
+					Variants: []templates.UnionVariantAccess{
+						{VariantField: "A", FieldInVariant: "X"},
+						{VariantField: "B", FieldInVariant: "X"},
+					},
+				},
+			}},
+			contains: []string{
+				`if cast.Spec.Routing == nil`,
+				`if cast.Spec.Routing.A != nil`,
+				`return string(cast.Spec.Routing.A.X), nil`,
+				`if cast.Spec.Routing.B != nil`,
+				`return string(cast.Spec.Routing.B.X), nil`,
+			},
+		},
+		{
+			name: "union case 2: optional int field in variant uses fmt.Sprintf and deref",
+			fields: []templates.SchemaMetadataSelectableField{{
+				Field: ".spec.routing.count", Optional: true, Type: "int",
+				OptionalFieldsInPath: []string{},
+				Union: &templates.UnionFieldAccess{
+					UnionFieldPath: "spec.routing",
+					UnionOptional:  false,
+					Variants: []templates.UnionVariantAccess{
+						{VariantField: "A", FieldInVariant: "Count", FieldInVariantOptional: true},
+					},
+				},
+			}},
+			contains: []string{
+				`if cast.Spec.Routing.A != nil`,
+				`if cast.Spec.Routing.A.Count != nil`,
+				`fmt.Sprintf("%d", *cast.Spec.Routing.A.Count)`,
+			},
+		},
+		{
+			name: "union case 1: required union skips outer nil check",
+			fields: []templates.SchemaMetadataSelectableField{{
+				Field: ".spec.routing.type", Optional: true, Type: "string",
+				OptionalFieldsInPath: []string{},
+				Union: &templates.UnionFieldAccess{
+					UnionFieldPath: "spec.routing",
+					UnionOptional:  false,
+					Variants: []templates.UnionVariantAccess{
+						{VariantField: "A", ConstantValue: "A"},
+					},
+				},
+			}},
+			contains: []string{
+				`if cast.Spec.Routing.A != nil`,
+				`return "A", nil`,
 			},
 		},
 	}
