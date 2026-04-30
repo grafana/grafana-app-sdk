@@ -28,10 +28,10 @@ var (
                     return "", nil
                 }{{ end }}
                 {{ if .Optional }}{{ if eq .Type "string" }}
-                return *cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
+                return string(*cast.{{$root.ToObjectPath .Field}}), nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
                 return fmt.Sprintf("%v", *cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ else }}{{ if eq .Type "string" }}
-                return cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
+                return string(cast.{{$root.ToObjectPath .Field}}), nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
                 return fmt.Sprintf("%v", cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ end }}
             },
