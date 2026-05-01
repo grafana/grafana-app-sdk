@@ -228,16 +228,27 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	kindVersionPriorities := make(map[string][]string)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
-			priorities, ok := kindVersionPriorities[kind.Kind.Kind()]
+			gvk := gv.WithKind(kind.Kind.Kind())
+			priorities, ok := kindVersionPriorities[gvk.Kind]
 			if !ok {
 				priorities = make([]string, 0)
 			}
 			priorities = append(priorities, gv.Version)
-			kindVersionPriorities[kind.Kind.Kind()] = priorities
+			kindVersionPriorities[gvk.Kind] = priorities
 
-			scheme.AddKnownTypeWithName(kind.Kind.GroupVersionKind(), kind.Kind.ZeroValue())
-			scheme.AddKnownTypeWithName(gv.WithKind(kind.Kind.Kind()+"List"), kind.Kind.ZeroListValue())
-			metav1.AddToGroupVersion(scheme, kind.Kind.GroupVersionKind().GroupVersion())
+			scheme.AddKnownTypeWithName(gvk, kind.Kind.ZeroValue())
+			scheme.AddKnownTypeWithName(gv.WithKind(gvk.Kind+"List"), kind.Kind.ZeroListValue())
+			metav1.AddToGroupVersion(scheme, gv)
+
+			// Register the same kind to alias versions (typically older or duplicate apiVersions)
+			for _, alias := range kind.Kind.AliasVersions() {
+				gvk.Version = alias
+				gv.Version = alias
+				scheme.AddKnownTypeWithName(gvk, kind.Kind.ZeroValue())
+				scheme.AddKnownTypeWithName(gv.WithKind(gvk.Kind+"List"), kind.Kind.ZeroListValue())
+				metav1.AddToGroupVersion(scheme, gv)
+			}
+
 			// Ensure that the internal kind uses the preferred version if possible,
 			// but otherwise make sure it always has _something_ set
 			if _, ok := internalKinds[kind.Kind.Kind()]; !ok || r.appConfig.ManifestData.PreferredVersion == gv.Version {

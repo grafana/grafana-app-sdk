@@ -13,18 +13,18 @@ testManifest: {
 	preferredVersion: "v1"
 	extraPermissions: {
 		accessKinds: [{
-			group: "foo.bar"
+			group:    "foo.bar"
 			resource: "foos"
-			actions: ["get","list","watch"]
+			actions: ["get", "list", "watch"]
 		}]
 	}
 	operatorURL: "https://foo.bar:8443"
 	roles: {
 		"test-app:reader": {
-			title: "Test App Viewer"
+			title:       "Test App Viewer"
 			description: "View Test App Resources"
 			kinds: [{
-				kind: "TestKind"
+				kind:          "TestKind"
 				permissionSet: "viewer"
 			}]
 			routes: ["createFoobar"]
@@ -39,7 +39,7 @@ testManifestV1: {
 	codegen: ts: enabled: false
 	kinds: [
 		testKind.versions["v1"] & testKind,
-		testKind2.versions["v1"] & testKind2
+		testKind2.versions["v1"] & testKind2,
 	]
 }
 
@@ -56,7 +56,7 @@ testManifestV3: {
 			"POST": {
 				name: "createFoobar"
 				#Key: {
-					name: string
+					name:   string
 					match?: string
 				}
 				request: body: {
@@ -71,9 +71,9 @@ testManifestV3: {
 }
 
 testKind: {
-	kind: "TestKind"
+	kind:   "TestKind"
 	plural: "testkinds"
-	validation: operations: ["create","update"]
+	validation: operations: ["create", "update"]
 	conversion: true
 	conversionWebhookProps: url: "http://foo.bar/convert"
 	current: "v1"
@@ -84,49 +84,50 @@ testKind: {
 					stringField: string & =~"^[a-zA-Z_][a-zA-Z0-9_-]*$"
 				}
 			}
+			aliasVersions: ["v0alpha1", "v0beta1"] // keeps the old versions registered
 		}
 		"v2": {
 			codegen: ts: enabled: true
 			schema: {
 				spec: {
 					stringField: string
-					intField: int64
-					timeField: string & time.Time
+					intField:    int64
+					timeField:   string & time.Time
 				}
 			}
-			mutation: operations: ["create","update"]
+			mutation: operations: ["create", "update"]
 			additionalPrinterColumns: [
-                {
-                    jsonPath: ".spec.stringField"
-                    name: "STRING FIELD"
-                    type: "string"
-                }
-            ]
+				{
+					jsonPath: ".spec.stringField"
+					name:     "STRING FIELD"
+					type:     "string"
+				},
+			]
 		}
 		"v3": {
 			schema: {
 				spec: {
 					stringField: string
-					intField: int64
-					timeField: string & time.Time
-					boolField: bool
+					intField:    int64
+					timeField:   string & time.Time
+					boolField:   bool
 				}
 			}
-			mutation: operations: ["create","update"]
-			validation: operations: ["create","update"]
+			mutation: operations: ["create", "update"]
+			validation: operations: ["create", "update"]
 			routes: {
 				"/reconcile": {
 					POST: {
 						name: "createReconcileRequest"
 						request: {
 							body: {
-								force: bool | *false 
+								force:   bool | *false
 								reason?: string
 							}
 						}
 						response: {
 							status: "success" | "failure"
-                            // A comment containing "quotes" should not break anything
+							// A comment containing "quotes" should not break anything
 							message: string
 						}
 						responseMetadata: typeMeta: false
@@ -143,14 +144,14 @@ testKind: {
 						}
 						request: {
 							query: {
-								q: string
-								limit?: int | *10
+								q:       string
+								limit?:  int | *10
 								offset?: int | *0
 							}
 						}
 						response: {
 							items: [...{
-								name: string
+								name:  string
 								score: float
 								list: [...{
 									foo: string

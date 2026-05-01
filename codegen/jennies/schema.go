@@ -54,6 +54,7 @@ func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Fil
 			Plural:           kind.PluralMachineName,
 			Scope:            kind.Scope,
 			SelectableFields: sf,
+			AliasVersions:    kind.AliasVersions,
 			FuncPrefix:       prefix,
 		}, &b)
 		if err != nil {

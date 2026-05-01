@@ -314,7 +314,11 @@ type ManifestVersionKind struct {
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
 	// This field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.
 	Conversion bool `json:"conversion" yaml:"conversion"`
-
+	// AliasVersions allow the same kind to be registered to multiple apiVersions
+	// This can greatly simplify conversions when graduating schemas to release versions
+	// NOTE: this versions is registered with k8s schema, but does not need to be an exposed apiVersion
+	AliasVersions []string `json:"aliasVersions,omitempty"`
+	// Define extra columns used when returning the k8s table format
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 }
 
