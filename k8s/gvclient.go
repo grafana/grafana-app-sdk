@@ -625,7 +625,21 @@ func (w *WatchResponse) start() {
 
 	for {
 		select {
-		case evt := <-w.watch.ResultChan():
+		case evt, ok := <-w.watch.ResultChan():
+			if !ok {
+				// ResultChan closed upstream (server-side timeout, connection reset, etc.).
+				// Cannot call Stop() here — it blocks on sending to stopCh, which only
+				// this goroutine reads, causing a deadlock.
+				w.startMux.Lock()
+				if w.started {
+					close(w.ch)
+					w.watch.Stop()
+					w.started = false
+				}
+				w.startMux.Unlock()
+				logger.Debug("watch stream stopped due to ResultChan end")
+				return
+			}
 			if evt.Object == nil {
 				logger.Warn("received nil object in watch event",
 					"eventType", string(evt.Type))
@@ -681,6 +695,9 @@ func (w *WatchResponse) start() {
 func (w *WatchResponse) Stop() {
 	w.startMux.Lock()
 	defer w.startMux.Unlock()
+	if !w.started {
+		return
+	}
 	w.stopCh <- struct{}{}
 	close(w.ch)
 	w.watch.Stop()
