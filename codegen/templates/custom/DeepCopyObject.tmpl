@@ -23,8 +23,7 @@
     {{- if $resolved.Struct -}}
         {{- if $isPtr -}}
             if {{ $src }} != nil {
-                {{ $deref := $type|noPtr }}
-                {{ $dst }} = new({{ template "print_type" (arr $deref $root) }})
+                {{ $dst }} = new({{ $type | formatType | dePointer }})
                 {{ $src }}.{{ copyFunctionName }}({{ $dst }})
             }
         {{- else -}}
@@ -54,10 +53,12 @@
                 {{ $dst }}[key] = mapVal
             }
             {{- else if and $mapValResolved.Struct $mapValType.Nullable }}
+            // FIXME: this should be unreachable via cog+CUE, but is here just in case
             for key, val := range {{ $src }} {
                 var mapVal {{ template "print_type" (arr $mapValType $root) }}
                 if val != nil {
-                    val.{{ copyFunctionName }}(&mapVal)
+                    mapVal = new({{ $mapValType | formatType | dePointer }})
+                    val.{{ copyFunctionName }}(mapVal)
                 }
                 {{ $dst }}[key] = mapVal
             }

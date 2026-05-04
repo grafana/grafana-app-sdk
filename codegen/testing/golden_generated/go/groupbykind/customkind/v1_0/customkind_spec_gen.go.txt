@@ -160,7 +160,6 @@ func (RecursiveList) OpenAPIModelName() string {
 func (o RecursiveList) CopyInto(dst *RecursiveList) {
 	dst.Val = o.Val
 	if o.Next != nil {
-
 		dst.Next = new(RecursiveList)
 		o.Next.CopyInto(dst.Next)
 	}

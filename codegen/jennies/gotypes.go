@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go/format"
 	"path"
-	"reflect"
 	"strings"
 
 	"cuelang.org/go/cue"
@@ -292,19 +291,17 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 				"concat": func(items ...string) string {
 					return strings.Join(items, "")
 				},
-				"noPtr": func(item any) any {
-					// reflect.ValueOf(item) is non-addressable, so allocate an addressable copy.
-					src := reflect.ValueOf(item)
-					v := reflect.New(src.Type()).Elem()
-					v.Set(src)
-					v.FieldByName("Nullable").SetBool(false)
-					return v.Interface()
+				"dePointer": func(s string) string {
+					if len(s) > 1 && s[0] == '*' {
+						return s[1:]
+					}
+					return s
 				},
 				"generateCopyCode": func() bool {
 					return cfg.GenerateCopyCode
 				},
 				"copyFunctionName": func() string {
-					return "CopyInto"
+					return "CopyInto" // TODO: is there a reason to make this customizable?
 				},
 			},
 		})
