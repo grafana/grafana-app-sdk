@@ -84,6 +84,9 @@
                                 "type": "object"
                             }
                         },
+                        "selectableFields": [
+                            ".spec.stringField"
+                        ],
                         "conversion": true
                     },
                     {
@@ -241,6 +244,10 @@
                                 "type": "object"
                             }
                         },
+                        "selectableFields": [
+                            ".spec.stringField",
+                            ".spec.intField"
+                        ],
                         "conversion": true
                     }
                 ]
@@ -338,6 +345,11 @@
                                 "type": "object"
                             }
                         },
+                        "selectableFields": [
+                            ".spec.stringField",
+                            ".spec.intField",
+                            ".spec.boolField"
+                        ],
                         "conversion": true,
                         "routes": {
                             "/reconcile": {

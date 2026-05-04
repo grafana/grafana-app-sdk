@@ -80,7 +80,12 @@
                 },
                 "subresources": {
                     "status": {}
-                }
+                },
+                "selectableFields": [
+                    {
+                        "jsonPath": ".spec.stringField"
+                    }
+                ]
             },
             {
                 "name": "v2",
@@ -164,6 +169,14 @@
                 "subresources": {
                     "status": {}
                 },
+                "selectableFields": [
+                    {
+                        "jsonPath": ".spec.stringField"
+                    },
+                    {
+                        "jsonPath": ".spec.intField"
+                    }
+                ],
                 "additionalPrinterColumns": [
                     {
                         "name": "STRING FIELD",
@@ -257,7 +270,18 @@
                 },
                 "subresources": {
                     "status": {}
-                }
+                },
+                "selectableFields": [
+                    {
+                        "jsonPath": ".spec.stringField"
+                    },
+                    {
+                        "jsonPath": ".spec.intField"
+                    },
+                    {
+                        "jsonPath": ".spec.boolField"
+                    }
+                ]
             }
         ],
         "names": {

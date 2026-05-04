@@ -91,6 +91,8 @@ spec:
               type: object
           type: object
       scope: Namespaced
+      selectableFields:
+      - .spec.stringField
     - conversion: false
       kind: TestKind2
       plural: TestKind2s
@@ -210,6 +212,9 @@ spec:
               type: object
           type: object
       scope: Namespaced
+      selectableFields:
+      - .spec.stringField
+      - .spec.intField
     name: v2
     served: true
   - kinds:
@@ -396,5 +401,9 @@ spec:
               type: object
           type: object
       scope: Namespaced
+      selectableFields:
+      - .spec.stringField
+      - .spec.intField
+      - .spec.boolField
     name: v3
     served: true
