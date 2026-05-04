@@ -21,42 +21,60 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 	return g
 }
 
+type ResourceGeneratorConfig struct {
+	// GroupKinds dictates whether kinds are packaged together by group,
+	// or split into separate packages for each kind.
+	// When true, kinds are packaged together based on group.
+	GroupKinds bool
+	// GenerateCopyCode dictates whether CopyInto methods will be generated
+	// for each go struct. This governs the logic of DeepCopy/DeepCopyInto
+	// for the subresource and object types. If false, reflection is used
+	// to handle deep copying (see resource.CopyObjectInto).
+	GenerateCopyCode bool
+}
+
 // ResourceGenerator returns a collection of jennies which generate backend resource code from kinds.
 // The `versioned` parameter governs whether to generate all versions where codegen.backend == true,
 // or just generate code for the current version.
 // If `groupKinds` is true, kinds within the same group will exist in the same package.
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
-func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
+func ResourceGenerator(projectRepo, generatedAPIPath string, cfg ResourceGeneratorConfig) *codejen.JennyList[codegen.AppManifest] {
+	copyFunc := ""
+	if cfg.GenerateCopyCode {
+		copyFunc = "CopyInto"
+	}
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(
 		&jennies.GoTypes{
 			Depth:                1,
 			AddKubernetesCodegen: true,
-			GroupByKind:          !groupKinds,
+			GroupByKind:          !cfg.GroupKinds,
 			AnyAsInterface:       true,                 // This is for compatibility with kube openAPI generator, which has issues with map[string]any
 			ExcludeFields:        []string{"metadata"}, // We don't want an object generated for the metadata, as we use the k8s metadata objects
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
-				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
+				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!cfg.GroupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
 				return apiserver.ToOpenAPIName(path)
 			},
+			GenerateCopyCode: cfg.GenerateCopyCode,
 		},
 		&jennies.ResourceObjectGenerator{
-			SubresourceTypesArePrefixed: groupKinds,
-			GroupByKind:                 !groupKinds,
+			SubresourceTypesArePrefixed: cfg.GroupKinds,
+			GroupByKind:                 !cfg.GroupKinds,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
-				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
+				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!cfg.GroupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
 				return apiserver.ToOpenAPIName(path)
 			},
+			GoTypeCopyIntoFunction: copyFunc,
 		},
 		&jennies.SchemaGenerator{
-			GroupByKind: !groupKinds,
+			GroupByKind: !cfg.GroupKinds,
 		},
 		&jennies.CodecGenerator{
-			GroupByKind: !groupKinds,
+			GroupByKind: !cfg.GroupKinds,
 		},
 		&jennies.Constants{
-			GroupByKind: !groupKinds,
+			GroupByKind: !cfg.GroupKinds,
 		},
 	)
 	return g

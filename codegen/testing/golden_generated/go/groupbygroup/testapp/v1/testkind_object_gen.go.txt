@@ -318,7 +318,7 @@ func (s *TestKindSpec) DeepCopy() *TestKindSpec {
 
 // DeepCopyInto deep copies Spec into another Spec object
 func (s *TestKindSpec) DeepCopyInto(dst *TestKindSpec) {
-	resource.CopyObjectInto(dst, s)
+	s.CopyInto(dst)
 }
 
 // DeepCopy creates a full deep copy of TestKindStatus
@@ -330,5 +330,5 @@ func (s *TestKindStatus) DeepCopy() *TestKindStatus {
 
 // DeepCopyInto deep copies TestKindStatus into another TestKindStatus object
 func (s *TestKindStatus) DeepCopyInto(dst *TestKindStatus) {
-	resource.CopyObjectInto(dst, s)
+	s.CopyInto(dst)
 }

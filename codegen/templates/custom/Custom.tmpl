@@ -1,0 +1,7 @@
+{{- define "object_all_custom_methods" -}}
+{{ template "openapimodelname" .Object }}
+{{- $cc := generateCopyCode -}}
+{{- if $cc -}}
+{{ template "object_copy_method" .Object }}
+{{- end -}}
+{{- end -}}

@@ -1,6 +1,7 @@
-{{- define "object_all_custom_methods" -}}
-{{ $objName := .Object.Name|formatObjectName }}
-{{- if or .Object.Type.Struct .Object.Type.Enum .Object.Type.Map -}}
+{{- define "openapimodelname" -}}
+{{ $obj := . }}
+{{ $objName := $obj.Name|formatObjectName }}
+{{- if or $obj.Type.Struct $obj.Type.Enum $obj.Type.Map -}}
 // OpenAPIModelName returns the OpenAPI model name for {{ $objName }}.
 func ({{ $objName }}) OpenAPIModelName() string {
 	return "{{ namerFunc $objName }}"

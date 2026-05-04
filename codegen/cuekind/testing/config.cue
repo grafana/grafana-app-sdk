@@ -12,6 +12,7 @@ configJson: {
 		goModule:     "codegen-tests"
 		goModGenPath: "pkg/generated"
 		tsGenPath:    "codegen/testing/golden_generated/typescript/versioned"
+		enableGeneratedCopyCode: true
 	}
 	kinds: {
 		grouping: "group"
@@ -31,6 +32,7 @@ configYaml: {
 		goModule:     "codegen-tests"
 		goModGenPath: "pkg/generated"
 		tsGenPath:    "codegen/testing/golden_generated/typescript/versioned"
+		enableGeneratedCopyCode: true
 	}
 	kinds: {
 		grouping: "group"
@@ -51,6 +53,7 @@ configKind: {
 		goModule:     "codegen-tests"
 		goModGenPath: "pkg/generated"
 		tsGenPath:    "codegen/testing/golden_generated/typescript/versioned"
+		enableGeneratedCopyCode: true
 	}
 	kinds: {
 		grouping: "kind"
@@ -68,6 +71,7 @@ configIntegrationGen1: {
 		goGenPath: "pkg/gen1"
 		tsGenPath: "ts/gen1"
 		goModGenPath: "pkg/generated"
+		enableGeneratedCopyCode: true
 	}
 	kinds: {
 		grouping: "kind"
@@ -85,6 +89,7 @@ configIntegrationGen2: {
 		goGenPath: "pkg/gen2"
 		tsGenPath: "ts/gen2"
 		goModGenPath: "pkg/generated"
+		enableGeneratedCopyCode: true
 	}
 	kinds: {
 		grouping: "group"
@@ -95,4 +100,5 @@ configIntegrationGen2: {
 configIntegrationGen3: {
 	manifestSelectors: ["integrationManifest"]
 	kinds: grouping: "group"
+	codegen: enableGeneratedCopyCode: true
 }

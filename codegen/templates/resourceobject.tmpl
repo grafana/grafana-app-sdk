@@ -295,7 +295,11 @@ func (s *{{.SpecTypeName}}) DeepCopy() *{{.SpecTypeName}} {
 
 // DeepCopyInto deep copies Spec into another Spec object
 func (s *{{.SpecTypeName}}) DeepCopyInto(dst *{{.SpecTypeName}}) {
+	{{- if .SubresourceCopyMethod }}
+	s.{{ .SubresourceCopyMethod }}(dst)
+	{{- else }}
 	resource.CopyObjectInto(dst, s)
+	{{- end }}
 }
 
 {{ range .Subresources }}// DeepCopy creates a full deep copy of {{.TypeName}}
@@ -307,6 +311,10 @@ func(s *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
 
 // DeepCopyInto deep copies {{.TypeName}} into another {{.TypeName}} object
 func(s *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
+	{{- if $.SubresourceCopyMethod }}
+	s.{{ $.SubresourceCopyMethod }}(dst)
+	{{- else }}
 	resource.CopyObjectInto(dst, s)
+	{{- end }}
 }
 {{ end }}

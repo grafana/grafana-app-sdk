@@ -58,7 +58,10 @@ func TestResourceGenerator(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("group by kind", func(t *testing.T) {
-		files, err := ResourceGenerator("codegen-tests", "pkg/generated", false).Generate(kinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", ResourceGeneratorConfig{
+			GroupKinds:       false,
+			GenerateCopyCode: true,
+		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
@@ -68,7 +71,10 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group", func(t *testing.T) {
-		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(kinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", ResourceGeneratorConfig{
+			GroupKinds:       true,
+			GenerateCopyCode: true,
+		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 12 (7 -> object, spec, status, schema, codec, constants) * 2 versions
@@ -78,7 +84,10 @@ func TestResourceGenerator(t *testing.T) {
 	})
 
 	t.Run("group by group, multiple kinds", func(t *testing.T) {
-		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(sameGroupKinds...)
+		files, err := ResourceGenerator("codegen-tests", "pkg/generated", ResourceGeneratorConfig{
+			GroupKinds:       true,
+			GenerateCopyCode: true,
+		}).Generate(sameGroupKinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))
