@@ -270,22 +270,14 @@ func variantGoName(variant cue.Value) string {
 func definitionName(variant cue.Value) string {
 	if _, ref := variant.ReferencePath(); len(ref.Selectors()) > 0 {
 		sels := ref.Selectors()
-		if name := defNameFromSelector(sels[len(sels)-1]); name != "" {
-			return name
+		if s := sels[len(sels)-1].String(); strings.HasPrefix(s, "#") {
+			return s[1:]
 		}
 	}
 	if id, ok := variant.Source().(*ast.Ident); ok {
 		if strings.HasPrefix(id.Name, "#") {
 			return id.Name[1:]
 		}
-	}
-	return ""
-}
-
-func defNameFromSelector(sel cue.Selector) string {
-	s := sel.String()
-	if strings.HasPrefix(s, "#") {
-		return s[1:]
 	}
 	return ""
 }
