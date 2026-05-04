@@ -152,11 +152,37 @@ type SchemaMetadata struct {
 	FuncPrefix       string
 }
 
+// UnionFieldAccess describes how to read a selectable field that lives inside a
+// CUE disjunction. cog generates each disjunction as a Go struct with one
+// optional pointer field per variant, so access is "check each variant pointer".
+type UnionFieldAccess struct {
+	UnionFieldPath string
+	UnionOptional  bool
+	Variants       []UnionVariantAccess
+}
+
+type UnionVariantAccess struct {
+	// VariantField is the Go field name on the union struct (e.g. "Foo" for
+	// named #Foo, or "TypeA" for an anonymous variant whose discriminator is
+	// type: "A" — matches cog's anonymous-variant naming).
+	VariantField string
+	// FieldInVariant is the Go field name within the variant struct, or empty
+	// when ConstantValue is set.
+	FieldInVariant         string
+	FieldInVariantOptional bool
+	// ConstantValue, when non-empty, is the literal string to return when this
+	// variant pointer is non-nil (used for selecting a discriminator field).
+	ConstantValue string
+}
+
 type SchemaMetadataSelectableField struct {
 	Field                string
 	Optional             bool
 	Type                 string
 	OptionalFieldsInPath []string
+	// Union, when set, replaces the flat path-based emission with per-variant
+	// pointer checks.
+	Union *UnionFieldAccess
 }
 
 func (SchemaMetadata) ToObjectPath(s string) string {
