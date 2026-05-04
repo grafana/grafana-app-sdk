@@ -18,7 +18,7 @@ require (
 	github.com/grafana/authlib v0.0.0-20260414201248-d766c8627a66
 	github.com/grafana/codejen v0.0.4-0.20250428224353-8764ced07770
 	github.com/grafana/cog v0.1.11
-	github.com/grafana/grafana-app-sdk/logging v0.54.0
+	github.com/grafana/grafana-app-sdk/logging v0.54.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
@@ -36,7 +36,7 @@ require (
 	golang.org/x/sync v0.20.0
 	golang.org/x/tools v0.44.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
-	google.golang.org/grpc v1.80.0
+	google.golang.org/grpc v1.81.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.0
 	k8s.io/apiextensions-apiserver v0.36.0
