@@ -10,26 +10,32 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/grafana/codejen"
 	"golang.org/x/tools/imports"
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-
-	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 const (
 	VersionV1Alpha1 = "v1alpha1"
 	VersionV1Alpha2 = "v1alpha2"
+)
+
+const (
+	keyAPIVersion = "apiVersion"
+	keyKind       = "kind"
+	keyMetadata   = "metadata"
+	keySpec       = "spec"
 )
 
 type ManifestOutputEncoder func(any) ([]byte, error)
@@ -83,14 +89,14 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = apiVersion.String()
-	output["kind"] = "AppManifest"
-	output["metadata"] = map[string]string{
+	output[keyAPIVersion] = apiVersion.String()
+	output[keyKind] = "AppManifest"
+	output[keyMetadata] = map[string]string{
 		"name": manifestData.AppName,
 	}
-	output["spec"] = manifestSpec
+	output[keySpec] = manifestSpec
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	out, err := m.Encoder(output)
 	if err != nil {
 		return nil, err
@@ -160,7 +166,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 		}
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	files = append(files, codejen.File{
 		Data:         formatted,
 		RelativePath: filepath.Join(g.DestinationPath, fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group)),
@@ -392,7 +398,7 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 				return nil, codegen.AppManifestPropertiesRoleBindings{}, err
 			}
 			for it.Next() {
-				if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+				if it.Selector().String() == keySpec || it.Selector().String() == keyMetadata {
 					continue
 				}
 				sr := fmt.Sprintf("%s/%s", k.Kind, it.Selector().String())
@@ -415,7 +421,7 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 	for k := range kindListMap {
 		kindList = append(kindList, k)
 	}
-	sort.Strings(kindList)
+	slices.Sort(kindList)
 	allKindsDesc := joinKindNames(kindList)
 	roles := map[string]codegen.AppManifestPropertiesRole{
 		readerKey: {
@@ -607,7 +613,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
-			if field == "metadata" || field == "apiVersion" || field == "kind" { //nolint:goconst
+			if field == keyMetadata || field == keyAPIVersion || field == keyKind { //nolint:goconst
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
 			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
@@ -634,7 +640,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		}
 		schemas[vk.Kind] = map[string]any{
 			"properties": props,
-			"required":   []string{"spec"},
+			"required":   []string{keySpec},
 		}
 		mver.Schema, err = app.VersionSchemaFromMap(map[string]any{
 			"components": map[string]any{
@@ -766,7 +772,7 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 	for name := range schemaProps.Properties {
 		paramNames = append(paramNames, name)
 	}
-	sort.Strings(paramNames)
+	slices.Sort(paramNames)
 
 	parameters := make([]*spec3.Parameter, 0, len(paramNames))
 	// Iterate through sorted names
@@ -830,22 +836,22 @@ func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata code
 		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
 	if metadata.TypeMeta {
-		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
-		schemaProps.Properties["kind"] = kindPropSchema
-		schemaProps.Required = append(schemaProps.Required, "apiVersion", "kind")
+		schemaProps.Properties[keyAPIVersion] = apiVersionPropSchema
+		schemaProps.Properties[keyKind] = kindPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyAPIVersion, keyKind)
 	}
 	if metadata.ObjectMeta {
-		if _, exists := schemaProps.Properties["metadata"]; exists {
+		if _, exists := schemaProps.Properties[keyMetadata]; exists {
 			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
 		}
-		schemaProps.Properties["metadata"] = objectMetaPropSchema
-		schemaProps.Required = append(schemaProps.Required, "metadata")
+		schemaProps.Properties[keyMetadata] = objectMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyMetadata)
 	} else if metadata.ListMeta {
-		if _, exists := schemaProps.Properties["metadata"]; exists {
+		if _, exists := schemaProps.Properties[keyMetadata]; exists {
 			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
 		}
-		schemaProps.Properties["metadata"] = listMetaPropSchema
-		schemaProps.Required = append(schemaProps.Required, "metadata")
+		schemaProps.Properties[keyMetadata] = listMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyMetadata)
 	}
 
 	response := spec3.Response{
@@ -1035,12 +1041,12 @@ var (
 								SchemaProps: spec.SchemaProps{
 									Type: []string{"object"},
 									Properties: map[string]spec.Schema{
-										"apiVersion": {
+										keyAPIVersion: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
 										},
-										"kind": {
+										keyKind: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
@@ -1066,7 +1072,7 @@ var (
 											},
 										},
 									},
-									Required: []string{"apiVersion", "kind", "name", "uid"},
+									Required: []string{keyAPIVersion, keyKind, "name", "uid"},
 								},
 							},
 						},
@@ -1102,7 +1108,7 @@ var (
 												Type: []string{"string"},
 											},
 										},
-										"apiVersion": {
+										keyAPIVersion: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},

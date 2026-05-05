@@ -84,6 +84,7 @@ testKind: {
 					stringField: string & =~"^[a-zA-Z_][a-zA-Z0-9_-]*$"
 				}
 			}
+			selectableFields: [".spec.stringField"]
 		}
 		"v2": {
 			codegen: ts: enabled: true
@@ -94,6 +95,7 @@ testKind: {
 					timeField: string & time.Time
 				}
 			}
+			selectableFields: [".spec.stringField", ".spec.intField"]
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
                 {
@@ -112,6 +114,7 @@ testKind: {
 					boolField: bool
 				}
 			}
+			selectableFields: [".spec.stringField", ".spec.intField", ".spec.boolField"]
 			mutation: operations: ["create","update"]
 			validation: operations: ["create","update"]
 			routes: {

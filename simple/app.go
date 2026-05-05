@@ -17,6 +17,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/logging"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/operator"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -206,6 +207,12 @@ type AppInformerConfig struct {
 	// InformerSupplier can be set to specify a function for creating informers for kinds.
 	// If left unset, DefaultInformerSupplier will be used.
 	InformerSupplier InformerSupplier
+	// RetryProcessorConfig enables the concurrent retry processor when non-nil.
+	// When set, a RetryProcessor is created and its Prometheus metrics are included in PrometheusCollectors().
+	RetryProcessorConfig *operator.RetryProcessorConfig
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics.
+	// Metrics are always created; an empty Namespace produces unprefixed metric names.
+	MetricsConfig metrics.Config
 }
 
 // AppManagedKind is a Kind and associated functionality used by an App.
@@ -307,8 +314,13 @@ func NewApp(config AppConfig) (*App, error) {
 	if clients == nil {
 		clients = k8s.NewClientRegistry(config.KubeConfig, k8s.DefaultClientConfig())
 	}
+	controllerCfg := operator.DefaultInformerControllerConfig()
+	if config.InformerConfig.RetryProcessorConfig != nil {
+		controllerCfg.RetryProcessorConfig = config.InformerConfig.RetryProcessorConfig
+	}
+	controllerCfg.MetricsConfig = config.InformerConfig.MetricsConfig
 	a := &App{
-		informerController: operator.NewInformerController(operator.DefaultInformerControllerConfig()),
+		informerController: operator.NewInformerController(controllerCfg),
 		runner:             app.NewMultiRunner(),
 		clientGenerator:    clients,
 		kinds:              make(map[string]AppManagedKind),
@@ -407,7 +419,7 @@ func (a *App) ValidateManifest(manifest app.ManifestData) error {
 
 // ManagedKinds returns a slice of all Kinds managed by this App
 func (a *App) ManagedKinds() []resource.Kind {
-	kinds := make([]resource.Kind, 0)
+	kinds := make([]resource.Kind, 0, len(a.kinds))
 	for _, k := range a.kinds {
 		kinds = append(kinds, k.Kind)
 	}
@@ -417,6 +429,8 @@ func (a *App) ManagedKinds() []resource.Kind {
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
 // added via AddRunnable. The returned resource.Runnable also implements metrics.Provider, allowing the caller
 // to gather prometheus.Collector objects used by all underlying runners.
+// PrometheusCollectors returns all Collectors from this Runner, and only one or the other should be used
+// to avoid duplicate metric registration.
 func (a *App) Runner() app.Runnable {
 	return a.runner
 }
@@ -543,12 +557,15 @@ func (a *App) RegisterKindConverter(groupKind schema.GroupKind, converter k8s.Co
 }
 
 // PrometheusCollectors implements metrics.Provider and returns prometheus collectors used by the app for exposing metrics
+// as well as all collectors that are part of all underlying runner logic, such as the runner returned by Runner().
+// Attempting to register the Collectors returned by Runner().PrometheusCollectors in addition to the Collectors
+// returned by this function will result in duplicate metrics.
 func (a *App) PrometheusCollectors() []prometheus.Collector {
-	return a.collectors
+	return append(a.collectors, a.runner.PrometheusCollectors()...)
 }
 
 func (a *App) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0) //nolint:prealloc
 
 	checks = append(checks, a.runner.HealthChecks()...)
 	checks = append(checks, a.informerController.HealthChecks()...)

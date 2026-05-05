@@ -26,14 +26,31 @@ var (
                 }{{ range .OptionalFieldsInPath }}
                 if cast.{{$root.ToObjectPath .}} == nil {
                     return "", nil
-                }{{ end }}
+                }{{ end }}{{ if .Union }}{{ $u := .Union }}{{ $f := . }}{{ if $u.UnionOptional }}
+                if cast.{{$root.ToObjectPath $u.UnionFieldPath}} == nil {
+                    return "", nil
+                }{{ end }}{{ range $u.Variants }}{{ if .ConstantValue }}
+                if cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}} != nil {
+                    return "{{.ConstantValue}}", nil
+                }{{ else }}
+                if cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}} != nil {{"{"}}{{ if .FieldInVariantOptional }}
+                    if cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}} != nil {{"{"}}{{ if eq $f.Type "string" }}
+                        return string(*cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}}), nil{{ else if eq $f.Type "int" }}
+                        return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}}), nil{{ else }}
+                        return fmt.Sprintf("%v", *cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}}), nil{{ end }}
+                    }{{ else }}{{ if eq $f.Type "string" }}
+                    return string(cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}}), nil{{ else if eq $f.Type "int" }}
+                    return fmt.Sprintf("%d", cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}}), nil{{ else }}
+                    return fmt.Sprintf("%v", cast.{{$root.ToObjectPath $u.UnionFieldPath}}.{{.VariantField}}.{{.FieldInVariant}}), nil{{ end }}{{ end }}
+                }{{ end }}{{ end }}
+                return "", nil{{ else }}
                 {{ if .Optional }}{{ if eq .Type "string" }}
-                return *cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
+                return string(*cast.{{$root.ToObjectPath .Field}}), nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", *cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
                 return fmt.Sprintf("%v", *cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ else }}{{ if eq .Type "string" }}
-                return cast.{{$root.ToObjectPath .Field}}, nil{{ else if eq .Type "int" }}
+                return string(cast.{{$root.ToObjectPath .Field}}), nil{{ else if eq .Type "int" }}
                 return fmt.Sprintf("%d", cast.{{$root.ToObjectPath .Field}}), nil{{ else }}
-                return fmt.Sprintf("%v", cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ end }}
+                return fmt.Sprintf("%v", cast.{{$root.ToObjectPath .Field}}), nil{{ end }}{{ end }}{{ end }}
             },
         },
         {{ end }} }){{ end }})

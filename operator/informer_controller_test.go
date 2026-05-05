@@ -10,10 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -787,7 +790,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 				continue
 			}
 			// Check that the time since the last call is not less than (retry attempt)^2 seconds. Retry attempt is attempt-1 (as we're tracking attempts including the first one in this test)
-			assert.GreaterOrEqual(t, time.Now().Sub(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
+			assert.GreaterOrEqual(t, time.Since(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
 		}
 	}()
 	updateWG := sync.WaitGroup{}
@@ -801,7 +804,7 @@ func TestInformerController_Run_BackoffRetry(t *testing.T) {
 				continue
 			}
 			// Check that the time since the last call is not less than (retry attempt)^2 seconds. Retry attempt is attempt-1 (as we're tracking attempts including the first one in this test)
-			assert.GreaterOrEqual(t, time.Now().Sub(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
+			assert.GreaterOrEqual(t, time.Since(tpl.lastAttempt), time.Duration(math.Pow(2, float64(tpl.attempt-1)))*baseInterval-jitter)
 		}
 	}()
 
@@ -1393,4 +1396,87 @@ func TestInformerController_Run_WithRetryProcessorDequeue(t *testing.T) {
 		time.Sleep(200 * time.Millisecond)
 		assert.Equal(t, int64(1), addCalls.Load(), "add retry should have been dequeued by update")
 	})
+}
+
+func TestInformerController_PrometheusCollectors(t *testing.T) {
+	c := NewInformerController(InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+	})
+	collectors := c.PrometheusCollectors()
+	assert.ElementsMatch(t, []prometheus.Collector{
+		c.totalEvents,
+		c.reconcileLatency,
+		c.inflightEvents,
+		c.inflightActions,
+		c.reconcilerLatency,
+		c.watcherLatency,
+		c.reconcilerErrors,
+		c.watcherErrors,
+	}, collectors)
+}
+
+func TestInformerController_Metrics_ReconcilerErrors(t *testing.T) {
+	kind := "foo"
+	inf := &testInformer{}
+	c := NewInformerController(InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+		// No RetryPolicy so errors are dropped after first attempt — keeps the test simple.
+		RetryPolicy: func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+	})
+	c.AddReconciler(&SimpleReconciler{
+		ReconcileFunc: func(_ context.Context, _ ReconcileRequest) (ReconcileResult, error) {
+			return ReconcileResult{}, errors.New("reconcile error")
+		},
+	}, kind)
+	c.AddInformer(inf, kind)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.Run(ctx)
+
+	inf.FireAdd(context.Background(), emptyObject)
+
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.reconcilerErrors, string(ResourceActionCreate), ""))
+}
+
+func TestInformerController_Metrics_WatcherErrors(t *testing.T) {
+	kind := "foo"
+	inf := &testInformer{}
+	c := NewInformerController(InformerControllerConfig{
+		MetricsConfig: metrics.DefaultConfig("test"),
+		RetryPolicy:   func(_ error, _ int) (bool, time.Duration) { return false, 0 },
+	})
+	c.AddWatcher(&SimpleWatcher{
+		AddFunc: func(_ context.Context, _ resource.Object) error {
+			return errors.New("watcher add error")
+		},
+		UpdateFunc: func(_ context.Context, _, _ resource.Object) error {
+			return errors.New("watcher update error")
+		},
+		DeleteFunc: func(_ context.Context, _ resource.Object) error {
+			return errors.New("watcher delete error")
+		},
+	}, kind)
+	c.AddInformer(inf, kind)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go c.Run(ctx)
+
+	inf.FireAdd(context.Background(), emptyObject)
+	inf.FireUpdate(context.Background(), emptyObject, emptyObject)
+	inf.FireDelete(context.Background(), emptyObject)
+
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.watcherErrors, string(ResourceActionCreate), ""))
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.watcherErrors, string(ResourceActionUpdate), ""))
+	assert.Equal(t, float64(1), counterValueFromVec(t, c.watcherErrors, string(ResourceActionDelete), ""))
+}
+
+func counterValueFromVec(t *testing.T, cv *prometheus.CounterVec, labelValues ...string) float64 {
+	t.Helper()
+	m, err := cv.GetMetricWithLabelValues(labelValues...)
+	require.NoError(t, err)
+	var pb dto.Metric
+	require.NoError(t, m.Write(&pb))
+	return pb.GetCounter().GetValue()
 }

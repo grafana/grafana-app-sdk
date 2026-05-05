@@ -11,8 +11,9 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/grafana/codejen"
 	"golang.org/x/tools/imports"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -48,7 +49,7 @@ func (*CustomRouteGoTypesJenny) JennyName() string {
 
 //nolint:gocognit
 func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for _, version := range appManifest.Versions() {
 		for _, kind := range version.Kinds() {
 			var openAPINamer func(string) string
@@ -117,7 +118,7 @@ func (c *CustomRouteGoTypesJenny) Generate(appManifest codegen.AppManifest) (cod
 }
 
 func (c *CustomRouteGoTypesJenny) generateCustomRouteKinds(basePath string, packageName string, filenamePrefix string, customRoute codegen.CustomRoute, openAPINamer func(string) string) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	if !customRoute.Response.Exists() {
 		return nil, errors.New("custom route response is required")
 	}
@@ -200,7 +201,7 @@ func (c *CustomRouteGoTypesJenny) generateResponseTypes(customRoute codegen.Cust
 	if !customRoute.ResponseMetadata.TypeMeta && (customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.ObjectMeta) {
 		return nil, errors.New("TypeMeta must be true if ObjectMeta or ListMeta is true")
 	}
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	bodyName := typeName + "Body"
 	goGenTypeName := "Response"
 	if customRoute.ResponseMetadata.ListMeta || customRoute.ResponseMetadata.TypeMeta || customRoute.ResponseMetadata.ObjectMeta {

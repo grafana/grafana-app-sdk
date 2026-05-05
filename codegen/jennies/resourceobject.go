@@ -11,9 +11,10 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
-	"github.com/grafana/codejen"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -71,7 +72,7 @@ func (*ResourceObjectGenerator) JennyName() string {
 }
 
 func (r *ResourceObjectGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		openAPIName := ""
 		if r.OpenAPINamer != nil {
