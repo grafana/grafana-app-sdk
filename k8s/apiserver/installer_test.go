@@ -44,7 +44,7 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
 				return resource.Kind{}, false
 			},
-		})
+		}, AppInstallerOptions{})
 		require.Nil(t, err)
 		scheme := newScheme()
 		err = installer.AddToScheme(scheme)
@@ -67,7 +67,7 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
 				return TestKind, true
 			},
-		})
+		}, AppInstallerOptions{})
 		require.Nil(t, err)
 		scheme := newScheme()
 		err = installer.AddToScheme(scheme)
@@ -168,7 +168,7 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 			assert.Equal(t, "/foo", path)
 			return getFooResponse{}, true
 		},
-	})
+	}, AppInstallerOptions{})
 	require.Nil(t, err)
 	scheme := newScheme()
 	require.Nil(t, installer.AddToScheme(scheme))
@@ -206,7 +206,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
 				return TestKind, false
 			},
-		})
+		}, AppInstallerOptions{})
 		require.Nil(t, err)
 		err = installer.InstallAPIs(nil, nil)
 		assert.NotNil(t, err)
@@ -218,7 +218,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
 				return TestKind, false
 			},
-		})
+		}, AppInstallerOptions{})
 		require.Nil(t, err)
 		installer.scheme = newScheme()
 		err = installer.InstallAPIs(nil, nil)
@@ -231,7 +231,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
 				return TestKind, true
 			},
-		})
+		}, AppInstallerOptions{})
 		require.Nil(t, err)
 		err = installer.InstallAPIs(nil, nil)
 		assert.NotNil(t, err)
@@ -241,7 +241,7 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 
 func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
 	t.Run("no admission control", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		plugin := installer.AdmissionPlugin()
 		assert.Nil(t, plugin)
@@ -263,7 +263,7 @@ func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
 				}},
 			}},
 		}
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		plugin := installer.AdmissionPlugin()
 		assert.NotNil(t, plugin)
@@ -290,7 +290,7 @@ func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
 				}},
 			}},
 		}
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		plugin := installer.AdmissionPlugin()
 		assert.NotNil(t, plugin)
@@ -306,7 +306,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 	t.Run("error", func(t *testing.T) {
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, func(cfg app.Config) (app.App, error) {
 			return nil, errors.New("I AM ERROR")
-		}), app.Config{}, nil)
+		}), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		err = installer.InitializeApp(clientrest.Config{})
 		assert.Equal(t, errors.New("I AM ERROR"), err)
@@ -315,7 +315,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 	t.Run("already initialized", func(t *testing.T) {
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, func(cfg app.Config) (app.App, error) {
 			return nil, errors.New("I AM ERROR")
-		}), app.Config{}, nil)
+		}), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		installer.app = &MockApp{}
 		err = installer.InitializeApp(clientrest.Config{})
@@ -336,7 +336,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 			assert.Equal(t, rcfg, cfg.KubeConfig)
 			initCalled = true
 			return &MockApp{}, nil
-		}), app.Config{}, nil)
+		}), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		err = installer.InitializeApp(rcfg)
 		require.Nil(t, err)
@@ -346,7 +346,7 @@ func TestDefaultInstaller_InitializeApp(t *testing.T) {
 
 func TestDefaultInstaller_App(t *testing.T) {
 	t.Run("uninitialized", func(t *testing.T) {
-		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil)
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, nil), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		app, err := installer.App()
 		assert.Nil(t, app)
@@ -357,7 +357,7 @@ func TestDefaultInstaller_App(t *testing.T) {
 		mockApp := &MockApp{}
 		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{}), nil, func(cfg app.Config) (app.App, error) {
 			return mockApp, nil
-		}), app.Config{}, nil)
+		}), app.Config{}, nil, AppInstallerOptions{})
 		require.Nil(t, err)
 		err = installer.InitializeApp(clientrest.Config{})
 		require.Nil(t, err)
@@ -420,7 +420,7 @@ func TestDefaultInstaller_GroupVersions(t *testing.T) {
 
 	for idx, test := range tests {
 		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
-			installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(test.manifest), nil, nil), app.Config{}, nil)
+			installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(test.manifest), nil, nil), app.Config{}, nil, AppInstallerOptions{})
 			require.Nil(t, err)
 			assert.Equal(t, test.expected, installer.GroupVersions())
 		})
@@ -437,7 +437,7 @@ func TestDefaultInstaller_ManifestData(t *testing.T) {
 			}},
 		}},
 	}
-	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(data), nil, nil), app.Config{}, nil)
+	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(data), nil, nil), app.Config{}, nil, AppInstallerOptions{})
 	require.Nil(t, err)
 	assert.Equal(t, &data, installer.ManifestData())
 }
