@@ -236,10 +236,6 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 
 	// Metrics
 	if s.metricsExporter != nil {
-		if err := s.metricsExporter.RegisterCollectors(runner.PrometheusCollectors()...); err != nil {
-			return err
-		}
-
 		if err := s.metricsExporter.RegisterCollectors(a.PrometheusCollectors()...); err != nil {
 			return err
 		}

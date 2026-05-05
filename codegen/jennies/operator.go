@@ -31,7 +31,7 @@ func (*watcherJenny) JennyName() string {
 }
 
 func (w *watcherJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.PreferredVersionKinds(appManifest) {
 		if !kind.Codegen.Go.Enabled {
 			continue

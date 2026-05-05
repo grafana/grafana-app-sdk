@@ -6,6 +6,7 @@ package v2
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -13,7 +14,29 @@ import (
 // schema is unexported to prevent accidental overwrites
 var (
 	schemaTestKind = resource.NewSimpleSchema("testapp.ext.grafana.com", "v2", NewTestKind(), &TestKindList{}, resource.WithKind("TestKind"),
-		resource.WithPlural("testkinds"), resource.WithScope(resource.NamespacedScope), resource.WithTableColumns([]resource.TableColumn{{
+		resource.WithPlural("testkinds"), resource.WithScope(resource.NamespacedScope), resource.WithSelectableFields([]resource.SelectableField{resource.SelectableField{
+			FieldSelector: ".spec.stringField",
+			FieldValueFunc: func(o resource.Object) (string, error) {
+				cast, ok := o.(*TestKind)
+				if !ok {
+					return "", errors.New("provided object must be of type *TestKind")
+				}
+
+				return string(cast.Spec.StringField), nil
+			},
+		},
+			resource.SelectableField{
+				FieldSelector: ".spec.intField",
+				FieldValueFunc: func(o resource.Object) (string, error) {
+					cast, ok := o.(*TestKind)
+					if !ok {
+						return "", errors.New("provided object must be of type *TestKind")
+					}
+
+					return fmt.Sprintf("%d", cast.Spec.IntField), nil
+				},
+			},
+		}), resource.WithTableColumns([]resource.TableColumn{{
 			Name: "STRING FIELD", Type: "string", JSONPath: ".spec.stringField",
 			ValueFunc: func(o resource.Object) (any, error) {
 				cast, ok := o.(*TestKind)

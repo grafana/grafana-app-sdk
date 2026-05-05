@@ -67,6 +67,7 @@ type TableColumn struct {
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
 // but an implementation may require a relationship.
+//
 // Deprecated: Kinds are now favored over Schemas for usage.
 type SchemaGroup interface {
 	Schemas() []Schema
@@ -136,6 +137,7 @@ func (s *SimpleSchema) TableColumns() []TableColumn {
 }
 
 // SimpleSchemaGroup collects schemas with the same group and version
+//
 // Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 type SimpleSchemaGroup struct {
 	group   string
@@ -224,6 +226,7 @@ func NewSimpleSchema(group, version string, zeroVal Object, zeroList ListObject,
 }
 
 // NewSimpleSchemaGroup returns a new SimpleSchemaGroup
+//
 // Deprecated: Kinds are now favored over Schemas for usage. Use KindGroup instead.
 func NewSimpleSchemaGroup(group, version string) *SimpleSchemaGroup {
 	return &SimpleSchemaGroup{
