@@ -39,7 +39,7 @@ var (
 var appManifestData = app.ManifestData{
 	AppName:          "test-app",
 	AppDisplayName:   "test-app",
-	Group:            "testapp.ext.grafana.com",
+	Group:            "testapp.ext.grafana.app",
 	PreferredVersion: "v1",
 	Versions: []app.ManifestVersion{
 		{

@@ -66,7 +66,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.app", manifestData.AppName)
 	}
 
 	// Whether or not the schema is CRD-compatible determines which version of AppManifest to use.
@@ -136,7 +136,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.app", manifestData.AppName)
 	}
 
 	buf := bytes.Buffer{}

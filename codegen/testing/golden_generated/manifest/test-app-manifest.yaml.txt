@@ -13,7 +13,7 @@ spec:
       - watch
       group: foo.bar
       resource: foos
-  group: testapp.ext.grafana.com
+  group: testapp.ext.grafana.app
   operator:
     url: https://foo.bar:8443
     webhooks:

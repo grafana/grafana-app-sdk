@@ -5,7 +5,7 @@ metadata:
 spec:
   appDisplayName: custom-app
   appName: custom-app
-  group: customapp.ext.grafana.com
+  group: customapp.ext.grafana.app
   preferredVersion: v1-0
   roleBindings:
     admin:

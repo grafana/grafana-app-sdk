@@ -24,6 +24,9 @@ manifest: {
 	// appName is the unique name of your app. It is used to reference the app from other config objects,
 	// and to generate the group used by your app in the app platform API.
 	appName: "example"
+	// groupOverride pins this example's API group so the README curls keep working.
+	// Without it, the auto-generated group would be `example.ext.grafana.app`.
+	groupOverride: "example.ext.grafana.com"
 	// versions is a map of versions supported by your app. Version names should follow the format "v<integer>" or
 	// "v<integer>(alpha|beta)<integer>". Each version contains the kinds your app manages for that version.
 	// If your app needs access to kinds managed by another app, use permissions.accessKinds to allow your app access.
