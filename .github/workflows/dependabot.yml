@@ -33,7 +33,7 @@ jobs:
 
     - name: Generate GitHub App token
       id: generate_token
-      uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2
+      uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
       with:
         app-id: ${{ env.APP_ID }}
         private-key: ${{ env.PRIVATE_KEY }}
@@ -47,7 +47,7 @@ jobs:
         persist-credentials: true
 
     - name: Set go version
-      uses: actions/setup-go@19bb51245e9c80abacb2e91cc42b33fa478b8639 # v4
+      uses: actions/setup-go@7b8cf10d4e4a01d4992d18a89f4d7dc5a3e6d6f4 # v4
       with:
         go-version-file: go.mod
     
