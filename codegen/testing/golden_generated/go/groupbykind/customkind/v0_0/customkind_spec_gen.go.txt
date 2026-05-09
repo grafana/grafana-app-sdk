@@ -17,3 +17,9 @@ func NewSpec() *Spec {
 func (Spec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v0_0.Spec"
 }
+
+// CopyInto copies the object into another object
+func (o Spec) CopyInto(dst *Spec) {
+	dst.Field1 = o.Field1
+	dst.DeprecatedField = o.DeprecatedField
+}

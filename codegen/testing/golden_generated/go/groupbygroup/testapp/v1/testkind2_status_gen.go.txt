@@ -25,6 +25,22 @@ func (TestKind2statusOperatorState) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v1.TestKind2statusOperatorState"
 }
 
+// CopyInto copies the object into another object
+func (o TestKind2statusOperatorState) CopyInto(dst *TestKind2statusOperatorState) {
+	dst.LastEvaluation = o.LastEvaluation
+	dst.State = o.State
+	if o.DescriptiveState != nil {
+		tmp := *o.DescriptiveState
+		dst.DescriptiveState = &tmp
+	}
+	if o.Details != nil {
+		dst.Details = make(map[string]any)
+		for key, val := range o.Details {
+			dst.Details[key] = val
+		}
+	}
+}
+
 // +k8s:openapi-gen=true
 type TestKind2Status struct {
 	// operatorStates is a map of operator ID to operator state evaluations.
@@ -42,6 +58,24 @@ func NewTestKind2Status() *TestKind2Status {
 // OpenAPIModelName returns the OpenAPI model name for TestKind2Status.
 func (TestKind2Status) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v1.TestKind2Status"
+}
+
+// CopyInto copies the object into another object
+func (o TestKind2Status) CopyInto(dst *TestKind2Status) {
+	if o.OperatorStates != nil {
+		dst.OperatorStates = make(map[string]TestKind2statusOperatorState)
+		for key, val := range o.OperatorStates {
+			var mapVal TestKind2statusOperatorState
+			val.CopyInto(&mapVal)
+			dst.OperatorStates[key] = mapVal
+		}
+	}
+	if o.AdditionalFields != nil {
+		dst.AdditionalFields = make(map[string]any)
+		for key, val := range o.AdditionalFields {
+			dst.AdditionalFields[key] = val
+		}
+	}
 }
 
 // +k8s:openapi-gen=true

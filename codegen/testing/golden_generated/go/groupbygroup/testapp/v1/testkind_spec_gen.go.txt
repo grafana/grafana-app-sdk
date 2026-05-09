@@ -16,3 +16,8 @@ func NewTestKindSpec() *TestKindSpec {
 func (TestKindSpec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v1.TestKindSpec"
 }
+
+// CopyInto copies the object into another object
+func (o TestKindSpec) CopyInto(dst *TestKindSpec) {
+	dst.StringField = o.StringField
+}

@@ -28,6 +28,32 @@ func (InnerObject1) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.InnerObject1"
 }
 
+// CopyInto copies the object into another object
+func (o InnerObject1) CopyInto(dst *InnerObject1) {
+	dst.InnerField1 = o.InnerField1
+	if o.InnerField2 != nil {
+		dst.InnerField2 = make([]string, len(o.InnerField2))
+		copy(dst.InnerField2, o.InnerField2)
+	}
+	if o.InnerField3 != nil {
+		dst.InnerField3 = make([]InnerObject2, len(o.InnerField3))
+		for idx, val := range o.InnerField3 {
+			val.CopyInto(&dst.InnerField3[idx])
+		}
+	}
+	if o.InnerField4 != nil {
+		dst.InnerField4 = make([]map[string]any, len(o.InnerField4))
+		for idx, val := range o.InnerField4 {
+			if val != nil {
+				dst.InnerField4[idx] = make(map[string]any)
+				for key, val := range val {
+					dst.InnerField4[idx][key] = val
+				}
+			}
+		}
+	}
+}
+
 // +k8s:openapi-gen=true
 type InnerObject2 struct {
 	Name    string                 `json:"name"`
@@ -44,6 +70,17 @@ func NewInnerObject2() *InnerObject2 {
 // OpenAPIModelName returns the OpenAPI model name for InnerObject2.
 func (InnerObject2) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.InnerObject2"
+}
+
+// CopyInto copies the object into another object
+func (o InnerObject2) CopyInto(dst *InnerObject2) {
+	dst.Name = o.Name
+	if o.Details != nil {
+		dst.Details = make(map[string]any)
+		for key, val := range o.Details {
+			dst.Details[key] = val
+		}
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -65,6 +102,15 @@ func (Type1) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.Type1"
 }
 
+// CopyInto copies the object into another object
+func (o Type1) CopyInto(dst *Type1) {
+	dst.Group = o.Group
+	if o.Options != nil {
+		dst.Options = make([]string, len(o.Options))
+		copy(dst.Options, o.Options)
+	}
+}
+
 // +k8s:openapi-gen=true
 type Type2 struct {
 	Group   string                 `json:"group"`
@@ -83,6 +129,17 @@ func (Type2) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.Type2"
 }
 
+// CopyInto copies the object into another object
+func (o Type2) CopyInto(dst *Type2) {
+	dst.Group = o.Group
+	if o.Details != nil {
+		dst.Details = make(map[string]any)
+		for key, val := range o.Details {
+			dst.Details[key] = val
+		}
+	}
+}
+
 // +k8s:openapi-gen=true
 type RecursiveList struct {
 	Val  string         `json:"val"`
@@ -97,6 +154,15 @@ func NewRecursiveList() *RecursiveList {
 // OpenAPIModelName returns the OpenAPI model name for RecursiveList.
 func (RecursiveList) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.RecursiveList"
+}
+
+// CopyInto copies the object into another object
+func (o RecursiveList) CopyInto(dst *RecursiveList) {
+	dst.Val = o.Val
+	if o.Next != nil {
+		dst.Next = new(RecursiveList)
+		o.Next.CopyInto(dst.Next)
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -129,6 +195,29 @@ func NewSpec() *Spec {
 // OpenAPIModelName returns the OpenAPI model name for Spec.
 func (Spec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.Spec"
+}
+
+// CopyInto copies the object into another object
+func (o Spec) CopyInto(dst *Spec) {
+	dst.Field1 = o.Field1
+	o.Inner.CopyInto(&dst.Inner)
+	dst.Union = o.Union
+	if o.Map != nil {
+		dst.Map = make(map[string]Type2)
+		for key, val := range o.Map {
+			var mapVal Type2
+			val.CopyInto(&mapVal)
+			dst.Map[key] = mapVal
+		}
+	}
+	dst.Timestamp = o.Timestamp
+	dst.Enum = o.Enum
+	dst.I32 = o.I32
+	dst.I64 = o.I64
+	dst.BoolField = o.BoolField
+	dst.FloatField = o.FloatField
+	o.LinkedList.CopyInto(&dst.LinkedList)
+	dst.ExclusiveInt = o.ExclusiveInt
 }
 
 // +k8s:openapi-gen=true

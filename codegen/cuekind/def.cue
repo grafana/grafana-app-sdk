@@ -66,6 +66,8 @@ _kubeObjectMetadata: {
 	enableK8sPostProcessing: bool | *false
 	// Generate operator state code.
 	enableOperatorStatusGeneration: bool | *true
+	// Generate `CopyInto` methods on go struct types, and avoid using `resource.CopyObjectInto` and reflection for copies
+	enableGeneratedCopyCode: bool | *false
 }
 
 Config: {

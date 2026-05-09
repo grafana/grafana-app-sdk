@@ -28,6 +28,32 @@ func (CustomKindInnerObject1) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject1"
 }
 
+// CopyInto copies the object into another object
+func (o CustomKindInnerObject1) CopyInto(dst *CustomKindInnerObject1) {
+	dst.InnerField1 = o.InnerField1
+	if o.InnerField2 != nil {
+		dst.InnerField2 = make([]string, len(o.InnerField2))
+		copy(dst.InnerField2, o.InnerField2)
+	}
+	if o.InnerField3 != nil {
+		dst.InnerField3 = make([]CustomKindInnerObject2, len(o.InnerField3))
+		for idx, val := range o.InnerField3 {
+			val.CopyInto(&dst.InnerField3[idx])
+		}
+	}
+	if o.InnerField4 != nil {
+		dst.InnerField4 = make([]map[string]any, len(o.InnerField4))
+		for idx, val := range o.InnerField4 {
+			if val != nil {
+				dst.InnerField4[idx] = make(map[string]any)
+				for key, val := range val {
+					dst.InnerField4[idx][key] = val
+				}
+			}
+		}
+	}
+}
+
 // +k8s:openapi-gen=true
 type CustomKindInnerObject2 struct {
 	Name    string                 `json:"name"`
@@ -44,6 +70,17 @@ func NewCustomKindInnerObject2() *CustomKindInnerObject2 {
 // OpenAPIModelName returns the OpenAPI model name for CustomKindInnerObject2.
 func (CustomKindInnerObject2) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindInnerObject2"
+}
+
+// CopyInto copies the object into another object
+func (o CustomKindInnerObject2) CopyInto(dst *CustomKindInnerObject2) {
+	dst.Name = o.Name
+	if o.Details != nil {
+		dst.Details = make(map[string]any)
+		for key, val := range o.Details {
+			dst.Details[key] = val
+		}
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -65,6 +102,15 @@ func (CustomKindType1) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType1"
 }
 
+// CopyInto copies the object into another object
+func (o CustomKindType1) CopyInto(dst *CustomKindType1) {
+	dst.Group = o.Group
+	if o.Options != nil {
+		dst.Options = make([]string, len(o.Options))
+		copy(dst.Options, o.Options)
+	}
+}
+
 // +k8s:openapi-gen=true
 type CustomKindType2 struct {
 	Group   string                 `json:"group"`
@@ -83,6 +129,17 @@ func (CustomKindType2) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType2"
 }
 
+// CopyInto copies the object into another object
+func (o CustomKindType2) CopyInto(dst *CustomKindType2) {
+	dst.Group = o.Group
+	if o.Details != nil {
+		dst.Details = make(map[string]any)
+		for key, val := range o.Details {
+			dst.Details[key] = val
+		}
+	}
+}
+
 // +k8s:openapi-gen=true
 type CustomKindRecursiveList struct {
 	Val  string                   `json:"val"`
@@ -97,6 +154,15 @@ func NewCustomKindRecursiveList() *CustomKindRecursiveList {
 // OpenAPIModelName returns the OpenAPI model name for CustomKindRecursiveList.
 func (CustomKindRecursiveList) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindRecursiveList"
+}
+
+// CopyInto copies the object into another object
+func (o CustomKindRecursiveList) CopyInto(dst *CustomKindRecursiveList) {
+	dst.Val = o.Val
+	if o.Next != nil {
+		dst.Next = new(CustomKindRecursiveList)
+		o.Next.CopyInto(dst.Next)
+	}
 }
 
 // +k8s:openapi-gen=true
@@ -129,6 +195,29 @@ func NewCustomKindSpec() *CustomKindSpec {
 // OpenAPIModelName returns the OpenAPI model name for CustomKindSpec.
 func (CustomKindSpec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindSpec"
+}
+
+// CopyInto copies the object into another object
+func (o CustomKindSpec) CopyInto(dst *CustomKindSpec) {
+	dst.Field1 = o.Field1
+	o.Inner.CopyInto(&dst.Inner)
+	dst.Union = o.Union
+	if o.Map != nil {
+		dst.Map = make(map[string]CustomKindType2)
+		for key, val := range o.Map {
+			var mapVal CustomKindType2
+			val.CopyInto(&mapVal)
+			dst.Map[key] = mapVal
+		}
+	}
+	dst.Timestamp = o.Timestamp
+	dst.Enum = o.Enum
+	dst.I32 = o.I32
+	dst.I64 = o.I64
+	dst.BoolField = o.BoolField
+	dst.FloatField = o.FloatField
+	o.LinkedList.CopyInto(&dst.LinkedList)
+	dst.ExclusiveInt = o.ExclusiveInt
 }
 
 // +k8s:openapi-gen=true

@@ -65,6 +65,11 @@ type ResourceObjectGenerator struct {
 	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
 	// apiservers if using the default apiserver.AppInstaller.
 	OpenAPINamer func(OpenAPINamerInfo) string
+
+	// GoTypeCopyIntoFunction is the name of the "copy into" function for the go struct types that are subresources
+	// of the Object (spec, status, etc.). If left empty, the generated resource.Object will use resource.CopyObjectInto
+	// instead of calling a method on the subresource type for implementing DeepCopyObject.
+	GoTypeCopyIntoFunction string
 }
 
 func (*ResourceObjectGenerator) JennyName() string {
@@ -135,14 +140,15 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind,
 		typePrefix = exportField(kind.Kind)
 	}
 	md := templates.ResourceObjectTemplateMetadata{
-		Package:              pkg,
-		TypeName:             kind.Kind,
-		SpecTypeName:         typePrefix + "Spec",
-		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object
-		ObjectShortName:      "o",
-		Subresources:         make([]templates.SubresourceMetadata, 0),
-		CustomMetadataFields: customMetadataFields,
-		OpenAPIModelName:     openAPIName,
+		Package:               pkg,
+		TypeName:              kind.Kind,
+		SpecTypeName:          typePrefix + "Spec",
+		ObjectTypeName:        "Object", // Package is the machine name of the object, so this makes it machinename.Object
+		ObjectShortName:       "o",
+		Subresources:          make([]templates.SubresourceMetadata, 0),
+		CustomMetadataFields:  customMetadataFields,
+		OpenAPIModelName:      openAPIName,
+		SubresourceCopyMethod: r.GoTypeCopyIntoFunction,
 	}
 	it, err := kind.Schema.Fields()
 	if err != nil {

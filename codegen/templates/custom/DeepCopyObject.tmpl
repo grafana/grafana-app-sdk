@@ -1,0 +1,100 @@
+{{- define "print_type" -}}
+    {{- $type := index . 0 -}}
+    {{- $root := index . 1 -}}
+    {{- if $type.Ref -}}
+        {{- formatType $type -}}
+    {{- else if $type.Map -}}
+        map[{{- template "print_type" (arr $type.Map.IndexType $root) -}}]{{- template "print_type" (arr $type.Map.ValueType $root) -}}
+    {{- else if $type.Array -}}
+        []{{- template "print_type" (arr $type.Array.ValueType $root) -}}
+    {{- else if $type.Scalar }}
+        {{- $type.Scalar.ScalarKind -}}
+    {{- else -}}
+        any
+    {{- end -}}
+{{- end -}}
+{{- define "copy_type_statement" -}}
+    {{- $src := index . 0 -}}
+    {{- $dst := index . 1 -}}
+    {{- $type := index . 2 -}}
+    {{- $isPtr := index . 3 -}}
+    {{- $root := index . 4 -}}
+    {{- $resolved := $type|resolveRefs }}
+    {{- if $resolved.Struct -}}
+        {{- if $isPtr -}}
+            if {{ $src }} != nil {
+                {{ $dst }} = new({{ $type | formatType | dePointer }})
+                {{ $src }}.{{ copyFunctionName }}({{ $dst }})
+            }
+        {{- else -}}
+            {{ $src }}.{{ copyFunctionName }}(&{{ $dst }})
+        {{- end -}}
+    {{- else if $resolved.Array -}}
+        if {{ $src }} != nil {
+            {{ $dst }} = make({{ template "print_type" (arr $resolved $root) }}, len({{ $src }}))
+            {{- $resolvedArray := $resolved.Array.ValueType|resolveRefs -}}
+            {{- if or $resolvedArray.Struct $resolvedArray.Map $resolvedArray.Array }}
+                for idx, val := range {{ $src }} {
+                    {{ template "copy_type_statement" (arr "val" (concat $dst "[idx]") $resolved.Array.ValueType false $root) }}
+                }
+            {{- else }}
+            copy({{ $dst }}, {{ $src }})
+            {{- end }}
+        }
+    {{- else if $resolved.Map -}}
+        if {{ $src }} != nil {
+            {{ $dst }} = make({{ template "print_type" (arr $resolved $root) }})
+            {{- $mapValType := $resolved.Map.ValueType -}}
+            {{- $mapValResolved := $mapValType|resolveRefs -}}
+            {{- if and $mapValResolved.Struct (not $mapValType.Nullable) }}
+            for key, val := range {{ $src }} {
+                var mapVal {{ template "print_type" (arr $mapValType $root) }}
+                val.{{ copyFunctionName }}(&mapVal)
+                {{ $dst }}[key] = mapVal
+            }
+            {{- else if and $mapValResolved.Struct $mapValType.Nullable }}
+            // FIXME: this should be unreachable via cog+CUE, but is here just in case
+            for key, val := range {{ $src }} {
+                var mapVal {{ template "print_type" (arr $mapValType $root) }}
+                if val != nil {
+                    mapVal = new({{ $mapValType | formatType | dePointer }})
+                    val.{{ copyFunctionName }}(mapVal)
+                }
+                {{ $dst }}[key] = mapVal
+            }
+            {{- else }}
+            for key, val := range {{ $src }} {
+                {{ template "copy_type_statement" (arr "val" (concat $dst "[key]") $mapValType false $root) }}
+            }
+            {{- end }}
+        }
+    {{- else if $resolved.Disjunction -}}
+    // FIXME: This should never happen, disjunctions are not supported in go
+    {{- else if $resolved.Enum -}}
+    {{ $dst }} = {{ $src }}
+    {{- else if $resolved.Intersection -}}
+    // FIXME: This should never happen, intersections are not supported in go
+    {{- else -}}
+        {{- if $isPtr -}}
+        if {{ $src }} != nil {
+            tmp := *{{ $src }}
+            {{ $dst }} = &tmp
+        }
+        {{- else -}}
+        {{ $dst }} = {{ $src }}
+        {{- end -}}
+    {{- end }}
+{{- end -}}
+{{- define "object_copy_method" -}}
+{{ $obj := . }}
+{{ $objName := $obj.Name|formatObjectName }}
+{{- if $obj.Type.Struct -}}
+// {{ copyFunctionName }} copies the object into another object
+func (o {{ $objName }}) {{ copyFunctionName }}(dst *{{ $objName }}) {
+    {{- range $obj.Type.Struct.Fields -}}
+	    {{- $field := .Name|formatFieldName }}
+	    {{ template "copy_type_statement" (arr (concat "o." $field) (concat "dst." $field) .Type (not .Required) $obj) }}
+	{{- end -}}
+}
+{{- end -}}
+{{- end -}}

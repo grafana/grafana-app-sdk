@@ -71,6 +71,10 @@ type GoTypes struct {
 	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
 	// apiservers if using the default apiserver.AppInstaller.
 	OpenAPINamer func(OpenAPINamerInfo) string
+
+	// GenerateCopyCode dictates whether a `CopyInto` receiver method will be generated for each struct type.
+	// The `CopyInto` method copies the type into a pointer to an instance of the same type.
+	GenerateCopyCode bool
 }
 
 type OpenAPINamerInfo struct {
@@ -199,6 +203,7 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 			NamePrefix:                     cfg.NamePrefix,
 			AddKubernetesOpenAPIGenComment: g.AddKubernetesCodegen && (len(fieldName) != 1 || fieldName[0] != "metadata"),
 			AnyAsInterface:                 g.AnyAsInterface,
+			GenerateCopyCode:               g.GenerateCopyCode,
 		}, len(v.Path().Selectors())-(g.Depth-g.NamingDepth), namerFunc)
 		if err != nil {
 			return nil, fmt.Errorf("error converting schema path %s.%s to go type: %w", schemaPath.String(), fieldName, err)
@@ -236,6 +241,9 @@ type CUEGoConfig struct {
 
 	// NamePrefix prefixes all generated types with the provided NamePrefix
 	NamePrefix string
+
+	// GenerateCopyCode dictates whether struct go types will have a CopyInto receiver method generated for them
+	GenerateCopyCode bool
 }
 
 func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc func(string) string) ([]byte, error) {
@@ -277,6 +285,24 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 			CustomTemplatesFS: templates.GetCogTemplates(),
 			CustomTemplatesFuncs: map[string]any{
 				"namerFunc": namerFunc,
+				"arr": func(items ...any) []any {
+					return items
+				},
+				"concat": func(items ...string) string {
+					return strings.Join(items, "")
+				},
+				"dePointer": func(s string) string {
+					if len(s) > 1 && s[0] == '*' {
+						return s[1:]
+					}
+					return s
+				},
+				"generateCopyCode": func() bool {
+					return cfg.GenerateCopyCode
+				},
+				"copyFunctionName": func() string {
+					return "CopyInto" // TODO: is there a reason to make this customizable?
+				},
 			},
 		})
 

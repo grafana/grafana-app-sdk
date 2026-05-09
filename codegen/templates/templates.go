@@ -106,14 +106,15 @@ var (
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
 type ResourceObjectTemplateMetadata struct {
-	Package              string
-	TypeName             string
-	SpecTypeName         string
-	ObjectTypeName       string
-	ObjectShortName      string
-	OpenAPIModelName     string
-	Subresources         []SubresourceMetadata
-	CustomMetadataFields []ObjectMetadataField
+	Package               string
+	TypeName              string
+	SpecTypeName          string
+	ObjectTypeName        string
+	ObjectShortName       string
+	OpenAPIModelName      string
+	SubresourceCopyMethod string
+	Subresources          []SubresourceMetadata
+	CustomMetadataFields  []ObjectMetadataField
 }
 
 // SubresourceMetadata is subresource information used in templates
