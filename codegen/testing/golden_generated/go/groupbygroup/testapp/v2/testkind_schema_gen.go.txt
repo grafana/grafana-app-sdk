@@ -36,6 +36,16 @@ var (
 					return fmt.Sprintf("%d", cast.Spec.IntField), nil
 				},
 			},
+		}), resource.WithTableColumns([]resource.TableColumn{{
+			Name: "STRING FIELD", Type: "string", JSONPath: ".spec.stringField",
+			ValueFunc: func(o resource.Object) (any, error) {
+				cast, ok := o.(*TestKind)
+				if !ok {
+					return nil, errors.New("provided object must be of type *TestKind")
+				}
+				return cast.Spec.StringField, nil
+			},
+		},
 		}))
 	kindTestKind = resource.Kind{
 		Schema: schemaTestKind,
