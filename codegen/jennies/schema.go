@@ -153,6 +153,8 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 // buildUnionFieldAccess returns metadata for accessing field through a CUE
 // disjunction. Concrete-string variant fields become ConstantValue (resolved at
 // codegen); typed variant fields become FieldInVariant (read at runtime).
+//
+//nolint:revive
 func buildUnionFieldAccess(val cue.Value, parts []string, field string, unionOptional bool) (*templates.UnionFieldAccess, string, error) {
 	variants, hadNull := disjunctionVariants(val)
 	if hadNull && !unionOptional {
@@ -295,6 +297,11 @@ func variantGoName(variant cue.Value) string {
 		if s, err := fv.String(); err == nil {
 			return upperCamelCase(iter.Selector().String()) + upperCamelCase(s)
 		}
+	}
+	// Return the type name
+	if _, ref := variant.ReferencePath(); len(ref.Selectors()) > 0 {
+		sels := ref.Selectors()
+		return sels[len(sels)-1].String()[1:]
 	}
 	return ""
 }
