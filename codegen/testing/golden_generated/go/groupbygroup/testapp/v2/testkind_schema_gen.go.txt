@@ -36,6 +36,39 @@ var (
 					return fmt.Sprintf("%d", cast.Spec.IntField), nil
 				},
 			},
+			resource.SelectableField{
+				FieldSelector: ".spec.unionNull.str",
+				FieldValueFunc: func(o resource.Object) (string, error) {
+					cast, ok := o.(*TestKind)
+					if !ok {
+						return "", errors.New("provided object must be of type *TestKind")
+					}
+					if cast.Spec.UnionNull == nil {
+						return "", nil
+					}
+
+					return string(cast.Spec.UnionNull.Str), nil
+				},
+			},
+			resource.SelectableField{
+				FieldSelector: ".spec.unionNull2.str",
+				FieldValueFunc: func(o resource.Object) (string, error) {
+					cast, ok := o.(*TestKind)
+					if !ok {
+						return "", errors.New("provided object must be of type *TestKind")
+					}
+					if cast.Spec.UnionNull2 == nil {
+						return "", nil
+					}
+					if cast.Spec.UnionNull2.Def != nil {
+						return string(cast.Spec.UnionNull2.Def.Str), nil
+					}
+					if cast.Spec.UnionNull2.Def2 != nil {
+						return string(cast.Spec.UnionNull2.Def2.Str), nil
+					}
+					return "", nil
+				},
+			},
 		}))
 	kindTestKind = resource.Kind{
 		Schema: schemaTestKind,

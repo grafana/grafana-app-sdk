@@ -93,6 +93,59 @@ spec:
               timeField:
                 format: date-time
                 type: string
+              unionNull:
+                allOf:
+                - required:
+                  - str
+                  - i
+                description: This generates a normal go pointer field, but needs to
+                  be handled correctly as a selectable field, as the schema logic
+                  registers it as a disjunction
+                nullable: true
+                properties:
+                  i:
+                    type: integer
+                  str:
+                    type: string
+                type: object
+              unionNull2:
+                description: null variant should be ignore in disjunction when generating
+                  the selectable field
+                oneOf:
+                - not:
+                    anyOf:
+                    - required:
+                      - b
+                  required:
+                  - str
+                  - i
+                - not:
+                    anyOf:
+                    - required:
+                      - i
+                  required:
+                  - str
+                  - b
+                - not:
+                    anyOf:
+                    - required:
+                      - str
+                    - required:
+                      - i
+                    - required:
+                      - str
+                    - required:
+                      - b
+                properties:
+                  b:
+                    type: boolean
+                  i:
+                    type: integer
+                  str:
+                    type: string
+                type:
+                - object
+                - "null"
             required:
             - stringField
             - intField
@@ -143,6 +196,8 @@ spec:
     selectableFields:
     - jsonPath: .spec.stringField
     - jsonPath: .spec.intField
+    - jsonPath: .spec.unionNull.str
+    - jsonPath: .spec.unionNull2.str
     served: true
     storage: false
     subresources:
