@@ -53,6 +53,7 @@ integrationV1: {
 			spec: {
 				title:    string
 				routing?: #Routing
+				nullable?: #DirectRoute | null // Union with null should collapse to just optional in go
 			}
 		}
 		selectableFields: [
@@ -60,6 +61,7 @@ integrationV1: {
 			".spec.routing.type",
 			".spec.routing.target",
 			".spec.routing.tree",
+			".spec.nullable.target",
 		]
 	}]
 	routes: {

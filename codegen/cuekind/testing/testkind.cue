@@ -89,13 +89,23 @@ testKind: {
 		"v2": {
 			codegen: ts: enabled: true
 			schema: {
+				#Def: {
+					str: string
+					i: int
+				}
+				#Def2: {
+					str: string
+					b: bool
+				}
 				spec: {
 					stringField: string
 					intField: int64
 					timeField: string & time.Time
+					unionNull?: #Def | null // This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction
+					unionNull2?: #Def | #Def2 | null // null variant should be ignore in disjunction when generating the selectable field
 				}
 			}
-			selectableFields: [".spec.stringField", ".spec.intField"]
+			selectableFields: [".spec.stringField", ".spec.intField", ".spec.unionNull.str", ".spec.unionNull2.str"]
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
                 {

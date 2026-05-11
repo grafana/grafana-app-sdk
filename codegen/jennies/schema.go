@@ -111,6 +111,18 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 				return nil, fmt.Errorf("invalid selectable field '%s': %w", s, err)
 			}
 			if union != nil {
+				// Unions with one variant mean there was a union with a single element and the `null` literal,
+				// this doesn't create a go type with union members as fields, so report this as a regular nullable field
+				if union.CollapsedNullToSingle {
+					fields = append(fields, templates.SchemaMetadataSelectableField{
+						Field:                s,
+						Optional:             union.Variants[0].FieldInVariantOptional,
+						Type:                 typeStr,
+						OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, fieldPath),
+					})
+					continue
+				}
+
 				fields = append(fields, templates.SchemaMetadataSelectableField{
 					Field:                s,
 					Optional:             true,
@@ -141,15 +153,21 @@ func (*SchemaGenerator) getSelectableFields(kind *codegen.VersionedKind) ([]temp
 // buildUnionFieldAccess returns metadata for accessing field through a CUE
 // disjunction. Concrete-string variant fields become ConstantValue (resolved at
 // codegen); typed variant fields become FieldInVariant (read at runtime).
+//
+//nolint:revive
 func buildUnionFieldAccess(val cue.Value, parts []string, field string, unionOptional bool) (*templates.UnionFieldAccess, string, error) {
-	variants := disjunctionVariants(val)
+	variants, hadNull := disjunctionVariants(val)
+	if hadNull && !unionOptional {
+		return nil, "", fmt.Errorf("disjunction at %q includes null but the field is required; declare it optional (use ?:) to allow null", strings.Join(parts, "."))
+	}
 	if len(variants) == 0 {
 		return nil, "", nil
 	}
 
 	access := &templates.UnionFieldAccess{
-		UnionFieldPath: strings.Join(parts, "."),
-		UnionOptional:  unionOptional,
+		UnionFieldPath:        strings.Join(parts, "."),
+		UnionOptional:         unionOptional,
+		CollapsedNullToSingle: hadNull && len(variants) == 1,
 	}
 
 	cuePath := cue.MakePath(cue.Str(field))
@@ -195,21 +213,23 @@ func buildUnionFieldAccess(val cue.Value, parts []string, field string, unionOpt
 	return access, typeStr, nil
 }
 
-// disjunctionVariants returns the OrOp branches of a CUE disjunction value.
-// In the post-Decode codegen pipeline the value often arrives wrapped in an
-// AndOp (intersection with a manifest open-struct constraint) whose operand
-// still carries the ReferencePath to the named disjunction; unwrap AndOp and
-// follow references before falling back to evaluation.
-func disjunctionVariants(v cue.Value) []cue.Value {
-	if variants := variantsFromValue(v); len(variants) > 0 {
-		return variants
+// disjunctionVariants returns the OrOp branches of a CUE disjunction value,
+// with any `null` literal variants filtered out; hadNull reports whether a
+// null variant was present. In the post-Decode codegen pipeline the value
+// often arrives wrapped in an AndOp (intersection with a manifest open-struct
+// constraint) whose operand still carries the ReferencePath to the named
+// disjunction; unwrap AndOp and follow references before falling back to
+// evaluation.
+func disjunctionVariants(v cue.Value) (variants []cue.Value, hadNull bool) {
+	if raw := variantsFromValue(v); len(raw) > 0 {
+		return filterNullVariants(raw)
 	}
 	if eval := v.Eval(); eval.Err() == nil && !sameValue(eval, v) {
-		if variants := variantsFromValue(eval); len(variants) > 0 {
-			return variants
+		if raw := variantsFromValue(eval); len(raw) > 0 {
+			return filterNullVariants(raw)
 		}
 	}
-	return nil
+	return nil, false
 }
 
 func variantsFromValue(v cue.Value) []cue.Value {
@@ -233,6 +253,23 @@ func variantsFromValue(v cue.Value) []cue.Value {
 		}
 	}
 	return nil
+}
+
+// filterNullVariants drops `null` literal variants from a disjunction's
+// branches. A `T | null` disjunction conveys "field is optional"; cog
+// lowers it to a nullable Go pointer and the variant itself has no Go
+// counterpart, so it cannot participate in a typed variant access.
+func filterNullVariants(variants []cue.Value) ([]cue.Value, bool) {
+	hadNull := false
+	out := variants[:0:0]
+	for _, variant := range variants {
+		if variant.IncompleteKind() == cue.NullKind {
+			hadNull = true
+			continue
+		}
+		out = append(out, variant)
+	}
+	return out, hadNull
 }
 
 // sameValue guards against ReferencePath resolving back to v itself.
@@ -260,6 +297,11 @@ func variantGoName(variant cue.Value) string {
 		if s, err := fv.String(); err == nil {
 			return upperCamelCase(iter.Selector().String()) + upperCamelCase(s)
 		}
+	}
+	// Return the type name
+	if _, ref := variant.ReferencePath(); len(ref.Selectors()) > 0 {
+		sels := ref.Selectors()
+		return sels[len(sels)-1].String()[1:]
 	}
 	return ""
 }

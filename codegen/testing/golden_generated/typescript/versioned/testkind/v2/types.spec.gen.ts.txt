@@ -1,9 +1,33 @@
 // Code generated - EDITING IS FUTILE. DO NOT EDIT.
 
+export interface Def {
+	str: string;
+	i: number;
+}
+
+export const defaultDef = (): Def => ({
+	str: "",
+	i: 0,
+});
+
+export interface Def2 {
+	str: string;
+	b: boolean;
+}
+
+export const defaultDef2 = (): Def2 => ({
+	str: "",
+	b: false,
+});
+
 export interface Spec {
 	stringField: string;
 	intField: number;
 	timeField: string;
+	// This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction
+	unionNull?: Def | null;
+	// null variant should be ignore in disjunction when generating the selectable field
+	unionNull2?: Def | Def2 | null;
 }
 
 export const defaultSpec = (): Spec => ({
