@@ -38,16 +38,18 @@ func TestParseManifestTestApp(t *testing.T) {
 	assert.Equal(t, []string{"test-app:reader"}, props.RoleBindings.Viewer)
 
 	versions := manifest.Versions()
-	require.Len(t, versions, 3)
+	require.Len(t, versions, 4)
 	assert.Equal(t, "v1", versions[0].Name())
 	assert.Equal(t, "v2", versions[1].Name())
 	assert.Equal(t, "v3", versions[2].Name())
+	assert.Equal(t, "v4", versions[3].Name())
 
 	// v1 should have 2 kinds (testKind + testKind2)
 	assert.Len(t, versions[0].Kinds(), 2)
-	// v2 and v3 should each have 1 kind (testKind only)
+	// v2, v3, and v4 should each have 1 kind (testKind only)
 	assert.Len(t, versions[1].Kinds(), 1)
 	assert.Len(t, versions[2].Kinds(), 1)
+	assert.Len(t, versions[3].Kinds(), 1)
 }
 
 func TestParseManifestKindProperties(t *testing.T) {
@@ -79,6 +81,11 @@ func TestParseManifestKindProperties(t *testing.T) {
 	require.Len(t, v2Kind.AdditionalPrinterColumns, 1)
 	assert.Equal(t, "STRING FIELD", v2Kind.AdditionalPrinterColumns[0].Name)
 	assert.Equal(t, ".spec.stringField", v2Kind.AdditionalPrinterColumns[0].JSONPath)
+
+	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
+	v4Kind := versions[3].Kinds()[0]
+	assert.Equal(t, "TestKind", v4Kind.Kind)
+	assert.Equal(t, []string{".spec.spec.name"}, v4Kind.SelectableFields)
 }
 
 func TestParseManifestRoutes(t *testing.T) {

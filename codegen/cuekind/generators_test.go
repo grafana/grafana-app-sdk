@@ -81,7 +81,8 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(sameGroupKinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))
+		// Prior: 23 for v1–v3; +6 for v4 TestKind (object, spec, status, schema, codec, constants)
+		assert.Len(t, files, 29, "should be 29 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")
 	})
@@ -140,8 +141,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 15 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), the resource clients for v1-v3 (3), and the version-level client for v3 routes (1)
-		require.Len(t, files, 15, "should be 15 files generated, got %d", len(files))
+		// 16 -> prior 15 (manifest, reconcile/search/foobar routes + v1–v3 clients + v3 route client) + v4 resource client (1)
+		require.Len(t, files, 16, "should be 16 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
