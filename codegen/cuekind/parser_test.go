@@ -85,7 +85,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
 	v4Kind := versions[3].Kinds()[0]
 	assert.Equal(t, "TestKind", v4Kind.Kind)
-	assert.Equal(t, []string{".spec.spec.name"}, v4Kind.SelectableFields)
+	assert.Equal(t, []string{".spec.union.spec.name"}, v4Kind.SelectableFields)
 }
 
 func TestParseManifestRoutes(t *testing.T) {

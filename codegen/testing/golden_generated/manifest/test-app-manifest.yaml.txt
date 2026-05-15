@@ -473,8 +473,29 @@ spec:
       plural: TestKinds
       schema:
         spec:
+          properties:
+            union:
+              oneOf:
+              - required:
+                - kind
+                - spec
+              - required:
+                - kind
+                - spec
+              properties:
+                kind:
+                  type: string
+                spec:
+                  properties:
+                    name:
+                      type: string
+                  required:
+                  - name
+                  type: object
+              type: object
+          required:
+          - union
           type: object
-          x-kubernetes-preserve-unknown-fields: true
         status:
           properties:
             additionalFields:
@@ -515,6 +536,6 @@ spec:
           type: object
       scope: Namespaced
       selectableFields:
-      - .spec.spec.name
+      - .spec.union.spec.name
     name: v4
     served: true

@@ -394,8 +394,45 @@
                     "openAPIV3Schema": {
                         "properties": {
                             "spec": {
-                                "type": "object",
-                                "x-kubernetes-preserve-unknown-fields": true
+                                "properties": {
+                                    "union": {
+                                        "oneOf": [
+                                            {
+                                                "required": [
+                                                    "kind",
+                                                    "spec"
+                                                ]
+                                            },
+                                            {
+                                                "required": [
+                                                    "kind",
+                                                    "spec"
+                                                ]
+                                            }
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "spec": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name"
+                                                ],
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "union"
+                                ],
+                                "type": "object"
                             },
                             "status": {
                                 "properties": {
@@ -454,7 +491,7 @@
                 },
                 "selectableFields": [
                     {
-                        "jsonPath": ".spec.spec.name"
+                        "jsonPath": ".spec.union.spec.name"
                     }
                 ]
             }

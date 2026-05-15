@@ -181,7 +181,7 @@ testKind: {
 				}
 			}
 		}
-		// v4: selectable field path crosses a union parent (same pattern as dashboard VariableKind: outer spec is a disjunction, inner spec.name).
+		// v4: selectable field crosses a union nested under spec (spec.union is the disjunction; path .spec.union.spec.name).
 		"v4": {
 			schema: {
 				#UnionVariantA: {
@@ -192,9 +192,11 @@ testKind: {
 					kind: "VariantB"
 					spec: {name: string}
 				}
-				spec: #UnionVariantA | #UnionVariantB
+				spec: {
+					union: #UnionVariantA | #UnionVariantB
+				}
 			}
-			selectableFields: [".spec.spec.name"]
+			selectableFields: [".spec.union.spec.name"]
 			validation: operations: ["create", "update"]
 		}
 	}

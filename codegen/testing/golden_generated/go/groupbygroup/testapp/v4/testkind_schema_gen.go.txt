@@ -14,17 +14,17 @@ import (
 var (
 	schemaTestKind = resource.NewSimpleSchema("testapp.ext.grafana.app", "v4", NewTestKind(), &TestKindList{}, resource.WithKind("TestKind"),
 		resource.WithPlural("testkinds"), resource.WithScope(resource.NamespacedScope), resource.WithSelectableFields([]resource.SelectableField{resource.SelectableField{
-			FieldSelector: ".spec.spec.name",
+			FieldSelector: ".spec.union.spec.name",
 			FieldValueFunc: func(o resource.Object) (string, error) {
 				cast, ok := o.(*TestKind)
 				if !ok {
 					return "", errors.New("provided object must be of type *TestKind")
 				}
-				if cast.Spec.UnionVariantA != nil {
-					return string(cast.Spec.UnionVariantA.Spec.Name), nil
+				if cast.Spec.Union.UnionVariantA != nil {
+					return string(cast.Spec.Union.UnionVariantA.Spec.Name), nil
 				}
-				if cast.Spec.UnionVariantB != nil {
-					return string(cast.Spec.UnionVariantB.Spec.Name), nil
+				if cast.Spec.Union.UnionVariantB != nil {
+					return string(cast.Spec.Union.UnionVariantB.Spec.Name), nil
 				}
 				return "", nil
 			},
