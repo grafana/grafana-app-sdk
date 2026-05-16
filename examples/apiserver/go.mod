@@ -8,10 +8,10 @@ require (
 	github.com/grafana/grafana-app-sdk v0.49.0
 	github.com/grafana/grafana-app-sdk/logging v0.54.1
 	k8s.io/apimachinery v0.36.1
-	k8s.io/apiserver v0.36.0
+	k8s.io/apiserver v0.36.1
 	k8s.io/client-go v0.36.1
-	k8s.io/component-base v0.36.0
-	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
+	k8s.io/component-base v0.36.1
+	k8s.io/kube-openapi v0.0.0-20260512234627-ef417d054102
 )
 
 require (
@@ -125,7 +125,7 @@ require (
 	k8s.io/api v0.36.1 // indirect
 	k8s.io/apiextensions-apiserver v0.36.0 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	k8s.io/kms v0.36.0 // indirect
+	k8s.io/kms v0.36.1 // indirect
 	k8s.io/streaming v0.36.1 // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.34.0 // indirect
