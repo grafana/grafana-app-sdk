@@ -1289,6 +1289,7 @@ func TestMetricsWatchWrapper(t *testing.T) {
 				watchErrorsTotal: watchErrorsTotal,
 				ctx:              ctx,
 				ch:               make(chan watch.Event, 10),
+				stopCh:           make(chan struct{}, 1),
 			}
 
 			// Start reading from ResultChan
@@ -1368,6 +1369,7 @@ func TestMetricsWatchWrapper_StopPropagation(t *testing.T) {
 		watchEventsTotal: watchEventsTotal,
 		ctx:              ctx,
 		ch:               make(chan watch.Event, 10),
+		stopCh:           make(chan struct{}, 1),
 	}
 
 	// Call Stop on wrapper
@@ -1390,6 +1392,7 @@ func TestMetricsWatchWrapper_NoMetrics(t *testing.T) {
 		watchErrorsTotal: nil,
 		ctx:              ctx,
 		ch:               make(chan watch.Event, 10),
+		stopCh:           make(chan struct{}, 1),
 	}
 
 	// Start reading from ResultChan
@@ -1430,7 +1433,7 @@ func TestWatchResponse_KubernetesWatch_WithMetrics(t *testing.T) {
 	wr := &WatchResponse{
 		watch:            mockW,
 		ch:               make(chan resource.WatchEvent, 1),
-		stopCh:           make(chan struct{}),
+		stopCh:           make(chan struct{}, 1),
 		ctx:              ctx,
 		plural:           "tests",
 		watchEventsTotal: watchEventsTotal,
@@ -1486,7 +1489,7 @@ func TestWatchResponse_KubernetesWatch_WithoutMetrics(t *testing.T) {
 	wr := &WatchResponse{
 		watch:            mockW,
 		ch:               make(chan resource.WatchEvent, 1),
-		stopCh:           make(chan struct{}),
+		stopCh:           make(chan struct{}, 1),
 		ctx:              ctx,
 		plural:           "tests",
 		watchEventsTotal: nil,
@@ -1498,4 +1501,93 @@ func TestWatchResponse_KubernetesWatch_WithoutMetrics(t *testing.T) {
 
 	// Should return the raw underlying watch (not wrapped)
 	assert.Equal(t, mockW, k8sWatch, "KubernetesWatch() should return raw watch when metrics not configured")
+}
+
+func TestMetricsWatchWrapper_StopWhileBlocked(t *testing.T) {
+	mockW := newMockWatch()
+	ctx := context.Background()
+
+	wrapper := &metricsWatchWrapper{
+		underlying: mockW,
+		plural:     "tests",
+		ctx:        ctx,
+		ch:         make(chan watch.Event), // unbuffered — send will block
+		stopCh:     make(chan struct{}, 1),
+	}
+
+	resultCh := wrapper.ResultChan()
+
+	// Fill the underlying channel so interceptEvents has an event to forward
+	mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+
+	// Give interceptEvents time to pick up the event and block on w.ch send
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop must not deadlock even though interceptEvents is blocked sending
+	done := make(chan struct{})
+	go func() {
+		wrapper.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() deadlocked — goroutine leak not fixed")
+	}
+
+	// Channel should be closed after interceptEvents exits
+	select {
+	case _, ok := <-resultCh:
+		if ok {
+			t.Fatal("expected channel to be closed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("result channel was never closed — goroutine leaked")
+	}
+}
+
+func TestWatchResponse_StopWhileBlocked(t *testing.T) {
+	mockW := newMockWatch()
+	ctx := context.Background()
+
+	wr := &WatchResponse{
+		watch:  mockW,
+		ch:     make(chan resource.WatchEvent), // unbuffered — send will block
+		stopCh: make(chan struct{}, 1),
+		ctx:    ctx,
+		plural: "tests",
+	}
+
+	// Start the translation goroutine
+	watchCh := wr.WatchEvents()
+
+	// Send an event so start() has something to forward and blocks on w.ch
+	mockW.sendEvent(watch.Event{Type: watch.Added, Object: getTestObject()})
+
+	// Give start() time to pick up the event and block on w.ch send
+	time.Sleep(50 * time.Millisecond)
+
+	// Stop must not deadlock even though start() is blocked sending
+	done := make(chan struct{})
+	go func() {
+		wr.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Stop() deadlocked — goroutine leak not fixed")
+	}
+
+	// Channel should be closed after start() exits
+	select {
+	case _, ok := <-watchCh:
+		if ok {
+			t.Fatal("expected channel to be closed")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("watch channel was never closed — goroutine leaked")
+	}
 }
