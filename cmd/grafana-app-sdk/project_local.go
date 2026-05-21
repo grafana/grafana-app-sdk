@@ -762,7 +762,13 @@ func localGenerateGrafanaYAML(envCfg localEnvConfig, props *yamlGenProperties, o
 		props.SecureJSONData[k] = val
 	}
 
-	tmplGrafana, err := template.ParseFS(localEnvFiles, "templates/local/generated/grafana.yaml")
+	funcMap := template.FuncMap{
+		"replaceGroupName": func(s, replacement string) string {
+			return strings.ReplaceAll(s, ".", replacement)
+		},
+	}
+
+	tmplGrafana, err := template.New("grafana.yaml").Funcs(funcMap).ParseFS(localEnvFiles, "templates/local/generated/grafana.yaml")
 	if err != nil {
 		return err
 	}
