@@ -44,6 +44,9 @@ appManifestv1alpha2: appManifestKind & {
 			// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 			// Different values will result in an error or undefined behavior.
 			scope: *"Namespaced" | "Cluster"
+			// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
+			// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
+			userReadable?: bool | *false
 			admission?: #AdmissionCapabilities
 			// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
 			// It must contain a key named the same as the `kind` field of the Kind.

@@ -201,7 +201,8 @@ type customResourceDefinition struct {
 }
 
 type customResourceDefinitionMetadata struct {
-	Name string `json:"name,omitempty" yaml:"name" protobuf:"bytes,1,opt,name=name"`
+	Name        string            `json:"name,omitempty" yaml:"name" protobuf:"bytes,1,opt,name=name"`
+	Annotations map[string]string `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 	// TODO: other fields as necessary for codegen
 }
 

@@ -191,6 +191,9 @@ Kind: S={
 	// scope determines whether resources of this kind exist globally ("Cluster") or
 	// within Kubernetes namespaces.
 	scope: "Cluster" | *"Namespaced"
+	// userReadable controls whether end users can read cluster-scoped resources of this kind.
+	// Only meaningful when scope is "Cluster". Service identities are always allowed full access via normal authorization.
+	userReadable: bool | *false
 	// validation determines whether there is code-based validation for this kind.
 	validation: #AdmissionCapability | *{
 		operations: []
