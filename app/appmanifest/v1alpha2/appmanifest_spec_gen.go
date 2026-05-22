@@ -39,8 +39,11 @@ type AppManifestManifestVersionKind struct {
 	Plural *string `json:"plural,omitempty"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
-	Scope     AppManifestManifestVersionKindScope `json:"scope"`
-	Admission *AppManifestAdmissionCapabilities   `json:"admission,omitempty"`
+	Scope AppManifestManifestVersionKindScope `json:"scope"`
+	// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
+	// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
+	UserReadable *bool                             `json:"userReadable,omitempty"`
+	Admission    *AppManifestAdmissionCapabilities `json:"admission,omitempty"`
 	// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
 	// It must contain a key named the same as the `kind` field of the Kind.
 	// Other fields may be present to be referenced by $ref tags in a schema,
@@ -64,9 +67,10 @@ type AppManifestManifestVersionKind struct {
 // NewAppManifestManifestVersionKind creates a new AppManifestManifestVersionKind object.
 func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
 	return &AppManifestManifestVersionKind{
-		Scope:      AppManifestManifestVersionKindScopeNamespaced,
-		Schemas:    map[string]interface{}{},
-		Conversion: (func(input bool) *bool { return &input })(false),
+		Scope:        AppManifestManifestVersionKindScopeNamespaced,
+		UserReadable: (func(input bool) *bool { return &input })(false),
+		Schemas:      map[string]interface{}{},
+		Conversion:   (func(input bool) *bool { return &input })(false),
 	}
 }
 
