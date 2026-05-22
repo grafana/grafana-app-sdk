@@ -532,10 +532,11 @@ type simpleOpenAPIDoc[T any] struct {
 //nolint:revive,funlen,unparam,gocognit
 func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) (app.ManifestVersionKind, error) {
 	mver := app.ManifestVersionKind{
-		Kind:       vk.Kind,
-		Plural:     vk.PluralName,
-		Scope:      vk.Scope,
-		Conversion: vk.Conversion,
+		Kind:         vk.Kind,
+		Plural:       vk.PluralName,
+		Scope:        vk.Scope,
+		UserReadable: vk.UserReadable,
+		Conversion:   vk.Conversion,
 	}
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
