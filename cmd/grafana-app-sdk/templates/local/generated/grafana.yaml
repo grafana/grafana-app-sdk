@@ -96,7 +96,7 @@ data:
     tracing = true{{ end }}
     [server]
     http_port = 3000
-    root_url = 
+    root_url =
     router_logging = true
     [unified_alerting]
     enabled = true
@@ -105,7 +105,10 @@ data:
     [feature_toggles]
     grafanaAPIServerEnsureKubectlAccess = true
     ; disable the experimental APIs flag to disable bundling of the example service locally
-    grafanaAPIServerWithExperimentalAPIs = false
+    grafanaAPIServerWithExperimentalAPIs = true
+    {{ range $group, $versions := .APIGroups }}
+    aggregation.{{ replaceGroupName $group "-"}}.enabled=true
+    {{ end }}
     kubernetesAggregator = true
     [grafana-apiserver]
     remote_services_file = /app-aggregator/apiservices.yaml{{ if .ProxyClientCert.Enabled }}
