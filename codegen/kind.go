@@ -34,6 +34,7 @@ type KindProperties struct {
 	// This does not have to be the latest, but determines preference when generating code.
 	Current                string                      `json:"current"`
 	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`

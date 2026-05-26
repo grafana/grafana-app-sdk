@@ -41,6 +41,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				SelectableFields: kind.SelectableFields,
 				Scope:            string(kind.Scope),
 			}
+			if kind.UserReadable != nil {
+				k.UserReadable = *kind.UserReadable
+			}
 			if kind.Plural != nil {
 				k.Plural = strings.ToLower(*kind.Plural)
 			}
@@ -303,6 +306,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Scope:            AppManifestManifestVersionKindScope(kind.Scope),
 				SelectableFields: kind.SelectableFields,
 				Conversion:       &kind.Conversion,
+				UserReadable:     &kind.UserReadable,
 			}
 			if kind.Schema != nil {
 				k.Schemas = kind.Schema.AsOpenAPI3SchemasMap()

@@ -17,6 +17,7 @@
                         "kind": "AppManifest",
                         "plural": "AppManifests",
                         "scope": "Cluster",
+                        "userReadable": false,
                         "schemas": {
                             "AdditionalPrinterColumns": {
                                 "additionalProperties": false,
@@ -432,6 +433,7 @@
                                         "type": "string"
                                     },
                                     "appName": {
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -569,6 +571,7 @@
                         "kind": "AppManifest",
                         "plural": "AppManifests",
                         "scope": "Cluster",
+                        "userReadable": false,
                         "schemas": {
                             "AdditionalPrinterColumns": {
                                 "additionalProperties": false,
@@ -793,6 +796,11 @@
                                             "type": "string"
                                         },
                                         "type": "array"
+                                    },
+                                    "userReadable": {
+                                        "default": false,
+                                        "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
+                                        "type": "boolean"
                                     }
                                 },
                                 "required": [
@@ -1008,6 +1016,7 @@
                                     },
                                     "appName": {
                                         "description": "AppName is the unique ID of the app",
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {

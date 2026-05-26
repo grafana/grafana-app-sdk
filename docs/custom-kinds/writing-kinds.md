@@ -84,9 +84,19 @@ foov1: fooKind & {
             stringField: string
             intField: int64
         }
-    }
+	}
 }
 ```
+
+## Cluster scope and user-readable kinds
+
+Kinds are **namespaced** by default. Set `scope: "Cluster"` on the kind metadata when the resource should exist once per cluster (no namespace in the API path).
+
+Cluster-scoped CRDs are normally not intended for users to be able to access them, so they are denied access to those resources on the Grafana API Extensions server unless you explicitly opt in.
+
+To allow users to **get** and **list** instances of a cluster-scoped kind (but not watch, mutate, or access subresources such as `/status` through this fast path), set **`userReadable: true`** alongside `scope: "Cluster"` in your CUE kind and in **App Manifest v1alpha2** (`userReadable` on the kind entry).
+
+Service identities are not limited by this gate; they continue through the normal resource authorizer (RBAC / access checks).
 
 ## Generating Code
 

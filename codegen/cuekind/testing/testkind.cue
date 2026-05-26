@@ -9,6 +9,7 @@ testManifest: {
 		"v1": testManifestV1
 		"v2": testManifestV2
 		"v3": testManifestV3
+		"v4": testManifestV4
 	}
 	preferredVersion: "v1"
 	extraPermissions: {
@@ -68,6 +69,11 @@ testManifestV3: {
 			}
 		}
 	}
+}
+
+testManifestV4: {
+	codegen: ts: enabled: false
+	kinds: [testKind & testKind.versions["v4"]]
 }
 
 testKind: {
@@ -174,6 +180,24 @@ testKind: {
 					}
 				}
 			}
+		}
+		// v4: selectable field crosses a union nested under spec (spec.union is the disjunction; path .spec.union.spec.name).
+		"v4": {
+			schema: {
+				#UnionVariantA: {
+					kind: "VariantA"
+					spec: {name: string}
+				}
+				#UnionVariantB: {
+					kind: "VariantB"
+					spec: {name: string}
+				}
+				spec: {
+					union: #UnionVariantA | #UnionVariantB
+				}
+			}
+			selectableFields: [".spec.union.spec.name"]
+			validation: operations: ["create", "update"]
 		}
 	}
 }
