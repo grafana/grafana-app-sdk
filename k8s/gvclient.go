@@ -566,7 +566,7 @@ func (g *groupVersionClient) watch(ctx context.Context, namespace, plural string
 		codec:            codec,
 		watch:            resp,
 		ch:               make(chan resource.WatchEvent, channelBufferSize),
-		stopCh:           make(chan struct{}),
+		stopCh:           make(chan struct{}, 1),
 		ctx:              ctx,
 		namespace:        namespace,
 		plural:           plural,
@@ -617,6 +617,8 @@ type WatchResponse struct {
 
 //nolint:revive,staticcheck,gocritic
 func (w *WatchResponse) start() {
+	defer close(w.ch)
+
 	logger := logging.FromContext(w.ctx).With(
 		"kind", w.plural,
 		"namespace", w.namespace,
@@ -627,12 +629,8 @@ func (w *WatchResponse) start() {
 		select {
 		case evt, ok := <-w.watch.ResultChan():
 			if !ok {
-				// ResultChan closed upstream (server-side timeout, connection reset, etc.).
-				// Cannot call Stop() here — it blocks on sending to stopCh, which only
-				// this goroutine reads, causing a deadlock.
 				w.startMux.Lock()
 				if w.started {
-					close(w.ch)
 					w.watch.Stop()
 					w.started = false
 				}
@@ -678,13 +676,16 @@ func (w *WatchResponse) start() {
 
 			w.incWatchEventCounter(string(evt.Type))
 
-			w.ch <- resource.WatchEvent{
+			select {
+			case w.ch <- resource.WatchEvent{
 				EventType: string(evt.Type),
 				Object:    obj,
+			}:
+			case <-w.stopCh:
+				return
 			}
 		case <-w.stopCh:
 			logger.Debug("watch stream stopped")
-			close(w.stopCh)
 			return
 		}
 	}
@@ -699,7 +700,6 @@ func (w *WatchResponse) Stop() {
 		return
 	}
 	w.stopCh <- struct{}{}
-	close(w.ch)
 	w.watch.Stop()
 	w.started = false
 }
@@ -740,7 +740,7 @@ func (w *WatchResponse) KubernetesWatch() watch.Interface {
 			watchErrorsTotal: w.watchErrorsTotal,
 			ctx:              w.ctx,
 			ch:               make(chan watch.Event, cap(w.ch)),
-			stopCh:           make(chan struct{}),
+			stopCh:           make(chan struct{}, 1),
 		}
 	}
 
@@ -818,7 +818,11 @@ func (w *metricsWatchWrapper) interceptEvents() {
 			}
 
 			// Forward event to wrapper's channel
-			w.ch <- evt
+			select {
+			case w.ch <- evt:
+			case <-w.stopCh:
+				return
+			}
 
 		case <-w.stopCh:
 			logger.Debug("metrics watch wrapper stopped")
