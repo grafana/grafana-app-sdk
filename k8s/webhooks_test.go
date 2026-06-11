@@ -382,6 +382,12 @@ func TestWebhookServer_HandleMutateHTTP(t *testing.T) {
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{
+			name:               "empty request body",
+			reqMethod:          http.MethodPost,
+			payload:            []byte("{}"),
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
 			name: "converted resource uses resolved kind for lookup",
 			serverConfig: WebhookServerConfig{
 				MutatingControllers: map[*resource.Kind]resource.MutatingAdmissionController{
@@ -526,6 +532,12 @@ func TestWebhookServer_HandleValidateHTTP(t *testing.T) {
 			name:               "malformed request body: bad JSON",
 			reqMethod:          http.MethodPost,
 			payload:            []byte("{"),
+			expectedStatusCode: http.StatusBadRequest,
+		},
+		{
+			name:               "empty request body",
+			reqMethod:          http.MethodPost,
+			payload:            []byte("{}"),
 			expectedStatusCode: http.StatusBadRequest,
 		},
 		{

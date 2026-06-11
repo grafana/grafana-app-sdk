@@ -202,6 +202,11 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 		logging.FromContext(req.Context()).Error("Couldn't unmarshal", "error", err)
 		return
 	}
+	if admRev.Request == nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		logging.FromContext(req.Context()).Error("Admission review missing request")
+		return
+	}
 
 	// Look up the schema and controller
 	var schema resource.Kind
@@ -279,6 +284,10 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// Unmarshal the admission review
 	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
 	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if admRev.Request == nil {
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
