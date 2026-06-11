@@ -613,3 +613,47 @@ func (tmac *testMutatingAdmissionController) Mutate(ctx context.Context, request
 	}
 	return nil, nil
 }
+
+func TestWebhookServer_CustomRoutes(t *testing.T) {
+	t.Run("SetCustomRouteHandler post-construction", func(t *testing.T) {
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port:      1234,
+			TLSConfig: TLSConfig{CertPath: "x", KeyPath: "y"},
+		})
+		require.NoError(t, err)
+		assert.Nil(t, srv.customRoutes)
+		stub := &stubApp{}
+		h, err := NewCustomRouteHandler(CustomRouteHandlerConfig{Caller: stub, Manifest: testManifest()})
+		require.NoError(t, err)
+		srv.SetCustomRouteHandler(h)
+		assert.Same(t, h, srv.customRoutes)
+	})
+
+	t.Run("served on shared mux alongside webhook paths", func(t *testing.T) {
+		// Mirror the mux that Run() builds, since Run() itself requires real TLS files.
+		stub := &stubApp{}
+		h, err := NewCustomRouteHandler(CustomRouteHandlerConfig{Caller: stub, Manifest: testManifest()})
+		require.NoError(t, err)
+		srv, err := NewWebhookServer(WebhookServerConfig{
+			Port:      1234,
+			TLSConfig: TLSConfig{CertPath: "x", KeyPath: "y"},
+		})
+		require.NoError(t, err)
+		srv.SetCustomRouteHandler(h)
+
+		mux := http.NewServeMux()
+		mux.HandleFunc("/validate", srv.HandleValidateHTTP)
+		mux.HandleFunc("/mutate", srv.HandleMutateHTTP)
+		mux.HandleFunc("/convert", srv.HandleConvertHTTP)
+		srv.customRoutes.Register(mux)
+
+		ts := httptest.NewServer(mux)
+		defer ts.Close()
+
+		resp, err := http.Get(ts.URL + "/apis/test.grafana.app/v1/namespaces/ns1/foos/myfoo/echo")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.NotNil(t, stub.called, "custom route handler was not invoked through shared mux")
+		assert.Equal(t, "echo", stub.called.Path)
+	})
+}
