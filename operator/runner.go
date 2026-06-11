@@ -85,8 +85,10 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 
 // RunnerConfig contains configuration information for the Runner.
 type RunnerConfig struct {
-	// WebhookConfig contains configuration information for exposing k8s webhooks.
-	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
+	// WebhookConfig contains configuration information for exposing k8s webhooks and the App's
+	// custom routes. The webhook server hosts both admission/conversion endpoints and the
+	// /apis/... custom route paths on the same HTTPS port. This can be empty only if the App
+	// has no admission, conversion, or custom route capabilities.
 	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
@@ -112,6 +114,7 @@ type RunnerWebhookConfig struct {
 	// Port is the port to open the webhook server on
 	Port int
 	// TLSConfig is the TLS Cert and Key to use for the HTTPS endpoints exposed for webhooks
+	// and custom routes.
 	TLSConfig k8s.TLSConfig
 }
 
@@ -194,9 +197,10 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 			}
 		}
 	}
-	if anyWebhooks {
+	anyCustomRoutes := manifestHasCustomRoutes(manifestData)
+	if anyWebhooks || anyCustomRoutes {
 		if s.webhookServer == nil {
-			return errors.New("app has capabilities that require webhooks, but webhook server was not provided TLS config")
+			return errors.New("app has capabilities that require the webhook server (admission, conversion, or custom routes), but no TLS config was provided")
 		}
 		for _, kind := range a.ManagedKinds() {
 			c, ok := vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind(), kind.Version())]
@@ -224,6 +228,16 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 					Kind:  kind.Kind(),
 				})
 			}
+		}
+		if anyCustomRoutes {
+			handler, err := k8s.NewCustomRouteHandler(k8s.CustomRouteHandlerConfig{
+				Caller:   a,
+				Manifest: *manifestData,
+			})
+			if err != nil {
+				return fmt.Errorf("failed to create custom route handler: %w", err)
+			}
+			s.webhookServer.SetCustomRouteHandler(handler)
 		}
 		runner.AddRunnable(s.webhookServer)
 	}
@@ -343,6 +357,22 @@ func (s *simpleK8sConverter) Convert(obj k8s.RawKind, targetAPIVersion string) (
 	return s.convertFunc(obj, targetAPIVersion)
 }
 
+// manifestHasCustomRoutes reports whether the manifest declares any kind subresource routes
+// or any version-level routes.
+func manifestHasCustomRoutes(md *app.ManifestData) bool {
+	for _, version := range md.Versions {
+		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 {
+			return true
+		}
+		for _, kind := range version.Kinds {
+			if len(kind.Routes) > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func newWebhookServerRunner(ws *k8s.WebhookServer) *webhookServerRunner {
 	return &webhookServerRunner{
 		server: ws,
@@ -371,6 +401,10 @@ func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource
 
 func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
 	s.server.AddConverter(converter, groupKind)
+}
+
+func (s *webhookServerRunner) SetCustomRouteHandler(h *k8s.CustomRouteHandler) {
+	s.server.SetCustomRouteHandler(h)
 }
 
 type k8sRunner interface {

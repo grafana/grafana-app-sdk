@@ -61,6 +61,7 @@ type WebhookServer struct {
 	validatingControllers     map[string]validatingAdmissionControllerTuple
 	mutatingControllers       map[string]mutatingAdmissionControllerTuple
 	converters                map[string]Converter
+	customRoutes              *CustomRouteHandler
 	port                      int
 	tlsConfig                 TLSConfig
 }
@@ -138,6 +139,12 @@ func (w *WebhookServer) AddMutatingAdmissionController(controller resource.Mutat
 	}
 }
 
+// SetCustomRouteHandler attaches a CustomRouteHandler to the WebhookServer. It must be called
+// before Run; later calls have no effect on an already-running server.
+func (w *WebhookServer) SetCustomRouteHandler(h *CustomRouteHandler) {
+	w.customRoutes = h
+}
+
 // AddConverter adds a Converter to the WebhookServer, associated with the given group and kind.
 func (w *WebhookServer) AddConverter(converter Converter, groupKind metav1.GroupKind) {
 	if w.converters == nil {
@@ -154,6 +161,9 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	mux.HandleFunc("/validate", w.HandleValidateHTTP)
 	mux.HandleFunc("/mutate", w.HandleMutateHTTP)
 	mux.HandleFunc("/convert", w.HandleConvertHTTP)
+	if w.customRoutes != nil {
+		w.customRoutes.Register(mux)
+	}
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", w.port),
 		Handler:           mux,
