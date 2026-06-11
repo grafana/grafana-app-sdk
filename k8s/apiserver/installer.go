@@ -336,6 +336,9 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	res := map[string]common.OpenAPIDefinition{}
 	hasCustomRoutes := false
 	for _, v := range r.appConfig.ManifestData.Versions {
+		if !v.Served {
+			continue
+		}
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
 			if !ok {
