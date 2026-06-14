@@ -5,8 +5,8 @@ go 1.26.3
 replace github.com/grafana/grafana-app-sdk => ../../
 
 require (
-	github.com/grafana/grafana-app-sdk v0.49.0
-	github.com/grafana/grafana-app-sdk/logging v0.54.1
+	github.com/grafana/grafana-app-sdk v0.56.1
+	github.com/grafana/grafana-app-sdk/logging v0.56.1
 	k8s.io/apimachinery v0.36.1
 	k8s.io/apiserver v0.36.0
 	k8s.io/client-go v0.36.1
