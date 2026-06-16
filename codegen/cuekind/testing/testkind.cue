@@ -56,6 +56,9 @@ testManifestV3: {
 		"/foobar": {
 			"POST": {
 				name: "createFoobar"
+				// Key identifies a foobar entry.
+				// It is referenced by a custom route, so its multi-line
+				// description exercises the route schema codegen path.
 				#Key: {
 					name: string
 					match?: string

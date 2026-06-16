@@ -473,7 +473,8 @@ var appManifestData = app.ManifestData{
 				Schemas: map[string]spec.Schema{
 					"createFoobarKey": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Type:        []string{"object"},
+							Description: "Key identifies a foobar entry.\nIt is referenced by a custom route, so its multi-line\ndescription exercises the route schema codegen path.",
 							Properties: map[string]spec.Schema{
 								"match": {
 									SchemaProps: spec.SchemaProps{

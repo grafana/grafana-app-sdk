@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -37,9 +38,11 @@ var (
 		"refString": func(ref spec.Ref) string {
 			return ref.String()
 		},
-		"escapeQuotes": func(s string) string {
-			return strings.ReplaceAll(s, `"`, `\"`)
-		},
+		// goString renders s as a valid, fully-escaped Go double-quoted string
+		// literal (including the surrounding quotes). strconv.Quote escapes quotes,
+		// newlines, backslashes and control characters, so descriptions sourced
+		// from multi-line CUE doc comments produce parseable Go.
+		"goString": strconv.Quote,
 	}
 
 	templateResourceObject, _         = template.ParseFS(templates, "resourceobject.tmpl")
