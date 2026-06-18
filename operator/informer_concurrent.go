@@ -43,6 +43,9 @@ type ConcurrentInformerOptions struct {
 	MaxConcurrentWorkers uint64
 	// MetricsConfig controls the namespace for Prometheus metrics exposed by the ConcurrentInformer.
 	MetricsConfig metrics.Config
+	// ResourceKind is used as the "kind" label on queue depth metrics.
+	// When empty, the label value defaults to an empty string.
+	ResourceKind string
 }
 
 // NewConcurrentInformer creates a new ConcurrentInformer wrapping the provided Informer.
@@ -63,10 +66,11 @@ func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
 	}
 	ci.queueDepth = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: opts.MetricsConfig.Namespace,
-		Subsystem: "concurrent_watcher",
-		Name:      "queue_depth",
-		Help:      "Current number of pending events across all concurrent watcher worker queues.",
+		Namespace:   opts.MetricsConfig.Namespace,
+		Subsystem:   "concurrent_watcher",
+		Name:        "queue_depth",
+		Help:        "Current number of pending events across all concurrent watcher worker queues.",
+		ConstLabels: prometheus.Labels{"kind": opts.ResourceKind},
 	}, ci.sumQueueDepth)
 
 	return ci, nil
@@ -89,10 +93,11 @@ func NewConcurrentInformerFromOptions(inf Informer, opts InformerOptions) (
 		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
 	}
 	ci.queueDepth = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
-		Namespace: opts.MetricsConfig.Namespace,
-		Subsystem: "concurrent_watcher",
-		Name:      "queue_depth",
-		Help:      "Current number of pending events across all concurrent watcher worker queues.",
+		Namespace:   opts.MetricsConfig.Namespace,
+		Subsystem:   "concurrent_watcher",
+		Name:        "queue_depth",
+		Help:        "Current number of pending events across all concurrent watcher worker queues.",
+		ConstLabels: prometheus.Labels{"kind": opts.ResourceKind},
 	}, ci.sumQueueDepth)
 
 	return ci, nil

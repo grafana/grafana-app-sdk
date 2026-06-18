@@ -82,6 +82,9 @@ type InformerOptions struct {
 	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics
 	// exposed by components that use these options (e.g., ConcurrentInformer queue depth).
 	MetricsConfig metrics.Config
+	// ResourceKind is used as the "kind" label on queue depth metrics.
+	// When empty, the label value defaults to an empty string.
+	ResourceKind string
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,

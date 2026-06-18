@@ -149,6 +149,10 @@ var DefaultInformerSupplier = func(
 		return nil, err
 	}
 
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
+	}
+
 	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
 	if err != nil {
 		return nil, err
@@ -178,6 +182,10 @@ var OptimizedInformerSupplier = func(
 	client, err := clients.ClientFor(kind)
 	if err != nil {
 		return nil, err
+	}
+
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
 	}
 
 	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)

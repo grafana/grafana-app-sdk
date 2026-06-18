@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -387,6 +388,7 @@ func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
 	t.Run("implements metrics.Provider", func(t *testing.T) {
 		ci, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
 			MetricsConfig: metrics.DefaultConfig("test"),
+			ResourceKind:  "test.example.com/v1, Kind=TestKind",
 		})
 		require.NoError(t, err)
 
@@ -438,6 +440,38 @@ func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
 		assert.Eventually(t, func() bool {
 			return ci.sumQueueDepth() == 0
 		}, time.Second, 10*time.Millisecond)
+	})
+
+	t.Run("multiple informers with different kinds register without collision", func(t *testing.T) {
+		reg := prometheus.NewRegistry()
+
+		ci1, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+			ResourceKind:  "group1/v1, Kind=KindA",
+		})
+		require.NoError(t, err)
+		for _, c := range ci1.PrometheusCollectors() {
+			require.NoError(t, reg.Register(c))
+		}
+
+		ci2, err := NewConcurrentInformerFromOptions(&noopInformer{}, InformerOptions{
+			MetricsConfig: metrics.DefaultConfig("test"),
+			ResourceKind:  "group2/v1, Kind=KindB",
+		})
+		require.NoError(t, err)
+		for _, c := range ci2.PrometheusCollectors() {
+			require.NoError(t, reg.Register(c))
+		}
+
+		mfs, err := reg.Gather()
+		require.NoError(t, err)
+		var found int
+		for _, mf := range mfs {
+			if mf.GetName() == "test_concurrent_watcher_queue_depth" {
+				found = len(mf.GetMetric())
+			}
+		}
+		assert.Equal(t, 2, found)
 	})
 
 	t.Run("deprecated constructor also creates metrics", func(t *testing.T) {
