@@ -500,6 +500,9 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 			LabelFilters:   kind.ReconcileOptions.LabelFilters,
 			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
 		}
+		if opts.MetricsConfig == (metrics.Config{}) {
+			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
+		}
 
 		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)
 		if err != nil {
