@@ -165,7 +165,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	runner := app.NewMultiRunner()
 
 	// Admission control and custom routes
-	if k8s.AppNeedsWebhookHandler(manifestData) {
+	if k8s.ManifestRequiresWebhooks(manifestData) {
 		if s.webhookServer == nil {
 			return errors.New("app has capabilities that require the webhook server (admission, conversion, or custom routes), but no TLS config was provided")
 		}

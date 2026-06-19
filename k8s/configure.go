@@ -17,10 +17,10 @@ type webhookCapabilities struct {
 	validation bool
 }
 
-// AppNeedsWebhookHandler reports whether the given app manifest declares any admission,
+// ManifestRequiresWebhooks reports whether the given app manifest declares any admission,
 // conversion, or custom route capabilities, i.e. whether the app requires a WebhookHandler
-// to be registered against.
-func AppNeedsWebhookHandler(manifestData *app.ManifestData) bool {
+// to be configured for it.
+func ManifestRequiresWebhooks(manifestData *app.ManifestData) bool {
 	for _, version := range manifestData.Versions {
 		for _, kind := range version.Kinds {
 			if kind.Conversion {
