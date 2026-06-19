@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/health"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -78,6 +79,12 @@ type InformerOptions struct {
 	// Events for a particular object are assigned to the same worker to maintain in-order delivery per object.
 	// An empty value (0) will use the default of 10 workers.
 	MaxConcurrentWorkers uint64
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics
+	// exposed by components that use these options (e.g., ConcurrentInformer queue depth).
+	MetricsConfig metrics.Config
+	// ResourceKind is used as the "kind" label on queue depth metrics.
+	// When empty, the label value defaults to an empty string.
+	ResourceKind string
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,

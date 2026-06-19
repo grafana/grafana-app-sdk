@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -160,6 +161,7 @@ type bufferedQueue struct {
 	buf            *buffer.RingGrowing //nolint:staticcheck
 	stopMux        sync.RWMutex
 	stopped        bool
+	depth          atomic.Int64
 }
 
 // newBufferedQueue returns a properly initialized bufferedQueue. The consumer
@@ -187,7 +189,13 @@ func (l *bufferedQueue) push(event any) {
 		return
 	}
 
+	l.depth.Add(1)
 	l.incomingEvents <- event
+}
+
+// Len returns the current number of pending events in the queue.
+func (l *bufferedQueue) Len() int64 {
+	return l.depth.Load()
 }
 
 // run will continuously read messages from the events channel, and write them to a buffer.
@@ -203,6 +211,7 @@ func (l *bufferedQueue) run() {
 	for {
 		select {
 		case nextCh <- event:
+			l.depth.Add(-1)
 			event, ok = l.buf.ReadOne()
 			if !ok {
 				nextCh = nil
