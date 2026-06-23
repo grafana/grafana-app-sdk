@@ -15,10 +15,18 @@ import (
 // Annotation name constants which are used by the Typed and Untyped Objects for converting non-kubernetes metadata
 // into CommonMetadata attributes. While it is not required for Object implementations to use these annotations
 // for storing non-kubernetes CommonMetadata fields, it is encouraged for maximum compatibility.
+//
+// Deprecated: these keys use the "grafana.com/" prefix (and the "updateTimestamp" spelling), which
+// don't match grafana/grafana ("grafana.app/" and "updatedTimestamp"). Use AnnoKeyCreatedBy,
+// AnnoKeyUpdatedBy, and AnnoKeyUpdatedTimestamp from annotations.go instead. We keep these defined and
+// still read them as a fallback so existing objects keep working.
 const (
-	AnnotationUpdateTimestamp = "grafana.com/updateTimestamp"
-	AnnotationCreatedBy       = "grafana.com/createdBy"
-	AnnotationUpdatedBy       = "grafana.com/updatedBy"
+	// Deprecated: use AnnoKeyUpdatedTimestamp instead.
+	AnnotationUpdateTimestamp = AnnotationPrefix + "updateTimestamp"
+	// Deprecated: use AnnoKeyCreatedBy instead.
+	AnnotationCreatedBy = AnnotationPrefix + "createdBy"
+	// Deprecated: use AnnoKeyUpdatedBy instead.
+	AnnotationUpdatedBy = AnnotationPrefix + "updatedBy"
 )
 
 var (
@@ -167,15 +175,17 @@ func (u *UntypedObject) GetCommonMetadata() CommonMetadata {
 	createdBy := ""
 	updatedBy := ""
 	if u.Annotations != nil {
-		strUpdt, ok := u.Annotations[AnnotationUpdateTimestamp]
-		if ok {
+		// Read the "grafana.app/" keys first and fall back to the old "grafana.com/" keys, so objects
+		// written by core and by older SDK versions both read correctly.
+		strUpdt := firstNonEmptyAnnotation(u.Annotations, AnnoKeyUpdatedTimestamp, AnnotationUpdateTimestamp)
+		if strUpdt != "" {
 			updt, err = time.Parse(time.RFC3339, strUpdt)
 			if err != nil {
 				// HMMMM
 			}
 		}
-		createdBy = u.Annotations[AnnotationCreatedBy]
-		updatedBy = u.Annotations[AnnotationUpdatedBy]
+		createdBy = firstNonEmptyAnnotation(u.Annotations, AnnoKeyCreatedBy, AnnotationCreatedBy)
+		updatedBy = firstNonEmptyAnnotation(u.Annotations, AnnoKeyUpdatedBy, AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(u.UID),
