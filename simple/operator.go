@@ -237,6 +237,7 @@ func (o *Operator) WatchKind(kind resource.Kind, watcher SyncWatcher, options op
 			Namespace:      options.Namespace,
 			LabelFilters:   options.LabelFilters,
 			FieldSelectors: options.FieldSelectors,
+			ShardSelector:  options.ShardSelector,
 		},
 		CacheResyncInterval: o.cacheResyncInterval,
 		ErrorHandler:        o.ErrorHandler,
@@ -286,6 +287,7 @@ func (o *Operator) ReconcileKind(kind resource.Kind, reconciler operator.Reconci
 			Namespace:      options.Namespace,
 			LabelFilters:   options.LabelFilters,
 			FieldSelectors: options.FieldSelectors,
+			ShardSelector:  options.ShardSelector,
 		},
 		ErrorHandler:        o.ErrorHandler,
 		CacheResyncInterval: o.cacheResyncInterval,
@@ -344,5 +346,5 @@ func (o *Operator) ConvertKind(gk metav1.GroupKind, converter k8s.Converter) err
 
 func (*Operator) label(schema resource.Schema, options operator.ListWatchOptions) string {
 	// TODO: hash?
-	return fmt.Sprintf("%s-%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","), strings.Join(options.FieldSelectors, ","))
+	return fmt.Sprintf("%s-%s-%s-%s-%s-%s-%s", schema.Group(), schema.Kind(), schema.Version(), options.Namespace, strings.Join(options.LabelFilters, ","), strings.Join(options.FieldSelectors, ","), options.ShardSelector)
 }

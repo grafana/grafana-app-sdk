@@ -58,6 +58,13 @@ type ListOptions struct {
 	LabelFilters []string
 	// FieldSelectors are a set of field selector strings to use when listing
 	FieldSelectors []string
+	// ShardSelector is a CEL-based shard selector expression used to restrict the
+	// list of returned objects to a single shard. See
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#the-shardselector-field
+	// for the expression format.
+	// This is an alpha Kubernetes feature and requires the ShardedListAndWatch feature gate
+	// to be enabled on the API server (Kubernetes 1.36+).
+	ShardSelector string
 	// Limit limits the number of returned results from the List call, when >0.
 	// The returned ListMetadata SHOULD include the remaining item count, and the page to use for the next call.
 	Limit int
@@ -145,7 +152,14 @@ type WatchOptions struct {
 	// LabelFilters are a set of label filter strings applied to watched resources
 	LabelFilters []string
 	// FieldSelectors are a set of field selector strings applied to watched resources
-	FieldSelectors      []string
+	FieldSelectors []string
+	// ShardSelector is a CEL-based shard selector expression used to restrict the
+	// watched objects to a single shard. See
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#the-shardselector-field
+	// for the expression format.
+	// This is an alpha Kubernetes feature and requires the ShardedListAndWatch feature gate
+	// to be enabled on the API server (Kubernetes 1.36+).
+	ShardSelector       string
 	AllowWatchBookmarks bool
 	TimeoutSeconds      *int64
 	// SendInitialEvents is used by streaming ListWatch
