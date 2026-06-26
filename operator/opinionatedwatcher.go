@@ -393,6 +393,13 @@ func (*OpinionatedWatcher) Delete(context.Context, resource.Object) error {
 	return nil
 }
 
+// RegisterMetricsCollectors registers additional prometheus collectors for the OpinionatedWatcher,
+// in addition to those provided by any wrapped ResourceWatcher via Wrap().
+// These additional prometheus collectors are exposed as a part of the list returned by PrometheusCollectors().
+func (o *OpinionatedWatcher) RegisterMetricsCollectors(collectors ...prometheus.Collector) {
+	o.collectors = append(o.collectors, collectors...)
+}
+
 func (o *OpinionatedWatcher) PrometheusCollectors() []prometheus.Collector {
 	return o.collectors
 }
