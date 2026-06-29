@@ -177,7 +177,7 @@ func (o *AppManifest) GetCreatedBy() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
+	return o.ObjectMeta.Annotations[resource.AnnotationPrefix+"createdBy"]
 }
 
 func (o *AppManifest) SetCreatedBy(createdBy string) {
@@ -185,7 +185,7 @@ func (o *AppManifest) SetCreatedBy(createdBy string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
+	o.ObjectMeta.Annotations[resource.AnnotationPrefix+"createdBy"] = createdBy
 }
 
 func (o *AppManifest) GetUpdateTimestamp() time.Time {
@@ -193,7 +193,7 @@ func (o *AppManifest) GetUpdateTimestamp() time.Time {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	parsed, _ := time.Parse(time.RFC3339, o.ObjectMeta.Annotations["grafana.com/updateTimestamp"])
+	parsed, _ := time.Parse(time.RFC3339, o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updateTimestamp"])
 	return parsed
 }
 
@@ -202,7 +202,7 @@ func (o *AppManifest) SetUpdateTimestamp(updateTimestamp time.Time) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["grafana.com/updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
+	o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
 }
 
 func (o *AppManifest) GetUpdatedBy() string {
@@ -210,7 +210,7 @@ func (o *AppManifest) GetUpdatedBy() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
+	return o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updatedBy"]
 }
 
 func (o *AppManifest) SetUpdatedBy(updatedBy string) {
@@ -218,7 +218,7 @@ func (o *AppManifest) SetUpdatedBy(updatedBy string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["grafana.com/updatedBy"] = updatedBy
+	o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updatedBy"] = updatedBy
 }
 
 func (o *AppManifest) Copy() resource.Object {
