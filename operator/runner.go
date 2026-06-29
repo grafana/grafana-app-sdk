@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"k8s.io/client-go/rest"
@@ -31,7 +32,7 @@ type Runner struct {
 	metricsServer       *MetricsServer
 	metricsServerRunner *app.SingletonRunner
 	startMux            sync.Mutex
-	running             bool
+	running             atomic.Bool
 	runningWG           sync.WaitGroup
 }
 
@@ -148,11 +149,11 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	err = func() error {
 		s.startMux.Lock()
 		defer s.startMux.Unlock()
-		if !s.running {
-			s.running = true
+		if !s.running.Load() {
+			s.running.Store(true)
 			go func() {
 				s.runningWG.Wait()
-				s.running = false
+				s.running.Store(false)
 			}()
 		}
 		return nil
@@ -205,7 +206,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 }
 
 func (s *Runner) HealthCheck(_ context.Context) error {
-	if s.running {
+	if s.running.Load() {
 		return nil
 	}
 	return errors.New("app has not started yet")
