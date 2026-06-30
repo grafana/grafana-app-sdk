@@ -530,7 +530,10 @@ type simpleOpenAPIDoc[T any] struct {
 }
 
 //nolint:revive,funlen,unparam,gocognit
-func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) (app.ManifestVersionKind, error) {
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+	if err := validateSearchFields(vk, version); err != nil {
+		return app.ManifestVersionKind{}, err
+	}
 	mver := app.ManifestVersionKind{
 		Kind:         vk.Kind,
 		Plural:       vk.PluralName,
