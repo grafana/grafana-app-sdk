@@ -180,6 +180,27 @@ SchemaWithOperatorState: Schema & {
 	// each custom resource to produce the value for this column.
 	jsonPath: string
 }
+#SearchField: {
+	// name is the field name as it appears in search documents and queries.
+	name: string
+	// path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When omitted, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	path?: string
+	// type is the value type of the field.
+	type: "string" | "int64" | "double" | "boolean" | "date"
+	// array indicates that the field holds a list of values of the given type.
+	array?: bool | *false
+	// capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	capabilities: [...("filter" | "text" | "partial" | "sort" | "facet" | "retrieve" | "unranked")]
+	// emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	emitZeroIfAbsent?: bool | *false
+	// description is a human readable description of the field.
+	description?: string
+}
 
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
@@ -257,6 +278,8 @@ Kind: S={
 	selectableFields: [...string]
 	// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 	additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+	// searchFields is a list of fields exposed for search indexing and querying
+	searchFields?: [...#SearchField]
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

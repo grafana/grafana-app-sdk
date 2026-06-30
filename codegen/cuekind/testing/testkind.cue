@@ -94,6 +94,15 @@ testKind: {
 				}
 			}
 			selectableFields: [".spec.stringField"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+			]
 		}
 		"v2": {
 			codegen: ts: enabled: true
@@ -115,6 +124,22 @@ testKind: {
 				}
 			}
 			selectableFields: [".spec.stringField", ".spec.intField", ".spec.unionNull.str", ".spec.unionNull2.str"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+				{
+					name: "intField"
+					path: "spec.intField"
+					type: "int64"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+			]
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
                 {
@@ -134,6 +159,29 @@ testKind: {
 				}
 			}
 			selectableFields: [".spec.stringField", ".spec.intField", ".spec.boolField"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+				{
+					name: "intField"
+					path: "spec.intField"
+					type: "int64"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+				{
+					name: "boolField"
+					path: "spec.boolField"
+					type: "boolean"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+			]
 			mutation: operations: ["create","update"]
 			validation: operations: ["create","update"]
 			routes: {

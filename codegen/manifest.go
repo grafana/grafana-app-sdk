@@ -113,6 +113,7 @@ func (m *SimpleManifest) Kinds() []Kind {
 				Validation:               kind.Validation,
 				Mutation:                 kind.Mutation,
 				AdditionalPrinterColumns: kind.AdditionalPrinterColumns,
+				SearchFields:             kind.SearchFields,
 				Routes:                   kind.Routes,
 			})
 			kinds[kind.Kind] = k
@@ -199,6 +200,7 @@ type VersionedKind struct {
 	Served                   bool                      `json:"served"`
 	SelectableFields         []string                  `json:"selectableFields"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
+	SearchFields             []SearchField             `json:"searchFields,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)

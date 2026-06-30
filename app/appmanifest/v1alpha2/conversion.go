@@ -93,6 +93,33 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					k.AdditionalPrinterColumns[i] = translated
 				}
 			}
+			// SearchFields
+			if len(kind.SearchFields) > 0 {
+				k.SearchFields = make([]app.ManifestVersionKindSearchField, len(kind.SearchFields))
+				for i, sf := range kind.SearchFields {
+					translated := app.ManifestVersionKindSearchField{
+						Name:         sf.Name,
+						Type:         string(sf.Type),
+						Capabilities: make([]string, len(sf.Capabilities)),
+					}
+					for ci, c := range sf.Capabilities {
+						translated.Capabilities[ci] = string(c)
+					}
+					if sf.Path != nil {
+						translated.Path = *sf.Path
+					}
+					if sf.Array != nil {
+						translated.Array = *sf.Array
+					}
+					if sf.EmitZeroIfAbsent != nil {
+						translated.EmitZeroIfAbsent = *sf.EmitZeroIfAbsent
+					}
+					if sf.Description != nil {
+						translated.Description = *sf.Description
+					}
+					k.SearchFields[i] = translated
+				}
+			}
 			// Schema
 			if kind.Schemas != nil {
 				toParse := make(map[string]any)
@@ -344,6 +371,33 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 						Priority:    kind.AdditionalPrinterColumns[i].Priority,
 						JsonPath:    kind.AdditionalPrinterColumns[i].JSONPath,
 					}
+				}
+			}
+			if len(kind.SearchFields) > 0 {
+				k.SearchFields = make([]AppManifestSearchField, len(kind.SearchFields))
+				for i := 0; i < len(kind.SearchFields); i++ {
+					sf := kind.SearchFields[i]
+					translated := AppManifestSearchField{
+						Name:         sf.Name,
+						Type:         AppManifestSearchFieldType(sf.Type),
+						Capabilities: make([]AppManifestSearchFieldCapabilities, len(sf.Capabilities)),
+					}
+					for ci := 0; ci < len(sf.Capabilities); ci++ {
+						translated.Capabilities[ci] = AppManifestSearchFieldCapabilities(sf.Capabilities[ci])
+					}
+					if sf.Path != "" {
+						translated.Path = &sf.Path
+					}
+					if sf.Array {
+						translated.Array = &sf.Array
+					}
+					if sf.EmitZeroIfAbsent {
+						translated.EmitZeroIfAbsent = &sf.EmitZeroIfAbsent
+					}
+					if sf.Description != "" {
+						translated.Description = &sf.Description
+					}
+					k.SearchFields[i] = translated
 				}
 			}
 			// Routes
