@@ -653,7 +653,27 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		}
 	}
 	mver.SelectableFields = vk.SelectableFields
+	mver.SearchFields = searchFieldsToManifest(vk.SearchFields)
 	return mver, nil
+}
+
+func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionKindSearchField {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]app.ManifestVersionKindSearchField, len(fields))
+	for i, f := range fields {
+		out[i] = app.ManifestVersionKindSearchField{
+			Name:             f.Name,
+			Path:             f.Path,
+			Type:             f.Type,
+			Array:            f.Array,
+			Capabilities:     f.Capabilities,
+			EmitZeroIfAbsent: f.EmitZeroIfAbsent,
+			Description:      f.Description,
+		}
+	}
+	return out
 }
 
 var validAdmissionOperations = map[codegen.KindAdmissionCapabilityOperation]app.AdmissionOperation{

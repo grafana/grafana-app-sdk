@@ -13,6 +13,64 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 )
 
+func TestSearchFieldsConversion(t *testing.T) {
+	ptr := func(s string) *string { return &s }
+	truePtr := func() *bool { b := true; return &b }
+
+	md := app.ManifestData{
+		AppName: "foo",
+		Versions: []app.ManifestVersion{{
+			Name:   "v1",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{{
+				Kind:  "Foo",
+				Scope: "Namespaced",
+				SearchFields: []app.ManifestVersionKindSearchField{
+					{
+						Name:         "email",
+						Path:         "spec.email",
+						Type:         "string",
+						Capabilities: []string{"filter", "text", "retrieve"},
+						Description:  "User email",
+					},
+					{
+						Name:             "labels",
+						Type:             "int64",
+						Array:            true,
+						Capabilities:     []string{"filter", "retrieve"},
+						EmitZeroIfAbsent: true,
+					},
+				},
+			}},
+		}},
+	}
+
+	// manifest -> spec: optional scalars become pointers and only the set ones are
+	// populated; type and capabilities become the generated enum types.
+	spec, err := SpecFromManifestData(md)
+	require.NoError(t, err)
+	require.Len(t, spec.Versions[0].Kinds[0].SearchFields, 2)
+	assert.Equal(t, AppManifestSearchField{
+		Name:         "email",
+		Path:         ptr("spec.email"),
+		Type:         AppManifestSearchFieldTypeString,
+		Capabilities: []AppManifestSearchFieldCapabilities{"filter", "text", "retrieve"},
+		Description:  ptr("User email"),
+	}, spec.Versions[0].Kinds[0].SearchFields[0])
+	assert.Equal(t, AppManifestSearchField{
+		Name:             "labels",
+		Type:             AppManifestSearchFieldTypeInt64,
+		Array:            truePtr(),
+		Capabilities:     []AppManifestSearchFieldCapabilities{"filter", "retrieve"},
+		EmitZeroIfAbsent: truePtr(),
+	}, spec.Versions[0].Kinds[0].SearchFields[1])
+
+	// spec -> manifest: the set pointers are dereferenced back, unset ones stay zero.
+	roundTripped, err := spec.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, md.Versions[0].Kinds[0].SearchFields, roundTripped.Versions[0].Kinds[0].SearchFields)
+}
+
 func TestAppManifestSpec_ToManifestData(t *testing.T) {
 	t.Run("successful conversion", func(t *testing.T) {
 		// For v1alpha2, app.ManifestData is essentially a subset of v1alpha2.AppManifestSpec,

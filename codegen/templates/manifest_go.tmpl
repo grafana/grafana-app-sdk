@@ -185,6 +185,17 @@ var appManifestData = app.ManifestData{
                 Schema: &versionSchema{{.Kind}}{{$.ToPackageName $v.Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
+                },{{end}}{{ if .SearchFields }}
+                SearchFields: []app.ManifestVersionKindSearchField{ {{ range .SearchFields }}
+                    {
+                        Name: {{ goString .Name }},{{ if .Path }}
+                        Path: {{ goString .Path }},{{ end }}
+                        Type: {{ goString .Type }},{{ if .Array }}
+                        Array: {{.Array}},{{ end }}
+                        Capabilities: []string{ {{ range .Capabilities }}{{ goString . }}, {{ end }}},{{ if .EmitZeroIfAbsent }}
+                        EmitZeroIfAbsent: {{.EmitZeroIfAbsent}},{{ end }}{{ if .Description }}
+                        Description: {{ goString .Description }},{{ end }}
+                    },{{ end }}
                 },{{end}}{{ if .Routes }}
                 Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}

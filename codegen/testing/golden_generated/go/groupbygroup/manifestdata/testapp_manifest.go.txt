@@ -67,6 +67,15 @@ var appManifestData = app.ManifestData{
 					SelectableFields: []string{
 						".spec.stringField",
 					},
+					SearchFields: []app.ManifestVersionKindSearchField{
+						{
+							Name:         "stringField",
+							Path:         "spec.stringField",
+							Type:         "string",
+							Capabilities: []string{"filter", "text", "sort", "retrieve"},
+							Description:  "The string field",
+						},
+					},
 				},
 
 				{
@@ -114,6 +123,22 @@ var appManifestData = app.ManifestData{
 						".spec.unionNull.str",
 						".spec.unionNull2.str",
 					},
+					SearchFields: []app.ManifestVersionKindSearchField{
+						{
+							Name:         "stringField",
+							Path:         "spec.stringField",
+							Type:         "string",
+							Capabilities: []string{"filter", "text", "sort", "retrieve"},
+							Description:  "The string field",
+						},
+						{
+							Name:             "intField",
+							Path:             "spec.intField",
+							Type:             "int64",
+							Capabilities:     []string{"filter", "retrieve"},
+							EmitZeroIfAbsent: true,
+						},
+					},
 				},
 			},
 			Routes: app.ManifestVersionRoutes{
@@ -151,6 +176,29 @@ var appManifestData = app.ManifestData{
 						".spec.stringField",
 						".spec.intField",
 						".spec.boolField",
+					},
+					SearchFields: []app.ManifestVersionKindSearchField{
+						{
+							Name:         "stringField",
+							Path:         "spec.stringField",
+							Type:         "string",
+							Capabilities: []string{"filter", "text", "sort", "retrieve"},
+							Description:  "The string field",
+						},
+						{
+							Name:             "intField",
+							Path:             "spec.intField",
+							Type:             "int64",
+							Capabilities:     []string{"filter", "retrieve"},
+							EmitZeroIfAbsent: true,
+						},
+						{
+							Name:             "boolField",
+							Path:             "spec.boolField",
+							Type:             "boolean",
+							Capabilities:     []string{"filter", "retrieve"},
+							EmitZeroIfAbsent: true,
+						},
 					},
 					Routes: map[string]spec3.PathProps{
 						"/reconcile": {

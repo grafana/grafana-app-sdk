@@ -75,12 +75,40 @@ func TestParseManifestKindProperties(t *testing.T) {
 	assert.Equal(t, "http://foo.bar/convert", testKind.ConversionWebhookProps.URL)
 	assert.Equal(t, []codegen.KindAdmissionCapabilityOperation{"create", "update"}, testKind.Validation.Operations)
 
+	// v1 TestKind declares a single string search field with several capabilities.
+	require.Len(t, testKind.SearchFields, 1)
+	assert.Equal(t, codegen.SearchField{
+		Name:         "stringField",
+		Path:         "spec.stringField",
+		Type:         "string",
+		Capabilities: []string{"filter", "text", "sort", "retrieve"},
+		Description:  "The string field",
+	}, testKind.SearchFields[0])
+
 	// v2 TestKind should have mutation and additional printer columns
 	v2Kind := versions[1].Kinds()[0]
 	assert.Equal(t, []codegen.KindAdmissionCapabilityOperation{"create", "update"}, v2Kind.Mutation.Operations)
 	require.Len(t, v2Kind.AdditionalPrinterColumns, 1)
 	assert.Equal(t, "STRING FIELD", v2Kind.AdditionalPrinterColumns[0].Name)
 	assert.Equal(t, ".spec.stringField", v2Kind.AdditionalPrinterColumns[0].JSONPath)
+
+	// v2 TestKind also declares search fields; the int64 field defaults emitZeroIfAbsent to true
+	// and array to false.
+	require.Len(t, v2Kind.SearchFields, 2)
+	assert.Equal(t, codegen.SearchField{
+		Name:         "stringField",
+		Path:         "spec.stringField",
+		Type:         "string",
+		Capabilities: []string{"filter", "text", "sort", "retrieve"},
+		Description:  "The string field",
+	}, v2Kind.SearchFields[0])
+	assert.Equal(t, codegen.SearchField{
+		Name:             "intField",
+		Path:             "spec.intField",
+		Type:             "int64",
+		Capabilities:     []string{"filter", "retrieve"},
+		EmitZeroIfAbsent: true,
+	}, v2Kind.SearchFields[1])
 
 	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
 	v4Kind := versions[3].Kinds()[0]

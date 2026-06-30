@@ -327,6 +327,8 @@ type ManifestVersionKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
+	// SearchFields are the fields exposed for search indexing and querying.
+	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
 }
 
 // Subresources returns a list of all (stored) subresources for the kind.
@@ -384,6 +386,28 @@ type ManifestVersionKindAdditionalPrinterColumn struct {
 	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
 	// each custom resource to produce the value for this column.
 	JSONPath string `json:"jsonPath"`
+}
+
+type ManifestVersionKindSearchField struct {
+	// Name is the field name as it appears in search documents and queries.
+	Name string `json:"name" yaml:"name"`
+	// Path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When empty, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+	// Type is the value type of the field. One of: string, int64, double, boolean, date.
+	Type string `json:"type" yaml:"type"`
+	// Array indicates that the field holds a list of values of the given type.
+	Array bool `json:"array,omitempty" yaml:"array,omitempty"`
+	// Capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	Capabilities []string `json:"capabilities" yaml:"capabilities"`
+	// EmitZeroIfAbsent indexes the type's zero value when Path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	EmitZeroIfAbsent bool `json:"emitZeroIfAbsent,omitempty" yaml:"emitZeroIfAbsent,omitempty"`
+	// Description is a human readable description of the field.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 const parsedCRDSchemaKindName = "__KIND__"

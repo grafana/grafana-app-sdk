@@ -791,6 +791,12 @@
                                         ],
                                         "type": "string"
                                     },
+                                    "searchFields": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/SearchField"
+                                        },
+                                        "type": "array"
+                                    },
                                     "selectableFields": {
                                         "items": {
                                             "type": "string"
@@ -989,6 +995,67 @@
                                 "required": [
                                     "kind",
                                     "verbs"
+                                ],
+                                "type": "object"
+                            },
+                            "SearchField": {
+                                "additionalProperties": false,
+                                "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values mirror Grafana's search field model, the\nonly consumer today; keep them in sync with SearchFieldType and\nSearchCapability:\nhttps://github.com/grafana/grafana/blob/0adfec05289ea611cbbcfc9b5e57acd94a65230d/pkg/storage/unified/resource/search_field.go#L25",
+                                "properties": {
+                                    "array": {
+                                        "default": false,
+                                        "description": "array indicates that the field holds a list of values of the given type.",
+                                        "type": "boolean"
+                                    },
+                                    "capabilities": {
+                                        "description": "capabilities lists what the field can be used for at query time, such as\nfiltering, full-text search, sorting, or faceting.",
+                                        "items": {
+                                            "enum": [
+                                                "filter",
+                                                "text",
+                                                "partial",
+                                                "sort",
+                                                "facet",
+                                                "retrieve",
+                                                "unranked"
+                                            ],
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    },
+                                    "description": {
+                                        "description": "description is a human readable description of the field.",
+                                        "type": "string"
+                                    },
+                                    "emitZeroIfAbsent": {
+                                        "default": false,
+                                        "description": "emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,\nso sort and range queries see every document. Without it, a document missing\nthe path omits the field entirely.",
+                                        "type": "boolean"
+                                    },
+                                    "name": {
+                                        "description": "name is the field name as it appears in search documents and queries.",
+                                        "type": "string"
+                                    },
+                                    "path": {
+                                        "description": "path is the JSON path within the resource that supplies this field's value\n(for example \"spec.email\"). When omitted, the field is populated by a custom\ndocument builder rather than read directly from the resource.",
+                                        "type": "string"
+                                    },
+                                    "type": {
+                                        "description": "type is the value type of the field.",
+                                        "enum": [
+                                            "string",
+                                            "int64",
+                                            "double",
+                                            "boolean",
+                                            "date"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "name",
+                                    "type",
+                                    "capabilities"
                                 ],
                                 "type": "object"
                             },
