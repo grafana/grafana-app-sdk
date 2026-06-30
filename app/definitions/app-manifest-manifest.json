@@ -1000,6 +1000,7 @@
                             },
                             "SearchField": {
                                 "additionalProperties": false,
+                                "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values mirror Grafana's search field model, the\nonly consumer today; keep them in sync with SearchFieldType and\nSearchCapability:\nhttps://github.com/grafana/grafana/blob/0adfec05289ea611cbbcfc9b5e57acd94a65230d/pkg/storage/unified/resource/search_field.go#L25",
                                 "properties": {
                                     "array": {
                                         "default": false,

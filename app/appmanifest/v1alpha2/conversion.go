@@ -375,15 +375,14 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 			if len(kind.SearchFields) > 0 {
 				k.SearchFields = make([]AppManifestSearchField, len(kind.SearchFields))
-				for i := 0; i < len(kind.SearchFields); i++ {
-					sf := kind.SearchFields[i]
+				for i, sf := range kind.SearchFields {
 					translated := AppManifestSearchField{
 						Name:         sf.Name,
 						Type:         AppManifestSearchFieldType(sf.Type),
 						Capabilities: make([]AppManifestSearchFieldCapabilities, len(sf.Capabilities)),
 					}
-					for ci := 0; ci < len(sf.Capabilities); ci++ {
-						translated.Capabilities[ci] = AppManifestSearchFieldCapabilities(sf.Capabilities[ci])
+					for ci, c := range sf.Capabilities {
+						translated.Capabilities[ci] = AppManifestSearchFieldCapabilities(c)
 					}
 					if sf.Path != "" {
 						translated.Path = &sf.Path

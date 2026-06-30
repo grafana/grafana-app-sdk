@@ -178,6 +178,11 @@ func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
 }
 
+// #SearchField describes a field exposed for search indexing and querying.
+// The type and capabilities values mirror Grafana's search field model, the
+// only consumer today; keep them in sync with SearchFieldType and
+// SearchCapability:
+// https://github.com/grafana/grafana/blob/0adfec05289ea611cbbcfc9b5e57acd94a65230d/pkg/storage/unified/resource/search_field.go#L25
 // +k8s:openapi-gen=true
 type AppManifestSearchField struct {
 	// name is the field name as it appears in search documents and queries.
