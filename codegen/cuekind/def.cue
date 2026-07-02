@@ -181,10 +181,10 @@ SchemaWithOperatorState: Schema & {
 	jsonPath: string
 }
 // #SearchField describes a field exposed for search indexing and querying.
-// The type and capabilities values mirror Grafana's search field model, the
-// only consumer today; keep them in sync with SearchFieldType and
-// SearchCapability:
-// https://github.com/grafana/grafana/blob/0adfec05289ea611cbbcfc9b5e57acd94a65230d/pkg/storage/unified/resource/search_field.go#L25
+// The type and capabilities values, and which capabilities are valid on which
+// type, are defined by the searchfields package
+// (github.com/grafana/grafana-app-sdk/searchfields), the shared source of
+// truth for both the SDK codegen validator and the runtime search backend.
 #SearchField: {
 	// name is the field name as it appears in search documents and queries.
 	name: string

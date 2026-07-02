@@ -8,18 +8,12 @@ import (
 	"cuelang.org/go/cue"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/searchfields"
 )
 
-// stringOnlySearchCapabilities are the search capabilities that rely on text or
-// keyword analysis and therefore only make sense on string-typed fields. This
-// mirrors the capability matrix the consuming search backend enforces at
-// runtime, see Grafana's validateSearchFieldDefinitions:
-// https://github.com/grafana/grafana/blob/0adfec05289ea611cbbcfc9b5e57acd94a65230d/pkg/storage/unified/resource/search_field.go#L444
-var stringOnlySearchCapabilities = []string{"text", "partial", "facet", "sort"}
-
 // validateSearchFields checks every search field declared on a kind version:
-// capabilities that need text or keyword analysis must only appear on
-// string-typed fields, and each non-empty path must resolve against the
+// capabilities must be compatible with the declared field type (see the
+// searchfields package), and each non-empty path must resolve against the
 // version schema to a field whose type is compatible with the declared type.
 func validateSearchFields(vk codegen.VersionedKind, version string) error {
 	for _, sf := range vk.SearchFields {
@@ -49,16 +43,11 @@ func validateSearchFields(vk codegen.VersionedKind, version string) error {
 	return nil
 }
 
+// validateSearchFieldCapabilities delegates to the shared searchfields matrix,
+// the single source of truth for which capabilities are valid on which field
+// types. Grafana's runtime validator consumes the same matrix.
 func validateSearchFieldCapabilities(sf codegen.SearchField) error {
-	if sf.Type == "string" {
-		return nil
-	}
-	for _, c := range sf.Capabilities {
-		if slices.Contains(stringOnlySearchCapabilities, c) {
-			return fmt.Errorf("capability %q requires a string-typed field, but type is %q", c, sf.Type)
-		}
-	}
-	return nil
+	return searchfields.Validate(sf.Type, sf.Capabilities)
 }
 
 type pathSegment struct {
@@ -140,11 +129,10 @@ func resolveSegments(v cue.Value, segs []pathSegment) (cue.Value, bool, error) {
 //
 // The accepted sets mirror what the consuming extractor can coerce at runtime,
 // so a declaration that passes here is never silently dropped during indexing.
-// The only consumer today is Grafana's coerceScalar:
-// https://github.com/grafana/grafana/blob/0adfec05289ea611cbbcfc9b5e57acd94a65230d/pkg/storage/unified/resource/path_extract.go#L138
-// This mapping is duplicated by convention across the two repositories; a
-// future change could move extraction into generated code or this library so
-// the two cannot drift. The rule of thumb is that this validator may be more
+// The only consumer today is Grafana's scalar coercion in its search path
+// extractor. This mapping is duplicated by convention across the two
+// repositories; a future change could move extraction into generated code or
+// this library so the two cannot drift. The rule of thumb is that this validator may be more
 // lenient than a given consumer, but must not accept a type the consumer
 // cannot extract. Kinds it cannot classify (structs other than time.Time, or
 // anything unresolved) are skipped rather than flagged.
