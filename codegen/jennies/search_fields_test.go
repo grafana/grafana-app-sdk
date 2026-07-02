@@ -150,7 +150,10 @@ func TestValidateSearchFieldCapabilities(t *testing.T) {
 	}{
 		{name: "string with text", field: codegen.SearchField{Type: "string", Capabilities: []string{"filter", "text", "sort"}}},
 		{name: "int with filter only", field: codegen.SearchField{Type: "int64", Capabilities: []string{"filter", "retrieve"}}},
-		{name: "int with sort", field: codegen.SearchField{Type: "int64", Capabilities: []string{"sort"}}, wantErr: true},
+		{name: "int with sort", field: codegen.SearchField{Type: "int64", Capabilities: []string{"sort"}}},
+		{name: "double with sort", field: codegen.SearchField{Type: "double", Capabilities: []string{"sort"}}},
+		{name: "boolean with sort", field: codegen.SearchField{Type: "boolean", Capabilities: []string{"sort"}}},
+		{name: "date with sort", field: codegen.SearchField{Type: "date", Capabilities: []string{"sort"}}, wantErr: true},
 		{name: "boolean with facet", field: codegen.SearchField{Type: "boolean", Capabilities: []string{"facet"}}, wantErr: true},
 		{name: "date with text", field: codegen.SearchField{Type: "date", Capabilities: []string{"text"}}, wantErr: true},
 		{name: "double with partial", field: codegen.SearchField{Type: "double", Capabilities: []string{"partial"}}, wantErr: true},
