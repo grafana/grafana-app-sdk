@@ -43,11 +43,11 @@ require (
 	k8s.io/apimachinery v0.36.2
 	k8s.io/apiserver v0.36.2
 	k8s.io/client-go v0.36.2
-	k8s.io/gengo/v2 v2.0.0-20251215205346-5ee0d033ba5b
+	k8s.io/gengo/v2 v2.0.0-20260408192533-25e2208e0dc3
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a
-	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.0
+	k8s.io/kube-openapi v0.0.0-20260706235625-cdb1db5517a0
+	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.1
 	sigs.k8s.io/yaml v1.6.0
 )
 
