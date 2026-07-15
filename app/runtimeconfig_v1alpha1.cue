@@ -12,12 +12,16 @@ runtimeConfigv1alpha1: runtimeConfigKind & {
 			tls: #TLSOptions
 		}
 
+		#OperatorWebhookOptions: {
+			conversionPath?: string
+			validationPath?: string
+			mutationPath?:   string
+		}
+
 		#OperatorConfig: {
-			url:            string
-			tls:            #TLSOptions
-			conversionPath: string
-			validationPath: string
-			mutationPath:   string
+			url:       string
+			tls:       #TLSOptions
+			webhooks?: #OperatorWebhookOptions
 		}
 
 		#PluginConfig: {
