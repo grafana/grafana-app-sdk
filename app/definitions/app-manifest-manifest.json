@@ -1831,9 +1831,16 @@
                         "scope": "Cluster",
                         "userReadable": false,
                         "schemas": {
-                            "APIServer": {
+                            "APIServerConfig": {
                                 "additionalProperties": false,
                                 "properties": {
+                                    "groupVersions": {
+                                        "description": "groupVersions this full apiserver serves. Enough to statically assemble\nthe /openapi/v3 root directory; leaf specs are proxied on demand.",
+                                        "items": {
+                                            "$ref": "#/components/schemas/GroupVersion"
+                                        },
+                                        "type": "array"
+                                    },
                                     "tls": {
                                         "$ref": "#/components/schemas/TLSOptions"
                                     },
@@ -1843,7 +1850,24 @@
                                 },
                                 "required": [
                                     "url",
-                                    "tls"
+                                    "tls",
+                                    "groupVersions"
+                                ],
+                                "type": "object"
+                            },
+                            "GroupVersion": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "group": {
+                                        "type": "string"
+                                    },
+                                    "version": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "group",
+                                    "version"
                                 ],
                                 "type": "object"
                             },
@@ -1962,7 +1986,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "apiServer": {
-                                        "$ref": "#/components/schemas/APIServer"
+                                        "$ref": "#/components/schemas/APIServerConfig"
                                     },
                                     "mode": {
                                         "enum": [
@@ -2011,79 +2035,6 @@
                         "scope": "Cluster",
                         "userReadable": false,
                         "schemas": {
-                            "APIServer": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "tls": {
-                                        "$ref": "#/components/schemas/TLSOptions"
-                                    },
-                                    "url": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "url",
-                                    "tls"
-                                ],
-                                "type": "object"
-                            },
-                            "AdditionalPrinterColumns": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "description": {
-                                        "description": "description is a human readable description of this column.",
-                                        "type": "string"
-                                    },
-                                    "format": {
-                                        "description": "format is an optional OpenAPI type definition for this column. The 'name' format is applied\nto the primary identifier column to assist in clients identifying column is the resource name.\nSee https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.",
-                                        "type": "string"
-                                    },
-                                    "jsonPath": {
-                                        "description": "jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against\neach custom resource to produce the value for this column.",
-                                        "type": "string"
-                                    },
-                                    "name": {
-                                        "description": "name is a human readable name for the column.",
-                                        "type": "string"
-                                    },
-                                    "priority": {
-                                        "description": "priority is an integer defining the relative importance of this column compared to others. Lower\nnumbers are considered higher priority. Columns that may be omitted in limited space scenarios\nshould be given a priority greater than 0.",
-                                        "type": "integer"
-                                    },
-                                    "type": {
-                                        "description": "type is an OpenAPI type definition for this column.\nSee https://github.com/OAI/OpenAPI-Specification/blob/master/versions/2.0.md#data-types for details.",
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "name",
-                                    "type",
-                                    "jsonPath"
-                                ],
-                                "type": "object"
-                            },
-                            "AdmissionCapabilities": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "mutation": {
-                                        "$ref": "#/components/schemas/MutationCapability"
-                                    },
-                                    "validation": {
-                                        "$ref": "#/components/schemas/ValidationCapability"
-                                    }
-                                },
-                                "type": "object"
-                            },
-                            "AdmissionOperation": {
-                                "enum": [
-                                    "CREATE",
-                                    "UPDATE",
-                                    "DELETE",
-                                    "CONNECT",
-                                    "*"
-                                ],
-                                "type": "string"
-                            },
                             "AppRoute": {
                                 "properties": {
                                     "spec": {
@@ -2096,183 +2047,6 @@
                                 "required": [
                                     "spec"
                                 ]
-                            },
-                            "KindPermission": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "actions": {
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "group": {
-                                        "type": "string"
-                                    },
-                                    "resource": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "group",
-                                    "resource",
-                                    "actions"
-                                ],
-                                "type": "object"
-                            },
-                            "ManifestVersion": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "kinds": {
-                                        "description": "Kinds is a list of all the kinds served in this version.\nGenerally, kinds should exist in each version unless they have been deprecated (and no longer exist in a newer version)\nor newly added (and didn't exist for older versions).",
-                                        "items": {
-                                            "$ref": "#/components/schemas/ManifestVersionKind"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "name": {
-                                        "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
-                                        "type": "string"
-                                    },
-                                    "routes": {
-                                        "$ref": "#/components/schemas/ManifestVersionRoutes",
-                                        "description": "Routes is a section defining version-level custom resource routes.\nThese routes are registered at the same level as kinds, and thus should not conflict with existing kinds."
-                                    },
-                                    "served": {
-                                        "default": true,
-                                        "description": "Served dictates whether this version is served by the API server.\nA version cannot be removed from a manifest until it is no longer served.",
-                                        "type": "boolean"
-                                    }
-                                },
-                                "required": [
-                                    "name",
-                                    "kinds"
-                                ],
-                                "type": "object"
-                            },
-                            "ManifestVersionKind": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "additionalPrinterColumns": {
-                                        "items": {
-                                            "$ref": "#/components/schemas/AdditionalPrinterColumns"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "admission": {
-                                        "$ref": "#/components/schemas/AdmissionCapabilities"
-                                    },
-                                    "conversion": {
-                                        "default": false,
-                                        "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
-                                        "type": "boolean"
-                                    },
-                                    "kind": {
-                                        "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
-                                        "type": "string"
-                                    },
-                                    "plural": {
-                                        "description": "Plural is the plural version of `kind`. This is optional and defaults to the kind + \"s\" if not present.",
-                                        "type": "string"
-                                    },
-                                    "routes": {
-                                        "additionalProperties": true,
-                                        "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
-                                        "type": "object"
-                                    },
-                                    "schemas": {
-                                        "additionalProperties": true,
-                                        "description": "Schemas is the components.schemas section of an OpenAPI document describing this Kind.\nIt must contain a key named the same as the `kind` field of the Kind.\nOther fields may be present to be referenced by $ref tags in a schema,\nand references should lead with '#/components/schemas/' just as they would in a standard OpenAPI document.\nIf route responses in the `routes` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
-                                        "type": "object"
-                                    },
-                                    "scope": {
-                                        "default": "Namespaced",
-                                        "description": "Scope dictates the scope of the kind. This field must be the same for all versions of the kind.\nDifferent values will result in an error or undefined behavior.",
-                                        "enum": [
-                                            "Namespaced",
-                                            "Cluster"
-                                        ],
-                                        "type": "string"
-                                    },
-                                    "searchFields": {
-                                        "items": {
-                                            "$ref": "#/components/schemas/SearchField"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "selectableFields": {
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "userReadable": {
-                                        "default": false,
-                                        "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
-                                        "type": "boolean"
-                                    }
-                                },
-                                "required": [
-                                    "kind",
-                                    "scope",
-                                    "schemas"
-                                ],
-                                "type": "object"
-                            },
-                            "ManifestVersionRoutes": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "cluster": {
-                                        "additionalProperties": true,
-                                        "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
-                                        "type": "object"
-                                    },
-                                    "namespaced": {
-                                        "additionalProperties": true,
-                                        "description": "Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
-                                        "type": "object"
-                                    },
-                                    "schemas": {
-                                        "additionalProperties": true,
-                                        "description": "Schemas contains additional schemas referenced by requests/responses for namespaced and cluster routes.\nIf route responses in the `namespaced` or `cluster` section reference a definition in '#/components/schemas',\nthat schema definition must exist in this section.",
-                                        "type": "object"
-                                    }
-                                },
-                                "type": "object"
-                            },
-                            "MutationCapability": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "operations": {
-                                        "items": {
-                                            "$ref": "#/components/schemas/AdmissionOperation"
-                                        },
-                                        "type": "array"
-                                    }
-                                },
-                                "required": [
-                                    "operations"
-                                ],
-                                "type": "object"
-                            },
-                            "OperatorConfig": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "tls": {
-                                        "$ref": "#/components/schemas/TLSOptions"
-                                    },
-                                    "url": {
-                                        "type": "string"
-                                    },
-                                    "webhooks": {
-                                        "$ref": "#/components/schemas/OperatorWebhookOptions"
-                                    }
-                                },
-                                "required": [
-                                    "url",
-                                    "tls"
-                                ],
-                                "type": "object"
                             },
                             "OperatorState": {
                                 "additionalProperties": false,
@@ -2306,326 +2080,8 @@
                                 ],
                                 "type": "object"
                             },
-                            "OperatorWebhookOptions": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "conversionPath": {
-                                        "type": "string"
-                                    },
-                                    "mutationPath": {
-                                        "type": "string"
-                                    },
-                                    "validationPath": {
-                                        "type": "string"
-                                    }
-                                },
-                                "type": "object"
-                            },
-                            "PluginConfig": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "tls": {
-                                        "$ref": "#/components/schemas/TLSOptions"
-                                    },
-                                    "url": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "url",
-                                    "tls"
-                                ],
-                                "type": "object"
-                            },
-                            "Role": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "description": {
-                                        "description": "Description is used as the role description in grafana, displayed in the UI and API responses",
-                                        "type": "string"
-                                    },
-                                    "kinds": {
-                                        "items": {
-                                            "$ref": "#/components/schemas/RoleKind"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "routes": {
-                                        "description": "Routes is a list of route names to match.\nTo match the same route in multiple versions, it should share the same name.",
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "title": {
-                                        "description": "Title will be used as the role title in grafana",
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "title",
-                                    "description"
-                                ],
-                                "type": "object"
-                            },
-                            "RoleKind": {
-                                "oneOf": [
-                                    {
-                                        "$ref": "#/components/schemas/RoleKindWithPermissionSet"
-                                    },
-                                    {
-                                        "$ref": "#/components/schemas/RoleKindWithVerbs"
-                                    }
-                                ]
-                            },
-                            "RoleKindWithPermissionSet": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "kind": {
-                                        "type": "string"
-                                    },
-                                    "permissionSet": {
-                                        "default": "viewer",
-                                        "enum": [
-                                            "viewer",
-                                            "editor",
-                                            "admin"
-                                        ],
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "kind",
-                                    "permissionSet"
-                                ],
-                                "type": "object"
-                            },
-                            "RoleKindWithVerbs": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "kind": {
-                                        "type": "string"
-                                    },
-                                    "verbs": {
-                                        "items": {
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    }
-                                },
-                                "required": [
-                                    "kind",
-                                    "verbs"
-                                ],
-                                "type": "object"
-                            },
-                            "SearchField": {
-                                "additionalProperties": false,
-                                "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values, and which capabilities are valid on which\ntype, are defined by the searchfields package\n(github.com/grafana/grafana-app-sdk/searchfields), the shared source of\ntruth for both the SDK codegen validator and the runtime search backend.",
-                                "properties": {
-                                    "array": {
-                                        "default": false,
-                                        "description": "array indicates that the field holds a list of values of the given type.",
-                                        "type": "boolean"
-                                    },
-                                    "capabilities": {
-                                        "description": "capabilities lists what the field can be used for at query time, such as\nfiltering, full-text search, sorting, or faceting.",
-                                        "items": {
-                                            "enum": [
-                                                "filter",
-                                                "text",
-                                                "partial",
-                                                "sort",
-                                                "facet",
-                                                "retrieve",
-                                                "unranked"
-                                            ],
-                                            "type": "string"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "description": {
-                                        "description": "description is a human readable description of the field.",
-                                        "type": "string"
-                                    },
-                                    "emitZeroIfAbsent": {
-                                        "default": false,
-                                        "description": "emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,\nso sort and range queries see every document. Without it, a document missing\nthe path omits the field entirely.",
-                                        "type": "boolean"
-                                    },
-                                    "name": {
-                                        "description": "name is the field name as it appears in search documents and queries.",
-                                        "type": "string"
-                                    },
-                                    "path": {
-                                        "description": "path is the JSON path within the resource that supplies this field's value\n(for example \"spec.email\"). When omitted, the field is populated by a custom\ndocument builder rather than read directly from the resource.",
-                                        "type": "string"
-                                    },
-                                    "type": {
-                                        "description": "type is the value type of the field.",
-                                        "enum": [
-                                            "string",
-                                            "int64",
-                                            "double",
-                                            "boolean",
-                                            "date"
-                                        ],
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "name",
-                                    "type",
-                                    "capabilities"
-                                ],
-                                "type": "object"
-                            },
-                            "TLSOptions": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "caData": {
-                                        "type": "string"
-                                    },
-                                    "skipTLSVerify": {
-                                        "default": false,
-                                        "type": "boolean"
-                                    }
-                                },
-                                "required": [
-                                    "skipTLSVerify"
-                                ],
-                                "type": "object"
-                            },
-                            "ValidationCapability": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "operations": {
-                                        "items": {
-                                            "$ref": "#/components/schemas/AdmissionOperation"
-                                        },
-                                        "type": "array"
-                                    }
-                                },
-                                "required": [
-                                    "operations"
-                                ],
-                                "type": "object"
-                            },
                             "spec": {
-                                "additionalProperties": false,
-                                "description": "AppRoute's spec is the flat union of the AppManifest and RuntimeConfig\nspecs. DRY: reference both specs directly, never redeclare fields.\nThis only unifies cleanly because the two field sets are disjoint\n(v1alpha3 dropped `operator`, which used to collide with RuntimeConfig's).",
-                                "properties": {
-                                    "apiServer": {
-                                        "$ref": "#/components/schemas/APIServer"
-                                    },
-                                    "appDisplayName": {
-                                        "description": "AppDisplayName is the display name of the app, which can contain any printable characters",
-                                        "type": "string"
-                                    },
-                                    "appName": {
-                                        "description": "AppName is the unique ID of the app",
-                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
-                                        "type": "string"
-                                    },
-                                    "dryRunKinds": {
-                                        "default": false,
-                                        "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
-                                        "type": "boolean"
-                                    },
-                                    "extraPermissions": {
-                                        "additionalProperties": false,
-                                        "description": "ExtraPermissions contains additional permissions needed for an app's backend component to operate.\nApps implicitly have all permissions for kinds they managed (defined in `kinds`).",
-                                        "properties": {
-                                            "accessKinds": {
-                                                "description": "accessKinds is a list of KindPermission objects for accessing additional kinds provided by other apps",
-                                                "items": {
-                                                    "$ref": "#/components/schemas/KindPermission"
-                                                },
-                                                "type": "array"
-                                            }
-                                        },
-                                        "required": [
-                                            "accessKinds"
-                                        ],
-                                        "type": "object"
-                                    },
-                                    "group": {
-                                        "type": "string"
-                                    },
-                                    "mode": {
-                                        "enum": [
-                                            "apiserver",
-                                            "plugin",
-                                            "operator"
-                                        ],
-                                        "type": "string"
-                                    },
-                                    "operator": {
-                                        "$ref": "#/components/schemas/OperatorConfig"
-                                    },
-                                    "plugin": {
-                                        "$ref": "#/components/schemas/PluginConfig"
-                                    },
-                                    "preferredVersion": {
-                                        "description": "PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.\nFor CRDs, this also dictates which version is used for storage.",
-                                        "type": "string"
-                                    },
-                                    "roleBindings": {
-                                        "additionalProperties": false,
-                                        "description": "RoleBindings binds the roles specified in Roles to groups.\nBasic groups are \"anonymous\", \"viewer\", \"editor\", and \"admin\".\nAdditional groups are specified under \"additional\"",
-                                        "properties": {
-                                            "additional": {
-                                                "additionalProperties": {
-                                                    "items": {
-                                                        "type": "string"
-                                                    },
-                                                    "type": "array"
-                                                },
-                                                "type": "object"
-                                            },
-                                            "admin": {
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "type": "array"
-                                            },
-                                            "editor": {
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "type": "array"
-                                            },
-                                            "viewer": {
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "type": "array"
-                                            }
-                                        },
-                                        "type": "object"
-                                    },
-                                    "roles": {
-                                        "additionalProperties": {
-                                            "$ref": "#/components/schemas/Role"
-                                        },
-                                        "description": "Roles contains information for new user roles associated with this app.\nIt is a map of the role name (e.g. \"dashboard:reader\") to the set of permissions on resources managed by this app.",
-                                        "type": "object"
-                                    },
-                                    "versions": {
-                                        "description": "Versions is the list of versions for this manifest, in order.",
-                                        "items": {
-                                            "$ref": "#/components/schemas/ManifestVersion"
-                                        },
-                                        "type": "array"
-                                    }
-                                },
-                                "required": [
-                                    "appName",
-                                    "appDisplayName",
-                                    "group",
-                                    "versions",
-                                    "mode"
-                                ],
+                                "additionalProperties": {},
                                 "type": "object"
                             },
                             "status": {

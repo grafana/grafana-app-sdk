@@ -18,6 +18,25 @@
                                 "properties": {
                                     "apiServer": {
                                         "properties": {
+                                            "groupVersions": {
+                                                "description": "groupVersions this full apiserver serves. Enough to statically assemble\nthe /openapi/v3 root directory; leaf specs are proxied on demand.",
+                                                "items": {
+                                                    "properties": {
+                                                        "group": {
+                                                            "type": "string"
+                                                        },
+                                                        "version": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "group",
+                                                        "version"
+                                                    ],
+                                                    "type": "object"
+                                                },
+                                                "type": "array"
+                                            },
                                             "tls": {
                                                 "properties": {
                                                     "caData": {
@@ -39,7 +58,8 @@
                                         },
                                         "required": [
                                             "url",
-                                            "tls"
+                                            "tls",
+                                            "groupVersions"
                                         ],
                                         "type": "object"
                                     },
