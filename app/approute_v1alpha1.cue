@@ -1,27 +1,32 @@
 package app
 
 appRoutev1alpha1: appRouteKind & {
-	// Discriminated union on `mode`. Each branch is a closed definition, so a
-	// route carries exactly its mode's fields — nothing leaks across modes.
-	//   - apiserver: a pure proxy target. No manifest data — the remote apiserver
+	// K8s-style tagged union: a `mode` discriminator plus optional member structs.
+	// A top-level CUE disjunction (oneOf) can't be code-generated into a Go struct,
+	// and another kind's spec can't be embedded as a typed field (the codegen can't
+	// resolve a multi-hop selector reference), so:
+	//   - purity of the union is enforced in the validating admission hook, and
+	//   - manifest data is referenced by name, not embedded (no duplication/drift).
+	//
+	// Modes:
+	//   - apiserver: only `apiServer` set. A pure proxy target — the remote apiserver
 	//     owns its kinds/schemas/OpenAPI; we only need where to reach it and which
 	//     groupVersions it serves (to assemble the /openapi/v3 root).
-	//   - operator/plugin: flatten the full AppManifest spec, since the platform
-	//     serves those kinds and the manifest data is authoritative.
-	#apiserverRoute: {
-		mode:      "apiserver"
-		apiServer: #APIServerConfig
-	}
-	#operatorRoute: {
-		mode: "operator"
-		appManifestv1alpha3.schema.spec
-		operator: #OperatorConfig
-	}
-	#pluginRoute: {
-		mode: "plugin"
-		appManifestv1alpha3.schema.spec
-		plugin: #PluginConfig
-	}
+	//   - operator/plugin: `manifestName` + the respective config set. The platform
+	//     serves those kinds, so the referenced AppManifest is authoritative.
+	schema: spec: {
+		// mode selects which member below applies.
+		mode: "apiserver" | "operator" | "plugin"
 
-	schema: spec: #apiserverRoute | #operatorRoute | #pluginRoute
+		// apiserver mode
+		apiServer?: #APIServerConfig
+
+		// operator / plugin modes
+		operator?: #OperatorConfig
+		plugin?:   #PluginConfig
+
+		// manifestName references the (cluster-scoped) AppManifest this route serves.
+		// Required for operator/plugin modes; unused for apiserver mode.
+		manifestName?: string
+	}
 }
