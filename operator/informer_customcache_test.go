@@ -344,15 +344,31 @@ func (lw *mockListWatcher) Watch(options metav1.ListOptions) (watch.Interface, e
 	return nil, nil
 }
 
+// mockWatch implements watch.Interface and resource.WatchResponse, so it can be returned from a
+// ListWatchClient's Watch call. WatchEvents is a stub: consumers check KubernetesCompatibleWatch
+// first and use the underlying watch.Interface directly.
 type mockWatch struct {
 	events chan watch.Event
 }
+
+var (
+	_ resource.WatchResponse    = &mockWatch{}
+	_ KubernetesCompatibleWatch = &mockWatch{}
+)
 
 func (w *mockWatch) ResultChan() <-chan watch.Event {
 	return w.events
 }
 
 func (*mockWatch) Stop() {}
+
+func (*mockWatch) WatchEvents() <-chan resource.WatchEvent {
+	return nil
+}
+
+func (w *mockWatch) KubernetesWatch() watch.Interface {
+	return w
+}
 
 func newUnsafeCache() *unsafeCache {
 	return &unsafeCache{

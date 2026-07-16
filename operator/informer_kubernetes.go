@@ -249,6 +249,15 @@ func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 		err := cast.Into(newObj, kind.Codec(resource.KindEncodingJSON))
 		return newObj, err
 	}
+
+	// Deletes which are missed while the watch is disconnected are delivered on relist
+	// as cache.DeletedFinalStateUnknown tombstones wrapping the last known state of the object
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		if tombstone.Obj == nil {
+			return nil, fmt.Errorf("cannot convert DeletedFinalStateUnknown tombstone for %q: it contains no object", tombstone.Key)
+		}
+		return toResourceObject(tombstone.Obj, kind)
+	}
 	// TODO: other methods...?
 
 	return nil, fmt.Errorf("unable to cast %v into resource.Object", reflect.TypeOf(obj))
