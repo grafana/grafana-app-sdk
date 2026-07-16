@@ -27,6 +27,6 @@ appRoutev1alpha1: appRouteKind & {
 
 		// manifestName references the (cluster-scoped) AppManifest this route serves.
 		// Required for operator/plugin modes; unused for apiserver mode.
-		manifestName?: string
+		manifestName: string
 	}
 }
