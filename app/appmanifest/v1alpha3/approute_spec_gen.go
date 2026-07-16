@@ -137,7 +137,7 @@ type AppRouteSpec struct {
 	Plugin   *AppRoutePluginConfig   `json:"plugin,omitempty"`
 	// manifestName references the (cluster-scoped) AppManifest this route serves.
 	// Required for operator/plugin modes; unused for apiserver mode.
-	ManifestName *string `json:"manifestName,omitempty"`
+	ManifestName string `json:"manifestName"`
 }
 
 // NewAppRouteSpec creates a new AppRouteSpec object.

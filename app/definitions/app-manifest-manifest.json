@@ -2221,7 +2221,8 @@
                                     }
                                 },
                                 "required": [
-                                    "mode"
+                                    "mode",
+                                    "manifestName"
                                 ],
                                 "type": "object"
                             },
