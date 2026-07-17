@@ -1826,21 +1826,23 @@
                         "conversion": false
                     },
                     {
-                        "kind": "RuntimeConfig",
-                        "plural": "RuntimeConfigs",
+                        "kind": "RouteBackend",
+                        "plural": "RouteBackends",
                         "scope": "Cluster",
                         "userReadable": false,
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
                         "schemas": {
-                            "APIServerConfig": {
+                            "Config": {
                                 "additionalProperties": false,
+                                "description": "#Config is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
                                 "properties": {
-                                    "groupVersions": {
-                                        "description": "groupVersions this full apiserver serves. Enough to statically assemble\nthe /openapi/v3 root directory; leaf specs are proxied on demand.",
-                                        "items": {
-                                            "$ref": "#/components/schemas/GroupVersion"
-                                        },
-                                        "type": "array"
-                                    },
                                     "tls": {
                                         "$ref": "#/components/schemas/TLSOptions"
                                     },
@@ -1850,24 +1852,7 @@
                                 },
                                 "required": [
                                     "url",
-                                    "tls",
-                                    "groupVersions"
-                                ],
-                                "type": "object"
-                            },
-                            "GroupVersion": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "group": {
-                                        "type": "string"
-                                    },
-                                    "version": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "group",
-                                    "version"
+                                    "tls"
                                 ],
                                 "type": "object"
                             },
@@ -1953,7 +1938,7 @@
                                 ],
                                 "type": "object"
                             },
-                            "RuntimeConfig": {
+                            "RouteBackend": {
                                 "properties": {
                                     "spec": {
                                         "$ref": "#/components/schemas/spec"
@@ -1986,15 +1971,7 @@
                                 "additionalProperties": false,
                                 "properties": {
                                     "apiServer": {
-                                        "$ref": "#/components/schemas/APIServerConfig"
-                                    },
-                                    "mode": {
-                                        "enum": [
-                                            "apiserver",
-                                            "plugin",
-                                            "operator"
-                                        ],
-                                        "type": "string"
+                                        "$ref": "#/components/schemas/Config"
                                     },
                                     "operator": {
                                         "$ref": "#/components/schemas/OperatorConfig"
@@ -2003,222 +1980,6 @@
                                         "$ref": "#/components/schemas/PluginConfig"
                                     }
                                 },
-                                "required": [
-                                    "mode"
-                                ],
-                                "type": "object"
-                            },
-                            "status": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "additionalFields": {
-                                        "additionalProperties": true,
-                                        "description": "additionalFields is reserved for future use",
-                                        "type": "object"
-                                    },
-                                    "operatorStates": {
-                                        "additionalProperties": {
-                                            "$ref": "#/components/schemas/OperatorState"
-                                        },
-                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
-                                        "type": "object"
-                                    }
-                                },
-                                "type": "object"
-                            }
-                        },
-                        "conversion": false
-                    },
-                    {
-                        "kind": "AppRoute",
-                        "plural": "AppRoutes",
-                        "scope": "Cluster",
-                        "userReadable": false,
-                        "schemas": {
-                            "APIServerConfig": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "groupVersions": {
-                                        "description": "groupVersions this full apiserver serves. Enough to statically assemble\nthe /openapi/v3 root directory; leaf specs are proxied on demand.",
-                                        "items": {
-                                            "$ref": "#/components/schemas/GroupVersion"
-                                        },
-                                        "type": "array"
-                                    },
-                                    "tls": {
-                                        "$ref": "#/components/schemas/TLSOptions"
-                                    },
-                                    "url": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "url",
-                                    "tls",
-                                    "groupVersions"
-                                ],
-                                "type": "object"
-                            },
-                            "AppRoute": {
-                                "properties": {
-                                    "spec": {
-                                        "$ref": "#/components/schemas/spec"
-                                    },
-                                    "status": {
-                                        "$ref": "#/components/schemas/status"
-                                    }
-                                },
-                                "required": [
-                                    "spec"
-                                ]
-                            },
-                            "GroupVersion": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "group": {
-                                        "type": "string"
-                                    },
-                                    "version": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "group",
-                                    "version"
-                                ],
-                                "type": "object"
-                            },
-                            "OperatorConfig": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "tls": {
-                                        "$ref": "#/components/schemas/TLSOptions"
-                                    },
-                                    "url": {
-                                        "type": "string"
-                                    },
-                                    "webhooks": {
-                                        "$ref": "#/components/schemas/OperatorWebhookOptions"
-                                    }
-                                },
-                                "required": [
-                                    "url",
-                                    "tls"
-                                ],
-                                "type": "object"
-                            },
-                            "OperatorState": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "descriptiveState": {
-                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                        "type": "string"
-                                    },
-                                    "details": {
-                                        "additionalProperties": true,
-                                        "description": "details contains any extra information that is operator-specific",
-                                        "type": "object"
-                                    },
-                                    "lastEvaluation": {
-                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                        "type": "string"
-                                    },
-                                    "state": {
-                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                        "enum": [
-                                            "success",
-                                            "in_progress",
-                                            "failed"
-                                        ],
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "lastEvaluation",
-                                    "state"
-                                ],
-                                "type": "object"
-                            },
-                            "OperatorWebhookOptions": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "conversionPath": {
-                                        "type": "string"
-                                    },
-                                    "mutationPath": {
-                                        "type": "string"
-                                    },
-                                    "validationPath": {
-                                        "type": "string"
-                                    }
-                                },
-                                "type": "object"
-                            },
-                            "PluginConfig": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "tls": {
-                                        "$ref": "#/components/schemas/TLSOptions"
-                                    },
-                                    "url": {
-                                        "type": "string"
-                                    }
-                                },
-                                "required": [
-                                    "url",
-                                    "tls"
-                                ],
-                                "type": "object"
-                            },
-                            "TLSOptions": {
-                                "additionalProperties": false,
-                                "properties": {
-                                    "caData": {
-                                        "type": "string"
-                                    },
-                                    "skipTLSVerify": {
-                                        "default": false,
-                                        "type": "boolean"
-                                    }
-                                },
-                                "required": [
-                                    "skipTLSVerify"
-                                ],
-                                "type": "object"
-                            },
-                            "spec": {
-                                "additionalProperties": false,
-                                "description": "K8s-style tagged union: a `mode` discriminator plus optional member structs.\nA top-level CUE disjunction (oneOf) can't be code-generated into a Go struct,\nand another kind's spec can't be embedded as a typed field (the codegen can't\nresolve a multi-hop selector reference), so:\n  - purity of the union is enforced in the validating admission hook, and\n  - manifest data is referenced by name, not embedded (no duplication/drift).\n\nModes:\n  - apiserver: only `apiServer` set. A pure proxy target — the remote apiserver\n    owns its kinds/schemas/OpenAPI; we only need where to reach it and which\n    groupVersions it serves (to assemble the /openapi/v3 root).\n  - operator/plugin: `manifestName` + the respective config set. The platform\n    serves those kinds, so the referenced AppManifest is authoritative.",
-                                "properties": {
-                                    "apiServer": {
-                                        "$ref": "#/components/schemas/APIServerConfig",
-                                        "description": "apiserver mode"
-                                    },
-                                    "manifestName": {
-                                        "description": "manifestName references the (cluster-scoped) AppManifest this route serves.\nRequired for operator/plugin modes; unused for apiserver mode.",
-                                        "type": "string"
-                                    },
-                                    "mode": {
-                                        "description": "mode selects which member below applies.",
-                                        "enum": [
-                                            "apiserver",
-                                            "operator",
-                                            "plugin"
-                                        ],
-                                        "type": "string"
-                                    },
-                                    "operator": {
-                                        "$ref": "#/components/schemas/OperatorConfig",
-                                        "description": "operator / plugin modes"
-                                    },
-                                    "plugin": {
-                                        "$ref": "#/components/schemas/PluginConfig"
-                                    }
-                                },
-                                "required": [
-                                    "mode",
-                                    "manifestName"
-                                ],
                                 "type": "object"
                             },
                             "status": {

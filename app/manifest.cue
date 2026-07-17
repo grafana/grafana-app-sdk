@@ -26,7 +26,7 @@ manifest: {
 		}
 		"v1alpha3": {
 			codegen: ts: enabled: false
-			kinds: [appManifestv1alpha3, runtimeConfigv1alpha1, appRoutev1alpha1]
+			kinds: [appManifestv1alpha3, routeBackendv1alpha1]
 		}
 	}
 	extraPermissions: {
@@ -61,16 +61,8 @@ appManifestKind: {
 	}
 }
 
-runtimeConfigKind: {
-	kind: "RuntimeConfig"
-	scope: "Cluster"
-	codegen: {
-		ts: enabled: false
-	}
-}
-
-appRouteKind: {
-	kind: "AppRoute"
+routeBackendKind: {
+	kind: "RouteBackend"
 	scope: "Cluster"
 	codegen: {
 		ts: enabled: false

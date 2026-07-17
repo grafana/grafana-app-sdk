@@ -15,29 +15,29 @@ import (
 )
 
 // +k8s:openapi-gen=true
-type AppRoute struct {
+type RouteBackend struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
 
-	// Spec is the spec of the AppRoute
-	Spec AppRouteSpec `json:"spec" yaml:"spec"`
+	// Spec is the spec of the RouteBackend
+	Spec RouteBackendSpec `json:"spec" yaml:"spec"`
 
-	Status AppRouteStatus `json:"status" yaml:"status"`
+	Status RouteBackendStatus `json:"status" yaml:"status"`
 }
 
-func NewAppRoute() *AppRoute {
-	return &AppRoute{
-		Spec:   *NewAppRouteSpec(),
-		Status: *NewAppRouteStatus(),
+func NewRouteBackend() *RouteBackend {
+	return &RouteBackend{
+		Spec:   *NewRouteBackendSpec(),
+		Status: *NewRouteBackendStatus(),
 	}
 }
 
-func (o *AppRoute) GetSpec() any {
+func (o *RouteBackend) GetSpec() any {
 	return o.Spec
 }
 
-func (o *AppRoute) SetSpec(spec any) error {
-	cast, ok := spec.(AppRouteSpec)
+func (o *RouteBackend) SetSpec(spec any) error {
+	cast, ok := spec.(RouteBackendSpec)
 	if !ok {
 		return fmt.Errorf("cannot set spec type %#v, not of type Spec", spec)
 	}
@@ -45,13 +45,13 @@ func (o *AppRoute) SetSpec(spec any) error {
 	return nil
 }
 
-func (o *AppRoute) GetSubresources() map[string]any {
+func (o *RouteBackend) GetSubresources() map[string]any {
 	return map[string]any{
 		"status": o.Status,
 	}
 }
 
-func (o *AppRoute) GetSubresource(name string) (any, bool) {
+func (o *RouteBackend) GetSubresource(name string) (any, bool) {
 	switch name {
 	case "status":
 		return o.Status, true
@@ -60,12 +60,12 @@ func (o *AppRoute) GetSubresource(name string) (any, bool) {
 	}
 }
 
-func (o *AppRoute) SetSubresource(name string, value any) error {
+func (o *RouteBackend) SetSubresource(name string, value any) error {
 	switch name {
 	case "status":
-		cast, ok := value.(AppRouteStatus)
+		cast, ok := value.(RouteBackendStatus)
 		if !ok {
-			return fmt.Errorf("cannot set status type %#v, not of type AppRouteStatus", value)
+			return fmt.Errorf("cannot set status type %#v, not of type RouteBackendStatus", value)
 		}
 		o.Status = cast
 		return nil
@@ -74,7 +74,7 @@ func (o *AppRoute) SetSubresource(name string, value any) error {
 	}
 }
 
-func (o *AppRoute) GetStaticMetadata() resource.StaticMetadata {
+func (o *RouteBackend) GetStaticMetadata() resource.StaticMetadata {
 	gvk := o.GroupVersionKind()
 	return resource.StaticMetadata{
 		Name:      o.ObjectMeta.Name,
@@ -85,7 +85,7 @@ func (o *AppRoute) GetStaticMetadata() resource.StaticMetadata {
 	}
 }
 
-func (o *AppRoute) SetStaticMetadata(metadata resource.StaticMetadata) {
+func (o *RouteBackend) SetStaticMetadata(metadata resource.StaticMetadata) {
 	o.Name = metadata.Name
 	o.Namespace = metadata.Namespace
 	o.SetGroupVersionKind(schema.GroupVersionKind{
@@ -95,7 +95,7 @@ func (o *AppRoute) SetStaticMetadata(metadata resource.StaticMetadata) {
 	})
 }
 
-func (o *AppRoute) GetCommonMetadata() resource.CommonMetadata {
+func (o *RouteBackend) GetCommonMetadata() resource.CommonMetadata {
 	dt := o.DeletionTimestamp
 	var deletionTimestamp *time.Time
 	if dt != nil {
@@ -127,7 +127,7 @@ func (o *AppRoute) GetCommonMetadata() resource.CommonMetadata {
 	}
 }
 
-func (o *AppRoute) SetCommonMetadata(metadata resource.CommonMetadata) {
+func (o *RouteBackend) SetCommonMetadata(metadata resource.CommonMetadata) {
 	o.UID = types.UID(metadata.UID)
 	o.ResourceVersion = metadata.ResourceVersion
 	o.Generation = metadata.Generation
@@ -172,7 +172,7 @@ func (o *AppRoute) SetCommonMetadata(metadata resource.CommonMetadata) {
 	}
 }
 
-func (o *AppRoute) GetCreatedBy() string {
+func (o *RouteBackend) GetCreatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -180,7 +180,7 @@ func (o *AppRoute) GetCreatedBy() string {
 	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
 }
 
-func (o *AppRoute) SetCreatedBy(createdBy string) {
+func (o *RouteBackend) SetCreatedBy(createdBy string) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -188,7 +188,7 @@ func (o *AppRoute) SetCreatedBy(createdBy string) {
 	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
 }
 
-func (o *AppRoute) GetUpdateTimestamp() time.Time {
+func (o *RouteBackend) GetUpdateTimestamp() time.Time {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -197,7 +197,7 @@ func (o *AppRoute) GetUpdateTimestamp() time.Time {
 	return parsed
 }
 
-func (o *AppRoute) SetUpdateTimestamp(updateTimestamp time.Time) {
+func (o *RouteBackend) SetUpdateTimestamp(updateTimestamp time.Time) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -205,7 +205,7 @@ func (o *AppRoute) SetUpdateTimestamp(updateTimestamp time.Time) {
 	o.ObjectMeta.Annotations["grafana.com/updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
 }
 
-func (o *AppRoute) GetUpdatedBy() string {
+func (o *RouteBackend) GetUpdatedBy() string {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -213,7 +213,7 @@ func (o *AppRoute) GetUpdatedBy() string {
 	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
 }
 
-func (o *AppRoute) SetUpdatedBy(updatedBy string) {
+func (o *RouteBackend) SetUpdatedBy(updatedBy string) {
 	if o.ObjectMeta.Annotations == nil {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
@@ -221,21 +221,21 @@ func (o *AppRoute) SetUpdatedBy(updatedBy string) {
 	o.ObjectMeta.Annotations["grafana.com/updatedBy"] = updatedBy
 }
 
-func (o *AppRoute) Copy() resource.Object {
+func (o *RouteBackend) Copy() resource.Object {
 	return resource.CopyObject(o)
 }
 
-func (o *AppRoute) DeepCopyObject() runtime.Object {
+func (o *RouteBackend) DeepCopyObject() runtime.Object {
 	return o.Copy()
 }
 
-func (o *AppRoute) DeepCopy() *AppRoute {
-	cpy := &AppRoute{}
+func (o *RouteBackend) DeepCopy() *RouteBackend {
+	cpy := &RouteBackend{}
 	o.DeepCopyInto(cpy)
 	return cpy
 }
 
-func (o *AppRoute) DeepCopyInto(dst *AppRoute) {
+func (o *RouteBackend) DeepCopyInto(dst *RouteBackend) {
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
 	o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
@@ -243,39 +243,39 @@ func (o *AppRoute) DeepCopyInto(dst *AppRoute) {
 	o.Status.DeepCopyInto(&dst.Status)
 }
 
-func (AppRoute) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.AppRoute"
+func (RouteBackend) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.RouteBackend"
 }
 
 // Interface compliance compile-time check
-var _ resource.Object = &AppRoute{}
+var _ resource.Object = &RouteBackend{}
 
 // +k8s:openapi-gen=true
-type AppRouteList struct {
+type RouteBackendList struct {
 	metav1.TypeMeta `json:",inline" yaml:",inline"`
 	metav1.ListMeta `json:"metadata" yaml:"metadata"`
-	Items           []AppRoute `json:"items" yaml:"items"`
+	Items           []RouteBackend `json:"items" yaml:"items"`
 }
 
-func (o *AppRouteList) DeepCopyObject() runtime.Object {
+func (o *RouteBackendList) DeepCopyObject() runtime.Object {
 	return o.Copy()
 }
 
-func (o *AppRouteList) Copy() resource.ListObject {
-	cpy := &AppRouteList{
+func (o *RouteBackendList) Copy() resource.ListObject {
+	cpy := &RouteBackendList{
 		TypeMeta: o.TypeMeta,
-		Items:    make([]AppRoute, len(o.Items)),
+		Items:    make([]RouteBackend, len(o.Items)),
 	}
 	o.ListMeta.DeepCopyInto(&cpy.ListMeta)
 	for i := 0; i < len(o.Items); i++ {
-		if item, ok := o.Items[i].Copy().(*AppRoute); ok {
+		if item, ok := o.Items[i].Copy().(*RouteBackend); ok {
 			cpy.Items[i] = *item
 		}
 	}
 	return cpy
 }
 
-func (o *AppRouteList) GetItems() []resource.Object {
+func (o *RouteBackendList) GetItems() []resource.Object {
 	items := make([]resource.Object, len(o.Items))
 	for i := 0; i < len(o.Items); i++ {
 		items[i] = &o.Items[i]
@@ -283,52 +283,52 @@ func (o *AppRouteList) GetItems() []resource.Object {
 	return items
 }
 
-func (o *AppRouteList) SetItems(items []resource.Object) {
-	o.Items = make([]AppRoute, len(items))
+func (o *RouteBackendList) SetItems(items []resource.Object) {
+	o.Items = make([]RouteBackend, len(items))
 	for i := 0; i < len(items); i++ {
-		o.Items[i] = *items[i].(*AppRoute)
+		o.Items[i] = *items[i].(*RouteBackend)
 	}
 }
 
-func (o *AppRouteList) DeepCopy() *AppRouteList {
-	cpy := &AppRouteList{}
+func (o *RouteBackendList) DeepCopy() *RouteBackendList {
+	cpy := &RouteBackendList{}
 	o.DeepCopyInto(cpy)
 	return cpy
 }
 
-func (o *AppRouteList) DeepCopyInto(dst *AppRouteList) {
+func (o *RouteBackendList) DeepCopyInto(dst *RouteBackendList) {
 	resource.CopyObjectInto(dst, o)
 }
 
-func (AppRouteList) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.AppRouteList"
+func (RouteBackendList) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.RouteBackendList"
 }
 
 // Interface compliance compile-time check
-var _ resource.ListObject = &AppRouteList{}
+var _ resource.ListObject = &RouteBackendList{}
 
 // Copy methods for all subresource types
 
 // DeepCopy creates a full deep copy of Spec
-func (s *AppRouteSpec) DeepCopy() *AppRouteSpec {
-	cpy := &AppRouteSpec{}
+func (s *RouteBackendSpec) DeepCopy() *RouteBackendSpec {
+	cpy := &RouteBackendSpec{}
 	s.DeepCopyInto(cpy)
 	return cpy
 }
 
 // DeepCopyInto deep copies Spec into another Spec object
-func (s *AppRouteSpec) DeepCopyInto(dst *AppRouteSpec) {
+func (s *RouteBackendSpec) DeepCopyInto(dst *RouteBackendSpec) {
 	resource.CopyObjectInto(dst, s)
 }
 
-// DeepCopy creates a full deep copy of AppRouteStatus
-func (s *AppRouteStatus) DeepCopy() *AppRouteStatus {
-	cpy := &AppRouteStatus{}
+// DeepCopy creates a full deep copy of RouteBackendStatus
+func (s *RouteBackendStatus) DeepCopy() *RouteBackendStatus {
+	cpy := &RouteBackendStatus{}
 	s.DeepCopyInto(cpy)
 	return cpy
 }
 
-// DeepCopyInto deep copies AppRouteStatus into another AppRouteStatus object
-func (s *AppRouteStatus) DeepCopyInto(dst *AppRouteStatus) {
+// DeepCopyInto deep copies RouteBackendStatus into another RouteBackendStatus object
+func (s *RouteBackendStatus) DeepCopyInto(dst *RouteBackendStatus) {
 	resource.CopyObjectInto(dst, s)
 }

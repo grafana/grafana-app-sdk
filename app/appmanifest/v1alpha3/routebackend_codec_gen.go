@@ -11,18 +11,18 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// AppRouteJSONCodec is an implementation of resource.Codec for kubernetes JSON encoding
-type AppRouteJSONCodec struct{}
+// RouteBackendJSONCodec is an implementation of resource.Codec for kubernetes JSON encoding
+type RouteBackendJSONCodec struct{}
 
 // Read reads JSON-encoded bytes from `reader` and unmarshals them into `into`
-func (*AppRouteJSONCodec) Read(reader io.Reader, into resource.Object) error {
+func (*RouteBackendJSONCodec) Read(reader io.Reader, into resource.Object) error {
 	return json.NewDecoder(reader).Decode(into)
 }
 
 // Write writes JSON-encoded bytes into `writer` marshaled from `from`
-func (*AppRouteJSONCodec) Write(writer io.Writer, from resource.Object) error {
+func (*RouteBackendJSONCodec) Write(writer io.Writer, from resource.Object) error {
 	return json.NewEncoder(writer).Encode(from)
 }
 
 // Interface compliance checks
-var _ resource.Codec = &AppRouteJSONCodec{}
+var _ resource.Codec = &RouteBackendJSONCodec{}
