@@ -39,8 +39,12 @@ routeBackendv1alpha1: routeBackendKind & {
 	// generated manifest advertise the webhook so the platform calls it.
 	validation: operations: ["CREATE", "UPDATE"]
 	schema: spec: {
-		apiServer?: #Config
+		mode: "forward" | "plugin" | "operator"
+		// Basic HTTP Proxy mode
+		forward?: #CommonBackendConfig
+		// HTTP based operator
 		operator?:  #OperatorConfig
+		// Plugin based handler
 		plugin?:    #PluginConfig
 	}
 }

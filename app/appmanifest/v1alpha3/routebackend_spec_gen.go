@@ -2,25 +2,25 @@
 
 package v1alpha3
 
-// #Config is the common shape for every backend target: where to reach it and
+// #CommonBackendConfig is the common shape for every backend target: where to reach it and
 // how to trust it. The three concrete configs embed it. GroupVersions are NOT
 // carried here — they are derived from the same-name AppManifest for all modes.
 // +k8s:openapi-gen=true
-type RouteBackendConfig struct {
+type RouteBackendCommonBackendConfig struct {
 	Url string                 `json:"url"`
 	Tls RouteBackendTLSOptions `json:"tls"`
 }
 
-// NewRouteBackendConfig creates a new RouteBackendConfig object.
-func NewRouteBackendConfig() *RouteBackendConfig {
-	return &RouteBackendConfig{
+// NewRouteBackendCommonBackendConfig creates a new RouteBackendCommonBackendConfig object.
+func NewRouteBackendCommonBackendConfig() *RouteBackendCommonBackendConfig {
+	return &RouteBackendCommonBackendConfig{
 		Tls: *NewRouteBackendTLSOptions(),
 	}
 }
 
-// OpenAPIModelName returns the OpenAPI model name for RouteBackendConfig.
-func (RouteBackendConfig) OpenAPIModelName() string {
-	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.RouteBackendConfig"
+// OpenAPIModelName returns the OpenAPI model name for RouteBackendCommonBackendConfig.
+func (RouteBackendCommonBackendConfig) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.RouteBackendCommonBackendConfig"
 }
 
 // +k8s:openapi-gen=true
@@ -97,9 +97,13 @@ func (RouteBackendPluginConfig) OpenAPIModelName() string {
 
 // +k8s:openapi-gen=true
 type RouteBackendSpec struct {
-	ApiServer *RouteBackendConfig         `json:"apiServer,omitempty"`
-	Operator  *RouteBackendOperatorConfig `json:"operator,omitempty"`
-	Plugin    *RouteBackendPluginConfig   `json:"plugin,omitempty"`
+	Mode RouteBackendSpecMode `json:"mode"`
+	// Basic HTTP Proxy mode
+	Forward *RouteBackendCommonBackendConfig `json:"forward,omitempty"`
+	// HTTP based operator
+	Operator *RouteBackendOperatorConfig `json:"operator,omitempty"`
+	// Plugin based handler
+	Plugin *RouteBackendPluginConfig `json:"plugin,omitempty"`
 }
 
 // NewRouteBackendSpec creates a new RouteBackendSpec object.
@@ -110,4 +114,18 @@ func NewRouteBackendSpec() *RouteBackendSpec {
 // OpenAPIModelName returns the OpenAPI model name for RouteBackendSpec.
 func (RouteBackendSpec) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.RouteBackendSpec"
+}
+
+// +k8s:openapi-gen=true
+type RouteBackendSpecMode string
+
+const (
+	RouteBackendSpecModeForward  RouteBackendSpecMode = "forward"
+	RouteBackendSpecModePlugin   RouteBackendSpecMode = "plugin"
+	RouteBackendSpecModeOperator RouteBackendSpecMode = "operator"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for RouteBackendSpecMode.
+func (RouteBackendSpecMode) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha3.RouteBackendSpecMode"
 }
