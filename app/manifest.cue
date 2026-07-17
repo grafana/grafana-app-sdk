@@ -24,6 +24,10 @@ manifest: {
 			codegen: ts: enabled: false
 			kinds: [appManifestv1alpha2]
 		}
+		"v1alpha3": {
+			codegen: ts: enabled: false
+			kinds: [appManifestv1alpha3, routeBackendv1alpha1]
+		}
 	}
 	extraPermissions: {
 		accessKinds: [{
@@ -51,6 +55,14 @@ manifest: {
 
 appManifestKind: {
 	kind: "AppManifest"
+	scope: "Cluster"
+	codegen: {
+		ts: enabled: false
+	}
+}
+
+routeBackendKind: {
+	kind: "RouteBackend"
 	scope: "Cluster"
 	codegen: {
 		ts: enabled: false
