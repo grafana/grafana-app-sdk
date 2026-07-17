@@ -16,8 +16,8 @@
                         "properties": {
                             "spec": {
                                 "properties": {
-                                    "apiServer": {
-                                        "description": "#Config is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
+                                    "forward": {
+                                        "description": "#CommonBackendConfig is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
                                         "properties": {
                                             "tls": {
                                                 "properties": {
@@ -43,6 +43,14 @@
                                             "tls"
                                         ],
                                         "type": "object"
+                                    },
+                                    "mode": {
+                                        "enum": [
+                                            "forward",
+                                            "plugin",
+                                            "operator"
+                                        ],
+                                        "type": "string"
                                     },
                                     "operator": {
                                         "properties": {
@@ -113,6 +121,9 @@
                                         "type": "object"
                                     }
                                 },
+                                "required": [
+                                    "mode"
+                                ],
                                 "type": "object"
                             },
                             "status": {

@@ -1839,9 +1839,9 @@
                             }
                         },
                         "schemas": {
-                            "Config": {
+                            "CommonBackendConfig": {
                                 "additionalProperties": false,
-                                "description": "#Config is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
+                                "description": "#CommonBackendConfig is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
                                 "properties": {
                                     "tls": {
                                         "$ref": "#/components/schemas/TLSOptions"
@@ -1970,16 +1970,30 @@
                             "spec": {
                                 "additionalProperties": false,
                                 "properties": {
-                                    "apiServer": {
-                                        "$ref": "#/components/schemas/Config"
+                                    "forward": {
+                                        "$ref": "#/components/schemas/CommonBackendConfig",
+                                        "description": "Basic HTTP Proxy mode"
+                                    },
+                                    "mode": {
+                                        "enum": [
+                                            "forward",
+                                            "plugin",
+                                            "operator"
+                                        ],
+                                        "type": "string"
                                     },
                                     "operator": {
-                                        "$ref": "#/components/schemas/OperatorConfig"
+                                        "$ref": "#/components/schemas/OperatorConfig",
+                                        "description": "HTTP based operator"
                                     },
                                     "plugin": {
-                                        "$ref": "#/components/schemas/PluginConfig"
+                                        "$ref": "#/components/schemas/PluginConfig",
+                                        "description": "Plugin based handler"
                                     }
                                 },
+                                "required": [
+                                    "mode"
+                                ],
                                 "type": "object"
                             },
                             "status": {
