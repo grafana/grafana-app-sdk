@@ -169,6 +169,7 @@ func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig
 		kubeConfig.CertFile = ""
 		kubeConfig.KeyData = nil
 		kubeConfig.KeyFile = ""
+		kubeConfig.Transport = nil
 	}
 
 	return kubeConfig
