@@ -27,14 +27,3 @@ updates:
     all:
       patterns:
       - "*"
-- package-ecosystem: gomod
-  directory: "/plugin/"
-  target-branch: "lts/v0.24"
-  schedule:
-    interval: daily
-  groups:
-    all:
-      patterns:
-        - "*"
-      exclude-patterns:
-        - "*grafana-app-sdk*" # Don't update the app-sdk version via dependabot for this branch
