@@ -63,15 +63,17 @@ func (t *TypedSpecObject[T]) GetCommonMetadata() CommonMetadata {
 	createdBy := ""
 	updatedBy := ""
 	if t.Annotations != nil {
-		strUpdt, ok := t.Annotations[AnnotationUpdateTimestamp]
-		if ok {
+		// Read the "grafana.app/" keys first and fall back to the old "grafana.com/" keys, so objects
+		// written by core and by older SDK versions both read correctly.
+		strUpdt := firstNonEmptyAnnotation(t.Annotations, AnnoKeyUpdatedTimestamp, AnnotationUpdateTimestamp)
+		if strUpdt != "" {
 			updt, err = time.Parse(time.RFC3339, strUpdt)
 			if err != nil {
 				// HMMMM
 			}
 		}
-		createdBy = t.Annotations[AnnotationCreatedBy]
-		updatedBy = t.Annotations[AnnotationUpdatedBy]
+		createdBy = firstNonEmptyAnnotation(t.Annotations, AnnoKeyCreatedBy, AnnotationCreatedBy)
+		updatedBy = firstNonEmptyAnnotation(t.Annotations, AnnoKeyUpdatedBy, AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(t.UID),
@@ -206,15 +208,17 @@ func (t *TypedSpecStatusObject[T, S]) GetCommonMetadata() CommonMetadata {
 	createdBy := ""
 	updatedBy := ""
 	if t.Annotations != nil {
-		strUpdt, ok := t.Annotations[AnnotationUpdateTimestamp]
-		if ok {
+		// Read the "grafana.app/" keys first and fall back to the old "grafana.com/" keys, so objects
+		// written by core and by older SDK versions both read correctly.
+		strUpdt := firstNonEmptyAnnotation(t.Annotations, AnnoKeyUpdatedTimestamp, AnnotationUpdateTimestamp)
+		if strUpdt != "" {
 			updt, err = time.Parse(time.RFC3339, strUpdt)
 			if err != nil {
 				// HMMMM
 			}
 		}
-		createdBy = t.Annotations[AnnotationCreatedBy]
-		updatedBy = t.Annotations[AnnotationUpdatedBy]
+		createdBy = firstNonEmptyAnnotation(t.Annotations, AnnoKeyCreatedBy, AnnotationCreatedBy)
+		updatedBy = firstNonEmptyAnnotation(t.Annotations, AnnoKeyUpdatedBy, AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(t.UID),
@@ -369,15 +373,17 @@ func (t *TypedObject[Spec, Sub]) GetCommonMetadata() CommonMetadata {
 	createdBy := ""
 	updatedBy := ""
 	if t.Annotations != nil {
-		strUpdt, ok := t.Annotations[AnnotationUpdateTimestamp]
-		if ok {
+		// Read the "grafana.app/" keys first and fall back to the old "grafana.com/" keys, so objects
+		// written by core and by older SDK versions both read correctly.
+		strUpdt := firstNonEmptyAnnotation(t.Annotations, AnnoKeyUpdatedTimestamp, AnnotationUpdateTimestamp)
+		if strUpdt != "" {
 			updt, err = time.Parse(time.RFC3339, strUpdt)
 			if err != nil {
 				// HMMMM
 			}
 		}
-		createdBy = t.Annotations[AnnotationCreatedBy]
-		updatedBy = t.Annotations[AnnotationUpdatedBy]
+		createdBy = firstNonEmptyAnnotation(t.Annotations, AnnoKeyCreatedBy, AnnotationCreatedBy)
+		updatedBy = firstNonEmptyAnnotation(t.Annotations, AnnoKeyUpdatedBy, AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(t.UID),
