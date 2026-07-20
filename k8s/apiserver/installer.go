@@ -336,6 +336,9 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	res := map[string]common.OpenAPIDefinition{}
 	hasCustomRoutes := false
 	for _, v := range r.appConfig.ManifestData.Versions {
+		if !v.Served {
+			continue
+		}
 		for _, manifestKind := range v.Kinds {
 			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
 			if !ok {
@@ -509,6 +512,9 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	// Make sure we didn't miss any versions that don't have any kinds registered
 	hasEnabledRoutes := make(map[string]bool)
 	for _, v := range r.appConfig.ManifestData.Versions {
+		if !v.Served {
+			continue
+		}
 		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
 		for routePath := range v.Routes.Namespaced {
 			if r.isCustomRouteEnabled(gv, routePath) {
@@ -799,6 +805,9 @@ func (r *defaultInstaller) App() (app.App, error) {
 func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 	groupVersions := make([]schema.GroupVersion, 0, len(r.appConfig.ManifestData.Versions))
 	for _, gv := range r.appConfig.ManifestData.Versions {
+		if !gv.Served {
+			continue
+		}
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}
 	return groupVersions
@@ -1132,6 +1141,9 @@ func (r *defaultInstaller) getKindsByGroupVersion() (map[schema.GroupVersion][]K
 	out := make(map[schema.GroupVersion][]KindAndManifestKind)
 	group := r.appConfig.ManifestData.Group
 	for _, v := range r.appConfig.ManifestData.Versions {
+		if !v.Served {
+			continue
+		}
 		for _, manifestKind := range v.Kinds {
 			gv := schema.GroupVersion{Group: group, Version: v.Name}
 			kind, ok := r.resolver.KindToGoType(manifestKind.Kind, v.Name)
