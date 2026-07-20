@@ -149,6 +149,10 @@ var DefaultInformerSupplier = func(
 		return nil, err
 	}
 
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
+	}
+
 	inf, err := operator.NewKubernetesBasedInformer(kind, client, options)
 	if err != nil {
 		return nil, err
@@ -178,6 +182,10 @@ var OptimizedInformerSupplier = func(
 	client, err := clients.ClientFor(kind)
 	if err != nil {
 		return nil, err
+	}
+
+	if options.ResourceKind == "" {
+		options.ResourceKind = kind.GroupVersionKind().String()
 	}
 
 	store := cache.NewStore(cache.DeletionHandlingMetaNamespaceKeyFunc)
@@ -499,6 +507,9 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 			Namespace:      kind.ReconcileOptions.Namespace,
 			LabelFilters:   kind.ReconcileOptions.LabelFilters,
 			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+		}
+		if opts.MetricsConfig == (metrics.Config{}) {
+			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
 		}
 
 		inf, err := infSupplier(kind.Kind, a.clientGenerator, opts)

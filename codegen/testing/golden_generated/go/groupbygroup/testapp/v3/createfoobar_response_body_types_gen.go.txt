@@ -2,6 +2,9 @@
 
 package v3
 
+// Key identifies a foobar entry.
+// It is referenced by a custom route, so its multi-line
+// description exercises the route schema codegen path.
 // +k8s:openapi-gen=true
 type CreateFoobarKey struct {
 	Name  string  `json:"name"`

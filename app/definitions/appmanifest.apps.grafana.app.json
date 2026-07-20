@@ -21,6 +21,7 @@
                                         "type": "string"
                                     },
                                     "appName": {
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -509,6 +510,7 @@
                                     },
                                     "appName": {
                                         "description": "AppName is the unique ID of the app",
+                                        "pattern": "^([a-z][a-z0-9-]*[a-z0-9])$",
                                         "type": "string"
                                     },
                                     "dryRunKinds": {
@@ -800,6 +802,11 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "folderScoped": {
+                                                                "default": true,
+                                                                "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
+                                                                "type": "boolean"
+                                                            },
                                                             "kind": {
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"
@@ -827,11 +834,79 @@
                                                                 ],
                                                                 "type": "string"
                                                             },
+                                                            "searchFields": {
+                                                                "items": {
+                                                                    "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values, and which capabilities are valid on which\ntype, are defined by the searchfields package\n(github.com/grafana/grafana-app-sdk/searchfields), the shared source of\ntruth for both the SDK codegen validator and the runtime search backend.",
+                                                                    "properties": {
+                                                                        "array": {
+                                                                            "default": false,
+                                                                            "description": "array indicates that the field holds a list of values of the given type.",
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "capabilities": {
+                                                                            "description": "capabilities lists what the field can be used for at query time, such as\nfiltering, full-text search, sorting, or faceting.",
+                                                                            "items": {
+                                                                                "enum": [
+                                                                                    "filter",
+                                                                                    "text",
+                                                                                    "partial",
+                                                                                    "sort",
+                                                                                    "facet",
+                                                                                    "retrieve",
+                                                                                    "unranked"
+                                                                                ],
+                                                                                "type": "string"
+                                                                            },
+                                                                            "type": "array"
+                                                                        },
+                                                                        "description": {
+                                                                            "description": "description is a human readable description of the field.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "emitZeroIfAbsent": {
+                                                                            "default": false,
+                                                                            "description": "emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,\nso sort and range queries see every document. Without it, a document missing\nthe path omits the field entirely.",
+                                                                            "type": "boolean"
+                                                                        },
+                                                                        "name": {
+                                                                            "description": "name is the field name as it appears in search documents and queries.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "path": {
+                                                                            "description": "path is the JSON path within the resource that supplies this field's value\n(for example \"spec.email\"). When omitted, the field is populated by a custom\ndocument builder rather than read directly from the resource.",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "type": {
+                                                                            "description": "type is the value type of the field.",
+                                                                            "enum": [
+                                                                                "string",
+                                                                                "int64",
+                                                                                "double",
+                                                                                "boolean",
+                                                                                "date"
+                                                                            ],
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "name",
+                                                                        "type",
+                                                                        "capabilities"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
                                                             "selectableFields": {
                                                                 "items": {
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
+                                                            },
+                                                            "userReadable": {
+                                                                "default": false,
+                                                                "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
+                                                                "type": "boolean"
                                                             }
                                                         },
                                                         "required": [

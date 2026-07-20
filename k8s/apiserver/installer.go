@@ -1597,7 +1597,7 @@ func copySpec3MediaType(mt *spec3.MediaType) *spec3.MediaType {
 type EmptyObject struct{}
 
 func (EmptyObject) OpenAPIModelName() string {
-	return "com.github.grafana-app-sdk.k8s.apiserver.EmptyObject"
+	return "com.github.grafana.grafana-app-sdk.k8s.apiserver.EmptyObject"
 }
 
 func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value string) (string, string, error) {

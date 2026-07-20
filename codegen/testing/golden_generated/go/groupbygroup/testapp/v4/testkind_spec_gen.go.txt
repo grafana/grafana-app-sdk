@@ -1,0 +1,159 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v4
+
+import (
+	json "encoding/json"
+)
+
+// +k8s:openapi-gen=true
+type TestKindUnionVariantA struct {
+	Kind string                      `json:"kind"`
+	Spec TestKindV4UnionVariantASpec `json:"spec"`
+}
+
+// NewTestKindUnionVariantA creates a new TestKindUnionVariantA object.
+func NewTestKindUnionVariantA() *TestKindUnionVariantA {
+	return &TestKindUnionVariantA{
+		Kind: "VariantA",
+		Spec: *NewTestKindV4UnionVariantASpec(),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindUnionVariantA.
+func (TestKindUnionVariantA) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v4.TestKindUnionVariantA"
+}
+
+// +k8s:openapi-gen=true
+type TestKindUnionVariantB struct {
+	Kind string                      `json:"kind"`
+	Spec TestKindV4UnionVariantBSpec `json:"spec"`
+}
+
+// NewTestKindUnionVariantB creates a new TestKindUnionVariantB object.
+func NewTestKindUnionVariantB() *TestKindUnionVariantB {
+	return &TestKindUnionVariantB{
+		Kind: "VariantB",
+		Spec: *NewTestKindV4UnionVariantBSpec(),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindUnionVariantB.
+func (TestKindUnionVariantB) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v4.TestKindUnionVariantB"
+}
+
+// +k8s:openapi-gen=true
+type TestKindSpec struct {
+	Union TestKindUnionVariantAOrUnionVariantB `json:"union"`
+}
+
+// NewTestKindSpec creates a new TestKindSpec object.
+func NewTestKindSpec() *TestKindSpec {
+	return &TestKindSpec{
+		Union: *NewTestKindUnionVariantAOrUnionVariantB(),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindSpec.
+func (TestKindSpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v4.TestKindSpec"
+}
+
+// +k8s:openapi-gen=true
+type TestKindV4UnionVariantASpec struct {
+	Name string `json:"name"`
+}
+
+// NewTestKindV4UnionVariantASpec creates a new TestKindV4UnionVariantASpec object.
+func NewTestKindV4UnionVariantASpec() *TestKindV4UnionVariantASpec {
+	return &TestKindV4UnionVariantASpec{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindV4UnionVariantASpec.
+func (TestKindV4UnionVariantASpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v4.TestKindV4UnionVariantASpec"
+}
+
+// +k8s:openapi-gen=true
+type TestKindV4UnionVariantBSpec struct {
+	Name string `json:"name"`
+}
+
+// NewTestKindV4UnionVariantBSpec creates a new TestKindV4UnionVariantBSpec object.
+func NewTestKindV4UnionVariantBSpec() *TestKindV4UnionVariantBSpec {
+	return &TestKindV4UnionVariantBSpec{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindV4UnionVariantBSpec.
+func (TestKindV4UnionVariantBSpec) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v4.TestKindV4UnionVariantBSpec"
+}
+
+// +k8s:openapi-gen=true
+type TestKindUnionVariantAOrUnionVariantB struct {
+	UnionVariantA *TestKindUnionVariantA `json:"UnionVariantA,omitempty"`
+	UnionVariantB *TestKindUnionVariantB `json:"UnionVariantB,omitempty"`
+}
+
+// NewTestKindUnionVariantAOrUnionVariantB creates a new TestKindUnionVariantAOrUnionVariantB object.
+func NewTestKindUnionVariantAOrUnionVariantB() *TestKindUnionVariantAOrUnionVariantB {
+	return &TestKindUnionVariantAOrUnionVariantB{}
+}
+
+// MarshalJSON implements a custom JSON marshalling logic to encode `TestKindUnionVariantAOrUnionVariantB` as JSON.
+func (resource TestKindUnionVariantAOrUnionVariantB) MarshalJSON() ([]byte, error) {
+	if resource.UnionVariantA != nil {
+		return json.Marshal(resource.UnionVariantA)
+	}
+	if resource.UnionVariantB != nil {
+		return json.Marshal(resource.UnionVariantB)
+	}
+
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON implements a custom JSON unmarshalling logic to decode `TestKindUnionVariantAOrUnionVariantB` from JSON.
+func (resource *TestKindUnionVariantAOrUnionVariantB) UnmarshalJSON(raw []byte) error {
+	if raw == nil {
+		return nil
+	}
+
+	// FIXME: this is wasteful, we need to find a more efficient way to unmarshal this.
+	parsedAsMap := make(map[string]interface{})
+	if err := json.Unmarshal(raw, &parsedAsMap); err != nil {
+		return err
+	}
+
+	discriminator, found := parsedAsMap["kind"]
+	if !found {
+		return nil
+	}
+
+	switch discriminator {
+	case "VariantA":
+		var testKindUnionVariantA TestKindUnionVariantA
+		if err := json.Unmarshal(raw, &testKindUnionVariantA); err != nil {
+			return err
+		}
+
+		resource.UnionVariantA = &testKindUnionVariantA
+		return nil
+	case "VariantB":
+		var testKindUnionVariantB TestKindUnionVariantB
+		if err := json.Unmarshal(raw, &testKindUnionVariantB); err != nil {
+			return err
+		}
+
+		resource.UnionVariantB = &testKindUnionVariantB
+		return nil
+	}
+
+	return nil
+}
+
+// OpenAPIModelName returns the OpenAPI model name for TestKindUnionVariantAOrUnionVariantB.
+func (TestKindUnionVariantAOrUnionVariantB) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v4.TestKindUnionVariantAOrUnionVariantB"
+}

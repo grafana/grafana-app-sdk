@@ -177,6 +177,45 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 	assert.Equal(t, expected, res)
 }
 
+// TestEmptyObject_OpenAPIDefinitionKeyMatchesModelName guards the invariant
+// that EmptyObject's OpenAPI definition is registered under the same key the
+// builder uses to look it up (its OpenAPIModelName()). A mismatch produces a
+// dangling $ref in the served OpenAPI document for custom routes that fall
+// back to EmptyObject as their response type.
+func TestEmptyObject_OpenAPIDefinitionKeyMatchesModelName(t *testing.T) {
+	sch, err := app.VersionSchemaFromMap(map[string]any{
+		"spec": map[string]any{"type": "object"},
+	}, TestKind.Kind())
+	require.Nil(t, err)
+	md := app.ManifestData{
+		Group: TestKind.Group(),
+		Versions: []app.ManifestVersion{{
+			Name: TestKind.Version(),
+			Kinds: []app.ManifestVersionKind{{
+				Kind:   TestKind.Kind(),
+				Schema: sch,
+				Routes: map[string]spec3.PathProps{
+					"/foo": {Get: &spec3.Operation{}},
+				},
+			}},
+		}},
+	}
+	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+		KindToGoTypeFunc: func(k, v string) (resource.Kind, bool) {
+			return TestKind, true
+		},
+	})
+	require.Nil(t, err)
+	scheme := newScheme()
+	require.Nil(t, installer.AddToScheme(scheme))
+	defs := installer.GetOpenAPIDefinitions(func(path string) spec.Ref {
+		ref, _ := spec.NewRef(path)
+		return ref
+	})
+	_, ok := defs[EmptyObject{}.OpenAPIModelName()]
+	assert.True(t, ok, "EmptyObject must be registered in GetOpenAPIDefinitions under its OpenAPIModelName %q", EmptyObject{}.OpenAPIModelName())
+}
+
 type getFooResponse struct{}
 
 func TestDefaultInstaller_InstallAPIs(t *testing.T) {

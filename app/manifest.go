@@ -91,7 +91,7 @@ type ManifestData struct {
 	// AppDisplayName is the human-readable display name of the app. Unlike the AppName, any printable characters are allowed in this field
 	AppDisplayName string `json:"appDisplayName" yaml:"appDisplayName"`
 	// Group is the group used for all kinds maintained by this app.
-	// This is usually "<AppName>.ext.grafana.com"
+	// This is usually "<AppName>.ext.grafana.app"
 	Group string `json:"group" yaml:"group"`
 	// Versions is a list of versions supported by this App
 	Versions []ManifestVersion `json:"versions" yaml:"versions"`
@@ -124,11 +124,13 @@ func (m *ManifestData) IsEmpty() bool {
 //nolint:gocognit
 func (m *ManifestData) Validate() error {
 	type kindData struct {
-		kind       string
-		plural     string
-		scope      string
-		conversion bool
-		version    string
+		kind         string
+		plural       string
+		scope        string
+		conversion   bool
+		userReadable bool
+		folderScoped bool
+		version      string
 	}
 	var errs error
 	kinds := make(map[string]kindData)
@@ -143,11 +145,13 @@ func (m *ManifestData) Validate() error {
 			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
-					kind:       kind.Kind,
-					plural:     kind.Plural,
-					scope:      kind.Scope,
-					conversion: kind.Conversion,
-					version:    version.Name,
+					kind:         kind.Kind,
+					plural:       kind.Plural,
+					scope:        kind.Scope,
+					conversion:   kind.Conversion,
+					userReadable: kind.UserReadable,
+					folderScoped: isFolderScoped(kind.FolderScoped),
+					version:      version.Name,
 				}
 				kinds[kind.Kind] = k
 			} else {
@@ -159,6 +163,12 @@ func (m *ManifestData) Validate() error {
 				}
 				if k.conversion != kind.Conversion {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' conversion does not match in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.userReadable != kind.UserReadable {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different userReadable in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.folderScoped != isFolderScoped(kind.FolderScoped) {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different folderScoped in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
 			}
 		}
@@ -222,11 +232,13 @@ func (m *ManifestData) Kinds() []ManifestKind {
 			k, ok := kinds[kind.Kind]
 			if !ok {
 				k = ManifestKind{
-					Kind:       kind.Kind,
-					Plural:     kind.Plural,
-					Scope:      kind.Scope,
-					Conversion: kind.Conversion,
-					Versions:   make([]ManifestKindVersion, 0),
+					Kind:         kind.Kind,
+					Plural:       kind.Plural,
+					Scope:        kind.Scope,
+					Conversion:   kind.Conversion,
+					UserReadable: kind.UserReadable,
+					FolderScoped: kind.FolderScoped,
+					Versions:     make([]ManifestKindVersion, 0),
 				}
 			}
 			k.Versions = append(k.Versions, ManifestKindVersion{
@@ -258,6 +270,11 @@ type ManifestKind struct {
 	Versions []ManifestKindVersion `json:"versions" yaml:"versions"`
 	// Conversion is true if the app has a conversion capability for this kind
 	Conversion bool `json:"conversion" yaml:"conversion"`
+	// UserReadable is true when end users may get/list this cluster-scoped kind.
+	UserReadable bool `json:"userReadable" yaml:"userReadable"`
+	// FolderScoped declares whether resources of this namespaced kind are scoped to folders.
+	// A nil value defaults to true (folder-scoped). Ignored for cluster-scoped kinds.
+	FolderScoped *bool `json:"folderScoped,omitempty" yaml:"folderScoped,omitempty"`
 }
 
 // ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
@@ -299,6 +316,14 @@ type ManifestVersionKind struct {
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
 	Scope string `json:"scope" yaml:"scope"`
+	// UserReadable declares that end users may get/list this kind when it is cluster-scoped.
+	// Ignored for namespaced kinds. Must match across all versions of the same kind.
+	UserReadable bool `json:"userReadable,omitempty" yaml:"userReadable,omitempty"`
+	// FolderScoped declares whether resources of this kind are scoped to folders.
+	// It is only meaningful for namespaced kinds and is ignored for cluster-scoped kinds.
+	// A nil value defaults to true (folder-scoped). Set it to a pointer to false to opt out
+	// of folder support. Must match across all versions of the same kind.
+	FolderScoped *bool `json:"folderScoped,omitempty" yaml:"folderScoped,omitempty"`
 	// Admission is the collection of admission capabilities for this version.
 	// If nil, no admission capabilities exist for the version.
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
@@ -316,6 +341,14 @@ type ManifestVersionKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
+	// SearchFields are the fields exposed for search indexing and querying.
+	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
+}
+
+// isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer
+// as the default of true (folder-scoped).
+func isFolderScoped(folderScoped *bool) bool {
+	return folderScoped == nil || *folderScoped
 }
 
 // Subresources returns a list of all (stored) subresources for the kind.
@@ -373,6 +406,28 @@ type ManifestVersionKindAdditionalPrinterColumn struct {
 	// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
 	// each custom resource to produce the value for this column.
 	JSONPath string `json:"jsonPath"`
+}
+
+type ManifestVersionKindSearchField struct {
+	// Name is the field name as it appears in search documents and queries.
+	Name string `json:"name" yaml:"name"`
+	// Path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When empty, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+	// Type is the value type of the field. One of: string, int64, double, boolean, date.
+	Type string `json:"type" yaml:"type"`
+	// Array indicates that the field holds a list of values of the given type.
+	Array bool `json:"array,omitempty" yaml:"array,omitempty"`
+	// Capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	Capabilities []string `json:"capabilities" yaml:"capabilities"`
+	// EmitZeroIfAbsent indexes the type's zero value when Path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	EmitZeroIfAbsent bool `json:"emitZeroIfAbsent,omitempty" yaml:"emitZeroIfAbsent,omitempty"`
+	// Description is a human readable description of the field.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 const parsedCRDSchemaKindName = "__KIND__"
