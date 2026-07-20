@@ -35,6 +35,9 @@ type Schema interface {
 	Scope() SchemaScope
 	// SelectableFields returns a list of fully-qualified field selectors which can be used for querying
 	SelectableFields() []SelectableField
+	// TableColumns returns a list of additional table columns for display in table views (e.g. kubectl get).
+	// Each column includes a ValueFunc that extracts the column value directly from a typed Object.
+	TableColumns() []TableColumn
 }
 
 // SelectableField is a struct which represents the FieldSelector string and function to retrieve the value of that
@@ -45,6 +48,21 @@ type SelectableField struct {
 	// FieldValueFunc is a function which returns the value of the FieldSelector in the provided Object,
 	// or an error if the Object is not of the correct underlying type, or the value cannot be retrieved for any reason
 	FieldValueFunc func(Object) (string, error)
+}
+
+// TableColumn represents an additional column for table views (e.g. kubectl get output).
+// It includes metadata for the column header and a ValueFunc that extracts the column value
+// directly from a typed Object, avoiding reflection.
+type TableColumn struct {
+	Name        string
+	Type        string // OpenAPI type: "string", "integer", "number", "boolean", "date"
+	Format      string
+	Description string
+	Priority    int32
+	JSONPath    string
+	// ValueFunc extracts the column value from the provided Object.
+	// Returns an error if the Object is not of the correct underlying type.
+	ValueFunc func(Object) (any, error)
 }
 
 // SchemaGroup represents a group of Schemas. The interface does not require commonality between Schemas,
@@ -65,6 +83,7 @@ type SimpleSchema struct {
 	plural           string
 	scope            SchemaScope
 	selectableFields []SelectableField
+	tableColumns     []TableColumn
 	zero             Object
 	zeroList         ListObject
 }
@@ -110,6 +129,11 @@ func (s *SimpleSchema) ZeroListValue() ListObject {
 // TODO: should this be in the kind instead of the schema?
 func (s *SimpleSchema) SelectableFields() []SelectableField {
 	return s.selectableFields
+}
+
+// TableColumns returns the list of additional table columns for this schema
+func (s *SimpleSchema) TableColumns() []TableColumn {
+	return s.tableColumns
 }
 
 // SimpleSchemaGroup collects schemas with the same group and version
@@ -164,6 +188,13 @@ func WithScope(scope SchemaScope) func(schema *SimpleSchema) {
 func WithSelectableFields(selectableFields []SelectableField) func(schema *SimpleSchema) {
 	return func(s *SimpleSchema) {
 		s.selectableFields = selectableFields
+	}
+}
+
+// WithTableColumns returns a SimpleSchemaOption that sets the SimpleSchema's TableColumns to the provided columns
+func WithTableColumns(columns []TableColumn) func(schema *SimpleSchema) {
+	return func(s *SimpleSchema) {
+		s.tableColumns = columns
 	}
 }
 
