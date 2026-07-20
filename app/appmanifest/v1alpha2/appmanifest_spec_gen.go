@@ -42,7 +42,11 @@ type AppManifestManifestVersionKind struct {
 	Scope AppManifestManifestVersionKindScope `json:"scope"`
 	// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
 	// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
-	UserReadable *bool                             `json:"userReadable,omitempty"`
+	UserReadable *bool `json:"userReadable,omitempty"`
+	// folderScoped controls whether resources of this kind are scoped to folders.
+	// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+	// Defaults to true (folder-scoped).
+	FolderScoped *bool                             `json:"folderScoped,omitempty"`
 	Admission    *AppManifestAdmissionCapabilities `json:"admission,omitempty"`
 	// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
 	// It must contain a key named the same as the `kind` field of the Kind.
@@ -70,6 +74,7 @@ func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
 	return &AppManifestManifestVersionKind{
 		Scope:        AppManifestManifestVersionKindScopeNamespaced,
 		UserReadable: (func(input bool) *bool { return &input })(false),
+		FolderScoped: (func(input bool) *bool { return &input })(true),
 		Schemas:      map[string]interface{}{},
 		Conversion:   (func(input bool) *bool { return &input })(false),
 	}

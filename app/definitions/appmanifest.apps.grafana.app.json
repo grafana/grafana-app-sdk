@@ -802,6 +802,11 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "folderScoped": {
+                                                                "default": true,
+                                                                "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
+                                                                "type": "boolean"
+                                                            },
                                                             "kind": {
                                                                 "description": "Kind is the name of the kind. This should begin with a capital letter and be CamelCased",
                                                                 "type": "string"

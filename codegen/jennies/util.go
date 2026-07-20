@@ -66,6 +66,7 @@ func versionedKindToKindProperties(kind codegen.VersionedKind, appManifest codeg
 		Current:                appManifest.Properties().PreferredVersion,
 		Scope:                  kind.Scope,
 		UserReadable:           kind.UserReadable,
+		FolderScoped:           kind.FolderScoped,
 		Validation:             kind.Validation,
 		Mutation:               kind.Mutation,
 		Conversion:             kind.Conversion,

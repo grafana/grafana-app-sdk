@@ -95,6 +95,7 @@ func (m *SimpleManifest) Kinds() []Kind {
 						Current:                m.PreferredVersion,
 						Scope:                  kind.Scope,
 						UserReadable:           kind.UserReadable,
+						FolderScoped:           kind.FolderScoped,
 						Validation:             kind.Validation,
 						Mutation:               kind.Mutation,
 						Conversion:             kind.Conversion,
@@ -191,6 +192,7 @@ type VersionedKind struct {
 	PluralName             string                      `json:"pluralName"`
 	Scope                  string                      `json:"scope"`
 	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`

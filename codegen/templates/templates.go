@@ -43,6 +43,14 @@ var (
 		// newlines, backslashes and control characters, so descriptions sourced
 		// from multi-line CUE doc comments produce parseable Go.
 		"goString": strconv.Quote,
+		// goBoolPtr renders a *bool as a Go expression that evaluates to a *bool.
+		// A nil pointer renders as "nil".
+		"goBoolPtr": func(b *bool) string {
+			if b == nil {
+				return "nil"
+			}
+			return "func(b bool) *bool { return &b }(" + strconv.FormatBool(*b) + ")"
+		},
 	}
 
 	templateResourceObject, _         = template.ParseFS(templates, "resourceobject.tmpl")
