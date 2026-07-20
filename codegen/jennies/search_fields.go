@@ -36,6 +36,7 @@ func validateSearchFields(vk codegen.VersionedKind, version string) error {
 				return fmt.Errorf("kind %q version %q search field %q: %w", vk.Kind, version, sf.Name, err)
 			}
 			if warning != "" {
+				//nolint:revive // release-please: ignore
 				fmt.Printf("[WARN] kind %q version %q search field %q: %s\n", vk.Kind, version, sf.Name, warning)
 			}
 		}

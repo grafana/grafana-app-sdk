@@ -129,6 +129,7 @@ func (m *ManifestData) Validate() error {
 		scope        string
 		conversion   bool
 		userReadable bool
+		folderScoped bool
 		version      string
 	}
 	var errs error
@@ -149,6 +150,7 @@ func (m *ManifestData) Validate() error {
 					scope:        kind.Scope,
 					conversion:   kind.Conversion,
 					userReadable: kind.UserReadable,
+					folderScoped: isFolderScoped(kind.FolderScoped),
 					version:      version.Name,
 				}
 				kinds[kind.Kind] = k
@@ -164,6 +166,9 @@ func (m *ManifestData) Validate() error {
 				}
 				if k.userReadable != kind.UserReadable {
 					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different userReadable in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
+				}
+				if k.folderScoped != isFolderScoped(kind.FolderScoped) {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' has a different folderScoped in versions '%s' and '%s'", kind.Kind, k.version, version.Name))
 				}
 			}
 		}
@@ -232,6 +237,7 @@ func (m *ManifestData) Kinds() []ManifestKind {
 					Scope:        kind.Scope,
 					Conversion:   kind.Conversion,
 					UserReadable: kind.UserReadable,
+					FolderScoped: kind.FolderScoped,
 					Versions:     make([]ManifestKindVersion, 0),
 				}
 			}
@@ -266,6 +272,9 @@ type ManifestKind struct {
 	Conversion bool `json:"conversion" yaml:"conversion"`
 	// UserReadable is true when end users may get/list this cluster-scoped kind.
 	UserReadable bool `json:"userReadable" yaml:"userReadable"`
+	// FolderScoped declares whether resources of this namespaced kind are scoped to folders.
+	// A nil value defaults to true (folder-scoped). Ignored for cluster-scoped kinds.
+	FolderScoped *bool `json:"folderScoped,omitempty" yaml:"folderScoped,omitempty"`
 }
 
 // ManifestKindVersion is an extension on ManifestVersionKind that adds the version name
@@ -310,6 +319,11 @@ type ManifestVersionKind struct {
 	// UserReadable declares that end users may get/list this kind when it is cluster-scoped.
 	// Ignored for namespaced kinds. Must match across all versions of the same kind.
 	UserReadable bool `json:"userReadable,omitempty" yaml:"userReadable,omitempty"`
+	// FolderScoped declares whether resources of this kind are scoped to folders.
+	// It is only meaningful for namespaced kinds and is ignored for cluster-scoped kinds.
+	// A nil value defaults to true (folder-scoped). Set it to a pointer to false to opt out
+	// of folder support. Must match across all versions of the same kind.
+	FolderScoped *bool `json:"folderScoped,omitempty" yaml:"folderScoped,omitempty"`
 	// Admission is the collection of admission capabilities for this version.
 	// If nil, no admission capabilities exist for the version.
 	Admission *AdmissionCapabilities `json:"admission,omitempty" yaml:"admission,omitempty"`
@@ -329,6 +343,12 @@ type ManifestVersionKind struct {
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 	// SearchFields are the fields exposed for search indexing and querying.
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
+}
+
+// isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer
+// as the default of true (folder-scoped).
+func isFolderScoped(folderScoped *bool) bool {
+	return folderScoped == nil || *folderScoped
 }
 
 // Subresources returns a list of all (stored) subresources for the kind.

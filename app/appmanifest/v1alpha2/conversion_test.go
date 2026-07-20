@@ -71,6 +71,44 @@ func TestSearchFieldsConversion(t *testing.T) {
 	assert.Equal(t, md.Versions[0].Kinds[0].SearchFields, roundTripped.Versions[0].Kinds[0].SearchFields)
 }
 
+func TestFolderScopedConversion(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	for _, tc := range []struct {
+		name  string
+		value *bool
+	}{
+		{name: "unset", value: nil},
+		{name: "explicit true", value: boolPtr(true)},
+		{name: "explicit false", value: boolPtr(false)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:         "Foo",
+						Scope:        "Namespaced",
+						FolderScoped: tc.value,
+					}},
+				}},
+			}
+
+			// manifest -> spec: the pointer is copied verbatim.
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+			assert.Equal(t, tc.value, spec.Versions[0].Kinds[0].FolderScoped)
+
+			// spec -> manifest: the pointer is copied back verbatim, preserving unset vs explicit.
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.value, roundTripped.Versions[0].Kinds[0].FolderScoped)
+		})
+	}
+}
+
 func TestAppManifestSpec_ToManifestData(t *testing.T) {
 	t.Run("successful conversion", func(t *testing.T) {
 		// For v1alpha2, app.ManifestData is essentially a subset of v1alpha2.AppManifestSpec,

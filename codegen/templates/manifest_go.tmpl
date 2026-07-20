@@ -169,7 +169,8 @@ var appManifestData = app.ManifestData{
                 Kind: "{{.Kind}}",
                 Plural: "{{.Plural}}",
                 Scope: "{{.Scope}}",
-                Conversion: {{.Conversion}}, {{ if .Admission }}
+                Conversion: {{.Conversion}}, {{ if .FolderScoped }}
+                FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
                         {{ if .Admission.Validation.Operations }} Operations: []app.AdmissionOperation{

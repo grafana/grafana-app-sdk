@@ -35,6 +35,7 @@ type KindProperties struct {
 	Current                string                      `json:"current"`
 	Scope                  string                      `json:"scope"`
 	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`

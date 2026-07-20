@@ -220,6 +220,10 @@ Kind: S={
 	// userReadable controls whether end users can read cluster-scoped resources of this kind.
 	// Only meaningful when scope is "Cluster". Service identities are always allowed full access via normal authorization.
 	userReadable: bool | *false
+	// folderScoped controls whether resources of this kind are scoped to folders.
+	// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+	// Defaults to true (folder-scoped).
+	folderScoped: bool | *true
 	// validation determines whether there is code-based validation for this kind.
 	validation: #AdmissionCapability | *{
 		operations: []

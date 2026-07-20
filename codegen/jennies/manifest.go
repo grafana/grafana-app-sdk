@@ -541,6 +541,12 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		UserReadable: vk.UserReadable,
 		Conversion:   vk.Conversion,
 	}
+	// FolderScoped defaults to true, so only carry an explicit opt-out (false) to keep
+	// the manifest data clean; a nil pointer is interpreted as folder-scoped downstream.
+	if !vk.FolderScoped {
+		folderScoped := vk.FolderScoped
+		mver.FolderScoped = &folderScoped
+	}
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

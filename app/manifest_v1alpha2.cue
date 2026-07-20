@@ -73,6 +73,10 @@ appManifestv1alpha2: appManifestKind & {
 			// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
 			// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
 			userReadable?: bool | *false
+			// folderScoped controls whether resources of this kind are scoped to folders.
+			// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+			// Defaults to true (folder-scoped).
+			folderScoped?: bool | *true
 			admission?: #AdmissionCapabilities
 			// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
 			// It must contain a key named the same as the `kind` field of the Kind.
