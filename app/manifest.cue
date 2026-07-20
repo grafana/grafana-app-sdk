@@ -22,11 +22,7 @@ manifest: {
 		}
 		"v1alpha2": {
 			codegen: ts: enabled: false
-			kinds: [appManifestv1alpha2]
-		}
-		"v1alpha3": {
-			codegen: ts: enabled: false
-			kinds: [appManifestv1alpha3, routeBackendv1alpha1]
+			kinds: [appManifestv1alpha2, routeBackendv1alpha1]
 		}
 	}
 	extraPermissions: {
