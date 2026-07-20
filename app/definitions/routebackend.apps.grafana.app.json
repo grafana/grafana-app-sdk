@@ -8,7 +8,7 @@
         "group": "apps.grafana.app",
         "versions": [
             {
-                "name": "v1alpha3",
+                "name": "v1alpha2",
                 "served": true,
                 "storage": true,
                 "schema": {
