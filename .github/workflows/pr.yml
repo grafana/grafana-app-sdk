@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
     - main
-    - "lts/v0.24"
     - "feat/*"
 
 permissions:
