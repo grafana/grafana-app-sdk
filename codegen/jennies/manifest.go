@@ -66,7 +66,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.app", manifestData.AppName)
 	}
 
 	// Whether or not the schema is CRD-compatible determines which version of AppManifest to use.
@@ -136,7 +136,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.app", manifestData.AppName)
 	}
 
 	buf := bytes.Buffer{}
@@ -530,12 +530,22 @@ type simpleOpenAPIDoc[T any] struct {
 }
 
 //nolint:revive,funlen,unparam,gocognit
-func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) (app.ManifestVersionKind, error) {
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+	if err := validateSearchFields(vk, version); err != nil {
+		return app.ManifestVersionKind{}, err
+	}
 	mver := app.ManifestVersionKind{
-		Kind:       vk.Kind,
-		Plural:     vk.PluralName,
-		Scope:      vk.Scope,
-		Conversion: vk.Conversion,
+		Kind:         vk.Kind,
+		Plural:       vk.PluralName,
+		Scope:        vk.Scope,
+		UserReadable: vk.UserReadable,
+		Conversion:   vk.Conversion,
+	}
+	// FolderScoped defaults to true, so only carry an explicit opt-out (false) to keep
+	// the manifest data clean; a nil pointer is interpreted as folder-scoped downstream.
+	if !vk.FolderScoped {
+		folderScoped := vk.FolderScoped
+		mver.FolderScoped = &folderScoped
 	}
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
@@ -652,7 +662,27 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		}
 	}
 	mver.SelectableFields = vk.SelectableFields
+	mver.SearchFields = searchFieldsToManifest(vk.SearchFields)
 	return mver, nil
+}
+
+func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionKindSearchField {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]app.ManifestVersionKindSearchField, len(fields))
+	for i, f := range fields {
+		out[i] = app.ManifestVersionKindSearchField{
+			Name:             f.Name,
+			Path:             f.Path,
+			Type:             f.Type,
+			Array:            f.Array,
+			Capabilities:     f.Capabilities,
+			EmitZeroIfAbsent: f.EmitZeroIfAbsent,
+			Description:      f.Description,
+		}
+	}
+	return out
 }
 
 var validAdmissionOperations = map[codegen.KindAdmissionCapabilityOperation]app.AdmissionOperation{

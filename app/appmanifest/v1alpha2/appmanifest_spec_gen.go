@@ -39,8 +39,15 @@ type AppManifestManifestVersionKind struct {
 	Plural *string `json:"plural,omitempty"`
 	// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 	// Different values will result in an error or undefined behavior.
-	Scope     AppManifestManifestVersionKindScope `json:"scope"`
-	Admission *AppManifestAdmissionCapabilities   `json:"admission,omitempty"`
+	Scope AppManifestManifestVersionKindScope `json:"scope"`
+	// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
+	// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
+	UserReadable *bool `json:"userReadable,omitempty"`
+	// folderScoped controls whether resources of this kind are scoped to folders.
+	// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+	// Defaults to true (folder-scoped).
+	FolderScoped *bool                             `json:"folderScoped,omitempty"`
+	Admission    *AppManifestAdmissionCapabilities `json:"admission,omitempty"`
 	// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
 	// It must contain a key named the same as the `kind` field of the Kind.
 	// Other fields may be present to be referenced by $ref tags in a schema,
@@ -50,6 +57,7 @@ type AppManifestManifestVersionKind struct {
 	Schemas                  map[string]interface{}                `json:"schemas"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
+	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -64,9 +72,11 @@ type AppManifestManifestVersionKind struct {
 // NewAppManifestManifestVersionKind creates a new AppManifestManifestVersionKind object.
 func NewAppManifestManifestVersionKind() *AppManifestManifestVersionKind {
 	return &AppManifestManifestVersionKind{
-		Scope:      AppManifestManifestVersionKindScopeNamespaced,
-		Schemas:    map[string]interface{}{},
-		Conversion: (func(input bool) *bool { return &input })(false),
+		Scope:        AppManifestManifestVersionKindScopeNamespaced,
+		UserReadable: (func(input bool) *bool { return &input })(false),
+		FolderScoped: (func(input bool) *bool { return &input })(true),
+		Schemas:      map[string]interface{}{},
+		Conversion:   (func(input bool) *bool { return &input })(false),
 	}
 }
 
@@ -171,6 +181,48 @@ func NewAppManifestAdditionalPrinterColumns() *AppManifestAdditionalPrinterColum
 // OpenAPIModelName returns the OpenAPI model name for AppManifestAdditionalPrinterColumns.
 func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestAdditionalPrinterColumns"
+}
+
+// #SearchField describes a field exposed for search indexing and querying.
+// The type and capabilities values, and which capabilities are valid on which
+// type, are defined by the searchfields package
+// (github.com/grafana/grafana-app-sdk/searchfields), the shared source of
+// truth for both the SDK codegen validator and the runtime search backend.
+// +k8s:openapi-gen=true
+type AppManifestSearchField struct {
+	// name is the field name as it appears in search documents and queries.
+	Name string `json:"name"`
+	// path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When omitted, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	Path *string `json:"path,omitempty"`
+	// type is the value type of the field.
+	Type AppManifestSearchFieldType `json:"type"`
+	// array indicates that the field holds a list of values of the given type.
+	Array *bool `json:"array,omitempty"`
+	// capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	Capabilities []AppManifestSearchFieldCapabilities `json:"capabilities"`
+	// emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	EmitZeroIfAbsent *bool `json:"emitZeroIfAbsent,omitempty"`
+	// description is a human readable description of the field.
+	Description *string `json:"description,omitempty"`
+}
+
+// NewAppManifestSearchField creates a new AppManifestSearchField object.
+func NewAppManifestSearchField() *AppManifestSearchField {
+	return &AppManifestSearchField{
+		Array:            (func(input bool) *bool { return &input })(false),
+		Capabilities:     []AppManifestSearchFieldCapabilities{},
+		EmitZeroIfAbsent: (func(input bool) *bool { return &input })(false),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSearchField.
+func (AppManifestSearchField) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchField"
 }
 
 // +k8s:openapi-gen=true
@@ -413,6 +465,40 @@ const (
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindScope.
 func (AppManifestManifestVersionKindScope) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindScope"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSearchFieldType string
+
+const (
+	AppManifestSearchFieldTypeString  AppManifestSearchFieldType = "string"
+	AppManifestSearchFieldTypeInt64   AppManifestSearchFieldType = "int64"
+	AppManifestSearchFieldTypeDouble  AppManifestSearchFieldType = "double"
+	AppManifestSearchFieldTypeBoolean AppManifestSearchFieldType = "boolean"
+	AppManifestSearchFieldTypeDate    AppManifestSearchFieldType = "date"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSearchFieldType.
+func (AppManifestSearchFieldType) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchFieldType"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSearchFieldCapabilities string
+
+const (
+	AppManifestSearchFieldCapabilitiesFilter   AppManifestSearchFieldCapabilities = "filter"
+	AppManifestSearchFieldCapabilitiesText     AppManifestSearchFieldCapabilities = "text"
+	AppManifestSearchFieldCapabilitiesPartial  AppManifestSearchFieldCapabilities = "partial"
+	AppManifestSearchFieldCapabilitiesSort     AppManifestSearchFieldCapabilities = "sort"
+	AppManifestSearchFieldCapabilitiesFacet    AppManifestSearchFieldCapabilities = "facet"
+	AppManifestSearchFieldCapabilitiesRetrieve AppManifestSearchFieldCapabilities = "retrieve"
+	AppManifestSearchFieldCapabilitiesUnranked AppManifestSearchFieldCapabilities = "unranked"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSearchFieldCapabilities.
+func (AppManifestSearchFieldCapabilities) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchFieldCapabilities"
 }
 
 // +k8s:openapi-gen=true

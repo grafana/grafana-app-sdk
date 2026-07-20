@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -37,8 +38,18 @@ var (
 		"refString": func(ref spec.Ref) string {
 			return ref.String()
 		},
-		"escapeQuotes": func(s string) string {
-			return strings.ReplaceAll(s, `"`, `\"`)
+		// goString renders s as a valid, fully-escaped Go double-quoted string
+		// literal (including the surrounding quotes). strconv.Quote escapes quotes,
+		// newlines, backslashes and control characters, so descriptions sourced
+		// from multi-line CUE doc comments produce parseable Go.
+		"goString": strconv.Quote,
+		// goBoolPtr renders a *bool as a Go expression that evaluates to a *bool.
+		// A nil pointer renders as "nil".
+		"goBoolPtr": func(b *bool) string {
+			if b == nil {
+				return "nil"
+			}
+			return "func(b bool) *bool { return &b }(" + strconv.FormatBool(*b) + ")"
 		},
 	}
 
@@ -155,10 +166,17 @@ type SchemaMetadata struct {
 // UnionFieldAccess describes how to read a selectable field that lives inside a
 // CUE disjunction. cog generates each disjunction as a Go struct with one
 // optional pointer field per variant, so access is "check each variant pointer".
+// If a variant is the `null` literal, cog will not include the variant as a field;
+// When the disjunction is `<any> | null`, cog will collapse this into the `*<any>`
+// type, rather than a type with each disjunction as a field. When this is the case,
+// CollapsedNullToSingle should be set to `true`.
 type UnionFieldAccess struct {
 	UnionFieldPath string
 	UnionOptional  bool
 	Variants       []UnionVariantAccess
+	// CollapsedNullToSingle is true if the disjunction was a single variant + null,
+	// which is collapsed to a single returned variant as `null` is not a branch type
+	CollapsedNullToSingle bool
 }
 
 type UnionVariantAccess struct {

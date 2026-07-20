@@ -19,6 +19,7 @@ import (
 	v1 "codegen-tests/pkg/generated/testapp/v1"
 	v2 "codegen-tests/pkg/generated/testapp/v2"
 	v3 "codegen-tests/pkg/generated/testapp/v3"
+	v4 "codegen-tests/pkg/generated/testapp/v4"
 )
 
 var (
@@ -28,18 +29,21 @@ var (
 	rawSchemaTestKind2v1     = []byte(`{"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind2":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"testField":{"type":"string"}},"required":["testField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKind2v1 app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKind2v1, &versionSchemaTestKind2v1)
-	rawSchemaTestKindv2      = []byte(`{"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"intField":{"type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"}},"required":["stringField","intField","timeField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	rawSchemaTestKindv2      = []byte(`{"Def":{"additionalProperties":false,"properties":{"i":{"type":"integer"},"str":{"type":"string"}},"required":["str","i"],"type":"object"},"Def2":{"additionalProperties":false,"properties":{"b":{"type":"boolean"},"str":{"type":"string"}},"required":["str","b"],"type":"object"},"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"intField":{"type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"},"unionNull":{"allOf":[{"$ref":"#/components/schemas/Def"}],"description":"This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction","nullable":true},"unionNull2":{"description":"null variant should be ignore in disjunction when generating the selectable field","oneOf":[{"$ref":"#/components/schemas/Def"},{"$ref":"#/components/schemas/Def2"},{"type":"null"}]}},"required":["stringField","intField","timeField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv2  app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKindv2, &versionSchemaTestKindv2)
 	rawSchemaTestKindv3      = []byte(`{"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"spec":{"additionalProperties":false,"properties":{"boolField":{"type":"boolean"},"intField":{"type":"integer"},"stringField":{"type":"string"},"timeField":{"format":"date-time","type":"string"}},"required":["stringField","intField","timeField","boolField"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
 	versionSchemaTestKindv3  app.VersionSchema
 	_                        = json.Unmarshal(rawSchemaTestKindv3, &versionSchemaTestKindv3)
+	rawSchemaTestKindv4      = []byte(`{"OperatorState":{"additionalProperties":false,"properties":{"descriptiveState":{"description":"descriptiveState is an optional more descriptive state field which has no requirements on format","type":"string"},"details":{"additionalProperties":true,"description":"details contains any extra information that is operator-specific","type":"object"},"lastEvaluation":{"description":"lastEvaluation is the ResourceVersion last evaluated","type":"string"},"state":{"description":"state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.","enum":["success","in_progress","failed"],"type":"string"}},"required":["lastEvaluation","state"],"type":"object"},"TestKind":{"properties":{"spec":{"$ref":"#/components/schemas/spec"},"status":{"$ref":"#/components/schemas/status"}},"required":["spec"]},"UnionVariantA":{"additionalProperties":false,"properties":{"kind":{"const":"VariantA","type":"string"},"spec":{"additionalProperties":false,"properties":{"name":{"type":"string"}},"required":["name"],"type":"object"}},"required":["kind","spec"],"type":"object"},"UnionVariantB":{"additionalProperties":false,"properties":{"kind":{"const":"VariantB","type":"string"},"spec":{"additionalProperties":false,"properties":{"name":{"type":"string"}},"required":["name"],"type":"object"}},"required":["kind","spec"],"type":"object"},"spec":{"additionalProperties":false,"properties":{"union":{"oneOf":[{"$ref":"#/components/schemas/UnionVariantA"},{"$ref":"#/components/schemas/UnionVariantB"}]}},"required":["union"],"type":"object"},"status":{"additionalProperties":false,"properties":{"additionalFields":{"additionalProperties":true,"description":"additionalFields is reserved for future use","type":"object"},"operatorStates":{"additionalProperties":{"$ref":"#/components/schemas/OperatorState"},"description":"operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.","type":"object"}},"type":"object"}}`)
+	versionSchemaTestKindv4  app.VersionSchema
+	_                        = json.Unmarshal(rawSchemaTestKindv4, &versionSchemaTestKindv4)
 )
 
 var appManifestData = app.ManifestData{
 	AppName:          "test-app",
 	AppDisplayName:   "test-app",
-	Group:            "testapp.ext.grafana.com",
+	Group:            "testapp.ext.grafana.app",
 	PreferredVersion: "v1",
 	Versions: []app.ManifestVersion{
 		{
@@ -62,6 +66,15 @@ var appManifestData = app.ManifestData{
 					Schema: &versionSchemaTestKindv1,
 					SelectableFields: []string{
 						".spec.stringField",
+					},
+					SearchFields: []app.ManifestVersionKindSearchField{
+						{
+							Name:         "stringField",
+							Path:         "spec.stringField",
+							Type:         "string",
+							Capabilities: []string{"filter", "text", "sort", "retrieve"},
+							Description:  "The string field",
+						},
 					},
 				},
 
@@ -107,6 +120,24 @@ var appManifestData = app.ManifestData{
 					SelectableFields: []string{
 						".spec.stringField",
 						".spec.intField",
+						".spec.unionNull.str",
+						".spec.unionNull2.str",
+					},
+					SearchFields: []app.ManifestVersionKindSearchField{
+						{
+							Name:         "stringField",
+							Path:         "spec.stringField",
+							Type:         "string",
+							Capabilities: []string{"filter", "text", "sort", "retrieve"},
+							Description:  "The string field",
+						},
+						{
+							Name:             "intField",
+							Path:             "spec.intField",
+							Type:             "int64",
+							Capabilities:     []string{"filter", "retrieve"},
+							EmitZeroIfAbsent: true,
+						},
 					},
 				},
 			},
@@ -145,6 +176,29 @@ var appManifestData = app.ManifestData{
 						".spec.stringField",
 						".spec.intField",
 						".spec.boolField",
+					},
+					SearchFields: []app.ManifestVersionKindSearchField{
+						{
+							Name:         "stringField",
+							Path:         "spec.stringField",
+							Type:         "string",
+							Capabilities: []string{"filter", "text", "sort", "retrieve"},
+							Description:  "The string field",
+						},
+						{
+							Name:             "intField",
+							Path:             "spec.intField",
+							Type:             "int64",
+							Capabilities:     []string{"filter", "retrieve"},
+							EmitZeroIfAbsent: true,
+						},
+						{
+							Name:             "boolField",
+							Path:             "spec.boolField",
+							Type:             "boolean",
+							Capabilities:     []string{"filter", "retrieve"},
+							EmitZeroIfAbsent: true,
+						},
 					},
 					Routes: map[string]spec3.PathProps{
 						"/reconcile": {
@@ -467,7 +521,8 @@ var appManifestData = app.ManifestData{
 				Schemas: map[string]spec.Schema{
 					"createFoobarKey": {
 						SchemaProps: spec.SchemaProps{
-							Type: []string{"object"},
+							Type:        []string{"object"},
+							Description: "Key identifies a foobar entry.\nIt is referenced by a custom route, so its multi-line\ndescription exercises the route schema codegen path.",
 							Properties: map[string]spec.Schema{
 								"match": {
 									SchemaProps: spec.SchemaProps{
@@ -486,6 +541,36 @@ var appManifestData = app.ManifestData{
 						},
 					},
 				},
+			},
+		},
+
+		{
+			Name:   "v4",
+			Served: true,
+			Kinds: []app.ManifestVersionKind{
+				{
+					Kind:       "TestKind",
+					Plural:     "TestKinds",
+					Scope:      "Namespaced",
+					Conversion: true,
+					Admission: &app.AdmissionCapabilities{
+						Validation: &app.ValidationCapability{
+							Operations: []app.AdmissionOperation{
+								app.AdmissionOperationCreate,
+								app.AdmissionOperationUpdate,
+							},
+						},
+					},
+					Schema: &versionSchemaTestKindv4,
+					SelectableFields: []string{
+						".spec.union.spec.name",
+					},
+				},
+			},
+			Routes: app.ManifestVersionRoutes{
+				Namespaced: map[string]spec3.PathProps{},
+				Cluster:    map[string]spec3.PathProps{},
+				Schemas:    map[string]spec.Schema{},
 			},
 		},
 	},
@@ -547,6 +632,7 @@ var kindVersionToGoType = map[string]resource.Kind{
 	"TestKind2/v1": v1.TestKind2Kind(),
 	"TestKind/v2":  v2.TestKindKind(),
 	"TestKind/v3":  v3.TestKindKind(),
+	"TestKind/v4":  v4.TestKindKind(),
 }
 
 // ManifestGoTypeAssociator returns the associated resource.Kind instance for a given Kind and Version, if one exists.

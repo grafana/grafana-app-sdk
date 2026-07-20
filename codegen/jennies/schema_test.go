@@ -55,9 +55,9 @@ func TestGetSelectableFields(t *testing.T) {
 						UnionFieldPath: "spec.routing",
 						UnionOptional:  false,
 						Variants: []templates.UnionVariantAccess{
-							{VariantField: "TypeA", ConstantValue: "A"},
-							{VariantField: "TypeB", ConstantValue: "B"},
-							{VariantField: "TypeC", ConstantValue: "C"},
+							{VariantField: "AType", ConstantValue: "A"},
+							{VariantField: "BType", ConstantValue: "B"},
+							{VariantField: "CType", ConstantValue: "C"},
 						},
 					},
 				},
@@ -77,7 +77,7 @@ func TestGetSelectableFields(t *testing.T) {
 						UnionFieldPath: "spec.routing",
 						UnionOptional:  true,
 						Variants: []templates.UnionVariantAccess{
-							{VariantField: "TypeA", FieldInVariant: "X"},
+							{VariantField: "AType", FieldInVariant: "X"},
 						},
 					},
 				},
@@ -151,8 +151,8 @@ func TestGetSelectableFields(t *testing.T) {
 						UnionFieldPath: "spec.routing",
 						UnionOptional:  true,
 						Variants: []templates.UnionVariantAccess{
-							{VariantField: "TypeA", FieldInVariant: "X"},
-							{VariantField: "TypeB", FieldInVariant: "X"},
+							{VariantField: "AType", FieldInVariant: "X"},
+							{VariantField: "BType", FieldInVariant: "X"},
 						},
 					},
 				},
@@ -184,6 +184,125 @@ func TestGetSelectableFields(t *testing.T) {
 					},
 				},
 			},
+		},
+		{
+			name: "inline: field path crosses union parent",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {type: "A", spec: {name: string}} | {type: "B", spec: {name: string}}}`),
+				SelectableFields: []string{".spec.spec.name"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{
+					Field: ".spec.spec.name", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec",
+						UnionOptional:  false,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "AType", FieldInVariant: "Spec.Name"},
+							{VariantField: "BType", FieldInVariant: "Spec.Name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "named definitions: field path crosses union parent",
+			kind: codegen.VersionedKind{
+				Schema: ctx.CompileString(`
+					#A: {kind: "A", spec: {name: string}}
+					#B: {kind: "B", spec: {name: string}}
+					#Union: #A | #B
+					{spec: #Union}
+				`),
+				SelectableFields: []string{".spec.spec.name"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{
+					Field: ".spec.spec.name", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec",
+						UnionOptional:  false,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "A", FieldInVariant: "Spec.Name"},
+							{VariantField: "B", FieldInVariant: "Spec.Name"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "inline: disjunction with null variant on optional field",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {routing?: {type: "A", x: string} | {type: "B", y: string} | null}}`),
+				SelectableFields: []string{".spec.routing.type"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{
+					Field: ".spec.routing.type", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "AType", ConstantValue: "A"},
+							{VariantField: "BType", ConstantValue: "B"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "named definitions: disjunction with null variant on optional field",
+			kind: codegen.VersionedKind{
+				Schema: ctx.CompileString(`
+					#A: {type: "A", x: string}
+					#B: {type: "B", y: string}
+					#Union: #A | #B | null
+					{spec: {routing?: #Union}}
+				`),
+				SelectableFields: []string{".spec.routing.x"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{
+					Field: ".spec.routing.x", Optional: true, Type: "string",
+					OptionalFieldsInPath: []string{},
+					Union: &templates.UnionFieldAccess{
+						UnionFieldPath: "spec.routing",
+						UnionOptional:  true,
+						Variants: []templates.UnionVariantAccess{
+							{VariantField: "A", FieldInVariant: "X"},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "disjunction with one type and null collapses into single value",
+			kind: codegen.VersionedKind{
+				Schema: ctx.CompileString(`
+					#A: {type: "A", x: string}
+					{spec: {routing?: #A | null}}
+				`),
+				SelectableFields: []string{".spec.routing.x"},
+			},
+			want: []templates.SchemaMetadataSelectableField{
+				{
+					Field:                ".spec.routing.x",
+					Optional:             false,
+					Type:                 "string",
+					OptionalFieldsInPath: []string{"spec.routing"},
+				},
+			},
+		},
+		{
+			name: "disjunction with null variant on required field is an error",
+			kind: codegen.VersionedKind{
+				Schema:           ctx.CompileString(`{spec: {routing: {type: "A", x: string} | {type: "B", y: string} | null}}`),
+				SelectableFields: []string{".spec.routing.type"},
+			},
+			wantErr: true,
 		},
 		{
 			name: "invalid path — field does not exist",

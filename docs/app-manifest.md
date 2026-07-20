@@ -14,7 +14,7 @@ metadata:
   name: issue-tracker-project
 spec:
   appName: example
-  group: example.ext.grafana.com
+  group: example.ext.grafana.app
   versions:
     - name: v1alpha1
       served: true
@@ -50,7 +50,7 @@ spec:
           - watch
   preferredVersion: "v1alpha1"
 ```
-This manifest describes an app which is called `example` (each appName must be unique), with the API group `example.ext.grafana.com`. 
+This manifest describes an app which is called `example` (each appName must be unique), with the API group `example.ext.grafana.app`. 
 This app has a kind it manages called `Foo`, which is has the capability to **validate** and **mutate**. 
 Finally, it requires permissions to get, list, and watch `playlists` from the `playlist.grafana.app` group.
 
@@ -109,7 +109,7 @@ different values for each version of the kind).
 
 The default preferred API version for clients to use is whichever is highest, but can be manually specified with the manifest's
 `preferredVersion` field.
-This manifest uses the API group `exampleapp.ext.grafana.com`, as the default group is automatically determined from the app name. 
+This manifest uses the API group `exampleapp.ext.grafana.app`, as the default group is automatically determined from the app name. 
 If you are working from an app written in a much older version of the app-sdk, or otherwise need to change the group, 
 you can add a `groupOverride` field with a fully-qualified group name to keep your current group. 
 This manifest also requires the same extra permissions for playlists as the YAML example manifest above.

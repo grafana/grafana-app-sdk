@@ -49,9 +49,31 @@ type TLSConfig struct {
 	KeyPath string
 }
 
+// WebhookHandlerConfig is the configuration object for a WebhookHandler, used with NewWebhookHandler.
+// Schema-specific controllers and converters are registered post-construction via
+// AddValidatingAdmissionController, AddMutatingAdmissionController, and AddConverter.
+type WebhookHandlerConfig struct {
+	// DefaultValidatingController is called for any /validate requests received which don't have a schema-specific
+	// ValidatingAdmissionController registered. If left nil, an error will be returned to the caller instead.
+	DefaultValidatingController resource.ValidatingAdmissionController
+	// DefaultMutatingController is called for any /mutate requests received which don't have a schema-specific
+	// MutatingAdmissionController registered. If left nil, an error will be returned to the caller instead.
+	DefaultMutatingController resource.MutatingAdmissionController
+}
+
 // WebhookServer is a kubernetes webhook server, which exposes /validate and /mutate HTTPS endpoints.
 // It implements operator.Controller and can be run as a controller in an operator, or as a standalone process.
 type WebhookServer struct {
+	*WebhookHandler
+	port      int
+	tlsConfig TLSConfig
+}
+
+// WebhookHandler implements the kubernetes webhook HTTP endpoints (/validate, /mutate, /convert),
+// optionally alongside custom routes registered via SetCustomRouteHandler. It is transport-agnostic:
+// callers install its handlers on an http.ServeMux via Register, or call the Handle*HTTP methods
+// directly. See WebhookServer for a ready-to-run HTTPS server that wraps a WebhookHandler.
+type WebhookHandler struct {
 	// DefaultValidatingController is the default ValidatingAdmissionController to use if one is not defined for the schema in the request.
 	// If this is empty, the request will be rejected.
 	DefaultValidatingController resource.ValidatingAdmissionController
@@ -61,8 +83,7 @@ type WebhookServer struct {
 	validatingControllers     map[string]validatingAdmissionControllerTuple
 	mutatingControllers       map[string]mutatingAdmissionControllerTuple
 	converters                map[string]Converter
-	port                      int
-	tlsConfig                 TLSConfig
+	customRoutes              *CustomRouteHandler
 }
 
 // NewWebhookServer creates a new WebhookServer using the provided configuration.
@@ -80,13 +101,12 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	}
 
 	ws := WebhookServer{
-		DefaultValidatingController: config.DefaultValidatingController,
-		DefaultMutatingController:   config.DefaultMutatingController,
-		validatingControllers:       make(map[string]validatingAdmissionControllerTuple),
-		mutatingControllers:         make(map[string]mutatingAdmissionControllerTuple),
-		converters:                  make(map[string]Converter),
-		port:                        config.Port,
-		tlsConfig:                   config.TLSConfig,
+		WebhookHandler: NewWebhookHandler(WebhookHandlerConfig{
+			DefaultValidatingController: config.DefaultValidatingController,
+			DefaultMutatingController:   config.DefaultMutatingController,
+		}),
+		port:      config.Port,
+		tlsConfig: config.TLSConfig,
 	}
 
 	for sch, controller := range config.ValidatingControllers {
@@ -104,10 +124,23 @@ func NewWebhookServer(config WebhookServerConfig) (*WebhookServer, error) {
 	return &ws, nil
 }
 
+// NewWebhookHandler creates a new WebhookHandler from the provided configuration. All config fields
+// are optional. Schema-specific controllers and converters are added post-construction via
+// AddValidatingAdmissionController, AddMutatingAdmissionController, and AddConverter.
+func NewWebhookHandler(config WebhookHandlerConfig) *WebhookHandler {
+	return &WebhookHandler{
+		DefaultValidatingController: config.DefaultValidatingController,
+		DefaultMutatingController:   config.DefaultMutatingController,
+		validatingControllers:       make(map[string]validatingAdmissionControllerTuple),
+		mutatingControllers:         make(map[string]mutatingAdmissionControllerTuple),
+		converters:                  make(map[string]Converter),
+	}
+}
+
 // AddValidatingAdmissionController adds a resource.ValidatingAdmissionController to the WebhookServer, associated with a given schema.
 // The schema association associates all incoming requests of the same group and kind of the schema to the schema's ZeroValue object.
 // If a ValidatingAdmissionController already exists for the provided schema, the one provided in this call will be used instead of the extant one.
-func (w *WebhookServer) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, kind resource.Kind) {
+func (w *WebhookHandler) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, kind resource.Kind) {
 	if w.validatingControllers == nil {
 		w.validatingControllers = make(map[string]validatingAdmissionControllerTuple)
 	}
@@ -124,7 +157,7 @@ func (w *WebhookServer) AddValidatingAdmissionController(controller resource.Val
 // AddMutatingAdmissionController adds a resource.MutatingAdmissionController to the WebhookServer, associated with a given schema.
 // The schema association associates all incoming requests of the same group and kind of the schema to the schema's ZeroValue object.
 // If a MutatingAdmissionController already exists for the provided schema, the one provided in this call will be used instead of the extant one.
-func (w *WebhookServer) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, kind resource.Kind) {
+func (w *WebhookHandler) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, kind resource.Kind) {
 	if w.mutatingControllers == nil {
 		w.mutatingControllers = make(map[string]mutatingAdmissionControllerTuple)
 	}
@@ -138,8 +171,14 @@ func (w *WebhookServer) AddMutatingAdmissionController(controller resource.Mutat
 	}
 }
 
+// SetCustomRouteHandler attaches a CustomRouteHandler to the WebhookServer. It must be called
+// before Run; later calls have no effect on an already-running server.
+func (w *WebhookHandler) SetCustomRouteHandler(h *CustomRouteHandler) {
+	w.customRoutes = h
+}
+
 // AddConverter adds a Converter to the WebhookServer, associated with the given group and kind.
-func (w *WebhookServer) AddConverter(converter Converter, groupKind metav1.GroupKind) {
+func (w *WebhookHandler) AddConverter(converter Converter, groupKind metav1.GroupKind) {
 	if w.converters == nil {
 		w.converters = make(map[string]Converter)
 	}
@@ -151,9 +190,7 @@ func (w *WebhookServer) AddConverter(converter Converter, groupKind metav1.Group
 // or the server encounters an unrecoverable error (in which case it returns the error).
 func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/validate", w.HandleValidateHTTP)
-	mux.HandleFunc("/mutate", w.HandleMutateHTTP)
-	mux.HandleFunc("/convert", w.HandleConvertHTTP)
+	w.Register(mux)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", w.port),
 		Handler:           mux,
@@ -176,9 +213,20 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	return err
 }
 
+// Register installs the webhook endpoints (/validate, /mutate, /convert) on the provided mux,
+// along with any patterns from a CustomRouteHandler attached via SetCustomRouteHandler.
+func (w *WebhookHandler) Register(mux *http.ServeMux) {
+	mux.HandleFunc("/validate", w.HandleValidateHTTP)
+	mux.HandleFunc("/mutate", w.HandleMutateHTTP)
+	mux.HandleFunc("/convert", w.HandleConvertHTTP)
+	if w.customRoutes != nil {
+		w.customRoutes.Register(mux)
+	}
+}
+
 // HandleValidateHTTP is the HTTP HandlerFunc for a kubernetes validating webhook call
 // nolint:errcheck,revive,funlen
-func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http.Request) {
+func (w *WebhookHandler) HandleValidateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
 		writer.WriteHeader(http.StatusMethodNotAllowed)
@@ -200,6 +248,11 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 	if err != nil {
 		writer.WriteHeader(http.StatusBadRequest)
 		logging.FromContext(req.Context()).Error("Couldn't unmarshal", "error", err)
+		return
+	}
+	if admRev.Request == nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		logging.FromContext(req.Context()).Error("Admission review missing request")
 		return
 	}
 
@@ -261,7 +314,7 @@ func (w *WebhookServer) HandleValidateHTTP(writer http.ResponseWriter, req *http
 
 // HandleMutateHTTP is the HTTP HandlerFunc for a kubernetes mutating webhook call
 // nolint:errcheck,revive,funlen
-func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.Request) {
+func (w *WebhookHandler) HandleMutateHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
 		writer.WriteHeader(http.StatusMethodNotAllowed)
@@ -279,6 +332,10 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 	// Unmarshal the admission review
 	admRev, err := unmarshalKubernetesAdmissionReview(body, resource.WireFormatJSON)
 	if err != nil {
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if admRev.Request == nil {
 		writer.WriteHeader(http.StatusBadRequest)
 		return
 	}
@@ -345,7 +402,7 @@ func (w *WebhookServer) HandleMutateHTTP(writer http.ResponseWriter, req *http.R
 
 // HandleConvertHTTP is the HTTP HandlerFunc for a kubernetes CRD conversion webhook call
 // nolint:errcheck,revive,funlen
-func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.Request) {
+func (w *WebhookHandler) HandleConvertHTTP(writer http.ResponseWriter, req *http.Request) {
 	// Only POST is allowed
 	if req.Method != http.MethodPost {
 		writer.WriteHeader(http.StatusMethodNotAllowed)
@@ -430,7 +487,7 @@ func (w *WebhookServer) HandleConvertHTTP(writer http.ResponseWriter, req *http.
 	writer.Write(resp)
 }
 
-func (*WebhookServer) generatePatch(admRev *admission.AdmissionReview, alteredObject resource.Object, codec resource.Codec) ([]byte, error) {
+func (*WebhookHandler) generatePatch(admRev *admission.AdmissionReview, alteredObject resource.Object, codec resource.Codec) ([]byte, error) {
 	// We need to generate a list of JSONPatch operations for updating the existing object to the provided one.
 	// To start, we need to translate the provided object into its kubernetes bytes representation
 	buf := &bytes.Buffer{}

@@ -80,6 +80,39 @@ func TestManifestData_Validate(t *testing.T) {
 		},
 		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' conversion does not match in versions 'v1' and 'v2'")),
 	}, {
+		name: "folderScoped mismatch (unset vs explicit false)",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:         "Foo",
+					FolderScoped: ptr(false),
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil, errors.New("kind 'Foo' has a different folderScoped in versions 'v1' and 'v2'")),
+	}, {
+		name: "folderScoped consistent (unset vs explicit true)",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+				}},
+			}, {
+				Name: "v2",
+				Kinds: []ManifestVersionKind{{
+					Kind:         "Foo",
+					FolderScoped: ptr(true),
+				}},
+			}},
+		},
+	}, {
 		name: "plural, scope, and conversion mismatch",
 		data: ManifestData{
 			Versions: []ManifestVersion{{

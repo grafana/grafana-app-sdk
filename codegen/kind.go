@@ -34,6 +34,8 @@ type KindProperties struct {
 	// This does not have to be the latest, but determines preference when generating code.
 	Current                string                      `json:"current"`
 	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`
@@ -92,6 +94,16 @@ type AdditionalPrinterColumn struct {
 	JSONPath    string  `json:"jsonPath"`
 }
 
+type SearchField struct {
+	Name             string   `json:"name"`
+	Path             string   `json:"path,omitempty"`
+	Type             string   `json:"type"`
+	Array            bool     `json:"array,omitempty"`
+	Capabilities     []string `json:"capabilities"`
+	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
+	Description      string   `json:"description,omitempty"`
+}
+
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
 	Query cue.Value `json:"query,omitempty"`
@@ -124,6 +136,7 @@ type KindVersion struct {
 	Validation               KindAdmissionCapability           `json:"validation"`
 	Mutation                 KindAdmissionCapability           `json:"mutation"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
+	SearchFields             []SearchField                     `json:"searchFields,omitempty"`
 	Routes                   map[string]map[string]CustomRoute `json:"routes,omitempty"`
 }
 

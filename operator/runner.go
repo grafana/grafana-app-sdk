@@ -8,17 +8,15 @@ import (
 	"io/fs"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/metrics"
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // Runner runs an app.App as a standalone operator, capable of exposing admission (validation, mutation)
@@ -34,7 +32,7 @@ type Runner struct {
 	metricsServer       *MetricsServer
 	metricsServerRunner *app.SingletonRunner
 	startMux            sync.Mutex
-	running             bool
+	running             atomic.Bool
 	runningWG           sync.WaitGroup
 }
 
@@ -85,8 +83,10 @@ func NewRunner(cfg RunnerConfig) (*Runner, error) {
 
 // RunnerConfig contains configuration information for the Runner.
 type RunnerConfig struct {
-	// WebhookConfig contains configuration information for exposing k8s webhooks.
-	// This can be empty if your App does not implement ValidatorApp, MutatorApp, or ConversionApp
+	// WebhookConfig contains configuration information for exposing k8s webhooks and the App's
+	// custom routes. The webhook server hosts both admission/conversion endpoints and the
+	// /apis/... custom route paths on the same HTTPS port. This can be empty only if the App
+	// has no admission, conversion, or custom route capabilities.
 	WebhookConfig RunnerWebhookConfig
 	// MetricsConfig contains the configuration for exposing prometheus metrics, if desired
 	MetricsConfig RunnerMetricsConfig
@@ -112,13 +112,8 @@ type RunnerWebhookConfig struct {
 	// Port is the port to open the webhook server on
 	Port int
 	// TLSConfig is the TLS Cert and Key to use for the HTTPS endpoints exposed for webhooks
+	// and custom routes.
 	TLSConfig k8s.TLSConfig
-}
-
-type capabilities struct {
-	conversion bool
-	mutation   bool
-	validation bool
 }
 
 // Run runs the Runner for the app built from the provided app.AppProvider, until the provided context.Context is closed,
@@ -154,11 +149,11 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	err = func() error {
 		s.startMux.Lock()
 		defer s.startMux.Unlock()
-		if !s.running {
-			s.running = true
+		if !s.running.Load() {
+			s.running.Store(true)
 			go func() {
 				s.runningWG.Wait()
-				s.running = false
+				s.running.Store(false)
 			}()
 		}
 		return nil
@@ -170,60 +165,13 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 	// Build the operator
 	runner := app.NewMultiRunner()
 
-	// Admission control
-	anyWebhooks := false
-	vkCapabilities := make(map[string]capabilities)
-	for _, version := range manifestData.Versions {
-		for _, kind := range version.Kinds {
-			if kind.Admission == nil {
-				if kind.Conversion {
-					anyWebhooks = true
-					vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
-						conversion: kind.Conversion,
-					}
-				}
-				continue
-			}
-			vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind, version.Name)] = capabilities{
-				conversion: kind.Conversion,
-				mutation:   kind.Admission.SupportsAnyMutation(),
-				validation: kind.Admission.SupportsAnyValidation(),
-			}
-			if kind.Conversion || kind.Admission.SupportsAnyMutation() || kind.Admission.SupportsAnyValidation() {
-				anyWebhooks = true
-			}
-		}
-	}
-	if anyWebhooks {
+	// Admission control and custom routes
+	if k8s.ManifestRequiresWebhooks(manifestData) {
 		if s.webhookServer == nil {
-			return errors.New("app has capabilities that require webhooks, but webhook server was not provided TLS config")
+			return errors.New("app has capabilities that require the webhook server (admission, conversion, or custom routes), but no TLS config was provided")
 		}
-		for _, kind := range a.ManagedKinds() {
-			c, ok := vkCapabilities[fmt.Sprintf("%s/%s", kind.Kind(), kind.Version())]
-			if !ok {
-				continue
-			}
-			if c.validation {
-				s.webhookServer.AddValidatingAdmissionController(&resource.SimpleValidatingAdmissionController{
-					ValidateFunc: func(ctx context.Context, request *resource.AdmissionRequest) error {
-						return a.Validate(ctx, s.translateAdmissionRequest(request))
-					},
-				}, kind)
-			}
-			if c.mutation {
-				s.webhookServer.AddMutatingAdmissionController(&resource.SimpleMutatingAdmissionController{
-					MutateFunc: func(ctx context.Context, request *resource.AdmissionRequest) (*resource.MutatingResponse, error) {
-						resp, err := a.Mutate(ctx, s.translateAdmissionRequest(request))
-						return s.translateMutatingResponse(resp), err
-					},
-				}, kind)
-			}
-			if c.conversion {
-				s.webhookServer.AddConverter(toWebhookConverter(a), metav1.GroupKind{
-					Group: kind.Group(),
-					Kind:  kind.Kind(),
-				})
-			}
+		if err := k8s.ConfigureWebhookHandler(s.webhookServer.server.WebhookHandler, a, manifestData); err != nil {
+			return err
 		}
 		runner.AddRunnable(s.webhookServer)
 	}
@@ -258,7 +206,7 @@ func (s *Runner) Run(ctx context.Context, provider app.Provider) error {
 }
 
 func (s *Runner) HealthCheck(_ context.Context) error {
-	if s.running {
+	if s.running.Load() {
 		return nil
 	}
 	return errors.New("app has not started yet")
@@ -298,51 +246,6 @@ func (s *Runner) getManifestData(provider app.Provider) (*app.ManifestData, erro
 	return &data, nil
 }
 
-func (*Runner) translateAdmissionRequest(request *resource.AdmissionRequest) *app.AdmissionRequest {
-	if request == nil {
-		return nil
-	}
-	// app.AdmissionRequest is of type resource.AdmissionRequest
-	req := app.AdmissionRequest(*request)
-	return &req
-}
-
-func (*Runner) translateMutatingResponse(response *app.MutatingResponse) *resource.MutatingResponse {
-	if response == nil {
-		return nil
-	}
-	// app.MutatingResponse is of type resource.MutatingResponse
-	resp := resource.MutatingResponse(*response)
-	return &resp
-}
-
-func toWebhookConverter(a app.App) k8s.Converter {
-	return &simpleK8sConverter{
-		convertFunc: func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-			converted, err := a.Convert(context.Background(), app.ConversionRequest{
-				SourceGVK: schema.FromAPIVersionAndKind(obj.APIVersion, obj.Kind),
-				TargetGVK: schema.FromAPIVersionAndKind(targetAPIVersion, obj.Kind),
-				Raw: app.RawObject{
-					Raw:      obj.Raw,
-					Encoding: resource.KindEncodingJSON,
-				},
-			})
-			if err != nil {
-				return nil, err
-			}
-			return converted.Raw, nil
-		},
-	}
-}
-
-type simpleK8sConverter struct {
-	convertFunc func(obj k8s.RawKind, targetAPIVersion string) ([]byte, error)
-}
-
-func (s *simpleK8sConverter) Convert(obj k8s.RawKind, targetAPIVersion string) ([]byte, error) {
-	return s.convertFunc(obj, targetAPIVersion)
-}
-
 func newWebhookServerRunner(ws *k8s.WebhookServer) *webhookServerRunner {
 	return &webhookServerRunner{
 		server: ws,
@@ -359,18 +262,6 @@ type webhookServerRunner struct {
 
 func (s *webhookServerRunner) Run(ctx context.Context) error {
 	return s.runner.Run(ctx)
-}
-
-func (s *webhookServerRunner) AddValidatingAdmissionController(controller resource.ValidatingAdmissionController, kind resource.Kind) {
-	s.server.AddValidatingAdmissionController(controller, kind)
-}
-
-func (s *webhookServerRunner) AddMutatingAdmissionController(controller resource.MutatingAdmissionController, kind resource.Kind) {
-	s.server.AddMutatingAdmissionController(controller, kind)
-}
-
-func (s *webhookServerRunner) AddConverter(converter k8s.Converter, groupKind metav1.GroupKind) {
-	s.server.AddConverter(converter, groupKind)
 }
 
 type k8sRunner interface {

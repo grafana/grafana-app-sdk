@@ -197,7 +197,7 @@ func NewApp(cfg app.Config) (app.App, error) {
 }
 ```
 You can connect this to a kubernetes API server by changing `"local.kubeconfig"` (or populating that file), 
-and making sure the `MyKind` CRD exists by applying the generated `definitions/mykind.testapp.ext.grafana.com.json` file.
+and making sure the `MyKind` CRD exists by applying the generated `definitions/mykind.testapp.ext.grafana.app.json` file.
 
 You can expand on this to add Validation or Mutation (or conversion), but keep in mind you'll need to add a WebhookConfig 
 to the `operator.RunnerConfig`, and set up the webhook configurations in your kubernetes API server. 

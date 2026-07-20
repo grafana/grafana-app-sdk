@@ -13,7 +13,7 @@ manifest: {
 	// and to generate the group used by your app in the app platform API.
 	appName: "issue-tracker-project"
 	// groupOverride can be used to specify a non-appName-based API group.
-	// By default, an app's API group is LOWER(REPLACE(appName, '-', '')).ext.grafana.com,
+	// By default, an app's API group is LOWER(REPLACE(appName, '-', '')).ext.grafana.app,
 	// but there are cases where this needs to be changed.
 	// Keep in mind that changing this after an app is deployed can cause problems with clients and/or kind data.
 	// groupOverride: foo.ext.grafana.app
@@ -102,7 +102,7 @@ $ make generate
  * Writing file plugin/src/generated/issue/v1alpha1/types.metadata.gen.ts
  * Writing file plugin/src/generated/issue/v1alpha1/types.spec.gen.ts
  * Writing file plugin/src/generated/issue/v1alpha1/types.status.gen.ts
- * Writing file definitions/issue.issuetrackerproject.ext.grafana.com.json
+ * Writing file definitions/issue.issuetrackerproject.ext.grafana.app.json
  * Writing file definitions/issue-tracker-project-manifest.json
  * Writing file pkg/generated/manifestdata/issuetrackerproject_manifest.go
 ```
@@ -114,7 +114,7 @@ $ tree .
 │   └── operator
 ├── definitions
 │   ├── issue-tracker-project-manifest.json
-│   └── issue.issuetrackerproject.ext.grafana.com.json
+│   └── issue.issuetrackerproject.ext.grafana.app.json
 ├── go.mod
 ├── go.sum
 ├── kinds
@@ -232,7 +232,7 @@ We also have a manifest here, which will be used by the grafana API server in th
 $ tree definitions
 definitions
 ├── issue-tracker-project-manifest.json
-└── issue.issuetrackerproject.ext.grafana.com.json
+└── issue.issuetrackerproject.ext.grafana.app.json
 
 1 directory, 2 files
 ```
