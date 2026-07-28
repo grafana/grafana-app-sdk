@@ -1147,6 +1147,8 @@ github.com/go-openapi/swag/fileutils v0.25.1 h1:rSRXapjQequt7kqalKXdcpIegIShhTPX
 github.com/go-openapi/swag/fileutils v0.25.1/go.mod h1:+NXtt5xNZZqmpIpjqcujqojGFek9/w55b3ecmOdtg8M=
 github.com/go-openapi/swag/fileutils v0.25.4/go.mod h1:cdOT/PKbwcysVQ9Tpr0q20lQKH7MGhOEb6EwmHOirUk=
 github.com/go-openapi/swag/jsonname v0.25.4/go.mod h1:GPVEk9CWVhNvWhZgrnvRA6utbAltopbKwDu8mXNUMag=
+github.com/go-openapi/swag/jsonname v0.26.1 h1:VReupaV6WxlAsCn0e4DUfgV6bPmINnPpyJDLqSfNPcE=
+github.com/go-openapi/swag/jsonname v0.26.1/go.mod h1:OvdW6BoWoj33pTfi7x9vFrgmT+fk7aw0BRwvCE0YOuc=
 github.com/go-openapi/swag/jsonutils v0.25.1 h1:AihLHaD0brrkJoMqEZOBNzTLnk81Kg9cWr+SPtxtgl8=
 github.com/go-openapi/swag/jsonutils v0.25.1/go.mod h1:JpEkAjxQXpiaHmRO04N1zE4qbUEg3b7Udll7AMGTNOo=
 github.com/go-openapi/swag/jsonutils v0.25.4/go.mod h1:7OYGXpvVFPn4PpaSdPHJBtF0iGnbEaTk8AvBkoWnaAY=
@@ -2713,6 +2715,8 @@ k8s.io/code-generator v0.36.0 h1:XWAkrhnArm0VWMmSFO7kyB+wE2LROwep7hEH0GPGkqA=
 k8s.io/code-generator v0.36.0/go.mod h1:Tr2UhfBRdlyRoadfob9aPCmmGe8PUs5XPK9MEJ2nx+w=
 k8s.io/code-generator v0.36.2 h1:iBNFYhClojQaVrF99Z3iTAad7LztQh3yCtwR8L8Ocpg=
 k8s.io/code-generator v0.36.2/go.mod h1:IfnsRW1IAq9iPxqs/FfOnVnWWONxS2mPDvWNR4fPlzI=
+k8s.io/code-generator v0.36.3 h1:tsiHI6NepXQncnexlTAf52w5VxZ4HYDU4ZqCNLFb9tA=
+k8s.io/code-generator v0.36.3/go.mod h1:Unn13Mp8X+H803jgZi4f4ExxK11aj0llXcSsl++UTkE=
 k8s.io/component-base v0.30.3 h1:Ci0UqKWf4oiwy8hr1+E3dsnliKnkMLZMVbWzeorlk7s=
 k8s.io/component-base v0.30.3/go.mod h1:C1SshT3rGPCuNtBs14RmVD2xW0EhRSeLvBh7AGk1quA=
 k8s.io/component-base v0.31.0 h1:/KIzGM5EvPNQcYgwq5NwoQBaOlVFrghoVGr8lG6vNRs=
