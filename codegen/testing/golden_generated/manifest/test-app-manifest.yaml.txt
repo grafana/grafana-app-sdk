@@ -19,7 +19,7 @@ spec:
     webhooks:
       conversionPath: /convert
       mutationPath: /mutate
-      validationPath: /validate
+      validationPath: /validate/test-app.ext.grafana.app/v1
   preferredVersion: v1
   roleBindings:
     viewer:

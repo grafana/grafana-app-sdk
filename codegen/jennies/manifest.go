@@ -270,19 +270,24 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	if m.Properties().OperatorURL != nil {
+	operatorURL, err := resolveOperatorURL(m.Properties())
+	if err != nil {
+		return nil, err
+	}
+	if operatorURL != nil {
+		conversionPath, validationPath, mutationPath := operatorWebhookPaths(m.Properties())
 		webhooks := app.ManifestOperatorWebhookProperties{}
 		if hasAnyConversion {
-			webhooks.ConversionPath = "/convert"
+			webhooks.ConversionPath = conversionPath
 		}
 		if hasAnyValidation {
-			webhooks.ValidationPath = "/validate"
+			webhooks.ValidationPath = validationPath
 		}
 		if hasAnyMutation {
-			webhooks.MutationPath = "/mutate"
+			webhooks.MutationPath = mutationPath
 		}
 		manifest.Operator = &app.ManifestOperatorInfo{
-			URL:      *m.Properties().OperatorURL,
+			URL:      *operatorURL,
 			Webhooks: &webhooks,
 		}
 	}
@@ -331,6 +336,46 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	}
 
 	return &manifest, validateManifestRoles(manifest, includeSchemas)
+}
+
+// resolveOperatorURL determines the operator URL from the manifest properties.
+// The structured operator.url takes precedence over the deprecated operatorURL,
+// but if both are set they must have the same value. It returns nil if neither is set.
+func resolveOperatorURL(props codegen.AppManifestProperties) (*string, error) {
+	var structuredURL *string
+	if props.Operator != nil {
+		structuredURL = props.Operator.URL
+	}
+	deprecatedURL := props.OperatorURL
+
+	if structuredURL != nil && deprecatedURL != nil && *structuredURL != *deprecatedURL {
+		return nil, fmt.Errorf("operatorURL (%q) and operator.url (%q) are both set but differ; set only operator.url", *deprecatedURL, *structuredURL)
+	}
+	if structuredURL != nil {
+		return structuredURL, nil
+	}
+	return deprecatedURL, nil
+}
+
+// operatorWebhookPaths returns the conversion, validation, and mutation webhook paths
+// from the manifest properties, falling back to the default paths when not configured.
+func operatorWebhookPaths(props codegen.AppManifestProperties) (conversionPath, validationPath, mutationPath string) {
+	conversionPath = "/convert"
+	validationPath = "/validate"
+	mutationPath = "/mutate"
+	if props.Operator == nil || props.Operator.Webhooks == nil {
+		return conversionPath, validationPath, mutationPath
+	}
+	if props.Operator.Webhooks.ConversionPath != "" {
+		conversionPath = props.Operator.Webhooks.ConversionPath
+	}
+	if props.Operator.Webhooks.ValidationPath != "" {
+		validationPath = props.Operator.Webhooks.ValidationPath
+	}
+	if props.Operator.Webhooks.MutationPath != "" {
+		mutationPath = props.Operator.Webhooks.MutationPath
+	}
+	return conversionPath, validationPath, mutationPath
 }
 
 // joinKindNames joins a sorted list of kind plural names into a
