@@ -346,7 +346,7 @@ func resolveOperatorURL(props codegen.AppManifestProperties) (*string, error) {
 	if props.Operator != nil {
 		structuredURL = props.Operator.URL
 	}
-	deprecatedURL := props.OperatorURL
+	deprecatedURL := props.OperatorURL //nolint:staticcheck // fallback support for the deprecated field is the purpose of this function
 
 	if structuredURL != nil && deprecatedURL != nil && *structuredURL != *deprecatedURL {
 		return nil, fmt.Errorf("operatorURL (%q) and operator.url (%q) are both set but differ; set only operator.url", *deprecatedURL, *structuredURL)
