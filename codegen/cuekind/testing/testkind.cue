@@ -19,7 +19,12 @@ testManifest: {
 			actions: ["get","list","watch"]
 		}]
 	}
-	operatorURL: "https://foo.bar:8443"
+	operator: {
+		url: "https://foo.bar:8443"
+		webhooks: {
+			validationPath: "/validate/test-app.ext.grafana.app/v1"
+		}
+	}
 	roles: {
 		"test-app:reader": {
 			title: "Test App Viewer"

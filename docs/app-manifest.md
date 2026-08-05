@@ -124,6 +124,34 @@ grafana-app-sdk generate --crdencoding=yaml
 ```
 A manifest isn't all that useful in most scenarios without at least one kind that your app exposes, so be sure you're familiar with [custom kinds](./custom-kinds/README.md) and [writing custom kinds](./custom-kinds/writing-kinds.md).
 
+## Operator and webhook paths
+
+If your app deploys an operator that serves admission (validation, mutation) or conversion webhooks, describe it with the `operator` block. The `url` is used by the platform to route webhook requests, and the `webhooks` paths are appended to that URL when constructing the webhook configurations:
+
+```cue
+manifest: {
+	appName: "example-app"
+	operator: {
+		// url is the HTTPS URL of your operator, including port if non-standard (443).
+		url: "https://example-app.example-namespace.svc.cluster.local:8443"
+		// webhooks lets you override the paths your operator serves webhooks on.
+		// Omit any path to use the defaults ("/validate", "/mutate", "/convert").
+		webhooks: {
+			validationPath: "/validate/example-app.ext.grafana.app/v1"
+			mutationPath:   "/mutate"
+			conversionPath: "/convert"
+		}
+	}
+	// ...
+}
+```
+
+The `webhooks` paths are only emitted for the webhook types your kinds actually declare (a validation path is only set if some kind has validation, and so on). Override them when your operator serves webhooks on non-default paths (for example, an operator built on controller-runtime that routes by group/version/kind).
+
+> The deprecated top-level `operatorURL` field is still accepted and is equivalent to `operator.url`. If both are set, they must have the same value. Prefer `operator.url` in new manifests.
+
+> These path overrides configure the generated manifest only. The webhook servers the SDK runs for you (`k8s.WebhookHandler`/`k8s.WebhookServer`, and the `simple` App/Operator runners) always serve at the default `/validate`, `/mutate`, and `/convert` paths. Overriding the paths is intended for apps that serve webhooks with their own HTTP routing.
+
 ## Versions
 
 Versions exposed by a manifest should adhere to the scheme `v([0-9]+)((alpha|beta)[0-9]+)?`. Examples include:

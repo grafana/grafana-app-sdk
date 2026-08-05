@@ -399,7 +399,22 @@ Manifest: S={
 	// operatorURL is the HTTPS URL of your operator, including port if non-standard (443).
 	// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
 	// This is used to construct validation, mutations, or conversion webhooks for your deployment.
+	// Deprecated: use operator.url instead. If both are set, they must have the same value.
 	operatorURL?: string
+
+	// operator contains information about the app's operator deployment, used to construct webhook configurations.
+	operator?: {
+		// url is the HTTPS URL of the operator, including port if non-standard (443).
+		// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
+		url?: string
+		// webhooks configures the paths the operator serves validation, mutation, and conversion webhooks on.
+		// Override these if your operator serves webhooks on non-default paths.
+		webhooks?: {
+			conversionPath: string & =~"^/" | *"/convert"
+			validationPath: string & =~"^/" | *"/validate"
+			mutationPath:   string & =~"^/" | *"/mutate"
+		}
+	}
 
 	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
 	// if present, this value is used for the full group instead.
