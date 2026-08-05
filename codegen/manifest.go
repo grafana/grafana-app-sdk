@@ -22,6 +22,7 @@ type AppManifestProperties struct {
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
 	// OperatorURL is the HTTPS URL of the app's operator.
+	//
 	// Deprecated: use Operator.URL instead. If both are set, they must have the same value.
 	OperatorURL      *string                              `json:"operatorURL,omitempty"`
 	Operator         *AppManifestPropertiesOperatorInfo   `json:"operator,omitempty"`
