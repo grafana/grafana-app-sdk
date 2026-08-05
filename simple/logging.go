@@ -3,6 +3,8 @@ package simple
 import (
 	"context"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
 )
@@ -39,6 +41,14 @@ func handleCustomRouteWithLogging(ctx context.Context, handler AppCustomRouteHan
 	ctx = logging.Context(ctx, logger)
 	err := handler(ctx, writer, req)
 	if err != nil {
+		if cast, ok := err.(apierrors.APIStatus); ok {
+			if cast.Status().Code < 500 {
+				logger.Info("custom route handler returned non-5xx status error", "code", cast.Status().Code, "message", cast.Status().Message)
+				return err
+			}
+			logger.Error("custom route handler returned 5xx status error", "code", cast.Status().Code, "message", cast.Status().Message)
+			return err
+		}
 		logger.With("error", err).Error("custom route handler failed")
 		return err
 	}
