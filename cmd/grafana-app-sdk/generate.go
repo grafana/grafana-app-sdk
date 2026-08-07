@@ -3,8 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	goparser "go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
@@ -76,6 +81,12 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 		}
 		files, err := generateKindsCue(parser, cfg)
 		if err != nil {
+			return err
+		}
+
+		// Fail fast (before writing) if codegen produced Go that would not
+		// compile due to duplicate top-level declarations. See grafana/grafana-app-sdk#1043.
+		if err = validateGeneratedGoDecls(files); err != nil {
 			return err
 		}
 
@@ -208,6 +219,72 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	allFiles = append(allFiles, manifestFiles...)
 	allFiles = append(allFiles, goManifestFiles...)
 	return allFiles, nil
+}
+
+// collidableDeclNames returns top-level names (type/func/const/var) sharing Go's
+// package namespace. Blank "_" and init funcs (legal repeats) are excluded.
+func collidableDeclNames(file *ast.File) []string {
+	var names []string
+	for _, d := range file.Decls {
+		switch decl := d.(type) {
+		case *ast.GenDecl: // type / const / var
+			for _, spec := range decl.Specs {
+				switch s := spec.(type) {
+				case *ast.TypeSpec:
+					names = append(names, s.Name.Name)
+				case *ast.ValueSpec:
+					for _, n := range s.Names {
+						names = append(names, n.Name)
+					}
+				default:
+				}
+			}
+		case *ast.FuncDecl:
+			if decl.Recv == nil && decl.Name.Name != "init" { // top-level func, not a method or init
+				names = append(names, decl.Name.Name)
+			}
+		default:
+		}
+	}
+	return slices.DeleteFunc(names, func(n string) bool { return n == "_" })
+}
+
+// validateGeneratedGoDecls errors if a generated Go package declares the same
+// top-level name in two files ("redeclared in this block"). See grafana-app-sdk#1043.
+func validateGeneratedGoDecls(files codejen.Files) error {
+	type ref struct{ dir, name string }
+	// (dir, name) -> files declaring it (with repeats); >=2 occurrences collide.
+	decls := make(map[ref][]string)
+	fset := token.NewFileSet()
+	for _, f := range files {
+		if !strings.HasSuffix(f.RelativePath, ".go") {
+			continue
+		}
+		parsed, err := goparser.ParseFile(fset, f.RelativePath, f.Data, 0)
+		if err != nil {
+			return fmt.Errorf("generated file %s does not parse: %w", f.RelativePath, err)
+		}
+		dir, base := filepath.Dir(f.RelativePath), filepath.Base(f.RelativePath)
+		for _, name := range collidableDeclNames(parsed) {
+			r := ref{dir: dir, name: name}
+			decls[r] = append(decls[r], base)
+		}
+	}
+
+	var collisions []string
+	for r, where := range decls {
+		if len(where) < 2 {
+			continue
+		}
+		slices.Sort(where)
+		where = slices.Compact(where) // distinct files for the message
+		collisions = append(collisions, fmt.Sprintf("  - %q redeclared in %s (%s)", r.name, r.dir, strings.Join(where, ", ")))
+	}
+	if len(collisions) == 0 {
+		return nil
+	}
+	slices.Sort(collisions)
+	return fmt.Errorf("generated Go will not compile (duplicate declarations); a schema field or definition is likely named after a generated type such as Spec, Status, or JSONCodec:\n%s", strings.Join(collisions, "\n"))
 }
 
 func postGenerateFilesCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files, error) {
