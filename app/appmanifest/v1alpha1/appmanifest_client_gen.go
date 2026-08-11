@@ -39,6 +39,7 @@ func (c *AppManifestClient) ListAll(ctx context.Context, namespace string, opts 
 		Limit:           opts.Limit,
 		LabelFilters:    opts.LabelFilters,
 		FieldSelectors:  opts.FieldSelectors,
+		ShardSelector:   opts.ShardSelector,
 	})
 	if err != nil {
 		return nil, err
@@ -50,6 +51,7 @@ func (c *AppManifestClient) ListAll(ctx context.Context, namespace string, opts 
 			Limit:           opts.Limit,
 			LabelFilters:    opts.LabelFilters,
 			FieldSelectors:  opts.FieldSelectors,
+			ShardSelector:   opts.ShardSelector,
 		})
 		if err != nil {
 			return nil, err

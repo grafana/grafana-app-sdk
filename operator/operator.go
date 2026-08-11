@@ -15,6 +15,13 @@ type ListWatchOptions struct {
 	Namespace      string
 	LabelFilters   []string
 	FieldSelectors []string
+	// ShardSelector is a CEL-based shard selector expression used to restrict the
+	// objects returned by ListWatch requests to a single shard. See
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#the-shardselector-field
+	// for the expression format.
+	// This is an alpha Kubernetes feature and requires the ShardedListAndWatch feature gate
+	// to be enabled on the API server (Kubernetes 1.36+).
+	ShardSelector string
 }
 
 // Controller is an interface that describes a controller which can be run as part of an operator

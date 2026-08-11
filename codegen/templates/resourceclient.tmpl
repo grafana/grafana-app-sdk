@@ -45,6 +45,7 @@ func (c *{{.KindName}}Client) ListAll(ctx context.Context, namespace string, opt
 		Limit:           opts.Limit,
 		LabelFilters:    opts.LabelFilters,
 		FieldSelectors:  opts.FieldSelectors,
+		ShardSelector:   opts.ShardSelector,
 	})
 	if err != nil {
 		return nil, err
@@ -56,6 +57,7 @@ func (c *{{.KindName}}Client) ListAll(ctx context.Context, namespace string, opt
 			Limit:           opts.Limit,
 			LabelFilters:    opts.LabelFilters,
 			FieldSelectors:  opts.FieldSelectors,
+			ShardSelector:   opts.ShardSelector,
 		})
 		if err != nil {
 			return nil, err

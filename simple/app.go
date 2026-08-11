@@ -265,6 +265,13 @@ type UnmanagedKindReconcileOptions struct {
 	LabelFilters []string
 	// FieldSelectors are any field selector filters to apply to the ListWatch request
 	FieldSelectors []string
+	// ShardSelector is a CEL-based shard selector expression used to restrict the ListWatch
+	// request to a single shard. See
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#the-shardselector-field
+	// for the expression format.
+	// This is an alpha Kubernetes feature and requires the ShardedListAndWatch feature gate
+	// to be enabled on the API server (Kubernetes 1.36+).
+	ShardSelector string
 	// UseOpinionated should be set to true to wrap the Watcher or Reconciler in its opinionated variant.
 	// If true, the app must have permission to add finalizers to the unmanaged Kind, and if
 	// the AppUnmanagedKind is ever removed from the app, the finalizers added should be cleaned up.
@@ -279,6 +286,13 @@ type BasicReconcileOptions struct {
 	LabelFilters []string
 	// FieldSelectors are any field selector filters to apply to the ListWatch request
 	FieldSelectors []string
+	// ShardSelector is a CEL-based shard selector expression used to restrict the ListWatch
+	// request to a single shard. See
+	// https://kubernetes.io/docs/reference/using-api/api-concepts/#the-shardselector-field
+	// for the expression format.
+	// This is an alpha Kubernetes feature and requires the ShardedListAndWatch feature gate
+	// to be enabled on the API server (Kubernetes 1.36+).
+	ShardSelector string
 	// UsePlain can be set to true to avoid wrapping the Reconciler or Watcher in its Opinionated variant.
 	UsePlain bool
 }
@@ -482,6 +496,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 				Namespace:      kind.ReconcileOptions.Namespace,
 				LabelFilters:   kind.ReconcileOptions.LabelFilters,
 				FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+				ShardSelector:  kind.ReconcileOptions.ShardSelector,
 				UseOpinionated: !kind.ReconcileOptions.UsePlain,
 			},
 		})
@@ -507,6 +522,7 @@ func (a *App) watchKind(kind AppUnmanagedKind) error {
 			Namespace:      kind.ReconcileOptions.Namespace,
 			LabelFilters:   kind.ReconcileOptions.LabelFilters,
 			FieldSelectors: kind.ReconcileOptions.FieldSelectors,
+			ShardSelector:  kind.ReconcileOptions.ShardSelector,
 		}
 		if opts.MetricsConfig == (metrics.Config{}) {
 			opts.MetricsConfig = a.cfg.InformerConfig.MetricsConfig
