@@ -343,6 +343,30 @@ type ManifestVersionKind struct {
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 	// SearchFields are the fields exposed for search indexing and querying.
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
+	// Search declares which search endpoints are served for this kind.
+	// A nil value, or a nil field within it, means the endpoint is served.
+	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
+}
+
+// ManifestVersionKindSearch declares which search endpoints are served for a kind.
+// Each field is a pointer so that an unset value can keep the default of the endpoint being served.
+type ManifestVersionKindSearch struct {
+	// Endpoint declares whether the kind serves the /search endpoint. A nil value defaults to true.
+	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
+	// Trash declares whether the kind serves the /trash endpoint. A nil value defaults to true.
+	Trash *bool `json:"trash,omitempty" yaml:"trash,omitempty"`
+}
+
+// HasSearchEndpoint reports whether the kind serves the /search endpoint.
+// Kinds serve it unless they explicitly opt out.
+func (m *ManifestVersionKind) HasSearchEndpoint() bool {
+	return m.Search == nil || m.Search.Endpoint == nil || *m.Search.Endpoint
+}
+
+// HasTrashEndpoint reports whether the kind serves the /trash endpoint.
+// Kinds serve it unless they explicitly opt out.
+func (m *ManifestVersionKind) HasTrashEndpoint() bool {
+	return m.Search == nil || m.Search.Trash == nil || *m.Search.Trash
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer

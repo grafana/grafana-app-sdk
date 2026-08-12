@@ -834,6 +834,22 @@
                                                                 ],
                                                                 "type": "string"
                                                             },
+                                                            "search": {
+                                                                "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
+                                                                "properties": {
+                                                                    "endpoint": {
+                                                                        "default": true,
+                                                                        "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "trash": {
+                                                                        "default": true,
+                                                                        "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
+                                                                        "type": "boolean"
+                                                                    }
+                                                                },
+                                                                "type": "object"
+                                                            },
                                                             "searchFields": {
                                                                 "items": {
                                                                     "description": "#SearchField describes a field exposed for search indexing and querying.\nThe type and capabilities values, and which capabilities are valid on which\ntype, are defined by the searchfields package\n(github.com/grafana/grafana-app-sdk/searchfields), the shared source of\ntruth for both the SDK codegen validator and the runtime search backend.",

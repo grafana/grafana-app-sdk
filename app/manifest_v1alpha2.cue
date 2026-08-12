@@ -91,6 +91,9 @@ appManifestv1alpha2: appManifestKind & {
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 			searchFields?: [...#SearchField]
+			// search declares which search endpoints are served for this kind.
+			// Both are served unless the kind opts out here.
+			search?: #ManifestVersionKindSearch
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -102,6 +105,14 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		// #ManifestVersionKindSearch declares which search endpoints are served for a kind.
+		#ManifestVersionKindSearch: {
+			// endpoint declares whether the kind serves the /search endpoint.
+			endpoint?: bool | *true
+			// trash declares whether the kind serves the /trash endpoint,
+			// which lists deleted resources of the kind.
+			trash?: bool | *true
 		}
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.

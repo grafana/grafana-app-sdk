@@ -1080,3 +1080,24 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 func ptr[T any](in T) *T {
 	return &in
 }
+
+func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		search         *ManifestVersionKindSearch
+		expectedSearch bool
+		expectedTrash  bool
+	}{
+		{name: "unset serves both", search: nil, expectedSearch: true, expectedTrash: true},
+		{name: "empty block serves both", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true},
+		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: ptr(false)}, expectedSearch: false, expectedTrash: true},
+		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: ptr(false)}, expectedSearch: true, expectedTrash: false},
+		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: ptr(false), Trash: ptr(false)}, expectedSearch: false, expectedTrash: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
+			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
+			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
+		})
+	}
+}

@@ -121,6 +121,13 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					k.SearchFields[i] = translated
 				}
 			}
+			// Search endpoints
+			if kind.Search != nil {
+				k.Search = &app.ManifestVersionKindSearch{
+					Endpoint: kind.Search.Endpoint,
+					Trash:    kind.Search.Trash,
+				}
+			}
 			// Schema
 			if kind.Schemas != nil {
 				toParse := make(map[string]any)
@@ -399,6 +406,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 						translated.Description = &sf.Description
 					}
 					k.SearchFields[i] = translated
+				}
+			}
+			if kind.Search != nil {
+				k.Search = &AppManifestManifestVersionKindSearch{
+					Endpoint: kind.Search.Endpoint,
+					Trash:    kind.Search.Trash,
 				}
 			}
 			// Routes

@@ -83,7 +83,10 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKind2s",
 					Scope:      "Namespaced",
 					Conversion: false,
-					Schema:     &versionSchemaTestKind2v1,
+					Search: &app.ManifestVersionKindSearch{
+						Trash: func(b bool) *bool { return &b }(false),
+					},
+					Schema: &versionSchemaTestKind2v1,
 				},
 			},
 			Routes: app.ManifestVersionRoutes{
