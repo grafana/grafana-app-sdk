@@ -104,6 +104,14 @@ type SearchField struct {
 	Description      string   `json:"description,omitempty"`
 }
 
+// KindSearch controls which search endpoints are served for a kind.
+type KindSearch struct {
+	// Endpoint controls whether the kind serves the /search endpoint.
+	Endpoint bool `json:"endpoint"`
+	// Trash controls whether the kind serves the /trash endpoint.
+	Trash bool `json:"trash"`
+}
+
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
 	Query cue.Value `json:"query,omitempty"`

@@ -796,6 +796,10 @@
                                         ],
                                         "type": "string"
                                     },
+                                    "search": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindSearch",
+                                        "description": "search declares which search endpoints are served for this kind.\nBoth are served unless the kind opts out here."
+                                    },
                                     "searchFields": {
                                         "items": {
                                             "$ref": "#/components/schemas/SearchField"
@@ -819,6 +823,23 @@
                                     "scope",
                                     "schemas"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindSearch": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
+                                "properties": {
+                                    "endpoint": {
+                                        "default": true,
+                                        "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                        "type": "boolean"
+                                    },
+                                    "trash": {
+                                        "default": true,
+                                        "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
+                                        "type": "boolean"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "ManifestVersionRoutes": {

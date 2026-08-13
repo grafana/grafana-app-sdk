@@ -58,6 +58,9 @@ type AppManifestManifestVersionKind struct {
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
+	// search declares which search endpoints are served for this kind.
+	// Both are served unless the kind opts out here.
+	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -223,6 +226,29 @@ func NewAppManifestSearchField() *AppManifestSearchField {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestSearchField.
 func (AppManifestSearchField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchField"
+}
+
+// #ManifestVersionKindSearch declares which search endpoints are served for a kind.
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindSearch struct {
+	// endpoint declares whether the kind serves the /search endpoint.
+	Endpoint *bool `json:"endpoint,omitempty"`
+	// trash declares whether the kind serves the /trash endpoint,
+	// which lists deleted resources of the kind.
+	Trash *bool `json:"trash,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindSearch creates a new AppManifestManifestVersionKindSearch object.
+func NewAppManifestManifestVersionKindSearch() *AppManifestManifestVersionKindSearch {
+	return &AppManifestManifestVersionKindSearch{
+		Endpoint: (func(input bool) *bool { return &input })(true),
+		Trash:    (func(input bool) *bool { return &input })(true),
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindSearch.
+func (AppManifestManifestVersionKindSearch) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindSearch"
 }
 
 // +k8s:openapi-gen=true

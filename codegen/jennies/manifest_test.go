@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"k8s.io/utils/ptr"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
@@ -170,6 +171,43 @@ func TestJoinKindNames(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := joinKindNames(tt.input)
 			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestProcessKindVersion_Search(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		search   codegen.KindSearch
+		expected *app.ManifestVersionKindSearch
+	}{{
+		// Both endpoints are served by default, so nothing is written to the manifest.
+		name:     "both enabled",
+		search:   codegen.KindSearch{Endpoint: true, Trash: true},
+		expected: nil,
+	}, {
+		name:     "search opt-out",
+		search:   codegen.KindSearch{Endpoint: false, Trash: true},
+		expected: &app.ManifestVersionKindSearch{Endpoint: ptr.To(false)},
+	}, {
+		name:     "trash opt-out",
+		search:   codegen.KindSearch{Endpoint: true, Trash: false},
+		expected: &app.ManifestVersionKindSearch{Trash: ptr.To(false)},
+	}, {
+		name:     "both opt-out",
+		search:   codegen.KindSearch{Endpoint: false, Trash: false},
+		expected: &app.ManifestVersionKindSearch{Endpoint: ptr.To(false), Trash: ptr.To(false)},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			mver, err := processKindVersion(codegen.VersionedKind{
+				Kind:         "Foo",
+				PluralName:   "Foos",
+				Scope:        "Namespaced",
+				FolderScoped: true,
+				Search:       tc.search,
+			}, "v1", false)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, mver.Search)
 		})
 	}
 }
