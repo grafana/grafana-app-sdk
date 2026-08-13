@@ -109,6 +109,8 @@ github.com/grafana/dskit v0.0.0-20260108123158-1a1acfb6ef2e h1:zP30ZbtnWjy0KJxTo
 github.com/grafana/dskit v0.0.0-20260108123158-1a1acfb6ef2e/go.mod h1:Tl9i4F2CPp3cOiXo06JObTh05tENG/NV/ombn2XOY7Y=
 github.com/grafana/grafana-app-sdk v0.56.7 h1:FiOlboXGJp+v1yimCn5ny4JS0T+OuMaClYvnfpnGv+w=
 github.com/grafana/grafana-app-sdk v0.56.7/go.mod h1:vg/DLN9+HZYgPC3IIaJ5pK1Ndr6WxoaTVpRww13rcjU=
+github.com/grafana/grafana-app-sdk v0.57.0 h1:vvXVhLuv4+rjlhbEqDVcxlHnVW5l1O0a+z+Hn37W1JA=
+github.com/grafana/grafana-app-sdk v0.57.0/go.mod h1:yZyAR15Owp0ACGE6rl9MA+B44IMZwwjjJOje9VKM9js=
 github.com/grafana/grafana-app-sdk/logging v0.56.7 h1:D1OTroxLvquU1KWjcJ0CouWaLoJhqPHC8NXoGMiMlnQ=
 github.com/grafana/grafana-app-sdk/logging v0.56.7/go.mod h1:cdNktt6ny3ZOqXttkIib9s0FGnLQHCBI/47V8m4STK0=
 github.com/grafana/grafana-plugin-sdk-go v0.296.1 h1:7J0tGnR6u+RIT3XCX/T93Fb9BRQR0aHh6gYAYaAy1dw=
