@@ -64,6 +64,7 @@ var (
 	templateGoResourceClient, _       = template.ParseFS(templates, "resourceclient.tmpl")
 	templateGoVersionedRouteClient, _ = template.ParseFS(templates, "client.tmpl")
 	templateRuntimeObject, _          = template.ParseFS(templates, "runtimeobject.tmpl")
+	templateGoTypeAlias, _            = template.ParseFS(templates, "gotypealias.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -125,6 +126,11 @@ type ResourceObjectTemplateMetadata struct {
 	OpenAPIModelName     string
 	Subresources         []SubresourceMetadata
 	CustomMetadataFields []ObjectMetadataField
+	// SpecIsExternalGoType is true when the spec type is a `@grafana_app_sdk(goType=...)` alias to a type
+	// defined in another package. When true, the DeepCopy/DeepCopyInto methods for the spec are not generated
+	// here (they must be provided by the external package, since Go does not allow defining methods on an alias
+	// to a non-local type).
+	SpecIsExternalGoType bool
 }
 
 // SubresourceMetadata is subresource information used in templates
@@ -133,11 +139,36 @@ type SubresourceMetadata struct {
 	TypeName string
 	JSONName string
 	Comment  string
+	// IsExternalGoType is true when this subresource's type is a `@grafana_app_sdk(goType=...)` alias to a type
+	// defined in another package. When true, the DeepCopy/DeepCopyInto methods for it are not generated here
+	// (they must be provided by the external package, since Go does not allow defining methods on an alias
+	// to a non-local type).
+	IsExternalGoType bool
 }
 
 // WriteResourceObject executes the Resource Object template, and writes out the generated go code to out
 func WriteResourceObject(metadata ResourceObjectTemplateMetadata, out io.Writer) error {
 	return templateResourceObject.Execute(out, metadata)
+}
+
+// GoTypeAliasMetadata is the metadata required by the go type alias template, used to emit a type alias to a
+// go type defined in another package (via the `@grafana_app_sdk(goType=...)` attribute).
+type GoTypeAliasMetadata struct {
+	// PackageName is the package of the generated file.
+	PackageName string
+	// ImportAlias is the alias used for the imported package in the generated file.
+	ImportAlias string
+	// ImportPath is the go import path of the package containing the externally-defined type.
+	ImportPath string
+	// TypeName is the name the alias takes within the generated package (e.g. Status or FooStatus).
+	TypeName string
+	// ExternalType is the name of the type within the imported package.
+	ExternalType string
+}
+
+// WriteGoTypeAlias executes the go type alias template, and writes out the generated go code to out
+func WriteGoTypeAlias(metadata GoTypeAliasMetadata, out io.Writer) error {
+	return templateGoTypeAlias.Execute(out, metadata)
 }
 
 type ResourceTSTemplateMetadata struct {
