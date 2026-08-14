@@ -50,11 +50,14 @@ customKind: {
 						[string]: _
 					}
 				}
+				#UnionTypeDiscriminator: "Type1" | "Type2"
 				#Type1: {
+					type: #UnionTypeDiscriminator & "Type1"
 					group: string
 					options?: [...string]
 				}
 				#Type2: {
+					type: #UnionTypeDiscriminator & "Type2"
 					group: string
 					details: {
 						[string]: _

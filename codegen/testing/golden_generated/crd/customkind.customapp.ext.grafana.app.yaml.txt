@@ -153,7 +153,14 @@ spec:
                       x-kubernetes-preserve-unknown-fields: true
                     group:
                       type: string
+                    type:
+                      default: Type2
+                      enum:
+                      - Type1
+                      - Type2
+                      type: string
                   required:
+                  - type
                   - group
                   - details
                   type: object
@@ -168,8 +175,10 @@ spec:
                     - required:
                       - details
                   required:
+                  - type
                   - group
                 - required:
+                  - type
                   - group
                   - details
                 properties:
@@ -182,6 +191,12 @@ spec:
                     items:
                       type: string
                     type: array
+                  type:
+                    default: Type1
+                    enum:
+                    - Type1
+                    - Type2
+                    type: string
                 type: object
             required:
             - field1
