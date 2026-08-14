@@ -956,6 +956,18 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"foo":{"allOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{"properties":{"bar":{"type":"string"}},"required":["bar"]}]}}}}`),
 		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"},"bar":{"type":"string"}},"allOf":[{"required":["foo"]},{"required":["bar"]}]}`),
+	}, {
+		// A field which references another type and also has a default is expressed as an allOf with a
+		// single $ref, because in OpenAPI 3.0 a $ref cannot have any siblings.
+		name:       "allOf with single ref keeps enum",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"routingType":{"type":"string","enum":["a","b"]},"foo":{"type":"object","properties":{"routing":{"allOf":[{"$ref":"#/components/schemas/routingType"}],"default":"a"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"routing":{"type":"string","enum":["a","b"],"default":"a"}}}`),
+	}, {
+		name:       "allOf with single ref keeps other constraints",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"duration":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration"},"foo":{"type":"object","properties":{"interval":{"allOf":[{"$ref":"#/components/schemas/duration"}],"default":"30s"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"interval":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration","default":"30s"}}}`),
 	}}
 
 	for _, test := range tests {
