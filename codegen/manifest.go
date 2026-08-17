@@ -21,10 +21,28 @@ type AppManifestProperties struct {
 	Group            string                                `json:"group"`
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
-	OperatorURL      *string                               `json:"operatorURL,omitempty"`
-	PreferredVersion string                                `json:"preferredVersion"`
-	Roles            map[string]AppManifestPropertiesRole  `json:"roles"`
-	RoleBindings     *AppManifestPropertiesRoleBindings    `json:"roleBindings"`
+	// OperatorURL is the HTTPS URL of the app's operator.
+	//
+	// Deprecated: use Operator.URL instead. If both are set, they must have the same value.
+	OperatorURL      *string                              `json:"operatorURL,omitempty"`
+	Operator         *AppManifestPropertiesOperatorInfo   `json:"operator,omitempty"`
+	PreferredVersion string                               `json:"preferredVersion"`
+	Roles            map[string]AppManifestPropertiesRole `json:"roles"`
+	RoleBindings     *AppManifestPropertiesRoleBindings   `json:"roleBindings"`
+}
+
+// AppManifestPropertiesOperatorInfo contains information about the app's operator deployment,
+// used to construct webhook configurations.
+type AppManifestPropertiesOperatorInfo struct {
+	URL      *string                                         `json:"url,omitempty"`
+	Webhooks *AppManifestPropertiesOperatorWebhookProperties `json:"webhooks,omitempty"`
+}
+
+// AppManifestPropertiesOperatorWebhookProperties contains the paths the operator serves webhooks on.
+type AppManifestPropertiesOperatorWebhookProperties struct {
+	ConversionPath string `json:"conversionPath"`
+	ValidationPath string `json:"validationPath"`
+	MutationPath   string `json:"mutationPath"`
 }
 
 type AppManifestPropertiesExtraPermissions struct {
@@ -203,6 +221,7 @@ type VersionedKind struct {
 	SelectableFields         []string                  `json:"selectableFields"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
 	SearchFields             []SearchField             `json:"searchFields,omitempty"`
+	Search                   KindSearch                `json:"search"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)

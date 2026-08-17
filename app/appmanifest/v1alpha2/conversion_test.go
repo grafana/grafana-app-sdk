@@ -211,3 +211,41 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		}, md)
 	})
 }
+
+func TestSearchEndpointsConversion(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	for _, tc := range []struct {
+		name   string
+		search *app.ManifestVersionKindSearch
+	}{
+		{name: "unset", search: nil},
+		{name: "empty", search: &app.ManifestVersionKindSearch{}},
+		{name: "search opt-out", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(false)}},
+		{name: "trash opt-out", search: &app.ManifestVersionKindSearch{Trash: boolPtr(false)}},
+		{name: "explicit true", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(true), Trash: boolPtr(true)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:   "Foo",
+						Scope:  "Namespaced",
+						Search: tc.search,
+					}},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+
+			// spec -> manifest: unset vs explicit is preserved in both directions.
+			roundTripped, err := spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.search, roundTripped.Versions[0].Kinds[0].Search)
+		})
+	}
+}

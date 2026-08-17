@@ -745,7 +745,7 @@
             "url": "https://foo.bar:8443",
             "webhooks": {
                 "conversionPath": "/convert",
-                "validationPath": "/validate",
+                "validationPath": "/validate/test-app.ext.grafana.app/v1",
                 "mutationPath": "/mutate"
             }
         },

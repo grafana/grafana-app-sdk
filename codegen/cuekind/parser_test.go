@@ -20,8 +20,13 @@ func TestParseManifestTestApp(t *testing.T) {
 	assert.Equal(t, "test-app", props.AppName)
 	assert.Equal(t, "v1", props.PreferredVersion)
 
-	require.NotNil(t, props.OperatorURL)
-	assert.Equal(t, "https://foo.bar:8443", *props.OperatorURL)
+	require.NotNil(t, props.Operator)
+	require.NotNil(t, props.Operator.URL)
+	assert.Equal(t, "https://foo.bar:8443", *props.Operator.URL)
+	require.NotNil(t, props.Operator.Webhooks)
+	assert.Equal(t, "/validate/test-app.ext.grafana.app/v1", props.Operator.Webhooks.ValidationPath)
+	assert.Equal(t, "/convert", props.Operator.Webhooks.ConversionPath)
+	assert.Equal(t, "/mutate", props.Operator.Webhooks.MutationPath)
 
 	require.Len(t, props.ExtraPermissions.AccessKinds, 1)
 	assert.Equal(t, "foo.bar", props.ExtraPermissions.AccessKinds[0].Group)

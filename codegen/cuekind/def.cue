@@ -207,6 +207,15 @@ SchemaWithOperatorState: Schema & {
 	description?: string
 }
 
+// #KindSearch controls which search endpoints are served for a kind.
+#KindSearch: {
+	// endpoint controls whether the kind serves the /search endpoint.
+	endpoint: bool | *true
+	// trash controls whether the kind serves the /trash endpoint,
+	// which lists deleted resources of the kind.
+	trash: bool | *true
+}
+
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
 	kind:  =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
@@ -289,6 +298,9 @@ Kind: S={
 	additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 	// searchFields is a list of fields exposed for search indexing and querying
 	searchFields?: [...#SearchField]
+	// search controls which search endpoints are served for this kind.
+	// Both are served unless the kind opts out here.
+	search: #KindSearch
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability
@@ -399,7 +411,22 @@ Manifest: S={
 	// operatorURL is the HTTPS URL of your operator, including port if non-standard (443).
 	// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
 	// This is used to construct validation, mutations, or conversion webhooks for your deployment.
+	// Deprecated: use operator.url instead. If both are set, they must have the same value.
 	operatorURL?: string
+
+	// operator contains information about the app's operator deployment, used to construct webhook configurations.
+	operator?: {
+		// url is the HTTPS URL of the operator, including port if non-standard (443).
+		// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
+		url?: string
+		// webhooks configures the paths the operator serves validation, mutation, and conversion webhooks on.
+		// Override these if your operator serves webhooks on non-default paths.
+		webhooks?: {
+			conversionPath: string & =~"^/" | *"/convert"
+			validationPath: string & =~"^/" | *"/validate"
+			mutationPath:   string & =~"^/" | *"/mutate"
+		}
+	}
 
 	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
 	// if present, this value is used for the full group instead.

@@ -83,7 +83,10 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKind2s",
 					Scope:      "Namespaced",
 					Conversion: false,
-					Schema:     &versionSchemaTestKind2v1,
+					Search: &app.ManifestVersionKindSearch{
+						Trash: func(b bool) *bool { return &b }(false),
+					},
+					Schema: &versionSchemaTestKind2v1,
 				},
 			},
 			Routes: app.ManifestVersionRoutes{
@@ -591,7 +594,7 @@ var appManifestData = app.ManifestData{
 		URL: "https://foo.bar:8443",
 		Webhooks: &app.ManifestOperatorWebhookProperties{
 			ConversionPath: "/convert",
-			ValidationPath: "/validate",
+			ValidationPath: "/validate/test-app.ext.grafana.app/v1",
 			MutationPath:   "/mutate",
 		},
 	},

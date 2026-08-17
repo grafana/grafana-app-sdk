@@ -796,6 +796,10 @@
                                         ],
                                         "type": "string"
                                     },
+                                    "search": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindSearch",
+                                        "description": "search declares which search endpoints are served for this kind.\nBoth are served unless the kind opts out here."
+                                    },
                                     "searchFields": {
                                         "items": {
                                             "$ref": "#/components/schemas/SearchField"
@@ -819,6 +823,23 @@
                                     "scope",
                                     "schemas"
                                 ],
+                                "type": "object"
+                            },
+                            "ManifestVersionKindSearch": {
+                                "additionalProperties": false,
+                                "description": "#ManifestVersionKindSearch declares which search endpoints are served for a kind.",
+                                "properties": {
+                                    "endpoint": {
+                                        "default": true,
+                                        "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                        "type": "boolean"
+                                    },
+                                    "trash": {
+                                        "default": true,
+                                        "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
+                                        "type": "boolean"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "ManifestVersionRoutes": {
@@ -1211,6 +1232,198 @@
                                 "required": [
                                     "resources"
                                 ],
+                                "type": "object"
+                            }
+                        },
+                        "conversion": false
+                    },
+                    {
+                        "kind": "RouteBackend",
+                        "plural": "RouteBackends",
+                        "scope": "Cluster",
+                        "userReadable": false,
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schemas": {
+                            "CommonBackendConfig": {
+                                "additionalProperties": false,
+                                "description": "#CommonBackendConfig is the common shape for every backend target: where to reach it and\nhow to trust it. The three concrete configs embed it. GroupVersions are NOT\ncarried here — they are derived from the same-name AppManifest for all modes.",
+                                "properties": {
+                                    "tls": {
+                                        "$ref": "#/components/schemas/TLSOptions"
+                                    },
+                                    "url": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "tls"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorConfig": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "tls": {
+                                        "$ref": "#/components/schemas/TLSOptions"
+                                    },
+                                    "url": {
+                                        "type": "string"
+                                    },
+                                    "webhooks": {
+                                        "$ref": "#/components/schemas/OperatorWebhookOptions"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "tls"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorState": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorWebhookOptions": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "conversionPath": {
+                                        "type": "string"
+                                    },
+                                    "mutationPath": {
+                                        "type": "string"
+                                    },
+                                    "validationPath": {
+                                        "type": "string"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "PluginConfig": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "tls": {
+                                        "$ref": "#/components/schemas/TLSOptions"
+                                    },
+                                    "url": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "url",
+                                    "tls"
+                                ],
+                                "type": "object"
+                            },
+                            "RouteBackend": {
+                                "properties": {
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
+                            "TLSOptions": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "caData": {
+                                        "type": "string"
+                                    },
+                                    "skipTLSVerify": {
+                                        "default": false,
+                                        "type": "boolean"
+                                    }
+                                },
+                                "required": [
+                                    "skipTLSVerify"
+                                ],
+                                "type": "object"
+                            },
+                            "spec": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "forward": {
+                                        "$ref": "#/components/schemas/CommonBackendConfig",
+                                        "description": "Basic HTTP Proxy mode"
+                                    },
+                                    "mode": {
+                                        "enum": [
+                                            "forward",
+                                            "plugin",
+                                            "operator"
+                                        ],
+                                        "type": "string"
+                                    },
+                                    "operator": {
+                                        "$ref": "#/components/schemas/OperatorConfig",
+                                        "description": "HTTP based operator"
+                                    },
+                                    "plugin": {
+                                        "$ref": "#/components/schemas/PluginConfig",
+                                        "description": "Plugin based handler"
+                                    }
+                                },
+                                "required": [
+                                    "mode"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "additionalFields": {
+                                        "additionalProperties": true,
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object"
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "$ref": "#/components/schemas/OperatorState"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
                                 "type": "object"
                             }
                         },
