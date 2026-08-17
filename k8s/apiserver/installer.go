@@ -712,12 +712,22 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			Body:               req.Request.Body,
 		})
 		if err != nil {
-			resp.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(resp).Encode(metav1.Status{
-				Status:  metav1.StatusFailure,
-				Code:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
+			j, e := json.Marshal(err)
+			if e != nil {
+				logging.FromContext(req.Request.Context()).Error("unable to marshal error JSON", "error", err)
+				resp.WriteHeader(http.StatusInternalServerError)
+			}
+			if cast, ok := err.(apierrors.APIStatus); ok {
+				resp.WriteHeader(int(cast.Status().Code))
+			} else {
+				resp.WriteHeader(http.StatusInternalServerError)
+			}
+			_, e = resp.Write(j)
+			if e != nil {
+				sanitizedPath := strings.ReplaceAll(req.Request.URL.Path, "\n", "")
+				sanitizedPath = strings.ReplaceAll(sanitizedPath, "\r", "")
+				logging.FromContext(req.Request.Context()).Error("unable to write response", "error", err, "url", sanitizedPath)
+			}
 		}
 	}).Returns(200, "OK", responseType))
 	return nil
