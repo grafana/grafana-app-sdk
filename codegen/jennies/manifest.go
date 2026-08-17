@@ -568,6 +568,23 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 	return errs
 }
 
+// manifestKindSearch translates a kind's search endpoint choices into the manifest.
+// Both endpoints default to being served, so only an explicit opt-out is written out,
+// keeping the manifest data clean; a nil pointer is interpreted as served downstream.
+func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearch {
+	if search.Endpoint && search.Trash {
+		return nil
+	}
+	out := &app.ManifestVersionKindSearch{}
+	if !search.Endpoint {
+		out.Endpoint = &search.Endpoint
+	}
+	if !search.Trash {
+		out.Trash = &search.Trash
+	}
+	return out
+}
+
 type simpleOpenAPIDoc[T any] struct {
 	Components struct {
 		Schemas map[string]T `json:"schemas" yaml:"schemas"`
@@ -592,6 +609,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		folderScoped := vk.FolderScoped
 		mver.FolderScoped = &folderScoped
 	}
+	mver.Search = manifestKindSearch(vk.Search)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {
