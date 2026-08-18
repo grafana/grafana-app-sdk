@@ -29,20 +29,31 @@ export type UnionType = Type1 | Type2;
 export const defaultUnionType = (): UnionType => (defaultType1());
 
 export interface Type1 {
+	type: UnionTypeDiscriminator.Type1;
 	group: string;
 	options?: string[];
 }
 
 export const defaultType1 = (): Type1 => ({
+	type: UnionTypeDiscriminator.Type1,
 	group: "",
 });
 
+export enum UnionTypeDiscriminator {
+	Type1 = "Type1",
+	Type2 = "Type2",
+}
+
+export const defaultUnionTypeDiscriminator = (): UnionTypeDiscriminator => (UnionTypeDiscriminator.Type1);
+
 export interface Type2 {
+	type: UnionTypeDiscriminator.Type2;
 	group: string;
 	details: Record<string, any>;
 }
 
 export const defaultType2 = (): Type2 => ({
+	type: UnionTypeDiscriminator.Type2,
 	group: "",
 	details: {},
 });

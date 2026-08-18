@@ -3,6 +3,7 @@
 package v1_0
 
 import (
+	json "encoding/json"
 	time "time"
 )
 
@@ -47,17 +48,25 @@ func (CustomKindInnerObject2) OpenAPIModelName() string {
 }
 
 // +k8s:openapi-gen=true
-type CustomKindUnionType interface{}
+type CustomKindUnionType = CustomKindType1OrType2
+
+// NewCustomKindUnionType creates a new CustomKindUnionType object.
+func NewCustomKindUnionType() *CustomKindUnionType {
+	return NewCustomKindType1OrType2()
+}
 
 // +k8s:openapi-gen=true
 type CustomKindType1 struct {
-	Group   string   `json:"group"`
-	Options []string `json:"options,omitempty"`
+	Type    CustomKindUnionTypeDiscriminator `json:"type"`
+	Group   string                           `json:"group"`
+	Options []string                         `json:"options,omitempty"`
 }
 
 // NewCustomKindType1 creates a new CustomKindType1 object.
 func NewCustomKindType1() *CustomKindType1 {
-	return &CustomKindType1{}
+	return &CustomKindType1{
+		Type: CustomKindUnionTypeDiscriminatorType1,
+	}
 }
 
 // OpenAPIModelName returns the OpenAPI model name for CustomKindType1.
@@ -66,14 +75,29 @@ func (CustomKindType1) OpenAPIModelName() string {
 }
 
 // +k8s:openapi-gen=true
+type CustomKindUnionTypeDiscriminator string
+
+const (
+	CustomKindUnionTypeDiscriminatorType1 CustomKindUnionTypeDiscriminator = "Type1"
+	CustomKindUnionTypeDiscriminatorType2 CustomKindUnionTypeDiscriminator = "Type2"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindUnionTypeDiscriminator.
+func (CustomKindUnionTypeDiscriminator) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindUnionTypeDiscriminator"
+}
+
+// +k8s:openapi-gen=true
 type CustomKindType2 struct {
-	Group   string                 `json:"group"`
-	Details map[string]interface{} `json:"details"`
+	Type    CustomKindUnionTypeDiscriminator `json:"type"`
+	Group   string                           `json:"group"`
+	Details map[string]interface{}           `json:"details"`
 }
 
 // NewCustomKindType2 creates a new CustomKindType2 object.
 func NewCustomKindType2() *CustomKindType2 {
 	return &CustomKindType2{
+		Type:    CustomKindUnionTypeDiscriminatorType2,
 		Details: map[string]interface{}{},
 	}
 }
@@ -119,6 +143,7 @@ type CustomKindSpec struct {
 func NewCustomKindSpec() *CustomKindSpec {
 	return &CustomKindSpec{
 		Inner:      *NewCustomKindInnerObject1(),
+		Union:      *NewCustomKindUnionType(),
 		Map:        map[string]CustomKindType2{},
 		Enum:       CustomKindSpecEnumDefault,
 		BoolField:  false,
@@ -145,4 +170,71 @@ const (
 // OpenAPIModelName returns the OpenAPI model name for CustomKindSpecEnum.
 func (CustomKindSpecEnum) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindSpecEnum"
+}
+
+// +k8s:openapi-gen=true
+type CustomKindType1OrType2 struct {
+	Type1 *CustomKindType1 `json:"Type1,omitempty"`
+	Type2 *CustomKindType2 `json:"Type2,omitempty"`
+}
+
+// NewCustomKindType1OrType2 creates a new CustomKindType1OrType2 object.
+func NewCustomKindType1OrType2() *CustomKindType1OrType2 {
+	return &CustomKindType1OrType2{}
+}
+
+// MarshalJSON implements a custom JSON marshalling logic to encode `CustomKindType1OrType2` as JSON.
+func (resource CustomKindType1OrType2) MarshalJSON() ([]byte, error) {
+	if resource.Type1 != nil {
+		return json.Marshal(resource.Type1)
+	}
+	if resource.Type2 != nil {
+		return json.Marshal(resource.Type2)
+	}
+
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON implements a custom JSON unmarshalling logic to decode `CustomKindType1OrType2` from JSON.
+func (resource *CustomKindType1OrType2) UnmarshalJSON(raw []byte) error {
+	if raw == nil {
+		return nil
+	}
+
+	// FIXME: this is wasteful, we need to find a more efficient way to unmarshal this.
+	parsedAsMap := make(map[string]interface{})
+	if err := json.Unmarshal(raw, &parsedAsMap); err != nil {
+		return err
+	}
+
+	discriminator, found := parsedAsMap["type"]
+	if !found {
+		return nil
+	}
+
+	switch discriminator {
+	case "Type1":
+		var customKindType1 CustomKindType1
+		if err := json.Unmarshal(raw, &customKindType1); err != nil {
+			return err
+		}
+
+		resource.Type1 = &customKindType1
+		return nil
+	case "Type2":
+		var customKindType2 CustomKindType2
+		if err := json.Unmarshal(raw, &customKindType2); err != nil {
+			return err
+		}
+
+		resource.Type2 = &customKindType2
+		return nil
+	}
+
+	return nil
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CustomKindType1OrType2.
+func (CustomKindType1OrType2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindType1OrType2"
 }
