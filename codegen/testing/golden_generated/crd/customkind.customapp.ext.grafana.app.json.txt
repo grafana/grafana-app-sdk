@@ -200,9 +200,18 @@
                                                 },
                                                 "group": {
                                                     "type": "string"
+                                                },
+                                                "type": {
+                                                    "default": "Type2",
+                                                    "enum": [
+                                                        "Type1",
+                                                        "Type2"
+                                                    ],
+                                                    "type": "string"
                                                 }
                                             },
                                             "required": [
+                                                "type",
                                                 "group",
                                                 "details"
                                             ],
@@ -227,11 +236,13 @@
                                                     ]
                                                 },
                                                 "required": [
+                                                    "type",
                                                     "group"
                                                 ]
                                             },
                                             {
                                                 "required": [
+                                                    "type",
                                                     "group",
                                                     "details"
                                                 ]
@@ -250,6 +261,14 @@
                                                     "type": "string"
                                                 },
                                                 "type": "array"
+                                            },
+                                            "type": {
+                                                "default": "Type1",
+                                                "enum": [
+                                                    "Type1",
+                                                    "Type2"
+                                                ],
+                                                "type": "string"
                                             }
                                         },
                                         "type": "object"
