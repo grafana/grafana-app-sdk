@@ -160,6 +160,7 @@ func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig
 	kubeConfig.Host = remoteCfg.Host
 	kubeConfig.TLSClientConfig = remoteCfg.TLSClientConfig
 	kubeConfig.WrapTransport = remoteCfg.WrapTransport
+	kubeConfig.Transport = nil
 
 	// Clear inherited auth that doesn't apply to the remote target.
 	if remoteCfg.OverrideAuth {
