@@ -1,0 +1,104 @@
+package grpcplugin
+
+import (
+	"context"
+
+	plugin "github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc"
+
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+)
+
+// V3Server is implemented by plugins that serve the grafana.plugin.v3 API — the
+// modern successor to the legacy genproto/pluginv2 (backend.proto) contract.
+//
+// Unlike the legacy services (Data, Resource, Diagnostics, ...), the V3 service
+// contracts are the generated gRPC interfaces themselves: there is
+// intentionally no hand-written Go wrapper translating between the protobuf
+// types and an SDK-native type. Implementations embed UnimplementedV3Server and
+// override the RPCs they support.
+type V3Server interface {
+	pluginv3.ValidateServiceServer
+	pluginv3.MutateServiceServer
+	pluginv3.ConversionServiceServer
+	pluginv3.RouteServiceServer
+}
+
+// UnimplementedV3Server is the stub that plugin authors embed to implement the
+// grafana.plugin.v3 API. Embedding it makes the V3 opt-in explicit and supplies
+// default (gRPC "Unimplemented") handlers for every V3 RPC, so a plugin only
+// needs to override the RPCs it actually serves.
+type UnimplementedV3Server struct {
+	pluginv3.UnimplementedValidateServiceServer
+	pluginv3.UnimplementedMutateServiceServer
+	pluginv3.UnimplementedConversionServiceServer
+	pluginv3.UnimplementedRouteServiceServer
+}
+
+// Compile-time assurance that the stub satisfies the V3 contract.
+var _ V3Server = UnimplementedV3Server{}
+
+// The types below are thin go-plugin adapters. go-plugin dispenses plugins by
+// name and requires each to implement plugin.GRPCPlugin; the generated code
+// only provides Register*Server / New*Client. Each adapter registers the
+// generated gRPC service directly — no wrapping server type is inserted.
+
+type validateGRPCPlugin struct {
+	plugin.NetRPCUnsupportedPlugin
+	plugin.GRPCPlugin
+	server pluginv3.ValidateServiceServer
+}
+
+func (p *validateGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
+	pluginv3.RegisterValidateServiceServer(s, p.server)
+	return nil
+}
+
+func (p *validateGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+	return pluginv3.NewValidateServiceClient(c), nil
+}
+
+type mutateGRPCPlugin struct {
+	plugin.NetRPCUnsupportedPlugin
+	plugin.GRPCPlugin
+	server pluginv3.MutateServiceServer
+}
+
+func (p *mutateGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
+	pluginv3.RegisterMutateServiceServer(s, p.server)
+	return nil
+}
+
+func (p *mutateGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+	return pluginv3.NewMutateServiceClient(c), nil
+}
+
+type conversionGRPCPlugin struct {
+	plugin.NetRPCUnsupportedPlugin
+	plugin.GRPCPlugin
+	server pluginv3.ConversionServiceServer
+}
+
+func (p *conversionGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
+	pluginv3.RegisterConversionServiceServer(s, p.server)
+	return nil
+}
+
+func (p *conversionGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+	return pluginv3.NewConversionServiceClient(c), nil
+}
+
+type routeGRPCPlugin struct {
+	plugin.NetRPCUnsupportedPlugin
+	plugin.GRPCPlugin
+	server pluginv3.RouteServiceServer
+}
+
+func (p *routeGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
+	pluginv3.RegisterRouteServiceServer(s, p.server)
+	return nil
+}
+
+func (p *routeGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+	return pluginv3.NewRouteServiceClient(c), nil
+}

@@ -24,8 +24,8 @@ const (
 // type.
 type RawObject struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Raw         []byte                 `protobuf:"bytes,1,opt,name=raw"`
-	xxx_hidden_ContentType *string                `protobuf:"bytes,2,opt,name=content_type,json=contentType"`
+	xxx_hidden_Gvk         *GroupVersionKind      `protobuf:"bytes,1,opt,name=gvk"`
+	xxx_hidden_Raw         []byte                 `protobuf:"bytes,2,opt,name=raw"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -57,6 +57,13 @@ func (x *RawObject) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
+func (x *RawObject) GetGvk() *GroupVersionKind {
+	if x != nil {
+		return x.xxx_hidden_Gvk
+	}
+	return nil
+}
+
 func (x *RawObject) GetRaw() []byte {
 	if x != nil {
 		return x.xxx_hidden_Raw
@@ -64,14 +71,8 @@ func (x *RawObject) GetRaw() []byte {
 	return nil
 }
 
-func (x *RawObject) GetContentType() string {
-	if x != nil {
-		if x.xxx_hidden_ContentType != nil {
-			return *x.xxx_hidden_ContentType
-		}
-		return ""
-	}
-	return ""
+func (x *RawObject) SetGvk(v *GroupVersionKind) {
+	x.xxx_hidden_Gvk = v
 }
 
 func (x *RawObject) SetRaw(v []byte) {
@@ -79,58 +80,49 @@ func (x *RawObject) SetRaw(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_Raw = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 2)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 2)
 }
 
-func (x *RawObject) SetContentType(v string) {
-	x.xxx_hidden_ContentType = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 2)
+func (x *RawObject) HasGvk() bool {
+	if x == nil {
+		return false
+	}
+	return x.xxx_hidden_Gvk != nil
 }
 
 func (x *RawObject) HasRaw() bool {
 	if x == nil {
 		return false
 	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
-}
-
-func (x *RawObject) HasContentType() bool {
-	if x == nil {
-		return false
-	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
-func (x *RawObject) ClearRaw() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_Raw = nil
+func (x *RawObject) ClearGvk() {
+	x.xxx_hidden_Gvk = nil
 }
 
-func (x *RawObject) ClearContentType() {
+func (x *RawObject) ClearRaw() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
-	x.xxx_hidden_ContentType = nil
+	x.xxx_hidden_Raw = nil
 }
 
 type RawObject_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
+	// Object type
+	Gvk *GroupVersionKind
 	// raw is the serialized object.
 	Raw []byte
-	// content_type is the media type of the raw object.
-	ContentType *string
 }
 
 func (b0 RawObject_builder) Build() *RawObject {
 	m0 := &RawObject{}
 	b, x := &b0, m0
 	_, _ = b, x
+	x.xxx_hidden_Gvk = b.Gvk
 	if b.Raw != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 2)
-		x.xxx_hidden_Raw = b.Raw
-	}
-	if b.ContentType != nil {
 		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 2)
-		x.xxx_hidden_ContentType = b.ContentType
+		x.xxx_hidden_Raw = b.Raw
 	}
 	return m0
 }
@@ -139,10 +131,10 @@ func (b0 RawObject_builder) Build() *RawObject {
 // another.
 type ConvertObjectsRequest struct {
 	state                    protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_ApiVersion    *GroupVersion          `protobuf:"bytes,1,opt,name=api_version,json=apiVersion"`
+	xxx_hidden_Api           *GroupVersion          `protobuf:"bytes,1,opt,name=api"`
 	xxx_hidden_Uid           *string                `protobuf:"bytes,2,opt,name=uid"`
 	xxx_hidden_Objects       *[]*RawObject          `protobuf:"bytes,3,rep,name=objects"`
-	xxx_hidden_TargetVersion *GroupVersion          `protobuf:"bytes,4,opt,name=target_version,json=targetVersion"`
+	xxx_hidden_TargetVersion *string                `protobuf:"bytes,4,opt,name=target_version,json=targetVersion"`
 	XXX_raceDetectHookData   protoimpl.RaceDetectHookData
 	XXX_presence             [1]uint32
 	unknownFields            protoimpl.UnknownFields
@@ -174,9 +166,9 @@ func (x *ConvertObjectsRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *ConvertObjectsRequest) GetApiVersion() *GroupVersion {
+func (x *ConvertObjectsRequest) GetApi() *GroupVersion {
 	if x != nil {
-		return x.xxx_hidden_ApiVersion
+		return x.xxx_hidden_Api
 	}
 	return nil
 }
@@ -200,15 +192,18 @@ func (x *ConvertObjectsRequest) GetObjects() []*RawObject {
 	return nil
 }
 
-func (x *ConvertObjectsRequest) GetTargetVersion() *GroupVersion {
+func (x *ConvertObjectsRequest) GetTargetVersion() string {
 	if x != nil {
-		return x.xxx_hidden_TargetVersion
+		if x.xxx_hidden_TargetVersion != nil {
+			return *x.xxx_hidden_TargetVersion
+		}
+		return ""
 	}
-	return nil
+	return ""
 }
 
-func (x *ConvertObjectsRequest) SetApiVersion(v *GroupVersion) {
-	x.xxx_hidden_ApiVersion = v
+func (x *ConvertObjectsRequest) SetApi(v *GroupVersion) {
+	x.xxx_hidden_Api = v
 }
 
 func (x *ConvertObjectsRequest) SetUid(v string) {
@@ -220,15 +215,16 @@ func (x *ConvertObjectsRequest) SetObjects(v []*RawObject) {
 	x.xxx_hidden_Objects = &v
 }
 
-func (x *ConvertObjectsRequest) SetTargetVersion(v *GroupVersion) {
-	x.xxx_hidden_TargetVersion = v
+func (x *ConvertObjectsRequest) SetTargetVersion(v string) {
+	x.xxx_hidden_TargetVersion = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 4)
 }
 
-func (x *ConvertObjectsRequest) HasApiVersion() bool {
+func (x *ConvertObjectsRequest) HasApi() bool {
 	if x == nil {
 		return false
 	}
-	return x.xxx_hidden_ApiVersion != nil
+	return x.xxx_hidden_Api != nil
 }
 
 func (x *ConvertObjectsRequest) HasUid() bool {
@@ -242,11 +238,11 @@ func (x *ConvertObjectsRequest) HasTargetVersion() bool {
 	if x == nil {
 		return false
 	}
-	return x.xxx_hidden_TargetVersion != nil
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
 }
 
-func (x *ConvertObjectsRequest) ClearApiVersion() {
-	x.xxx_hidden_ApiVersion = nil
+func (x *ConvertObjectsRequest) ClearApi() {
+	x.xxx_hidden_Api = nil
 }
 
 func (x *ConvertObjectsRequest) ClearUid() {
@@ -255,6 +251,7 @@ func (x *ConvertObjectsRequest) ClearUid() {
 }
 
 func (x *ConvertObjectsRequest) ClearTargetVersion() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
 	x.xxx_hidden_TargetVersion = nil
 }
 
@@ -262,7 +259,7 @@ type ConvertObjectsRequest_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// the request api_version
-	ApiVersion *GroupVersion
+	Api *GroupVersion
 	// uid is an identifier for the individual request/response. It allows
 	// distinguishing instances of requests which are otherwise identical
 	// (parallel requests, etc). It is meant to track the round trip between the
@@ -271,20 +268,23 @@ type ConvertObjectsRequest_builder struct {
 	// objects to convert.
 	Objects []*RawObject
 	// target_version is the version to convert to.
-	TargetVersion *GroupVersion
+	TargetVersion *string
 }
 
 func (b0 ConvertObjectsRequest_builder) Build() *ConvertObjectsRequest {
 	m0 := &ConvertObjectsRequest{}
 	b, x := &b0, m0
 	_, _ = b, x
-	x.xxx_hidden_ApiVersion = b.ApiVersion
+	x.xxx_hidden_Api = b.Api
 	if b.Uid != nil {
 		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 4)
 		x.xxx_hidden_Uid = b.Uid
 	}
 	x.xxx_hidden_Objects = &b.Objects
-	x.xxx_hidden_TargetVersion = b.TargetVersion
+	if b.TargetVersion != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 4)
+		x.xxx_hidden_TargetVersion = b.TargetVersion
+	}
 	return m0
 }
 
@@ -417,21 +417,20 @@ var File_grafana_plugin_v3_conversion_proto protoreflect.FileDescriptor
 
 const file_grafana_plugin_v3_conversion_proto_rawDesc = "" +
 	"\n" +
-	"\"grafana/plugin/v3/conversion.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"@\n" +
-	"\tRawObject\x12\x10\n" +
-	"\x03raw\x18\x01 \x01(\fR\x03raw\x12!\n" +
-	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"\xeb\x01\n" +
-	"\x15ConvertObjectsRequest\x12@\n" +
-	"\vapi_version\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.GroupVersionR\n" +
-	"apiVersion\x12\x10\n" +
+	"\"grafana/plugin/v3/conversion.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"T\n" +
+	"\tRawObject\x125\n" +
+	"\x03gvk\x18\x01 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x03gvk\x12\x10\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\"\xbb\x01\n" +
+	"\x15ConvertObjectsRequest\x121\n" +
+	"\x03api\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.GroupVersionR\x03api\x12\x10\n" +
 	"\x03uid\x18\x02 \x01(\tR\x03uid\x126\n" +
-	"\aobjects\x18\x03 \x03(\v2\x1c.grafana.plugin.v3.RawObjectR\aobjects\x12F\n" +
-	"\x0etarget_version\x18\x04 \x01(\v2\x1f.grafana.plugin.v3.GroupVersionR\rtargetVersion\"\x9b\x01\n" +
+	"\aobjects\x18\x03 \x03(\v2\x1c.grafana.plugin.v3.RawObjectR\aobjects\x12%\n" +
+	"\x0etarget_version\x18\x04 \x01(\tR\rtargetVersion\"\x9b\x01\n" +
 	"\x16ConvertObjectsResponse\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x127\n" +
 	"\x06result\x18\x02 \x01(\v2\x1f.grafana.plugin.v3.StatusResultR\x06result\x126\n" +
-	"\aobjects\x18\x03 \x03(\v2\x1c.grafana.plugin.v3.RawObjectR\aobjects2\x82\x01\n" +
-	"\x19ResourceConversionService\x12e\n" +
+	"\aobjects\x18\x03 \x03(\v2\x1c.grafana.plugin.v3.RawObjectR\aobjects2z\n" +
+	"\x11ConversionService\x12e\n" +
 	"\x0eConvertObjects\x12(.grafana.plugin.v3.ConvertObjectsRequest\x1a).grafana.plugin.v3.ConvertObjectsResponseB\xe2\x01\n" +
 	"\x15com.grafana.plugin.v3B\x0fConversionProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
@@ -440,17 +439,18 @@ var file_grafana_plugin_v3_conversion_proto_goTypes = []any{
 	(*RawObject)(nil),              // 0: grafana.plugin.v3.RawObject
 	(*ConvertObjectsRequest)(nil),  // 1: grafana.plugin.v3.ConvertObjectsRequest
 	(*ConvertObjectsResponse)(nil), // 2: grafana.plugin.v3.ConvertObjectsResponse
-	(*GroupVersion)(nil),           // 3: grafana.plugin.v3.GroupVersion
-	(*StatusResult)(nil),           // 4: grafana.plugin.v3.StatusResult
+	(*GroupVersionKind)(nil),       // 3: grafana.plugin.v3.GroupVersionKind
+	(*GroupVersion)(nil),           // 4: grafana.plugin.v3.GroupVersion
+	(*StatusResult)(nil),           // 5: grafana.plugin.v3.StatusResult
 }
 var file_grafana_plugin_v3_conversion_proto_depIdxs = []int32{
-	3, // 0: grafana.plugin.v3.ConvertObjectsRequest.api_version:type_name -> grafana.plugin.v3.GroupVersion
-	0, // 1: grafana.plugin.v3.ConvertObjectsRequest.objects:type_name -> grafana.plugin.v3.RawObject
-	3, // 2: grafana.plugin.v3.ConvertObjectsRequest.target_version:type_name -> grafana.plugin.v3.GroupVersion
-	4, // 3: grafana.plugin.v3.ConvertObjectsResponse.result:type_name -> grafana.plugin.v3.StatusResult
+	3, // 0: grafana.plugin.v3.RawObject.gvk:type_name -> grafana.plugin.v3.GroupVersionKind
+	4, // 1: grafana.plugin.v3.ConvertObjectsRequest.api:type_name -> grafana.plugin.v3.GroupVersion
+	0, // 2: grafana.plugin.v3.ConvertObjectsRequest.objects:type_name -> grafana.plugin.v3.RawObject
+	5, // 3: grafana.plugin.v3.ConvertObjectsResponse.result:type_name -> grafana.plugin.v3.StatusResult
 	0, // 4: grafana.plugin.v3.ConvertObjectsResponse.objects:type_name -> grafana.plugin.v3.RawObject
-	1, // 5: grafana.plugin.v3.ResourceConversionService.ConvertObjects:input_type -> grafana.plugin.v3.ConvertObjectsRequest
-	2, // 6: grafana.plugin.v3.ResourceConversionService.ConvertObjects:output_type -> grafana.plugin.v3.ConvertObjectsResponse
+	1, // 5: grafana.plugin.v3.ConversionService.ConvertObjects:input_type -> grafana.plugin.v3.ConvertObjectsRequest
+	2, // 6: grafana.plugin.v3.ConversionService.ConvertObjects:output_type -> grafana.plugin.v3.ConvertObjectsResponse
 	6, // [6:7] is the sub-list for method output_type
 	5, // [5:6] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name

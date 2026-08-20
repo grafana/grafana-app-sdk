@@ -19,107 +19,107 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ResourceConversionService_ConvertObjects_FullMethodName = "/grafana.plugin.v3.ResourceConversionService/ConvertObjects"
+	ConversionService_ConvertObjects_FullMethodName = "/grafana.plugin.v3.ConversionService/ConvertObjects"
 )
 
-// ResourceConversionServiceClient is the client API for ResourceConversionService service.
+// ConversionServiceClient is the client API for ConversionService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// ResourceConversionService can be used to convert resources between versions.
+// ConversionService can be used to convert resources between versions.
 // See: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-request-and-response
-type ResourceConversionServiceClient interface {
+type ConversionServiceClient interface {
 	// ConvertObjects converts objects to a target version.
 	ConvertObjects(ctx context.Context, in *ConvertObjectsRequest, opts ...grpc.CallOption) (*ConvertObjectsResponse, error)
 }
 
-type resourceConversionServiceClient struct {
+type conversionServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewResourceConversionServiceClient(cc grpc.ClientConnInterface) ResourceConversionServiceClient {
-	return &resourceConversionServiceClient{cc}
+func NewConversionServiceClient(cc grpc.ClientConnInterface) ConversionServiceClient {
+	return &conversionServiceClient{cc}
 }
 
-func (c *resourceConversionServiceClient) ConvertObjects(ctx context.Context, in *ConvertObjectsRequest, opts ...grpc.CallOption) (*ConvertObjectsResponse, error) {
+func (c *conversionServiceClient) ConvertObjects(ctx context.Context, in *ConvertObjectsRequest, opts ...grpc.CallOption) (*ConvertObjectsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ConvertObjectsResponse)
-	err := c.cc.Invoke(ctx, ResourceConversionService_ConvertObjects_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ConversionService_ConvertObjects_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// ResourceConversionServiceServer is the server API for ResourceConversionService service.
-// All implementations should embed UnimplementedResourceConversionServiceServer
+// ConversionServiceServer is the server API for ConversionService service.
+// All implementations should embed UnimplementedConversionServiceServer
 // for forward compatibility.
 //
-// ResourceConversionService can be used to convert resources between versions.
+// ConversionService can be used to convert resources between versions.
 // See: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-request-and-response
-type ResourceConversionServiceServer interface {
+type ConversionServiceServer interface {
 	// ConvertObjects converts objects to a target version.
 	ConvertObjects(context.Context, *ConvertObjectsRequest) (*ConvertObjectsResponse, error)
 }
 
-// UnimplementedResourceConversionServiceServer should be embedded to have
+// UnimplementedConversionServiceServer should be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedResourceConversionServiceServer struct{}
+type UnimplementedConversionServiceServer struct{}
 
-func (UnimplementedResourceConversionServiceServer) ConvertObjects(context.Context, *ConvertObjectsRequest) (*ConvertObjectsResponse, error) {
+func (UnimplementedConversionServiceServer) ConvertObjects(context.Context, *ConvertObjectsRequest) (*ConvertObjectsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ConvertObjects not implemented")
 }
-func (UnimplementedResourceConversionServiceServer) testEmbeddedByValue() {}
+func (UnimplementedConversionServiceServer) testEmbeddedByValue() {}
 
-// UnsafeResourceConversionServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ResourceConversionServiceServer will
+// UnsafeConversionServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ConversionServiceServer will
 // result in compilation errors.
-type UnsafeResourceConversionServiceServer interface {
-	mustEmbedUnimplementedResourceConversionServiceServer()
+type UnsafeConversionServiceServer interface {
+	mustEmbedUnimplementedConversionServiceServer()
 }
 
-func RegisterResourceConversionServiceServer(s grpc.ServiceRegistrar, srv ResourceConversionServiceServer) {
-	// If the following call panics, it indicates UnimplementedResourceConversionServiceServer was
+func RegisterConversionServiceServer(s grpc.ServiceRegistrar, srv ConversionServiceServer) {
+	// If the following call panics, it indicates UnimplementedConversionServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&ResourceConversionService_ServiceDesc, srv)
+	s.RegisterService(&ConversionService_ServiceDesc, srv)
 }
 
-func _ResourceConversionService_ConvertObjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ConversionService_ConvertObjects_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConvertObjectsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ResourceConversionServiceServer).ConvertObjects(ctx, in)
+		return srv.(ConversionServiceServer).ConvertObjects(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: ResourceConversionService_ConvertObjects_FullMethodName,
+		FullMethod: ConversionService_ConvertObjects_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ResourceConversionServiceServer).ConvertObjects(ctx, req.(*ConvertObjectsRequest))
+		return srv.(ConversionServiceServer).ConvertObjects(ctx, req.(*ConvertObjectsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// ResourceConversionService_ServiceDesc is the grpc.ServiceDesc for ResourceConversionService service.
+// ConversionService_ServiceDesc is the grpc.ServiceDesc for ConversionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var ResourceConversionService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "grafana.plugin.v3.ResourceConversionService",
-	HandlerType: (*ResourceConversionServiceServer)(nil),
+var ConversionService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "grafana.plugin.v3.ConversionService",
+	HandlerType: (*ConversionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "ConvertObjects",
-			Handler:    _ResourceConversionService_ConvertObjects_Handler,
+			Handler:    _ConversionService_ConvertObjects_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
