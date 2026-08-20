@@ -7,12 +7,9 @@ import (
 
 // handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
 func (*ManagedApp) handlePing(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Add("Content-Type", "application/json")
-	if _, err := w.Write([]byte(`{"message": "ok"}`)); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(`{"message": "ok"}`))
 }
 
 // handleEcho is an example HTTP POST resource that accepts a JSON with a "message" key and
@@ -29,12 +26,14 @@ func (*ManagedApp) handleEcho(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	w.Header().Add("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(body); err != nil {
+	payload, err := json.Marshal(body)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(payload)
 }
 
 // registerRoutes takes a *http.ServeMux and registers some HTTP handlers.

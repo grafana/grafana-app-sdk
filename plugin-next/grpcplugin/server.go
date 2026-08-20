@@ -22,8 +22,9 @@ const (
 	pluginKeyRouter     = "v3-route"
 )
 
-// pluginSet builds the go-plugin PluginSet from the given options. It is shared
-// by Serve and by tests that exercise the go-plugin dispensing path in-process.
+// PluginSet returns the go-plugin server registrations configured in opts.
+// Pass the result as backend.ServeOpts.ExtraPlugins or
+// backend/app.ManageOpts.ExtraPlugins.
 func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	pSet := make(plugin.PluginSet)
 
@@ -38,6 +39,16 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	}
 
 	return pSet
+}
+
+// ClientPluginSet returns the client-side go-plugin registrations needed to
+// negotiate and dispense all grafana.plugin.v3 services.
+func ClientPluginSet() plugin.PluginSet {
+	return plugin.PluginSet{
+		pluginKeyAdmission:  &admissionGRPCPlugin{},
+		pluginKeyConversion: &conversionGRPCPlugin{},
+		pluginKeyRouter:     &routeGRPCPlugin{},
+	}
 }
 
 // V3Server is implemented by plugins that serve the grafana.plugin.v3 API — the

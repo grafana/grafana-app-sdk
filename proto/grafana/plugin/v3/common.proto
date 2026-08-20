@@ -4,52 +4,54 @@ package grafana.plugin.v3;
 
 // GroupVersion represents the API group and version of a resource.
 message GroupVersion {
-  // The api group
+  // group is the API group.
   string group = 1;
 
-  // version eg v1, v2beta1, etc
+  // version is the API version, such as v1 or v2beta1.
   string version = 2;
 }
 
 // GroupVersionKind identifies the properties of an object.
 message GroupVersionKind {
-  // The api group
+  // group is the API group.
   string group = 1;
 
-  // version eg v1, v2beta1, etc
+  // version is the API version, such as v1 or v2beta1.
   string version = 2;
 
-  // Kind name (capitalized singular)
+  // kind is the capitalized, singular kind name.
   string kind = 3;
 }
 
-// GroupVersionKind identifies the properties of an object.
+// GroupVersionResource identifies a resource endpoint.
 message GroupVersionResource {
-  // The api group
+  // group is the API group.
   string group = 1;
 
-  // version eg v1, v2beta1, etc
+  // version is the API version, such as v1 or v2beta1.
   string version = 2;
 
-  // resource name (lowercase plural)
-  string kind = 3;
+  // resource is the lowercase, plural resource name.
+  string resource = 3;
 }
 
-// ResourceObject 
+// ResourceObject contains a serialized resource and the fields needed to
+// identify it.
 message ResourceObject {
-  // For plugins, group is usually the plugin identifier
+  // type identifies the resource endpoint. For plugins, its group is usually
+  // the plugin identifier.
   GroupVersionResource type = 1;
 
-  // tenant isolation
+  // namespace identifies the tenant or resource namespace.
   string namespace = 3;
 
-  // the identifier
+  // name is the resource name.
   string name = 4;
 
-  // the resource version -- changes here indicate that raw body has changed
+  // rv is the resource version. A change indicates that raw has changed.
   string rv = 5;
 
-  // JSON raw resource
+  // raw is the complete JSON-encoded resource.
   bytes raw = 6;
 }
 

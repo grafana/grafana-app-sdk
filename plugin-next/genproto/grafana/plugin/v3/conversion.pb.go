@@ -20,8 +20,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// RawObject contains a resource serialized into a byte array with a content
-// type.
+// RawObject contains a serialized resource and its kind.
 type RawObject struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Gvk         *GroupVersionKind      `protobuf:"bytes,1,opt,name=gvk"`
@@ -121,11 +120,11 @@ func (x *RawObject) ClearRaw() {
 type RawObject_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// Object type
+	// gvk identifies the object's kind.
 	Gvk *GroupVersionKind
-	// json serialized object
+	// raw is the complete JSON-encoded object.
 	Raw []byte
-	// When converted, these are the warnings
+	// warnings contains non-fatal issues encountered during conversion.
 	Warnings []string
 }
 
@@ -405,7 +404,7 @@ func (x *ConvertObjectsResponse) ClearUid() {
 type ConvertObjectsResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// When the request fails, we can return a full error error status
+	// error describes a failure to convert the requested objects.
 	Error *StatusResult
 	// uid is an identifier for the individual request/response. This should be
 	// copied over from the corresponding request.uid.

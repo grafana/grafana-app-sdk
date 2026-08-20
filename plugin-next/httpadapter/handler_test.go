@@ -3,6 +3,7 @@ package httpadapter
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
@@ -210,6 +211,24 @@ func TestCallRouteErrors(t *testing.T) {
 			require.False(t, called)
 		})
 	}
+}
+
+func TestCallRouteReturnsStreamSendError(t *testing.T) {
+	sender := newTestCallRouteResponseSender()
+	sender.sendErr = errors.New("send failed")
+	handler := New(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+		_, err := rw.Write([]byte("response"))
+		require.NoError(t, err)
+	}))
+	req := pluginv3.CallRouteRequest_builder{
+		Method: proto.String(http.MethodGet),
+		Path:   proto.String("test"),
+		Url:    proto.String("/test"),
+	}.Build()
+
+	err := handler.CallRoute(req, sender)
+
+	require.ErrorIs(t, err, sender.sendErr)
 }
 
 func TestCallRouteWithoutOptionalRequestFields(t *testing.T) {

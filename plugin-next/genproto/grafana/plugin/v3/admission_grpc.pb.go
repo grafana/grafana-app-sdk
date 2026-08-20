@@ -28,9 +28,9 @@ const (
 //
 // AdmissionService is based on the Kubernetes admission webhook pattern.
 // It can be used to verify that objects are valid and to mutate them.
-// See: https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L41
+// See: https://github.com/kubernetes/kubernetes/blob/v1.36.0/pkg/apis/admission/types.go#L41
 type AdmissionServiceClient interface {
-	// ValidateObject validates a resource; the response is a simple yes/no.
+	// AdmissionReview validates and may mutate a resource.
 	AdmissionReview(ctx context.Context, in *AdmissionReviewRequest, opts ...grpc.CallOption) (*AdmissionReviewResponse, error)
 }
 
@@ -58,9 +58,9 @@ func (c *admissionServiceClient) AdmissionReview(ctx context.Context, in *Admiss
 //
 // AdmissionService is based on the Kubernetes admission webhook pattern.
 // It can be used to verify that objects are valid and to mutate them.
-// See: https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L41
+// See: https://github.com/kubernetes/kubernetes/blob/v1.36.0/pkg/apis/admission/types.go#L41
 type AdmissionServiceServer interface {
-	// ValidateObject validates a resource; the response is a simple yes/no.
+	// AdmissionReview validates and may mutate a resource.
 	AdmissionReview(context.Context, *AdmissionReviewRequest) (*AdmissionReviewResponse, error)
 }
 

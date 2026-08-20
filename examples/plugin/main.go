@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"os"
 
@@ -15,30 +14,28 @@ import (
 )
 
 func main() {
-	// Any request on the router
+	// Serve every v3 route with a small handler that echoes request metadata.
 	echo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		msg := map[string]any{
 			"method": r.Method,
 			"url":    r.URL.String(),
 		}
-		w.Header().Add("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(msg); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.DefaultLogger.Error("write route response", "error", err)
 		}
-		w.WriteHeader(http.StatusOK)
 	})
 
-	// multi-tenant app
-	mt := &plugin.App{} // stubs for admission and conversion
+	// Admission and conversion are process-wide services; the managed app below
+	// remains scoped to each Grafana app instance.
+	mt := &plugin.App{}
 	opts := grpcplugin.ServeOpts{
 		RouteServer:      httpadapter.New(echo),
 		AdmissionServer:  mt,
 		ConversionServer: mt,
 	}
-	fmt.Printf("ooo %v\n", opts)
 
-	// This starts BOTH a managed app, and standalone MT handlers
+	// Start both the managed app and the process-wide v3 services.
 	if err := app.Manage("sdk-example-app", plugin.NewManagedApp, app.ManageOpts{
 		ExtraPlugins: opts.PluginSet(), // attach the extra plugins
 	}); err != nil {

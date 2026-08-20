@@ -5,16 +5,16 @@ import (
 	"net/http"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	"github.com/grafana/grafana-app-sdk/plugin-next/grpcplugin"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
 )
 
-// Make sure App implements required interfaces. This is important to do
-// since otherwise we will only get a not implemented error response from plugin in
-// runtime. Plugin should not implement all these interfaces - only those which are
-// required for a particular task.
+// Compile-time checks keep interface mismatches from becoming runtime
+// "unimplemented" responses. Plugins only need to implement the services they
+// register.
 var (
 	_ backend.CallResourceHandler   = (*ManagedApp)(nil)
 	_ instancemgmt.InstanceDisposer = (*ManagedApp)(nil)
@@ -24,21 +24,21 @@ var (
 	_ pluginv3.ConversionServiceServer = (*App)(nil)
 )
 
-// Single instance for everything
-type App struct{}
+// App implements the process-wide v3 admission and conversion services.
+type App struct {
+	grpcplugin.UnimplementedV3Server
+}
 
-// Managed app is created for each namespace/instance that is seen
+// ManagedApp is created once for each Grafana app instance.
 type ManagedApp struct {
 	backend.CallResourceHandler
 }
 
-// NewManagedApp creates a new example *App instance.
+// NewManagedApp creates a managed app instance.
 func NewManagedApp(_ context.Context, _ backend.AppInstanceSettings) (instancemgmt.Instance, error) {
 	var app ManagedApp
 
-	// Use a httpadapter (provided by the SDK) for resource calls. This allows us
-	// to use a *http.ServeMux for resource calls, so we can map multiple routes
-	// to CallResource without having to implement extra logic.
+	// The existing plugin SDK adapter lets a ServeMux handle CallResource.
 	mux := http.NewServeMux()
 	app.registerRoutes(mux)
 	app.CallResourceHandler = httpadapter.New(mux)
@@ -46,8 +46,7 @@ func NewManagedApp(_ context.Context, _ backend.AppInstanceSettings) (instancemg
 	return &app, nil
 }
 
-// Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
-// created.
+// Dispose releases resources owned by this managed app instance.
 func (*ManagedApp) Dispose() {
 	// cleanup
 }

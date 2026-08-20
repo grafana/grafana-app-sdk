@@ -10,36 +10,36 @@ service RouteService {
   rpc CallRoute(CallRouteRequest) returns (stream CallRouteResponse);
 }
 
-// RouteResource is the resource object referenced by the requested path
+// RouteResource is the resource referenced by the requested subresource path.
 message RouteResource {
-  // the parent resource type (eg, dashboards)
+  // resource is the lowercase, plural parent resource name, such as dashboards.
   string resource = 1;
 
-  // The resource name when attached to a resource (ie, the route is a "subresource")
+  // name is the parent resource name.
   string name = 2;
 
-  // the resource version -- changes here indicate that raw body has changed
+  // rv is the resource version. A change indicates that raw has changed.
   string rv = 3;
 
-  // JSON raw resource returned from `get`
+  // raw is the complete JSON-encoded parent resource.
   bytes raw = 4;
 }
 
 // CallRouteRequest is the request for RouteService.CallRoute.
 message CallRouteRequest {
-  // For plugins, group is usually the plugin identifier
+  // group is the API group. For plugins, it is usually the plugin identifier.
   string group = 1;
 
-  // version eg v1, v2beta1, etc
+  // version is the API version, such as v1 or v2beta1.
   string version = 2;
 
-  // When namespaced
+  // namespace identifies the tenant or resource namespace.
   string namespace = 3;
 
-  // When the route is a sub-resource
+  // parent is set when the route targets a resource subresource.
   RouteResource parent = 4;
 
-  // path relative to the configured location
+  // path is relative to the configured route location.
   string path = 5;
 
   // method is the HTTP method.
@@ -51,7 +51,7 @@ message CallRouteRequest {
   // headers are the raw HTTP request headers.
   map<string, StringList> headers = 8;
 
-  // For HTTP POST+PUT
+  // body is the raw HTTP request body.
   bytes body = 9;
 }
 

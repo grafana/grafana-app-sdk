@@ -34,7 +34,6 @@ func (h *httpRouteHandler) CallRoute(req *pluginv3.CallRouteRequest, sender grpc
 
 	ctx := sender.Context()
 
-	// TODO.. add user to context (authlib)
 	reqURL, err := url.Parse(req.GetUrl())
 	if err != nil {
 		return err
@@ -61,19 +60,22 @@ func (h *httpRouteHandler) CallRoute(req *pluginv3.CallRouteRequest, sender grpc
 	}
 
 	for key, values := range req.GetHeaders() {
-		httpReq.Header[key] = values.GetValues()
+		for _, value := range values.GetValues() {
+			httpReq.Header.Add(key, value)
+		}
 	}
 
 	writer := newResponseWriter(sender)
 	h.handler.ServeHTTP(writer, httpReq)
 	writer.Flush()
 
-	return nil
+	return writer.sendErr
 }
 
 type parentKey struct{}
 
-// ParentFromContext gets the parent from context (if it was configured)
+// ParentFromContext returns the resource associated with a subresource route.
+// It returns nil when the route request has no parent resource.
 func ParentFromContext(ctx context.Context) *pluginv3.RouteResource {
 	raw := ctx.Value(parentKey{})
 	if raw == nil {

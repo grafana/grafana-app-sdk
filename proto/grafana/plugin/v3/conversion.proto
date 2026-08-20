@@ -12,16 +12,15 @@ service ConversionService {
   rpc ConvertObjects(ConvertObjectsRequest) returns (ConvertObjectsResponse);
 }
 
-// RawObject contains a resource serialized into a byte array with a content
-// type.
+// RawObject contains a serialized resource and its kind.
 message RawObject {
-  // Object type
+  // gvk identifies the object's kind.
   GroupVersionKind gvk = 1;
 
-  // json serialized object
+  // raw is the complete JSON-encoded object.
   bytes raw = 2;
 
-  // When converted, these are the warnings
+  // warnings contains non-fatal issues encountered during conversion.
   repeated string warnings = 3;
 }
 
@@ -64,7 +63,7 @@ message ConvertObjectsResponse {
     repeated string warnings = 2;
   }
 
-  // When the request fails, we can return a full error error status
+  // error describes a failure to convert the requested objects.
   StatusResult error = 1;
 
   // uid is an identifier for the individual request/response. This should be

@@ -7,9 +7,9 @@ import "grafana/plugin/v3/status.proto";
 
 // AdmissionService is based on the Kubernetes admission webhook pattern.
 // It can be used to verify that objects are valid and to mutate them.
-// See: https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L41
+// See: https://github.com/kubernetes/kubernetes/blob/v1.36.0/pkg/apis/admission/types.go#L41
 service AdmissionService {
-  // ValidateObject validates a resource; the response is a simple yes/no.
+  // AdmissionReview validates and may mutate a resource.
   rpc AdmissionReview(AdmissionReviewRequest) returns (AdmissionReviewResponse);
 }
 
@@ -23,7 +23,6 @@ message AdmissionReviewRequest {
     OPERATION_CREATE = 1;
     OPERATION_UPDATE = 2;
     OPERATION_DELETE = 3;
-    // connect? -- do we want to review connect
   }
 
   // operation is the requested operation.
@@ -40,9 +39,10 @@ message AdmissionReviewRequest {
   bytes old_object_bytes = 4;
 }
 
-// ValidateAdmissionResponse reports whether an object may be admitted.
+// AdmissionReviewResponse reports whether an object may be admitted and may
+// include its mutated representation.
 message AdmissionReviewResponse {
-  // When the request fails, we can return a full error error status
+  // error describes a failure to evaluate the admission request.
   StatusResult error = 1;
 
   // allowed indicates whether or not the admission request was permitted.
@@ -53,6 +53,7 @@ message AdmissionReviewResponse {
   // and large numbers of warnings may be truncated.
   repeated string warnings = 3;
 
-  // object_bytes are included when the object should change
+  // object_bytes contains the complete mutated object. It is empty when the
+  // object does not need to change.
   bytes object_bytes = 4;
 }

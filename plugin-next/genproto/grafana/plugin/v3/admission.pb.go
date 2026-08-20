@@ -28,7 +28,7 @@ const (
 	AdmissionReviewRequest_OPERATION_UNSPECIFIED AdmissionReviewRequest_Operation = 0
 	AdmissionReviewRequest_OPERATION_CREATE      AdmissionReviewRequest_Operation = 1
 	AdmissionReviewRequest_OPERATION_UPDATE      AdmissionReviewRequest_Operation = 2
-	AdmissionReviewRequest_OPERATION_DELETE      AdmissionReviewRequest_Operation = 3 // connect? -- do we want to review connect
+	AdmissionReviewRequest_OPERATION_DELETE      AdmissionReviewRequest_Operation = 3
 )
 
 // Enum value maps for AdmissionReviewRequest_Operation.
@@ -244,7 +244,8 @@ func (b0 AdmissionReviewRequest_builder) Build() *AdmissionReviewRequest {
 	return m0
 }
 
-// ValidateAdmissionResponse reports whether an object may be admitted.
+// AdmissionReviewResponse reports whether an object may be admitted and may
+// include its mutated representation.
 type AdmissionReviewResponse struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Error       *StatusResult          `protobuf:"bytes,1,opt,name=error"`
@@ -369,7 +370,7 @@ func (x *AdmissionReviewResponse) ClearObjectBytes() {
 type AdmissionReviewResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// When the request fails, we can return a full error error status
+	// error describes a failure to evaluate the admission request.
 	Error *StatusResult
 	// allowed indicates whether or not the admission request was permitted.
 	Allowed *bool
@@ -377,7 +378,8 @@ type AdmissionReviewResponse_builder struct {
 	// Limit warnings to 120 characters if possible. Warnings over 256 characters
 	// and large numbers of warnings may be truncated.
 	Warnings []string
-	// object_bytes are included when the object should change
+	// object_bytes contains the complete mutated object. It is empty when the
+	// object does not need to change.
 	ObjectBytes []byte
 }
 

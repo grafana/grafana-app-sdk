@@ -3,7 +3,6 @@ package httpadapter
 import (
 	"errors"
 	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,7 +11,6 @@ import (
 func TestResponseWriterWriteAndHeaders(t *testing.T) {
 	t.Run("writes a body with implicit status and detected content type", func(t *testing.T) {
 		rw := newResponseWriter(newTestCallRouteResponseSender())
-		rw.body = nil
 
 		n, err := rw.Write([]byte(`{"message":"hello"}`))
 
@@ -56,29 +54,14 @@ func TestResponseWriterWriteAndHeaders(t *testing.T) {
 	})
 }
 
-func TestResponseWriterContentTypeFromString(t *testing.T) {
-	rw := newResponseWriter(newTestCallRouteResponseSender())
-
-	rw.writeContentTypeHeader(nil, strings.Repeat("a", 513))
-
-	require.Equal(t, "text/plain; charset=utf-8", rw.Header().Get("Content-Type"))
-	require.Equal(t, http.StatusOK, rw.code)
-
-	// Once the first chunk has been sent, content-type detection is a no-op.
-	rw.sentFirstStream = true
-	rw.headerMap = nil
-	rw.writeContentTypeHeader([]byte("ignored"), "")
-	require.Nil(t, rw.headerMap)
-}
-
 func TestResponseWriterHeaderInitializesNilMap(t *testing.T) {
 	rw := newResponseWriter(newTestCallRouteResponseSender())
-	rw.headerMap = nil
+	rw.header = nil
 
 	header := rw.Header()
 	header.Set("X-Test", "value")
 
-	require.Equal(t, "value", rw.headerMap.Get("X-Test"))
+	require.Equal(t, "value", rw.header.Get("X-Test"))
 }
 
 func TestResponseWriterFlush(t *testing.T) {
@@ -113,29 +96,36 @@ func TestResponseWriterFlush(t *testing.T) {
 
 	t.Run("sends an empty initial response with default status", func(t *testing.T) {
 		sender := newTestCallRouteResponseSender()
-		rw := &callRouteResponseWriter{stream: sender}
+		rw := newResponseWriter(sender)
 
 		rw.Flush()
 
 		require.Len(t, sender.respMessages, 1)
 		require.Equal(t, int32(http.StatusOK), sender.respMessages[0].GetCode())
 		require.Empty(t, sender.respMessages[0].GetBody())
-		require.NotNil(t, rw.headerMap)
-		require.Nil(t, rw.body)
+		require.NotNil(t, rw.header)
+		require.Empty(t, rw.body.Bytes())
+		require.True(t, rw.wroteHeader)
 		require.Nil(t, rw.chunk())
 
-		// Writing after a nil body allocates its buffer.
-		_, err := rw.Write([]byte("later"))
-		require.NoError(t, err)
-		require.Equal(t, "later", rw.body.String())
+		// Flush commits the implicit status and headers.
+		rw.WriteHeader(http.StatusCreated)
+		require.Equal(t, http.StatusOK, rw.code)
 	})
 
-	t.Run("handles a stream send error", func(t *testing.T) {
+	t.Run("retains a stream send error", func(t *testing.T) {
 		sender := newTestCallRouteResponseSender()
 		sender.sendErr = errors.New("send failed")
 		rw := newResponseWriter(sender)
 
 		require.NotPanics(t, rw.Flush)
+		require.ErrorIs(t, rw.sendErr, sender.sendErr)
+		require.Len(t, sender.respMessages, 1)
+
+		n, err := rw.Write([]byte("not sent"))
+		require.Zero(t, n)
+		require.ErrorIs(t, err, sender.sendErr)
+		rw.Flush()
 		require.Len(t, sender.respMessages, 1)
 	})
 }

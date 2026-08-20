@@ -22,7 +22,7 @@ const (
 
 // StatusResult carries a machine- and human-readable description of the outcome
 // of an operation. It mirrors the Kubernetes meta/v1 Status shape:
-// https://github.com/kubernetes/apimachinery/blob/v0.30.1/pkg/apis/meta/v1/generated.proto#L979
+// https://github.com/kubernetes/apimachinery/blob/v0.36.3/pkg/apis/meta/v1/generated.proto#L979
 type StatusResult struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Status      *string                `protobuf:"bytes,2,opt,name=status"`

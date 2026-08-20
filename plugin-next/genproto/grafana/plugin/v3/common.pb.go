@@ -113,9 +113,9 @@ func (x *GroupVersion) ClearVersion() {
 type GroupVersion_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// The api group
+	// group is the API group.
 	Group *string
-	// version eg v1, v2beta1, etc
+	// version is the API version, such as v1 or v2beta1.
 	Version *string
 }
 
@@ -255,11 +255,11 @@ func (x *GroupVersionKind) ClearKind() {
 type GroupVersionKind_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// The api group
+	// group is the API group.
 	Group *string
-	// version eg v1, v2beta1, etc
+	// version is the API version, such as v1 or v2beta1.
 	Version *string
-	// Kind name (capitalized singular)
+	// kind is the capitalized, singular kind name.
 	Kind *string
 }
 
@@ -282,12 +282,12 @@ func (b0 GroupVersionKind_builder) Build() *GroupVersionKind {
 	return m0
 }
 
-// GroupVersionKind identifies the properties of an object.
+// GroupVersionResource identifies a resource endpoint.
 type GroupVersionResource struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Group       *string                `protobuf:"bytes,1,opt,name=group"`
 	xxx_hidden_Version     *string                `protobuf:"bytes,2,opt,name=version"`
-	xxx_hidden_Kind        *string                `protobuf:"bytes,3,opt,name=kind"`
+	xxx_hidden_Resource    *string                `protobuf:"bytes,3,opt,name=resource"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -339,10 +339,10 @@ func (x *GroupVersionResource) GetVersion() string {
 	return ""
 }
 
-func (x *GroupVersionResource) GetKind() string {
+func (x *GroupVersionResource) GetResource() string {
 	if x != nil {
-		if x.xxx_hidden_Kind != nil {
-			return *x.xxx_hidden_Kind
+		if x.xxx_hidden_Resource != nil {
+			return *x.xxx_hidden_Resource
 		}
 		return ""
 	}
@@ -359,8 +359,8 @@ func (x *GroupVersionResource) SetVersion(v string) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 3)
 }
 
-func (x *GroupVersionResource) SetKind(v string) {
-	x.xxx_hidden_Kind = &v
+func (x *GroupVersionResource) SetResource(v string) {
+	x.xxx_hidden_Resource = &v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 3)
 }
 
@@ -378,7 +378,7 @@ func (x *GroupVersionResource) HasVersion() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
-func (x *GroupVersionResource) HasKind() bool {
+func (x *GroupVersionResource) HasResource() bool {
 	if x == nil {
 		return false
 	}
@@ -395,20 +395,20 @@ func (x *GroupVersionResource) ClearVersion() {
 	x.xxx_hidden_Version = nil
 }
 
-func (x *GroupVersionResource) ClearKind() {
+func (x *GroupVersionResource) ClearResource() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
-	x.xxx_hidden_Kind = nil
+	x.xxx_hidden_Resource = nil
 }
 
 type GroupVersionResource_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// The api group
+	// group is the API group.
 	Group *string
-	// version eg v1, v2beta1, etc
+	// version is the API version, such as v1 or v2beta1.
 	Version *string
-	// resource name (lowercase plural)
-	Kind *string
+	// resource is the lowercase, plural resource name.
+	Resource *string
 }
 
 func (b0 GroupVersionResource_builder) Build() *GroupVersionResource {
@@ -423,14 +423,15 @@ func (b0 GroupVersionResource_builder) Build() *GroupVersionResource {
 		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 3)
 		x.xxx_hidden_Version = b.Version
 	}
-	if b.Kind != nil {
+	if b.Resource != nil {
 		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 3)
-		x.xxx_hidden_Kind = b.Kind
+		x.xxx_hidden_Resource = b.Resource
 	}
 	return m0
 }
 
-// ResourceObject
+// ResourceObject contains a serialized resource and the fields needed to
+// identify it.
 type ResourceObject struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Type        *GroupVersionResource  `protobuf:"bytes,1,opt,name=type"`
@@ -602,15 +603,16 @@ func (x *ResourceObject) ClearRaw() {
 type ResourceObject_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
-	// For plugins, group is usually the plugin identifier
+	// type identifies the resource endpoint. For plugins, its group is usually
+	// the plugin identifier.
 	Type *GroupVersionResource
-	// tenant isolation
+	// namespace identifies the tenant or resource namespace.
 	Namespace *string
-	// the identifier
+	// name is the resource name.
 	Name *string
-	// the resource version -- changes here indicate that raw body has changed
+	// rv is the resource version. A change indicates that raw has changed.
 	Rv *string
-	// JSON raw resource
+	// raw is the complete JSON-encoded resource.
 	Raw []byte
 }
 
@@ -708,11 +710,11 @@ const file_grafana_plugin_v3_common_proto_rawDesc = "" +
 	"\x10GroupVersionKind\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\tR\x04kind\"Z\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\"b\n" +
 	"\x14GroupVersionResource\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\tR\aversion\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\tR\x04kind\"\xa1\x01\n" +
+	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1a\n" +
+	"\bresource\x18\x03 \x01(\tR\bresource\"\xa1\x01\n" +
 	"\x0eResourceObject\x12;\n" +
 	"\x04type\x18\x01 \x01(\v2'.grafana.plugin.v3.GroupVersionResourceR\x04type\x12\x1c\n" +
 	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x12\n" +

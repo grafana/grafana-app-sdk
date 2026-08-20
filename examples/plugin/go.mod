@@ -7,6 +7,7 @@ replace github.com/grafana/grafana-app-sdk => ../../
 require (
 	github.com/grafana/grafana-app-sdk v0.57.0
 	github.com/grafana/grafana-plugin-sdk-go v0.296.4-0.20260820062033-164c814d1e05
+	github.com/stretchr/testify v1.12.0
 )
 
 require (
@@ -78,4 +79,5 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260810153831-ec0a7760b754 // indirect
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

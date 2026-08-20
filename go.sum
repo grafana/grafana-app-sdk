@@ -130,8 +130,6 @@ github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 h1:kGigNSum3b7XJjemh
 github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745/go.mod h1:dLUEt5k1Zv21//kvSk8ZR4kXjCq5oALBLu2LupLhj5k=
 github.com/grafana/grafana-app-sdk/logging v0.57.0 h1:348k1pHmWLjIek3ixtmv5cDLYRGm8BAJs7w5VCXNrcM=
 github.com/grafana/grafana-app-sdk/logging v0.57.0/go.mod h1:B7CyNwhYFAOZg9XPrR3vLb6lOREpD0kwsxbfmH5afrE=
-github.com/grafana/grafana-plugin-sdk-go v0.296.4-0.20260820062033-164c814d1e05 h1:a3niC5D9nZpZuRTp7mplcdlt9iRnIPZFByev1cJV8Uw=
-github.com/grafana/grafana-plugin-sdk-go v0.296.4-0.20260820062033-164c814d1e05/go.mod h1:bN2jcRFWnvjCMJGtycqTRUivubNSzjTvkPJ+wMjk3WE=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 h1:QGLs/O40yoNK9vmy4rhUGBVyMf1lISBGtXRpsu/Qu/o=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0/go.mod h1:hM2alZsMUni80N33RBe6J0e423LB+odMj7d3EMP9l20=
 github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 h1:B+8ClL/kCQkRiU82d9xajRPKYMrB7E0MbtzWVi1K4ns=
