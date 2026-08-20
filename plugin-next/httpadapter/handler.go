@@ -9,9 +9,9 @@ import (
 )
 
 // HandlerFunc creates an HTTP handler that forwards requests to a RouteServiceClient.
-func HandlerFunc(client *pluginv3.RouteServiceClient) http.HandlerFunc {
+func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if client == nil || *client == nil {
+		if client == nil {
 			http.Error(w, "route service client is not configured", http.StatusInternalServerError)
 			return
 		}
@@ -22,7 +22,7 @@ func HandlerFunc(client *pluginv3.RouteServiceClient) http.HandlerFunc {
 			return
 		}
 
-		stream, err := (*client).CallRoute(r.Context(), req)
+		stream, err := (client).CallRoute(r.Context(), req)
 		if err != nil {
 			http.Error(w, "call route: "+err.Error(), http.StatusInternalServerError)
 			return

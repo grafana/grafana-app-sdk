@@ -28,8 +28,7 @@ func TestHandlerFunc(t *testing.T) {
 			callRouteResponse(0, nil, []byte("world")),
 		}},
 	}
-	client := pluginv3.RouteServiceClient(grpcClient)
-	handler := HandlerFunc(&client)
+	handler := HandlerFunc(grpcClient)
 
 	ctx := context.WithValue(context.Background(), parentKey{}, parent)
 	req := httptest.NewRequest(http.MethodPost, "/route?query=1", strings.NewReader("request body")).WithContext(ctx)
@@ -59,10 +58,9 @@ func TestHandlerFunc(t *testing.T) {
 
 func TestHandlerFuncCallError(t *testing.T) {
 	grpcClient := &testRouteServiceClient{err: errors.New("call failed")}
-	client := pluginv3.RouteServiceClient(grpcClient)
 	recorder := httptest.NewRecorder()
 
-	HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+	HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
 	require.Equal(t, http.StatusInternalServerError, recorder.Code)
 	require.Contains(t, recorder.Body.String(), "call failed")
@@ -80,12 +78,11 @@ func TestHandlerFuncErrors(t *testing.T) {
 
 	t.Run("request body cannot be read", func(t *testing.T) {
 		grpcClient := &testRouteServiceClient{}
-		client := pluginv3.RouteServiceClient(grpcClient)
 		recorder := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodPost, "/route", nil)
 		req.Body = io.NopCloser(&testErrorReader{err: errors.New("read failed")})
 
-		HandlerFunc(&client)(recorder, req)
+		HandlerFunc(grpcClient)(recorder, req)
 
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
 		require.Contains(t, recorder.Body.String(), "read failed")
@@ -96,10 +93,9 @@ func TestHandlerFuncErrors(t *testing.T) {
 		grpcClient := &testRouteServiceClient{
 			stream: &testCallRouteResponseReceiver{err: errors.New("receive failed")},
 		}
-		client := pluginv3.RouteServiceClient(grpcClient)
 		recorder := httptest.NewRecorder()
 
-		HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
 		require.Contains(t, recorder.Body.String(), "receive failed")
@@ -112,10 +108,9 @@ func TestHandlerFuncErrors(t *testing.T) {
 				err:       errors.New("receive failed"),
 			},
 		}
-		client := pluginv3.RouteServiceClient(grpcClient)
 		recorder := httptest.NewRecorder()
 
-		HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
 		require.Equal(t, http.StatusOK, recorder.Code)
 		require.Equal(t, "partial", recorder.Body.String())
@@ -127,10 +122,9 @@ func TestHandlerFuncErrors(t *testing.T) {
 				responses: []*pluginv3.CallRouteResponse{callRouteResponse(1000, nil, nil)},
 			},
 		}
-		client := pluginv3.RouteServiceClient(grpcClient)
 		recorder := httptest.NewRecorder()
 
-		HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
 		require.Contains(t, recorder.Body.String(), "invalid HTTP status code")
@@ -144,10 +138,9 @@ func TestHandlerFuncResponseWriterVariants(t *testing.T) {
 				responses: []*pluginv3.CallRouteResponse{callRouteResponse(0, nil, []byte("response"))},
 			},
 		}
-		client := pluginv3.RouteServiceClient(grpcClient)
 		writer := newTestHTTPResponseWriter(nil)
 
-		HandlerFunc(&client)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
+		HandlerFunc(grpcClient)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
 
 		require.Equal(t, http.StatusOK, writer.status)
 		require.Equal(t, "response", writer.body.String())
@@ -160,10 +153,9 @@ func TestHandlerFuncResponseWriterVariants(t *testing.T) {
 				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("response"))},
 			},
 		}
-		client := pluginv3.RouteServiceClient(grpcClient)
 		writer := newTestHTTPResponseWriter(writeErr)
 
-		HandlerFunc(&client)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
+		HandlerFunc(grpcClient)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
 
 		require.Equal(t, http.StatusOK, writer.status)
 		require.True(t, writer.writeCalled)
