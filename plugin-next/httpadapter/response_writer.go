@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"net/http"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"google.golang.org/grpc"
+
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
 )
