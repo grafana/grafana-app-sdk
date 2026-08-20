@@ -1,90 +1,112 @@
 package httpadapter
 
 import (
-	"bytes"
-	"context"
+	"errors"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
-
-	"google.golang.org/grpc"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
 )
 
-// New creates a RouteServiceServer adapter that handles route calls using an
-// http.Handler.
-func New(handler http.Handler) pluginv3.RouteServiceServer {
-	return &httpRouteHandler{
-		handler: handler,
+// HandlerFunc creates an HTTP handler that forwards requests to a RouteServiceClient.
+func HandlerFunc(client *pluginv3.RouteServiceClient) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if client == nil || *client == nil {
+			http.Error(w, "route service client is not configured", http.StatusInternalServerError)
+			return
+		}
+
+		req, err := requestFromHTTP(r)
+		if err != nil {
+			http.Error(w, "read request body: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		stream, err := (*client).CallRoute(r.Context(), req)
+		if err != nil {
+			http.Error(w, "call route: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		forwardResponse(w, stream)
 	}
 }
 
-type httpRouteHandler struct {
-	handler http.Handler
-}
-
-func (h *httpRouteHandler) CallRoute(req *pluginv3.CallRouteRequest, sender grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
-	body := req.GetBody()
-	var reqBodyReader io.Reader
-	if len(body) > 0 {
-		reqBodyReader = bytes.NewReader(body)
-	}
-
-	ctx := sender.Context()
-
-	reqURL, err := url.Parse(req.GetUrl())
-	if err != nil {
-		return err
-	}
-
-	// Add the parent to the request
-	parent := req.GetParent()
-	if parent != nil {
-		ctx = context.WithValue(ctx, parentKey{}, parent)
-	}
-
-	resourceURL := req.GetPath()
-	if reqURL.RawQuery != "" {
-		resourceURL += "?" + reqURL.RawQuery
-	}
-
-	if !strings.HasPrefix(resourceURL, "/") {
-		resourceURL = "/" + resourceURL
-	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, req.GetMethod(), resourceURL, reqBodyReader)
-	if err != nil {
-		return err
-	}
-
-	for key, values := range req.GetHeaders() {
-		for _, value := range values.GetValues() {
-			httpReq.Header.Add(key, value)
+func requestFromHTTP(r *http.Request) (*pluginv3.CallRouteRequest, error) {
+	var body []byte
+	if r.Body != nil {
+		var err error
+		body, err = io.ReadAll(r.Body)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	writer := newResponseWriter(sender)
-	h.handler.ServeHTTP(writer, httpReq)
-	writer.Flush()
+	headers := make(map[string]*pluginv3.StringList, len(r.Header))
+	for key, values := range r.Header {
+		headers[key] = pluginv3.StringList_builder{Values: values}.Build()
+	}
 
-	return writer.sendErr
+	req := &pluginv3.CallRouteRequest{}
+	req.SetMethod(r.Method)
+	req.SetPath(r.URL.Path) // TODO? remove {group}/{version}/... prefix?
+	req.SetUrl(r.URL.String())
+	req.SetHeaders(headers)
+	if len(body) > 0 {
+		req.SetBody(body)
+	}
+	if parent := ParentFromContext(r.Context()); parent != nil {
+		req.SetParent(parent)
+	}
+	return req, nil
 }
 
-type parentKey struct{}
+func forwardResponse(w http.ResponseWriter, stream pluginv3.RouteService_CallRouteClient) {
+	wroteHeader := false
+	flusher, canFlush := w.(http.Flusher)
+	for {
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return
+		}
+		if err != nil {
+			if !wroteHeader {
+				http.Error(w, "receive route response: "+err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
 
-// ParentFromContext returns the resource associated with a subresource route.
-// It returns nil when the route request has no parent resource.
-func ParentFromContext(ctx context.Context) *pluginv3.RouteResource {
-	raw := ctx.Value(parentKey{})
-	if raw == nil {
-		return nil
+		if !wroteHeader {
+			if err := writeResponseHeader(w, resp); err != nil {
+				http.Error(w, "receive route response: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			wroteHeader = true
+		}
+
+		if _, err := w.Write(resp.GetBody()); err != nil {
+			return
+		}
+		if canFlush {
+			flusher.Flush()
+		}
+	}
+}
+
+func writeResponseHeader(w http.ResponseWriter, resp *pluginv3.CallRouteResponse) error {
+	code := int(resp.GetCode())
+	if code == 0 {
+		code = http.StatusOK
+	}
+	if code < 100 || code > 999 {
+		return errors.New("invalid HTTP status code")
 	}
 
-	parent, ok := raw.(*pluginv3.RouteResource)
-	if !ok {
-		return nil
+	for key, values := range resp.GetHeaders() {
+		for _, value := range values.GetValues() {
+			w.Header().Add(key, value)
+		}
 	}
-	return parent
+	w.WriteHeader(code)
+	return nil
 }

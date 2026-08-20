@@ -30,7 +30,7 @@ func main() {
 	// remains scoped to each Grafana app instance.
 	mt := &plugin.App{}
 	opts := grpcplugin.ServeOpts{
-		RouteServer:      httpadapter.New(echo),
+		RouteServer:      httpadapter.NewServer(echo),
 		AdmissionServer:  mt,
 		ConversionServer: mt,
 	}

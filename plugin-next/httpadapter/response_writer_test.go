@@ -52,6 +52,27 @@ func TestResponseWriterWriteAndHeaders(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusCreated, rw.code)
 	})
+
+	t.Run("does not detect content type after headers are written", func(t *testing.T) {
+		rw := newResponseWriter(newTestCallRouteResponseSender())
+		rw.WriteHeader(http.StatusOK)
+
+		rw.detectContentType([]byte("body"))
+
+		require.Empty(t, rw.Header().Get("Content-Type"))
+	})
+}
+
+func TestResponseWriterRejectsInvalidStatus(t *testing.T) {
+	for name, code := range map[string]int{"too low": 99, "too high": 1000} {
+		t.Run(name, func(t *testing.T) {
+			rw := newResponseWriter(newTestCallRouteResponseSender())
+
+			require.Panics(t, func() {
+				rw.WriteHeader(code)
+			})
+		})
+	}
 }
 
 func TestResponseWriterHeaderInitializesNilMap(t *testing.T) {

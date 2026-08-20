@@ -2,348 +2,258 @@ package httpadapter
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
 )
 
-func TestHTTPRouteHandler(t *testing.T) {
-	t.Run("Given HTTP route handler and calling CallRoute", func(t *testing.T) {
-		testSender := newTestCallRouteResponseSender()
-		httpHandler := &testHTTPHandler{
-			responseHeaders: map[string][]string{
-				"X-Header-Out-1": {"A", "B"},
-				"X-Header-Out-2": {"C"},
-			},
-			responseData: map[string]interface{}{
-				"message": "hello client",
-			},
-			responseStatus: http.StatusCreated,
-		}
-		resourceHandler := New(httpHandler)
+func TestHandlerFunc(t *testing.T) {
+	parent := &pluginv3.RouteResource{}
+	parent.SetResource("widgets")
+	parent.SetName("widget-1")
 
-		jsonMap := map[string]interface{}{
-			"message": "hello server",
-		}
-		reqBody, err := json.Marshal(&jsonMap)
-		require.NoError(t, err)
-
-		parent := pluginv3.RouteResource_builder{
-			Resource: proto.String("widgets"),
-			Name:     proto.String("widget-1"),
-			Rv:       proto.String("42"),
-			Raw:      []byte(`{"spec":{"enabled":true}}`),
-		}.Build()
-		req := pluginv3.CallRouteRequest_builder{
-			Group:   proto.String("my-plugin"),
-			Version: proto.String("v1alpha1"),
-			Parent:  parent,
-			Method:  proto.String(http.MethodPost),
-			Path:    proto.String("path"),
-			Url:     proto.String("/api/plugins/plugin-abc/resources/path?query=1"),
-			Headers: map[string]*pluginv3.StringList{
-				"X-Header-In-1": pluginv3.StringList_builder{Values: []string{"D", "E"}}.Build(),
-				"X-Header-In-2": pluginv3.StringList_builder{Values: []string{"F"}}.Build(),
-			},
-			Body: reqBody,
-		}.Build()
-		err = resourceHandler.CallRoute(req, testSender)
-		require.NoError(t, err)
-		require.Equal(t, 1, httpHandler.callerCount)
-
-		t.Run("Should provide expected request to http handler", func(t *testing.T) {
-			require.NotNil(t, httpHandler.req)
-			require.Equal(t, "/path?query=1", httpHandler.req.URL.String())
-			require.Equal(t, req.GetMethod(), httpHandler.req.Method)
-			require.Contains(t, httpHandler.req.Header, "X-Header-In-1")
-			require.Equal(t, []string{"D", "E"}, httpHandler.req.Header["X-Header-In-1"])
-			require.Contains(t, httpHandler.req.Header, "X-Header-In-2")
-			require.Equal(t, []string{"F"}, httpHandler.req.Header["X-Header-In-2"])
-			require.NotNil(t, httpHandler.req.Body)
-			defer func() { _ = httpHandler.req.Body.Close() }()
-			actualBodyBytes, err := io.ReadAll(httpHandler.req.Body)
-			require.NoError(t, err)
-			var actualJSONMap map[string]interface{}
-			err = json.Unmarshal(actualBodyBytes, &actualJSONMap)
-			require.NoError(t, err)
-			require.Contains(t, actualJSONMap, "message")
-			require.Equal(t, "hello server", actualJSONMap["message"])
-		})
-
-		t.Run("Should return expected response from http handler", func(t *testing.T) {
-			require.Len(t, testSender.respMessages, 1)
-			resp := testSender.respMessages[0]
-			require.NotNil(t, resp)
-			require.NoError(t, httpHandler.writeErr)
-			require.NotNil(t, resp)
-			require.Equal(t, int32(http.StatusCreated), resp.GetCode())
-			require.Contains(t, resp.GetHeaders(), "X-Header-Out-1")
-			require.Equal(t, []string{"A", "B"}, resp.GetHeaders()["X-Header-Out-1"].GetValues())
-			require.Contains(t, resp.GetHeaders(), "X-Header-Out-2")
-			require.Equal(t, []string{"C"}, resp.GetHeaders()["X-Header-Out-2"].GetValues())
-			var actualJSONMap map[string]interface{}
-			err = json.Unmarshal(resp.GetBody(), &actualJSONMap)
-			require.NoError(t, err)
-			require.Contains(t, actualJSONMap, "message")
-			require.Equal(t, "hello client", actualJSONMap["message"])
-		})
-
-		t.Run("Should provide the parent resource in the request context", func(t *testing.T) {
-			require.NotNil(t, httpHandler.req)
-			require.Same(t, parent, ParentFromContext(httpHandler.req.Context()))
-		})
-	})
-
-	t.Run("Given streaming HTTP route handler and calling CallRoute", func(t *testing.T) {
-		testSender := newTestCallRouteResponseSender()
-		httpHandler := &testStreamingHTTPHandler{
-			responseHeaders: map[string][]string{
-				"X-Header-Out-1": {"A", "B"},
-				"X-Header-Out-2": {"C"},
-			},
-			responseData: [][]byte{
-				[]byte("hello"),
-				[]byte("world"),
-				[]byte("bye bye"),
-			},
-			responseStatus: http.StatusOK,
-		}
-		resourceHandler := New(httpHandler)
-		req := pluginv3.CallRouteRequest_builder{
-			Group:  proto.String("my-plugin"),
-			Method: proto.String(http.MethodPost),
-			Path:   proto.String("path"),
-			Url:    proto.String("/api/plugins/plugin-abc/resources/path?query=1"),
-			Headers: map[string]*pluginv3.StringList{
-				"X-Header-In-1": pluginv3.StringList_builder{Values: []string{"D", "E"}}.Build(),
-				"X-Header-In-2": pluginv3.StringList_builder{Values: []string{"F"}}.Build(),
-			},
-		}.Build()
-		err := resourceHandler.CallRoute(req, testSender)
-		require.NoError(t, err)
-		require.Equal(t, 1, httpHandler.callerCount)
-
-		t.Run("Should return expected response from http handler", func(t *testing.T) {
-			require.Len(t, testSender.respMessages, 3)
-			resp1 := testSender.respMessages[0]
-			require.NotNil(t, resp1)
-			require.NoError(t, httpHandler.writeErr)
-			require.NotNil(t, resp1)
-			require.Equal(t, int32(http.StatusOK), resp1.GetCode())
-			require.Contains(t, resp1.GetHeaders(), "X-Header-Out-1")
-			require.Equal(t, []string{"A", "B"}, resp1.GetHeaders()["X-Header-Out-1"].GetValues())
-			require.Contains(t, resp1.GetHeaders(), "X-Header-Out-2")
-			require.Equal(t, []string{"C"}, resp1.GetHeaders()["X-Header-Out-2"].GetValues())
-			require.Equal(t, "hello", string(resp1.GetBody()))
-
-			resp2 := testSender.respMessages[1]
-			require.NotNil(t, resp2)
-			require.Equal(t, "world", string(resp2.GetBody()))
-
-			resp3 := testSender.respMessages[2]
-			require.NotNil(t, resp3)
-			require.Equal(t, "bye bye", string(resp3.GetBody()))
-		})
-	})
-}
-
-func TestServeMuxHandler(t *testing.T) {
-	t.Run("Given HTTP route ServeMux handler and calling CallRoute", func(t *testing.T) {
-		testSender := newTestCallRouteResponseSender()
-		mux := http.NewServeMux()
-		handlerWasCalled := false
-		mux.HandleFunc("/test", func(_ http.ResponseWriter, _ *http.Request) {
-			handlerWasCalled = true
-		})
-		resourceHandler := New(mux)
-
-		req := pluginv3.CallRouteRequest_builder{
-			Group:  proto.String("my-plugin"),
-			Method: proto.String(http.MethodGet),
-			Path:   proto.String("test"),
-			Url:    proto.String("/test?query=1"),
-		}.Build()
-		err := resourceHandler.CallRoute(req, testSender)
-		require.NoError(t, err)
-		require.True(t, handlerWasCalled)
-	})
-}
-
-func TestCallRouteErrors(t *testing.T) {
-	tests := []struct {
-		name string
-		req  *pluginv3.CallRouteRequest
-	}{
-		{
-			name: "invalid URL",
-			req: pluginv3.CallRouteRequest_builder{
-				Method: proto.String(http.MethodGet),
-				Url:    proto.String("%"),
-			}.Build(),
-		},
-		{
-			name: "invalid HTTP method",
-			req: pluginv3.CallRouteRequest_builder{
-				Method: proto.String("invalid\nmethod"),
-				Url:    proto.String("/valid"),
-			}.Build(),
-		},
+	grpcClient := &testRouteServiceClient{
+		stream: &testCallRouteResponseReceiver{responses: []*pluginv3.CallRouteResponse{
+			callRouteResponse(http.StatusCreated, map[string][]string{
+				"X-Response": {"one", "two"},
+			}, []byte("hello ")),
+			callRouteResponse(0, nil, []byte("world")),
+		}},
 	}
+	client := pluginv3.RouteServiceClient(grpcClient)
+	handler := HandlerFunc(&client)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			called := false
-			handler := New(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-				called = true
-			}))
+	ctx := context.WithValue(context.Background(), parentKey{}, parent)
+	req := httptest.NewRequest(http.MethodPost, "/route?query=1", strings.NewReader("request body")).WithContext(ctx)
+	req.Header.Add("X-Request", "one")
+	req.Header.Add("X-Request", "two")
+	recorder := httptest.NewRecorder()
 
-			err := handler.CallRoute(tt.req, newTestCallRouteResponseSender())
+	handler(recorder, req)
 
-			require.Error(t, err)
-			require.False(t, called)
-		})
-	}
-}
+	require.Same(t, ctx, grpcClient.ctx)
+	require.Equal(t, http.MethodPost, grpcClient.req.GetMethod())
+	require.Equal(t, "/route", grpcClient.req.GetPath())
+	require.Equal(t, "/route?query=1", grpcClient.req.GetUrl())
+	require.Equal(t, []string{"one", "two"}, grpcClient.req.GetHeaders()["X-Request"].GetValues())
+	require.Equal(t, "request body", string(grpcClient.req.GetBody()))
+	require.Same(t, parent, grpcClient.req.GetParent())
 
-func TestCallRouteReturnsStreamSendError(t *testing.T) {
-	sender := newTestCallRouteResponseSender()
-	sender.sendErr = errors.New("send failed")
-	handler := New(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
-		_, err := rw.Write([]byte("response"))
-		require.NoError(t, err)
-	}))
-	req := pluginv3.CallRouteRequest_builder{
-		Method: proto.String(http.MethodGet),
-		Path:   proto.String("test"),
-		Url:    proto.String("/test"),
-	}.Build()
-
-	err := handler.CallRoute(req, sender)
-
-	require.ErrorIs(t, err, sender.sendErr)
-}
-
-func TestCallRouteWithoutOptionalRequestFields(t *testing.T) {
-	type contextKey struct{}
-	ctx := context.WithValue(context.Background(), contextKey{}, "context value")
-	sender := newTestCallRouteResponseSender()
-	sender.ctx = ctx
-
-	handler := New(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
-		require.Equal(t, "/already-absolute", req.URL.String())
-		require.Equal(t, "context value", req.Context().Value(contextKey{}))
-		require.Nil(t, ParentFromContext(req.Context()))
-		require.Empty(t, req.Header)
-		rw.WriteHeader(http.StatusNoContent)
-	}))
-	req := pluginv3.CallRouteRequest_builder{
-		Method: proto.String(http.MethodGet),
-		Path:   proto.String("/already-absolute"),
-		Url:    proto.String("/already-absolute"),
-	}.Build()
-
-	err := handler.CallRoute(req, sender)
-
+	result := recorder.Result()
+	defer func() { _ = result.Body.Close() }()
+	responseBody, err := io.ReadAll(result.Body)
 	require.NoError(t, err)
-	require.Len(t, sender.respMessages, 1)
-	require.Equal(t, int32(http.StatusNoContent), sender.respMessages[0].GetCode())
+	require.Equal(t, http.StatusCreated, result.StatusCode)
+	require.Equal(t, []string{"one", "two"}, result.Header.Values("X-Response"))
+	require.Equal(t, "hello world", string(responseBody))
+	require.True(t, recorder.Flushed)
 }
 
-type testHTTPHandler struct {
-	responseStatus  int
-	responseHeaders map[string][]string
-	responseData    map[string]interface{}
-	callerCount     int
-	req             *http.Request
-	writeErr        error
+func TestHandlerFuncCallError(t *testing.T) {
+	grpcClient := &testRouteServiceClient{err: errors.New("call failed")}
+	client := pluginv3.RouteServiceClient(grpcClient)
+	recorder := httptest.NewRecorder()
+
+	HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	require.Contains(t, recorder.Body.String(), "call failed")
 }
 
-func (h *testHTTPHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	h.callerCount++
-	h.req = req
+func TestHandlerFuncErrors(t *testing.T) {
+	t.Run("client is not configured", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
 
-	if h.responseHeaders != nil {
-		for k, values := range h.responseHeaders {
-			for _, v := range values {
-				rw.Header().Add(k, v)
-			}
+		HandlerFunc(nil)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "route service client is not configured")
+	})
+
+	t.Run("request body cannot be read", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{}
+		client := pluginv3.RouteServiceClient(grpcClient)
+		recorder := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/route", nil)
+		req.Body = io.NopCloser(&testErrorReader{err: errors.New("read failed")})
+
+		HandlerFunc(&client)(recorder, req)
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "read failed")
+		require.Nil(t, grpcClient.req)
+	})
+
+	t.Run("response cannot be received before headers", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{err: errors.New("receive failed")},
 		}
-	}
+		client := pluginv3.RouteServiceClient(grpcClient)
+		recorder := httptest.NewRecorder()
 
-	if h.responseStatus != 0 {
-		rw.WriteHeader(h.responseStatus)
-	} else {
-		rw.WriteHeader(200)
-	}
+		HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
-	if h.responseData != nil {
-		body, _ := json.Marshal(&h.responseData)
-		_, h.writeErr = rw.Write(body)
-	}
-}
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "receive failed")
+	})
 
-type testStreamingHTTPHandler struct {
-	responseStatus  int
-	responseHeaders map[string][]string
-	responseData    [][]byte
-	callerCount     int
-	req             *http.Request
-	writeErr        error
-}
-
-func (h *testStreamingHTTPHandler) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
-	h.callerCount++
-	h.req = req
-
-	if h.responseHeaders != nil {
-		for k, values := range h.responseHeaders {
-			for _, v := range values {
-				rw.Header().Add(k, v)
-			}
+	t.Run("response cannot be received after headers", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("partial"))},
+				err:       errors.New("receive failed"),
+			},
 		}
-	}
+		client := pluginv3.RouteServiceClient(grpcClient)
+		recorder := httptest.NewRecorder()
 
-	if h.responseStatus != 0 {
-		rw.WriteHeader(h.responseStatus)
-	} else {
-		rw.WriteHeader(200)
-	}
+		HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
-	for _, bytes := range h.responseData {
-		_, h.writeErr = rw.Write(bytes)
-		rw.(http.Flusher).Flush()
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, "partial", recorder.Body.String())
+	})
+
+	t.Run("response has invalid status", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(1000, nil, nil)},
+			},
+		}
+		client := pluginv3.RouteServiceClient(grpcClient)
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(&client)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "invalid HTTP status code")
+	})
+}
+
+func TestHandlerFuncResponseWriterVariants(t *testing.T) {
+	t.Run("defaults status and supports a writer without flush", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(0, nil, []byte("response"))},
+			},
+		}
+		client := pluginv3.RouteServiceClient(grpcClient)
+		writer := newTestHTTPResponseWriter(nil)
+
+		HandlerFunc(&client)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusOK, writer.status)
+		require.Equal(t, "response", writer.body.String())
+	})
+
+	t.Run("stops when writing the response fails", func(t *testing.T) {
+		writeErr := errors.New("write failed")
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("response"))},
+			},
+		}
+		client := pluginv3.RouteServiceClient(grpcClient)
+		writer := newTestHTTPResponseWriter(writeErr)
+
+		HandlerFunc(&client)(writer, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusOK, writer.status)
+		require.True(t, writer.writeCalled)
+	})
+}
+
+type testRouteServiceClient struct {
+	ctx    context.Context
+	req    *pluginv3.CallRouteRequest
+	stream grpc.ServerStreamingClient[pluginv3.CallRouteResponse]
+	err    error
+}
+
+func (c *testRouteServiceClient) CallRoute(ctx context.Context, req *pluginv3.CallRouteRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
+	c.ctx = ctx
+	c.req = req
+	return c.stream, c.err
+}
+
+type testCallRouteResponseReceiver struct {
+	grpc.ClientStream
+	responses []*pluginv3.CallRouteResponse
+	err       error
+}
+
+func (r *testCallRouteResponseReceiver) Recv() (*pluginv3.CallRouteResponse, error) {
+	if len(r.responses) == 0 {
+		if r.err != nil {
+			return nil, r.err
+		}
+		return nil, io.EOF
+	}
+	response := r.responses[0]
+	r.responses = r.responses[1:]
+	return response, nil
+}
+
+type testErrorReader struct {
+	err error
+}
+
+func (r *testErrorReader) Read([]byte) (int, error) {
+	return 0, r.err
+}
+
+type testHTTPResponseWriter struct {
+	header      http.Header
+	status      int
+	body        strings.Builder
+	writeErr    error
+	writeCalled bool
+}
+
+func newTestHTTPResponseWriter(writeErr error) *testHTTPResponseWriter {
+	return &testHTTPResponseWriter{
+		header:   make(http.Header),
+		writeErr: writeErr,
 	}
 }
 
-type testCallRouteResponseSender struct {
-	grpc.ServerStream
-	respMessages []*pluginv3.CallRouteResponse
-	ctx          context.Context
-	sendErr      error
+func (w *testHTTPResponseWriter) Header() http.Header {
+	return w.header
 }
 
-func newTestCallRouteResponseSender() *testCallRouteResponseSender {
-	return &testCallRouteResponseSender{
-		respMessages: []*pluginv3.CallRouteResponse{},
+func (w *testHTTPResponseWriter) Write(body []byte) (int, error) {
+	w.writeCalled = true
+	if w.writeErr != nil {
+		return 0, w.writeErr
 	}
+	return w.body.Write(body)
 }
 
-func (s *testCallRouteResponseSender) Send(resp *pluginv3.CallRouteResponse) error {
-	s.respMessages = append(s.respMessages, proto.Clone(resp).(*pluginv3.CallRouteResponse))
-	return s.sendErr
+func (w *testHTTPResponseWriter) WriteHeader(status int) {
+	w.status = status
 }
 
-func (s *testCallRouteResponseSender) Context() context.Context {
-	if s.ctx != nil {
-		return s.ctx
+func callRouteResponse(code int, headers map[string][]string, body []byte) *pluginv3.CallRouteResponse {
+	response := &pluginv3.CallRouteResponse{}
+	if code != 0 {
+		response.SetCode(int32(code)) //nolint:gosec // Test status codes are constants in the valid HTTP range.
 	}
-	return context.Background()
+	if headers != nil {
+		protoHeaders := make(map[string]*pluginv3.StringList, len(headers))
+		for key, values := range headers {
+			protoHeaders[key] = pluginv3.StringList_builder{Values: values}.Build()
+		}
+		response.SetHeaders(protoHeaders)
+	}
+	if body != nil {
+		response.SetBody(body)
+	}
+	return response
 }
