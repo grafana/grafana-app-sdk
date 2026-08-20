@@ -18,8 +18,7 @@ import (
 // types and an SDK-native type. Implementations embed UnimplementedV3Server and
 // override the RPCs they support.
 type V3Server interface {
-	pluginv3.ValidateServiceServer
-	pluginv3.MutateServiceServer
+	pluginv3.AdmissionServiceServer
 	pluginv3.ConversionServiceServer
 	pluginv3.RouteServiceServer
 }
@@ -29,8 +28,7 @@ type V3Server interface {
 // default (gRPC "Unimplemented") handlers for every V3 RPC, so a plugin only
 // needs to override the RPCs it actually serves.
 type UnimplementedV3Server struct {
-	pluginv3.UnimplementedValidateServiceServer
-	pluginv3.UnimplementedMutateServiceServer
+	pluginv3.UnimplementedAdmissionServiceServer
 	pluginv3.UnimplementedConversionServiceServer
 	pluginv3.UnimplementedRouteServiceServer
 }
@@ -43,34 +41,19 @@ var _ V3Server = UnimplementedV3Server{}
 // only provides Register*Server / New*Client. Each adapter registers the
 // generated gRPC service directly — no wrapping server type is inserted.
 
-type validateGRPCPlugin struct {
+type admissionGRPCPlugin struct {
 	plugin.NetRPCUnsupportedPlugin
 	plugin.GRPCPlugin
-	server pluginv3.ValidateServiceServer
+	server pluginv3.AdmissionServiceServer
 }
 
-func (p *validateGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterValidateServiceServer(s, p.server)
+func (p *admissionGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
+	pluginv3.RegisterAdmissionServiceServer(s, p.server)
 	return nil
 }
 
-func (p *validateGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
-	return pluginv3.NewValidateServiceClient(c), nil
-}
-
-type mutateGRPCPlugin struct {
-	plugin.NetRPCUnsupportedPlugin
-	plugin.GRPCPlugin
-	server pluginv3.MutateServiceServer
-}
-
-func (p *mutateGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterMutateServiceServer(s, p.server)
-	return nil
-}
-
-func (p *mutateGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
-	return pluginv3.NewMutateServiceClient(c), nil
+func (p *admissionGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (interface{}, error) {
+	return pluginv3.NewAdmissionServiceClient(c), nil
 }
 
 type conversionGRPCPlugin struct {

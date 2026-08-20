@@ -8,8 +8,7 @@ import (
 
 // ServeOpts contains options for serving plugins.
 type ServeOpts struct {
-	ValidationServer pluginv3.ValidateServiceServer
-	MutationServer   pluginv3.MutateServiceServer
+	AdmissionServer  pluginv3.AdmissionServiceServer
 	ConversionServer pluginv3.ConversionServiceServer
 	RouteServer      pluginv3.RouteServiceServer
 }
@@ -19,11 +18,8 @@ type ServeOpts struct {
 func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	pSet := make(plugin.PluginSet)
 
-	if opts.ValidationServer != nil {
-		pSet["v3-validate"] = &validateGRPCPlugin{server: opts.ValidationServer}
-	}
-	if opts.MutationServer != nil {
-		pSet["v3-mutate"] = &mutateGRPCPlugin{server: opts.MutationServer}
+	if opts.AdmissionServer != nil {
+		pSet["v3-admission"] = &admissionGRPCPlugin{server: opts.AdmissionServer}
 	}
 	if opts.ConversionServer != nil {
 		pSet["v3-convert"] = &conversionGRPCPlugin{server: opts.ConversionServer}

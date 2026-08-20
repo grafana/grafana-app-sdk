@@ -7,15 +7,14 @@ import "grafana/plugin/v3/common.proto";
 // AdmissionService is based on the Kubernetes admission webhook pattern.
 // It can be used to verify that objects are valid and to mutate them.
 // See: https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L41
-service MutateService {
-  // MutateObject returns a modified copy of the request that can be saved,
-  // or a descriptive error.
-  rpc MutateObject(MutateObjectRequest) returns (MutateObjectResponse);
+service AdmissionService {
+  // ValidateObject validates a resource; the response is a simple yes/no.
+  rpc AdmissionReview(AdmissionReviewRequest) returns (AdmissionReviewResponse);
 }
 
-// MutateAdmissionRequest contains information from a Kubernetes admission
+// AdmissionReviewRequest contains information from a Kubernetes admission
 // request and the decoded object(s).
-message MutateObjectRequest {
+message AdmissionReviewRequest {
   // operation is the requested operation.
   Operation operation = 1;
 
@@ -30,9 +29,8 @@ message MutateObjectRequest {
   bytes old_object_bytes = 4;
 }
 
-// MutateAdmissionResponse returns a mutated copy of the object in a form that
-// can be admitted.
-message MutateObjectResponse {
+// ValidateAdmissionResponse reports whether an object may be admitted.
+message AdmissionReviewResponse {
   // allowed indicates whether or not the admission request was permitted.
   bool allowed = 1;
 
@@ -41,8 +39,10 @@ message MutateObjectResponse {
   StatusResult result = 2;
 
   // warnings is a list of warning messages to return to the requesting client.
+  // Limit warnings to 120 characters if possible. Warnings over 256 characters
+  // and large numbers of warnings may be truncated.
   repeated string warnings = 3;
 
-  // object_bytes is the mutated object.
+  // object_bytes are included when the object should change
   bytes object_bytes = 4;
 }

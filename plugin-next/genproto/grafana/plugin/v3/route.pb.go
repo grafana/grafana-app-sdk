@@ -486,7 +486,7 @@ type CallRouteRequest_builder struct {
 	Url *string
 	// headers are the raw HTTP request headers.
 	Headers map[string]*StringList
-	// body is the raw HTTP request body.
+	// For HTTP POST+PUT
 	Body []byte
 }
 
@@ -534,6 +534,7 @@ type CallRouteResponse struct {
 	xxx_hidden_Code        int32                  `protobuf:"varint,1,opt,name=code"`
 	xxx_hidden_Headers     map[string]*StringList `protobuf:"bytes,2,rep,name=headers" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	xxx_hidden_Body        []byte                 `protobuf:"bytes,3,opt,name=body"`
+	xxx_hidden_Eof         bool                   `protobuf:"varint,4,opt,name=eof"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -586,9 +587,16 @@ func (x *CallRouteResponse) GetBody() []byte {
 	return nil
 }
 
+func (x *CallRouteResponse) GetEof() bool {
+	if x != nil {
+		return x.xxx_hidden_Eof
+	}
+	return false
+}
+
 func (x *CallRouteResponse) SetCode(v int32) {
 	x.xxx_hidden_Code = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 3)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 4)
 }
 
 func (x *CallRouteResponse) SetHeaders(v map[string]*StringList) {
@@ -600,7 +608,12 @@ func (x *CallRouteResponse) SetBody(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_Body = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 3)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 4)
+}
+
+func (x *CallRouteResponse) SetEof(v bool) {
+	x.xxx_hidden_Eof = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 4)
 }
 
 func (x *CallRouteResponse) HasCode() bool {
@@ -617,6 +630,13 @@ func (x *CallRouteResponse) HasBody() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
 }
 
+func (x *CallRouteResponse) HasEof() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
+}
+
 func (x *CallRouteResponse) ClearCode() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_Code = 0
@@ -627,15 +647,24 @@ func (x *CallRouteResponse) ClearBody() {
 	x.xxx_hidden_Body = nil
 }
 
+func (x *CallRouteResponse) ClearEof() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
+	x.xxx_hidden_Eof = false
+}
+
 type CallRouteResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// code maps to raw HTTP status codes when passed over HTTP.
+	// This is only respected in the first response payload
 	Code *int32
 	// headers are the raw HTTP headers sent to the client.
+	// This is only respected in the first response payload
 	Headers map[string]*StringList
 	// body are the raw HTTP body bytes sent to the client.
 	Body []byte
+	// This is the last message, we can close the HTTP stream
+	Eof *bool
 }
 
 func (b0 CallRouteResponse_builder) Build() *CallRouteResponse {
@@ -643,13 +672,17 @@ func (b0 CallRouteResponse_builder) Build() *CallRouteResponse {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.Code != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 3)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 4)
 		x.xxx_hidden_Code = *b.Code
 	}
 	x.xxx_hidden_Headers = b.Headers
 	if b.Body != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 3)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 4)
 		x.xxx_hidden_Body = b.Body
+	}
+	if b.Eof != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 4)
+		x.xxx_hidden_Eof = *b.Eof
 	}
 	return m0
 }
@@ -676,11 +709,12 @@ const file_grafana_plugin_v3_route_proto_rawDesc = "" +
 	"\x04body\x18\t \x01(\fR\x04body\x1aY\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
-	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x01\"\xe3\x01\n" +
+	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x01\"\xf5\x01\n" +
 	"\x11CallRouteResponse\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12K\n" +
 	"\aheaders\x18\x02 \x03(\v21.grafana.plugin.v3.CallRouteResponse.HeadersEntryR\aheaders\x12\x12\n" +
-	"\x04body\x18\x03 \x01(\fR\x04body\x1aY\n" +
+	"\x04body\x18\x03 \x01(\fR\x04body\x12\x10\n" +
+	"\x03eof\x18\x04 \x01(\bR\x03eof\x1aY\n" +
 	"\fHeadersEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
 	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x012h\n" +

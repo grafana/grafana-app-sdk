@@ -51,7 +51,7 @@ message CallRouteRequest {
   // headers are the raw HTTP request headers.
   map<string, StringList> headers = 8;
 
-  // body is the raw HTTP request body.
+  // For HTTP POST+PUT
   bytes body = 9;
 }
 
@@ -59,11 +59,16 @@ message CallRouteRequest {
 // The code and headers will only be used for the first stream chunk.
 message CallRouteResponse {
   // code maps to raw HTTP status codes when passed over HTTP.
+  // This is only respected in the first response payload
   int32 code = 1;
 
   // headers are the raw HTTP headers sent to the client.
+  // This is only respected in the first response payload
   map<string, StringList> headers = 2;
 
   // body are the raw HTTP body bytes sent to the client.
   bytes body = 3;
+
+  // This is the last message, we can close the HTTP stream
+  bool eof = 4;
 }

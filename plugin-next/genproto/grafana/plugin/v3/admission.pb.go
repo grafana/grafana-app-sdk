@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: grafana/plugin/v3/mutate.proto
+// source: grafana/plugin/v3/admission.proto
 
 package pluginv3
 
@@ -20,9 +20,9 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// MutateAdmissionRequest contains information from a Kubernetes admission
+// ValidateAdmissionRequest contains information from a Kubernetes admission
 // request and the decoded object(s).
-type MutateObjectRequest struct {
+type AdmissionReviewRequest struct {
 	state                     protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Operation      Operation              `protobuf:"varint,1,opt,name=operation,enum=grafana.plugin.v3.Operation"`
 	xxx_hidden_Kind           *GroupVersionKind      `protobuf:"bytes,2,opt,name=kind"`
@@ -34,21 +34,21 @@ type MutateObjectRequest struct {
 	sizeCache                 protoimpl.SizeCache
 }
 
-func (x *MutateObjectRequest) Reset() {
-	*x = MutateObjectRequest{}
-	mi := &file_grafana_plugin_v3_mutate_proto_msgTypes[0]
+func (x *AdmissionReviewRequest) Reset() {
+	*x = AdmissionReviewRequest{}
+	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MutateObjectRequest) String() string {
+func (x *AdmissionReviewRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MutateObjectRequest) ProtoMessage() {}
+func (*AdmissionReviewRequest) ProtoMessage() {}
 
-func (x *MutateObjectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_mutate_proto_msgTypes[0]
+func (x *AdmissionReviewRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -59,7 +59,7 @@ func (x *MutateObjectRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *MutateObjectRequest) GetOperation() Operation {
+func (x *AdmissionReviewRequest) GetOperation() Operation {
 	if x != nil {
 		if protoimpl.X.Present(&(x.XXX_presence[0]), 0) {
 			return x.xxx_hidden_Operation
@@ -68,37 +68,37 @@ func (x *MutateObjectRequest) GetOperation() Operation {
 	return Operation_OPERATION_UNSPECIFIED
 }
 
-func (x *MutateObjectRequest) GetKind() *GroupVersionKind {
+func (x *AdmissionReviewRequest) GetKind() *GroupVersionKind {
 	if x != nil {
 		return x.xxx_hidden_Kind
 	}
 	return nil
 }
 
-func (x *MutateObjectRequest) GetObjectBytes() []byte {
+func (x *AdmissionReviewRequest) GetObjectBytes() []byte {
 	if x != nil {
 		return x.xxx_hidden_ObjectBytes
 	}
 	return nil
 }
 
-func (x *MutateObjectRequest) GetOldObjectBytes() []byte {
+func (x *AdmissionReviewRequest) GetOldObjectBytes() []byte {
 	if x != nil {
 		return x.xxx_hidden_OldObjectBytes
 	}
 	return nil
 }
 
-func (x *MutateObjectRequest) SetOperation(v Operation) {
+func (x *AdmissionReviewRequest) SetOperation(v Operation) {
 	x.xxx_hidden_Operation = v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 4)
 }
 
-func (x *MutateObjectRequest) SetKind(v *GroupVersionKind) {
+func (x *AdmissionReviewRequest) SetKind(v *GroupVersionKind) {
 	x.xxx_hidden_Kind = v
 }
 
-func (x *MutateObjectRequest) SetObjectBytes(v []byte) {
+func (x *AdmissionReviewRequest) SetObjectBytes(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
@@ -106,7 +106,7 @@ func (x *MutateObjectRequest) SetObjectBytes(v []byte) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 4)
 }
 
-func (x *MutateObjectRequest) SetOldObjectBytes(v []byte) {
+func (x *AdmissionReviewRequest) SetOldObjectBytes(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
@@ -114,54 +114,54 @@ func (x *MutateObjectRequest) SetOldObjectBytes(v []byte) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 4)
 }
 
-func (x *MutateObjectRequest) HasOperation() bool {
+func (x *AdmissionReviewRequest) HasOperation() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
 }
 
-func (x *MutateObjectRequest) HasKind() bool {
+func (x *AdmissionReviewRequest) HasKind() bool {
 	if x == nil {
 		return false
 	}
 	return x.xxx_hidden_Kind != nil
 }
 
-func (x *MutateObjectRequest) HasObjectBytes() bool {
+func (x *AdmissionReviewRequest) HasObjectBytes() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
 }
 
-func (x *MutateObjectRequest) HasOldObjectBytes() bool {
+func (x *AdmissionReviewRequest) HasOldObjectBytes() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
 }
 
-func (x *MutateObjectRequest) ClearOperation() {
+func (x *AdmissionReviewRequest) ClearOperation() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_Operation = Operation_OPERATION_UNSPECIFIED
 }
 
-func (x *MutateObjectRequest) ClearKind() {
+func (x *AdmissionReviewRequest) ClearKind() {
 	x.xxx_hidden_Kind = nil
 }
 
-func (x *MutateObjectRequest) ClearObjectBytes() {
+func (x *AdmissionReviewRequest) ClearObjectBytes() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
 	x.xxx_hidden_ObjectBytes = nil
 }
 
-func (x *MutateObjectRequest) ClearOldObjectBytes() {
+func (x *AdmissionReviewRequest) ClearOldObjectBytes() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
 	x.xxx_hidden_OldObjectBytes = nil
 }
 
-type MutateObjectRequest_builder struct {
+type AdmissionReviewRequest_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// operation is the requested operation.
@@ -175,8 +175,8 @@ type MutateObjectRequest_builder struct {
 	OldObjectBytes []byte
 }
 
-func (b0 MutateObjectRequest_builder) Build() *MutateObjectRequest {
-	m0 := &MutateObjectRequest{}
+func (b0 AdmissionReviewRequest_builder) Build() *AdmissionReviewRequest {
+	m0 := &AdmissionReviewRequest{}
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.Operation != nil {
@@ -195,9 +195,8 @@ func (b0 MutateObjectRequest_builder) Build() *MutateObjectRequest {
 	return m0
 }
 
-// MutateAdmissionResponse returns a mutated copy of the object in a form that
-// can be admitted.
-type MutateObjectResponse struct {
+// ValidateAdmissionResponse reports whether an object may be admitted.
+type AdmissionReviewResponse struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Allowed     bool                   `protobuf:"varint,1,opt,name=allowed"`
 	xxx_hidden_Result      *StatusResult          `protobuf:"bytes,2,opt,name=result"`
@@ -209,21 +208,21 @@ type MutateObjectResponse struct {
 	sizeCache              protoimpl.SizeCache
 }
 
-func (x *MutateObjectResponse) Reset() {
-	*x = MutateObjectResponse{}
-	mi := &file_grafana_plugin_v3_mutate_proto_msgTypes[1]
+func (x *AdmissionReviewResponse) Reset() {
+	*x = AdmissionReviewResponse{}
+	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MutateObjectResponse) String() string {
+func (x *AdmissionReviewResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MutateObjectResponse) ProtoMessage() {}
+func (*AdmissionReviewResponse) ProtoMessage() {}
 
-func (x *MutateObjectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_mutate_proto_msgTypes[1]
+func (x *AdmissionReviewResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -234,48 +233,48 @@ func (x *MutateObjectResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *MutateObjectResponse) GetAllowed() bool {
+func (x *AdmissionReviewResponse) GetAllowed() bool {
 	if x != nil {
 		return x.xxx_hidden_Allowed
 	}
 	return false
 }
 
-func (x *MutateObjectResponse) GetResult() *StatusResult {
+func (x *AdmissionReviewResponse) GetResult() *StatusResult {
 	if x != nil {
 		return x.xxx_hidden_Result
 	}
 	return nil
 }
 
-func (x *MutateObjectResponse) GetWarnings() []string {
+func (x *AdmissionReviewResponse) GetWarnings() []string {
 	if x != nil {
 		return x.xxx_hidden_Warnings
 	}
 	return nil
 }
 
-func (x *MutateObjectResponse) GetObjectBytes() []byte {
+func (x *AdmissionReviewResponse) GetObjectBytes() []byte {
 	if x != nil {
 		return x.xxx_hidden_ObjectBytes
 	}
 	return nil
 }
 
-func (x *MutateObjectResponse) SetAllowed(v bool) {
+func (x *AdmissionReviewResponse) SetAllowed(v bool) {
 	x.xxx_hidden_Allowed = v
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 4)
 }
 
-func (x *MutateObjectResponse) SetResult(v *StatusResult) {
+func (x *AdmissionReviewResponse) SetResult(v *StatusResult) {
 	x.xxx_hidden_Result = v
 }
 
-func (x *MutateObjectResponse) SetWarnings(v []string) {
+func (x *AdmissionReviewResponse) SetWarnings(v []string) {
 	x.xxx_hidden_Warnings = v
 }
 
-func (x *MutateObjectResponse) SetObjectBytes(v []byte) {
+func (x *AdmissionReviewResponse) SetObjectBytes(v []byte) {
 	if v == nil {
 		v = []byte{}
 	}
@@ -283,42 +282,42 @@ func (x *MutateObjectResponse) SetObjectBytes(v []byte) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 4)
 }
 
-func (x *MutateObjectResponse) HasAllowed() bool {
+func (x *AdmissionReviewResponse) HasAllowed() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
 }
 
-func (x *MutateObjectResponse) HasResult() bool {
+func (x *AdmissionReviewResponse) HasResult() bool {
 	if x == nil {
 		return false
 	}
 	return x.xxx_hidden_Result != nil
 }
 
-func (x *MutateObjectResponse) HasObjectBytes() bool {
+func (x *AdmissionReviewResponse) HasObjectBytes() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
 }
 
-func (x *MutateObjectResponse) ClearAllowed() {
+func (x *AdmissionReviewResponse) ClearAllowed() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_Allowed = false
 }
 
-func (x *MutateObjectResponse) ClearResult() {
+func (x *AdmissionReviewResponse) ClearResult() {
 	x.xxx_hidden_Result = nil
 }
 
-func (x *MutateObjectResponse) ClearObjectBytes() {
+func (x *AdmissionReviewResponse) ClearObjectBytes() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
 	x.xxx_hidden_ObjectBytes = nil
 }
 
-type MutateObjectResponse_builder struct {
+type AdmissionReviewResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// allowed indicates whether or not the admission request was permitted.
@@ -327,13 +326,15 @@ type MutateObjectResponse_builder struct {
 	// It is not consulted in any way when allowed is true.
 	Result *StatusResult
 	// warnings is a list of warning messages to return to the requesting client.
+	// Limit warnings to 120 characters if possible. Warnings over 256 characters
+	// and large numbers of warnings may be truncated.
 	Warnings []string
-	// object_bytes is the mutated object.
+	// object_bytes are included when the object should change
 	ObjectBytes []byte
 }
 
-func (b0 MutateObjectResponse_builder) Build() *MutateObjectResponse {
-	m0 := &MutateObjectResponse{}
+func (b0 AdmissionReviewResponse_builder) Build() *AdmissionReviewResponse {
+	m0 := &AdmissionReviewResponse{}
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.Allowed != nil {
@@ -349,39 +350,39 @@ func (b0 MutateObjectResponse_builder) Build() *MutateObjectResponse {
 	return m0
 }
 
-var File_grafana_plugin_v3_mutate_proto protoreflect.FileDescriptor
+var File_grafana_plugin_v3_admission_proto protoreflect.FileDescriptor
 
-const file_grafana_plugin_v3_mutate_proto_rawDesc = "" +
+const file_grafana_plugin_v3_admission_proto_rawDesc = "" +
 	"\n" +
-	"\x1egrafana/plugin/v3/mutate.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"\xd7\x01\n" +
-	"\x13MutateObjectRequest\x12:\n" +
+	"!grafana/plugin/v3/admission.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"\xda\x01\n" +
+	"\x16AdmissionReviewRequest\x12:\n" +
 	"\toperation\x18\x01 \x01(\x0e2\x1c.grafana.plugin.v3.OperationR\toperation\x127\n" +
 	"\x04kind\x18\x02 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x04kind\x12!\n" +
 	"\fobject_bytes\x18\x03 \x01(\fR\vobjectBytes\x12(\n" +
-	"\x10old_object_bytes\x18\x04 \x01(\fR\x0eoldObjectBytes\"\xa8\x01\n" +
-	"\x14MutateObjectResponse\x12\x18\n" +
+	"\x10old_object_bytes\x18\x04 \x01(\fR\x0eoldObjectBytes\"\xab\x01\n" +
+	"\x17AdmissionReviewResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x127\n" +
 	"\x06result\x18\x02 \x01(\v2\x1f.grafana.plugin.v3.StatusResultR\x06result\x12\x1a\n" +
 	"\bwarnings\x18\x03 \x03(\tR\bwarnings\x12!\n" +
-	"\fobject_bytes\x18\x04 \x01(\fR\vobjectBytes2p\n" +
-	"\rMutateService\x12_\n" +
-	"\fMutateObject\x12&.grafana.plugin.v3.MutateObjectRequest\x1a'.grafana.plugin.v3.MutateObjectResponseB\xde\x01\n" +
-	"\x15com.grafana.plugin.v3B\vMutateProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\fobject_bytes\x18\x04 \x01(\fR\vobjectBytes2|\n" +
+	"\x10AdmissionService\x12h\n" +
+	"\x0fAdmissionReview\x12).grafana.plugin.v3.AdmissionReviewRequest\x1a*.grafana.plugin.v3.AdmissionReviewResponseB\xe1\x01\n" +
+	"\x15com.grafana.plugin.v3B\x0eAdmissionProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_mutate_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_grafana_plugin_v3_mutate_proto_goTypes = []any{
-	(*MutateObjectRequest)(nil),  // 0: grafana.plugin.v3.MutateObjectRequest
-	(*MutateObjectResponse)(nil), // 1: grafana.plugin.v3.MutateObjectResponse
-	(Operation)(0),               // 2: grafana.plugin.v3.Operation
-	(*GroupVersionKind)(nil),     // 3: grafana.plugin.v3.GroupVersionKind
-	(*StatusResult)(nil),         // 4: grafana.plugin.v3.StatusResult
+var file_grafana_plugin_v3_admission_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_grafana_plugin_v3_admission_proto_goTypes = []any{
+	(*AdmissionReviewRequest)(nil),  // 0: grafana.plugin.v3.AdmissionReviewRequest
+	(*AdmissionReviewResponse)(nil), // 1: grafana.plugin.v3.AdmissionReviewResponse
+	(Operation)(0),                  // 2: grafana.plugin.v3.Operation
+	(*GroupVersionKind)(nil),        // 3: grafana.plugin.v3.GroupVersionKind
+	(*StatusResult)(nil),            // 4: grafana.plugin.v3.StatusResult
 }
-var file_grafana_plugin_v3_mutate_proto_depIdxs = []int32{
-	2, // 0: grafana.plugin.v3.MutateObjectRequest.operation:type_name -> grafana.plugin.v3.Operation
-	3, // 1: grafana.plugin.v3.MutateObjectRequest.kind:type_name -> grafana.plugin.v3.GroupVersionKind
-	4, // 2: grafana.plugin.v3.MutateObjectResponse.result:type_name -> grafana.plugin.v3.StatusResult
-	0, // 3: grafana.plugin.v3.MutateService.MutateObject:input_type -> grafana.plugin.v3.MutateObjectRequest
-	1, // 4: grafana.plugin.v3.MutateService.MutateObject:output_type -> grafana.plugin.v3.MutateObjectResponse
+var file_grafana_plugin_v3_admission_proto_depIdxs = []int32{
+	2, // 0: grafana.plugin.v3.AdmissionReviewRequest.operation:type_name -> grafana.plugin.v3.Operation
+	3, // 1: grafana.plugin.v3.AdmissionReviewRequest.kind:type_name -> grafana.plugin.v3.GroupVersionKind
+	4, // 2: grafana.plugin.v3.AdmissionReviewResponse.result:type_name -> grafana.plugin.v3.StatusResult
+	0, // 3: grafana.plugin.v3.AdmissionService.AdmissionReview:input_type -> grafana.plugin.v3.AdmissionReviewRequest
+	1, // 4: grafana.plugin.v3.AdmissionService.AdmissionReview:output_type -> grafana.plugin.v3.AdmissionReviewResponse
 	4, // [4:5] is the sub-list for method output_type
 	3, // [3:4] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -389,9 +390,9 @@ var file_grafana_plugin_v3_mutate_proto_depIdxs = []int32{
 	0, // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_grafana_plugin_v3_mutate_proto_init() }
-func file_grafana_plugin_v3_mutate_proto_init() {
-	if File_grafana_plugin_v3_mutate_proto != nil {
+func init() { file_grafana_plugin_v3_admission_proto_init() }
+func file_grafana_plugin_v3_admission_proto_init() {
+	if File_grafana_plugin_v3_admission_proto != nil {
 		return
 	}
 	file_grafana_plugin_v3_common_proto_init()
@@ -399,17 +400,17 @@ func file_grafana_plugin_v3_mutate_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_mutate_proto_rawDesc), len(file_grafana_plugin_v3_mutate_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_admission_proto_rawDesc), len(file_grafana_plugin_v3_admission_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_grafana_plugin_v3_mutate_proto_goTypes,
-		DependencyIndexes: file_grafana_plugin_v3_mutate_proto_depIdxs,
-		MessageInfos:      file_grafana_plugin_v3_mutate_proto_msgTypes,
+		GoTypes:           file_grafana_plugin_v3_admission_proto_goTypes,
+		DependencyIndexes: file_grafana_plugin_v3_admission_proto_depIdxs,
+		MessageInfos:      file_grafana_plugin_v3_admission_proto_msgTypes,
 	}.Build()
-	File_grafana_plugin_v3_mutate_proto = out.File
-	file_grafana_plugin_v3_mutate_proto_goTypes = nil
-	file_grafana_plugin_v3_mutate_proto_depIdxs = nil
+	File_grafana_plugin_v3_admission_proto = out.File
+	file_grafana_plugin_v3_admission_proto_goTypes = nil
+	file_grafana_plugin_v3_admission_proto_depIdxs = nil
 }
