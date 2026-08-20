@@ -80,5 +80,9 @@ func ParentFromContext(ctx context.Context) *pluginv3.RouteResource {
 		return nil
 	}
 
-	return raw.(*pluginv3.RouteResource)
+	parent, ok := raw.(*pluginv3.RouteResource)
+	if !ok {
+		return nil
+	}
+	return parent
 }

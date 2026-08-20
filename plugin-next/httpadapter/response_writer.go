@@ -4,10 +4,10 @@ import (
 	"bytes"
 	"net/http"
 
+	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 	"google.golang.org/grpc"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
-	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 // callRouteResponseWriter is an implementation of http.ResponseWriter that
@@ -107,6 +107,9 @@ func (rw *callRouteResponseWriter) WriteHeader(code int) {
 	if rw.wroteHeader {
 		return
 	}
+	if code < 100 || code > 999 {
+		panic("invalid WriteHeader code")
+	}
 
 	rw.code = code
 	rw.wroteHeader = true
@@ -138,15 +141,15 @@ func (rw *callRouteResponseWriter) chunk() *pluginv3.CallRouteResponse {
 
 	if !rw.sentFirstStream {
 		if rw.code > 0 {
-			rsp.SetCode(int32(rw.code))
+			rsp.SetCode(int32(rw.code)) //nolint:gosec // WriteHeader limits HTTP status codes to 100-999.
 		} else {
 			rsp.SetCode(200) // OK
 		}
 
 		// Copy the headers
-		copy := rw.Header().Clone()
-		headers := make(map[string]*pluginv3.StringList, len(copy))
-		for k, vals := range copy {
+		headerCopy := rw.Header().Clone()
+		headers := make(map[string]*pluginv3.StringList, len(headerCopy))
+		for k, vals := range headerCopy {
 			headers[k] = pluginv3.StringList_builder{Values: vals}.Build()
 		}
 		rsp.SetHeaders(headers)

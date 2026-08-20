@@ -9,21 +9,20 @@ import (
 	"github.com/grafana/grafana-app-sdk/examples/plugin/plugin"
 	"github.com/grafana/grafana-app-sdk/plugin-next/grpcplugin"
 	"github.com/grafana/grafana-app-sdk/plugin-next/httpadapter"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )
 
 func main() {
+	// Any request on the router
 	echo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var body struct {
-			Message string `json:"message"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
+		msg := map[string]any{
+			"method": r.Method,
+			"url":    r.URL.String(),
 		}
 		w.Header().Add("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(body); err != nil {
+		if err := json.NewEncoder(w).Encode(msg); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

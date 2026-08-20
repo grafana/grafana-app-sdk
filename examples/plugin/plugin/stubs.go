@@ -7,7 +7,7 @@ import (
 )
 
 // AdmissionReview implements [pluginv3.AdmissionServiceServer].
-func (a *App) AdmissionReview(ctx context.Context, req *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
+func (*App) AdmissionReview(_ context.Context, _ *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
 	rsp := &pluginv3.AdmissionReviewResponse{}
 	rsp.SetAllowed(true)
 	rsp.SetWarnings([]string{"warning 1", "warning 2"})
@@ -15,7 +15,7 @@ func (a *App) AdmissionReview(ctx context.Context, req *pluginv3.AdmissionReview
 }
 
 // ConvertObjects implements [pluginv3.ConversionServiceServer].
-func (a *App) ConvertObjects(ctx context.Context, req *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
+func (*App) ConvertObjects(_ context.Context, req *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
 	rsp := &pluginv3.ConvertObjectsResponse{}
 	rsp.SetUid(req.GetUid())
 

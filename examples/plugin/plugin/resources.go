@@ -6,7 +6,7 @@ import (
 )
 
 // handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
-func (a *ManagedApp) handlePing(w http.ResponseWriter, req *http.Request) {
+func (*ManagedApp) handlePing(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	if _, err := w.Write([]byte(`{"message": "ok"}`)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -17,7 +17,7 @@ func (a *ManagedApp) handlePing(w http.ResponseWriter, req *http.Request) {
 
 // handleEcho is an example HTTP POST resource that accepts a JSON with a "message" key and
 // returns to the client whatever it is sent.
-func (a *ManagedApp) handleEcho(w http.ResponseWriter, req *http.Request) {
+func (*ManagedApp) handleEcho(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

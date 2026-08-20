@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/resource/httpadapter"
@@ -47,12 +48,12 @@ func NewManagedApp(_ context.Context, _ backend.AppInstanceSettings) (instancemg
 
 // Dispose here tells plugin SDK that plugin wants to clean up resources when a new instance
 // created.
-func (_ *ManagedApp) Dispose() {
+func (*ManagedApp) Dispose() {
 	// cleanup
 }
 
 // CheckHealth handles health checks sent from Grafana to the plugin.
-func (_ *ManagedApp) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+func (*ManagedApp) CheckHealth(_ context.Context, _ *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
 	return &backend.CheckHealthResult{
 		Status:  backend.HealthStatusOk,
 		Message: "ok",
