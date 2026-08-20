@@ -156,7 +156,12 @@ This directory also holds a generated JSON (or YAML) **manifest** for your app. 
 
 ### Toggling TypeScript/Go Codegen
 
-You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind. The `codegen` field by default looks like:
+You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind.
+
+> [!NOTE]
+> This is a per-kind (or per-version) toggle. To disable go code generation for the entire project, set `config.codegen.goEnabled` to `false` instead — see [Code Generation](../code-generation.md). That project-wide switch also removes the need for a `go.mod` and the `go` binary.
+
+The `codegen` field by default looks like:
 ```cue
 codegen: {
     ts: {

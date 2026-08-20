@@ -24,6 +24,7 @@ config: {
 	}
 
 	codegen: {
+		goEnabled:                      true
 		goGenPath:                      "pkg/generated/"
 		tsGenPath:                      "plugin/src/generated/"
 		enableK8sPostProcessing:        false
@@ -32,9 +33,11 @@ config: {
 }
 ```
 `grafana-app-sdk generate` scans the `source` directory for CUE files, and parses all top-level fields in all present CUE files as CUE kinds. If kind validation encounters any errors, no files will be written, and the validation error(s) will be printed out. On successful generation: 
-* kind go code will be written to the path in `config.codegen.goGenPath`, with a package for each unique kind-version combination
+* kind go code will be written to the path in `config.codegen.goGenPath`, with a package for each unique kind-version combination (unless `config.codegen.goEnabled` is `false`)
 * kind TypeScript code will be written to the path in `config.codegen.tsGenPath`, with a folder for each unique kind-version combination
 * kind CRD files and app manifest will be written to `config.definitions.path`, encoded according to `config.definitions.encoding`
+
+Setting `config.codegen.goEnabled` to `false` disables go code generation entirely, for every kind. This is intended for frontend-only apps: no go files are written, and neither a `go.mod` nor the `go` binary is required to run codegen. TypeScript, CRD, and app manifest JSON/YAML generation are unaffected. To disable go codegen for an individual kind or version instead of the whole project, see [Toggling TypeScript/Go Codegen](./custom-kinds/writing-kinds.md#toggling-typescriptgo-codegen).
 
 > [!IMPORTANT]
 > Because the interfaces that the grafana-app-sdk libraries use can change, be sure to run kind code generation using a version of the `grafana-app-sdk` CLI that matches the version of the dependency you use in your project. Whenever you update the dependency, make sure you re-run the kind code generation as well.

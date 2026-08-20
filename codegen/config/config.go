@@ -28,6 +28,7 @@ type DefinitionsConfig struct {
 }
 
 type CodegenConfig struct {
+	GoEnabled                      bool
 	GoModule                       string
 	GoModGenPath                   string
 	GoGenPath                      string
