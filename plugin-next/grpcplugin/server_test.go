@@ -22,10 +22,17 @@ func TestServeOptsPluginSet(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			plugins := tt.opts.PluginSet()
-			require.Len(t, plugins, 1)
+			require.Len(t, plugins, 3)
 			require.Contains(t, plugins, tt.key)
+			require.Contains(t, plugins, pluginKeyAdmission)
+			require.Contains(t, plugins, pluginKeyConversion)
+			require.Contains(t, plugins, pluginKeyRouter)
 		})
 	}
+}
+
+func TestServeOptsPluginSetIsEmptyWhenV3IsNotConfigured(t *testing.T) {
+	require.Empty(t, (ServeOpts{}).PluginSet())
 }
 
 func TestClientPluginSet(t *testing.T) {

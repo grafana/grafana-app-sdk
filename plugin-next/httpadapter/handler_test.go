@@ -30,7 +30,13 @@ func TestHandlerFunc(t *testing.T) {
 	}
 	handler := HandlerFunc(grpcClient)
 
-	ctx := context.WithValue(context.Background(), parentKey{}, parent)
+	ctx := WithRouteInfo(context.Background(), RouteInfo{
+		Group:     "example.grafana.app",
+		Version:   "v1alpha1",
+		Namespace: "tenant-1",
+		Path:      "widgets/widget-1/render",
+		Parent:    parent,
+	})
 	req := httptest.NewRequest(http.MethodPost, "/route?query=1", strings.NewReader("request body")).WithContext(ctx)
 	req.Header.Add("X-Request", "one")
 	req.Header.Add("X-Request", "two")
@@ -40,7 +46,10 @@ func TestHandlerFunc(t *testing.T) {
 
 	require.Same(t, ctx, grpcClient.ctx)
 	require.Equal(t, http.MethodPost, grpcClient.req.GetMethod())
-	require.Equal(t, "/route", grpcClient.req.GetPath())
+	require.Equal(t, "example.grafana.app", grpcClient.req.GetGroup())
+	require.Equal(t, "v1alpha1", grpcClient.req.GetVersion())
+	require.Equal(t, "tenant-1", grpcClient.req.GetNamespace())
+	require.Equal(t, "widgets/widget-1/render", grpcClient.req.GetPath())
 	require.Equal(t, "/route?query=1", grpcClient.req.GetUrl())
 	require.Equal(t, []string{"one", "two"}, grpcClient.req.GetHeaders()["X-Request"].GetValues())
 	require.Equal(t, "request body", string(grpcClient.req.GetBody()))
@@ -54,6 +63,20 @@ func TestHandlerFunc(t *testing.T) {
 	require.Equal(t, []string{"one", "two"}, result.Header.Values("X-Response"))
 	require.Equal(t, "hello world", string(responseBody))
 	require.True(t, recorder.Flushed)
+}
+
+func TestHandlerFuncUsesURLPathWithoutRouteInfo(t *testing.T) {
+	grpcClient := &testRouteServiceClient{
+		stream: &testCallRouteResponseReceiver{},
+	}
+	recorder := httptest.NewRecorder()
+
+	HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route?query=1", nil))
+
+	require.Equal(t, "/route", grpcClient.req.GetPath())
+	require.Empty(t, grpcClient.req.GetGroup())
+	require.Empty(t, grpcClient.req.GetVersion())
+	require.Empty(t, grpcClient.req.GetNamespace())
 }
 
 func TestHandlerFuncCallError(t *testing.T) {

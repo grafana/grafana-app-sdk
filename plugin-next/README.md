@@ -17,7 +17,9 @@ gRPC. It currently defines admission, conversion, and HTTP-style route services.
 
 Implement the generated service interfaces directly. Embedding
 `grpcplugin.UnimplementedV3Server` supplies forward-compatible unimplemented
-methods for services your plugin does not override.
+methods for RPCs your plugin does not override. Once any v3 service is enabled,
+`PluginSet` also registers unimplemented stubs for omitted services so the host
+can negotiate v3 clients as a group.
 
 Attach the services to the Grafana plugin SDK through `ExtraPlugins`:
 
@@ -30,7 +32,7 @@ srv := &server{}
 extra := (grpcplugin.ServeOpts{
 	AdmissionServer:  srv,
 	ConversionServer: srv,
-	RouteServer:      httpadapter.New(http.DefaultServeMux),
+	RouteServer:      httpadapter.NewServer(http.DefaultServeMux),
 }).PluginSet()
 
 err := app.Manage("my-app", newApp, app.ManageOpts{
@@ -38,9 +40,12 @@ err := app.Manage("my-app", newApp, app.ManageOpts{
 })
 ```
 
-The `httpadapter` preserves the request context supplied by gRPC. For a
-subresource route, call `httpadapter.ParentFromContext` to access the parent
-resource.
+The `httpadapter` preserves the request context supplied by gRPC. An HTTP host
+should attach the route's group, version, namespace, relative path, and optional
+parent resource with `httpadapter.WithRouteInfo` before invoking
+`httpadapter.HandlerFunc`. On the server, handlers can read the same metadata
+with `httpadapter.RouteInfoFromContext`; `httpadapter.ParentFromContext` is a
+convenience for subresource routes.
 
 ## Creating clients
 

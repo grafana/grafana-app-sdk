@@ -32,17 +32,17 @@ func (h *httpRouteHandler) CallRoute(req *pluginv3.CallRouteRequest, sender grpc
 		reqBodyReader = bytes.NewReader(body)
 	}
 
-	ctx := sender.Context()
+	ctx := WithRouteInfo(sender.Context(), RouteInfo{
+		Group:     req.GetGroup(),
+		Version:   req.GetVersion(),
+		Namespace: req.GetNamespace(),
+		Path:      req.GetPath(),
+		Parent:    req.GetParent(),
+	})
 
 	reqURL, err := url.Parse(req.GetUrl())
 	if err != nil {
 		return err
-	}
-
-	// Add the parent to the request
-	parent := req.GetParent()
-	if parent != nil {
-		ctx = context.WithValue(ctx, parentKey{}, parent)
 	}
 
 	resourceURL := req.GetPath()
@@ -72,19 +72,37 @@ func (h *httpRouteHandler) CallRoute(req *pluginv3.CallRouteRequest, sender grpc
 	return writer.sendErr
 }
 
-type parentKey struct{}
+type routeInfoKey struct{}
+
+// RouteInfo contains the App Platform routing metadata associated with an HTTP
+// request. Path is relative to the route registered in the app manifest.
+type RouteInfo struct {
+	Group     string
+	Version   string
+	Namespace string
+	Path      string
+	Parent    *pluginv3.RouteResource
+}
+
+// WithRouteInfo returns a context carrying info. Hosts should add route
+// metadata before passing an HTTP request to [HandlerFunc].
+func WithRouteInfo(ctx context.Context, info RouteInfo) context.Context {
+	return context.WithValue(ctx, routeInfoKey{}, info)
+}
+
+// RouteInfoFromContext returns the App Platform routing metadata associated
+// with ctx. It returns false when no route metadata has been attached.
+func RouteInfoFromContext(ctx context.Context) (RouteInfo, bool) {
+	info, ok := ctx.Value(routeInfoKey{}).(RouteInfo)
+	return info, ok
+}
 
 // ParentFromContext returns the resource associated with a subresource route.
 // It returns nil when the route request has no parent resource.
 func ParentFromContext(ctx context.Context) *pluginv3.RouteResource {
-	raw := ctx.Value(parentKey{})
-	if raw == nil {
-		return nil
-	}
-
-	parent, ok := raw.(*pluginv3.RouteResource)
+	info, ok := RouteInfoFromContext(ctx)
 	if !ok {
 		return nil
 	}
-	return parent
+	return info.Parent
 }

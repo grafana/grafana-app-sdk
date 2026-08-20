@@ -9,7 +9,10 @@ import (
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
 )
 
-// ServeOpts contains options for serving plugins.
+// ServeOpts contains options for serving plugins. When at least one service is
+// configured, PluginSet registers all v3 service names and uses unimplemented
+// stubs for omitted services so clients can negotiate the v3 protocol as a
+// unit.
 type ServeOpts struct {
 	AdmissionServer  pluginv3.AdmissionServiceServer
 	ConversionServer pluginv3.ConversionServiceServer
@@ -27,16 +30,24 @@ const (
 // backend/app.ManageOpts.ExtraPlugins.
 func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	pSet := make(plugin.PluginSet)
+	if opts.AdmissionServer == nil && opts.ConversionServer == nil && opts.RouteServer == nil {
+		return pSet
+	}
 
-	if opts.AdmissionServer != nil {
-		pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: opts.AdmissionServer}
+	fallback := UnimplementedV3Server{}
+	if opts.AdmissionServer == nil {
+		opts.AdmissionServer = fallback
 	}
-	if opts.ConversionServer != nil {
-		pSet[pluginKeyConversion] = &conversionGRPCPlugin{server: opts.ConversionServer}
+	if opts.ConversionServer == nil {
+		opts.ConversionServer = fallback
 	}
-	if opts.RouteServer != nil {
-		pSet[pluginKeyRouter] = &routeGRPCPlugin{server: opts.RouteServer}
+	if opts.RouteServer == nil {
+		opts.RouteServer = fallback
 	}
+
+	pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: opts.AdmissionServer}
+	pSet[pluginKeyConversion] = &conversionGRPCPlugin{server: opts.ConversionServer}
+	pSet[pluginKeyRouter] = &routeGRPCPlugin{server: opts.RouteServer}
 
 	return pSet
 }

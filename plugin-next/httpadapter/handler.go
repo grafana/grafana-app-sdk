@@ -8,7 +8,9 @@ import (
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
 )
 
-// HandlerFunc creates an HTTP handler that forwards requests to a RouteServiceClient.
+// HandlerFunc creates an HTTP handler that forwards requests to a
+// RouteServiceClient. Use [WithRouteInfo] when the URL path alone does not
+// contain the App Platform routing metadata.
 func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if client == nil {
@@ -22,7 +24,7 @@ func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 			return
 		}
 
-		stream, err := (client).CallRoute(r.Context(), req)
+		stream, err := client.CallRoute(r.Context(), req)
 		if err != nil {
 			http.Error(w, "call route: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -49,14 +51,22 @@ func requestFromHTTP(r *http.Request) (*pluginv3.CallRouteRequest, error) {
 
 	req := &pluginv3.CallRouteRequest{}
 	req.SetMethod(r.Method)
-	req.SetPath(r.URL.Path) // TODO? remove {group}/{version}/... prefix?
+	// Use the URL path as a generic fallback. App Platform hosts override this
+	// below with the path relative to the registered route.
+	req.SetPath(r.URL.Path)
 	req.SetUrl(r.URL.String())
 	req.SetHeaders(headers)
 	if len(body) > 0 {
 		req.SetBody(body)
 	}
-	if parent := ParentFromContext(r.Context()); parent != nil {
-		req.SetParent(parent)
+	if info, ok := RouteInfoFromContext(r.Context()); ok {
+		req.SetGroup(info.Group)
+		req.SetVersion(info.Version)
+		req.SetNamespace(info.Namespace)
+		req.SetPath(info.Path)
+		if info.Parent != nil {
+			req.SetParent(info.Parent)
+		}
 	}
 	return req, nil
 }

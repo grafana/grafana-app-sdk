@@ -99,6 +99,14 @@ func TestHTTPRouteHandler(t *testing.T) {
 		t.Run("Should provide the parent resource in the request context", func(t *testing.T) {
 			require.NotNil(t, httpHandler.req)
 			require.Same(t, parent, ParentFromContext(httpHandler.req.Context()))
+
+			info, ok := RouteInfoFromContext(httpHandler.req.Context())
+			require.True(t, ok)
+			require.Equal(t, req.GetGroup(), info.Group)
+			require.Equal(t, req.GetVersion(), info.Version)
+			require.Equal(t, req.GetNamespace(), info.Namespace)
+			require.Equal(t, req.GetPath(), info.Path)
+			require.Same(t, parent, info.Parent)
 		})
 	})
 
@@ -258,7 +266,7 @@ func TestCallRouteWithoutOptionalRequestFields(t *testing.T) {
 }
 
 func TestParentFromContextIgnoresUnexpectedValue(t *testing.T) {
-	ctx := context.WithValue(context.Background(), parentKey{}, "not a route resource")
+	ctx := context.WithValue(context.Background(), routeInfoKey{}, "not route info")
 
 	require.Nil(t, ParentFromContext(ctx))
 }
