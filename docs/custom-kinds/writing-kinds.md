@@ -298,6 +298,44 @@ foov1: fooKind & {
 }
 ```
 
+### Sharing a go type across kinds (`goType`)
+
+By default, codegen generates a dedicated go type for each top-level schema field (`spec`, `status`, etc.) inline in the version package. If you want a field to instead reference a go type you maintain in another package — for example, a single `Status` type shared across many kinds — annotate the field with a `@grafana_app_sdk(goType="<import path>.<TypeName>")` attribute:
+
+```cue
+foov1: fooKind & {
+    schema: {
+        spec: {
+            name: string
+        }
+        // Instead of generating a Status type, alias the shared one from another package.
+        status: {
+            // The CUE shape still drives the CRD's status schema, so keep it in sync with the go type.
+            message?: string
+        } @grafana_app_sdk(goType="github.com/org/repo/apis/common.Status")
+    }
+}
+```
+
+Instead of a generated struct, codegen emits a type alias in the version package:
+
+```go
+import common "github.com/org/repo/apis/common"
+
+// Status is a type alias to an externally-defined, shared type.
+type Status = common.Status
+
+func NewStatus() *Status {
+    return &Status{}
+}
+```
+
+Notes and requirements:
+- **The CRD/OpenAPI schema still comes from your CUE.** The `goType` attribute only changes the *go* representation; the field's CUE shape continues to drive the generated CRD. Keep the CUE shape and the shared go type in agreement (or use a loose/`x-kubernetes-preserve-unknown-fields` status).
+- **The shared type must implement `DeepCopyInto(*T)` and `DeepCopy() *T`** (the standard k8s `deepcopy-gen`/`controller-gen` output). The generated resource object calls `DeepCopyInto` on the subresource, so it will not compile otherwise.
+- The alias keeps the field-derived type name (e.g. `Status`, or `FooStatus` when kinds are grouped by kind), so the generated codec, schema, and resource-object code are unaffected.
+- If you are replacing the auto-generated operator-state `status`, declare your own `status` field in the kind so the attribute has somewhere to live.
+
 ### Constraints
 
 [Bounds](https://cuelang.org/docs/tour/types/bounds/) can be added to your types, such as numerical bounds, or non-nil checks. These will only apply to the generated OpenAPI spec for your CRD, and will not be checked in your go or TypeScript types themselves (or in the generated Codecs). As such, the validation of the bounds is only checked on admission by the kubernetes API (via the apiextensions server that manages CRDs).
