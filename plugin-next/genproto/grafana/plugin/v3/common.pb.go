@@ -20,55 +20,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Operation is the type of resource operation being checked for admission control.
-// https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L158
-type Operation int32
-
-const (
-	Operation_OPERATION_UNSPECIFIED Operation = 0
-	Operation_OPERATION_CREATE      Operation = 1
-	Operation_OPERATION_UPDATE      Operation = 2
-	Operation_OPERATION_DELETE      Operation = 3
-)
-
-// Enum value maps for Operation.
-var (
-	Operation_name = map[int32]string{
-		0: "OPERATION_UNSPECIFIED",
-		1: "OPERATION_CREATE",
-		2: "OPERATION_UPDATE",
-		3: "OPERATION_DELETE",
-	}
-	Operation_value = map[string]int32{
-		"OPERATION_UNSPECIFIED": 0,
-		"OPERATION_CREATE":      1,
-		"OPERATION_UPDATE":      2,
-		"OPERATION_DELETE":      3,
-	}
-)
-
-func (x Operation) Enum() *Operation {
-	p := new(Operation)
-	*p = x
-	return p
-}
-
-func (x Operation) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (Operation) Descriptor() protoreflect.EnumDescriptor {
-	return file_grafana_plugin_v3_common_proto_enumTypes[0].Descriptor()
-}
-
-func (Operation) Type() protoreflect.EnumType {
-	return &file_grafana_plugin_v3_common_proto_enumTypes[0]
-}
-
-func (x Operation) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
 // GroupVersion represents the API group and version of a resource.
 type GroupVersion struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
@@ -746,189 +697,6 @@ func (b0 StringList_builder) Build() *StringList {
 	return m0
 }
 
-// StatusResult carries a machine- and human-readable description of the outcome
-// of an operation. It mirrors the Kubernetes meta/v1 Status shape:
-// https://github.com/kubernetes/apimachinery/blob/v0.30.1/pkg/apis/meta/v1/generated.proto#L979
-type StatusResult struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Status      *string                `protobuf:"bytes,1,opt,name=status"`
-	xxx_hidden_Message     *string                `protobuf:"bytes,2,opt,name=message"`
-	xxx_hidden_Reason      *string                `protobuf:"bytes,3,opt,name=reason"`
-	xxx_hidden_Code        int32                  `protobuf:"varint,4,opt,name=code"`
-	XXX_raceDetectHookData protoimpl.RaceDetectHookData
-	XXX_presence           [1]uint32
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
-}
-
-func (x *StatusResult) Reset() {
-	*x = StatusResult{}
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StatusResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StatusResult) ProtoMessage() {}
-
-func (x *StatusResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-func (x *StatusResult) GetStatus() string {
-	if x != nil {
-		if x.xxx_hidden_Status != nil {
-			return *x.xxx_hidden_Status
-		}
-		return ""
-	}
-	return ""
-}
-
-func (x *StatusResult) GetMessage() string {
-	if x != nil {
-		if x.xxx_hidden_Message != nil {
-			return *x.xxx_hidden_Message
-		}
-		return ""
-	}
-	return ""
-}
-
-func (x *StatusResult) GetReason() string {
-	if x != nil {
-		if x.xxx_hidden_Reason != nil {
-			return *x.xxx_hidden_Reason
-		}
-		return ""
-	}
-	return ""
-}
-
-func (x *StatusResult) GetCode() int32 {
-	if x != nil {
-		return x.xxx_hidden_Code
-	}
-	return 0
-}
-
-func (x *StatusResult) SetStatus(v string) {
-	x.xxx_hidden_Status = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 4)
-}
-
-func (x *StatusResult) SetMessage(v string) {
-	x.xxx_hidden_Message = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 4)
-}
-
-func (x *StatusResult) SetReason(v string) {
-	x.xxx_hidden_Reason = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 4)
-}
-
-func (x *StatusResult) SetCode(v int32) {
-	x.xxx_hidden_Code = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 4)
-}
-
-func (x *StatusResult) HasStatus() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 0)
-}
-
-func (x *StatusResult) HasMessage() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
-}
-
-func (x *StatusResult) HasReason() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
-}
-
-func (x *StatusResult) HasCode() bool {
-	if x == nil {
-		return false
-	}
-	return protoimpl.X.Present(&(x.XXX_presence[0]), 3)
-}
-
-func (x *StatusResult) ClearStatus() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
-	x.xxx_hidden_Status = nil
-}
-
-func (x *StatusResult) ClearMessage() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
-	x.xxx_hidden_Message = nil
-}
-
-func (x *StatusResult) ClearReason() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
-	x.xxx_hidden_Reason = nil
-}
-
-func (x *StatusResult) ClearCode() {
-	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 3)
-	x.xxx_hidden_Code = 0
-}
-
-type StatusResult_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	// status of the operation. One of: "Success" or "Failure".
-	Status *string
-	// message is a human-readable description of the status of this operation.
-	Message *string
-	// reason is a machine-readable description of why this operation is in the
-	// "Failure" status. If this value is empty there is no information available.
-	// A reason clarifies an HTTP status code but does not override it.
-	Reason *string
-	// code is a suggested HTTP return code for this status, 0 if not set.
-	Code *int32
-}
-
-func (b0 StatusResult_builder) Build() *StatusResult {
-	m0 := &StatusResult{}
-	b, x := &b0, m0
-	_, _ = b, x
-	if b.Status != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 4)
-		x.xxx_hidden_Status = b.Status
-	}
-	if b.Message != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 4)
-		x.xxx_hidden_Message = b.Message
-	}
-	if b.Reason != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 4)
-		x.xxx_hidden_Reason = b.Reason
-	}
-	if b.Code != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 4)
-		x.xxx_hidden_Code = *b.Code
-	}
-	return m0
-}
-
 var File_grafana_plugin_v3_common_proto protoreflect.FileDescriptor
 
 const file_grafana_plugin_v3_common_proto_rawDesc = "" +
@@ -953,32 +721,19 @@ const file_grafana_plugin_v3_common_proto_rawDesc = "" +
 	"\x03raw\x18\x06 \x01(\fR\x03raw\"$\n" +
 	"\n" +
 	"StringList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06values\"l\n" +
-	"\fStatusResult\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\x12\x12\n" +
-	"\x04code\x18\x04 \x01(\x05R\x04code*h\n" +
-	"\tOperation\x12\x19\n" +
-	"\x15OPERATION_UNSPECIFIED\x10\x00\x12\x14\n" +
-	"\x10OPERATION_CREATE\x10\x01\x12\x14\n" +
-	"\x10OPERATION_UPDATE\x10\x02\x12\x14\n" +
-	"\x10OPERATION_DELETE\x10\x03B\xde\x01\n" +
+	"\x06values\x18\x01 \x03(\tR\x06valuesB\xde\x01\n" +
 	"\x15com.grafana.plugin.v3B\vCommonProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_common_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_grafana_plugin_v3_common_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_grafana_plugin_v3_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_grafana_plugin_v3_common_proto_goTypes = []any{
-	(Operation)(0),               // 0: grafana.plugin.v3.Operation
-	(*GroupVersion)(nil),         // 1: grafana.plugin.v3.GroupVersion
-	(*GroupVersionKind)(nil),     // 2: grafana.plugin.v3.GroupVersionKind
-	(*GroupVersionResource)(nil), // 3: grafana.plugin.v3.GroupVersionResource
-	(*ResourceObject)(nil),       // 4: grafana.plugin.v3.ResourceObject
-	(*StringList)(nil),           // 5: grafana.plugin.v3.StringList
-	(*StatusResult)(nil),         // 6: grafana.plugin.v3.StatusResult
+	(*GroupVersion)(nil),         // 0: grafana.plugin.v3.GroupVersion
+	(*GroupVersionKind)(nil),     // 1: grafana.plugin.v3.GroupVersionKind
+	(*GroupVersionResource)(nil), // 2: grafana.plugin.v3.GroupVersionResource
+	(*ResourceObject)(nil),       // 3: grafana.plugin.v3.ResourceObject
+	(*StringList)(nil),           // 4: grafana.plugin.v3.StringList
 }
 var file_grafana_plugin_v3_common_proto_depIdxs = []int32{
-	3, // 0: grafana.plugin.v3.ResourceObject.type:type_name -> grafana.plugin.v3.GroupVersionResource
+	2, // 0: grafana.plugin.v3.ResourceObject.type:type_name -> grafana.plugin.v3.GroupVersionResource
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -996,14 +751,13 @@ func file_grafana_plugin_v3_common_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_common_proto_rawDesc), len(file_grafana_plugin_v3_common_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   6,
+			NumEnums:      0,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_grafana_plugin_v3_common_proto_goTypes,
 		DependencyIndexes: file_grafana_plugin_v3_common_proto_depIdxs,
-		EnumInfos:         file_grafana_plugin_v3_common_proto_enumTypes,
 		MessageInfos:      file_grafana_plugin_v3_common_proto_msgTypes,
 	}.Build()
 	File_grafana_plugin_v3_common_proto = out.File

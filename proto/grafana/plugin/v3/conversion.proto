@@ -3,6 +3,7 @@ edition = "2024";
 package grafana.plugin.v3;
 
 import "grafana/plugin/v3/common.proto";
+import "grafana/plugin/v3/status.proto";
 
 // ConversionService can be used to convert resources between versions.
 // See: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-request-and-response
@@ -17,13 +18,25 @@ message RawObject {
   // Object type
   GroupVersionKind gvk = 1;
 
-  // raw is the serialized object.
+  // json serialized object
   bytes raw = 2;
+
+  // When converted, these are the warnings
+  repeated string warnings = 3;
 }
 
 // ConvertObjectsRequest supports converting objects from one version to
 // another.
 message ConvertObjectsRequest {
+  // The Object that needs converted
+  message Object {
+    // Object type
+    GroupVersionKind gvk = 1;
+
+    // json serialized object
+    bytes raw = 2;
+  }
+
   // the request api_version
   GroupVersion api = 1;
 
@@ -34,7 +47,7 @@ message ConvertObjectsRequest {
   string uid = 2;
 
   // objects to convert.
-  repeated RawObject objects = 3;
+  repeated Object objects = 3;
 
   // target_version is the version to convert to.
   string target_version = 4;
@@ -42,14 +55,22 @@ message ConvertObjectsRequest {
 
 // ConvertObjectsResponse contains the converted objects.
 message ConvertObjectsResponse {
+  // The Object that needs converted
+  message Object {
+    // json serialized object
+    bytes raw = 1;
+
+    // Return warning information
+    repeated string warnings = 2;
+  }
+
+  // When the request fails, we can return a full error error status
+  StatusResult error = 1;
+
   // uid is an identifier for the individual request/response. This should be
   // copied over from the corresponding request.uid.
-  string uid = 1;
+  string uid = 2;
 
-  // result contains extra detail into why a request was denied.
-  StatusResult result = 2;
-
-  // objects is the converted version of request.objects if result is
-  // successful, otherwise empty.
-  repeated RawObject objects = 3;
+  // converted objects
+  repeated Object converted = 3;
 }

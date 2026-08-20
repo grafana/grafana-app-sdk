@@ -35,15 +35,6 @@ message GroupVersionResource {
   string kind = 3;
 }
 
-// Operation is the type of resource operation being checked for admission control.
-// https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L158
-enum Operation {
-  OPERATION_UNSPECIFIED = 0;
-  OPERATION_CREATE = 1;
-  OPERATION_UPDATE = 2;
-  OPERATION_DELETE = 3;
-}
-
 // ResourceObject 
 message ResourceObject {
   // For plugins, group is usually the plugin identifier
@@ -66,23 +57,4 @@ message ResourceObject {
 // does not allow a repeated value in a map directly.
 message StringList {
   repeated string values = 1;
-}
-
-// StatusResult carries a machine- and human-readable description of the outcome
-// of an operation. It mirrors the Kubernetes meta/v1 Status shape:
-// https://github.com/kubernetes/apimachinery/blob/v0.30.1/pkg/apis/meta/v1/generated.proto#L979
-message StatusResult {
-  // status of the operation. One of: "Success" or "Failure".
-  string status = 1;
-
-  // message is a human-readable description of the status of this operation.
-  string message = 2;
-
-  // reason is a machine-readable description of why this operation is in the
-  // "Failure" status. If this value is empty there is no information available.
-  // A reason clarifies an HTTP status code but does not override it.
-  string reason = 3;
-
-  // code is a suggested HTTP return code for this status, 0 if not set.
-  int32 code = 4;
 }

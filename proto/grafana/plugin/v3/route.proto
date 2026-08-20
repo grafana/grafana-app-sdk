@@ -68,7 +68,4 @@ message CallRouteResponse {
 
   // body are the raw HTTP body bytes sent to the client.
   bytes body = 3;
-
-  // This is the last message, we can close the HTTP stream
-  bool eof = 4;
 }

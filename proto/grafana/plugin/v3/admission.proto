@@ -3,6 +3,7 @@ edition = "2024";
 package grafana.plugin.v3;
 
 import "grafana/plugin/v3/common.proto";
+import "grafana/plugin/v3/status.proto";
 
 // AdmissionService is based on the Kubernetes admission webhook pattern.
 // It can be used to verify that objects are valid and to mutate them.
@@ -15,6 +16,16 @@ service AdmissionService {
 // AdmissionReviewRequest contains information from a Kubernetes admission
 // request and the decoded object(s).
 message AdmissionReviewRequest {
+  // Operation is the type of resource operation being checked for admission control.
+  // https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L158
+  enum Operation {
+    OPERATION_UNSPECIFIED = 0;
+    OPERATION_CREATE = 1;
+    OPERATION_UPDATE = 2;
+    OPERATION_DELETE = 3;
+    // connect? -- do we want to review connect
+  }
+
   // operation is the requested operation.
   Operation operation = 1;
 
@@ -31,12 +42,11 @@ message AdmissionReviewRequest {
 
 // ValidateAdmissionResponse reports whether an object may be admitted.
 message AdmissionReviewResponse {
-  // allowed indicates whether or not the admission request was permitted.
-  bool allowed = 1;
+  // When the request fails, we can return a full error error status
+  StatusResult error = 1;
 
-  // result contains extra detail about why an admission request was denied.
-  // It is not consulted in any way when allowed is true.
-  StatusResult result = 2;
+  // allowed indicates whether or not the admission request was permitted.
+  bool allowed = 2;
 
   // warnings is a list of warning messages to return to the requesting client.
   // Limit warnings to 120 characters if possible. Warnings over 256 characters
