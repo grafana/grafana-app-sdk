@@ -23,6 +23,7 @@ func TestParseConfigOverridesDefaults(t *testing.T) {
 	assert.Equal(t, "custom/defs", cfg.Definitions.Path)
 	assert.Equal(t, jennies.VersionV1Alpha1, cfg.Definitions.ManifestVersion)
 
+	assert.False(t, cfg.Codegen.GoEnabled)
 	assert.Equal(t, "github.com/example/module", cfg.Codegen.GoModule)
 	assert.Equal(t, "internal/mod", cfg.Codegen.GoModGenPath)
 	assert.Equal(t, "alt/pkg/", cfg.Codegen.GoGenPath)
@@ -44,6 +45,7 @@ func TestParseConfigDefaultFallback(t *testing.T) {
 	assert.Equal(t, "definitions", cfg.Definitions.Path)
 	assert.Equal(t, jennies.VersionV1Alpha2, cfg.Definitions.ManifestVersion)
 
+	assert.True(t, cfg.Codegen.GoEnabled)
 	assert.Equal(t, "pkg/generated/", cfg.Codegen.GoGenPath)
 	assert.Equal(t, "plugin/src/generated/", cfg.Codegen.TsGenPath)
 	assert.False(t, cfg.Codegen.EnableK8sPostProcessing)

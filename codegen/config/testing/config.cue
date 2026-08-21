@@ -11,6 +11,7 @@ configA: {
 		manifestVersion: "v1alpha1"
 	}
 	codegen: {
+		goEnabled:                      false
 		goModule:                       "github.com/example/module"
 		goModGenPath:                   "internal/mod"
 		goGenPath:                      "alt/pkg/"
