@@ -1,0 +1,71 @@
+edition = "2024";
+
+package grafana.plugin.v3;
+
+import "grafana/plugin/v3/common.proto";
+
+// RouteService enables HTTP-style requests over gRPC.
+service RouteService {
+  // CallRoute issues an HTTP-style request and streams the response back.
+  rpc CallRoute(CallRouteRequest) returns (stream CallRouteResponse);
+}
+
+// RouteResource is the resource referenced by the requested subresource path.
+message RouteResource {
+  // resource is the lowercase, plural parent resource name, such as dashboards.
+  string resource = 1;
+
+  // name is the parent resource name.
+  string name = 2;
+
+  // rv is the resource version. A change indicates that raw has changed.
+  string rv = 3;
+
+  // raw is the complete JSON-encoded parent resource.
+  bytes raw = 4;
+}
+
+// CallRouteRequest is the request for RouteService.CallRoute.
+message CallRouteRequest {
+  // group is the API group. For plugins, it is usually the plugin identifier.
+  string group = 1;
+
+  // version is the API version, such as v1 or v2beta1.
+  string version = 2;
+
+  // namespace identifies the tenant or resource namespace.
+  string namespace = 3;
+
+  // parent is set when the route targets a resource subresource.
+  RouteResource parent = 4;
+
+  // path is relative to the configured route location.
+  string path = 5;
+
+  // method is the HTTP method.
+  string method = 6;
+
+  // url is the request URL.
+  string url = 7;
+
+  // headers are the raw HTTP request headers.
+  map<string, StringList> headers = 8;
+
+  // body is the raw HTTP request body.
+  bytes body = 9;
+}
+
+// CallRouteResponse is a streamed chunk of the response for RouteService.CallRoute.
+// The code and headers will only be used for the first stream chunk.
+message CallRouteResponse {
+  // code maps to raw HTTP status codes when passed over HTTP.
+  // This is only respected in the first response payload
+  int32 code = 1;
+
+  // headers are the raw HTTP headers sent to the client.
+  // This is only respected in the first response payload
+  map<string, StringList> headers = 2;
+
+  // body are the raw HTTP body bytes sent to the client.
+  bytes body = 3;
+}
