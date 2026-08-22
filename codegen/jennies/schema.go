@@ -46,6 +46,10 @@ func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Fil
 		if err != nil {
 			return nil, err
 		}
+		tc, err := s.getTableColumns(&kind)
+		if err != nil {
+			return nil, err
+		}
 		b := bytes.Buffer{}
 		err = templates.WriteSchema(templates.SchemaMetadata{
 			Package:          ToPackageName(version.Name()),
@@ -55,6 +59,7 @@ func (s *SchemaGenerator) Generate(appManifest codegen.AppManifest) (codejen.Fil
 			Plural:           kind.PluralMachineName,
 			Scope:            kind.Scope,
 			SelectableFields: sf,
+			TableColumns:     tc,
 			FuncPrefix:       prefix,
 		}, &b)
 		if err != nil {
@@ -456,6 +461,75 @@ func getCUEValueKindString(v cue.Value) (string, error) {
 		return "int", nil
 	}
 	return "", fmt.Errorf("unsupported type %s, supported types are string, bool, int and time.Time", v.IncompleteKind())
+}
+
+func (*SchemaGenerator) getTableColumns(kind *codegen.VersionedKind) ([]templates.SchemaMetadataTableColumn, error) {
+	columns := make([]templates.SchemaMetadataTableColumn, 0)
+	if len(kind.AdditionalPrinterColumns) == 0 {
+		return columns, nil
+	}
+	for _, col := range kind.AdditionalPrinterColumns {
+		fieldPath := col.JSONPath
+		if len(fieldPath) > 1 && fieldPath[0] == '.' {
+			fieldPath = fieldPath[1:]
+		}
+		parts := strings.Split(fieldPath, ".")
+		if len(parts) <= 1 {
+			return nil, fmt.Errorf("invalid table column JSONPath: %s", col.JSONPath)
+		}
+		field := parts[len(parts)-1]
+		parentParts := parts[:len(parts)-1]
+		path := make([]cue.Selector, 0)
+		for _, p := range parentParts {
+			path = append(path, cue.Str(p))
+		}
+		val := kind.Schema.LookupPath(cue.MakePath(path...).Optional())
+		if val.Err() != nil {
+			return nil, fmt.Errorf("invalid table column JSONPath %s: parent path not found", col.JSONPath)
+		}
+
+		var lookup cue.Value
+		var optional bool
+		cuePath := cue.MakePath(cue.Str(field))
+		if lookup = val.LookupPath(cuePath); lookup.Exists() {
+			optional = false
+		} else if lookup = val.LookupPath(cuePath.Optional()); lookup.Exists() {
+			optional = true
+		} else {
+			return nil, fmt.Errorf("invalid table column JSONPath: %s", col.JSONPath)
+		}
+
+		goType, err := getCUEValueKindString(lookup)
+		if err != nil {
+			return nil, fmt.Errorf("invalid table column '%s' (%s): %w", col.Name, col.JSONPath, err)
+		}
+
+		var colFormat string
+		if col.Format != nil {
+			colFormat = *col.Format
+		}
+		var colDescription string
+		if col.Description != nil {
+			colDescription = *col.Description
+		}
+		var priority int32
+		if col.Priority != nil {
+			priority = *col.Priority
+		}
+
+		columns = append(columns, templates.SchemaMetadataTableColumn{
+			Name:                 col.Name,
+			Type:                 col.Type,
+			Format:               colFormat,
+			Description:          colDescription,
+			Priority:             priority,
+			JSONPath:             col.JSONPath,
+			GoValueType:          goType,
+			Optional:             optional,
+			OptionalFieldsInPath: getOptionalFieldsInPath(kind.Schema, fieldPath),
+		})
+	}
+	return columns, nil
 }
 
 // getOptionalFieldsInPath returns a list of all optional fields found along the provided fieldPath.
