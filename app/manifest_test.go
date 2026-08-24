@@ -170,6 +170,35 @@ func TestManifestData_Validate(t *testing.T) {
 			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
 			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
 	}, {
+		name: "reserved search and trash routes",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/search": {},
+						"/bars/search": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"/BARS/TRASH/": {},
+						"/foos/trash":  {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/search' conflicts with reserved 'search' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route '/BARS/TRASH/' conflicts with reserved 'trash' route for kind 'bars'")),
+	}, {
 		name: "rolebindings for missing roles (no roles in manifest)",
 		data: ManifestData{
 			AppName: "myapp",

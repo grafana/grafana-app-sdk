@@ -177,11 +177,21 @@ func (m *ManifestData) Validate() error {
 			if _, ok := namespacedRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
 			}
+			if resource, endpoint, ok := reservedKindRoute(key); ok {
+				if _, exists := namespacedRoutes[resource]; exists {
+					errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with reserved '%s' route for kind '%s'", rpath, endpoint, resource))
+				}
+			}
 		}
 		for rpath := range version.Routes.Cluster {
 			key := strings.Trim(strings.ToLower(rpath), "/")
 			if _, ok := clusterRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
+			}
+			if resource, endpoint, ok := reservedKindRoute(key); ok {
+				if _, exists := clusterRoutes[resource]; exists {
+					errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with reserved '%s' route for kind '%s'", rpath, endpoint, resource))
+				}
 			}
 		}
 	}
@@ -220,6 +230,17 @@ func (m *ManifestData) Validate() error {
 		}
 	}
 	return errs
+}
+
+func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
+	for _, endpoint = range []string{"search", "trash"} {
+		suffix := "/" + endpoint
+		if strings.HasSuffix(route, suffix) {
+			resource = strings.TrimSuffix(route, suffix)
+			return resource, endpoint, resource != ""
+		}
+	}
+	return "", "", false
 }
 
 // Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
