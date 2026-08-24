@@ -18,6 +18,13 @@ testKindv0alpha1: testKind & {
 testKindv1alpha1: testKind & {
 	validation: operations: ["CREATE", "UPDATE"]
 	selectableFields: [".spec.testField"]
+	additionalPrinterColumns: [
+		{
+			jsonPath: ".spec.testField"
+			name:     "Test Field"
+			type:     "string"
+		},
+	]
 	schema: {
 		#Foo: {
 			foo: string | *"foo"

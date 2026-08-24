@@ -24,6 +24,16 @@ var (
 				return cast.Spec.TestField, nil
 			},
 		},
+		}), resource.WithTableColumns([]resource.TableColumn{{
+			Name: "Test Field", Type: "string", JSONPath: ".spec.testField",
+			ValueFunc: func(o resource.Object) (any, error) {
+				cast, ok := o.(*TestKind)
+				if !ok {
+					return nil, errors.New("provided object must be of type *TestKind")
+				}
+				return cast.Spec.TestField, nil
+			},
+		},
 		}))
 	kindTestKind = resource.Kind{
 		Schema: schemaTestKind,

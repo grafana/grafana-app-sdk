@@ -23,6 +23,13 @@ import (
 func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGetter generic.RESTOptionsGetter) (*genericregistry.Store, error) {
 	strategy := newStrategy(scheme, kind)
 
+	var tableConvertor rest.TableConvertor
+	if cols := kind.TableColumns(); len(cols) > 0 {
+		tableConvertor = newTableConvertor(cols)
+	} else {
+		tableConvertor = rest.NewDefaultTableConvertor(kind.GroupVersionResource().GroupResource())
+	}
+
 	store := &genericregistry.Store{
 		NewFunc: func() runtime.Object {
 			return kind.ZeroValue()
@@ -40,7 +47,7 @@ func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGett
 		CreateStrategy: strategy,
 		UpdateStrategy: strategy,
 		DeleteStrategy: strategy,
-		TableConvertor: rest.NewDefaultTableConvertor(kind.GroupVersionResource().GroupResource()),
+		TableConvertor: tableConvertor,
 	}
 
 	options := &generic.StoreOptions{RESTOptions: optsGetter, AttrFunc: getAttrsFunc(kind)}
