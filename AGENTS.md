@@ -932,7 +932,6 @@ The codebase is actively being optimized for production scale (10k-50k resources
 
 **Examples**:
 - Simple operator: `/examples/operator/simple/`
-- API server: `/examples/apiserver/`
 - Resource usage: `/examples/resource/`
 
 **Community**:
