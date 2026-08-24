@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // New creates a RouteServiceServer adapter that handles route calls using an

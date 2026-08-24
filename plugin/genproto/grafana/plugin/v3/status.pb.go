@@ -676,8 +676,8 @@ const file_grafana_plugin_v3_status_proto_rawDesc = "" +
 	"\vStatusCause\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
-	"\x05field\x18\x03 \x01(\tR\x05fieldB\xde\x01\n" +
-	"\x15com.grafana.plugin.v3B\vStatusProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x05field\x18\x03 \x01(\tR\x05fieldB\xd9\x01\n" +
+	"\x15com.grafana.plugin.v3B\vStatusProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
 var file_grafana_plugin_v3_status_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_grafana_plugin_v3_status_proto_goTypes = []any{

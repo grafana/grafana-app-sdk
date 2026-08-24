@@ -3,14 +3,14 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/grafana/grafana-app-sdk/plugin-next/genproto
+      value: github.com/grafana/grafana-app-sdk/plugin/genproto
 plugins:
   - local: protoc-gen-go
-    out: ../plugin-next/genproto
+    out: ../plugin/genproto
     opt:
       - paths=source_relative
   - local: protoc-gen-go-grpc
-    out: ../plugin-next/genproto
+    out: ../plugin/genproto
     opt:
       - paths=source_relative
       - require_unimplemented_servers=false

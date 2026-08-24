@@ -652,8 +652,8 @@ const file_grafana_plugin_v3_conversion_proto_rawDesc = "" +
 	"\x03raw\x18\x01 \x01(\fR\x03raw\x12\x1a\n" +
 	"\bwarnings\x18\x02 \x03(\tR\bwarnings2z\n" +
 	"\x11ConversionService\x12e\n" +
-	"\x0eConvertObjects\x12(.grafana.plugin.v3.ConvertObjectsRequest\x1a).grafana.plugin.v3.ConvertObjectsResponseB\xe2\x01\n" +
-	"\x15com.grafana.plugin.v3B\x0fConversionProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x0eConvertObjects\x12(.grafana.plugin.v3.ConvertObjectsRequest\x1a).grafana.plugin.v3.ConvertObjectsResponseB\xdd\x01\n" +
+	"\x15com.grafana.plugin.v3B\x0fConversionProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
 var file_grafana_plugin_v3_conversion_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_grafana_plugin_v3_conversion_proto_goTypes = []any{

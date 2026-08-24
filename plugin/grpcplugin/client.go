@@ -5,7 +5,7 @@ import (
 
 	"github.com/hashicorp/go-plugin"
 
-	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // ClientV3 groups clients for the grafana.plugin.v3 services.

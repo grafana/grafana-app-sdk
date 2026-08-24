@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // callRouteResponseWriter is an implementation of http.ResponseWriter that

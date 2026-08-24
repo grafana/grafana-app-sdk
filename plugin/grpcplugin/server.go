@@ -6,7 +6,7 @@ import (
 	plugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
-	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // ServeOpts contains options for serving plugins. When at least one service is
@@ -34,7 +34,7 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 		return pSet
 	}
 
-	fallback := UnimplementedV3Server{}
+	fallback := &UnimplementedV3Server{}
 	if opts.AdmissionServer == nil {
 		opts.AdmissionServer = fallback
 	}

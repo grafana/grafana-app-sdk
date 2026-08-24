@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // HandlerFunc creates an HTTP handler that forwards requests to a

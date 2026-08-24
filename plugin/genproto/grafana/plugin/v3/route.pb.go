@@ -687,9 +687,9 @@ const file_grafana_plugin_v3_route_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
 	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x012h\n" +
 	"\fRouteService\x12X\n" +
-	"\tCallRoute\x12#.grafana.plugin.v3.CallRouteRequest\x1a$.grafana.plugin.v3.CallRouteResponse0\x01B\xdd\x01\n" +
+	"\tCallRoute\x12#.grafana.plugin.v3.CallRouteRequest\x1a$.grafana.plugin.v3.CallRouteResponse0\x01B\xd8\x01\n" +
 	"\x15com.grafana.plugin.v3B\n" +
-	"RouteProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"RouteProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
 var file_grafana_plugin_v3_route_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_grafana_plugin_v3_route_proto_goTypes = []any{

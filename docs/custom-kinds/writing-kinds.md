@@ -126,6 +126,8 @@ Generated code by default ends up in three different places (these paths can be 
 * `config.codegen.tsGenPath` (for example `plugin/src/generated/foo/v1`)
 * `config.definitions.path` (for example `definitions/`)
 
+Within `config.definitions.path`, the app manifest is named `<appName>-manifest.<encoding>` unless `config.definitions.manifestFileName` overrides it. That override is only valid when a single manifest is generated (see `config.manifestSelectors`).
+
 ### `pkg/generated`
 
 All generated go code ends up in `pkg/generated/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
@@ -156,7 +158,12 @@ This directory also holds a generated JSON (or YAML) **manifest** for your app. 
 
 ### Toggling TypeScript/Go Codegen
 
-You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind. The `codegen` field by default looks like:
+You can turn on or off code generation for front-end (TypeScript) and/or back-end (go) using the `codegen` property in your kind or version(s) in your CUE kind.
+
+> [!NOTE]
+> This is a per-kind (or per-version) toggle. To disable go code generation for the entire project, set `config.codegen.goEnabled` to `false` instead — see [Code Generation](../code-generation.md). That project-wide switch also removes the need for a `go.mod` and the `go` binary.
+
+The `codegen` field by default looks like:
 ```cue
 codegen: {
     ts: {

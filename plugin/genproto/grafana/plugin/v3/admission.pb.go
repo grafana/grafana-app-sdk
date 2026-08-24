@@ -421,8 +421,8 @@ const file_grafana_plugin_v3_admission_proto_rawDesc = "" +
 	"\bwarnings\x18\x03 \x03(\tR\bwarnings\x12!\n" +
 	"\fobject_bytes\x18\x04 \x01(\fR\vobjectBytes2|\n" +
 	"\x10AdmissionService\x12h\n" +
-	"\x0fAdmissionReview\x12).grafana.plugin.v3.AdmissionReviewRequest\x1a*.grafana.plugin.v3.AdmissionReviewResponseB\xe1\x01\n" +
-	"\x15com.grafana.plugin.v3B\x0eAdmissionProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x0fAdmissionReview\x12).grafana.plugin.v3.AdmissionReviewRequest\x1a*.grafana.plugin.v3.AdmissionReviewResponseB\xdc\x01\n" +
+	"\x15com.grafana.plugin.v3B\x0eAdmissionProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
 var file_grafana_plugin_v3_admission_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_grafana_plugin_v3_admission_proto_msgTypes = make([]protoimpl.MessageInfo, 2)

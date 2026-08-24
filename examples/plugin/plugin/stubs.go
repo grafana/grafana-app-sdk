@@ -3,7 +3,7 @@ package plugin
 import (
 	"context"
 
-	pluginv3 "github.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // AdmissionReview implements [pluginv3.AdmissionServiceServer].

@@ -723,8 +723,8 @@ const file_grafana_plugin_v3_common_proto_rawDesc = "" +
 	"\x03raw\x18\x06 \x01(\fR\x03raw\"$\n" +
 	"\n" +
 	"StringList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06valuesB\xde\x01\n" +
-	"\x15com.grafana.plugin.v3B\vCommonProtoP\x01ZRgithub.com/grafana/grafana-app-sdk/plugin-next/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x06values\x18\x01 \x03(\tR\x06valuesB\xd9\x01\n" +
+	"\x15com.grafana.plugin.v3B\vCommonProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
 var file_grafana_plugin_v3_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_grafana_plugin_v3_common_proto_goTypes = []any{
