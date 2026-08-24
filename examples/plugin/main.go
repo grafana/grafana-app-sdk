@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/examples/plugin/plugin"
 	"github.com/grafana/grafana-app-sdk/plugin/grpcplugin"
 	"github.com/grafana/grafana-app-sdk/plugin/httpadapter"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
 )

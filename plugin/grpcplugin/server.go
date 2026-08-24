@@ -35,19 +35,22 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	}
 
 	fallback := &UnimplementedV3Server{}
-	if opts.AdmissionServer == nil {
-		opts.AdmissionServer = fallback
+	admissionServer := opts.AdmissionServer
+	if admissionServer == nil {
+		admissionServer = fallback
 	}
-	if opts.ConversionServer == nil {
-		opts.ConversionServer = fallback
+	conversionServer := opts.ConversionServer
+	if conversionServer == nil {
+		conversionServer = fallback
 	}
-	if opts.RouteServer == nil {
-		opts.RouteServer = fallback
+	routeServer := opts.RouteServer
+	if routeServer == nil {
+		routeServer = fallback
 	}
 
-	pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: opts.AdmissionServer}
-	pSet[pluginKeyConversion] = &conversionGRPCPlugin{server: opts.ConversionServer}
-	pSet[pluginKeyRouter] = &routeGRPCPlugin{server: opts.RouteServer}
+	pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: admissionServer}
+	pSet[pluginKeyConversion] = &conversionGRPCPlugin{server: conversionServer}
+	pSet[pluginKeyRouter] = &routeGRPCPlugin{server: routeServer}
 
 	return pSet
 }
