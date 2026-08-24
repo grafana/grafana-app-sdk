@@ -25,7 +25,7 @@ require (
 	github.com/puzpuzpuz/xsync/v2 v2.5.1
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	github.com/stretchr/testify v1.12.0
+	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.45.0
@@ -94,6 +94,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 // indirect
 	github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 // indirect
+	github.com/grafana/grafana-plugin-sdk-go v0.296.4 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.3 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
@@ -103,6 +104,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
+	github.com/magefile/mage v1.17.2 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
