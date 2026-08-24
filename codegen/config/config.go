@@ -25,6 +25,9 @@ type DefinitionsConfig struct {
 	Encoding        string
 	Path            string
 	ManifestVersion string
+	// ManifestFileName overrides the generated app manifest's filename (relative to Path).
+	// When empty, the filename defaults to "<appName>-manifest.<Encoding>".
+	ManifestFileName string
 }
 
 type CodegenConfig struct {

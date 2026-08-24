@@ -137,15 +137,27 @@ func PostResourceGenerationGenerator(projectRepo, goGenPath string, groupKinds b
 	return g
 }
 
-func ManifestGenerator(extension string, includeSchemas bool, version string) *codejen.JennyList[codegen.AppManifest] {
+// ManifestGeneratorConfig configures the ManifestGenerator JennyList.
+type ManifestGeneratorConfig struct {
+	// Extension selects both the output encoder and, unless FileName is set, the filename suffix.
+	Extension string
+	// FileName, when non-empty, overrides the generated manifest's filename entirely.
+	// The encoder is still selected by Extension.
+	FileName       string
+	IncludeSchemas bool
+	Version        string
+}
+
+func ManifestGenerator(cfg ManifestGeneratorConfig) *codejen.JennyList[codegen.AppManifest] {
 	generator := &jennies.ManifestGenerator{
 		Encoder:         jsonEncoder,
-		FileExtension:   extension,
-		IncludeSchemas:  includeSchemas,
-		ManifestVersion: version,
+		FileExtension:   cfg.Extension,
+		FileName:        cfg.FileName,
+		IncludeSchemas:  cfg.IncludeSchemas,
+		ManifestVersion: cfg.Version,
 	}
 
-	switch extension {
+	switch cfg.Extension {
 	case "json":
 		generator.Encoder = jsonEncoder
 	case "yaml":
