@@ -342,7 +342,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	return &manifest, validateManifestRoles(manifest, includeSchemas)
+	return &manifest, errors.Join(validateManifestRoles(manifest, includeSchemas), manifest.Validate())
 }
 
 // resolveOperatorURL determines the operator URL from the manifest properties.

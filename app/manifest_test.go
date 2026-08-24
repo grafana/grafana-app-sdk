@@ -91,7 +91,7 @@ func TestManifestData_Validate(t *testing.T) {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
 					Kind:         "Foo",
-					FolderScoped: ptr(false),
+					FolderScoped: new(false),
 				}},
 			}},
 		},
@@ -108,7 +108,7 @@ func TestManifestData_Validate(t *testing.T) {
 				Name: "v2",
 				Kinds: []ManifestVersionKind{{
 					Kind:         "Foo",
-					FolderScoped: ptr(true),
+					FolderScoped: new(true),
 				}},
 			}},
 		},
@@ -169,6 +169,41 @@ func TestManifestData_Validate(t *testing.T) {
 		expectedErr: multierror.Append(nil,
 			errors.New("namespaced custom route '/foos' conflicts with already-registered kind 'foos'"),
 			errors.New("cluster-scoped custom route '/foobars' conflicts with already-registered kind 'foobars'")),
+	}, {
+		name: "search and trash routes remain reserved after opt-out",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+					Search: &ManifestVersionKindSearch{
+						Endpoint: new(false),
+					},
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+					Search: &ManifestVersionKindSearch{
+						Trash: new(false),
+					},
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/search": {},
+						"/bars/search": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"/BARS/TRASH/": {},
+						"/foos/trash":  {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/search' conflicts with reserved 'search' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route '/BARS/TRASH/' conflicts with reserved 'trash' route for kind 'bars'")),
 	}, {
 		name: "rolebindings for missing roles (no roles in manifest)",
 		data: ManifestData{
@@ -844,8 +879,8 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 							"int": {
 								SchemaProps: spec.SchemaProps{
 									Type:    []string{"number"},
-									Minimum: ptr(float64(5)),
-									Maximum: ptr(float64(10)),
+									Minimum: new(float64(5)),
+									Maximum: new(float64(10)),
 									Format:  "integer",
 								},
 							},
@@ -863,8 +898,8 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 							"float": {
 								SchemaProps: spec.SchemaProps{
 									Type:    []string{"number"},
-									Minimum: ptr(float64(-0.5)),
-									Maximum: ptr(float64(0.5)),
+									Minimum: new(float64(-0.5)),
+									Maximum: new(float64(0.5)),
 									Format:  "decimal",
 								},
 							},
@@ -1089,10 +1124,6 @@ func kubeOpenAPIList(gvk schema.GroupVersionKind, ref common.ReferenceCallback) 
 	}
 }
 
-func ptr[T any](in T) *T {
-	return &in
-}
-
 func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
@@ -1102,9 +1133,9 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 	}{
 		{name: "unset serves both", search: nil, expectedSearch: true, expectedTrash: true},
 		{name: "empty block serves both", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true},
-		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: ptr(false)}, expectedSearch: false, expectedTrash: true},
-		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: ptr(false)}, expectedSearch: true, expectedTrash: false},
-		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: ptr(false), Trash: ptr(false)}, expectedSearch: false, expectedTrash: false},
+		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true},
+		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false},
+		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
