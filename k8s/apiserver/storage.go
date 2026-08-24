@@ -20,8 +20,11 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGetter generic.RESTOptionsGetter) (*genericregistry.Store, error) {
+func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGetter generic.RESTOptionsGetter, opts StoreOptions) (*genericregistry.Store, error) {
 	strategy := newStrategy(scheme, kind)
+	if opts.ObjectNameGenerator != nil {
+		strategy.namer = opts.ObjectNameGenerator
+	}
 
 	store := &genericregistry.Store{
 		NewFunc: func() runtime.Object {
