@@ -199,16 +199,30 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	// Manifest CRD
 	var manifestFiles codejen.Files
 	if cfg.Definitions.GenManifest {
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(
-			cfg.Definitions.Encoding,
-			cfg.Definitions.ManifestSchemas,
-			cfg.Definitions.ManifestVersion),
-			cfg.ManifestSelectors...)
+		// One manifest is generated per manifest selector, and a fixed filename would make
+		// every one of them collide on the same path, so reject the combination up-front.
+		if cfg.Definitions.ManifestFileName != "" && len(cfg.ManifestSelectors) > 1 {
+			return nil, fmt.Errorf("definitions.manifestFileName cannot be used with multiple "+
+				"manifestSelectors (%d configured): all manifests would be written to %q",
+				len(cfg.ManifestSelectors), cfg.Definitions.ManifestFileName)
+		}
+
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cuekind.ManifestGeneratorConfig{
+			Extension:      cfg.Definitions.Encoding,
+			FileName:       cfg.Definitions.ManifestFileName,
+			IncludeSchemas: cfg.Definitions.ManifestSchemas,
+			Version:        cfg.Definitions.ManifestVersion,
+		}), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
+		seenManifestPaths := make(map[string]struct{}, len(manifestFiles))
 		for i, f := range manifestFiles {
 			manifestFiles[i].RelativePath = filepath.Join(cfg.Definitions.Path, f.RelativePath)
+			if _, dup := seenManifestPaths[manifestFiles[i].RelativePath]; dup {
+				return nil, fmt.Errorf("multiple app manifests would be written to the same file %q", manifestFiles[i].RelativePath)
+			}
+			seenManifestPaths[manifestFiles[i].RelativePath] = struct{}{}
 		}
 	}
 
