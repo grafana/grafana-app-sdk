@@ -149,7 +149,7 @@ jobs:
           rm -rf kinds/config.cue
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
-          printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
+          printf "\nreplace github.com/grafana/grafana-app-sdk/plugin-legacy => $(readlink -f ../grafana-app-sdk/plugin-legacy)\n" >> go.mod
           cp ../grafana-app-sdk/codegen/cuekind/testing/integration.cue kinds/integration.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/config.cue kinds/config.cue
           grafana-app-sdk generate --config configIntegrationGen3

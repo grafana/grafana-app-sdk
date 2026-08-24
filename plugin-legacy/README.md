@@ -1,6 +1,6 @@
 # plugin-legacy
 
-/!\ This package was previously published as github.com/grafana/grafana-app-sdk/plugin. 
+/!\ This package was previously published as github.com/grafana/grafana-app-sdk/plugin.
 
 This package is meant for usage by a Grafana backend plugin. It contains functionality for working with Kubernetes client configs, routing and error handling.
 
@@ -22,7 +22,7 @@ import (
   "errors"
   "fmt"
 
-  "github.com/grafana/grafana-app-sdk/plugin"
+  "github.com/grafana/grafana-app-sdk/plugin-legacy"
 )
 
 func main() {
@@ -76,9 +76,9 @@ import (
 
   "github.com/grafana/grafana-plugin-sdk-go/backend"
   "github.com/grafana/grafana-app-sdk/crd"
-  "github.com/grafana/grafana-app-sdk/plugin"
-  "github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
-  "github.com/grafana/grafana-app-sdk/plugin/router"
+  "github.com/grafana/grafana-app-sdk/plugin-legacy"
+  "github.com/grafana/grafana-app-sdk/plugin-legacy/kubeconfig"
+  "github.com/grafana/grafana-app-sdk/plugin-legacy/router"
 )
 
 var rg = crd.NewResourceGroup("my.resourcegroup.com", "v1")
@@ -185,8 +185,8 @@ import (
   "net/http"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
-	"github.com/grafana/grafana-app-sdk/plugin"
-	"github.com/grafana/grafana-app-sdk/plugin/router"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
 )
 
 func main() {

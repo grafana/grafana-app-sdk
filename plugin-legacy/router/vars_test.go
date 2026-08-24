@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/grafana/grafana-app-sdk/plugin/router"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
 	"github.com/stretchr/testify/assert"
 )
 

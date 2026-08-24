@@ -3,10 +3,11 @@ package kubeconfig
 import (
 	"context"
 
-	"github.com/grafana/grafana-app-sdk/plugin-legacy"
-	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+
+	"github.com/grafana/grafana-app-sdk/plugin-legacy"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
 )
 
 // LoadingMiddleware returns a new middleware that can be used on a router for

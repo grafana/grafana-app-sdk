@@ -9,8 +9,8 @@ import (
 	"{{.Repo}}/pkg/plugin/secure"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-app-sdk/logging"
-	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
-	"github.com/grafana/grafana-app-sdk/plugin/router"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/kubeconfig"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
 )
 
 type Service interface { {{ range .Resources }}
