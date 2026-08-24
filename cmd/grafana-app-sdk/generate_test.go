@@ -91,3 +91,55 @@ func TestGenerateKindsCueGoDisabled(t *testing.T) {
 	assert.Positive(t, tsCount, "TypeScript files should still be generated when goEnabled is false")
 	assert.Positive(t, defCount, "CRD/manifest files should still be generated when goEnabled is false")
 }
+
+// TestGenerateKindsCueManifestFileNameMultipleSelectors verifies that a fixed manifest filename
+// is rejected when more than one manifest would be generated, rather than silently having each
+// manifest clobber the previous one.
+func TestGenerateKindsCueManifestFileNameMultipleSelectors(t *testing.T) {
+	cfg := testConfig(true)
+	cfg.Definitions.ManifestFileName = "my-manifest.json"
+	require.Len(t, cfg.ManifestSelectors, 2, "this test relies on more than one manifest selector")
+
+	_, err := generateKindsCue(testParser(t), cfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "manifestFileName")
+}
+
+// TestGenerateKindsCueManifestFileNameSingleSelector verifies that with a single manifest,
+// the configured filename is used verbatim inside the definitions path.
+func TestGenerateKindsCueManifestFileNameSingleSelector(t *testing.T) {
+	cfg := testConfig(true)
+	cfg.Definitions.ManifestFileName = "my-manifest.json"
+	cfg.ManifestSelectors = []string{"testManifest"}
+
+	files, err := generateKindsCue(testParser(t), cfg)
+	require.NoError(t, err)
+
+	want := filepath.Join(cfg.Definitions.Path, "my-manifest.json")
+	var found int
+	for _, f := range files {
+		if f.RelativePath == want {
+			found++
+		}
+	}
+	assert.Equal(t, 1, found, "expected exactly one manifest written to %s", want)
+}
+
+// TestGenerateKindsCueManifestFileNameUnset verifies the default filename is unchanged when
+// no manifestFileName is configured.
+func TestGenerateKindsCueManifestFileNameUnset(t *testing.T) {
+	cfg := testConfig(true)
+	cfg.ManifestSelectors = []string{"testManifest"}
+
+	files, err := generateKindsCue(testParser(t), cfg)
+	require.NoError(t, err)
+
+	want := filepath.Join(cfg.Definitions.Path, "test-app-manifest.json")
+	var found int
+	for _, f := range files {
+		if f.RelativePath == want {
+			found++
+		}
+	}
+	assert.Equal(t, 1, found, "expected the default manifest filename at %s", want)
+}

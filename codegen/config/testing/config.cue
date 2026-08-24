@@ -5,10 +5,11 @@ configA: {
 		grouping: "group"
 	}
 	definitions: {
-		manifestSchemas: false
-		encoding:        "yaml"
-		path:            "custom/defs"
-		manifestVersion: "v1alpha1"
+		manifestSchemas:  false
+		encoding:         "yaml"
+		path:             "custom/defs"
+		manifestVersion:  "v1alpha1"
+		manifestFileName: "custom-manifest.yaml"
 	}
 	codegen: {
 		goEnabled:                      false
