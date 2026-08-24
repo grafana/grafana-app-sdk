@@ -1,4 +1,4 @@
-module github.com/grafana/grafana-app-sdk/plugin
+module github.com/grafana/grafana-app-sdk/plugin-legacy
 
 go 1.26.5
 

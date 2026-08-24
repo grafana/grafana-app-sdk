@@ -8,11 +8,12 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/grafana/grafana-app-sdk/plugin"
-	"github.com/grafana/grafana-app-sdk/plugin/router"
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/plugin-legacy"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
 func TestJSONRouter_JSONErrorHandler(t *testing.T) {

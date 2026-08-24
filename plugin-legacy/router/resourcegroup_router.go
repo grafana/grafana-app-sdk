@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/grafana/grafana-app-sdk/plugin"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 

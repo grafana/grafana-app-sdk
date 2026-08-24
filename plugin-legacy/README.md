@@ -1,4 +1,6 @@
-# plugin
+# plugin-legacy
+
+/!\ This package was previously published as github.com/grafana/grafana-app-sdk/plugin. 
 
 This package is meant for usage by a Grafana backend plugin. It contains functionality for working with Kubernetes client configs, routing and error handling.
 

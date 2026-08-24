@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/rest"
 
-	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/kubeconfig"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 

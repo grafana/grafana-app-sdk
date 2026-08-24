@@ -7,12 +7,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/grafana/grafana-app-sdk/plugin/router"
-	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
+	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
 var (

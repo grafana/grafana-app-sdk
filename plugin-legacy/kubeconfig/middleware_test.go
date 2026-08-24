@@ -5,12 +5,13 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/stretchr/testify/assert"
 	"k8s.io/client-go/rest"
 
-	"github.com/grafana/grafana-app-sdk/plugin"
-	"github.com/grafana/grafana-app-sdk/plugin/kubeconfig"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
+
+	"github.com/grafana/grafana-app-sdk/plugin-legacy"
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/kubeconfig"
 )
 
 func TestLoadingMiddleware(t *testing.T) {

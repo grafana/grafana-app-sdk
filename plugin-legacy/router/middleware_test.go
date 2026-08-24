@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/grafana/grafana-app-sdk/plugin/router"
-	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/stretchr/testify/require"
+
+	"github.com/grafana/grafana-app-sdk/plugin-legacy/router"
+	"github.com/grafana/grafana-plugin-sdk-go/backend"
 )
 
 type ctxKey struct{}
@@ -33,7 +34,7 @@ func TestMiddleware_InOrderExecution(t *testing.T) {
 		require.NotNil(t, middlewareInjectedValue, "expected middleware to have affected the context")
 		res.Send(&backend.CallResourceResponse{
 			Status: http.StatusOK,
-			Body:   []byte(fmt.Sprintf("%shi!", middlewareInjectedValue)),
+			Body:   fmt.Appendf(nil, "%shi!", middlewareInjectedValue),
 		})
 	}, "GET")
 
@@ -51,12 +52,12 @@ func TestMiddleware_CapturingMiddleware(t *testing.T) {
 	// Each middleware will add a number to the payload, before and after
 	middleware1 := router.NewCapturingMiddleware(func(ctx context.Context, req *backend.CallResourceRequest, next router.NextFunc) {
 		res := next(context.WithValue(ctx, ctxKey{}, "1"))
-		res.Body = []byte(fmt.Sprintf("%s1", res.Body))
+		res.Body = fmt.Appendf(nil, "%s1", res.Body)
 	})
 	middleware2 := router.NewCapturingMiddleware(func(ctx context.Context, req *backend.CallResourceRequest, next router.NextFunc) {
 		current := ctx.Value(ctxKey{}).(string)
 		res := next(context.WithValue(ctx, ctxKey{}, fmt.Sprintf("%s2", current)))
-		res.Body = []byte(fmt.Sprintf("%s2", res.Body))
+		res.Body = fmt.Appendf(nil, "%s2", res.Body)
 	})
 	r.Use(middleware1, middleware2)
 
@@ -65,7 +66,7 @@ func TestMiddleware_CapturingMiddleware(t *testing.T) {
 		require.NotNil(t, middlewareInjectedValue, "expected middleware to have affected the context")
 		res.Send(&backend.CallResourceResponse{
 			Status: http.StatusOK,
-			Body:   []byte(fmt.Sprintf("%shi!", middlewareInjectedValue)),
+			Body:   fmt.Appendf(nil, "%shi!", middlewareInjectedValue),
 		})
 	}, "GET")
 
