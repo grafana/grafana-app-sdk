@@ -126,6 +126,8 @@ Generated code by default ends up in three different places (these paths can be 
 * `config.codegen.tsGenPath` (for example `plugin/src/generated/foo/v1`)
 * `config.definitions.path` (for example `definitions/`)
 
+Within `config.definitions.path`, the app manifest is named `<appName>-manifest.<encoding>` unless `config.definitions.manifestFileName` overrides it. That override is only valid when a single manifest is generated (see `config.manifestSelectors`).
+
 ### `pkg/generated`
 
 All generated go code ends up in `pkg/generated/<kind name>/<kind version>`. For each kind, there are at least six files that are generated (at least six, because each subresource generates its own go file):
