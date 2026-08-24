@@ -114,13 +114,44 @@ func TestManifestGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		files, err := ManifestGenerator("json", true, jennies.VersionV1Alpha1).Generate(kinds...)
+		files, err := ManifestGenerator(ManifestGeneratorConfig{
+			Extension:      "json",
+			IncludeSchemas: true,
+			Version:        jennies.VersionV1Alpha1,
+		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
 		assert.Len(t, files, 1)
 		// Check content against the golden files
 		compareToGolden(t, files, "manifest")
+	})
+
+	t.Run("filename override", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+		files, err := ManifestGenerator(ManifestGeneratorConfig{
+			Extension:      "json",
+			FileName:       "my-manifest.json",
+			IncludeSchemas: true,
+			Version:        jennies.VersionV1Alpha1,
+		}).Generate(kinds...)
+		require.NoError(t, err)
+		require.Len(t, files, 1)
+		assert.Equal(t, "my-manifest.json", files[0].RelativePath)
+	})
+
+	t.Run("empty filename uses the default", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+		files, err := ManifestGenerator(ManifestGeneratorConfig{
+			Extension:      "yaml",
+			IncludeSchemas: true,
+			Version:        jennies.VersionV1Alpha1,
+		}).Generate(kinds...)
+		require.NoError(t, err)
+		require.Len(t, files, 1)
+		assert.Equal(t, "test-app-manifest.yaml", files[0].RelativePath)
 	})
 }
 

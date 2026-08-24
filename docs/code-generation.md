@@ -37,6 +37,17 @@ config: {
 * kind TypeScript code will be written to the path in `config.codegen.tsGenPath`, with a folder for each unique kind-version combination
 * kind CRD files and app manifest will be written to `config.definitions.path`, encoded according to `config.definitions.encoding`
 
+By default the app manifest is named `<appName>-manifest.<encoding>`. Set `config.definitions.manifestFileName` to write it under a specific name instead (still relative to `config.definitions.path`):
+```cue
+config: {
+	definitions: {
+		path:             "definitions"
+		manifestFileName: "my-app.json"
+	}
+}
+```
+Because one manifest is generated per entry in `config.manifestSelectors`, `manifestFileName` can only be used when a single manifest is generated — otherwise every manifest would be written to the same file, so codegen errors out instead. Note that `manifestFileName` sets only the filename; the file's contents are still encoded according to `config.definitions.encoding`.
+
 Setting `config.codegen.goEnabled` to `false` disables go code generation entirely, for every kind. This is intended for frontend-only apps: no go files are written, and neither a `go.mod` nor the `go` binary is required to run codegen. TypeScript, CRD, and app manifest JSON/YAML generation are unaffected. To disable go codegen for an individual kind or version instead of the whole project, see [Toggling TypeScript/Go Codegen](./custom-kinds/writing-kinds.md#toggling-typescriptgo-codegen).
 
 > [!IMPORTANT]
