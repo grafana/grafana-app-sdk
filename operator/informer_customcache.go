@@ -318,6 +318,7 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 			err := client.ListInto(ctx, filterOptions.Namespace, resource.ListOptions{
 				LabelFilters:    filterOptions.LabelFilters,
 				FieldSelectors:  filterOptions.FieldSelectors,
+				ShardSelector:   filterOptions.ShardSelector,
 				Continue:        options.Continue,
 				Limit:           int(options.Limit),
 				ResourceVersion: options.ResourceVersion,
@@ -341,6 +342,7 @@ func NewListerWatcher(client ListWatchClient, sch resource.Schema, filterOptions
 				ResourceVersionMatch: string(options.ResourceVersionMatch),
 				LabelFilters:         filterOptions.LabelFilters,
 				FieldSelectors:       filterOptions.FieldSelectors,
+				ShardSelector:        filterOptions.ShardSelector,
 				AllowWatchBookmarks:  options.AllowWatchBookmarks,
 				TimeoutSeconds:       options.TimeoutSeconds,
 				SendInitialEvents:    options.SendInitialEvents,

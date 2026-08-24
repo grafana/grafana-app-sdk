@@ -115,13 +115,16 @@ func NewKubernetesBasedInformer(
 	if options.ListWatchOptions.Namespace != "" {
 		healthCheckName = fmt.Sprintf("%s/namespaces/%s", healthCheckName, options.ListWatchOptions.Namespace)
 	}
-	if len(options.ListWatchOptions.LabelFilters) > 0 || len(options.ListWatchOptions.FieldSelectors) > 0 {
+	if len(options.ListWatchOptions.LabelFilters) > 0 || len(options.ListWatchOptions.FieldSelectors) > 0 || options.ListWatchOptions.ShardSelector != "" {
 		params := make([]string, 0)
 		if len(options.ListWatchOptions.LabelFilters) > 0 {
 			params = append(params, fmt.Sprintf("labelSelector=%s", strings.Join(options.ListWatchOptions.LabelFilters, ",")))
 		}
 		if len(options.ListWatchOptions.FieldSelectors) > 0 {
 			params = append(params, fmt.Sprintf("fieldSelector=%s", strings.Join(options.ListWatchOptions.FieldSelectors, ",")))
+		}
+		if options.ListWatchOptions.ShardSelector != "" {
+			params = append(params, fmt.Sprintf("shardSelector=%s", options.ListWatchOptions.ShardSelector))
 		}
 		healthCheckName = fmt.Sprintf("%s?%s", healthCheckName, strings.Join(params, "&"))
 	}

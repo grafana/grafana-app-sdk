@@ -869,6 +869,38 @@ func TestClient_List(t *testing.T) {
 		assert.Equal(t, responseObj.GetSpec(), item.GetSpec())
 		assert.Equal(t, responseObj.GetSubresources(), item.GetSubresources())
 	})
+	t.Run("success, with shard selector", func(t *testing.T) {
+		const shardExpr = "shardRange(object.metadata.uid, '0x0', '0x8000000000000000')"
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			assert.Equal(t, shardExpr, r.URL.Query().Get("shardSelector"))
+			listBytes, err := json.Marshal(listResp)
+			assert.Nil(t, err)
+			writer.Write(listBytes)
+			writer.WriteHeader(http.StatusOK)
+			assert.Equal(t, fmt.Sprintf("/namespaces/%s/%s", ns, testSchema.Plural()), r.URL.Path)
+		}
+
+		list, err := client.List(ctx, ns, resource.ListOptions{
+			ShardSelector: shardExpr,
+		})
+		assert.Nil(t, err)
+		assert.NotNil(t, list)
+	})
+	t.Run("success, no shard selector omits param", func(t *testing.T) {
+		server.responseFunc = func(writer http.ResponseWriter, r *http.Request) {
+			assert.Equal(t, http.MethodGet, r.Method)
+			_, has := r.URL.Query()["shardSelector"]
+			assert.False(t, has, "shardSelector param should be absent when ShardSelector is empty")
+			listBytes, err := json.Marshal(listResp)
+			assert.Nil(t, err)
+			writer.Write(listBytes)
+			writer.WriteHeader(http.StatusOK)
+		}
+
+		_, err := client.List(ctx, ns, resource.ListOptions{})
+		assert.Nil(t, err)
+	})
 }
 
 func TestClient_Client(t *testing.T) {
