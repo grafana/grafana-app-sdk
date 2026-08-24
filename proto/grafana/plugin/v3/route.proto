@@ -45,10 +45,12 @@ message CallRouteRequest {
   // method is the HTTP method.
   string method = 6;
 
-  // url is the request URL.
+  // url is the request URL. The request's separate HTTP Host field is
+  // intentionally not forwarded; host-based routing is not supported.
   string url = 7;
 
-  // headers are the raw HTTP request headers.
+  // headers are the raw HTTP request headers. The HTTP Host is not included
+  // because Go represents it separately from the header map.
   map<string, StringList> headers = 8;
 
   // body is the raw HTTP request body.

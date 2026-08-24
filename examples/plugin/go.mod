@@ -2,9 +2,13 @@ module github.com/grafana/grafana-app-sdk/examples/plugin
 
 go 1.26.5
 
-replace github.com/grafana/grafana-app-sdk => ../../
+replace (
+	github.com/grafana/grafana-app-sdk => ../../
+	github.com/grafana/grafana-app-sdk/plugin => ../../plugin
+)
 
 require (
+	github.com/grafana/grafana-app-sdk/plugin v0.0.0
 	github.com/grafana/grafana-plugin-sdk-go v0.296.4
 	github.com/stretchr/testify v1.12.1
 )
@@ -18,7 +22,6 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/fatih/color v1.19.0 // indirect
-	github.com/getkin/kin-openapi v0.146.0 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/goccy/go-json v0.10.6 // indirect

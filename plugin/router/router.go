@@ -22,7 +22,7 @@ var DefaultNotFoundHandler HandlerFunc = func(
 ) {
 	_ = sender.Send(&backend.CallResourceResponse{
 		Status: http.StatusNotFound,
-		Body:   fmt.Appendf(nil, "no route match for path %s", req.Path),
+		Body:   []byte(fmt.Sprintf("no route match for path %s", req.Path)),
 	})
 }
 

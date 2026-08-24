@@ -2,7 +2,7 @@
 
 This directory is the source of truth for the experimental
 `grafana.plugin.v3` wire protocol used by Go backend plugins. Generated Go code
-is checked in under `plugin-next/genproto/grafana/plugin/v3`.
+is checked in under `plugin/genproto/grafana/plugin/v3`.
 
 ## Regenerating Go code
 
@@ -27,8 +27,8 @@ After generation, run the focused tests and verify that the generated diff only
 contains intentional protocol changes:
 
 ```sh
-go test ./plugin-next/...
+(cd ../plugin && go test ./...)
 git diff --check
 ```
 
-Do not edit files under `plugin-next/genproto` by hand.
+Do not edit files under `plugin/genproto` by hand.

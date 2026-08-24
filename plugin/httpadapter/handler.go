@@ -10,7 +10,8 @@ import (
 
 // HandlerFunc creates an HTTP handler that forwards requests to a
 // RouteServiceClient. Use [WithRouteInfo] when the URL path alone does not
-// contain the App Platform routing metadata.
+// contain the App Platform routing metadata. The HTTP Host is intentionally
+// not forwarded; plugin route handlers must not rely on host-based routing.
 func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if client == nil {

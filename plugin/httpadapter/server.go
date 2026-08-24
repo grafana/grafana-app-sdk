@@ -14,7 +14,8 @@ import (
 )
 
 // New creates a RouteServiceServer adapter that handles route calls using an
-// http.Handler.
+// http.Handler. Reconstructed requests have an empty Host because the plugin
+// route protocol intentionally does not support host-based routing.
 func NewServer(handler http.Handler) pluginv3.RouteServiceServer {
 	return &httpRouteHandler{
 		handler: handler,

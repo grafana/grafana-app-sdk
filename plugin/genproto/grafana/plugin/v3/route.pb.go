@@ -482,9 +482,11 @@ type CallRouteRequest_builder struct {
 	Path *string
 	// method is the HTTP method.
 	Method *string
-	// url is the request URL.
+	// url is the request URL. The request's separate HTTP Host field is
+	// intentionally not forwarded; host-based routing is not supported.
 	Url *string
-	// headers are the raw HTTP request headers.
+	// headers are the raw HTTP request headers. The HTTP Host is not included
+	// because Go represents it separately from the header map.
 	Headers map[string]*StringList
 	// body is the raw HTTP request body.
 	Body []byte
