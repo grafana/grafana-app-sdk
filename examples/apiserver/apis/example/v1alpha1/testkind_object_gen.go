@@ -209,7 +209,7 @@ func (o *TestKind) GetCreatedBy() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["grafana.com/createdBy"]
+	return o.ObjectMeta.Annotations[resource.AnnotationPrefix+"createdBy"]
 }
 
 func (o *TestKind) SetCreatedBy(createdBy string) {
@@ -217,7 +217,7 @@ func (o *TestKind) SetCreatedBy(createdBy string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["grafana.com/createdBy"] = createdBy
+	o.ObjectMeta.Annotations[resource.AnnotationPrefix+"createdBy"] = createdBy
 }
 
 func (o *TestKind) GetUpdateTimestamp() time.Time {
@@ -225,7 +225,7 @@ func (o *TestKind) GetUpdateTimestamp() time.Time {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	parsed, _ := time.Parse(time.RFC3339, o.ObjectMeta.Annotations["grafana.com/updateTimestamp"])
+	parsed, _ := time.Parse(time.RFC3339, o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updateTimestamp"])
 	return parsed
 }
 
@@ -234,7 +234,7 @@ func (o *TestKind) SetUpdateTimestamp(updateTimestamp time.Time) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["grafana.com/updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
+	o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updateTimestamp"] = updateTimestamp.Format(time.RFC3339)
 }
 
 func (o *TestKind) GetUpdatedBy() string {
@@ -242,7 +242,7 @@ func (o *TestKind) GetUpdatedBy() string {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	return o.ObjectMeta.Annotations["grafana.com/updatedBy"]
+	return o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updatedBy"]
 }
 
 func (o *TestKind) SetUpdatedBy(updatedBy string) {
@@ -250,7 +250,7 @@ func (o *TestKind) SetUpdatedBy(updatedBy string) {
 		o.ObjectMeta.Annotations = make(map[string]string)
 	}
 
-	o.ObjectMeta.Annotations["grafana.com/updatedBy"] = updatedBy
+	o.ObjectMeta.Annotations[resource.AnnotationPrefix+"updatedBy"] = updatedBy
 }
 
 func (o *TestKind) Copy() resource.Object {

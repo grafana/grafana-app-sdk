@@ -254,15 +254,17 @@ func (o *WrappedObject[T]) GetCommonMetadata() CommonMetadata {
 	updatedBy := ""
 	annotations := o.Object.GetAnnotations()
 	if annotations != nil {
-		strUpdt, ok := annotations[AnnotationUpdateTimestamp]
-		if ok {
+		// Read the "grafana.app/" keys first and fall back to the old "grafana.com/" keys, so objects
+		// written by core and by older SDK versions both read correctly.
+		strUpdt := firstNonEmptyAnnotation(annotations, AnnoKeyUpdatedTimestamp, AnnotationUpdateTimestamp)
+		if strUpdt != "" {
 			updt, err = time.Parse(time.RFC3339, strUpdt)
 			if err != nil {
 				// HMMMM
 			}
 		}
-		createdBy = annotations[AnnotationCreatedBy]
-		updatedBy = annotations[AnnotationUpdatedBy]
+		createdBy = firstNonEmptyAnnotation(annotations, AnnoKeyCreatedBy, AnnotationCreatedBy)
+		updatedBy = firstNonEmptyAnnotation(annotations, AnnoKeyUpdatedBy, AnnotationUpdatedBy)
 	}
 	return CommonMetadata{
 		UID:               string(o.Object.GetUID()),
