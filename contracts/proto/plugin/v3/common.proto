@@ -2,7 +2,7 @@
 // The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
-package grafana.plugin.v3;
+package plugin.v3;
 
 // GroupVersion represents the API group and version of a resource.
 message GroupVersion {
@@ -55,10 +55,4 @@ message ResourceObject {
 
   // raw is the complete JSON-encoded resource.
   bytes raw = 6;
-}
-
-// StringList is a list of strings. It is used as a map value, since protobuf
-// does not allow a repeated value in a map directly.
-message StringList {
-  repeated string values = 1;
 }

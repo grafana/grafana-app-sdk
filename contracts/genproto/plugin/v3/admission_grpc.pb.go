@@ -5,7 +5,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: grafana/plugin/v3/admission.proto
+// source: plugin/v3/admission.proto
 
 package pluginv3
 
@@ -22,7 +22,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AdmissionService_AdmissionReview_FullMethodName = "/grafana.plugin.v3.AdmissionService/AdmissionReview"
+	AdmissionService_AdmissionReview_FullMethodName = "/plugin.v3.AdmissionService/AdmissionReview"
 )
 
 // AdmissionServiceClient is the client API for AdmissionService service.
@@ -119,7 +119,7 @@ func _AdmissionService_AdmissionReview_Handler(srv interface{}, ctx context.Cont
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AdmissionService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "grafana.plugin.v3.AdmissionService",
+	ServiceName: "plugin.v3.AdmissionService",
 	HandlerType: (*AdmissionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -128,5 +128,5 @@ var AdmissionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "grafana/plugin/v3/admission.proto",
+	Metadata: "plugin/v3/admission.proto",
 }

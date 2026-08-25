@@ -5,7 +5,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: grafana/plugin/v3/common.proto
+// source: plugin/v3/common.proto
 
 package pluginv3
 
@@ -36,7 +36,7 @@ type GroupVersion struct {
 
 func (x *GroupVersion) Reset() {
 	*x = GroupVersion{}
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[0]
+	mi := &file_plugin_v3_common_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +48,7 @@ func (x *GroupVersion) String() string {
 func (*GroupVersion) ProtoMessage() {}
 
 func (x *GroupVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[0]
+	mi := &file_plugin_v3_common_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -151,7 +151,7 @@ type GroupVersionKind struct {
 
 func (x *GroupVersionKind) Reset() {
 	*x = GroupVersionKind{}
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[1]
+	mi := &file_plugin_v3_common_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -163,7 +163,7 @@ func (x *GroupVersionKind) String() string {
 func (*GroupVersionKind) ProtoMessage() {}
 
 func (x *GroupVersionKind) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[1]
+	mi := &file_plugin_v3_common_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -299,7 +299,7 @@ type GroupVersionResource struct {
 
 func (x *GroupVersionResource) Reset() {
 	*x = GroupVersionResource{}
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[2]
+	mi := &file_plugin_v3_common_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +311,7 @@ func (x *GroupVersionResource) String() string {
 func (*GroupVersionResource) ProtoMessage() {}
 
 func (x *GroupVersionResource) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[2]
+	mi := &file_plugin_v3_common_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,7 +450,7 @@ type ResourceObject struct {
 
 func (x *ResourceObject) Reset() {
 	*x = ResourceObject{}
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[3]
+	mi := &file_plugin_v3_common_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -462,7 +462,7 @@ func (x *ResourceObject) String() string {
 func (*ResourceObject) ProtoMessage() {}
 
 func (x *ResourceObject) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[3]
+	mi := &file_plugin_v3_common_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -643,70 +643,11 @@ func (b0 ResourceObject_builder) Build() *ResourceObject {
 	return m0
 }
 
-// StringList is a list of strings. It is used as a map value, since protobuf
-// does not allow a repeated value in a map directly.
-type StringList struct {
-	state             protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Values []string               `protobuf:"bytes,1,rep,name=values"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
-}
+var File_plugin_v3_common_proto protoreflect.FileDescriptor
 
-func (x *StringList) Reset() {
-	*x = StringList{}
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StringList) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StringList) ProtoMessage() {}
-
-func (x *StringList) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_common_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-func (x *StringList) GetValues() []string {
-	if x != nil {
-		return x.xxx_hidden_Values
-	}
-	return nil
-}
-
-func (x *StringList) SetValues(v []string) {
-	x.xxx_hidden_Values = v
-}
-
-type StringList_builder struct {
-	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
-
-	Values []string
-}
-
-func (b0 StringList_builder) Build() *StringList {
-	m0 := &StringList{}
-	b, x := &b0, m0
-	_, _ = b, x
-	x.xxx_hidden_Values = b.Values
-	return m0
-}
-
-var File_grafana_plugin_v3_common_proto protoreflect.FileDescriptor
-
-const file_grafana_plugin_v3_common_proto_rawDesc = "" +
+const file_plugin_v3_common_proto_rawDesc = "" +
 	"\n" +
-	"\x1egrafana/plugin/v3/common.proto\x12\x11grafana.plugin.v3\">\n" +
+	"\x16plugin/v3/common.proto\x12\tplugin.v3\">\n" +
 	"\fGroupVersion\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\"V\n" +
@@ -717,28 +658,25 @@ const file_grafana_plugin_v3_common_proto_rawDesc = "" +
 	"\x14GroupVersionResource\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1a\n" +
-	"\bresource\x18\x03 \x01(\tR\bresource\"\xa1\x01\n" +
-	"\x0eResourceObject\x12;\n" +
-	"\x04type\x18\x01 \x01(\v2'.grafana.plugin.v3.GroupVersionResourceR\x04type\x12\x1c\n" +
+	"\bresource\x18\x03 \x01(\tR\bresource\"\x99\x01\n" +
+	"\x0eResourceObject\x123\n" +
+	"\x04type\x18\x01 \x01(\v2\x1f.plugin.v3.GroupVersionResourceR\x04type\x12\x1c\n" +
 	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x12\n" +
 	"\x04name\x18\x04 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02rv\x18\x05 \x01(\tR\x02rv\x12\x10\n" +
-	"\x03raw\x18\x06 \x01(\fR\x03raw\"$\n" +
-	"\n" +
-	"StringList\x12\x16\n" +
-	"\x06values\x18\x01 \x03(\tR\x06valuesB\xd9\x01\n" +
-	"\x15com.grafana.plugin.v3B\vCommonProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x03raw\x18\x06 \x01(\fR\x03rawB\xab\x01\n" +
+	"\rcom.plugin.v3B\vCommonProtoP\x01ZHgithub.com/grafana/grafana-app-sdk/contracts/genproto/plugin/v3;pluginv3\xa2\x02\x03PXX\xaa\x02\tPlugin.V3\xca\x02\tPlugin\\V3\xe2\x02\x15Plugin\\V3\\GPBMetadata\xea\x02\n" +
+	"Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_common_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
-var file_grafana_plugin_v3_common_proto_goTypes = []any{
-	(*GroupVersion)(nil),         // 0: grafana.plugin.v3.GroupVersion
-	(*GroupVersionKind)(nil),     // 1: grafana.plugin.v3.GroupVersionKind
-	(*GroupVersionResource)(nil), // 2: grafana.plugin.v3.GroupVersionResource
-	(*ResourceObject)(nil),       // 3: grafana.plugin.v3.ResourceObject
-	(*StringList)(nil),           // 4: grafana.plugin.v3.StringList
+var file_plugin_v3_common_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_plugin_v3_common_proto_goTypes = []any{
+	(*GroupVersion)(nil),         // 0: plugin.v3.GroupVersion
+	(*GroupVersionKind)(nil),     // 1: plugin.v3.GroupVersionKind
+	(*GroupVersionResource)(nil), // 2: plugin.v3.GroupVersionResource
+	(*ResourceObject)(nil),       // 3: plugin.v3.ResourceObject
 }
-var file_grafana_plugin_v3_common_proto_depIdxs = []int32{
-	2, // 0: grafana.plugin.v3.ResourceObject.type:type_name -> grafana.plugin.v3.GroupVersionResource
+var file_plugin_v3_common_proto_depIdxs = []int32{
+	2, // 0: plugin.v3.ResourceObject.type:type_name -> plugin.v3.GroupVersionResource
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -746,26 +684,26 @@ var file_grafana_plugin_v3_common_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_grafana_plugin_v3_common_proto_init() }
-func file_grafana_plugin_v3_common_proto_init() {
-	if File_grafana_plugin_v3_common_proto != nil {
+func init() { file_plugin_v3_common_proto_init() }
+func file_plugin_v3_common_proto_init() {
+	if File_plugin_v3_common_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_common_proto_rawDesc), len(file_grafana_plugin_v3_common_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_v3_common_proto_rawDesc), len(file_plugin_v3_common_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_grafana_plugin_v3_common_proto_goTypes,
-		DependencyIndexes: file_grafana_plugin_v3_common_proto_depIdxs,
-		MessageInfos:      file_grafana_plugin_v3_common_proto_msgTypes,
+		GoTypes:           file_plugin_v3_common_proto_goTypes,
+		DependencyIndexes: file_plugin_v3_common_proto_depIdxs,
+		MessageInfos:      file_plugin_v3_common_proto_msgTypes,
 	}.Build()
-	File_grafana_plugin_v3_common_proto = out.File
-	file_grafana_plugin_v3_common_proto_goTypes = nil
-	file_grafana_plugin_v3_common_proto_depIdxs = nil
+	File_plugin_v3_common_proto = out.File
+	file_plugin_v3_common_proto_goTypes = nil
+	file_plugin_v3_common_proto_depIdxs = nil
 }

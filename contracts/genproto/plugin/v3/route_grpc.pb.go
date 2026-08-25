@@ -5,7 +5,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: grafana/plugin/v3/route.proto
+// source: plugin/v3/route.proto
 
 package pluginv3
 
@@ -22,7 +22,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	RouteService_CallRoute_FullMethodName = "/grafana.plugin.v3.RouteService/CallRoute"
+	RouteService_CallRoute_FullMethodName = "/plugin.v3.RouteService/CallRoute"
 )
 
 // RouteServiceClient is the client API for RouteService service.
@@ -117,7 +117,7 @@ type RouteService_CallRouteServer = grpc.ServerStreamingServer[CallRouteResponse
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var RouteService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "grafana.plugin.v3.RouteService",
+	ServiceName: "plugin.v3.RouteService",
 	HandlerType: (*RouteServiceServer)(nil),
 	Methods:     []grpc.MethodDesc{},
 	Streams: []grpc.StreamDesc{
@@ -127,5 +127,5 @@ var RouteService_ServiceDesc = grpc.ServiceDesc{
 			ServerStreams: true,
 		},
 	},
-	Metadata: "grafana/plugin/v3/route.proto",
+	Metadata: "plugin/v3/route.proto",
 }

@@ -5,11 +5,12 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: grafana/plugin/v3/admission.proto
+// source: plugin/v3/admission.proto
 
 package pluginv3
 
 import (
+	v1 "github.com/grafana/grafana-app-sdk/contracts/genproto/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -61,11 +62,11 @@ func (x AdmissionReviewRequest_Operation) String() string {
 }
 
 func (AdmissionReviewRequest_Operation) Descriptor() protoreflect.EnumDescriptor {
-	return file_grafana_plugin_v3_admission_proto_enumTypes[0].Descriptor()
+	return file_plugin_v3_admission_proto_enumTypes[0].Descriptor()
 }
 
 func (AdmissionReviewRequest_Operation) Type() protoreflect.EnumType {
-	return &file_grafana_plugin_v3_admission_proto_enumTypes[0]
+	return &file_plugin_v3_admission_proto_enumTypes[0]
 }
 
 func (x AdmissionReviewRequest_Operation) Number() protoreflect.EnumNumber {
@@ -76,7 +77,7 @@ func (x AdmissionReviewRequest_Operation) Number() protoreflect.EnumNumber {
 // request and the decoded object(s).
 type AdmissionReviewRequest struct {
 	state                     protoimpl.MessageState           `protogen:"opaque.v1"`
-	xxx_hidden_Operation      AdmissionReviewRequest_Operation `protobuf:"varint,1,opt,name=operation,enum=grafana.plugin.v3.AdmissionReviewRequest_Operation"`
+	xxx_hidden_Operation      AdmissionReviewRequest_Operation `protobuf:"varint,1,opt,name=operation,enum=plugin.v3.AdmissionReviewRequest_Operation"`
 	xxx_hidden_Kind           *GroupVersionKind                `protobuf:"bytes,2,opt,name=kind"`
 	xxx_hidden_ObjectBytes    []byte                           `protobuf:"bytes,3,opt,name=object_bytes,json=objectBytes"`
 	xxx_hidden_OldObjectBytes []byte                           `protobuf:"bytes,4,opt,name=old_object_bytes,json=oldObjectBytes"`
@@ -88,7 +89,7 @@ type AdmissionReviewRequest struct {
 
 func (x *AdmissionReviewRequest) Reset() {
 	*x = AdmissionReviewRequest{}
-	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[0]
+	mi := &file_plugin_v3_admission_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -100,7 +101,7 @@ func (x *AdmissionReviewRequest) String() string {
 func (*AdmissionReviewRequest) ProtoMessage() {}
 
 func (x *AdmissionReviewRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[0]
+	mi := &file_plugin_v3_admission_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -251,7 +252,7 @@ func (b0 AdmissionReviewRequest_builder) Build() *AdmissionReviewRequest {
 // include its mutated representation.
 type AdmissionReviewResponse struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Error       *StatusResult          `protobuf:"bytes,1,opt,name=error"`
+	xxx_hidden_Error       *v1.StatusResult       `protobuf:"bytes,1,opt,name=error"`
 	xxx_hidden_Allowed     bool                   `protobuf:"varint,2,opt,name=allowed"`
 	xxx_hidden_Warnings    []string               `protobuf:"bytes,3,rep,name=warnings"`
 	xxx_hidden_ObjectBytes []byte                 `protobuf:"bytes,4,opt,name=object_bytes,json=objectBytes"`
@@ -263,7 +264,7 @@ type AdmissionReviewResponse struct {
 
 func (x *AdmissionReviewResponse) Reset() {
 	*x = AdmissionReviewResponse{}
-	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[1]
+	mi := &file_plugin_v3_admission_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +276,7 @@ func (x *AdmissionReviewResponse) String() string {
 func (*AdmissionReviewResponse) ProtoMessage() {}
 
 func (x *AdmissionReviewResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_admission_proto_msgTypes[1]
+	mi := &file_plugin_v3_admission_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -286,7 +287,7 @@ func (x *AdmissionReviewResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *AdmissionReviewResponse) GetError() *StatusResult {
+func (x *AdmissionReviewResponse) GetError() *v1.StatusResult {
 	if x != nil {
 		return x.xxx_hidden_Error
 	}
@@ -314,7 +315,7 @@ func (x *AdmissionReviewResponse) GetObjectBytes() []byte {
 	return nil
 }
 
-func (x *AdmissionReviewResponse) SetError(v *StatusResult) {
+func (x *AdmissionReviewResponse) SetError(v *v1.StatusResult) {
 	x.xxx_hidden_Error = v
 }
 
@@ -374,7 +375,7 @@ type AdmissionReviewResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// error describes a failure to evaluate the admission request.
-	Error *StatusResult
+	Error *v1.StatusResult
 	// allowed indicates whether or not the admission request was permitted.
 	Allowed *bool
 	// warnings is a list of warning messages to return to the requesting client.
@@ -403,45 +404,46 @@ func (b0 AdmissionReviewResponse_builder) Build() *AdmissionReviewResponse {
 	return m0
 }
 
-var File_grafana_plugin_v3_admission_proto protoreflect.FileDescriptor
+var File_plugin_v3_admission_proto protoreflect.FileDescriptor
 
-const file_grafana_plugin_v3_admission_proto_rawDesc = "" +
+const file_plugin_v3_admission_proto_rawDesc = "" +
 	"\n" +
-	"!grafana/plugin/v3/admission.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\x1a\x1egrafana/plugin/v3/status.proto\"\xdb\x02\n" +
-	"\x16AdmissionReviewRequest\x12Q\n" +
-	"\toperation\x18\x01 \x01(\x0e23.grafana.plugin.v3.AdmissionReviewRequest.OperationR\toperation\x127\n" +
-	"\x04kind\x18\x02 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x04kind\x12!\n" +
+	"\x19plugin/v3/admission.proto\x12\tplugin.v3\x1a\x16plugin/v3/common.proto\x1a\x16common/v1/status.proto\"\xcb\x02\n" +
+	"\x16AdmissionReviewRequest\x12I\n" +
+	"\toperation\x18\x01 \x01(\x0e2+.plugin.v3.AdmissionReviewRequest.OperationR\toperation\x12/\n" +
+	"\x04kind\x18\x02 \x01(\v2\x1b.plugin.v3.GroupVersionKindR\x04kind\x12!\n" +
 	"\fobject_bytes\x18\x03 \x01(\fR\vobjectBytes\x12(\n" +
 	"\x10old_object_bytes\x18\x04 \x01(\fR\x0eoldObjectBytes\"h\n" +
 	"\tOperation\x12\x19\n" +
 	"\x15OPERATION_UNSPECIFIED\x10\x00\x12\x14\n" +
 	"\x10OPERATION_CREATE\x10\x01\x12\x14\n" +
 	"\x10OPERATION_UPDATE\x10\x02\x12\x14\n" +
-	"\x10OPERATION_DELETE\x10\x03\"\xa9\x01\n" +
-	"\x17AdmissionReviewResponse\x125\n" +
-	"\x05error\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.StatusResultR\x05error\x12\x18\n" +
+	"\x10OPERATION_DELETE\x10\x03\"\xa1\x01\n" +
+	"\x17AdmissionReviewResponse\x12-\n" +
+	"\x05error\x18\x01 \x01(\v2\x17.common.v1.StatusResultR\x05error\x12\x18\n" +
 	"\aallowed\x18\x02 \x01(\bR\aallowed\x12\x1a\n" +
 	"\bwarnings\x18\x03 \x03(\tR\bwarnings\x12!\n" +
-	"\fobject_bytes\x18\x04 \x01(\fR\vobjectBytes2|\n" +
-	"\x10AdmissionService\x12h\n" +
-	"\x0fAdmissionReview\x12).grafana.plugin.v3.AdmissionReviewRequest\x1a*.grafana.plugin.v3.AdmissionReviewResponseB\xdc\x01\n" +
-	"\x15com.grafana.plugin.v3B\x0eAdmissionProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\fobject_bytes\x18\x04 \x01(\fR\vobjectBytes2l\n" +
+	"\x10AdmissionService\x12X\n" +
+	"\x0fAdmissionReview\x12!.plugin.v3.AdmissionReviewRequest\x1a\".plugin.v3.AdmissionReviewResponseB\xae\x01\n" +
+	"\rcom.plugin.v3B\x0eAdmissionProtoP\x01ZHgithub.com/grafana/grafana-app-sdk/contracts/genproto/plugin/v3;pluginv3\xa2\x02\x03PXX\xaa\x02\tPlugin.V3\xca\x02\tPlugin\\V3\xe2\x02\x15Plugin\\V3\\GPBMetadata\xea\x02\n" +
+	"Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_admission_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_grafana_plugin_v3_admission_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_grafana_plugin_v3_admission_proto_goTypes = []any{
-	(AdmissionReviewRequest_Operation)(0), // 0: grafana.plugin.v3.AdmissionReviewRequest.Operation
-	(*AdmissionReviewRequest)(nil),        // 1: grafana.plugin.v3.AdmissionReviewRequest
-	(*AdmissionReviewResponse)(nil),       // 2: grafana.plugin.v3.AdmissionReviewResponse
-	(*GroupVersionKind)(nil),              // 3: grafana.plugin.v3.GroupVersionKind
-	(*StatusResult)(nil),                  // 4: grafana.plugin.v3.StatusResult
+var file_plugin_v3_admission_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_plugin_v3_admission_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_plugin_v3_admission_proto_goTypes = []any{
+	(AdmissionReviewRequest_Operation)(0), // 0: plugin.v3.AdmissionReviewRequest.Operation
+	(*AdmissionReviewRequest)(nil),        // 1: plugin.v3.AdmissionReviewRequest
+	(*AdmissionReviewResponse)(nil),       // 2: plugin.v3.AdmissionReviewResponse
+	(*GroupVersionKind)(nil),              // 3: plugin.v3.GroupVersionKind
+	(*v1.StatusResult)(nil),               // 4: common.v1.StatusResult
 }
-var file_grafana_plugin_v3_admission_proto_depIdxs = []int32{
-	0, // 0: grafana.plugin.v3.AdmissionReviewRequest.operation:type_name -> grafana.plugin.v3.AdmissionReviewRequest.Operation
-	3, // 1: grafana.plugin.v3.AdmissionReviewRequest.kind:type_name -> grafana.plugin.v3.GroupVersionKind
-	4, // 2: grafana.plugin.v3.AdmissionReviewResponse.error:type_name -> grafana.plugin.v3.StatusResult
-	1, // 3: grafana.plugin.v3.AdmissionService.AdmissionReview:input_type -> grafana.plugin.v3.AdmissionReviewRequest
-	2, // 4: grafana.plugin.v3.AdmissionService.AdmissionReview:output_type -> grafana.plugin.v3.AdmissionReviewResponse
+var file_plugin_v3_admission_proto_depIdxs = []int32{
+	0, // 0: plugin.v3.AdmissionReviewRequest.operation:type_name -> plugin.v3.AdmissionReviewRequest.Operation
+	3, // 1: plugin.v3.AdmissionReviewRequest.kind:type_name -> plugin.v3.GroupVersionKind
+	4, // 2: plugin.v3.AdmissionReviewResponse.error:type_name -> common.v1.StatusResult
+	1, // 3: plugin.v3.AdmissionService.AdmissionReview:input_type -> plugin.v3.AdmissionReviewRequest
+	2, // 4: plugin.v3.AdmissionService.AdmissionReview:output_type -> plugin.v3.AdmissionReviewResponse
 	4, // [4:5] is the sub-list for method output_type
 	3, // [3:4] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
@@ -449,29 +451,28 @@ var file_grafana_plugin_v3_admission_proto_depIdxs = []int32{
 	0, // [0:3] is the sub-list for field type_name
 }
 
-func init() { file_grafana_plugin_v3_admission_proto_init() }
-func file_grafana_plugin_v3_admission_proto_init() {
-	if File_grafana_plugin_v3_admission_proto != nil {
+func init() { file_plugin_v3_admission_proto_init() }
+func file_plugin_v3_admission_proto_init() {
+	if File_plugin_v3_admission_proto != nil {
 		return
 	}
-	file_grafana_plugin_v3_common_proto_init()
-	file_grafana_plugin_v3_status_proto_init()
+	file_plugin_v3_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_admission_proto_rawDesc), len(file_grafana_plugin_v3_admission_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_v3_admission_proto_rawDesc), len(file_plugin_v3_admission_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_grafana_plugin_v3_admission_proto_goTypes,
-		DependencyIndexes: file_grafana_plugin_v3_admission_proto_depIdxs,
-		EnumInfos:         file_grafana_plugin_v3_admission_proto_enumTypes,
-		MessageInfos:      file_grafana_plugin_v3_admission_proto_msgTypes,
+		GoTypes:           file_plugin_v3_admission_proto_goTypes,
+		DependencyIndexes: file_plugin_v3_admission_proto_depIdxs,
+		EnumInfos:         file_plugin_v3_admission_proto_enumTypes,
+		MessageInfos:      file_plugin_v3_admission_proto_msgTypes,
 	}.Build()
-	File_grafana_plugin_v3_admission_proto = out.File
-	file_grafana_plugin_v3_admission_proto_goTypes = nil
-	file_grafana_plugin_v3_admission_proto_depIdxs = nil
+	File_plugin_v3_admission_proto = out.File
+	file_plugin_v3_admission_proto_goTypes = nil
+	file_plugin_v3_admission_proto_depIdxs = nil
 }

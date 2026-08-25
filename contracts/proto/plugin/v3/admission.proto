@@ -2,10 +2,10 @@
 // The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
-package grafana.plugin.v3;
+package plugin.v3;
 
-import "grafana/plugin/v3/common.proto";
-import "grafana/plugin/v3/status.proto";
+import "plugin/v3/common.proto";
+import "plugin/v3/status.proto";
 
 // AdmissionService is based on the Kubernetes admission webhook pattern.
 // It can be used to verify that objects are valid and to mutate them.

@@ -2,10 +2,10 @@
 // The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
-package grafana.plugin.v3;
+package plugin.v3;
 
-import "grafana/plugin/v3/common.proto";
-import "grafana/plugin/v3/status.proto";
+import "plugin/v3/common.proto";
+import "plugin/v3/status.proto";
 
 // ConversionService can be used to convert resources between versions.
 // See: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-request-and-response

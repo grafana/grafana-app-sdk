@@ -5,11 +5,12 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: grafana/plugin/v3/conversion.proto
+// source: plugin/v3/conversion.proto
 
 package pluginv3
 
 import (
+	v1 "github.com/grafana/grafana-app-sdk/contracts/genproto/common/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -37,7 +38,7 @@ type RawObject struct {
 
 func (x *RawObject) Reset() {
 	*x = RawObject{}
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[0]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -49,7 +50,7 @@ func (x *RawObject) String() string {
 func (*RawObject) ProtoMessage() {}
 
 func (x *RawObject) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[0]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -160,7 +161,7 @@ type ConvertObjectsRequest struct {
 
 func (x *ConvertObjectsRequest) Reset() {
 	*x = ConvertObjectsRequest{}
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[1]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -172,7 +173,7 @@ func (x *ConvertObjectsRequest) String() string {
 func (*ConvertObjectsRequest) ProtoMessage() {}
 
 func (x *ConvertObjectsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[1]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -308,7 +309,7 @@ func (b0 ConvertObjectsRequest_builder) Build() *ConvertObjectsRequest {
 // ConvertObjectsResponse contains the converted objects.
 type ConvertObjectsResponse struct {
 	state                  protoimpl.MessageState            `protogen:"opaque.v1"`
-	xxx_hidden_Error       *StatusResult                     `protobuf:"bytes,1,opt,name=error"`
+	xxx_hidden_Error       *v1.StatusResult                  `protobuf:"bytes,1,opt,name=error"`
 	xxx_hidden_Uid         *string                           `protobuf:"bytes,2,opt,name=uid"`
 	xxx_hidden_Converted   *[]*ConvertObjectsResponse_Object `protobuf:"bytes,3,rep,name=converted"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
@@ -319,7 +320,7 @@ type ConvertObjectsResponse struct {
 
 func (x *ConvertObjectsResponse) Reset() {
 	*x = ConvertObjectsResponse{}
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[2]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -331,7 +332,7 @@ func (x *ConvertObjectsResponse) String() string {
 func (*ConvertObjectsResponse) ProtoMessage() {}
 
 func (x *ConvertObjectsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[2]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -342,7 +343,7 @@ func (x *ConvertObjectsResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-func (x *ConvertObjectsResponse) GetError() *StatusResult {
+func (x *ConvertObjectsResponse) GetError() *v1.StatusResult {
 	if x != nil {
 		return x.xxx_hidden_Error
 	}
@@ -368,7 +369,7 @@ func (x *ConvertObjectsResponse) GetConverted() []*ConvertObjectsResponse_Object
 	return nil
 }
 
-func (x *ConvertObjectsResponse) SetError(v *StatusResult) {
+func (x *ConvertObjectsResponse) SetError(v *v1.StatusResult) {
 	x.xxx_hidden_Error = v
 }
 
@@ -408,7 +409,7 @@ type ConvertObjectsResponse_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	// error describes a failure to convert the requested objects.
-	Error *StatusResult
+	Error *v1.StatusResult
 	// uid is an identifier for the individual request/response. This should be
 	// copied over from the corresponding request.uid.
 	Uid *string
@@ -442,7 +443,7 @@ type ConvertObjectsRequest_Object struct {
 
 func (x *ConvertObjectsRequest_Object) Reset() {
 	*x = ConvertObjectsRequest_Object{}
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[3]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -454,7 +455,7 @@ func (x *ConvertObjectsRequest_Object) String() string {
 func (*ConvertObjectsRequest_Object) ProtoMessage() {}
 
 func (x *ConvertObjectsRequest_Object) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[3]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -548,7 +549,7 @@ type ConvertObjectsResponse_Object struct {
 
 func (x *ConvertObjectsResponse_Object) Reset() {
 	*x = ConvertObjectsResponse_Object{}
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[4]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -560,7 +561,7 @@ func (x *ConvertObjectsResponse_Object) String() string {
 func (*ConvertObjectsResponse_Object) ProtoMessage() {}
 
 func (x *ConvertObjectsResponse_Object) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_conversion_proto_msgTypes[4]
+	mi := &file_plugin_v3_conversion_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -630,54 +631,55 @@ func (b0 ConvertObjectsResponse_Object_builder) Build() *ConvertObjectsResponse_
 	return m0
 }
 
-var File_grafana_plugin_v3_conversion_proto protoreflect.FileDescriptor
+var File_plugin_v3_conversion_proto protoreflect.FileDescriptor
 
-const file_grafana_plugin_v3_conversion_proto_rawDesc = "" +
+const file_plugin_v3_conversion_proto_rawDesc = "" +
 	"\n" +
-	"\"grafana/plugin/v3/conversion.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\x1a\x1egrafana/plugin/v3/status.proto\"p\n" +
-	"\tRawObject\x125\n" +
-	"\x03gvk\x18\x01 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x03gvk\x12\x10\n" +
+	"\x1aplugin/v3/conversion.proto\x12\tplugin.v3\x1a\x16plugin/v3/common.proto\x1a\x16common/v1/status.proto\"h\n" +
+	"\tRawObject\x12-\n" +
+	"\x03gvk\x18\x01 \x01(\v2\x1b.plugin.v3.GroupVersionKindR\x03gvk\x12\x10\n" +
 	"\x03raw\x18\x02 \x01(\fR\x03raw\x12\x1a\n" +
-	"\bwarnings\x18\x03 \x03(\tR\bwarnings\"\xa1\x02\n" +
-	"\x15ConvertObjectsRequest\x121\n" +
-	"\x03api\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.GroupVersionR\x03api\x12\x10\n" +
-	"\x03uid\x18\x02 \x01(\tR\x03uid\x12I\n" +
-	"\aobjects\x18\x03 \x03(\v2/.grafana.plugin.v3.ConvertObjectsRequest.ObjectR\aobjects\x12%\n" +
-	"\x0etarget_version\x18\x04 \x01(\tR\rtargetVersion\x1aQ\n" +
-	"\x06Object\x125\n" +
-	"\x03gvk\x18\x01 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x03gvk\x12\x10\n" +
-	"\x03raw\x18\x02 \x01(\fR\x03raw\"\xe9\x01\n" +
-	"\x16ConvertObjectsResponse\x125\n" +
-	"\x05error\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.StatusResultR\x05error\x12\x10\n" +
-	"\x03uid\x18\x02 \x01(\tR\x03uid\x12N\n" +
-	"\tconverted\x18\x03 \x03(\v20.grafana.plugin.v3.ConvertObjectsResponse.ObjectR\tconverted\x1a6\n" +
+	"\bwarnings\x18\x03 \x03(\tR\bwarnings\"\x89\x02\n" +
+	"\x15ConvertObjectsRequest\x12)\n" +
+	"\x03api\x18\x01 \x01(\v2\x17.plugin.v3.GroupVersionR\x03api\x12\x10\n" +
+	"\x03uid\x18\x02 \x01(\tR\x03uid\x12A\n" +
+	"\aobjects\x18\x03 \x03(\v2'.plugin.v3.ConvertObjectsRequest.ObjectR\aobjects\x12%\n" +
+	"\x0etarget_version\x18\x04 \x01(\tR\rtargetVersion\x1aI\n" +
+	"\x06Object\x12-\n" +
+	"\x03gvk\x18\x01 \x01(\v2\x1b.plugin.v3.GroupVersionKindR\x03gvk\x12\x10\n" +
+	"\x03raw\x18\x02 \x01(\fR\x03raw\"\xd9\x01\n" +
+	"\x16ConvertObjectsResponse\x12-\n" +
+	"\x05error\x18\x01 \x01(\v2\x17.common.v1.StatusResultR\x05error\x12\x10\n" +
+	"\x03uid\x18\x02 \x01(\tR\x03uid\x12F\n" +
+	"\tconverted\x18\x03 \x03(\v2(.plugin.v3.ConvertObjectsResponse.ObjectR\tconverted\x1a6\n" +
 	"\x06Object\x12\x10\n" +
 	"\x03raw\x18\x01 \x01(\fR\x03raw\x12\x1a\n" +
-	"\bwarnings\x18\x02 \x03(\tR\bwarnings2z\n" +
-	"\x11ConversionService\x12e\n" +
-	"\x0eConvertObjects\x12(.grafana.plugin.v3.ConvertObjectsRequest\x1a).grafana.plugin.v3.ConvertObjectsResponseB\xdd\x01\n" +
-	"\x15com.grafana.plugin.v3B\x0fConversionProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\bwarnings\x18\x02 \x03(\tR\bwarnings2j\n" +
+	"\x11ConversionService\x12U\n" +
+	"\x0eConvertObjects\x12 .plugin.v3.ConvertObjectsRequest\x1a!.plugin.v3.ConvertObjectsResponseB\xaf\x01\n" +
+	"\rcom.plugin.v3B\x0fConversionProtoP\x01ZHgithub.com/grafana/grafana-app-sdk/contracts/genproto/plugin/v3;pluginv3\xa2\x02\x03PXX\xaa\x02\tPlugin.V3\xca\x02\tPlugin\\V3\xe2\x02\x15Plugin\\V3\\GPBMetadata\xea\x02\n" +
+	"Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_conversion_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
-var file_grafana_plugin_v3_conversion_proto_goTypes = []any{
-	(*RawObject)(nil),                     // 0: grafana.plugin.v3.RawObject
-	(*ConvertObjectsRequest)(nil),         // 1: grafana.plugin.v3.ConvertObjectsRequest
-	(*ConvertObjectsResponse)(nil),        // 2: grafana.plugin.v3.ConvertObjectsResponse
-	(*ConvertObjectsRequest_Object)(nil),  // 3: grafana.plugin.v3.ConvertObjectsRequest.Object
-	(*ConvertObjectsResponse_Object)(nil), // 4: grafana.plugin.v3.ConvertObjectsResponse.Object
-	(*GroupVersionKind)(nil),              // 5: grafana.plugin.v3.GroupVersionKind
-	(*GroupVersion)(nil),                  // 6: grafana.plugin.v3.GroupVersion
-	(*StatusResult)(nil),                  // 7: grafana.plugin.v3.StatusResult
+var file_plugin_v3_conversion_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_plugin_v3_conversion_proto_goTypes = []any{
+	(*RawObject)(nil),                     // 0: plugin.v3.RawObject
+	(*ConvertObjectsRequest)(nil),         // 1: plugin.v3.ConvertObjectsRequest
+	(*ConvertObjectsResponse)(nil),        // 2: plugin.v3.ConvertObjectsResponse
+	(*ConvertObjectsRequest_Object)(nil),  // 3: plugin.v3.ConvertObjectsRequest.Object
+	(*ConvertObjectsResponse_Object)(nil), // 4: plugin.v3.ConvertObjectsResponse.Object
+	(*GroupVersionKind)(nil),              // 5: plugin.v3.GroupVersionKind
+	(*GroupVersion)(nil),                  // 6: plugin.v3.GroupVersion
+	(*v1.StatusResult)(nil),               // 7: common.v1.StatusResult
 }
-var file_grafana_plugin_v3_conversion_proto_depIdxs = []int32{
-	5, // 0: grafana.plugin.v3.RawObject.gvk:type_name -> grafana.plugin.v3.GroupVersionKind
-	6, // 1: grafana.plugin.v3.ConvertObjectsRequest.api:type_name -> grafana.plugin.v3.GroupVersion
-	3, // 2: grafana.plugin.v3.ConvertObjectsRequest.objects:type_name -> grafana.plugin.v3.ConvertObjectsRequest.Object
-	7, // 3: grafana.plugin.v3.ConvertObjectsResponse.error:type_name -> grafana.plugin.v3.StatusResult
-	4, // 4: grafana.plugin.v3.ConvertObjectsResponse.converted:type_name -> grafana.plugin.v3.ConvertObjectsResponse.Object
-	5, // 5: grafana.plugin.v3.ConvertObjectsRequest.Object.gvk:type_name -> grafana.plugin.v3.GroupVersionKind
-	1, // 6: grafana.plugin.v3.ConversionService.ConvertObjects:input_type -> grafana.plugin.v3.ConvertObjectsRequest
-	2, // 7: grafana.plugin.v3.ConversionService.ConvertObjects:output_type -> grafana.plugin.v3.ConvertObjectsResponse
+var file_plugin_v3_conversion_proto_depIdxs = []int32{
+	5, // 0: plugin.v3.RawObject.gvk:type_name -> plugin.v3.GroupVersionKind
+	6, // 1: plugin.v3.ConvertObjectsRequest.api:type_name -> plugin.v3.GroupVersion
+	3, // 2: plugin.v3.ConvertObjectsRequest.objects:type_name -> plugin.v3.ConvertObjectsRequest.Object
+	7, // 3: plugin.v3.ConvertObjectsResponse.error:type_name -> common.v1.StatusResult
+	4, // 4: plugin.v3.ConvertObjectsResponse.converted:type_name -> plugin.v3.ConvertObjectsResponse.Object
+	5, // 5: plugin.v3.ConvertObjectsRequest.Object.gvk:type_name -> plugin.v3.GroupVersionKind
+	1, // 6: plugin.v3.ConversionService.ConvertObjects:input_type -> plugin.v3.ConvertObjectsRequest
+	2, // 7: plugin.v3.ConversionService.ConvertObjects:output_type -> plugin.v3.ConvertObjectsResponse
 	7, // [7:8] is the sub-list for method output_type
 	6, // [6:7] is the sub-list for method input_type
 	6, // [6:6] is the sub-list for extension type_name
@@ -685,28 +687,27 @@ var file_grafana_plugin_v3_conversion_proto_depIdxs = []int32{
 	0, // [0:6] is the sub-list for field type_name
 }
 
-func init() { file_grafana_plugin_v3_conversion_proto_init() }
-func file_grafana_plugin_v3_conversion_proto_init() {
-	if File_grafana_plugin_v3_conversion_proto != nil {
+func init() { file_plugin_v3_conversion_proto_init() }
+func file_plugin_v3_conversion_proto_init() {
+	if File_plugin_v3_conversion_proto != nil {
 		return
 	}
-	file_grafana_plugin_v3_common_proto_init()
-	file_grafana_plugin_v3_status_proto_init()
+	file_plugin_v3_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_conversion_proto_rawDesc), len(file_grafana_plugin_v3_conversion_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_v3_conversion_proto_rawDesc), len(file_plugin_v3_conversion_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_grafana_plugin_v3_conversion_proto_goTypes,
-		DependencyIndexes: file_grafana_plugin_v3_conversion_proto_depIdxs,
-		MessageInfos:      file_grafana_plugin_v3_conversion_proto_msgTypes,
+		GoTypes:           file_plugin_v3_conversion_proto_goTypes,
+		DependencyIndexes: file_plugin_v3_conversion_proto_depIdxs,
+		MessageInfos:      file_plugin_v3_conversion_proto_msgTypes,
 	}.Build()
-	File_grafana_plugin_v3_conversion_proto = out.File
-	file_grafana_plugin_v3_conversion_proto_goTypes = nil
-	file_grafana_plugin_v3_conversion_proto_depIdxs = nil
+	File_plugin_v3_conversion_proto = out.File
+	file_plugin_v3_conversion_proto_goTypes = nil
+	file_plugin_v3_conversion_proto_depIdxs = nil
 }

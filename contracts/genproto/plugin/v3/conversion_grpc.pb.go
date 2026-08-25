@@ -5,7 +5,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: grafana/plugin/v3/conversion.proto
+// source: plugin/v3/conversion.proto
 
 package pluginv3
 
@@ -22,7 +22,7 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ConversionService_ConvertObjects_FullMethodName = "/grafana.plugin.v3.ConversionService/ConvertObjects"
+	ConversionService_ConvertObjects_FullMethodName = "/plugin.v3.ConversionService/ConvertObjects"
 )
 
 // ConversionServiceClient is the client API for ConversionService service.
@@ -117,7 +117,7 @@ func _ConversionService_ConvertObjects_Handler(srv interface{}, ctx context.Cont
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var ConversionService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "grafana.plugin.v3.ConversionService",
+	ServiceName: "plugin.v3.ConversionService",
 	HandlerType: (*ConversionServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -126,5 +126,5 @@ var ConversionService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "grafana/plugin/v3/conversion.proto",
+	Metadata: "plugin/v3/conversion.proto",
 }

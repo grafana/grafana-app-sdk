@@ -5,9 +5,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: grafana/plugin/v3/status.proto
+// source: common/v1/status.proto
 
-package pluginv3
+package commonv1
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -41,7 +41,7 @@ type StatusResult struct {
 
 func (x *StatusResult) Reset() {
 	*x = StatusResult{}
-	mi := &file_grafana_plugin_v3_status_proto_msgTypes[0]
+	mi := &file_common_v1_status_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -53,7 +53,7 @@ func (x *StatusResult) String() string {
 func (*StatusResult) ProtoMessage() {}
 
 func (x *StatusResult) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_status_proto_msgTypes[0]
+	mi := &file_common_v1_status_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -265,7 +265,7 @@ type StatusDetails struct {
 
 func (x *StatusDetails) Reset() {
 	*x = StatusDetails{}
-	mi := &file_grafana_plugin_v3_status_proto_msgTypes[1]
+	mi := &file_common_v1_status_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +277,7 @@ func (x *StatusDetails) String() string {
 func (*StatusDetails) ProtoMessage() {}
 
 func (x *StatusDetails) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_status_proto_msgTypes[1]
+	mi := &file_common_v1_status_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -508,7 +508,7 @@ type StatusCause struct {
 
 func (x *StatusCause) Reset() {
 	*x = StatusCause{}
-	mi := &file_grafana_plugin_v3_status_proto_msgTypes[2]
+	mi := &file_common_v1_status_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -520,7 +520,7 @@ func (x *StatusCause) String() string {
 func (*StatusCause) ProtoMessage() {}
 
 func (x *StatusCause) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_status_proto_msgTypes[2]
+	mi := &file_common_v1_status_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -657,39 +657,40 @@ func (b0 StatusCause_builder) Build() *StatusCause {
 	return m0
 }
 
-var File_grafana_plugin_v3_status_proto protoreflect.FileDescriptor
+var File_common_v1_status_proto protoreflect.FileDescriptor
 
-const file_grafana_plugin_v3_status_proto_rawDesc = "" +
+const file_common_v1_status_proto_rawDesc = "" +
 	"\n" +
-	"\x1egrafana/plugin/v3/status.proto\x12\x11grafana.plugin.v3\"\xa8\x01\n" +
+	"\x16common/v1/status.proto\x12\tcommon.v1\"\xa0\x01\n" +
 	"\fStatusResult\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\x12:\n" +
-	"\adetails\x18\x05 \x01(\v2 .grafana.plugin.v3.StatusDetailsR\adetails\x12\x12\n" +
-	"\x04code\x18\x06 \x01(\x05R\x04code\"\xc7\x01\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\x122\n" +
+	"\adetails\x18\x05 \x01(\v2\x18.common.v1.StatusDetailsR\adetails\x12\x12\n" +
+	"\x04code\x18\x06 \x01(\x05R\x04code\"\xbf\x01\n" +
 	"\rStatusDetails\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
 	"\x05group\x18\x02 \x01(\tR\x05group\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\tR\x04kind\x12\x10\n" +
-	"\x03uid\x18\x06 \x01(\tR\x03uid\x126\n" +
-	"\x06causes\x18\x04 \x03(\v2\x1e.grafana.plugin.v3.StatusCauseR\x06causes\x12.\n" +
+	"\x03uid\x18\x06 \x01(\tR\x03uid\x12.\n" +
+	"\x06causes\x18\x04 \x03(\v2\x16.common.v1.StatusCauseR\x06causes\x12.\n" +
 	"\x13retry_after_seconds\x18\x05 \x01(\x05R\x11retryAfterSeconds\"U\n" +
 	"\vStatusCause\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x14\n" +
-	"\x05field\x18\x03 \x01(\tR\x05fieldB\xd9\x01\n" +
-	"\x15com.grafana.plugin.v3B\vStatusProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x05field\x18\x03 \x01(\tR\x05fieldB\xab\x01\n" +
+	"\rcom.common.v1B\vStatusProtoP\x01ZHgithub.com/grafana/grafana-app-sdk/contracts/genproto/common/v1;commonv1\xa2\x02\x03CXX\xaa\x02\tCommon.V1\xca\x02\tCommon\\V1\xe2\x02\x15Common\\V1\\GPBMetadata\xea\x02\n" +
+	"Common::V1b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_status_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_grafana_plugin_v3_status_proto_goTypes = []any{
-	(*StatusResult)(nil),  // 0: grafana.plugin.v3.StatusResult
-	(*StatusDetails)(nil), // 1: grafana.plugin.v3.StatusDetails
-	(*StatusCause)(nil),   // 2: grafana.plugin.v3.StatusCause
+var file_common_v1_status_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_common_v1_status_proto_goTypes = []any{
+	(*StatusResult)(nil),  // 0: common.v1.StatusResult
+	(*StatusDetails)(nil), // 1: common.v1.StatusDetails
+	(*StatusCause)(nil),   // 2: common.v1.StatusCause
 }
-var file_grafana_plugin_v3_status_proto_depIdxs = []int32{
-	1, // 0: grafana.plugin.v3.StatusResult.details:type_name -> grafana.plugin.v3.StatusDetails
-	2, // 1: grafana.plugin.v3.StatusDetails.causes:type_name -> grafana.plugin.v3.StatusCause
+var file_common_v1_status_proto_depIdxs = []int32{
+	1, // 0: common.v1.StatusResult.details:type_name -> common.v1.StatusDetails
+	2, // 1: common.v1.StatusDetails.causes:type_name -> common.v1.StatusCause
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name
@@ -697,26 +698,26 @@ var file_grafana_plugin_v3_status_proto_depIdxs = []int32{
 	0, // [0:2] is the sub-list for field type_name
 }
 
-func init() { file_grafana_plugin_v3_status_proto_init() }
-func file_grafana_plugin_v3_status_proto_init() {
-	if File_grafana_plugin_v3_status_proto != nil {
+func init() { file_common_v1_status_proto_init() }
+func file_common_v1_status_proto_init() {
+	if File_common_v1_status_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_status_proto_rawDesc), len(file_grafana_plugin_v3_status_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_common_v1_status_proto_rawDesc), len(file_common_v1_status_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_grafana_plugin_v3_status_proto_goTypes,
-		DependencyIndexes: file_grafana_plugin_v3_status_proto_depIdxs,
-		MessageInfos:      file_grafana_plugin_v3_status_proto_msgTypes,
+		GoTypes:           file_common_v1_status_proto_goTypes,
+		DependencyIndexes: file_common_v1_status_proto_depIdxs,
+		MessageInfos:      file_common_v1_status_proto_msgTypes,
 	}.Build()
-	File_grafana_plugin_v3_status_proto = out.File
-	file_grafana_plugin_v3_status_proto_goTypes = nil
-	file_grafana_plugin_v3_status_proto_depIdxs = nil
+	File_common_v1_status_proto = out.File
+	file_common_v1_status_proto_goTypes = nil
+	file_common_v1_status_proto_depIdxs = nil
 }

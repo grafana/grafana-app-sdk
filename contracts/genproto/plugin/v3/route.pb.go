@@ -5,7 +5,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: grafana/plugin/v3/route.proto
+// source: plugin/v3/route.proto
 
 package pluginv3
 
@@ -38,7 +38,7 @@ type RouteResource struct {
 
 func (x *RouteResource) Reset() {
 	*x = RouteResource{}
-	mi := &file_grafana_plugin_v3_route_proto_msgTypes[0]
+	mi := &file_plugin_v3_route_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -50,7 +50,7 @@ func (x *RouteResource) String() string {
 func (*RouteResource) ProtoMessage() {}
 
 func (x *RouteResource) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_route_proto_msgTypes[0]
+	mi := &file_plugin_v3_route_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -205,18 +205,75 @@ func (b0 RouteResource_builder) Build() *RouteResource {
 	return m0
 }
 
+type HeaderValues struct {
+	state             protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Values []string               `protobuf:"bytes,1,rep,name=values"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *HeaderValues) Reset() {
+	*x = HeaderValues{}
+	mi := &file_plugin_v3_route_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HeaderValues) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HeaderValues) ProtoMessage() {}
+
+func (x *HeaderValues) ProtoReflect() protoreflect.Message {
+	mi := &file_plugin_v3_route_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+func (x *HeaderValues) GetValues() []string {
+	if x != nil {
+		return x.xxx_hidden_Values
+	}
+	return nil
+}
+
+func (x *HeaderValues) SetValues(v []string) {
+	x.xxx_hidden_Values = v
+}
+
+type HeaderValues_builder struct {
+	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
+
+	Values []string
+}
+
+func (b0 HeaderValues_builder) Build() *HeaderValues {
+	m0 := &HeaderValues{}
+	b, x := &b0, m0
+	_, _ = b, x
+	x.xxx_hidden_Values = b.Values
+	return m0
+}
+
 // CallRouteRequest is the request for RouteService.CallRoute.
 type CallRouteRequest struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Group       *string                `protobuf:"bytes,1,opt,name=group"`
-	xxx_hidden_Version     *string                `protobuf:"bytes,2,opt,name=version"`
-	xxx_hidden_Namespace   *string                `protobuf:"bytes,3,opt,name=namespace"`
-	xxx_hidden_Parent      *RouteResource         `protobuf:"bytes,4,opt,name=parent"`
-	xxx_hidden_Path        *string                `protobuf:"bytes,5,opt,name=path"`
-	xxx_hidden_Method      *string                `protobuf:"bytes,6,opt,name=method"`
-	xxx_hidden_Url         *string                `protobuf:"bytes,7,opt,name=url"`
-	xxx_hidden_Headers     map[string]*StringList `protobuf:"bytes,8,rep,name=headers" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	xxx_hidden_Body        []byte                 `protobuf:"bytes,9,opt,name=body"`
+	state                  protoimpl.MessageState   `protogen:"opaque.v1"`
+	xxx_hidden_Group       *string                  `protobuf:"bytes,1,opt,name=group"`
+	xxx_hidden_Version     *string                  `protobuf:"bytes,2,opt,name=version"`
+	xxx_hidden_Namespace   *string                  `protobuf:"bytes,3,opt,name=namespace"`
+	xxx_hidden_Parent      *RouteResource           `protobuf:"bytes,4,opt,name=parent"`
+	xxx_hidden_Path        *string                  `protobuf:"bytes,5,opt,name=path"`
+	xxx_hidden_Method      *string                  `protobuf:"bytes,6,opt,name=method"`
+	xxx_hidden_Url         *string                  `protobuf:"bytes,7,opt,name=url"`
+	xxx_hidden_Headers     map[string]*HeaderValues `protobuf:"bytes,8,rep,name=headers" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_Body        []byte                   `protobuf:"bytes,9,opt,name=body"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -225,7 +282,7 @@ type CallRouteRequest struct {
 
 func (x *CallRouteRequest) Reset() {
 	*x = CallRouteRequest{}
-	mi := &file_grafana_plugin_v3_route_proto_msgTypes[1]
+	mi := &file_plugin_v3_route_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -237,7 +294,7 @@ func (x *CallRouteRequest) String() string {
 func (*CallRouteRequest) ProtoMessage() {}
 
 func (x *CallRouteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_route_proto_msgTypes[1]
+	mi := &file_plugin_v3_route_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -315,7 +372,7 @@ func (x *CallRouteRequest) GetUrl() string {
 	return ""
 }
 
-func (x *CallRouteRequest) GetHeaders() map[string]*StringList {
+func (x *CallRouteRequest) GetHeaders() map[string]*HeaderValues {
 	if x != nil {
 		return x.xxx_hidden_Headers
 	}
@@ -363,7 +420,7 @@ func (x *CallRouteRequest) SetUrl(v string) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 9)
 }
 
-func (x *CallRouteRequest) SetHeaders(v map[string]*StringList) {
+func (x *CallRouteRequest) SetHeaders(v map[string]*HeaderValues) {
 	x.xxx_hidden_Headers = v
 }
 
@@ -490,7 +547,7 @@ type CallRouteRequest_builder struct {
 	Url *string
 	// headers are the raw HTTP request headers. The HTTP Host is not included
 	// because Go represents it separately from the header map.
-	Headers map[string]*StringList
+	Headers map[string]*HeaderValues
 	// body is the raw HTTP request body.
 	Body []byte
 }
@@ -535,10 +592,10 @@ func (b0 CallRouteRequest_builder) Build() *CallRouteRequest {
 // CallRouteResponse is a streamed chunk of the response for RouteService.CallRoute.
 // The code and headers will only be used for the first stream chunk.
 type CallRouteResponse struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Code        int32                  `protobuf:"varint,1,opt,name=code"`
-	xxx_hidden_Headers     map[string]*StringList `protobuf:"bytes,2,rep,name=headers" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	xxx_hidden_Body        []byte                 `protobuf:"bytes,3,opt,name=body"`
+	state                  protoimpl.MessageState   `protogen:"opaque.v1"`
+	xxx_hidden_Code        int32                    `protobuf:"varint,1,opt,name=code"`
+	xxx_hidden_Headers     map[string]*HeaderValues `protobuf:"bytes,2,rep,name=headers" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	xxx_hidden_Body        []byte                   `protobuf:"bytes,3,opt,name=body"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -547,7 +604,7 @@ type CallRouteResponse struct {
 
 func (x *CallRouteResponse) Reset() {
 	*x = CallRouteResponse{}
-	mi := &file_grafana_plugin_v3_route_proto_msgTypes[2]
+	mi := &file_plugin_v3_route_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -559,7 +616,7 @@ func (x *CallRouteResponse) String() string {
 func (*CallRouteResponse) ProtoMessage() {}
 
 func (x *CallRouteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_grafana_plugin_v3_route_proto_msgTypes[2]
+	mi := &file_plugin_v3_route_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -577,7 +634,7 @@ func (x *CallRouteResponse) GetCode() int32 {
 	return 0
 }
 
-func (x *CallRouteResponse) GetHeaders() map[string]*StringList {
+func (x *CallRouteResponse) GetHeaders() map[string]*HeaderValues {
 	if x != nil {
 		return x.xxx_hidden_Headers
 	}
@@ -596,7 +653,7 @@ func (x *CallRouteResponse) SetCode(v int32) {
 	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 3)
 }
 
-func (x *CallRouteResponse) SetHeaders(v map[string]*StringList) {
+func (x *CallRouteResponse) SetHeaders(v map[string]*HeaderValues) {
 	x.xxx_hidden_Headers = v
 }
 
@@ -640,7 +697,7 @@ type CallRouteResponse_builder struct {
 	Code *int32
 	// headers are the raw HTTP headers sent to the client.
 	// This is only respected in the first response payload.
-	Headers map[string]*StringList
+	Headers map[string]*HeaderValues
 	// body contains the raw HTTP body bytes sent to the client.
 	Body []byte
 }
@@ -661,58 +718,61 @@ func (b0 CallRouteResponse_builder) Build() *CallRouteResponse {
 	return m0
 }
 
-var File_grafana_plugin_v3_route_proto protoreflect.FileDescriptor
+var File_plugin_v3_route_proto protoreflect.FileDescriptor
 
-const file_grafana_plugin_v3_route_proto_rawDesc = "" +
+const file_plugin_v3_route_proto_rawDesc = "" +
 	"\n" +
-	"\x1dgrafana/plugin/v3/route.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"a\n" +
+	"\x15plugin/v3/route.proto\x12\tplugin.v3\"a\n" +
 	"\rRouteResource\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02rv\x18\x03 \x01(\tR\x02rv\x12\x10\n" +
-	"\x03raw\x18\x04 \x01(\fR\x03raw\"\x93\x03\n" +
+	"\x03raw\x18\x04 \x01(\fR\x03raw\"&\n" +
+	"\fHeaderValues\x12\x16\n" +
+	"\x06values\x18\x01 \x03(\tR\x06values\"\xfd\x02\n" +
 	"\x10CallRouteRequest\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1c\n" +
-	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x128\n" +
-	"\x06parent\x18\x04 \x01(\v2 .grafana.plugin.v3.RouteResourceR\x06parent\x12\x12\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x120\n" +
+	"\x06parent\x18\x04 \x01(\v2\x18.plugin.v3.RouteResourceR\x06parent\x12\x12\n" +
 	"\x04path\x18\x05 \x01(\tR\x04path\x12\x16\n" +
 	"\x06method\x18\x06 \x01(\tR\x06method\x12\x10\n" +
-	"\x03url\x18\a \x01(\tR\x03url\x12J\n" +
-	"\aheaders\x18\b \x03(\v20.grafana.plugin.v3.CallRouteRequest.HeadersEntryR\aheaders\x12\x12\n" +
-	"\x04body\x18\t \x01(\fR\x04body\x1aY\n" +
+	"\x03url\x18\a \x01(\tR\x03url\x12B\n" +
+	"\aheaders\x18\b \x03(\v2(.plugin.v3.CallRouteRequest.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\t \x01(\fR\x04body\x1aS\n" +
 	"\fHeadersEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
-	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x01\"\xe3\x01\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12-\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.plugin.v3.HeaderValuesR\x05value:\x028\x01\"\xd5\x01\n" +
 	"\x11CallRouteResponse\x12\x12\n" +
-	"\x04code\x18\x01 \x01(\x05R\x04code\x12K\n" +
-	"\aheaders\x18\x02 \x03(\v21.grafana.plugin.v3.CallRouteResponse.HeadersEntryR\aheaders\x12\x12\n" +
-	"\x04body\x18\x03 \x01(\fR\x04body\x1aY\n" +
+	"\x04code\x18\x01 \x01(\x05R\x04code\x12C\n" +
+	"\aheaders\x18\x02 \x03(\v2).plugin.v3.CallRouteResponse.HeadersEntryR\aheaders\x12\x12\n" +
+	"\x04body\x18\x03 \x01(\fR\x04body\x1aS\n" +
 	"\fHeadersEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
-	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x012h\n" +
-	"\fRouteService\x12X\n" +
-	"\tCallRoute\x12#.grafana.plugin.v3.CallRouteRequest\x1a$.grafana.plugin.v3.CallRouteResponse0\x01B\xd8\x01\n" +
-	"\x15com.grafana.plugin.v3B\n" +
-	"RouteProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"\x03key\x18\x01 \x01(\tR\x03key\x12-\n" +
+	"\x05value\x18\x02 \x01(\v2\x17.plugin.v3.HeaderValuesR\x05value:\x028\x012X\n" +
+	"\fRouteService\x12H\n" +
+	"\tCallRoute\x12\x1b.plugin.v3.CallRouteRequest\x1a\x1c.plugin.v3.CallRouteResponse0\x01B\xaa\x01\n" +
+	"\rcom.plugin.v3B\n" +
+	"RouteProtoP\x01ZHgithub.com/grafana/grafana-app-sdk/contracts/genproto/plugin/v3;pluginv3\xa2\x02\x03PXX\xaa\x02\tPlugin.V3\xca\x02\tPlugin\\V3\xe2\x02\x15Plugin\\V3\\GPBMetadata\xea\x02\n" +
+	"Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_route_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
-var file_grafana_plugin_v3_route_proto_goTypes = []any{
-	(*RouteResource)(nil),     // 0: grafana.plugin.v3.RouteResource
-	(*CallRouteRequest)(nil),  // 1: grafana.plugin.v3.CallRouteRequest
-	(*CallRouteResponse)(nil), // 2: grafana.plugin.v3.CallRouteResponse
-	nil,                       // 3: grafana.plugin.v3.CallRouteRequest.HeadersEntry
-	nil,                       // 4: grafana.plugin.v3.CallRouteResponse.HeadersEntry
-	(*StringList)(nil),        // 5: grafana.plugin.v3.StringList
+var file_plugin_v3_route_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_plugin_v3_route_proto_goTypes = []any{
+	(*RouteResource)(nil),     // 0: plugin.v3.RouteResource
+	(*HeaderValues)(nil),      // 1: plugin.v3.HeaderValues
+	(*CallRouteRequest)(nil),  // 2: plugin.v3.CallRouteRequest
+	(*CallRouteResponse)(nil), // 3: plugin.v3.CallRouteResponse
+	nil,                       // 4: plugin.v3.CallRouteRequest.HeadersEntry
+	nil,                       // 5: plugin.v3.CallRouteResponse.HeadersEntry
 }
-var file_grafana_plugin_v3_route_proto_depIdxs = []int32{
-	0, // 0: grafana.plugin.v3.CallRouteRequest.parent:type_name -> grafana.plugin.v3.RouteResource
-	3, // 1: grafana.plugin.v3.CallRouteRequest.headers:type_name -> grafana.plugin.v3.CallRouteRequest.HeadersEntry
-	4, // 2: grafana.plugin.v3.CallRouteResponse.headers:type_name -> grafana.plugin.v3.CallRouteResponse.HeadersEntry
-	5, // 3: grafana.plugin.v3.CallRouteRequest.HeadersEntry.value:type_name -> grafana.plugin.v3.StringList
-	5, // 4: grafana.plugin.v3.CallRouteResponse.HeadersEntry.value:type_name -> grafana.plugin.v3.StringList
-	1, // 5: grafana.plugin.v3.RouteService.CallRoute:input_type -> grafana.plugin.v3.CallRouteRequest
-	2, // 6: grafana.plugin.v3.RouteService.CallRoute:output_type -> grafana.plugin.v3.CallRouteResponse
+var file_plugin_v3_route_proto_depIdxs = []int32{
+	0, // 0: plugin.v3.CallRouteRequest.parent:type_name -> plugin.v3.RouteResource
+	4, // 1: plugin.v3.CallRouteRequest.headers:type_name -> plugin.v3.CallRouteRequest.HeadersEntry
+	5, // 2: plugin.v3.CallRouteResponse.headers:type_name -> plugin.v3.CallRouteResponse.HeadersEntry
+	1, // 3: plugin.v3.CallRouteRequest.HeadersEntry.value:type_name -> plugin.v3.HeaderValues
+	1, // 4: plugin.v3.CallRouteResponse.HeadersEntry.value:type_name -> plugin.v3.HeaderValues
+	2, // 5: plugin.v3.RouteService.CallRoute:input_type -> plugin.v3.CallRouteRequest
+	3, // 6: plugin.v3.RouteService.CallRoute:output_type -> plugin.v3.CallRouteResponse
 	6, // [6:7] is the sub-list for method output_type
 	5, // [5:6] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -720,27 +780,26 @@ var file_grafana_plugin_v3_route_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_grafana_plugin_v3_route_proto_init() }
-func file_grafana_plugin_v3_route_proto_init() {
-	if File_grafana_plugin_v3_route_proto != nil {
+func init() { file_plugin_v3_route_proto_init() }
+func file_plugin_v3_route_proto_init() {
+	if File_plugin_v3_route_proto != nil {
 		return
 	}
-	file_grafana_plugin_v3_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_route_proto_rawDesc), len(file_grafana_plugin_v3_route_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_v3_route_proto_rawDesc), len(file_plugin_v3_route_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_grafana_plugin_v3_route_proto_goTypes,
-		DependencyIndexes: file_grafana_plugin_v3_route_proto_depIdxs,
-		MessageInfos:      file_grafana_plugin_v3_route_proto_msgTypes,
+		GoTypes:           file_plugin_v3_route_proto_goTypes,
+		DependencyIndexes: file_plugin_v3_route_proto_depIdxs,
+		MessageInfos:      file_plugin_v3_route_proto_msgTypes,
 	}.Build()
-	File_grafana_plugin_v3_route_proto = out.File
-	file_grafana_plugin_v3_route_proto_goTypes = nil
-	file_grafana_plugin_v3_route_proto_depIdxs = nil
+	File_plugin_v3_route_proto = out.File
+	file_plugin_v3_route_proto_goTypes = nil
+	file_plugin_v3_route_proto_depIdxs = nil
 }

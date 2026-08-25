@@ -1,0 +1,1 @@
+This is a client provided to plugins

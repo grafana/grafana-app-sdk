@@ -2,7 +2,7 @@
 // The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
-package grafana.plugin.v3;
+package plugin.v3;
 
 // StatusResult carries a machine- and human-readable description of the outcome
 // of an operation. It mirrors the Kubernetes meta/v1 Status shape:

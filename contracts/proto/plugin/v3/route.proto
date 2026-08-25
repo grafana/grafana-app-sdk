@@ -2,9 +2,7 @@
 // The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
-package grafana.plugin.v3;
-
-import "grafana/plugin/v3/common.proto";
+package plugin.v3;
 
 // RouteService enables HTTP-style requests over gRPC.
 service RouteService {
@@ -26,6 +24,11 @@ message RouteResource {
   // raw is the complete JSON-encoded parent resource.
   bytes raw = 4;
 }
+
+message HeaderValues {
+  repeated string values = 1;
+}
+
 
 // CallRouteRequest is the request for RouteService.CallRoute.
 message CallRouteRequest {
@@ -53,7 +56,7 @@ message CallRouteRequest {
 
   // headers are the raw HTTP request headers. The HTTP Host is not included
   // because Go represents it separately from the header map.
-  map<string, StringList> headers = 8;
+  map<string, HeaderValues> headers = 8;
 
   // body is the raw HTTP request body.
   bytes body = 9;
@@ -68,7 +71,7 @@ message CallRouteResponse {
 
   // headers are the raw HTTP headers sent to the client.
   // This is only respected in the first response payload.
-  map<string, StringList> headers = 2;
+  map<string, HeaderValues> headers = 2;
 
   // body contains the raw HTTP body bytes sent to the client.
   bytes body = 3;
