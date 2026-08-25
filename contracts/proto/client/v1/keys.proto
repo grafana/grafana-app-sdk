@@ -1,0 +1,51 @@
+// EXPERIMENTAL: Plugin protocol v3 is a work in progress.
+// The APIs and wire format may change or be removed without notice.
+edition = "2024";
+
+package client.v1;
+
+// Allows access to list keys
+service KeysService {
+  rpc ListKeys(ListKeysRequest) returns (stream ListKeysResponse);
+}
+
+// GroupVersion represents the API group and version of a resource.
+message ListKeysRequest {
+  // Stop sending more 
+  int64 max_values = 1;
+
+  // The api group
+  string group = 2;
+
+  // the namespace -- when empty, it this is cluster scoped
+  string resource = 3;
+
+  // the namespace -- when empty, it this is cluster scoped
+  string namespace = 4;
+}
+
+message ListKeysResponse {
+  // The api group
+  repeated ResourceKeys keys = 2;
+
+  // True when more keys exists
+  bool more = 3;
+}
+
+// GroupVersion represents the API group and version of a resource.
+message ResourceKeys {
+  // The api group
+  string group = 1;
+
+  // the namespace -- when empty, it this is cluster scoped
+  string resource = 3;
+
+  // the namespace -- when empty, it this is cluster scoped
+  string namespace = 2;
+
+  // names in the 
+  repeated string names = 4;
+
+  // True when more keys exists for this resource in this namespace
+  bool more = 5;
+}

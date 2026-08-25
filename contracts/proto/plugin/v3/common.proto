@@ -1,0 +1,58 @@
+// EXPERIMENTAL: Plugin protocol v3 is a work in progress.
+// The APIs and wire format may change or be removed without notice.
+edition = "2024";
+
+package plugin.v3;
+
+// GroupVersion represents the API group and version of a resource.
+message GroupVersion {
+  // group is the API group.
+  string group = 1;
+
+  // version is the API version, such as v1 or v2beta1.
+  string version = 2;
+}
+
+// GroupVersionKind identifies the properties of an object.
+message GroupVersionKind {
+  // group is the API group.
+  string group = 1;
+
+  // version is the API version, such as v1 or v2beta1.
+  string version = 2;
+
+  // kind is the capitalized, singular kind name.
+  string kind = 3;
+}
+
+// GroupVersionResource identifies a resource endpoint.
+message GroupVersionResource {
+  // group is the API group.
+  string group = 1;
+
+  // version is the API version, such as v1 or v2beta1.
+  string version = 2;
+
+  // resource is the lowercase, plural resource name.
+  string resource = 3;
+}
+
+// ResourceObject contains a serialized resource and the fields needed to
+// identify it.
+message ResourceObject {
+  // type identifies the resource endpoint. For plugins, its group is usually
+  // the plugin identifier.
+  GroupVersionResource type = 1;
+
+  // namespace identifies the tenant or resource namespace.
+  string namespace = 3;
+
+  // name is the resource name.
+  string name = 4;
+
+  // rv is the resource version. A change indicates that raw has changed.
+  string rv = 5;
+
+  // raw is the complete JSON-encoded resource.
+  bytes raw = 6;
+}

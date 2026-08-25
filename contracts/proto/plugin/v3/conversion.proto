@@ -1,0 +1,77 @@
+// EXPERIMENTAL: Plugin protocol v3 is a work in progress.
+// The APIs and wire format may change or be removed without notice.
+edition = "2024";
+
+package plugin.v3;
+
+import "plugin/v3/common.proto";
+import "plugin/v3/status.proto";
+
+// ConversionService can be used to convert resources between versions.
+// See: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-request-and-response
+service ConversionService {
+  // ConvertObjects converts objects to a target version.
+  rpc ConvertObjects(ConvertObjectsRequest) returns (ConvertObjectsResponse);
+}
+
+// RawObject contains a serialized resource and its kind.
+message RawObject {
+  // gvk identifies the object's kind.
+  GroupVersionKind gvk = 1;
+
+  // raw is the complete JSON-encoded object.
+  bytes raw = 2;
+
+  // warnings contains non-fatal issues encountered during conversion.
+  repeated string warnings = 3;
+}
+
+// ConvertObjectsRequest supports converting objects from one version to
+// another.
+message ConvertObjectsRequest {
+  // Object is a serialized object to convert.
+  message Object {
+    // gvk identifies the object's kind.
+    GroupVersionKind gvk = 1;
+
+    // raw is the complete JSON-encoded object.
+    bytes raw = 2;
+  }
+
+  // api is the API group and version of the conversion request.
+  GroupVersion api = 1;
+
+  // uid is an identifier for the individual request/response. It allows
+  // distinguishing instances of requests which are otherwise identical
+  // (parallel requests, etc). It is meant to track the round trip between the
+  // Kubernetes API server and the webhook, not the user request.
+  string uid = 2;
+
+  // objects contains the objects to convert.
+  repeated Object objects = 3;
+
+  // target_version is the version to convert to.
+  string target_version = 4;
+}
+
+// ConvertObjectsResponse contains the converted objects.
+message ConvertObjectsResponse {
+  // Object is a converted serialized object.
+  message Object {
+    // raw is the complete JSON-encoded converted object.
+    bytes raw = 1;
+
+    // warnings contains non-fatal issues encountered during conversion.
+    repeated string warnings = 2;
+  }
+
+  // error describes a failure to convert the requested objects.
+  StatusResult error = 1;
+
+  // uid is an identifier for the individual request/response. This should be
+  // copied over from the corresponding request.uid.
+  string uid = 2;
+
+  // converted contains the converted objects in the same order as the request.
+  repeated Object converted = 3;
+}
