@@ -8,7 +8,7 @@ retract (
 )
 
 require (
-	github.com/grafana/grafana-app-sdk v0.58.0
+	github.com/grafana/grafana-app-sdk v0.59.0
 	github.com/grafana/grafana-app-sdk/logging v0.58.0
 	github.com/grafana/grafana-plugin-sdk-go v0.296.4
 	github.com/hashicorp/go-plugin v1.8.0
