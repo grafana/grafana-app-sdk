@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -25,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/admission"
+	endpointmetrics "k8s.io/apiserver/pkg/endpoints/metrics"
+	endpointrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -686,7 +689,7 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		}
 	}
 
-	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(func(req *restful.Request, resp *restful.Response) {
+	routeFunc := restful.RouteFunction(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
 		if err != nil {
 			writeCustomRouteError(resp, err)
@@ -710,8 +713,55 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		if err != nil {
 			writeCustomRouteError(resp, err)
 		}
-	}).Returns(200, "OK", responseType))
+	})
+
+	staticScope := "cluster"
+	if scope == resource.NamespacedScope {
+		staticScope = "namespace"
+	}
+	instrumented := instrumentRouteFunc(
+		httpMethodToK8sVerb[strings.ToUpper(method)],
+		gv.Group,
+		gv.Version,
+		rpath,
+		staticScope,
+		routeFunc,
+	)
+
+	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(instrumented).Returns(200, "OK", responseType))
 	return nil
+}
+
+// instrumentRouteFunc wraps routeFunc to record apiserver metrics. The scope label is
+// resolved from the request's RequestInfo when present (falling back to staticScope), since a
+// custom route may target a specific resource via a path parameter.
+func instrumentRouteFunc(verb, group, apiVersion, resourceName, staticScope string, routeFunc restful.RouteFunction) restful.RouteFunction {
+	return restful.RouteFunction(func(req *restful.Request, resp *restful.Response) {
+		startTime := time.Now()
+
+		routeFunc(req, resp)
+
+		scope := staticScope
+		if reqInfo, ok := endpointrequest.RequestInfoFrom(req.Request.Context()); ok && reqInfo != nil {
+			scope = endpointmetrics.CleanScope(reqInfo)
+		}
+
+		endpointmetrics.MonitorRequest(
+			req.Request,
+			verb,
+			group,
+			apiVersion,
+			resourceName,
+			"",
+			scope,
+			endpointmetrics.APIServerComponent,
+			false,
+			"",
+			resp.StatusCode(),
+			0,
+			time.Since(startTime),
+		)
+	})
 }
 
 func writeCustomRouteError(resp *restful.Response, err error) {
