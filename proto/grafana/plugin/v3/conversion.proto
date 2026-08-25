@@ -1,3 +1,5 @@
+// EXPERIMENTAL: Plugin protocol v3 is a work in progress.
+// The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
 package grafana.plugin.v3;
@@ -27,16 +29,16 @@ message RawObject {
 // ConvertObjectsRequest supports converting objects from one version to
 // another.
 message ConvertObjectsRequest {
-  // The Object that needs converted
+  // Object is a serialized object to convert.
   message Object {
-    // Object type
+    // gvk identifies the object's kind.
     GroupVersionKind gvk = 1;
 
-    // json serialized object
+    // raw is the complete JSON-encoded object.
     bytes raw = 2;
   }
 
-  // the request api_version
+  // api is the API group and version of the conversion request.
   GroupVersion api = 1;
 
   // uid is an identifier for the individual request/response. It allows
@@ -45,7 +47,7 @@ message ConvertObjectsRequest {
   // Kubernetes API server and the webhook, not the user request.
   string uid = 2;
 
-  // objects to convert.
+  // objects contains the objects to convert.
   repeated Object objects = 3;
 
   // target_version is the version to convert to.
@@ -54,12 +56,12 @@ message ConvertObjectsRequest {
 
 // ConvertObjectsResponse contains the converted objects.
 message ConvertObjectsResponse {
-  // The Object that needs converted
+  // Object is a converted serialized object.
   message Object {
-    // json serialized object
+    // raw is the complete JSON-encoded converted object.
     bytes raw = 1;
 
-    // Return warning information
+    // warnings contains non-fatal issues encountered during conversion.
     repeated string warnings = 2;
   }
 
@@ -70,6 +72,6 @@ message ConvertObjectsResponse {
   // copied over from the corresponding request.uid.
   string uid = 2;
 
-  // converted objects
+  // converted contains the converted objects in the same order as the request.
   repeated Object converted = 3;
 }

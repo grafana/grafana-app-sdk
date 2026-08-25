@@ -1,3 +1,8 @@
-= router
+# CallResource router
 
-Where is this package used?  Can we remove/deprecate it -- we want things to focus on the MT first CallRoute API rather than the managed CallResource request.
+This package provides routing helpers for the legacy, per-instance
+`backend.CallResource` API.
+
+The process-wide, multi-tenant `grafana.plugin.v3.RouteService` is intended to
+supersede this API. Plugin protocol v3 is still a work in progress, however,
+and may change or be removed without notice.

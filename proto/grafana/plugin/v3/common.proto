@@ -1,3 +1,5 @@
+// EXPERIMENTAL: Plugin protocol v3 is a work in progress.
+// The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
 package grafana.plugin.v3;

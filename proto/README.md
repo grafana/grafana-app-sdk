@@ -1,8 +1,12 @@
 # Plugin protocol v3 protobuf definitions
 
-This directory is the source of truth for the experimental
-`grafana.plugin.v3` wire protocol used by Go backend plugins. Generated Go code
-is checked in under `plugin/genproto/grafana/plugin/v3`.
+> [!WARNING]
+> Plugin protocol v3 is a work in progress. Its APIs and wire format may change
+> or be removed without notice. Use it only for experimentation.
+
+This directory is the source of truth for the `grafana.plugin.v3` wire protocol
+used by Go backend plugins. Generated Go code is checked in under
+`plugin/genproto/grafana/plugin/v3`.
 
 ## Regenerating Go code
 
@@ -31,4 +35,4 @@ contains intentional protocol changes:
 git diff --check
 ```
 
-Do not edit files under `plugin/genproto` by hand.
+Do not edit generated `*.pb.go` files under `plugin/genproto` by hand.

@@ -12,6 +12,9 @@ import (
 // RouteServiceClient. Use [WithRouteInfo] when the URL path alone does not
 // contain the App Platform routing metadata. The HTTP Host is intentionally
 // not forwarded; plugin route handlers must not rely on host-based routing.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if client == nil {

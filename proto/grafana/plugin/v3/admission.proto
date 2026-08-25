@@ -1,3 +1,5 @@
+// EXPERIMENTAL: Plugin protocol v3 is a work in progress.
+// The APIs and wire format may change or be removed without notice.
 edition = "2024";
 
 package grafana.plugin.v3;
@@ -17,7 +19,7 @@ service AdmissionService {
 // request and the decoded object(s).
 message AdmissionReviewRequest {
   // Operation is the type of resource operation being checked for admission control.
-  // https://github.com/kubernetes/kubernetes/blob/v1.30.0/pkg/apis/admission/types.go#L158
+  // https://github.com/kubernetes/kubernetes/blob/v1.36.0/pkg/apis/admission/types.go#L158
   enum Operation {
     OPERATION_UNSPECIFIED = 0;
     OPERATION_CREATE = 1;

@@ -9,6 +9,9 @@ import (
 )
 
 // ClientV3 groups clients for the grafana.plugin.v3 services.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 type ClientV3 struct {
 	pluginv3.AdmissionServiceClient
 	pluginv3.ConversionServiceClient
@@ -17,6 +20,9 @@ type ClientV3 struct {
 
 // NewClientV3 dispenses clients for all grafana.plugin.v3 services from a
 // negotiated go-plugin client connection.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 func NewClientV3(rpcClient plugin.ClientProtocol) (*ClientV3, error) {
 	admission, err := dispense[pluginv3.AdmissionServiceClient](rpcClient, pluginKeyAdmission)
 	if err != nil {

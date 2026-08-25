@@ -1,7 +1,11 @@
 # Plugin protocol v3 example
 
+> [!WARNING]
+> Plugin protocol v3 is a work in progress. Its APIs and wire format may change
+> or be removed without notice. Use it only for experimentation.
+
 This example runs the existing per-instance Grafana app backend together with
-the experimental `grafana.plugin.v3` services in one `go-plugin` process.
+the `grafana.plugin.v3` services in one `go-plugin` process.
 
 It demonstrates:
 

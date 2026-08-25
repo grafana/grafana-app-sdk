@@ -13,6 +13,9 @@ import (
 // configured, PluginSet registers all v3 service names and uses unimplemented
 // stubs for omitted services so clients can negotiate the v3 protocol as a
 // unit.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 type ServeOpts struct {
 	AdmissionServer  pluginv3.AdmissionServiceServer
 	ConversionServer pluginv3.ConversionServiceServer
@@ -28,6 +31,9 @@ const (
 // PluginSet returns the go-plugin server registrations configured in opts.
 // Pass the result as backend.ServeOpts.ExtraPlugins or
 // backend/app.ManageOpts.ExtraPlugins.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	pSet := make(plugin.PluginSet)
 	if opts.AdmissionServer == nil && opts.ConversionServer == nil && opts.RouteServer == nil {
@@ -57,6 +63,9 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 
 // ClientPluginSet returns the client-side go-plugin registrations needed to
 // negotiate and dispense all grafana.plugin.v3 services.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 func ClientPluginSet() plugin.PluginSet {
 	return plugin.PluginSet{
 		pluginKeyAdmission:  &admissionGRPCPlugin{},
@@ -73,6 +82,9 @@ func ClientPluginSet() plugin.PluginSet {
 // intentionally no hand-written Go wrapper translating between the protobuf
 // types and an SDK-native type. Implementations embed UnimplementedV3Server and
 // override the RPCs they support.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 type V3Server interface {
 	pluginv3.AdmissionServiceServer
 	pluginv3.ConversionServiceServer
@@ -83,6 +95,9 @@ type V3Server interface {
 // grafana.plugin.v3 API. Embedding it makes the V3 opt-in explicit and supplies
 // default (gRPC "Unimplemented") handlers for every V3 RPC, so a plugin only
 // needs to override the RPCs it actually serves.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 type UnimplementedV3Server struct {
 	pluginv3.UnimplementedAdmissionServiceServer
 	pluginv3.UnimplementedConversionServiceServer

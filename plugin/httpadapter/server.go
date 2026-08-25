@@ -13,9 +13,12 @@ import (
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
-// New creates a RouteServiceServer adapter that handles route calls using an
+// NewServer creates a RouteServiceServer adapter that handles route calls using an
 // http.Handler. Reconstructed requests have an empty Host because the plugin
 // route protocol intentionally does not support host-based routing.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
 func NewServer(handler http.Handler) pluginv3.RouteServiceServer {
 	return &httpRouteHandler{
 		handler: handler,
