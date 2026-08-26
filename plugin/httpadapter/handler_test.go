@@ -2,6 +2,7 @@ package httpadapter
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -11,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
@@ -80,13 +83,30 @@ func TestHandlerFuncUsesURLPathWithoutRouteInfo(t *testing.T) {
 }
 
 func TestHandlerFuncCallError(t *testing.T) {
-	grpcClient := &testRouteServiceClient{err: errors.New("call failed")}
-	recorder := httptest.NewRecorder()
+	t.Run("Kubernetes API error", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{err: apierrors.NewBadRequest("invalid route request")}
+		recorder := httptest.NewRecorder()
 
-	HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
 
-	require.Equal(t, http.StatusInternalServerError, recorder.Code)
-	require.Contains(t, recorder.Body.String(), "call failed")
+		require.Equal(t, http.StatusBadRequest, recorder.Code)
+		require.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
+
+		var status metav1.Status
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+		require.Equal(t, metav1.StatusReasonBadRequest, status.Reason)
+		require.Equal(t, "invalid route request", status.Message)
+	})
+
+	t.Run("generic error", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{err: errors.New("call failed")}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusInternalServerError, recorder.Code)
+		require.Contains(t, recorder.Body.String(), "call failed")
+	})
 }
 
 func TestHandlerFuncErrors(t *testing.T) {

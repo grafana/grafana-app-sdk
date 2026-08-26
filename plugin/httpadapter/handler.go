@@ -1,9 +1,12 @@
 package httpadapter
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
@@ -30,6 +33,14 @@ func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 
 		stream, err := client.CallRoute(r.Context(), req)
 		if err != nil {
+			k8s, ok := err.(apierrors.APIStatus)
+			if ok {
+				status := k8s.Status()
+				w.Header().Add("Content-Type", "application/json")
+				w.WriteHeader(int(status.Code))
+				_ = json.NewEncoder(w).Encode(status)
+				return
+			}
 			http.Error(w, "call route: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
