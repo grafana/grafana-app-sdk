@@ -5,6 +5,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -39,7 +42,7 @@ func (a *AdmissionAdapter) AdmissionReview(ctx context.Context, req *pluginv3.Ad
 	gvk := req.GetKind()
 	kind, ok := findManagedKind(a.app, gvk.GetGroup(), gvk.GetVersion(), gvk.GetKind())
 	if !ok {
-		return nil, fmt.Errorf("no managed kind for %s/%s %s", gvk.GetGroup(), gvk.GetVersion(), gvk.GetKind())
+		return unmanagedKindResponse(a.app, gvk), nil
 	}
 
 	obj, err := decodeObject(kind, req.GetObjectBytes())
@@ -128,12 +131,49 @@ func admissionAction(op pluginv3.AdmissionReviewRequest_Operation) resource.Admi
 // admissionErrorResponse builds a denying AdmissionReviewResponse carrying
 // err's message as the failure status.
 func admissionErrorResponse(err error) *pluginv3.AdmissionReviewResponse {
+	rsp := &pluginv3.AdmissionReviewResponse{}
+	rsp.SetAllowed(false)
+	rsp.SetError(toStatusResult(err))
+	return rsp
+}
+
+// unmanagedKindResponse builds a denying AdmissionReviewResponse for a kind the
+// App does not manage. The host only sends an admission request when the
+// manifest declares a validation or mutation hook for the kind, so this
+// mismatch is a misconfiguration: the response lists the kinds the App does
+// manage to make that easier to spot.
+func unmanagedKindResponse(a app.App, gvk *pluginv3.GroupVersionKind) *pluginv3.AdmissionReviewResponse {
+	managed := a.ManagedKinds()
+	kinds := make([]string, len(managed))
+	for i, k := range managed {
+		kinds[i] = k.GroupVersionKind().String()
+	}
+
+	causes := []*pluginv3.StatusCause{
+		newStatusCause("the manifest requires mutation/validation, but the kind is not managed by this plugin"),
+		newStatusCause(fmt.Sprintf("managed kinds: %v", kinds)),
+	}
+
+	details := &pluginv3.StatusDetails{}
+	details.SetGroup(gvk.GetGroup())
+	details.SetKind(gvk.GetKind())
+	details.SetCauses(causes)
+
 	status := &pluginv3.StatusResult{}
 	status.SetStatus("Failure")
-	status.SetMessage(err.Error())
+	status.SetReason(string(metav1.StatusReasonServiceUnavailable))
+	status.SetCode(http.StatusServiceUnavailable)
+	status.SetMessage(fmt.Sprintf("no managed kind for %s/%s %s", gvk.GetGroup(), gvk.GetVersion(), gvk.GetKind()))
+	status.SetDetails(details)
 
 	rsp := &pluginv3.AdmissionReviewResponse{}
 	rsp.SetAllowed(false)
 	rsp.SetError(status)
 	return rsp
+}
+
+func newStatusCause(reason string) *pluginv3.StatusCause {
+	cause := &pluginv3.StatusCause{}
+	cause.SetReason(reason)
+	return cause
 }
