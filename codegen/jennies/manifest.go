@@ -42,8 +42,11 @@ type ManifestOutputEncoder func(any) ([]byte, error)
 
 // ManifestGenerator generates a JSON/YAML App Manifest.
 type ManifestGenerator struct {
-	Encoder         ManifestOutputEncoder
-	FileExtension   string
+	Encoder       ManifestOutputEncoder
+	FileExtension string
+	// FileName overrides the generated manifest's filename. When empty, the filename
+	// defaults to "<appName>-manifest.<FileExtension>".
+	FileName        string
 	IncludeSchemas  bool
 	ManifestVersion string
 }
@@ -101,8 +104,12 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	if err != nil {
 		return nil, err
 	}
+	fileName := m.FileName
+	if fileName == "" {
+		fileName = fmt.Sprintf("%s-manifest.%s", manifestData.AppName, m.FileExtension)
+	}
 	files = append(files, codejen.File{
-		RelativePath: fmt.Sprintf("%s-manifest.%s", manifestData.AppName, m.FileExtension),
+		RelativePath: fileName,
 		Data:         out,
 		From:         []codejen.NamedJenny{m},
 	})
@@ -335,7 +342,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	return &manifest, validateManifestRoles(manifest, includeSchemas)
+	return &manifest, errors.Join(validateManifestRoles(manifest, includeSchemas), manifest.Validate())
 }
 
 // resolveOperatorURL determines the operator URL from the manifest properties.

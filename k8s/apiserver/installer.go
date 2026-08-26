@@ -689,12 +689,8 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
 		if err != nil {
-			resp.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(resp).Encode(metav1.Status{
-				Status:  metav1.StatusFailure,
-				Code:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
+			writeCustomRouteError(resp, err)
+			return
 		}
 		identifier := resource.FullIdentifier{
 			Group:   r.appConfig.ManifestData.Group,
@@ -712,15 +708,36 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			Body:               req.Request.Body,
 		})
 		if err != nil {
-			resp.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(resp).Encode(metav1.Status{
-				Status:  metav1.StatusFailure,
-				Code:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
+			writeCustomRouteError(resp, err)
 		}
 	}).Returns(200, "OK", responseType))
 	return nil
+}
+
+func writeCustomRouteError(resp *restful.Response, err error) {
+	code := int32(http.StatusInternalServerError)
+	reason := metav1.StatusReasonInternalError
+	message := err.Error()
+	var apiStatus apierrors.APIStatus
+	if errors.As(err, &apiStatus) {
+		st := apiStatus.Status()
+		if st.Code != 0 {
+			code = st.Code
+		}
+		if st.Reason != "" {
+			reason = st.Reason
+		}
+		if st.Message != "" {
+			message = st.Message
+		}
+	}
+	resp.WriteHeader(int(code))
+	_ = json.NewEncoder(resp).Encode(metav1.Status{
+		Status:  metav1.StatusFailure,
+		Code:    code,
+		Reason:  reason,
+		Message: message,
+	})
 }
 
 var allowedK8sVerbs = []string{

@@ -3,6 +3,7 @@ package jennies
 import (
 	"testing"
 
+	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/utils/ptr"
@@ -210,4 +211,30 @@ func TestProcessKindVersion_Search(t *testing.T) {
 			assert.Equal(t, tc.expected, mver.Search)
 		})
 	}
+}
+
+func TestBuildManifestData_RejectsReservedKindRoutes(t *testing.T) {
+	schema := cuecontext.New().CompileString("{}")
+	manifest := &codegen.SimpleManifest{
+		AppManifestProperties: codegen.AppManifestProperties{AppName: "test", FullGroup: "test.grafana.app"},
+		AllVersions: map[string]*codegen.SimpleVersion{
+			"v1": {
+				VersionProperties: codegen.VersionProperties{Name: "v1"},
+				AllKinds: []codegen.VersionedKind{{
+					Kind:       "Foo",
+					PluralName: "foos",
+					Scope:      "Namespaced",
+					Schema:     schema,
+				}},
+				CustomRoutes: &codegen.VersionCustomRoutes{
+					Namespaced: map[string]map[string]codegen.CustomRoute{
+						"foos/search": {},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := buildManifestData(manifest, false)
+	require.ErrorContains(t, err, "custom route 'foos/search' conflicts with reserved 'search' route for kind 'foos'")
 }

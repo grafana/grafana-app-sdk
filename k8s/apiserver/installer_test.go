@@ -1,14 +1,21 @@
 package apiserver
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/emicklei/go-restful/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -479,6 +486,71 @@ func TestDefaultInstaller_ManifestData(t *testing.T) {
 	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(data), nil, nil), app.Config{}, nil)
 	require.Nil(t, err)
 	assert.Equal(t, &data, installer.ManifestData())
+}
+
+func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
+	const group = "instrumentation-test.ext.grafana.com"
+	const version = "v1"
+
+	newInstaller := func(t *testing.T, callCustomRoute func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error) *defaultInstaller {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{
+			Group: group,
+		}), nil, nil), app.Config{}, &mockGoTypeResolver{
+			CustomRouteReturnGoTypeFunc: func(kind, ver, path, verb string) (any, bool) {
+				return &EmptyObject{}, true
+			},
+		})
+		require.NoError(t, err)
+		installer.app = &MockApp{CallCustomRouteFunc: callCustomRoute}
+		return installer
+	}
+
+	newServer := func(t *testing.T, installer *defaultInstaller, rpath string) (*httptest.Server, *restful.WebService) {
+		ws := new(restful.WebService)
+		ws.Path("/apis/" + group + "/" + version)
+		container := restful.NewContainer()
+		container.Add(ws)
+		err := installer.registerResourceRouteOperation(ws, schema.GroupVersion{Group: group, Version: version}, rpath, &spec3.Operation{}, resource.NamespacedScope, "GET")
+		require.NoError(t, err)
+		return httptest.NewServer(container), ws
+	}
+
+	t.Run("preserves APIStatus code and reason on error", func(t *testing.T) {
+		rpath := "instrument-bad-request"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			return apierrors.NewBadRequest("bad request")
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var status metav1.Status
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
+		assert.Equal(t, metav1.StatusReasonBadRequest, status.Reason)
+		assert.Equal(t, "bad request", status.Message)
+	})
+
+	t.Run("falls back to 500 for non-status errors", func(t *testing.T) {
+		rpath := "instrument-plain-error"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			return errors.New("boom")
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+		var status metav1.Status
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
+		assert.Equal(t, "boom", status.Message)
+	})
 }
 
 type MockGenericAPIServer struct {

@@ -41,6 +41,11 @@ _kubeObjectMetadata: {
 	// Encoding for kubernetes manifest files.
 	// Allowed values are "json" and "yaml"
 	encoding: *"json" | "yaml"
+	// Filename for the generated app manifest, relative to `path`.
+	// When empty, the filename defaults to "<appName>-manifest.<encoding>".
+	// Cannot be used when more than one manifest is generated (see manifestSelectors),
+	// as all manifests would be written to the same file.
+	manifestFileName: string | *""
 	// Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents.
 	// Use "v1alpha1" for legacy CRD-compatible schemas and "v1alpha2" for the default format.
 	manifestVersion: "v1alpha1" | *"v1alpha2"
@@ -50,6 +55,11 @@ _kubeObjectMetadata: {
 }
 
 #CodegenConfig: {
+	// Whether to generate go code.
+	// Set this to false for frontend-only apps which have no go module: when false, no go files
+	// are generated, and neither a go.mod nor the `go` binary is required to run codegen.
+	// TypeScript, CRD, and app manifest JSON/YAML generation are unaffected.
+	goEnabled: bool | *true
 	// Module name found in go.mod.
 	// If absent it will be inferred from ./go.mod.
 	goModule: string | *""

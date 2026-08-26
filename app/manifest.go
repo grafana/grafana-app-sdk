@@ -121,7 +121,7 @@ func (m *ManifestData) IsEmpty() bool {
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
 //
-//nolint:gocognit
+//nolint:gocognit,funlen
 func (m *ManifestData) Validate() error {
 	type kindData struct {
 		kind         string
@@ -177,11 +177,21 @@ func (m *ManifestData) Validate() error {
 			if _, ok := namespacedRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
 			}
+			if resource, endpoint, ok := reservedKindRoute(key); ok {
+				if _, exists := namespacedRoutes[resource]; exists {
+					errs = multierror.Append(errs, fmt.Errorf("namespaced custom route '%s' conflicts with reserved '%s' route for kind '%s'", rpath, endpoint, resource))
+				}
+			}
 		}
 		for rpath := range version.Routes.Cluster {
 			key := strings.Trim(strings.ToLower(rpath), "/")
 			if _, ok := clusterRoutes[key]; ok {
 				errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with already-registered kind '%s'", rpath, key))
+			}
+			if resource, endpoint, ok := reservedKindRoute(key); ok {
+				if _, exists := clusterRoutes[resource]; exists {
+					errs = multierror.Append(errs, fmt.Errorf("cluster-scoped custom route '%s' conflicts with reserved '%s' route for kind '%s'", rpath, endpoint, resource))
+				}
 			}
 		}
 	}
@@ -220,6 +230,20 @@ func (m *ManifestData) Validate() error {
 		}
 	}
 	return errs
+}
+
+func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
+	// These paths remain reserved for kinds that opt out of the built-in endpoints.
+	// Opting out controls which endpoints are served; it does not make their paths
+	// available for custom routes.
+	for _, endpoint = range []string{"search", "trash"} {
+		suffix := "/" + endpoint
+		if strings.HasSuffix(route, suffix) {
+			resource = strings.TrimSuffix(route, suffix)
+			return resource, endpoint, resource != ""
+		}
+	}
+	return "", "", false
 }
 
 // Kinds returns a list of ManifestKinds parsed from Versions, for compatibility with kind-centric usage
@@ -350,6 +374,7 @@ type ManifestVersionKind struct {
 
 // ManifestVersionKindSearch declares which search endpoints are served for a kind.
 // Each field is a pointer so that an unset value can keep the default of the endpoint being served.
+// The /search and /trash paths remain reserved for the kind when either endpoint is disabled.
 type ManifestVersionKindSearch struct {
 	// Endpoint declares whether the kind serves the /search endpoint. A nil value defaults to true.
 	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
@@ -1307,10 +1332,13 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			return nil, fmt.Errorf("failed to resolve allOf schema: %w", err)
 		}
 
-		// Add the required fields to AllOf, rather than the whole schema
-		result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
-			Required: resolved.Required,
-		}))
+		// Add the required fields to AllOf, rather than the whole schema.
+		// An entry with no required fields would only add an empty object to the CRD, so skip it.
+		if len(resolved.Required) > 0 {
+			result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+				Required: resolved.Required,
+			}))
+		}
 		resolved.Required = nil
 
 		// merge schema into existing schema, sans "required" section
@@ -1383,10 +1411,13 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			return nil, fmt.Errorf("failed to resolve anyOf schema: %w", err)
 		}
 
-		// Add the required fields to AnyOf, rather than the whole schema
-		result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", &openapi3.Schema{
-			Required: resolved.Required,
-		}))
+		// Add the required fields to AnyOf, rather than the whole schema.
+		// An entry with no required fields would only add an empty object to the CRD, so skip it.
+		if len(resolved.Required) > 0 {
+			result.AnyOf = append(result.AnyOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+				Required: resolved.Required,
+			}))
+		}
 		resolved.Required = nil
 
 		// merge schema into existing schema, sans "required" section
@@ -1476,7 +1507,73 @@ func mergeSchemas(mergeInto, toMerge *openapi3.Schema) error {
 		}
 	}
 
+	mergeValidationFields(mergeInto, toMerge)
+
 	return nil
+}
+
+// mergeValidationFields copies validation and documentation fields from toMerge into mergeInto,
+// but only those which mergeInto doesn't already set itself.
+// Without this, constraints such as `enum` are lost when one schema is merged into another,
+// for example when a field is expressed as an allOf with a single $ref, which is a common way
+// of attaching a default value to a referenced type.
+func mergeValidationFields(mergeInto, toMerge *openapi3.Schema) {
+	if len(mergeInto.Enum) == 0 {
+		mergeInto.Enum = toMerge.Enum
+	}
+	if mergeInto.Default == nil {
+		mergeInto.Default = toMerge.Default
+	}
+	if mergeInto.Description == "" {
+		mergeInto.Description = toMerge.Description
+	}
+	if mergeInto.Title == "" {
+		mergeInto.Title = toMerge.Title
+	}
+	if mergeInto.Format == "" {
+		mergeInto.Format = toMerge.Format
+	}
+	if mergeInto.Pattern == "" {
+		mergeInto.Pattern = toMerge.Pattern
+	}
+	if mergeInto.Example == nil {
+		mergeInto.Example = toMerge.Example
+	}
+	if mergeInto.Min == nil {
+		mergeInto.Min = toMerge.Min
+		mergeInto.ExclusiveMin = toMerge.ExclusiveMin
+	}
+	if mergeInto.Max == nil {
+		mergeInto.Max = toMerge.Max
+		mergeInto.ExclusiveMax = toMerge.ExclusiveMax
+	}
+	if mergeInto.MultipleOf == nil {
+		mergeInto.MultipleOf = toMerge.MultipleOf
+	}
+	if mergeInto.MinLength == 0 {
+		mergeInto.MinLength = toMerge.MinLength
+	}
+	if mergeInto.MaxLength == nil {
+		mergeInto.MaxLength = toMerge.MaxLength
+	}
+	if mergeInto.MinItems == 0 {
+		mergeInto.MinItems = toMerge.MinItems
+	}
+	if mergeInto.MaxItems == nil {
+		mergeInto.MaxItems = toMerge.MaxItems
+	}
+	if !mergeInto.UniqueItems {
+		mergeInto.UniqueItems = toMerge.UniqueItems
+	}
+	if mergeInto.MinProps == 0 {
+		mergeInto.MinProps = toMerge.MinProps
+	}
+	if mergeInto.MaxProps == nil {
+		mergeInto.MaxProps = toMerge.MaxProps
+	}
+	if !mergeInto.Nullable {
+		mergeInto.Nullable = toMerge.Nullable
+	}
 }
 
 // getRefName extracts the schema name from a $ref string
