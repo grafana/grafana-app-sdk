@@ -4,7 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"strings"
 	"testing"
+
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -164,14 +171,91 @@ func TestAdmissionAdapter_AdmissionReview(t *testing.T) {
 		}
 	})
 
-	t.Run("errors when the kind is not managed", func(t *testing.T) {
-		a := NewAdmissionAdapter(&admissionFakeApp{})
+	t.Run("denies with the managed kinds when the kind is not managed", func(t *testing.T) {
+		other := resource.Kind{
+			Schema: resource.NewSimpleSchema(
+				"other.grafana.app", "v1",
+				&resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{},
+				resource.WithKind("Bar"),
+			),
+			Codecs: map[resource.KindEncoding]resource.Codec{
+				resource.KindEncodingJSON: resource.NewJSONCodec(),
+			},
+		}
+		a := NewAdmissionAdapter(&admissionFakeApp{managedKinds: []resource.Kind{other}})
 
 		req := newAdmissionReviewRequest(pluginv3.AdmissionReviewRequest_OPERATION_CREATE, nil, nil)
 
-		_, err := a.AdmissionReview(context.Background(), req)
-		if err == nil {
-			t.Fatal("expected an error for an unmanaged kind")
+		rsp, err := a.AdmissionReview(context.Background(), req)
+		if err != nil {
+			t.Fatalf("AdmissionReview returned error: %v", err)
+		}
+		if rsp.GetAllowed() {
+			t.Fatal("expected allowed=false for an unmanaged kind")
+		}
+		status := rsp.GetError()
+		if status == nil {
+			t.Fatal("expected an error status")
+		}
+		if status.GetCode() != http.StatusServiceUnavailable {
+			t.Fatalf("unexpected code: %d", status.GetCode())
+		}
+		if status.GetReason() != string(metav1.StatusReasonServiceUnavailable) {
+			t.Fatalf("unexpected reason: %q", status.GetReason())
+		}
+		details := status.GetDetails()
+		if details == nil {
+			t.Fatal("expected status details")
+		}
+		if details.GetGroup() != "test.grafana.app" || details.GetKind() != "Foo" {
+			t.Fatalf("unexpected details: %+v", details)
+		}
+		causes := details.GetCauses()
+		if len(causes) != 2 {
+			t.Fatalf("expected 2 causes, got %d", len(causes))
+		}
+		if !strings.Contains(causes[1].GetReason(), "other.grafana.app/v1, Kind=Bar") {
+			t.Fatalf("expected the managed kinds to be listed, got %q", causes[1].GetReason())
+		}
+	})
+
+	t.Run("denies with structured details for an APIStatus error", func(t *testing.T) {
+		a := NewAdmissionAdapter(&admissionFakeApp{
+			managedKinds: []resource.Kind{testKind()},
+			validate: func(context.Context, *app.AdmissionRequest) error {
+				return apierrors.NewInvalid(
+					schema.GroupKind{Group: "test.grafana.app", Kind: "Foo"},
+					"foo1",
+					field.ErrorList{field.Required(field.NewPath("spec"), "spec is required")},
+				)
+			},
+		})
+
+		req := newAdmissionReviewRequest(pluginv3.AdmissionReviewRequest_OPERATION_CREATE, marshalFoo(t, "foo1", "hello"), nil)
+
+		rsp, err := a.AdmissionReview(context.Background(), req)
+		if err != nil {
+			t.Fatalf("AdmissionReview returned error: %v", err)
+		}
+		if rsp.GetAllowed() {
+			t.Fatal("expected allowed=false")
+		}
+		status := rsp.GetError()
+		if status.GetReason() != string(metav1.StatusReasonInvalid) {
+			t.Fatalf("unexpected reason: %q", status.GetReason())
+		}
+		if status.GetCode() != http.StatusUnprocessableEntity {
+			t.Fatalf("unexpected code: %d", status.GetCode())
+		}
+		details := status.GetDetails()
+		if details == nil || details.GetName() != "foo1" || details.GetKind() != "Foo" {
+			t.Fatalf("unexpected details: %+v", details)
+		}
+		if len(details.GetCauses()) != 1 {
+			t.Fatalf("expected 1 cause, got %+v", details.GetCauses())
+		}
+		if got := details.GetCauses()[0]; got.GetField() != "spec" || got.GetReason() != string(metav1.CauseTypeFieldValueRequired) {
+			t.Fatalf("unexpected cause: %+v", got)
 		}
 	})
 
