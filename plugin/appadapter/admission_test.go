@@ -219,6 +219,35 @@ func TestAdmissionAdapter_AdmissionReview(t *testing.T) {
 		}
 	})
 
+	t.Run("validates the mutated object and returns its bytes", func(t *testing.T) {
+		var validated string
+		a := NewAdmissionAdapter(&admissionFakeApp{
+			managedKinds: []resource.Kind{testKind()},
+			mutate: func(_ context.Context, req *app.AdmissionRequest) (*app.MutatingResponse, error) {
+				updated := req.Object.(*resource.TypedSpecObject[string])
+				updated.Spec = "mutated"
+				return &app.MutatingResponse{UpdatedObject: updated}, nil
+			},
+			validate: func(_ context.Context, req *app.AdmissionRequest) error {
+				validated = req.Object.(*resource.TypedSpecObject[string]).Spec
+				return nil
+			},
+		})
+
+		req := newAdmissionReviewRequest(pluginv3.AdmissionReviewRequest_OPERATION_CREATE, marshalFoo(t, "foo1", "hello"), nil)
+
+		rsp, err := a.AdmissionReview(context.Background(), req)
+		if err != nil {
+			t.Fatalf("AdmissionReview returned error: %v", err)
+		}
+		if !rsp.GetAllowed() {
+			t.Fatalf("expected allowed=true, got response: %+v", rsp)
+		}
+		if validated != "mutated" {
+			t.Fatalf("expected Validate to see the mutated object, got spec %q", validated)
+		}
+	})
+
 	t.Run("denies with structured details for an APIStatus error", func(t *testing.T) {
 		a := NewAdmissionAdapter(&admissionFakeApp{
 			managedKinds: []resource.Kind{testKind()},

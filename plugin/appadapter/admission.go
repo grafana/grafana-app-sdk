@@ -63,13 +63,10 @@ func (a *AdmissionAdapter) AdmissionReview(ctx context.Context, req *pluginv3.Ad
 		OldObject: oldObj,
 	}
 
-	if err := a.app.Validate(ctx, admissionReq); err != nil && !errors.Is(err, app.ErrNotImplemented) {
-		return admissionErrorResponse(err), nil
-	}
-
 	rsp := &pluginv3.AdmissionReviewResponse{}
 	rsp.SetAllowed(true)
 
+	// Mutate first, so that validation sees the object as it will be stored.
 	mutated, err := a.app.Mutate(ctx, admissionReq)
 	if err != nil && !errors.Is(err, app.ErrNotImplemented) {
 		return admissionErrorResponse(err), nil
@@ -79,7 +76,12 @@ func (a *AdmissionAdapter) AdmissionReview(ctx context.Context, req *pluginv3.Ad
 		if err != nil {
 			return admissionErrorResponse(err), nil
 		}
+		admissionReq.Object = mutated.UpdatedObject
 		rsp.SetObjectBytes(objectBytes)
+	}
+
+	if err := a.app.Validate(ctx, admissionReq); err != nil && !errors.Is(err, app.ErrNotImplemented) {
+		return admissionErrorResponse(err), nil
 	}
 
 	return rsp, nil
