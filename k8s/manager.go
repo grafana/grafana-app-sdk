@@ -209,14 +209,12 @@ const (
 )
 
 // toOpenAPIV3 converts a struct into a map[string]any representation of an OpenAPIV3-compliant JSON spec
-func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
+func toOpenAPIV3(typ reflect.Type) map[string]any {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	m := make(map[string]any)
 	for field := range typ.Fields() {
-		field := field
-
 		// Process type
 		fieldType := field.Type
 		for fieldType.Kind() == reflect.Pointer {

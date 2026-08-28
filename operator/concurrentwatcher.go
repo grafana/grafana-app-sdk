@@ -117,7 +117,6 @@ func (w *concurrentWatcher) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, queue := range w.workers {
 		wg.Go(func() {
-
 			// Start the background process responsible for emitting the events from queue.
 			go queue.run()
 			defer queue.stop()
