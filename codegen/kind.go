@@ -124,6 +124,17 @@ type CustomRouteResponseMetadata struct {
 	ObjectMeta bool `json:"objectMeta"`
 }
 
+// CustomRouteAuthz represents the declared authorization attributes of a custom route.
+// Each set field is emitted as an openAPI extension on the generated route.
+type CustomRouteAuthz struct {
+	// Resource is the resource the authz check is performed against.
+	Resource string `json:"resource"`
+	// Subresource is the subresource the authz check is performed against, if applicable.
+	Subresource *string `json:"subresource,omitempty"`
+	// Verb is the verb the authz check is performed with, if it differs from the one implied by the route's method.
+	Verb *string `json:"verb,omitempty"`
+}
+
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
 	Name             string                      `json:"name"`
@@ -131,6 +142,9 @@ type CustomRoute struct {
 	Response         cue.Value                   `json:"response"`
 	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
 	Extensions       map[string]any              `json:"extensions,omitempty"`
+	// Authz is the optional declared authorization information for the route. If nil,
+	// no authz openAPI extensions are added to the generated route.
+	Authz *CustomRouteAuthz `json:"authz,omitempty"`
 }
 
 type KindVersion struct {

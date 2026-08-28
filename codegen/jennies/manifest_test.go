@@ -6,6 +6,7 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 	"k8s.io/utils/ptr"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -237,4 +238,68 @@ func TestBuildManifestData_RejectsReservedKindRoutes(t *testing.T) {
 
 	_, err := buildManifestData(manifest, false)
 	require.ErrorContains(t, err, "custom route 'foos/search' conflicts with reserved 'search' route for kind 'foos'")
+}
+
+func TestCustomRouteExtensions(t *testing.T) {
+	tests := []struct {
+		name  string
+		route codegen.CustomRoute
+		want  spec.Extensions
+	}{
+		{
+			name:  "no extensions and no authz",
+			route: codegen.CustomRoute{},
+			want:  nil,
+		},
+		{
+			name: "extensions only",
+			route: codegen.CustomRoute{
+				Extensions: map[string]any{"x-foo": true},
+			},
+			want: spec.Extensions{"x-foo": true},
+		},
+		{
+			name: "authz resource only",
+			route: codegen.CustomRoute{
+				Authz: &codegen.CustomRouteAuthz{Resource: "foos"},
+			},
+			want: spec.Extensions{"x-grafana-declared-authz-resource": "foos"},
+		},
+		{
+			name: "full authz",
+			route: codegen.CustomRoute{
+				Authz: &codegen.CustomRouteAuthz{
+					Resource:    "foos",
+					Subresource: ptr.To("reconcile"),
+					Verb:        ptr.To("create"),
+				},
+			},
+			want: spec.Extensions{
+				"x-grafana-declared-authz-resource":    "foos",
+				"x-grafana-declared-authz-subresource": "reconcile",
+				"x-grafana-declared-authz-verb":        "create",
+			},
+		},
+		{
+			name: "authz alongside extensions",
+			route: codegen.CustomRoute{
+				Extensions: map[string]any{"x-foo": true},
+				Authz: &codegen.CustomRouteAuthz{
+					Resource: "foos",
+					Verb:     ptr.To("get"),
+				},
+			},
+			want: spec.Extensions{
+				"x-foo":                             true,
+				"x-grafana-declared-authz-resource": "foos",
+				"x-grafana-declared-authz-verb":     "get",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.want, customRouteExtensions(test.route))
+		})
+	}
 }

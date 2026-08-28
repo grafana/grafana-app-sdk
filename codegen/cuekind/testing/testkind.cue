@@ -205,11 +205,18 @@ testKind: {
 							message: string
 						}
 						responseMetadata: typeMeta: false
+						authz: {
+							resource: "testkinds"
+							subresource: "reconcile"
+							verb: "create"
+						}
 					}
 				}
 				"/search": {
 					GET: {
 						name: "getTestKindSearchResult"
+						// Only the resource is declared here, so only the resource extension is generated.
+						authz: resource: "testkinds"
 						extensions: {
 							"x-grafana-test": true
 							"x-grafana-test-value": {

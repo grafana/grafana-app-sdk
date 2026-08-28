@@ -786,6 +786,36 @@ func toKindPermissionActions(actions []string) []app.KindPermissionAction {
 	return a
 }
 
+// openAPI extension keys used for the declared authz attributes of a custom route.
+const (
+	extDeclaredAuthzResource    = "x-grafana-declared-authz-resource"
+	extDeclaredAuthzSubresource = "x-grafana-declared-authz-subresource"
+	extDeclaredAuthzVerb        = "x-grafana-declared-authz-verb"
+)
+
+// customRouteExtensions returns the openAPI extensions for a custom route, which are the route's
+// explicitly-declared extensions plus any extensions derived from the route's authz section.
+// It returns nil if the route has no extensions.
+func customRouteExtensions(route codegen.CustomRoute) spec.Extensions {
+	if len(route.Extensions) == 0 && route.Authz == nil {
+		return nil
+	}
+	extensions := make(spec.Extensions, len(route.Extensions))
+	for k, v := range route.Extensions {
+		extensions[k] = v
+	}
+	if route.Authz != nil {
+		extensions[extDeclaredAuthzResource] = route.Authz.Resource
+		if route.Authz.Subresource != nil {
+			extensions[extDeclaredAuthzSubresource] = *route.Authz.Subresource
+		}
+		if route.Authz.Verb != nil {
+			extensions[extDeclaredAuthzVerb] = *route.Authz.Verb
+		}
+	}
+	return extensions
+}
+
 func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]codegen.CustomRoute) (spec3.PathProps, map[string]spec.SchemaProps, error) {
 	targetPathProps := spec3.PathProps{}
 	additionalSchemas := make(map[string]spec.SchemaProps)
@@ -825,12 +855,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				OperationId: operationID,
 			},
 		}
-		if len(sourceRoute.Extensions) > 0 {
-			targetOperation.Extensions = make(spec.Extensions)
-			for k, v := range sourceRoute.Extensions {
-				targetOperation.Extensions[k] = v
-			}
-		}
+		targetOperation.Extensions = customRouteExtensions(sourceRoute)
 
 		switch upperMethod {
 		case "GET":
