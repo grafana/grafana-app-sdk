@@ -210,7 +210,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 
 		var reference codejen.Files
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
 				Package:            "manifestdata",
 				IncludeSchemas:     true,
@@ -237,7 +237,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 
 		var reference codejen.Files
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
 				Package:            "manifestdata",
 				IncludeSchemas:     true,
@@ -285,7 +285,7 @@ func TestManifestGoGenerator_RolesAreSorted(t *testing.T) {
 
 	// Find all quoted role keys in order of appearance
 	var keys []string
-	for _, line := range strings.Split(rolesSection, "\n") {
+	for line := range strings.SplitSeq(rolesSection, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, `"`) && strings.Contains(trimmed, `": {`) {
 			key := strings.SplitN(trimmed, `"`, 3)[1]

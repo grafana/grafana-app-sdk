@@ -238,8 +238,8 @@ func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
 	// available for custom routes.
 	for _, endpoint = range []string{"search", "trash"} {
 		suffix := "/" + endpoint
-		if strings.HasSuffix(route, suffix) {
-			resource = strings.TrimSuffix(route, suffix)
+		if before, ok0 := strings.CutSuffix(route, suffix); ok0 {
+			resource = before
 			return resource, endpoint, resource != ""
 		}
 	}

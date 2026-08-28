@@ -139,7 +139,7 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 			Versions: []AppManifestManifestVersion{{
 				Kinds: []AppManifestManifestVersionKind{{
 					Kind: "Foo",
-					Schemas: map[string]interface{}{
+					Schemas: map[string]any{
 						"bar": "foo", // Bad OpenAPI document, conversion will fail when loading the openAPI
 					},
 				}},

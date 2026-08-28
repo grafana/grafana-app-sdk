@@ -185,8 +185,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.finalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
-				var chk FinalizerError
-				if errors.As(err, &chk) {
+				if chk, ok := errors.AsType[FinalizerError](err); ok {
 					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 				}
 				logger.Error("error removing finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -198,8 +197,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
-				var chk FinalizerError
-				if errors.As(err, &chk) {
+				if chk, ok := errors.AsType[FinalizerError](err); ok {
 					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 				}
 				logger.Error("error removing in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -226,8 +224,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, object, o.addPendingFinalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
-				var chk FinalizerError
-				if errors.As(err, &chk) {
+				if chk, ok := errors.AsType[FinalizerError](err); ok {
 					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 				}
 				logger.Error("error removing in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -244,8 +241,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	err := o.finalizerUpdater.AddFinalizer(ctx, object, o.addPendingFinalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
-		var chk FinalizerError
-		if errors.As(err, &chk) {
+		if chk, ok := errors.AsType[FinalizerError](err); ok {
 			logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 		}
 		logger.Error("error adding in-progress finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -263,8 +259,7 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	err = o.finalizerUpdater.ReplaceFinalizer(ctx, object, o.addPendingFinalizer, o.finalizer)
 	if err != nil {
 		span.SetStatus(codes.Error, fmt.Sprintf("finalizer add error: %s", err.Error()))
-		var chk FinalizerError
-		if errors.As(err, &chk) {
+		if chk, ok := errors.AsType[FinalizerError](err); ok {
 			logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 		}
 		logger.Error("error adding finalizer", "error", err.Error(), "kind", object.GroupVersionKind().Kind, "namespace", object.GetNamespace(), "name", object.GetName())
@@ -316,8 +311,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		err = o.finalizerUpdater.ReplaceFinalizer(ctx, tgt, o.addPendingFinalizer, o.finalizer)
 		if err != nil {
 			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
-			var chk FinalizerError
-			if errors.As(err, &chk) {
+			if chk, ok := errors.AsType[FinalizerError](err); ok {
 				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 			}
 			logger.Error("error adding finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
@@ -348,8 +342,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, tgt, o.finalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
-				var chk FinalizerError
-				if errors.As(err, &chk) {
+				if chk, ok := errors.AsType[FinalizerError](err); ok {
 					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 				}
 				logger.Error("error removing finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
@@ -361,8 +354,7 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 			err = o.finalizerUpdater.RemoveFinalizer(ctx, tgt, o.addPendingFinalizer)
 			if err != nil {
 				span.SetStatus(codes.Error, fmt.Sprintf("error removing finalizer: %s", err.Error()))
-				var chk FinalizerError
-				if errors.As(err, &chk) {
+				if chk, ok := errors.AsType[FinalizerError](err); ok {
 					logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 				}
 				logger.Error("error removing in-progress finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())

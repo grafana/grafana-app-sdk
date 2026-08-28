@@ -115,7 +115,7 @@ var appManifestData = app.ManifestData{
 			Kinds: []app.ManifestRoleKind{
 				{
 					Kind:          "AppManifest",
-					PermissionSet: strPtr("viewer"),
+					PermissionSet: new("viewer"),
 				},
 			},
 			Routes: []string{},
@@ -206,7 +206,4 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 }
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
 	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
-}
-func strPtr(s string) *string {
-	return &s
 }

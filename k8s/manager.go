@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
 	"slices"
@@ -208,14 +209,12 @@ const (
 )
 
 // toOpenAPIV3 converts a struct into a map[string]any representation of an OpenAPIV3-compliant JSON spec
-func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
+func toOpenAPIV3(typ reflect.Type) map[string]any {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	m := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-
+	for field := range typ.Fields() {
 		// Process type
 		fieldType := field.Type
 		for fieldType.Kind() == reflect.Pointer {
@@ -245,9 +244,7 @@ func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
 		case reflect.Struct:
 			props := toOpenAPIV3(fieldType)
 			if field.Anonymous { // Embed anonymous fields
-				for key, val := range props {
-					m[key] = val
-				}
+				maps.Copy(m, props)
 				continue
 			}
 			v["type"] = openAPITypeObject

@@ -55,14 +55,12 @@ func (d *DiscoveryClient) PreferredVersion(apiGroup string) (*metav1.APIResource
 		// In those cases, we should check into the error further rather than just returning.
 		// If there are no results, return the error we got.
 		if len(preferred) == 0 {
-			var statusErr *apierrors.StatusError
-			if errors.As(err, &statusErr) {
+			if statusErr, ok := errors.AsType[*apierrors.StatusError](err); ok {
 				return nil, statusErr
 			}
 			return nil, fmt.Errorf("error getting preferred resources from discovery client: %w", err)
 		}
-		var groupDiscoveryErr *discovery.ErrGroupDiscoveryFailed
-		if errors.As(err, &groupDiscoveryErr) {
+		if groupDiscoveryErr, ok := errors.AsType[*discovery.ErrGroupDiscoveryFailed](err); ok {
 			for g, gerr := range groupDiscoveryErr.Groups {
 				logging.DefaultLogger.Warn(fmt.Sprintf("discovery failed for GroupVersion %s", g.String()), "groupversion", g, "error", gerr)
 				if g.Group == apiGroup {

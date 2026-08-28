@@ -827,9 +827,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 		}
 		if len(sourceRoute.Extensions) > 0 {
 			targetOperation.Extensions = make(spec.Extensions)
-			for k, v := range sourceRoute.Extensions {
-				targetOperation.Extensions[k] = v
-			}
+			maps.Copy(targetOperation.Extensions, sourceRoute.Extensions)
 		}
 
 		switch upperMethod {
