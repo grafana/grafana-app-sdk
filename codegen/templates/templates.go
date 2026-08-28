@@ -64,6 +64,7 @@ var (
 	templateGoResourceClient, _       = template.ParseFS(templates, "resourceclient.tmpl")
 	templateGoVersionedRouteClient, _ = template.ParseFS(templates, "client.tmpl")
 	templateRuntimeObject, _          = template.ParseFS(templates, "runtimeobject.tmpl")
+	templateGoCustomStorageBackend, _ = template.ParseFS(templates, "backend.tmpl")
 
 	templateBackendPluginRouter, _          = template.ParseFS(templates, "plugin/plugin.tmpl")
 	templateBackendPluginResourceHandler, _ = template.ParseFS(templates, "plugin/handler_resource.tmpl")
@@ -679,6 +680,17 @@ func WriteGoResourceClient(metadata GoResourceClientMetadata, out io.Writer) err
 		})
 	}
 	return templateGoResourceClient.Execute(out, metadata)
+}
+
+// GoBackendMetadata is the metadata used to render backend.tmpl, which generates a per-Kind
+// interface (`<KindName>Backend`) for developer-implemented custom storage.
+type GoBackendMetadata struct {
+	PackageName string
+	KindName    string
+}
+
+func WriteGoBackend(metadata GoBackendMetadata, out io.Writer) error {
+	return templateGoCustomStorageBackend.Execute(out, metadata)
 }
 
 type GoCustomRouteClientMetadata struct {

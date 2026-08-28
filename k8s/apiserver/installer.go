@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/admission"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic"
+	genericregistrystore "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
@@ -57,7 +58,10 @@ type AppInstaller interface {
 	AddToScheme(scheme *runtime.Scheme) error
 	// GetOpenAPIDefinitions gets a map of OpenAPI definitions for use with kubernetes OpenAPI
 	GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition
-	// InstallAPIs installs the API endpoints to an API server
+	// InstallAPIs installs the API endpoints to an API server.
+	// If the underlying App implements AppCustomStorageProvider (as simple.App does via
+	// AppManagedKind.Storage), InitializeApp must be called before InstallAPIs for that custom
+	// storage to be picked up — otherwise the kind silently falls back to the generic store.
 	InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error
 	// AdmissionPlugin returns an admission.Factory to use for the Admission Plugin.
 	// If the App does not provide admission control, it should return nil
@@ -168,6 +172,24 @@ var (
 	ErrAppAlreadyInitialized = errors.New("app already initialized")
 )
 
+// CustomStorageResolver resolves a kind and version to a caller-provided rest.Storage
+// implementation, to be used instead of the SDK's generic etcd-backed store for that kind.
+// It returns false if no custom storage is provided for the given kind and version, in which
+// case the installer falls back to its default, generic storage.
+// Use NewCustomStorage to build a rest.Storage from a Backend implementation.
+type CustomStorageResolver func(kind, ver string) (rest.Storage, bool)
+
+// AppCustomStorageProvider is implemented by an app.App which can provide a rest.Storage for one
+// or more of its managed kinds (for example, simple.App does this via AppManagedKind.Storage).
+// If the App returned by the AppInstaller's app.Provider implements this interface, it is
+// consulted for custom storage the same way a CustomStorageResolver set via SetCustomStorage
+// would be, without the caller needing to call SetCustomStorage directly.
+type AppCustomStorageProvider interface {
+	// CustomStorage resolves a kind and version to a rest.Storage implementation, the same way a
+	// CustomStorageResolver does.
+	CustomStorage(kind, ver string) (rest.Storage, bool)
+}
+
 var _ AppInstaller = (*defaultInstaller)(nil)
 
 type defaultInstaller struct {
@@ -175,6 +197,7 @@ type defaultInstaller struct {
 	appConfig      app.Config
 	resolver       GoTypeResolver
 	resourceConfig *serverstorage.ResourceConfig
+	customStorage  CustomStorageResolver
 
 	app    app.App
 	appMux sync.Mutex
@@ -209,6 +232,34 @@ func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, reso
 // Providing a `nil` ResourceConfig will remove any resourceConfig checking (this is the default behavior).
 func (r *defaultInstaller) SetResourceConfig(resourceConfig *serverstorage.ResourceConfig) {
 	r.resourceConfig = resourceConfig
+}
+
+// SetCustomStorage sets a CustomStorageResolver for the installer, which is consulted for each
+// kind when installing the APIs. If the resolver returns a rest.Storage for a given kind and
+// version, that storage is used instead of the SDK's generic etcd-backed store, allowing a Kind's
+// data to be backed by developer-written Go code (e.g. against a SQL database or external API)
+// while still being served through the aggregated API server.
+// Providing a `nil` CustomStorageResolver removes any custom storage resolution (this is the
+// default behavior).
+func (r *defaultInstaller) SetCustomStorage(resolver CustomStorageResolver) {
+	r.customStorage = resolver
+}
+
+// resolveCustomStorage resolves custom storage for a kind and version, checking the
+// CustomStorageResolver set via SetCustomStorage first, then falling back to the App's own
+// AppCustomStorageProvider implementation (if the App is initialized and implements it).
+func (r *defaultInstaller) resolveCustomStorage(kind, ver string) (rest.Storage, bool) {
+	if r.customStorage != nil {
+		if custom, ok := r.customStorage(kind, ver); ok {
+			return custom, true
+		}
+	}
+	if r.app != nil {
+		if provider, ok := r.app.(AppCustomStorageProvider); ok {
+			return provider.CustomStorage(kind, ver)
+		}
+	}
+	return nil, false
 }
 
 //nolint:gocognit,gocyclo,funlen
@@ -447,19 +498,39 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 				logging.DefaultLogger.Info("Skipping resource based on provided ResourceConfig", "kind", kind.Kind, "version", gv.Version, "group", group)
 				continue
 			}
-			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
-			if err != nil {
-				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
+			var s rest.Storage
+			if custom, ok := r.resolveCustomStorage(kind.Kind.Kind(), gv.Version); ok {
+				s = custom
+			}
+			if s == nil {
+				var err error
+				s, err = newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
+				if err != nil {
+					return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
+				}
 			}
 			storage[kind.Kind.Plural()] = s
-			// Loop through all subresources and set up storage
+			// Loop through all subresources and set up storage. Subresource storage is only
+			// derivable from the SDK's generic, etcd-backed store: a Kind using custom storage
+			// (see SetCustomStorage) which declares subresources must supply its own rest.Storage
+			// for those subresource paths via the same CustomStorageResolver, keyed by
+			// "<kind>/<subresource>".
+			genericStore, isGenericStore := s.(*genericregistrystore.Store)
 			for sr := range kind.Kind.ZeroValue().GetSubresources() {
-				// Use *StatusREST for the status subresource for backwards compatibility with grafana
-				if sr == string(resource.SubresourceStatus) {
-					storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), resource.SubresourceStatus)] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, s)
+				subresourcePath := fmt.Sprintf("%s/%s", kind.Kind.Plural(), sr)
+				if custom, ok := r.resolveCustomStorage(kind.Kind.Kind()+"/"+sr, gv.Version); ok {
+					storage[subresourcePath] = custom
 					continue
 				}
-				storage[fmt.Sprintf("%s/%s", kind.Kind.Plural(), sr)] = newSubresourceREST(s, r.scheme, kind.Kind, sr)
+				if !isGenericStore {
+					return fmt.Errorf("no custom storage provided for subresource %q of kind %s, which uses custom primary storage", sr, kind.Kind.Kind())
+				}
+				// Use *StatusREST for the status subresource for backwards compatibility with grafana
+				if sr == string(resource.SubresourceStatus) {
+					storage[subresourcePath] = newRegistryStatusStoreForKind(r.scheme, kind.Kind, genericStore)
+					continue
+				}
+				storage[subresourcePath] = newSubresourceREST(genericStore, r.scheme, kind.Kind, sr)
 			}
 			for route, props := range kind.ManifestKind.Routes {
 				if route == "" {

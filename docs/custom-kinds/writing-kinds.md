@@ -171,9 +171,12 @@ codegen: {
     }
     go: {
     	enabled: true
+    	customBackend: true
     }
 }
 ```
+
+`go.customBackend` controls whether the `<Kind>Backend` interface (see [Backing a Kind with your own storage](../application-design/custom-storage.md)) is generated for this kind. It's on by default; set `codegen: go: customBackend: false` if you don't intend to back this kind with your own storage and want to skip generating that file.
 And can be overwritten at either the kind level, or the version level. For example, if we wanted to turn off front-end code from being generated for `v1` of our kind, but keep it on for version `v2`, we could write a kind like this:
 ```cue
 fooKind: {

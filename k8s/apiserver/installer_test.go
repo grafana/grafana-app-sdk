@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
 	"k8s.io/kube-openapi/pkg/common"
@@ -283,6 +284,156 @@ func TestDefaultInstaller_InstallAPIs(t *testing.T) {
 		assert.NotNil(t, err)
 		assert.EqualError(t, err, "failed to create store for kind Test: failed completing storage options for Test: options for tests.test.ext.grafana.app must have RESTOptions set")
 	})
+
+	t.Run("success with custom storage", func(t *testing.T) {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return TestKind, true
+			},
+			CustomRouteReturnGoTypeFunc: func(kind, version, path, verb string) (any, bool) {
+				return nil, false
+			},
+		})
+		require.Nil(t, err)
+
+		backend := newFakeBackend()
+		customStorage := NewCustomStorage[*resource.UntypedObject, *resource.UntypedList](TestKind, backend)
+		installer.SetCustomStorage(func(kind, version string) (rest.Storage, bool) {
+			if kind == TestKind.Kind() && version == TestKind.Version() {
+				return customStorage, true
+			}
+			return nil, false
+		})
+
+		var captured *genericapiserver.APIGroupInfo
+		server := &MockGenericAPIServer{
+			InstallAPIGroupFunc: func(apiGroupInfo *genericapiserver.APIGroupInfo) error {
+				captured = apiGroupInfo
+				return nil
+			},
+		}
+
+		// optsGetter is nil: since custom storage never touches etcd/RESTOptions, this succeeds
+		// where the generic store ("error creating store" above) fails.
+		err = installer.InstallAPIs(server, nil)
+		require.NoError(t, err)
+		require.NotNil(t, captured)
+
+		storageMap := captured.VersionedResourcesStorageMap[TestKind.Version()]
+		require.NotNil(t, storageMap)
+		assert.Same(t, customStorage, storageMap[TestKind.Plural()])
+	})
+
+	t.Run("success with custom storage from AppCustomStorageProvider", func(t *testing.T) {
+		backend := newFakeBackend()
+		customStorage := NewCustomStorage[*resource.UntypedObject, *resource.UntypedList](TestKind, backend)
+		mockApp := &MockApp{
+			CustomStorageFunc: func(kind, version string) (rest.Storage, bool) {
+				if kind == TestKind.Kind() && version == TestKind.Version() {
+					return customStorage, true
+				}
+				return nil, false
+			},
+		}
+
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, func(_ app.Config) (app.App, error) {
+			return mockApp, nil
+		}), app.Config{}, &mockGoTypeResolver{
+			KindToGoTypeFunc: func(kind, ver string) (resource.Kind, bool) {
+				return TestKind, true
+			},
+			CustomRouteReturnGoTypeFunc: func(kind, version, path, verb string) (any, bool) {
+				return nil, false
+			},
+		})
+		require.Nil(t, err)
+		require.NoError(t, installer.InitializeApp(clientrest.Config{}))
+
+		var captured *genericapiserver.APIGroupInfo
+		server := &MockGenericAPIServer{
+			InstallAPIGroupFunc: func(apiGroupInfo *genericapiserver.APIGroupInfo) error {
+				captured = apiGroupInfo
+				return nil
+			},
+		}
+
+		// optsGetter is nil: since custom storage never touches etcd/RESTOptions, this succeeds
+		// where the generic store ("error creating store" above) fails.
+		err = installer.InstallAPIs(server, nil)
+		require.NoError(t, err)
+		require.NotNil(t, captured)
+
+		storageMap := captured.VersionedResourcesStorageMap[TestKind.Version()]
+		require.NotNil(t, storageMap)
+		assert.Same(t, customStorage, storageMap[TestKind.Plural()])
+	})
+}
+
+// fakeBackend is an in-memory implementation of Backend[*resource.UntypedObject, *resource.UntypedList],
+// used to test that custom storage is dispatched to correctly by the installer and customStorage adapter.
+type fakeBackend struct {
+	objects map[string]*resource.UntypedObject
+}
+
+func newFakeBackend() *fakeBackend {
+	return &fakeBackend{objects: map[string]*resource.UntypedObject{}}
+}
+
+func (f *fakeBackend) key(identifier resource.Identifier) string {
+	return identifier.Namespace + "/" + identifier.Name
+}
+
+func (f *fakeBackend) Get(_ context.Context, identifier resource.Identifier) (*resource.UntypedObject, error) {
+	obj, ok := f.objects[f.key(identifier)]
+	if !ok {
+		return nil, apierrors.NewNotFound(TestKind.GroupVersionResource().GroupResource(), identifier.Name)
+	}
+	return obj, nil
+}
+
+func (f *fakeBackend) List(_ context.Context, namespace string, _ resource.ListOptions) (*resource.UntypedList, error) {
+	list := &resource.UntypedList{}
+	for _, obj := range f.objects {
+		if namespace != "" && obj.GetNamespace() != namespace {
+			continue
+		}
+		list.Items = append(list.Items, obj)
+	}
+	return list, nil
+}
+
+func (f *fakeBackend) Create(_ context.Context, obj *resource.UntypedObject) (*resource.UntypedObject, error) {
+	f.objects[f.key(resource.Identifier{Namespace: obj.GetNamespace(), Name: obj.GetName()})] = obj
+	return obj, nil
+}
+
+func (f *fakeBackend) Update(_ context.Context, obj *resource.UntypedObject) (*resource.UntypedObject, error) {
+	f.objects[f.key(resource.Identifier{Namespace: obj.GetNamespace(), Name: obj.GetName()})] = obj
+	return obj, nil
+}
+
+func (f *fakeBackend) Delete(_ context.Context, identifier resource.Identifier) error {
+	if _, ok := f.objects[f.key(identifier)]; !ok {
+		return apierrors.NewNotFound(TestKind.GroupVersionResource().GroupResource(), identifier.Name)
+	}
+	delete(f.objects, f.key(identifier))
+	return nil
+}
+
+func (f *fakeBackend) Watch(_ context.Context, _ string, _ resource.WatchOptions) (resource.WatchResponse, error) {
+	return &fakeWatchResponse{events: make(chan resource.WatchEvent)}, nil
+}
+
+type fakeWatchResponse struct {
+	events chan resource.WatchEvent
+}
+
+func (f *fakeWatchResponse) Stop() {
+	close(f.events)
+}
+
+func (f *fakeWatchResponse) WatchEvents() <-chan resource.WatchEvent {
+	return f.events
 }
 
 func TestDefaultInstaller_AdmissionPlugin(t *testing.T) {
@@ -554,12 +705,20 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 }
 
 type MockGenericAPIServer struct {
-	InstallAPIGroupFunc func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	InstallAPIGroupFunc       func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	RegisteredWebServicesFunc func() []*restful.WebService
 }
 
 func (m *MockGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error {
 	if m.InstallAPIGroupFunc != nil {
 		return m.InstallAPIGroupFunc(apiGroupInfo)
+	}
+	return nil
+}
+
+func (m *MockGenericAPIServer) RegisteredWebServices() []*restful.WebService {
+	if m.RegisteredWebServicesFunc != nil {
+		return m.RegisteredWebServicesFunc()
 	}
 	return nil
 }

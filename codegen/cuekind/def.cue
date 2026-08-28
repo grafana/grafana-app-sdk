@@ -298,7 +298,10 @@ Kind: S={
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *S._codegen.go.enabled
-			config: {} | *S._codegen.go.config
+			// customBackend indicates whether a `<Kind>Backend` interface should be generated for this
+			// kind's schema, for use with a custom (non-CRD-backed) storage implementation.
+			customBackend: bool | *S._codegen.go.customBackend
+			config:        {} | *S._codegen.go.config
 		}
 	}
 
@@ -359,7 +362,10 @@ Version: S={
 		go: {
 			// enabled indicates whether back-end Go code should be generated for this kind's schema
 			enabled: bool | *true
-			config: {}
+			// customBackend indicates whether a `<Kind>Backend` interface should be generated for this
+			// kind's schema, for use with a custom (non-CRD-backed) storage implementation.
+			customBackend: bool | *true
+			config:        {}
 		}
 	}
 	kinds: [...{

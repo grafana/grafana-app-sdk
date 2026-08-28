@@ -172,8 +172,9 @@ func TestManifestGoGenerator(t *testing.T) {
 		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 16 -> prior 15 (manifest, reconcile/search/foobar routes + v1–v3 clients + v3 route client) + v4 resource client (1)
-		require.Len(t, files, 16, "should be 16 files generated, got %d", len(files))
+		// 21 -> prior 16 (manifest, reconcile/search/foobar routes + v1–v4 resource clients + v3 route client)
+		// + 5 backend interfaces (one per Go-enabled kind/version: testkind2 v1, testkind v1-v4)
+		require.Len(t, files, 21, "should be 21 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
@@ -192,8 +193,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 3 -> manifest, client v0_0, client v1_0
-		assert.Len(t, files, 3)
+		// 5 -> manifest, client v0_0, client v1_0, backend v0_0, backend v1_0
+		assert.Len(t, files, 5)
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbykind")

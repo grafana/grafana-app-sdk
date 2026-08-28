@@ -10,8 +10,10 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/rest"
+	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
+
+	apiserverregistry "k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
@@ -114,7 +116,7 @@ type App struct {
 // AppConfig is the configuration used by App
 type AppConfig struct {
 	Name       string
-	KubeConfig rest.Config
+	KubeConfig restclient.Config
 	// ClientGenerator is the ClientGenerator to use when constructing informers.
 	// It is optional and will default to k8s.NewClientRegistry(KubeConfig, k8s.DefaultClientConfig()) if not present.
 	ClientGenerator resource.ClientGenerator
@@ -244,6 +246,12 @@ type AppManagedKind struct {
 	CustomRoutes AppCustomRouteHandlers
 	// ReconcileOptions are the options to use for running the Reconciler or Watcher for the Kind, if one exists.
 	ReconcileOptions BasicReconcileOptions
+	// Storage is an optional rest.Storage implementation which, if set, is used by the AppInstaller
+	// to serve this Kind's version instead of the SDK's generic etcd/CRD-backed store. This allows
+	// the Kind's data to be backed by developer-written Go code (for example a SQL database or an
+	// external API) while still being served through the aggregated API server.
+	// Use apiserver.NewCustomStorage to build this from a Backend implementation.
+	Storage apiserverregistry.Storage
 }
 
 // AppUnmanagedKind is a Kind which an App does not manage, but still may want to watch or reconcile as part of app functionality
@@ -432,6 +440,23 @@ func (a *App) ManagedKinds() []resource.Kind {
 		kinds = append(kinds, k.Kind)
 	}
 	return kinds
+}
+
+// CustomStorage returns the rest.Storage set as AppManagedKind.Storage for the managed kind with
+// the given kind name and version, if one exists and has a non-nil Storage. It returns false
+// otherwise, in which case the caller should fall back to its own default storage for the kind.
+// This allows an AppInstaller to satisfy apiserver.CustomStorageResolver using this App's
+// declared AppManagedKind.Storage values.
+func (a *App) CustomStorage(kind, version string) (apiserverregistry.Storage, bool) {
+	for _, k := range a.kinds {
+		if k.Storage == nil {
+			continue
+		}
+		if k.Kind.Kind() == kind && k.Kind.Version() == version {
+			return k.Storage, true
+		}
+	}
+	return nil, false
 }
 
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners

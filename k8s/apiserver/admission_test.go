@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/authentication/user"
+	"k8s.io/apiserver/pkg/registry/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
@@ -591,6 +592,7 @@ type MockApp struct {
 	RunnerFunc               func() app.Runnable
 	HealthChecksFunc         func() []health.Check
 	PrometheusCollectorsFunc func() []prometheus.Collector
+	CustomStorageFunc        func(kind, ver string) (rest.Storage, bool)
 }
 
 func (m *MockApp) Validate(ctx context.Context, request *app.AdmissionRequest) error {
@@ -647,4 +649,12 @@ func (m *MockApp) PrometheusCollectors() []prometheus.Collector {
 		return m.PrometheusCollectorsFunc()
 	}
 	return nil
+}
+
+// CustomStorage makes MockApp implement AppCustomStorageProvider when CustomStorageFunc is set.
+func (m *MockApp) CustomStorage(kind, ver string) (rest.Storage, bool) {
+	if m.CustomStorageFunc != nil {
+		return m.CustomStorageFunc(kind, ver)
+	}
+	return nil, false
 }

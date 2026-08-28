@@ -74,8 +74,11 @@ type KindCodegenTSProperties struct {
 }
 
 type KindCodegenGoProperties struct {
-	Enabled bool           `json:"enabled"`
-	Config  map[string]any `json:"config"`
+	Enabled bool `json:"enabled"`
+	// CustomBackend indicates whether a `<Kind>Backend` interface should be generated for this
+	// kind's schema, for use with a custom (non-CRD-backed) storage implementation.
+	CustomBackend bool           `json:"customBackend"`
+	Config        map[string]any `json:"config"`
 }
 
 // KindCodegenTSConfig is the TypeScript configuration options for codegen,

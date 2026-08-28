@@ -4,6 +4,8 @@
 - [Frontend-only applications](#frontend-only-applications)
 - [Operator-based applications](#operator-based-applications)
 - [Applications with custom APIs](#applications-with-custom-apis)
+  - [Backing a Kind with your own storage](#backing-a-kind-with-your-own-storage)
+    - [Full guide: Backing a Kind with your own storage](./custom-storage.md) (includes filtering, pagination, and resource version handling)
 
 ## Overview
 
@@ -86,3 +88,9 @@ EOF
 ```
 
 In other words you would be defining a pseudo-subresource with the name `ServiceRollbackRequest` and using it to supply all information required for a service version rollback.
+
+### Backing a Kind with your own storage
+
+If your Kind's data doesn't need to (or shouldn't) live in the platform's generic storage — for example, it lives in an existing SQL database, comes from an external API, or is computed on the fly rather than persisted at all — you can back it with your own Go code while still exposing it through the aggregated API server, so that `kubectl get`, `create`, `update`, `delete` and `watch` all work exactly as they would for a CRD-backed Kind. Codegen produces a `<Kind>Backend` interface for you to implement, which you then declare on the Kind's `AppManagedKind` (or wire directly into an `AppInstaller`) in place of the platform's generic etcd-backed store.
+
+See [Backing a Kind with your own storage](./custom-storage.md) for the full walkthrough, including filtering, pagination, resource version handling, and a read-only example.

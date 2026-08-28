@@ -1,0 +1,26 @@
+package v3
+
+import (
+	"context"
+
+	"github.com/grafana/grafana-app-sdk/resource"
+)
+
+// TestKindBackend is implemented by developer-provided code which backs TestKind's
+// storage with something other than the SDK's generic, etcd/CRD-backed store. Implementations
+// can be adapted into a rest.Storage via apiserver.NewCustomStorage, to serve TestKind
+// through the aggregated API server without it being backed by a CRD.
+type TestKindBackend interface {
+	// Get retrieves a single TestKind by its identifier.
+	Get(ctx context.Context, identifier resource.Identifier) (*TestKind, error)
+	// List retrieves a list of TestKind in the given namespace matching the provided options.
+	List(ctx context.Context, namespace string, opts resource.ListOptions) (*TestKindList, error)
+	// Create creates a new TestKind, returning the created object as it is stored.
+	Create(ctx context.Context, obj *TestKind) (*TestKind, error)
+	// Update updates an existing TestKind, returning the updated object as it is stored.
+	Update(ctx context.Context, obj *TestKind) (*TestKind, error)
+	// Delete deletes an existing TestKind by its identifier.
+	Delete(ctx context.Context, identifier resource.Identifier) error
+	// Watch begins watching for changes to TestKind in the given namespace matching the provided options.
+	Watch(ctx context.Context, namespace string, opts resource.WatchOptions) (resource.WatchResponse, error)
+}

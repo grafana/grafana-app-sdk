@@ -10,6 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/grafana/grafana-app-sdk/app"
@@ -352,6 +353,42 @@ func TestApp_ManagedKinds(t *testing.T) {
 	}
 	a := createTestApp(t, AppConfig{ManagedKinds: managed})
 	assert.ElementsMatch(t, kinds, a.ManagedKinds())
+}
+
+// stubStorage is a minimal apiserverregistry.Storage implementation used to test that
+// AppManagedKind.Storage is surfaced correctly by App.CustomStorage.
+type stubStorage struct{}
+
+func (stubStorage) New() runtime.Object { return nil }
+func (stubStorage) Destroy()            {}
+
+func TestApp_CustomStorage(t *testing.T) {
+	kind := testKind()
+	storage := stubStorage{}
+
+	a := createTestApp(t, AppConfig{ManagedKinds: []AppManagedKind{
+		{Kind: kind, Storage: storage},
+	}})
+
+	got, ok := a.CustomStorage(kind.Kind(), kind.Version())
+	require.True(t, ok)
+	assert.Equal(t, storage, got)
+
+	_, ok = a.CustomStorage("Nonexistent", kind.Version())
+	assert.False(t, ok)
+
+	_, ok = a.CustomStorage(kind.Kind(), "v9999")
+	assert.False(t, ok)
+}
+
+func TestApp_CustomStorage_NoneDeclared(t *testing.T) {
+	kind := testKind()
+	a := createTestApp(t, AppConfig{ManagedKinds: []AppManagedKind{
+		{Kind: kind},
+	}})
+
+	_, ok := a.CustomStorage(kind.Kind(), kind.Version())
+	assert.False(t, ok)
 }
 
 func TestApp_Mutate(t *testing.T) {
