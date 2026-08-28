@@ -218,7 +218,7 @@ func CopyObjectInto[T any](out T, in T) error {
 }
 
 var errCannotSetValue = errors.New("cannot set value")
-var reflectTypeTime = reflect.TypeOf(time.Time{})
+var reflectTypeTime = reflect.TypeFor[time.Time]()
 
 // nolint:gocognit,gocritic,funlen
 func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {

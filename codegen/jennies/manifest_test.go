@@ -7,7 +7,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/kube-openapi/pkg/validation/spec"
-	"k8s.io/utils/ptr"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
@@ -27,39 +26,39 @@ func TestResolveOperatorURL(t *testing.T) {
 		},
 		{
 			name:  "deprecated operatorURL only",
-			props: codegen.AppManifestProperties{OperatorURL: ptr.To("https://foo.bar:8443")},
-			want:  ptr.To("https://foo.bar:8443"),
+			props: codegen.AppManifestProperties{OperatorURL: new("https://foo.bar:8443")},
+			want:  new("https://foo.bar:8443"),
 		},
 		{
 			name: "structured operator.url only",
 			props: codegen.AppManifestProperties{
-				Operator: &codegen.AppManifestPropertiesOperatorInfo{URL: ptr.To("https://foo.bar:8443")},
+				Operator: &codegen.AppManifestPropertiesOperatorInfo{URL: new("https://foo.bar:8443")},
 			},
-			want: ptr.To("https://foo.bar:8443"),
+			want: new("https://foo.bar:8443"),
 		},
 		{
 			name: "both set to same value",
 			props: codegen.AppManifestProperties{
-				OperatorURL: ptr.To("https://foo.bar:8443"),
-				Operator:    &codegen.AppManifestPropertiesOperatorInfo{URL: ptr.To("https://foo.bar:8443")},
+				OperatorURL: new("https://foo.bar:8443"),
+				Operator:    &codegen.AppManifestPropertiesOperatorInfo{URL: new("https://foo.bar:8443")},
 			},
-			want: ptr.To("https://foo.bar:8443"),
+			want: new("https://foo.bar:8443"),
 		},
 		{
 			name: "both set to different values errors",
 			props: codegen.AppManifestProperties{
-				OperatorURL: ptr.To("https://deprecated:8443"),
-				Operator:    &codegen.AppManifestPropertiesOperatorInfo{URL: ptr.To("https://structured:8443")},
+				OperatorURL: new("https://deprecated:8443"),
+				Operator:    &codegen.AppManifestPropertiesOperatorInfo{URL: new("https://structured:8443")},
 			},
 			wantErr: "both set but differ",
 		},
 		{
 			name: "operator set without url falls back to deprecated",
 			props: codegen.AppManifestProperties{
-				OperatorURL: ptr.To("https://foo.bar:8443"),
+				OperatorURL: new("https://foo.bar:8443"),
 				Operator:    &codegen.AppManifestPropertiesOperatorInfo{},
 			},
-			want: ptr.To("https://foo.bar:8443"),
+			want: new("https://foo.bar:8443"),
 		},
 	}
 	for _, tt := range tests {
@@ -92,7 +91,7 @@ func TestOperatorWebhookPaths(t *testing.T) {
 		{
 			name: "operator without webhooks uses defaults",
 			props: codegen.AppManifestProperties{
-				Operator: &codegen.AppManifestPropertiesOperatorInfo{URL: ptr.To("https://foo.bar")},
+				Operator: &codegen.AppManifestPropertiesOperatorInfo{URL: new("https://foo.bar")},
 			},
 			wantConversion: "/convert",
 			wantValidation: "/validate",
@@ -190,15 +189,15 @@ func TestProcessKindVersion_Search(t *testing.T) {
 	}, {
 		name:     "search opt-out",
 		search:   codegen.KindSearch{Endpoint: false, Trash: true},
-		expected: &app.ManifestVersionKindSearch{Endpoint: ptr.To(false)},
+		expected: &app.ManifestVersionKindSearch{Endpoint: new(false)},
 	}, {
 		name:     "trash opt-out",
 		search:   codegen.KindSearch{Endpoint: true, Trash: false},
-		expected: &app.ManifestVersionKindSearch{Trash: ptr.To(false)},
+		expected: &app.ManifestVersionKindSearch{Trash: new(false)},
 	}, {
 		name:     "both opt-out",
 		search:   codegen.KindSearch{Endpoint: false, Trash: false},
-		expected: &app.ManifestVersionKindSearch{Endpoint: ptr.To(false), Trash: ptr.To(false)},
+		expected: &app.ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			mver, err := processKindVersion(codegen.VersionedKind{
@@ -270,8 +269,8 @@ func TestCustomRouteExtensions(t *testing.T) {
 			route: codegen.CustomRoute{
 				Authz: &codegen.CustomRouteAuthz{
 					Resource:    "foos",
-					Subresource: ptr.To("reconcile"),
-					Verb:        ptr.To("create"),
+					Subresource: new("reconcile"),
+					Verb:        new("create"),
 				},
 			},
 			want: spec.Extensions{
@@ -286,7 +285,7 @@ func TestCustomRouteExtensions(t *testing.T) {
 				Extensions: map[string]any{"x-foo": true},
 				Authz: &codegen.CustomRouteAuthz{
 					Resource: "foos",
-					Verb:     ptr.To("get"),
+					Verb:     new("get"),
 				},
 			},
 			want: spec.Extensions{

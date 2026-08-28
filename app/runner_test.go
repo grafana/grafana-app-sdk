@@ -294,12 +294,10 @@ func TestDynamicMultiRunner_Run(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		wg2 := &sync.WaitGroup{}
-		wg2.Add(1)
-		go func() {
+		wg2.Go(func() {
 			err := runner.Run(ctx)
 			assert.Nil(t, err)
-			wg2.Done()
-		}()
+		})
 		// Verify that the first runner is running before we add a second runner
 		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for first runnable to run")
 		// Add a second runner and make sure it also gets run
@@ -344,12 +342,10 @@ func TestDynamicMultiRunner_Run(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			err := runner.Run(ctx)
 			assert.Nil(t, err)
-			wg.Done()
-		}()
+		})
 		// Wait for runner1 to start
 		require.False(t, waitForMessageOrTimeout(started, time.Second*5), "timed out waiting for runnable to run")
 		// Remove the runner (this should also cancel runner1's context)
@@ -389,12 +385,10 @@ func TestDynamicMultiRunner_Run(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			err := runner.Run(ctx)
 			assert.Nil(t, err)
-			wg.Done()
-		}()
+		})
 		// Wait for the runner to be started
 		require.False(t, waitForMessageOrTimeout(started, time.Second*5), "timed out waiting for runnable to run")
 		require.True(t, runner1Running)
@@ -436,12 +430,10 @@ func TestDynamicMultiRunner_Run(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			err := runner.Run(ctx)
 			assert.Equal(t, myErr, err)
-			wg.Done()
-		}()
+		})
 		// Wait for the runner to be started
 		require.False(t, waitForMessageOrTimeout(started, time.Second*5), "timed out waiting for runnable to run")
 		// Return an error from runner 1
@@ -454,8 +446,7 @@ func TestDynamicMultiRunner_Run(t *testing.T) {
 
 	t.Run("timeout waiting for runner to complete", func(t *testing.T) {
 		runner := NewDynamicMultiRunner()
-		runnerCtx, runnerCancel := context.WithCancel(context.Background())
-		defer runnerCancel()
+		runnerCtx := t.Context()
 		started := make(chan struct{})
 		defer close(started)
 		runner.AddRunnable(&testRunnable{
@@ -470,12 +461,10 @@ func TestDynamicMultiRunner_Run(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		wg := &sync.WaitGroup{}
-		wg.Add(1)
-		go func() {
+		wg.Go(func() {
 			err := runner.Run(ctx)
 			assert.Equal(t, ErrRunnerExitTimeout, err)
-			wg.Done()
-		}()
+		})
 		require.False(t, waitForMessageOrTimeout(started, timeout), "timed out waiting for runnable to start")
 		cancel()
 		require.False(t, waitOrTimeout(wg, time.Second*5), "timed out waiting for runner to exit")

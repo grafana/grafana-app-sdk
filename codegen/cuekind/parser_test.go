@@ -5,7 +5,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/utils/ptr"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
@@ -149,8 +148,8 @@ func TestParseManifestRoutes(t *testing.T) {
 		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
 		assert.Equal(t, codegen.CustomRouteAuthz{
 			Resource:    "testkinds",
-			Subresource: ptr.To("reconcile"),
-			Verb:        ptr.To("create"),
+			Subresource: new("reconcile"),
+			Verb:        new("create"),
 		}, *v3Kind.Routes["/reconcile"]["POST"].Authz)
 		require.NotNil(t, v3Kind.Routes["/search"]["GET"].Authz)
 		assert.Equal(t, codegen.CustomRouteAuthz{

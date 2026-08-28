@@ -801,9 +801,7 @@ func customRouteExtensions(route codegen.CustomRoute) spec.Extensions {
 		return nil
 	}
 	extensions := make(spec.Extensions, len(route.Extensions))
-	for k, v := range route.Extensions {
-		extensions[k] = v
-	}
+	maps.Copy(extensions, route.Extensions)
 	if route.Authz != nil {
 		extensions[extDeclaredAuthzResource] = route.Authz.Resource
 		if route.Authz.Subresource != nil {

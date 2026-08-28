@@ -78,7 +78,7 @@ func testObserverCommon(t *testing.T, options ObserverTestOptions) {
 	wg := sync.WaitGroup{}
 
 	// Simulate concurrent access
-	for i := 0; i < numChecks; i++ {
+	for i := range numChecks {
 		wg.Add(1)
 		tc := &testCheck{}
 		// copy the checks here so we can assert mock expectations on it
@@ -104,12 +104,10 @@ func testObserverCommon(t *testing.T, options ObserverTestOptions) {
 		cancel()
 	})
 
-	wg.Add(1)
-	go func() {
+	wg.Go(func() {
 		err := o.Run(ctx)
 		assert.Equal(t, err, context.Canceled, fmt.Sprintf("%s: %s", options.name, "could not start the observer"))
-		wg.Done()
-	}()
+	})
 
 	wg.Wait()
 

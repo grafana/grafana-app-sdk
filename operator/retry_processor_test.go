@@ -82,8 +82,7 @@ func TestRetryProcessor_TimeBasedScheduling(t *testing.T) {
 		}
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go processor.Run(ctx)
 
 	processor.Enqueue(RetryRequest{
@@ -127,8 +126,7 @@ func TestRetryProcessor_RetryPolicyCompliance(t *testing.T) {
 		}
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go processor.Run(ctx)
 
 	processor.Enqueue(RetryRequest{
@@ -168,8 +166,7 @@ func TestRetryProcessor_SuccessStopsRetries(t *testing.T) {
 		}
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go processor.Run(ctx)
 
 	processor.Enqueue(RetryRequest{
@@ -248,7 +245,7 @@ func TestRetryProcessor_DequeueAll(t *testing.T) {
 		}
 	})
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		processor.Enqueue(RetryRequest{
 			Key:        "same-key",
 			RetryAfter: time.Now().Add(time.Hour),
@@ -287,10 +284,10 @@ func TestRetryProcessor_ConcurrentEnqueue(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(goroutines)
 
-	for g := 0; g < goroutines; g++ {
+	for g := range goroutines {
 		go func(gIdx int) {
 			defer wg.Done()
-			for i := 0; i < itemsPerGoroutine; i++ {
+			for i := range itemsPerGoroutine {
 				processor.Enqueue(RetryRequest{
 					Key:        fmt.Sprintf("key-%d-%d", gIdx, i),
 					RetryAfter: time.Now().Add(time.Hour),
@@ -352,8 +349,7 @@ func TestRetryProcessor_RequeueAfter(t *testing.T) {
 		}
 	})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go processor.Run(ctx)
 
 	processor.Enqueue(RetryRequest{
@@ -552,8 +548,7 @@ func TestRetryProcessor_Metrics_ExecutionResults(t *testing.T) {
 				MetricsConfig:  metrics.DefaultConfig("test"),
 			}, func() RetryPolicy { return tt.retryPolicy }).(*defaultRetryProcessor)
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := t.Context()
 			go p.Run(ctx)
 
 			p.Enqueue(RetryRequest{
@@ -586,8 +581,7 @@ func TestRetryProcessor_Metrics_WaitDurationObserved(t *testing.T) {
 		MetricsConfig:  metrics.DefaultConfig("test"),
 	}, nil).(*defaultRetryProcessor)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go p.Run(ctx)
 
 	p.Enqueue(RetryRequest{
@@ -637,8 +631,7 @@ func BenchmarkRetryProcessor_Throughput(b *testing.B) {
 				CheckInterval:  time.Millisecond,
 			}, func() RetryPolicy { return retryPolicy })
 
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			ctx := b.Context()
 			go processor.Run(ctx)
 
 			b.ResetTimer()

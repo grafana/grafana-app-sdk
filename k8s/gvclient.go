@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -850,8 +851,6 @@ func addLabels(obj resource.Object, labels map[string]string) {
 	if l == nil {
 		l = make(map[string]string)
 	}
-	for k, v := range labels {
-		l[k] = v
-	}
+	maps.Copy(l, labels)
 	obj.SetLabels(l)
 }

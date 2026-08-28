@@ -24,7 +24,7 @@ type TypedStore[ObjectType Object] struct {
 // If they do not, an error is returned.
 func NewTypedStore[ObjectType Object](kind Kind, generator ClientGenerator) (*TypedStore[ObjectType], error) {
 	schemaType := reflect.TypeOf(kind.ZeroValue())
-	providedType := reflect.TypeOf(new(ObjectType)).Elem()
+	providedType := reflect.TypeFor[ObjectType]()
 	// Get the actual underlying types
 	// Do both at once, because there needs to be casting ability between them
 	for schemaType.Kind() == reflect.Ptr && providedType.Kind() == reflect.Ptr {

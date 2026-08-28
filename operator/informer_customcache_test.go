@@ -90,7 +90,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 	}
 	numHandlers := 100
 	wg := sync.WaitGroup{}
-	for i := 0; i < numHandlers; i++ {
+	for range numHandlers {
 		inf.AddEventHandler(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				assert.Equal(t, addObj, object)
@@ -111,8 +111,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go inf.Run(ctx)
 	waitForInitialEvents.Wait()
 
@@ -177,7 +176,7 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	addWG := sync.WaitGroup{}
 	updateWG := sync.WaitGroup{}
 	deleteWG := sync.WaitGroup{}
-	for i := 0; i < numHandlers; i++ {
+	for range numHandlers {
 		inf.AddEventHandler(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addWG.Done()
@@ -193,11 +192,10 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 			},
 		})
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go inf.Run(ctx)
 	waitForInitialEvents.Wait()
-	for i := 0; i < numEvents; i++ {
+	for i := range numEvents {
 		etype := watch.Added
 		switch i % 3 {
 		case 0:

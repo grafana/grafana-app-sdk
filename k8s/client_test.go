@@ -1014,8 +1014,8 @@ type decoder struct {
 
 func (d *decoder) Decode(data []byte, defaults *schema.GroupVersionKind, into runtime.Object) (runtime.Object, *schema.GroupVersionKind, error) {
 	type check struct {
-		Kind  string        `json:"kind"`
-		Items []interface{} `json:"items,omitempty"`
+		Kind  string `json:"kind"`
+		Items []any  `json:"items,omitempty"`
 	}
 	if into == nil {
 		fmt.Println("OH NO")
