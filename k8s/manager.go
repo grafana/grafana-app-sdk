@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 	"reflect"
 	"slices"
@@ -213,8 +214,8 @@ func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
 		typ = typ.Elem()
 	}
 	m := make(map[string]any)
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
+	for field := range typ.Fields() {
+		field := field
 
 		// Process type
 		fieldType := field.Type
@@ -245,9 +246,7 @@ func toOpenAPIV3(typ reflect.Type) map[string]any { // nolint: funlen
 		case reflect.Struct:
 			props := toOpenAPIV3(fieldType)
 			if field.Anonymous { // Embed anonymous fields
-				for key, val := range props {
-					m[key] = val
-				}
+				maps.Copy(m, props)
 				continue
 			}
 			v["type"] = openAPITypeObject

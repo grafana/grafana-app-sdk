@@ -65,10 +65,10 @@ type SimpleStore[SpecType any] struct {
 //
 // Deprecated: prefer using TypedStore instead
 func NewSimpleStore[SpecType any](kind Kind, generator ClientGenerator) (*SimpleStore[SpecType], error) {
-	if reflect.TypeOf(kind.Schema.ZeroValue().GetSpec()) != reflect.TypeOf(new(SpecType)).Elem() {
+	if reflect.TypeOf(kind.Schema.ZeroValue().GetSpec()) != reflect.TypeFor[SpecType]() {
 		return nil, fmt.Errorf(
 			"SpecType '%s' does not match underlying schema.ZeroValue().SpecObject() type '%s'",
-			reflect.TypeOf(new(SpecType)).Elem(),
+			reflect.TypeFor[SpecType](),
 			reflect.TypeOf(kind.ZeroValue().GetSpec()))
 	}
 

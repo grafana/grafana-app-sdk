@@ -147,8 +147,7 @@ func TestKubernetesBasedInformer_Run_TombstoneDelete(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go inf.Run(ctx)
 	select {
 	case <-addCh:

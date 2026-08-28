@@ -84,10 +84,10 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 		assert.Equal(t, 10, len(known))
 		testKindVal, ok := known[TestKind.Kind()]
 		require.True(t, ok)
-		assert.Equal(t, reflect.TypeOf(resource.UntypedObject{}), testKindVal)
+		assert.Equal(t, reflect.TypeFor[resource.UntypedObject](), testKindVal)
 		testKindListVal, ok := known[TestKind.Kind()+"List"]
 		require.True(t, ok)
-		assert.Equal(t, reflect.TypeOf(resource.UntypedList{}), testKindListVal)
+		assert.Equal(t, reflect.TypeFor[resource.UntypedList](), testKindListVal)
 	})
 }
 

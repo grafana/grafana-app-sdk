@@ -59,12 +59,12 @@ func TestBufferedQueue_Len(t *testing.T) {
 		go queue.run()
 		defer queue.stop()
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			queue.push(i)
 		}
 
 		out := queue.events()
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			<-out
 		}
 
