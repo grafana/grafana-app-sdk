@@ -10,14 +10,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
-	"github.com/grafana/grafana-app-sdk/app"
 	v1alpha1 "github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha1"
 	v1alpha2 "github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
-	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 var (
@@ -206,4 +206,7 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 }
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
 	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
+}
+func new(s string) *string {
+	return &s
 }

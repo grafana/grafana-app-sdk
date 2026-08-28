@@ -295,7 +295,7 @@ var appManifestData = app.ManifestData{
             Kinds: []app.ManifestRoleKind{ {{ range $val.Kinds }}
                 {
                     Kind: "{{ .Kind }}",{{ if .PermissionSet }}{{ $needs_str_ptr_func = true }}
-                    PermissionSet: strPtr("{{ .PermissionSet }}"),{{ else }}
+                    PermissionSet: new("{{ .PermissionSet }}"),{{ else }}
                     Verbs: []string{ 
                     {{ range .Verbs }}"{{ . }}",
                     {{ end }} },{{ end }}
@@ -447,7 +447,7 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
     return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
-{{ if $needs_str_ptr_func }}func strPtr(s string) *string {
+{{ if $needs_str_ptr_func }}func new(s string) *string {
     return &s
 }
 {{ end }}

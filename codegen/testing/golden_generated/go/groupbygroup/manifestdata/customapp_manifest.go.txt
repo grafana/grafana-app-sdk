@@ -80,11 +80,11 @@ var appManifestData = app.ManifestData{
 			Kinds: []app.ManifestRoleKind{
 				{
 					Kind:          "CustomKind",
-					PermissionSet: strPtr("admin"),
+					PermissionSet: new("admin"),
 				},
 				{
 					Kind:          "CustomKind/status",
-					PermissionSet: strPtr("admin"),
+					PermissionSet: new("admin"),
 				},
 			},
 			Routes: []string{},
@@ -95,7 +95,7 @@ var appManifestData = app.ManifestData{
 			Kinds: []app.ManifestRoleKind{
 				{
 					Kind:          "CustomKind",
-					PermissionSet: strPtr("editor"),
+					PermissionSet: new("editor"),
 				},
 			},
 			Routes: []string{},
@@ -106,7 +106,7 @@ var appManifestData = app.ManifestData{
 			Kinds: []app.ManifestRoleKind{
 				{
 					Kind:          "CustomKind",
-					PermissionSet: strPtr("viewer"),
+					PermissionSet: new("viewer"),
 				},
 			},
 			Routes: []string{},
@@ -197,6 +197,6 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
 	return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
-func strPtr(s string) *string {
+func new(s string) *string {
 	return &s
 }
