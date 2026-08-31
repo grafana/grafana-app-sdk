@@ -4,7 +4,7 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v4"
 )
 
 // NewListMap returns a pointer to a new properly-initialized ListMap.
