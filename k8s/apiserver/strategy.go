@@ -57,7 +57,7 @@ func (*strategy) Validate(_ context.Context, _ runtime.Object) field.ErrorList {
 func (*strategy) Canonicalize(_ runtime.Object) {
 }
 
-func (*strategy) AllowCreateOnUpdate() bool {
+func (*strategy) AllowCreateOnUpdate(_ context.Context) bool {
 	return false
 }
 
@@ -88,7 +88,7 @@ func (*strategy) ValidateUpdate(_ context.Context, _, _ runtime.Object) field.Er
 	return field.ErrorList{}
 }
 
-func (*strategy) AllowUnconditionalUpdate() bool {
+func (*strategy) AllowUnconditionalUpdate(_ context.Context) bool {
 	return false
 }
 
@@ -172,11 +172,11 @@ func (*genericStatusStrategy) PrepareForUpdate(ctx context.Context, obj, old run
 	}
 }
 
-func (*genericStatusStrategy) AllowCreateOnUpdate() bool {
+func (*genericStatusStrategy) AllowCreateOnUpdate(_ context.Context) bool {
 	return false
 }
 
-func (*genericStatusStrategy) AllowUnconditionalUpdate() bool {
+func (*genericStatusStrategy) AllowUnconditionalUpdate(_ context.Context) bool {
 	return false
 }
 
@@ -268,11 +268,11 @@ func (g *genericSubresourceStrategy) PrepareForUpdate(ctx context.Context, obj, 
 	}
 }
 
-func (*genericSubresourceStrategy) AllowCreateOnUpdate() bool {
+func (*genericSubresourceStrategy) AllowCreateOnUpdate(_ context.Context) bool {
 	return false
 }
 
-func (*genericSubresourceStrategy) AllowUnconditionalUpdate() bool {
+func (*genericSubresourceStrategy) AllowUnconditionalUpdate(_ context.Context) bool {
 	return false
 }
 
