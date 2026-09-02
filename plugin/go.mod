@@ -8,15 +8,15 @@ retract (
 )
 
 require (
-	github.com/grafana/grafana-app-sdk v0.58.0
-	github.com/grafana/grafana-app-sdk/logging v0.58.0
+	github.com/grafana/grafana-app-sdk v0.59.0
+	github.com/grafana/grafana-app-sdk/logging v0.59.0
 	github.com/grafana/grafana-plugin-sdk-go v0.296.4
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
-	google.golang.org/grpc v1.83.1
+	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 	k8s.io/apimachinery v0.36.4
 	k8s.io/client-go v0.36.4

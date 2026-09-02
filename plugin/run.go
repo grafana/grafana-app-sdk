@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/logging"
 	"github.com/grafana/grafana-app-sdk/plugin/appadapter"
 )
 
@@ -61,6 +62,9 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	for _, o := range opts {
 		o(&cfg)
 	}
+
+	// Forward logs into the plugin logger stream so they appear cleanly in Grafana logs.
+	logging.DefaultLogger = NewLogger(backendlog.DefaultLogger)
 
 	if provider == nil {
 		return errors.New("provider cannot be nil")
