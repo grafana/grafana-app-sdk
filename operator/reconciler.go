@@ -205,8 +205,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 				res.State = make(map[string]any)
 			}
 			res.State[opinionatedReconcilerPatchRemoveStateKey] = patchErr
-			var chk FinalizerError
-			if errors.As(patchErr, &chk) {
+			if chk, ok := errors.AsType[FinalizerError](patchErr); ok {
 				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 			}
 			logger.Error("error removing finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
@@ -250,8 +249,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 				resp.State = make(map[string]any)
 			}
 			resp.State[opinionatedReconcilerPatchAddStateKey] = patchErr
-			var chk FinalizerError
-			if errors.As(patchErr, &chk) {
+			if chk, ok := errors.AsType[FinalizerError](patchErr); ok {
 				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 			}
 			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())
@@ -263,8 +261,7 @@ func (o *OpinionatedReconciler) Reconcile(ctx context.Context, request Reconcile
 		logger.Debug("Missing finalizer in object, adding (this will trigger a new reconcile event)", "finalizer", o.finalizer)
 		patchErr := o.finalizerUpdater.AddFinalizer(ctx, request.Object, o.finalizer)
 		if patchErr != nil {
-			var chk FinalizerError
-			if errors.As(patchErr, &chk) {
+			if chk, ok := errors.AsType[FinalizerError](patchErr); ok {
 				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
 			}
 			logger.Error("error adding finalizer", "error", patchErr.Error(), "kind", request.Object.GroupVersionKind().Kind, "namespace", request.Object.GetNamespace(), "name", request.Object.GetName())

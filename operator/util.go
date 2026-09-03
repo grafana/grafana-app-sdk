@@ -1,6 +1,7 @@
 package operator
 
 import (
+	"slices"
 	"sync"
 
 	"github.com/puzpuzpuz/xsync/v2"
@@ -82,7 +83,7 @@ func (l *ListMap[K, V]) Range(key K, rangeFunc func(index int, value V)) {
 	if !ok {
 		return
 	}
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		rangeFunc(i, list[i])
 	}
 }
@@ -131,7 +132,7 @@ func (l *ListMap[K, V]) RemoveItem(key K, match func(V) bool) bool {
 	if !ok {
 		return false
 	}
-	for i := 0; i < len(list); i++ {
+	for i := range list {
 		if match(list[i]) {
 			l.internal.Store(key, l.remove(list, i))
 			return true
@@ -163,8 +164,8 @@ func (l *ListMap[K, V]) RemoveItems(key K, match func(V) bool, limit int) int {
 		}
 	}
 	// Traverse the toRemove list backwards, so we preserve indices as we delete from the list
-	for i := len(toRemove) - 1; i >= 0; i-- {
-		list = l.remove(list, toRemove[i])
+	for _, t := range slices.Backward(toRemove) {
+		list = l.remove(list, t)
 	}
 	l.internal.Store(key, list)
 	return len(toRemove)

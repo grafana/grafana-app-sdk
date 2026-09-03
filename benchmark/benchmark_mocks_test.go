@@ -19,7 +19,7 @@ import (
 
 // Buffer pools to reduce allocations during benchmarks
 var bufferPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		return &bytes.Buffer{}
 	},
 }
@@ -126,10 +126,7 @@ func (m *mockRoundTripper) handleList(req *http.Request) (*http.Response, error)
 				Header:     make(http.Header),
 			}, nil
 		}
-		endIdx = startIdx + limit
-		if endIdx > len(m.objects) {
-			endIdx = len(m.objects)
-		}
+		endIdx = min(startIdx+limit, len(m.objects))
 		if endIdx < len(m.objects) {
 			continueToken = strconv.Itoa(endIdx)
 		}
@@ -158,17 +155,17 @@ func (m *mockRoundTripper) handleList(req *http.Request) (*http.Response, error)
 	}
 
 	// Create Kubernetes List response format
-	listResp := map[string]interface{}{
+	listResp := map[string]any{
 		"apiVersion": m.kind.Schema.Group() + "/" + m.kind.Schema.Version(),
 		"kind":       m.kind.Schema.Kind() + "List",
-		"metadata": map[string]interface{}{
+		"metadata": map[string]any{
 			"resourceVersion": "1000",
 		},
 		"items": items,
 	}
 
 	if continueToken != "" {
-		listResp["metadata"].(map[string]interface{})["continue"] = continueToken
+		listResp["metadata"].(map[string]any)["continue"] = continueToken
 	}
 
 	// Marshal the full response

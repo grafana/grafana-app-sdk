@@ -46,8 +46,7 @@ type Exporter struct {
 func (e *Exporter) RegisterCollectors(metrics ...prometheus.Collector) error {
 	for _, m := range metrics {
 		if err := e.Registerer.Register(m); err != nil {
-			var already prometheus.AlreadyRegisteredError
-			if errors.As(err, &already) {
+			if _, ok := errors.AsType[prometheus.AlreadyRegisteredError](err); ok {
 				continue
 			}
 			return err

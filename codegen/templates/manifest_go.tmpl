@@ -19,7 +19,6 @@ import (
     {{ end }}
 )
 
-{{ $needs_str_ptr_func := false }}
 {{ define "schema" }}
 SchemaProps: spec.SchemaProps{
     {{ if .Type }}Type: []string{ {{ range $index, $type := .Type }}{{ if $index }}, {{ end }}"{{$type}}"{{ end }} },{{ end }}{{ if .Format }}
@@ -294,8 +293,8 @@ var appManifestData = app.ManifestData{
             Description: {{ goString $val.Description }},
             Kinds: []app.ManifestRoleKind{ {{ range $val.Kinds }}
                 {
-                    Kind: "{{ .Kind }}",{{ if .PermissionSet }}{{ $needs_str_ptr_func = true }}
-                    PermissionSet: strPtr("{{ .PermissionSet }}"),{{ else }}
+                    Kind: "{{ .Kind }}",{{ if .PermissionSet }}
+                    PermissionSet: new("{{ .PermissionSet }}"),{{ else }}
                     Verbs: []string{ 
                     {{ range .Verbs }}"{{ . }}",
                     {{ end }} },{{ end }}
@@ -447,7 +446,3 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
     return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
-{{ if $needs_str_ptr_func }}func strPtr(s string) *string {
-    return &s
-}
-{{ end }}

@@ -260,7 +260,7 @@ func TestConcurrentWatcher(t *testing.T) {
 		cw, err := newConcurrentWatcher(mock, 3, func(ctx context.Context, err error) { errCount.Add(1) })
 		assert.Nil(t, err)
 		go cw.Run(t.Context())
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			obj := schema.ZeroValue()
 			obj.SetName(strconv.Itoa(i))
 			err = cw.Add(t.Context(), obj)
@@ -339,7 +339,7 @@ func TestConcurrentWatcher(t *testing.T) {
 			close(runReturned)
 		}()
 
-		for i := 0; i < 90; i++ {
+		for i := range 90 {
 			obj := schema.ZeroValue()
 			obj.SetName(strconv.Itoa(i))
 			err = cw.Add(t.Context(), obj)

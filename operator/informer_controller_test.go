@@ -405,8 +405,7 @@ func TestInformerController_Run_WithWatcherAndReconciler(t *testing.T) {
 		c.AddInformer(inf, kind)
 
 		// Run
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		go c.Run(ctx)
 		inf.FireAdd(context.Background(), emptyObject)
 		assert.Equal(t, 1, addCalls)
@@ -1025,8 +1024,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				return nil
 			},
 		}, "foo")
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		go func() {
 			err := c.Run(ctx)
 			assert.Nil(t, err)
@@ -1083,8 +1081,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 				return updateError
 			},
 		}, "foo")
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		go func() {
 			err := c.Run(ctx)
 			assert.Nil(t, err)
@@ -1107,7 +1104,7 @@ func TestInformerController_Run_WithRetriesAndDequeuePolicy(t *testing.T) {
 		t.Cleanup(func() { timeout.Stop() })
 		addRetries := 0
 		updateRetries := 0
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			select {
 			case err := <-retryQuery:
 				// Check what request this is a retry for by examining the error
@@ -1280,7 +1277,7 @@ func newTestControllerWithProcessor(retryPolicy RetryPolicy, checkInterval time.
 func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
 	t.Run("watcher error, one retry via processor", func(t *testing.T) {
 		kind := "foo"
-		var addCalls int64
+		var addCalls atomic.Int64
 		reconcileCalls := 0
 		inf := &testInformer{}
 		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
@@ -1293,7 +1290,7 @@ func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
 		wg.Add(2)
 		c.AddWatcher(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
-				n := atomic.AddInt64(&addCalls, 1)
+				n := addCalls.Add(1)
 				require.LessOrEqual(t, n, int64(2), "Add should only be retried once based on the RetryPolicy")
 				wg.Done()
 				return errors.New("I AM ERROR")
@@ -1312,14 +1309,14 @@ func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
 		inf.FireAdd(context.Background(), emptyObject)
 		assert.True(t, waitOrTimeout(&wg, 5*time.Second), "timed out waiting for watcher retries via processor")
 		cancel()
-		assert.Equal(t, int64(2), atomic.LoadInt64(&addCalls))
+		assert.Equal(t, int64(2), addCalls.Load())
 		assert.Equal(t, 1, reconcileCalls)
 	})
 
 	t.Run("reconciler error, one retry via processor", func(t *testing.T) {
 		kind := "foo"
 		addCalls := 0
-		var reconcileCalls int64
+		var reconcileCalls atomic.Int64
 		inf := &testInformer{}
 		c := newTestControllerWithProcessor(func(err error, attempt int) (bool, time.Duration) {
 			if attempt > 1 {
@@ -1337,7 +1334,7 @@ func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
 		}, kind)
 		c.AddReconciler(&SimpleReconciler{
 			ReconcileFunc: func(ctx context.Context, request ReconcileRequest) (ReconcileResult, error) {
-				n := atomic.AddInt64(&reconcileCalls, 1)
+				n := reconcileCalls.Add(1)
 				_ = n
 				wg.Done()
 				return ReconcileResult{}, errors.New("I AM ERROR")
@@ -1351,7 +1348,7 @@ func TestInformerController_Run_WithRetryProcessor(t *testing.T) {
 		assert.True(t, waitOrTimeout(&wg, 5*time.Second), "timed out waiting for reconciler retries via processor")
 		cancel()
 		assert.Equal(t, 1, addCalls)
-		assert.Equal(t, int64(2), atomic.LoadInt64(&reconcileCalls))
+		assert.Equal(t, int64(2), reconcileCalls.Load())
 	})
 }
 
@@ -1380,8 +1377,7 @@ func TestInformerController_Run_WithRetryProcessorDequeue(t *testing.T) {
 		}, kind)
 		c.AddInformer(inf, kind)
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := t.Context()
 		go c.Run(ctx)
 
 		// Fire an add that fails - this queues a retry
@@ -1430,8 +1426,7 @@ func TestInformerController_Metrics_ReconcilerErrors(t *testing.T) {
 	}, kind)
 	c.AddInformer(inf, kind)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go c.Run(ctx)
 
 	inf.FireAdd(context.Background(), emptyObject)
@@ -1459,8 +1454,7 @@ func TestInformerController_Metrics_WatcherErrors(t *testing.T) {
 	}, kind)
 	c.AddInformer(inf, kind)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go c.Run(ctx)
 
 	inf.FireAdd(context.Background(), emptyObject)
