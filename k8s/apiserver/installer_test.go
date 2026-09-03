@@ -18,8 +18,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	endpointmetrics "k8s.io/apiserver/pkg/endpoints/metrics"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -515,6 +517,67 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 		return httptest.NewServer(container), ws
 	}
 
+	countAPIServerRequests := func(t *testing.T, rpath string) map[string]float64 {
+		t.Helper()
+		endpointmetrics.Register()
+		families, err := legacyregistry.DefaultGatherer.Gather()
+		require.NoError(t, err)
+		counts := map[string]float64{}
+		for _, family := range families {
+			if family.GetName() != "apiserver_request_total" {
+				continue
+			}
+			for _, m := range family.GetMetric() {
+				labels := map[string]string{}
+				for _, lp := range m.GetLabel() {
+					labels[lp.GetName()] = lp.GetValue()
+				}
+				if labels["group"] == group && labels["version"] == version && labels["resource"] == rpath {
+					counts[labels["code"]] += m.GetCounter().GetValue()
+				}
+			}
+		}
+		return counts
+	}
+
+	t.Run("records apiserver_request_total on success", func(t *testing.T) {
+		rpath := "instrument-success"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			w.WriteHeader(http.StatusOK)
+			return nil
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		before := countAPIServerRequests(t, rpath)
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		after := countAPIServerRequests(t, rpath)
+		assert.Equal(t, before["200"]+1, after["200"], "expected exactly one new apiserver_request_total sample recorded under code=200")
+	})
+
+	t.Run("records apiserver_request_total on failure with the status code", func(t *testing.T) {
+		rpath := "instrument-failure"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			return apierrors.NewBadRequest("prefix and contains are mutually exclusive")
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		before := countAPIServerRequests(t, rpath)
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		after := countAPIServerRequests(t, rpath)
+		assert.Equal(t, before["400"]+1, after["400"], "expected exactly one new apiserver_request_total sample recorded under code=400")
+		assert.Zero(t, after["200"]-before["200"], "a failed request must not be recorded as code=200")
+	})
+
 	t.Run("preserves APIStatus code and reason on error", func(t *testing.T) {
 		rpath := "instrument-bad-request"
 		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
@@ -542,6 +605,7 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 		srv, _ := newServer(t, installer, rpath)
 		defer srv.Close()
 
+		before := countAPIServerRequests(t, rpath)
 		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
 		require.NoError(t, err)
 		defer resp.Body.Close()
@@ -550,6 +614,9 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 		var status metav1.Status
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
 		assert.Equal(t, "boom", status.Message)
+
+		after := countAPIServerRequests(t, rpath)
+		assert.Equal(t, before["500"]+1, after["500"], "expected exactly one new apiserver_request_total sample recorded under code=500")
 	})
 }
 
