@@ -352,15 +352,3 @@ func (s *Spec) DeepCopy() *Spec {
 func (s *Spec) DeepCopyInto(dst *Spec) {
 	resource.CopyObjectInto(dst, s)
 }
-
-// DeepCopy creates a full deep copy of Status
-func (s *Status) DeepCopy() *Status {
-	cpy := &Status{}
-	s.DeepCopyInto(cpy)
-	return cpy
-}
-
-// DeepCopyInto deep copies Status into another Status object
-func (s *Status) DeepCopyInto(dst *Status) {
-	resource.CopyObjectInto(dst, s)
-}

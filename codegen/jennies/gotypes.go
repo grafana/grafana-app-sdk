@@ -1,6 +1,7 @@
 package jennies
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"go/format"
@@ -181,6 +182,23 @@ func (g *GoTypes) generateFilesAtDepth(v cue.Value, schemaPath cue.Path, currDep
 			return codejen.Files{}, nil
 		}
 
+		// If the field carries a `@grafana_app_sdk(goType="<import path>.<Type>")` attribute, we don't generate
+		// a go type for it. Instead, we emit a type alias to the externally-defined go type so that it can be
+		// shared across multiple kinds. The alias keeps the field-derived type name (e.g. Status), so the
+		// sibling resource-object/codec/schema jennies (which reference the subresource by name) are unaffected.
+		if importPath, externalType, ok := goTypeOverride(v); ok {
+			typeName := cfg.NamePrefix + exportField(strings.Join(fieldName, ""))
+			goBytes, err := renderGoTypeAlias(cfg.PackageName, typeName, importPath, externalType)
+			if err != nil {
+				return nil, fmt.Errorf("error generating go type alias for schema path %s.%s: %w", schemaPath.String(), fieldName, err)
+			}
+			return codejen.Files{codejen.File{
+				Data:         goBytes,
+				RelativePath: fmt.Sprintf(path.Join(cfg.PathPrefix, "%s_%s_gen.go"), strings.ToLower(cfg.MachineName), strings.Join(fieldName, "_")),
+				From:         []codejen.NamedJenny{g},
+			}}, nil
+		}
+
 		var namerFunc func(string) string
 		if g.OpenAPINamer != nil {
 			namerFunc = func(name string) string {
@@ -318,6 +336,64 @@ func sanitizeLabelString(s string) string {
 			return -1
 		}
 	}, s)
+}
+
+// goTypeOverride reads a `@grafana_app_sdk(goType="<import path>.<Type>")` attribute from the provided CUE value.
+// If present and well-formed, it returns the go import path and the type name within that package.
+// For example, `@grafana_app_sdk(goType="github.com/org/repo/apis/common.Status")` returns
+// ("github.com/org/repo/apis/common", "Status", true).
+func goTypeOverride(v cue.Value) (importPath string, typeName string, ok bool) {
+	attr := v.Attribute("grafana_app_sdk")
+	if attr.Err() != nil {
+		return "", "", false
+	}
+	goType, found, err := attr.Lookup(0, "goType")
+	if err != nil || !found {
+		return "", "", false
+	}
+	// The Lookup value may retain surrounding quotes (the attribute value is typically quoted in CUE because
+	// it contains slashes and dots); strip them.
+	goType = strings.Trim(strings.TrimSpace(goType), `"`)
+	if goType == "" {
+		return "", "", false
+	}
+	// The value has the form "<import path>.<Type>". The type name is appended to the package (the final
+	// segment of the import path) with a ".". Package names and type names never contain "." or "/", so we
+	// isolate the final path segment (after the last "/") and split it on its "." to separate package from type.
+	// This is unambiguous even when the import path itself contains dots (e.g. gopkg.in/... or example.com/...).
+	segStart := strings.LastIndex(goType, "/") + 1
+	dot := strings.Index(goType[segStart:], ".")
+	if dot <= 0 || segStart+dot == len(goType)-1 {
+		return "", "", false
+	}
+	dot += segStart
+	return goType[:dot], goType[dot+1:], true
+}
+
+// renderGoTypeAlias produces the source for a generated file that aliases an externally-defined go type.
+// packageName is the package of the generated file, typeName is the name the alias should take within that
+// package (matching what sibling jennies expect, e.g. "Status" or "FooStatus"), and importPath/externalType
+// identify the shared type being aliased.
+func renderGoTypeAlias(packageName, typeName, importPath, externalType string) ([]byte, error) {
+	importAlias := sanitizeLabelString(path.Base(importPath))
+	if importAlias == "" {
+		importAlias = "external"
+	}
+	b := bytes.Buffer{}
+	if err := templates.WriteGoTypeAlias(templates.GoTypeAliasMetadata{
+		PackageName:  packageName,
+		ImportAlias:  importAlias,
+		ImportPath:   importPath,
+		TypeName:     typeName,
+		ExternalType: externalType,
+	}, &b); err != nil {
+		return nil, err
+	}
+	formatted, err := format.Source(b.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	return formatted, nil
 }
 
 // exportField makes a field name exported
