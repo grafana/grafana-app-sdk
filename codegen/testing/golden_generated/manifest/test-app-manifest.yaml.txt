@@ -325,6 +325,9 @@ spec:
                       - message
                       type: object
                 description: Default OK response
+            x-grafana-declared-authz-resource: testkinds
+            x-grafana-declared-authz-subresource: reconcile
+            x-grafana-declared-authz-verb: create
         /search:
           get:
             operationId: getTestKindSearchResult
@@ -396,6 +399,7 @@ spec:
                       - kind
                       type: object
                 description: Default OK response
+            x-grafana-declared-authz-resource: testkinds
             x-grafana-test: true
             x-grafana-test-value:
               val: "1"
