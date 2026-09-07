@@ -8,6 +8,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/config"
 	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/prometheus/client_golang/prometheus"
 	"k8s.io/client-go/rest"
@@ -158,6 +159,45 @@ func TestRun(t *testing.T) {
 		}
 		if got.SpecificConfig != "specific" {
 			t.Errorf("expected specific config to be passed through, got %v", got.SpecificConfig)
+		}
+	})
+
+	t.Run("derives kube config from service account env vars when WithKubeConfig is not used", func(t *testing.T) {
+		stubManage(t, nil)
+		p := newFakeProvider("my-app")
+		t.Setenv(config.AppURL, "https://grafana.example.com")
+		t.Setenv(config.AppClientSecret, "secret")
+
+		if err := Run(p); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+
+		got := p.app.cfg.KubeConfig
+		if got.Host != "https://grafana.example.com" {
+			t.Errorf("expected Host %q, got %q", "https://grafana.example.com", got.Host)
+		}
+		if got.BearerToken != "secret" {
+			t.Errorf("expected BearerToken %q, got %q", "secret", got.BearerToken)
+		}
+	})
+
+	t.Run("WithKubeConfig overrides service account env vars", func(t *testing.T) {
+		stubManage(t, nil)
+		p := newFakeProvider("my-app")
+		t.Setenv(config.AppURL, "https://grafana.example.com")
+		t.Setenv(config.AppClientSecret, "secret")
+		kubeConfig := rest.Config{Host: "https://explicit.example.com"}
+
+		if err := Run(p, WithKubeConfig(kubeConfig)); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+
+		got := p.app.cfg.KubeConfig
+		if got.Host != "https://explicit.example.com" {
+			t.Errorf("expected Host %q, got %q", "https://explicit.example.com", got.Host)
+		}
+		if got.BearerToken != "" {
+			t.Errorf("expected empty BearerToken, got %q", got.BearerToken)
 		}
 	})
 
