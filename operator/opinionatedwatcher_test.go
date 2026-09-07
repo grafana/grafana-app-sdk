@@ -665,6 +665,86 @@ func TestOpinionatedWatcher_Delete(t *testing.T) {
 	assert.Nil(t, o.Delete(context.TODO(), schema.ZeroValue()))
 }
 
+func TestOpinionatedWatcher_DeletionRetries(t *testing.T) {
+	for _, event := range []string{"startup", "same generation update"} {
+		for _, owned := range []string{"normal", "pending", "both"} {
+			t.Run(event+"/"+owned, func(t *testing.T) {
+				schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+				client := &mockPatchClient{}
+				watcher, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{})
+				require.NoError(t, err)
+				obj := schema.ZeroValue()
+				obj.SetGeneration(1)
+				obj.SetResourceVersion("2")
+				now := metav1.Now()
+				obj.SetDeletionTimestamp(&now)
+				finalizers := []string{"other.example/cleanup", "finished.example/cleanup"}
+				if owned != "pending" {
+					finalizers = append(finalizers, watcher.finalizer)
+				}
+				if owned != "normal" {
+					finalizers = append(finalizers, watcher.addPendingFinalizer)
+				}
+				obj.SetFinalizers(finalizers)
+				old := schema.ZeroValue()
+				old.SetGeneration(1)
+				old.SetResourceVersion("1")
+				handle := func() error {
+					if event == "startup" {
+						return watcher.Add(t.Context(), obj)
+					}
+					return watcher.Update(t.Context(), old, obj)
+				}
+
+				deleteErr := fmt.Errorf("downstream unavailable")
+				patchErr := fmt.Errorf("apiserver unavailable")
+				deleteCalls, patchCalls := 0, 0
+				watcher.DeleteFunc = func(context.Context, resource.Object) error {
+					deleteCalls++
+					if deleteCalls == 1 {
+						return deleteErr
+					}
+					return nil
+				}
+				client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, _ resource.PatchRequest, _ resource.PatchOptions, _ resource.Object) error {
+					patchCalls++
+					return patchErr
+				}
+
+				require.ErrorIs(t, handle(), deleteErr)
+				require.Zero(t, patchCalls)
+				require.Equal(t, finalizers, obj.GetFinalizers())
+				require.ErrorIs(t, handle(), patchErr)
+				require.Equal(t, finalizers, obj.GetFinalizers())
+
+				// A concurrent owner finishes cleanup before our patch.
+				conflicted := false
+				client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+					if !conflicted {
+						conflicted = true
+						return &apierrors.StatusError{ErrStatus: metav1.Status{Code: http.StatusConflict}}
+					}
+					require.Equal(t, "3", req.Operations[1].Value)
+					into.SetFinalizers(req.Operations[0].Value.([]string))
+					return nil
+				}
+				client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+					current := append([]string(nil), finalizers[:1]...)
+					into.SetFinalizers(append(current, finalizers[2:]...))
+					into.SetResourceVersion("3")
+					return nil
+				}
+				require.NoError(t, handle())
+				require.True(t, conflicted)
+				require.Equal(t, []string{"other.example/cleanup"}, obj.GetFinalizers())
+				require.Equal(t, 3, deleteCalls)
+				require.NoError(t, handle())
+				require.Equal(t, 3, deleteCalls, "a completed finalizer must not repeat cleanup")
+			})
+		}
+	}
+}
+
 type mockPatchClient struct {
 	PatchIntoFunc func(context.Context, resource.Identifier, resource.PatchRequest, resource.PatchOptions, resource.Object) error
 	GetIntoFunc   func(context.Context, resource.Identifier, resource.Object) error
