@@ -181,9 +181,10 @@ func TestProcessKindVersion_Search(t *testing.T) {
 		search   codegen.KindSearch
 		expected *app.ManifestVersionKindSearch
 	}{{
-		// Both endpoints are served by default, so nothing is written to the manifest.
-		name:     "both enabled",
-		search:   codegen.KindSearch{Endpoint: true, Trash: true},
+		// Only a choice that differs from its default is written to the manifest,
+		// so all three at their defaults produce nothing at all.
+		name:     "defaults",
+		search:   codegen.KindSearch{Endpoint: true, Trash: true, Hybrid: false},
 		expected: nil,
 	}, {
 		name:     "search opt-out",
@@ -197,6 +198,15 @@ func TestProcessKindVersion_Search(t *testing.T) {
 		name:     "both opt-out",
 		search:   codegen.KindSearch{Endpoint: false, Trash: false},
 		expected: &app.ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)},
+	}, {
+		// Hybrid defaults off, so unlike the other two it is written when true.
+		name:     "hybrid opt-in",
+		search:   codegen.KindSearch{Endpoint: true, Trash: true, Hybrid: true},
+		expected: &app.ManifestVersionKindSearch{Hybrid: new(true)},
+	}, {
+		name:     "hybrid opt-in with trash opt-out",
+		search:   codegen.KindSearch{Endpoint: true, Trash: false, Hybrid: true},
+		expected: &app.ManifestVersionKindSearch{Trash: new(false), Hybrid: new(true)},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			mver, err := processKindVersion(codegen.VersionedKind{
@@ -210,6 +220,48 @@ func TestProcessKindVersion_Search(t *testing.T) {
 			assert.Equal(t, tc.expected, mver.Search)
 		})
 	}
+}
+
+func TestProcessKindVersion_Embed(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		embed    *codegen.KindEmbed
+		expected *app.ManifestVersionKindEmbed
+	}{
+		{name: "unset", embed: nil, expected: nil},
+		{name: "version carried through", embed: &codegen.KindEmbed{Version: 2}, expected: &app.ManifestVersionKindEmbed{Version: 2}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mver, err := processKindVersion(codegen.VersionedKind{
+				Kind:         "Foo",
+				PluralName:   "Foos",
+				Scope:        "Namespaced",
+				FolderScoped: true,
+				Embed:        tc.embed,
+			}, "v1", false)
+			require.NoError(t, err)
+			assert.Equal(t, tc.expected, mver.Embed)
+		})
+	}
+}
+
+func TestProcessKindVersion_RejectsUnreadableEmbedField(t *testing.T) {
+	// A field with no path is filled in by a custom document builder, which the
+	// embedding path never reads, so embedding it would silently produce nothing.
+	_, err := processKindVersion(codegen.VersionedKind{
+		Kind:         "Foo",
+		PluralName:   "Foos",
+		Scope:        "Namespaced",
+		FolderScoped: true,
+		SearchFields: []codegen.SearchField{{
+			Name:         "title",
+			Type:         "string",
+			Capabilities: []string{"retrieve"},
+			Embed:        true,
+		}},
+	}, "v1", false)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "embed requires a path")
 }
 
 func TestBuildManifestData_RejectsReservedKindRoutes(t *testing.T) {

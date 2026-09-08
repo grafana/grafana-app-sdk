@@ -172,7 +172,11 @@ var appManifestData = app.ManifestData{
                 FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Search }}
                 Search: &app.ManifestVersionKindSearch{ {{ if .Search.Endpoint }}
                     Endpoint: {{ goBoolPtr .Search.Endpoint }},{{ end }}{{ if .Search.Trash }}
-                    Trash: {{ goBoolPtr .Search.Trash }},{{ end }}
+                    Trash: {{ goBoolPtr .Search.Trash }},{{ end }}{{ if .Search.Hybrid }}
+                    Hybrid: {{ goBoolPtr .Search.Hybrid }},{{ end }}
+                }, {{ end }}{{ if .Embed }}
+                Embed: &app.ManifestVersionKindEmbed{
+                    Version: {{ .Embed.Version }},
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
@@ -198,7 +202,8 @@ var appManifestData = app.ManifestData{
                         Array: {{.Array}},{{ end }}
                         Capabilities: []string{ {{ range .Capabilities }}{{ goString . }}, {{ end }}},{{ if .EmitZeroIfAbsent }}
                         EmitZeroIfAbsent: {{.EmitZeroIfAbsent}},{{ end }}{{ if .Description }}
-                        Description: {{ goString .Description }},{{ end }}
+                        Description: {{ goString .Description }},{{ end }}{{ if .Embed }}
+                        Embed: {{.Embed}},{{ end }}
                     },{{ end }}
                 },{{end}}{{ if .Routes }}
                 Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}

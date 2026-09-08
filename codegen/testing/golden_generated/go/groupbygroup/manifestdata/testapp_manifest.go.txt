@@ -105,6 +105,12 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKinds",
 					Scope:      "Namespaced",
 					Conversion: true,
+					Search: &app.ManifestVersionKindSearch{
+						Hybrid: func(b bool) *bool { return &b }(true),
+					},
+					Embed: &app.ManifestVersionKindEmbed{
+						Version: 1,
+					},
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{
@@ -133,6 +139,7 @@ var appManifestData = app.ManifestData{
 							Type:         "string",
 							Capabilities: []string{"filter", "text", "sort", "retrieve"},
 							Description:  "The string field",
+							Embed:        true,
 						},
 						{
 							Name:             "intField",

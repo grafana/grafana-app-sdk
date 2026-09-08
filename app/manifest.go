@@ -368,18 +368,32 @@ type ManifestVersionKind struct {
 	// SearchFields are the fields exposed for search indexing and querying.
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
 	// Search declares which search endpoints are served for this kind.
-	// A nil value, or a nil field within it, means the endpoint is served.
+	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
+	// Embed configures embeddings built from this kind's declared search fields.
+	// Kinds whose embeddings are built in code do not set it.
+	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 }
 
 // ManifestVersionKindSearch declares which search endpoints are served for a kind.
-// Each field is a pointer so that an unset value can keep the default of the endpoint being served.
+// Each field is a pointer so that an unset value can keep the endpoint's default.
 // The /search and /trash paths remain reserved for the kind when either endpoint is disabled.
 type ManifestVersionKindSearch struct {
 	// Endpoint declares whether the kind serves the /search endpoint. A nil value defaults to true.
 	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
 	// Trash declares whether the kind serves the /trash endpoint. A nil value defaults to true.
 	Trash *bool `json:"trash,omitempty" yaml:"trash,omitempty"`
+	// Hybrid declares whether the kind serves the /search/hybrid endpoint. A nil value
+	// defaults to false: serving it requires embeddings for the kind, so kinds opt in
+	// rather than out.
+	Hybrid *bool `json:"hybrid,omitempty" yaml:"hybrid,omitempty"`
+}
+
+// ManifestVersionKindEmbed configures embeddings built from a kind's declared search fields.
+type ManifestVersionKindEmbed struct {
+	// Version identifies the text produced from the embed fields. Bumping it re-embeds
+	// every existing resource of the kind, which the search backend pays for.
+	Version int `json:"version" yaml:"version"`
 }
 
 // HasSearchEndpoint reports whether the kind serves the /search endpoint.
@@ -392,6 +406,13 @@ func (m *ManifestVersionKind) HasSearchEndpoint() bool {
 // Kinds serve it unless they explicitly opt out.
 func (m *ManifestVersionKind) HasTrashEndpoint() bool {
 	return m.Search == nil || m.Search.Trash == nil || *m.Search.Trash
+}
+
+// HasHybridEndpoint reports whether the kind serves the /search/hybrid endpoint.
+// Kinds do not serve it unless they explicitly opt in, the reverse of the other two:
+// it needs embeddings for the kind, which are neither free nor automatic.
+func (m *ManifestVersionKind) HasHybridEndpoint() bool {
+	return m.Search != nil && m.Search.Hybrid != nil && *m.Search.Hybrid
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer
@@ -477,6 +498,10 @@ type ManifestVersionKindSearchField struct {
 	EmitZeroIfAbsent bool `json:"emitZeroIfAbsent,omitempty" yaml:"emitZeroIfAbsent,omitempty"`
 	// Description is a human readable description of the field.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// Embed includes this field's value in the text embedded for semantic search,
+	// as one "name: value" line, in declaration order. Only read when the kind's
+	// embeddings are built from its declared fields.
+	Embed bool `json:"embed,omitempty" yaml:"embed,omitempty"`
 }
 
 const parsedCRDSchemaKindName = "__KIND__"

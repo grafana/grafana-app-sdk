@@ -1130,17 +1130,24 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 		search         *ManifestVersionKindSearch
 		expectedSearch bool
 		expectedTrash  bool
+		expectedHybrid bool
 	}{
-		{name: "unset serves both", search: nil, expectedSearch: true, expectedTrash: true},
-		{name: "empty block serves both", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true},
-		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true},
-		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false},
-		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false},
+		// search and trash are served unless the kind opts out. hybrid is the
+		// reverse: not served unless the kind opts in.
+		{name: "unset", search: nil, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "empty block", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true, expectedHybrid: false},
+		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false, expectedHybrid: false},
+		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false, expectedHybrid: false},
+		{name: "hybrid opt-in", search: &ManifestVersionKindSearch{Hybrid: new(true)}, expectedSearch: true, expectedTrash: true, expectedHybrid: true},
+		{name: "hybrid explicit false", search: &ManifestVersionKindSearch{Hybrid: new(false)}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "hybrid opt-in with search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Hybrid: new(true)}, expectedSearch: false, expectedTrash: true, expectedHybrid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
 			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
 			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
+			assert.Equal(t, tc.expectedHybrid, kind.HasHybridEndpoint())
 		})
 	}
 }

@@ -98,7 +98,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 	assert.Equal(t, ".spec.stringField", v2Kind.AdditionalPrinterColumns[0].JSONPath)
 
 	// v2 TestKind also declares search fields; the int64 field defaults emitZeroIfAbsent to true
-	// and array to false.
+	// and array to false. The string field opts into embedding, the int64 one does not.
 	require.Len(t, v2Kind.SearchFields, 2)
 	assert.Equal(t, codegen.SearchField{
 		Name:         "stringField",
@@ -106,6 +106,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 		Type:         "string",
 		Capabilities: []string{"filter", "text", "sort", "retrieve"},
 		Description:  "The string field",
+		Embed:        true,
 	}, v2Kind.SearchFields[0])
 	assert.Equal(t, codegen.SearchField{
 		Name:             "intField",
@@ -114,6 +115,14 @@ func TestParseManifestKindProperties(t *testing.T) {
 		Capabilities:     []string{"filter", "retrieve"},
 		EmitZeroIfAbsent: true,
 	}, v2Kind.SearchFields[1])
+
+	// v2 TestKind opts into /search/hybrid and declares an embed version. v1 does
+	// neither, so it keeps the defaults: no hybrid endpoint, no embed block.
+	assert.True(t, v2Kind.Search.Hybrid)
+	require.NotNil(t, v2Kind.Embed)
+	assert.Equal(t, 1, v2Kind.Embed.Version)
+	assert.False(t, testKind.Search.Hybrid)
+	assert.Nil(t, testKind.Embed)
 
 	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
 	v4Kind := versions[3].Kinds()[0]

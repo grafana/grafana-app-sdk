@@ -136,6 +136,7 @@ testKind: {
 					type: "string"
 					capabilities: ["filter", "text", "sort", "retrieve"]
 					description: "The string field"
+					embed: true
 				},
 				{
 					name: "intField"
@@ -145,6 +146,8 @@ testKind: {
 					emitZeroIfAbsent: true
 				},
 			]
+			search: hybrid: true
+			embed: version: 1
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
                 {

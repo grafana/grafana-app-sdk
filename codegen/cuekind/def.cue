@@ -215,6 +215,13 @@ SchemaWithOperatorState: Schema & {
 	emitZeroIfAbsent?: bool | *false
 	// description is a human readable description of the field.
 	description?: string
+	// embed includes this field's value in the text embedded for semantic search,
+	// as one "name: value" line. Fields are embedded in declaration order, so the
+	// order here affects the embedded text. Requires path and a string type.
+	//
+	// Only read when the kind's embeddings are built from its declared fields. A
+	// kind whose search backend builds them in code ignores this.
+	embed?: bool | *false
 }
 
 // #KindSearch controls which search endpoints are served for a kind.
@@ -224,6 +231,28 @@ SchemaWithOperatorState: Schema & {
 	// trash controls whether the kind serves the /trash endpoint,
 	// which lists deleted resources of the kind.
 	trash: bool | *true
+	// hybrid controls whether the kind serves the /search/hybrid endpoint,
+	// which combines lexical and semantic search.
+	//
+	// Defaults off, unlike the two above: serving it requires embeddings for the
+	// kind, which cost money to generate and must also be enabled on the server.
+	hybrid: bool | *false
+}
+
+// #KindEmbed configures embeddings built from a kind's declared search fields.
+// A kind whose search backend builds embeddings in code does not need it.
+#KindEmbed: {
+	// version identifies the text produced from the embed fields. Bump it when a
+	// change to those fields should re-embed resources that already exist:
+	// flagging or unflagging a field, changing a path, reordering them.
+	//
+	// Bumping re-embeds every resource of this kind on every instance, which the
+	// search backend pays for in provider spend and backfill time, so leave it
+	// alone for changes not worth paying for.
+	//
+	// One number per kind: declare the same value on every version. Carry the
+	// current value over when adding a version, rather than restarting at 1.
+	version: int & >0
 }
 
 // Kind represents an arbitrary kind which can be used for code generation
@@ -309,8 +338,12 @@ Kind: S={
 	// searchFields is a list of fields exposed for search indexing and querying
 	searchFields?: [...#SearchField]
 	// search controls which search endpoints are served for this kind.
-	// Both are served unless the kind opts out here.
+	// /search and /trash are served unless the kind opts out here; /search/hybrid
+	// is not served unless the kind opts in.
 	search: #KindSearch
+	// embed configures embeddings built from this kind's declared search fields.
+	// Only needed by kinds whose embeddings come from those fields.
+	embed?: #KindEmbed
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability

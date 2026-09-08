@@ -102,6 +102,8 @@ type SearchField struct {
 	Capabilities     []string `json:"capabilities"`
 	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
 	Description      string   `json:"description,omitempty"`
+	// Embed includes this field's value in the text embedded for semantic search.
+	Embed bool `json:"embed,omitempty"`
 }
 
 // KindSearch controls which search endpoints are served for a kind.
@@ -110,6 +112,16 @@ type KindSearch struct {
 	Endpoint bool `json:"endpoint"`
 	// Trash controls whether the kind serves the /trash endpoint.
 	Trash bool `json:"trash"`
+	// Hybrid controls whether the kind serves the /search/hybrid endpoint.
+	// Unlike the other two it is off unless the kind opts in.
+	Hybrid bool `json:"hybrid"`
+}
+
+// KindEmbed configures embeddings built from a kind's declared search fields.
+type KindEmbed struct {
+	// Version identifies the text produced from the embed fields; bumping it
+	// re-embeds every existing resource of the kind.
+	Version int `json:"version"`
 }
 
 // CustomRouteRequest represents the request part of a custom route definition.

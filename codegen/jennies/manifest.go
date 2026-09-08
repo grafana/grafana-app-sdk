@@ -576,10 +576,11 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 }
 
 // manifestKindSearch translates a kind's search endpoint choices into the manifest.
-// Both endpoints default to being served, so only an explicit opt-out is written out,
-// keeping the manifest data clean; a nil pointer is interpreted as served downstream.
+// Only choices that differ from the endpoint's default are written out, keeping the
+// manifest data clean; a nil pointer is interpreted as the default downstream.
+// /search and /trash default to served, /search/hybrid to not served.
 func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearch {
-	if search.Endpoint && search.Trash {
+	if search.Endpoint && search.Trash && !search.Hybrid {
 		return nil
 	}
 	out := &app.ManifestVersionKindSearch{}
@@ -589,7 +590,18 @@ func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearc
 	if !search.Trash {
 		out.Trash = &search.Trash
 	}
+	if search.Hybrid {
+		out.Hybrid = &search.Hybrid
+	}
 	return out
+}
+
+// manifestKindEmbed translates a kind's embed configuration into the manifest.
+func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
+	if embed == nil {
+		return nil
+	}
+	return &app.ManifestVersionKindEmbed{Version: embed.Version}
 }
 
 type simpleOpenAPIDoc[T any] struct {
@@ -617,6 +629,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		mver.FolderScoped = &folderScoped
 	}
 	mver.Search = manifestKindSearch(vk.Search)
+	mver.Embed = manifestKindEmbed(vk.Embed)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {
@@ -750,6 +763,7 @@ func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionK
 			Capabilities:     f.Capabilities,
 			EmitZeroIfAbsent: f.EmitZeroIfAbsent,
 			Description:      f.Description,
+			Embed:            f.Embed,
 		}
 	}
 	return out
