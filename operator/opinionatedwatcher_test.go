@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -103,6 +104,77 @@ func TestOpinionatedWatcher_Wrap(t *testing.T) {
 		assert.NotNil(t, w.UpdateFunc)
 		assert.NotNil(t, w.DeleteFunc)
 		assert.NotNil(t, w.SyncFunc)
+	})
+}
+
+type metricsSimpleWatcher struct {
+	SimpleWatcher
+	collectors []prometheus.Collector
+}
+
+func (m *metricsSimpleWatcher) PrometheusCollectors() []prometheus.Collector {
+	return m.collectors
+}
+
+func TestOpinionatedWatcher_RegisterMetricsCollectors(t *testing.T) {
+	t.Run("register collectors directly", func(t *testing.T) {
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{}, OpinionatedWatcherConfig{})
+		require.NoError(t, err)
+
+		c1 := prometheus.NewCounter(prometheus.CounterOpts{Name: "test_counter_1", Help: "test"})
+		c2 := prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_gauge_1", Help: "test"})
+
+		w.RegisterMetricsCollectors(c1, c2)
+
+		collectors := w.PrometheusCollectors()
+		assert.Len(t, collectors, 2)
+		assert.Contains(t, collectors, c1)
+		assert.Contains(t, collectors, c2)
+	})
+
+	t.Run("additive calls", func(t *testing.T) {
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{}, OpinionatedWatcherConfig{})
+		require.NoError(t, err)
+
+		c1 := prometheus.NewCounter(prometheus.CounterOpts{Name: "test_counter_2", Help: "test"})
+		c2 := prometheus.NewGauge(prometheus.GaugeOpts{Name: "test_gauge_2", Help: "test"})
+
+		w.RegisterMetricsCollectors(c1)
+		w.RegisterMetricsCollectors(c2)
+
+		collectors := w.PrometheusCollectors()
+		assert.Len(t, collectors, 2)
+		assert.Contains(t, collectors, c1)
+		assert.Contains(t, collectors, c2)
+	})
+
+	t.Run("combined with Wrap", func(t *testing.T) {
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{}, OpinionatedWatcherConfig{})
+		require.NoError(t, err)
+
+		wrapperCollector := prometheus.NewCounter(prometheus.CounterOpts{Name: "wrapper_counter", Help: "test"})
+		watcher := &metricsSimpleWatcher{
+			collectors: []prometheus.Collector{wrapperCollector},
+		}
+		w.Wrap(watcher, false)
+
+		directCollector := prometheus.NewGauge(prometheus.GaugeOpts{Name: "direct_gauge", Help: "test"})
+		w.RegisterMetricsCollectors(directCollector)
+
+		collectors := w.PrometheusCollectors()
+		assert.Len(t, collectors, 2)
+		assert.Contains(t, collectors, wrapperCollector)
+		assert.Contains(t, collectors, directCollector)
+	})
+
+	t.Run("no-op with no arguments", func(t *testing.T) {
+		w, err := NewOpinionatedWatcher(resource.NewSimpleSchema("", "", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{}), &mockPatchClient{}, OpinionatedWatcherConfig{})
+		require.NoError(t, err)
+
+		w.RegisterMetricsCollectors()
+
+		collectors := w.PrometheusCollectors()
+		assert.Empty(t, collectors)
 	})
 }
 
