@@ -139,9 +139,9 @@ func (m *ManifestData) Validate() error {
 		clusterRoutes := make(map[string]struct{})
 		for _, kind := range version.Kinds {
 			if kind.Scope == "Cluster" {
-				clusterRoutes[strings.ToLower(kind.Plural)] = struct{}{}
+				clusterRoutes[kind.Resource()] = struct{}{}
 			} else {
-				namespacedRoutes[strings.ToLower(kind.Plural)] = struct{}{}
+				namespacedRoutes[kind.Resource()] = struct{}{}
 			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
@@ -380,6 +380,14 @@ type ManifestVersionKindSearch struct {
 	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
 	// Trash declares whether the kind serves the /trash endpoint. A nil value defaults to true.
 	Trash *bool `json:"trash,omitempty" yaml:"trash,omitempty"`
+}
+
+// Resource defines the k8s resource path for the kind. It is a lowercase version of the plural name.
+func (m *ManifestVersionKind) Resource() string {
+	if m.Plural != "" {
+		return strings.ToLower(m.Plural)
+	}
+	return strings.ToLower(m.Kind) + "s"
 }
 
 // HasSearchEndpoint reports whether the kind serves the /search endpoint.
