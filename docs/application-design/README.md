@@ -86,3 +86,5 @@ EOF
 ```
 
 In other words you would be defining a pseudo-subresource with the name `ServiceRollbackRequest` and using it to supply all information required for a service version rollback.
+
+For a detailed guide on setting up an Extension API Server, see [Extension API Server](../extension-api-server.md). For information on deploying and running your operator backend, see [Running as an Operator](../running-as-operator.md).
