@@ -969,3 +969,4 @@ All file paths are absolute from repository root `/Users/igor/Code/grafana/grafa
 ---
 
 *This analysis was generated on 2025-10-27 based on the codebase state at commit 61bc84a (branch: chore/watchlist-page-size).*
+- Security issues should be reported via [Grafana's security issue reporting page](https://grafana.com/legal/report-a-security-issue/) and not directly in this repository.
