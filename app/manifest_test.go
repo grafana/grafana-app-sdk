@@ -279,6 +279,51 @@ func TestManifestData_Validate(t *testing.T) {
 	}
 }
 
+func TestManifestData_ValidateHybridRoutes(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		search *ManifestVersionKindSearch
+	}{
+		{name: "unset"},
+		{name: "disabled", search: &ManifestVersionKindSearch{Hybrid: new(false)}},
+		{name: "enabled", search: &ManifestVersionKindSearch{Hybrid: new(true)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{
+				Versions: []ManifestVersion{{
+					Name: "v1",
+					Kinds: []ManifestVersionKind{{
+						Kind:   "Foo",
+						Scope:  "Namespaced",
+						Search: tt.search,
+					}, {
+						Kind:   "Bar",
+						Scope:  "Cluster",
+						Search: tt.search,
+					}},
+					Routes: ManifestVersionRoutes{
+						Namespaced: map[string]spec3.PathProps{
+							"/foos/search/hybrid":       {},
+							"/bars/search/hybrid":       {},
+							"/foos/search/hybrid/stats": {},
+						},
+						Cluster: map[string]spec3.PathProps{
+							"/BARS/SEARCH/HYBRID/":      {},
+							"/foos/search/hybrid":       {},
+							"/other/search/hybrid":      {},
+							"/bars/search/hybrid/stats": {},
+						},
+					},
+				}},
+			}
+			expectedErr := multierror.Append(nil,
+				errors.New("namespaced custom route '/foos/search/hybrid' conflicts with reserved 'search/hybrid' route for kind 'foos'"),
+				errors.New("cluster-scoped custom route '/BARS/SEARCH/HYBRID/' conflicts with reserved 'search/hybrid' route for kind 'bars'"))
+			assert.Equal(t, expectedErr, manifest.Validate())
+		})
+	}
+}
+
 func TestManifestData_ValidateEmbed(t *testing.T) {
 	for _, tt := range []struct {
 		name         string

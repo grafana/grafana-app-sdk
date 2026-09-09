@@ -276,7 +276,7 @@ func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
 	// These paths remain reserved for kinds that opt out of the built-in endpoints.
 	// Opting out controls which endpoints are served; it does not make their paths
 	// available for custom routes.
-	for _, endpoint = range []string{"search", "trash"} {
+	for _, endpoint = range []string{"search", "trash", "search/hybrid"} {
 		suffix := "/" + endpoint
 		if before, ok0 := strings.CutSuffix(route, suffix); ok0 {
 			resource = before
@@ -416,7 +416,7 @@ type ManifestVersionKind struct {
 
 // ManifestVersionKindSearch declares which search endpoints are served for a kind.
 // Each field is a pointer so that an unset value can keep the endpoint's default.
-// The /search and /trash paths remain reserved for the kind when either endpoint is disabled.
+// The /search, /trash, and /search/hybrid paths remain reserved for the kind when endpoints are disabled.
 type ManifestVersionKindSearch struct {
 	// Endpoint declares whether the kind serves the /search endpoint. A nil value defaults to true.
 	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`

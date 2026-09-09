@@ -29,8 +29,10 @@ func TestValidateEmbedFields(t *testing.T) {
 		fixedCounts: [int, int]
 		nullableCounts: [...int] | null
 		nullableFlags: [...bool] | null
-		nullablePanels: [...{ title: string }] | null
-		nullablePanel: { title: string } | null
+		nullablePanels?: [...({ title: string, count: int } | null)] | null
+		#Panel: { title: string, count: int }
+		nullablePanel?: #Panel | null
+		nullableListVariants: [...int] | [...bool] | null
 	}`)
 	require.NoError(t, schema.Err())
 
@@ -47,7 +49,13 @@ func TestValidateEmbedFields(t *testing.T) {
 		{name: "nullable string array", path: "spec.nullableTags"},
 		{name: "empty string array", path: "spec.emptyTags"},
 		{name: "string array projection", path: "spec.tags[*]"},
+		{name: "nullable string array projection", path: "spec.nullableTags[*]"},
 		{name: "object array projection to string", path: "spec.panels[*].title"},
+		{name: "nullable object array projection to string", path: "spec.nullablePanels[*].title"},
+		{name: "nullable object array projection to integer", path: "spec.nullablePanels[*].count", wantErr: true},
+		{name: "nullable non-text list union projection", path: "spec.nullableListVariants[*]", wantErr: true},
+		{name: "string under nullable parent", path: "spec.nullablePanel.title"},
+		{name: "integer under nullable parent", path: "spec.nullablePanel.count", wantErr: true},
 		{name: "integer", path: "spec.count", wantErr: true},
 		{name: "nullable integer", path: "spec.nullableCount", wantErr: true},
 		{name: "number", path: "spec.ratio", wantErr: true},
@@ -64,7 +72,10 @@ func TestValidateEmbedFields(t *testing.T) {
 		{name: "nullable boolean array", path: "spec.nullableFlags", wantErr: true},
 		{name: "missing path", path: "spec.missing", wantErr: true},
 		{name: "missing projected leaf", path: "spec.panels[*].missing", wantErr: true},
+		{name: "missing nullable projected leaf", path: "spec.nullablePanels[*].missing", wantErr: true},
+		{name: "missing leaf under nullable parent", path: "spec.nullablePanel.missing", wantErr: true},
 		{name: "projection on scalar", path: "spec.title[*]", wantErr: true},
+		{name: "projection on nullable scalar", path: "spec.description[*]", wantErr: true},
 		{name: "malformed path", path: "spec..title", wantErr: true},
 	}
 	for _, tt := range tests {
