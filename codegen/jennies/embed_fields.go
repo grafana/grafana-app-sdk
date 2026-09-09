@@ -9,12 +9,14 @@ import (
 )
 
 func validateEmbedFields(vk codegen.VersionedKind, version string) error {
-	if vk.Embed == nil || !vk.Schema.Exists() {
+	if vk.Embed == nil {
 		return nil
 	}
 	for _, field := range vk.Embed.Fields {
-		// A custom builder supplies pathless fields; they need no resource schema entry.
 		if field.Path == "" {
+			return fmt.Errorf("kind %q version %q embed field %q requires a path", vk.Kind, version, field.Name)
+		}
+		if !vk.Schema.Exists() {
 			continue
 		}
 		leaf, resolved, err := resolveSearchFieldPath(vk.Schema, field.Path)

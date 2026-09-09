@@ -10,34 +10,41 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
 
-func TestParseManifestEmbedContentVersionLocation(t *testing.T) {
+func TestParseManifestEmbedConfiguration(t *testing.T) {
 	for _, tt := range []struct {
 		name         string
 		global       string
 		versionLocal string
-		wantErr      bool
+		field        string
+		wantErr      string
 	}{
 		{name: "global revision", global: "1"},
-		{name: "zero revision", global: "0", wantErr: true},
-		{name: "negative revision", global: "-1", wantErr: true},
-		{name: "version-local revision is rejected", global: "1", versionLocal: "contentVersion: 1", wantErr: true},
+		{name: "zero revision", global: "0", wantErr: "contentVersion"},
+		{name: "negative revision", global: "-1", wantErr: "contentVersion"},
+		{name: "version-local revision is rejected", global: "1", versionLocal: "contentVersion: 1", wantErr: "contentVersion"},
+		{name: "missing field path", global: "1", field: `name: "title"`, wantErr: "path"},
+		{name: "empty field path", global: "1", field: `name: "title", path: ""`, wantErr: "path"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			c := testingCue(t)
+			field := tt.field
+			if field == "" {
+				field = `name: "title", path: "spec.title"`
+			}
 			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`manifest: {
 				appName: "embed-app"
 				embed: foos: contentVersion: %s
 				versions: v1: kinds: [{
 					kind: "Foo"
 					schema: spec: title: string
-					embed: {fields: [{name: "title", path: "spec.title"}], %s}
+					embed: {fields: [{%s}], %s}
 				}]
-			}`, tt.global, tt.versionLocal))
+			}`, tt.global, field, tt.versionLocal))
 			parser, err := NewParser(c, false)
 			require.NoError(t, err)
 			_, err = parser.ParseManifest("manifest")
-			if tt.wantErr {
-				require.ErrorContains(t, err, "contentVersion")
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
 			} else {
 				require.NoError(t, err)
 			}
@@ -158,7 +165,6 @@ func TestParseManifestKindProperties(t *testing.T) {
 	assert.Equal(t, &codegen.KindEmbed{
 		Fields: []codegen.EmbedField{
 			{Name: "details", Path: "spec.unionNull.str"},
-			{Name: "summary"},
 		},
 	}, v2Kind.Embed)
 	assert.False(t, testKind.Search.Hybrid)

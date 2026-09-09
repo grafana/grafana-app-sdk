@@ -252,6 +252,13 @@ func (m *ManifestData) validateEmbed() error {
 			if _, ok := m.Embed[resource]; kind.Embed != nil && !ok {
 				errs = multierror.Append(errs, fmt.Errorf("kind %q version %q declares embedding fields without embed configuration for resource %q", kind.Kind, version.Name, resource))
 			}
+			if kind.Embed != nil {
+				for _, field := range kind.Embed.Fields {
+					if field.Path == "" {
+						errs = multierror.Append(errs, fmt.Errorf("kind %q version %q embed field %q requires a path", kind.Kind, version.Name, field.Name))
+					}
+				}
+			}
 		}
 	}
 	for _, resource := range slices.Sorted(maps.Keys(m.Embed)) {
@@ -422,6 +429,7 @@ type ManifestVersionKindSearch struct {
 }
 
 // ManifestVersionKindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
 type ManifestVersionKindEmbed struct {
 	// Fields supplies the embedding document inputs in declaration order.
 	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
@@ -431,8 +439,8 @@ type ManifestVersionKindEmbed struct {
 type ManifestVersionKindEmbedField struct {
 	// Name labels this input in the embedding document.
 	Name string `json:"name" yaml:"name"`
-	// Path supplies a string or string array from the resource. When omitted, a custom builder supplies the value.
-	Path string `json:"path,omitempty" yaml:"path,omitempty"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path" yaml:"path"`
 }
 
 // Resource defines the k8s resource path for the kind. It is a lowercase version of the plural name.

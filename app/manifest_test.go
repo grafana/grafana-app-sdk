@@ -307,6 +307,17 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 			}},
 		},
 		{
+			name:  "declared field requires a path",
+			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind: "Foo",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title"}},
+				},
+			}},
+			wantErr: "embed field \"title\" requires a path",
+		},
+		{
 			name:         "custom builder needs no versioned fields",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 2}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
@@ -395,7 +406,7 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 					Kind:   "Foo",
 					Plural: "foos",
 					Embed: &ManifestVersionKindEmbed{
-						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}, {Name: "computed"}},
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}},
 					},
 				},
 			},

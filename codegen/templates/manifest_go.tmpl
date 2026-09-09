@@ -181,8 +181,8 @@ var appManifestData = app.ManifestData{
                 Embed: &app.ManifestVersionKindEmbed{
                     Fields: []app.ManifestVersionKindEmbedField{ {{ range .Embed.Fields }}
                         {
-                            Name: {{ goString .Name }},{{ if .Path }}
-                            Path: {{ goString .Path }},{{ end }}
+                            Name: {{ goString .Name }},
+                            Path: {{ goString .Path }},
                         },{{ end }}
                     },
                 }, {{ end }}{{ if .Admission }}

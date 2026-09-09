@@ -39,7 +39,7 @@ func TestValidateEmbedFields(t *testing.T) {
 		path    string
 		wantErr bool
 	}{
-		{name: "custom builder field without a path"},
+		{name: "empty path", wantErr: true},
 		{name: "string", path: "spec.title"},
 		{name: "optional nullable string", path: "spec.description"},
 		{name: "string array", path: "spec.tags"},
@@ -90,6 +90,16 @@ func TestValidateEmbedFields(t *testing.T) {
 
 func TestValidateEmbedFields_Unset(t *testing.T) {
 	assert.NoError(t, validateEmbedFields(codegen.VersionedKind{Kind: "Widget"}, "v1"))
+}
+
+func TestValidateEmbedFields_EmptyPathWithoutSchema(t *testing.T) {
+	err := validateEmbedFields(codegen.VersionedKind{
+		Kind: "Widget",
+		Embed: &codegen.KindEmbed{
+			Fields: []codegen.EmbedField{{Name: "body"}},
+		},
+	}, "v1")
+	require.ErrorContains(t, err, `embed field "body"`)
 }
 
 func TestValidateEmbedFields_PerVersionSchema(t *testing.T) {

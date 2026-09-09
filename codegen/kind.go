@@ -116,6 +116,7 @@ type KindSearch struct {
 }
 
 // KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
 type KindEmbed struct {
 	// Fields supplies the embedding document inputs in declaration order.
 	Fields []EmbedField `json:"fields"`
@@ -124,8 +125,8 @@ type KindEmbed struct {
 // EmbedField supplies text for the embedding document without exposing a search field.
 type EmbedField struct {
 	Name string `json:"name"`
-	// Path supplies a string or string array from the resource. When omitted, a custom builder supplies the value.
-	Path string `json:"path,omitempty"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path"`
 }
 
 // CustomRouteRequest represents the request part of a custom route definition.

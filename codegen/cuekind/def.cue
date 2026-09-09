@@ -233,6 +233,7 @@ SchemaWithOperatorState: Schema & {
 }
 
 // #KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this section.
 #KindEmbed: {
 	// fields supplies the embedding document inputs in declaration order.
 	fields: [...#EmbedField]
@@ -251,8 +252,7 @@ SchemaWithOperatorState: Schema & {
 	name: string
 	// path supplies a string or string array from the resource, using the same
 	// dot-separated paths and [*] projections as searchFields.
-	// When omitted, a custom builder supplies the value.
-	path?: string
+	path: string & strings.MinRunes(1)
 }
 
 // Kind represents an arbitrary kind which can be used for code generation

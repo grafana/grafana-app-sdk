@@ -141,9 +141,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					k.Embed.Fields = make([]app.ManifestVersionKindEmbedField, len(kind.Embed.Fields))
 					for i, field := range kind.Embed.Fields {
 						k.Embed.Fields[i].Name = field.Name
-						if field.Path != nil {
-							k.Embed.Fields[i].Path = *field.Path
-						}
+						k.Embed.Fields[i].Path = field.Path
 					}
 				}
 			}
@@ -446,9 +444,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					k.Embed.Fields = make([]AppManifestManifestVersionKindEmbedField, len(kind.Embed.Fields))
 					for i, field := range kind.Embed.Fields {
 						k.Embed.Fields[i].Name = field.Name
-						if field.Path != "" {
-							k.Embed.Fields[i].Path = &field.Path
-						}
+						k.Embed.Fields[i].Path = field.Path
 					}
 				}
 			}

@@ -125,9 +125,6 @@ var appManifestData = app.ManifestData{
 								Name: "details",
 								Path: "spec.unionNull.str",
 							},
-							{
-								Name: "summary",
-							},
 						},
 					},
 					Admission: &app.AdmissionCapabilities{

@@ -234,14 +234,12 @@ func TestProcessKindVersion_Embed(t *testing.T) {
 			embed: &codegen.KindEmbed{
 				Fields: []codegen.EmbedField{
 					{Name: "summary", Path: "spec.summary"},
-					{Name: "computed"},
 					{Name: "title", Path: "spec.title"},
 				},
 			},
 			expected: &app.ManifestVersionKindEmbed{
 				Fields: []app.ManifestVersionKindEmbedField{
 					{Name: "summary", Path: "spec.summary"},
-					{Name: "computed"},
 					{Name: "title", Path: "spec.title"},
 				},
 			},
@@ -279,7 +277,6 @@ func TestProcessKindVersion_IndependentSearchAndEmbedFields(t *testing.T) {
 		Embed: &codegen.KindEmbed{
 			Fields: []codegen.EmbedField{
 				{Name: "summary", Path: "spec.summary"},
-				{Name: "computed"},
 			},
 		},
 	}, "v1", false)
@@ -291,7 +288,6 @@ func TestProcessKindVersion_IndependentSearchAndEmbedFields(t *testing.T) {
 	require.NotNil(t, mver.Embed)
 	assert.Equal(t, []app.ManifestVersionKindEmbedField{
 		{Name: "summary", Path: "spec.summary"},
-		{Name: "computed"},
 	}, mver.Embed.Fields)
 }
 
@@ -339,7 +335,7 @@ func TestBuildManifestData_GlobalEmbedContentVersion(t *testing.T) {
 							Scope:      "Namespaced",
 							Schema:     ctx.CompileString(`spec: { displayName: string }`),
 							Embed: &codegen.KindEmbed{
-								Fields: []codegen.EmbedField{{Name: "title", Path: "spec.displayName"}, {Name: "computed"}},
+								Fields: []codegen.EmbedField{{Name: "title", Path: "spec.displayName"}},
 							},
 						}},
 					},
@@ -359,7 +355,7 @@ func TestBuildManifestData_GlobalEmbedContentVersion(t *testing.T) {
 			require.NotNil(t, got.Versions[0].Kinds[0].Embed)
 			require.NotNil(t, got.Versions[1].Kinds[0].Embed)
 			assert.Equal(t, []app.ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}}, got.Versions[0].Kinds[0].Embed.Fields)
-			assert.Equal(t, []app.ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}, {Name: "computed"}}, got.Versions[1].Kinds[0].Embed.Fields)
+			assert.Equal(t, []app.ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}}, got.Versions[1].Kinds[0].Embed.Fields)
 		})
 	}
 }

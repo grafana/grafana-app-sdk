@@ -1,5 +1,7 @@
 package app
 
+import "strings"
+
 appManifestv1alpha2: appManifestKind & {
 	schema: {
 		#AdditionalPrinterColumns: {
@@ -118,6 +120,7 @@ appManifestv1alpha2: appManifestKind & {
 			// hybrid declares whether the kind serves the /search/hybrid endpoint.
 			hybrid?: bool | *false
 		}
+		// Kinds with a custom embedding builder omit this section.
 		#ManifestVersionKindEmbed: {
 			// fields supplies the embedding document inputs in declaration order.
 			fields: [...#ManifestVersionKindEmbedField]
@@ -132,8 +135,7 @@ appManifestv1alpha2: appManifestKind & {
 			name: string
 			// path supplies a string or string array from the resource, using the same
 			// dot-separated paths and [*] projections as searchFields.
-			// When omitted, a custom builder supplies the value.
-			path?: string
+			path: string & strings.MinRunes(1)
 		}
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.

@@ -151,7 +151,6 @@ testKind: {
 			embed: {
 				fields: [
 					{name: "details", path: "spec.unionNull.str"},
-					{name: "summary"},
 				]
 			}
 			mutation: operations: ["create","update"]

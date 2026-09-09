@@ -831,6 +831,7 @@
                             },
                             "ManifestVersionKindEmbed": {
                                 "additionalProperties": false,
+                                "description": "Kinds with a custom embedding builder omit this section.",
                                 "properties": {
                                     "fields": {
                                         "description": "fields supplies the embedding document inputs in declaration order.",
@@ -853,12 +854,14 @@
                                         "type": "string"
                                     },
                                     "path": {
-                                        "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.\nWhen omitted, a custom builder supplies the value.",
+                                        "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.",
+                                        "minLength": 1,
                                         "type": "string"
                                     }
                                 },
                                 "required": [
-                                    "name"
+                                    "name",
+                                    "path"
                                 ],
                                 "type": "object"
                             },

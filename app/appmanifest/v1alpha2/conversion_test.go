@@ -275,16 +275,15 @@ func TestEmbedConversion(t *testing.T) {
 			wantJSON: `{"fields":[{"name":"title","path":"spec.title"}]}`,
 		},
 		{
-			name:           "increased content version with custom and resource fields",
+			name:           "increased content version with multiple fields",
 			contentVersion: 3,
 			embed: &app.ManifestVersionKindEmbed{
 				Fields: []app.ManifestVersionKindEmbedField{
-					{Name: "summary"},
 					{Name: "title", Path: "spec.title"},
 					{Name: "tags", Path: "spec.tags"},
 				},
 			},
-			wantJSON: `{"fields":[{"name":"summary"},{"name":"title","path":"spec.title"},{"name":"tags","path":"spec.tags"}]}`,
+			wantJSON: `{"fields":[{"name":"title","path":"spec.title"},{"name":"tags","path":"spec.tags"}]}`,
 		},
 		{
 			name:           "empty fields",
@@ -382,9 +381,6 @@ func TestEmbedConversion_SharedContentVersion(t *testing.T) {
 						Kind:   "Child",
 						Plural: "children",
 						Scope:  "Namespaced",
-						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
-							{Name: "summary"},
-						}},
 					},
 				},
 			},
@@ -397,7 +393,6 @@ func TestEmbedConversion_SharedContentVersion(t *testing.T) {
 						Scope: "Namespaced",
 						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
 							{Name: "title", Path: "spec.details.title"},
-							{Name: "summary"},
 						}},
 					},
 					{

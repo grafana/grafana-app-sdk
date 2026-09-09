@@ -273,6 +273,7 @@ func (AppManifestManifestVersionKindSearch) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindSearch"
 }
 
+// Kinds with a custom embedding builder omit this section.
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindEmbed struct {
 	// fields supplies the embedding document inputs in declaration order.
@@ -297,8 +298,7 @@ type AppManifestManifestVersionKindEmbedField struct {
 	Name string `json:"name"`
 	// path supplies a string or string array from the resource, using the same
 	// dot-separated paths and [*] projections as searchFields.
-	// When omitted, a custom builder supplies the value.
-	Path *string `json:"path,omitempty"`
+	Path string `json:"path"`
 }
 
 // NewAppManifestManifestVersionKindEmbedField creates a new AppManifestManifestVersionKindEmbedField object.

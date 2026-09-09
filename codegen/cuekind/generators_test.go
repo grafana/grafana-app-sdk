@@ -207,7 +207,6 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 					assert.Equal(t, &app.ManifestVersionKindEmbed{
 						Fields: []app.ManifestVersionKindEmbedField{
 							{Name: "details", Path: "spec.unionNull.str"},
-							{Name: "summary"},
 						},
 					}, kind.Embed)
 					assert.True(t, kind.HasHybridEndpoint())
