@@ -118,7 +118,8 @@ type KindSearch struct {
 // KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this configuration.
 type KindEmbed struct {
-	// Fields supplies the embedding document inputs in declaration order.
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
 	Fields []EmbedField `json:"fields"`
 }
 

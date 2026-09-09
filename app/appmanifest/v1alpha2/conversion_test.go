@@ -263,7 +263,7 @@ func TestEmbedConversion(t *testing.T) {
 		embed          *app.ManifestVersionKindEmbed
 		wantJSON       string
 	}{
-		{name: "unset"},
+		{name: "custom builder omits embedding declarations"},
 		{
 			name:           "initial content version",
 			contentVersion: 1,
@@ -294,7 +294,7 @@ func TestEmbedConversion(t *testing.T) {
 			wantJSON: `{"fields":[]}`,
 		},
 		{
-			name:           "custom builder without declared fields",
+			name:           "resource revision without versioned fields",
 			contentVersion: 2,
 		},
 	} {

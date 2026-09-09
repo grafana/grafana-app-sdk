@@ -522,7 +522,7 @@
                                         "additionalProperties": {
                                             "properties": {
                                                 "contentVersion": {
-                                                    "description": "contentVersion identifies the embedding content definition shared by all API versions of this resource.\nBump it when changes to any version's inputs or a custom builder require re-embedding existing resources.",
+                                                    "description": "contentVersion identifies the embedding content definition shared by all API versions of this resource.\nBump it when changes to any version's declared inputs require re-embedding existing resources.",
                                                     "exclusiveMinimum": true,
                                                     "minimum": 0,
                                                     "type": "integer"
@@ -533,7 +533,7 @@
                                             ],
                                             "type": "object"
                                         },
-                                        "description": "Embed configures embeddings by resource name (the lowercase plural) within this app's group.",
+                                        "description": "Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.\nCustom embedding builders omit their entry and define their content version in Go.",
                                         "type": "object"
                                     },
                                     "extraPermissions": {
@@ -824,7 +824,7 @@
                                                                 "description": "Kinds with a custom embedding builder omit this section.",
                                                                 "properties": {
                                                                     "fields": {
-                                                                        "description": "fields supplies the embedding document inputs in declaration order.",
+                                                                        "description": "fields supplies inputs, in declaration order, used only to generate the text to be embedded.\nDeclaring an embedding field does not enable filtering embeddings by that field.",
                                                                         "items": {
                                                                             "properties": {
                                                                                 "name": {

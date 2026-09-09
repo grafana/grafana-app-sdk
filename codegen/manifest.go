@@ -16,7 +16,8 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
-	// Embed configures embeddings by resource name (the lowercase plural) within this app's group.
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Custom embedding builders omit their entry and define their content version in Go.
 	Embed            map[string]ResourceEmbed              `json:"embed,omitempty"`
 	AppName          string                                `json:"appName"`
 	AppDisplayName   string                                `json:"appDisplayName"`
@@ -33,7 +34,7 @@ type AppManifestProperties struct {
 	RoleBindings     *AppManifestPropertiesRoleBindings   `json:"roleBindings"`
 }
 
-// ResourceEmbed configures embeddings across all API versions of a resource.
+// ResourceEmbed configures declarative embeddings across all API versions of a resource.
 type ResourceEmbed struct {
 	ContentVersion int `json:"contentVersion"`
 }

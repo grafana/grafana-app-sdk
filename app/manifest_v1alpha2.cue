@@ -122,12 +122,13 @@ appManifestv1alpha2: appManifestKind & {
 		}
 		// Kinds with a custom embedding builder omit this section.
 		#ManifestVersionKindEmbed: {
-			// fields supplies the embedding document inputs in declaration order.
+			// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+			// Declaring an embedding field does not enable filtering embeddings by that field.
 			fields: [...#ManifestVersionKindEmbedField]
 		}
 		#ResourceEmbed: {
 			// contentVersion identifies the embedding content definition shared by all API versions of this resource.
-			// Bump it when changes to any version's inputs or a custom builder require re-embedding existing resources.
+			// Bump it when changes to any version's declared inputs require re-embedding existing resources.
 			contentVersion: int & >0
 		}
 		#ManifestVersionKindEmbedField: {
@@ -213,7 +214,8 @@ appManifestv1alpha2: appManifestKind & {
 			// AppDisplayName is the display name of the app, which can contain any printable characters
 			appDisplayName: string
 			group: string
-			// Embed configures embeddings by resource name (the lowercase plural) within this app's group.
+			// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+			// Custom embedding builders omit their entry and define their content version in Go.
 			embed?: {
 				[string]: #ResourceEmbed
 			}

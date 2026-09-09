@@ -332,7 +332,7 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name:         "configuration remains optional",
+			name:         "custom builder omits embedding declarations",
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
 		},
 		{
@@ -363,7 +363,7 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 			wantErr: "embed field \"title\" requires a path",
 		},
 		{
-			name:         "custom builder needs no versioned fields",
+			name:         "resource revision without versioned fields",
 			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 2}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
 		},

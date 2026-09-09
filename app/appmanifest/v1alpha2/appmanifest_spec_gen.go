@@ -5,7 +5,7 @@ package v1alpha2
 // +k8s:openapi-gen=true
 type AppManifestResourceEmbed struct {
 	// contentVersion identifies the embedding content definition shared by all API versions of this resource.
-	// Bump it when changes to any version's inputs or a custom builder require re-embedding existing resources.
+	// Bump it when changes to any version's declared inputs require re-embedding existing resources.
 	ContentVersion int64 `json:"contentVersion"`
 }
 
@@ -276,7 +276,8 @@ func (AppManifestManifestVersionKindSearch) OpenAPIModelName() string {
 // Kinds with a custom embedding builder omit this section.
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindEmbed struct {
-	// fields supplies the embedding document inputs in declaration order.
+	// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
 	Fields []AppManifestManifestVersionKindEmbedField `json:"fields"`
 }
 
@@ -464,7 +465,8 @@ type AppManifestSpec struct {
 	// AppDisplayName is the display name of the app, which can contain any printable characters
 	AppDisplayName string `json:"appDisplayName"`
 	Group          string `json:"group"`
-	// Embed configures embeddings by resource name (the lowercase plural) within this app's group.
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Custom embedding builders omit their entry and define their content version in Go.
 	Embed map[string]AppManifestResourceEmbed `json:"embed,omitempty"`
 	// Versions is the list of versions for this manifest, in order.
 	Versions []AppManifestManifestVersion `json:"versions"`

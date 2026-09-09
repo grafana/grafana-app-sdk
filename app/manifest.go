@@ -93,8 +93,9 @@ type ManifestData struct {
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.app"
 	Group string `json:"group" yaml:"group"`
-	// Embed configures embeddings by resource name (the lowercase plural) within Group.
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within Group.
 	// Each resource has one content version shared by all of its API versions.
+	// Custom embedding builders omit their entry and define their content version in Go.
 	Embed map[string]ManifestResourceEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 	// Versions is a list of versions supported by this App
 	Versions []ManifestVersion `json:"versions" yaml:"versions"`
@@ -118,10 +119,10 @@ type ManifestData struct {
 	RoleBindings *ManifestRoleBindings `json:"roleBindings,omitempty" yaml:"roleBindings,omitempty"`
 }
 
-// ManifestResourceEmbed configures embeddings across all API versions of a resource.
+// ManifestResourceEmbed configures declarative embeddings across all API versions of a resource.
 type ManifestResourceEmbed struct {
 	// ContentVersion identifies the embedding content definition.
-	// Bump it when changes to any version's inputs or a custom builder require re-embedding existing resources.
+	// Bump it when changes to any version's declared inputs require re-embedding existing resources.
 	ContentVersion int `json:"contentVersion" yaml:"contentVersion"`
 }
 
@@ -431,7 +432,8 @@ type ManifestVersionKindSearch struct {
 // ManifestVersionKindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this configuration.
 type ManifestVersionKindEmbed struct {
-	// Fields supplies the embedding document inputs in declaration order.
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
 	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
 }
 
