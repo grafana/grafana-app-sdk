@@ -216,17 +216,9 @@ SchemaWithOperatorState: Schema & {
 	// description is a human readable description of the field.
 	description?: string
 	// embed includes this field's value in the text embedded for semantic search,
-	// as one "name: value" line. Fields are embedded in declaration order, so the
-	// order here affects the embedded text. An array field contributes all of its
-	// values.
+	// as one "name: value" line. Fields are embedded in declaration order.
 	//
-	// Requires a path and the string type, arrays of strings included. Codegen
-	// rejects anything else: a field with no path is supplied by a custom document
-	// builder rather than read from the resource, and a non-string value has
-	// nothing meaningful to write into text.
-	//
-	// Only read when the kind's embeddings are built from its declared fields. A
-	// kind whose search backend builds them in code ignores this.
+	// Requires a path and type "string" (arrays included).
 	embed?: bool | *false
 }
 

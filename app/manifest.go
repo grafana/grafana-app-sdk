@@ -499,10 +499,8 @@ type ManifestVersionKindSearchField struct {
 	// Description is a human readable description of the field.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 	// Embed includes this field's value in the text embedded for semantic search,
-	// as one "name: value" line, in declaration order; an array field contributes
-	// all of its values. Requires Path and the string type, arrays of strings
-	// included. Only read when the kind's embeddings are built from its declared
-	// fields.
+	// as one "name: value" line, in declaration order. Requires Path and type
+	// "string" (arrays included).
 	Embed bool `json:"embed,omitempty" yaml:"embed,omitempty"`
 }
 
