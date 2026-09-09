@@ -47,6 +47,9 @@ appManifestv1alpha2: appManifestKind & {
 			emitZeroIfAbsent?: bool | *false
 			// description is a human readable description of the field.
 			description?: string
+			// embed includes this field in the text embedded for semantic search.
+			// Requires a path and type "string" (arrays included).
+			embed?: bool | *false
 		}
 		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
 		#ValidationCapability: {
@@ -92,8 +95,10 @@ appManifestv1alpha2: appManifestKind & {
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 			searchFields?: [...#SearchField]
 			// search declares which search endpoints are served for this kind.
-			// Both are served unless the kind opts out here.
+			// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 			search?: #ManifestVersionKindSearch
+			// embed configures embeddings built from this kind's declared search fields.
+			embed?: #ManifestVersionKindEmbed
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -113,6 +118,12 @@ appManifestv1alpha2: appManifestKind & {
 			// trash declares whether the kind serves the /trash endpoint,
 			// which lists deleted resources of the kind.
 			trash?: bool | *true
+			// hybrid declares whether the kind serves the /search/hybrid endpoint.
+			hybrid?: bool | *false
+		}
+		#ManifestVersionKindEmbed: {
+			// version identifies the embedding content definition shared by every API version of this kind.
+			version: int & >0
 		}
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.

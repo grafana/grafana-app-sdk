@@ -32,6 +32,7 @@ func TestSearchFieldsConversion(t *testing.T) {
 						Type:         "string",
 						Capabilities: []string{"filter", "text", "retrieve"},
 						Description:  "User email",
+						Embed:        true,
 					},
 					{
 						Name:             "labels",
@@ -56,6 +57,7 @@ func TestSearchFieldsConversion(t *testing.T) {
 		Type:         AppManifestSearchFieldTypeString,
 		Capabilities: []AppManifestSearchFieldCapabilities{"filter", "text", "retrieve"},
 		Description:  ptr("User email"),
+		Embed:        truePtr(),
 	}, spec.Versions[0].Kinds[0].SearchFields[0])
 	assert.Equal(t, AppManifestSearchField{
 		Name:             "labels",
@@ -224,6 +226,9 @@ func TestSearchEndpointsConversion(t *testing.T) {
 		{name: "search opt-out", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(false)}},
 		{name: "trash opt-out", search: &app.ManifestVersionKindSearch{Trash: boolPtr(false)}},
 		{name: "explicit true", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(true), Trash: boolPtr(true)}},
+		{name: "hybrid opt-in", search: &app.ManifestVersionKindSearch{Hybrid: boolPtr(true)}},
+		{name: "hybrid explicit false", search: &app.ManifestVersionKindSearch{Hybrid: boolPtr(false)}},
+		{name: "hybrid opt-in with search opt-out", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(false), Hybrid: boolPtr(true)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			md := app.ManifestData{
@@ -246,6 +251,42 @@ func TestSearchEndpointsConversion(t *testing.T) {
 			roundTripped, err := spec.ToManifestData()
 			require.NoError(t, err)
 			assert.Equal(t, tc.search, roundTripped.Versions[0].Kinds[0].Search)
+		})
+	}
+}
+
+func TestEmbedConversion(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		embed *app.ManifestVersionKindEmbed
+	}{
+		{name: "unset"},
+		{name: "initial revision", embed: &app.ManifestVersionKindEmbed{Version: 1}},
+		{name: "increased revision", embed: &app.ManifestVersionKindEmbed{Version: 3}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			md := app.ManifestData{
+				AppName: "foo",
+				Versions: []app.ManifestVersion{{
+					Name:   "v1",
+					Served: true,
+					Kinds: []app.ManifestVersionKind{{
+						Kind:  "Foo",
+						Scope: "Namespaced",
+						Embed: tc.embed,
+					}},
+				}},
+			}
+
+			spec, err := SpecFromManifestData(md)
+			require.NoError(t, err)
+			encoded, err := json.Marshal(spec)
+			require.NoError(t, err)
+			var decoded AppManifestSpec
+			require.NoError(t, json.Unmarshal(encoded, &decoded))
+			roundTripped, err := decoded.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, tc.embed, roundTripped.Versions[0].Kinds[0].Embed)
 		})
 	}
 }

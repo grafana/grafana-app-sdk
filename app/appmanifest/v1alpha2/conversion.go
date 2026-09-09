@@ -118,6 +118,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					if sf.Description != nil {
 						translated.Description = *sf.Description
 					}
+					if sf.Embed != nil {
+						translated.Embed = *sf.Embed
+					}
 					k.SearchFields[i] = translated
 				}
 			}
@@ -126,7 +129,11 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.Search = &app.ManifestVersionKindSearch{
 					Endpoint: kind.Search.Endpoint,
 					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
 				}
+			}
+			if kind.Embed != nil {
+				k.Embed = &app.ManifestVersionKindEmbed{Version: int(kind.Embed.Version)}
 			}
 			// Schema
 			if kind.Schemas != nil {
@@ -405,6 +412,9 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					if sf.Description != "" {
 						translated.Description = &sf.Description
 					}
+					if sf.Embed {
+						translated.Embed = &sf.Embed
+					}
 					k.SearchFields[i] = translated
 				}
 			}
@@ -412,7 +422,11 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				k.Search = &AppManifestManifestVersionKindSearch{
 					Endpoint: kind.Search.Endpoint,
 					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
 				}
+			}
+			if kind.Embed != nil {
+				k.Embed = &AppManifestManifestVersionKindEmbed{Version: int64(kind.Embed.Version)}
 			}
 			// Routes
 			if kind.Routes != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
+	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 )
 
@@ -153,6 +154,60 @@ func TestManifestGenerator(t *testing.T) {
 		require.Len(t, files, 1)
 		assert.Equal(t, "test-app-manifest.yaml", files[0].RelativePath)
 	})
+}
+
+func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
+	parser, err := NewParser(testingCue(t), true)
+	require.NoError(t, err)
+	manifests, err := parser.ManifestParser().Parse("testManifest")
+	require.NoError(t, err)
+
+	for _, extension := range []string{"json", "yaml"} {
+		t.Run(extension, func(t *testing.T) {
+			files, err := ManifestGenerator(ManifestGeneratorConfig{
+				Extension:      extension,
+				IncludeSchemas: true,
+				Version:        jennies.VersionV1Alpha2,
+			}).Generate(manifests...)
+			require.NoError(t, err)
+			require.Len(t, files, 1)
+
+			var manifest struct {
+				APIVersion string                   `json:"apiVersion"`
+				Spec       v1alpha2.AppManifestSpec `json:"spec"`
+			}
+			require.NoError(t, yaml.Unmarshal(files[0].Data, &manifest))
+			assert.Equal(t, v1alpha2.GroupVersion.String(), manifest.APIVersion)
+			data, err := manifest.Spec.ToManifestData()
+			require.NoError(t, err)
+
+			foundEmbeddedKind := false
+			for _, version := range data.Versions {
+				for _, kind := range version.Kinds {
+					if kind.Kind != "TestKind" {
+						continue
+					}
+					if version.Name != "v2" {
+						assert.Nil(t, kind.Embed)
+						assert.False(t, kind.HasHybridEndpoint())
+						for _, field := range kind.SearchFields {
+							assert.False(t, field.Embed)
+						}
+						continue
+					}
+
+					foundEmbeddedKind = true
+					require.NotNil(t, kind.Embed)
+					assert.Equal(t, 1, kind.Embed.Version)
+					assert.True(t, kind.HasHybridEndpoint())
+					require.Len(t, kind.SearchFields, 2)
+					assert.True(t, kind.SearchFields[0].Embed)
+					assert.False(t, kind.SearchFields[1].Embed)
+				}
+			}
+			require.True(t, foundEmbeddedKind)
+		})
+	}
 }
 
 func TestManifestGoGenerator(t *testing.T) {

@@ -59,8 +59,10 @@ type AppManifestManifestVersionKind struct {
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
 	// search declares which search endpoints are served for this kind.
-	// Both are served unless the kind opts out here.
+	// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
+	// embed configures embeddings built from this kind's declared search fields.
+	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -212,6 +214,9 @@ type AppManifestSearchField struct {
 	EmitZeroIfAbsent *bool `json:"emitZeroIfAbsent,omitempty"`
 	// description is a human readable description of the field.
 	Description *string `json:"description,omitempty"`
+	// embed includes this field in the text embedded for semantic search.
+	// Requires a path and type "string" (arrays included).
+	Embed *bool `json:"embed,omitempty"`
 }
 
 // NewAppManifestSearchField creates a new AppManifestSearchField object.
@@ -220,6 +225,7 @@ func NewAppManifestSearchField() *AppManifestSearchField {
 		Array:            (func(input bool) *bool { return &input })(false),
 		Capabilities:     []AppManifestSearchFieldCapabilities{},
 		EmitZeroIfAbsent: (func(input bool) *bool { return &input })(false),
+		Embed:            (func(input bool) *bool { return &input })(false),
 	}
 }
 
@@ -236,6 +242,8 @@ type AppManifestManifestVersionKindSearch struct {
 	// trash declares whether the kind serves the /trash endpoint,
 	// which lists deleted resources of the kind.
 	Trash *bool `json:"trash,omitempty"`
+	// hybrid declares whether the kind serves the /search/hybrid endpoint.
+	Hybrid *bool `json:"hybrid,omitempty"`
 }
 
 // NewAppManifestManifestVersionKindSearch creates a new AppManifestManifestVersionKindSearch object.
@@ -243,12 +251,29 @@ func NewAppManifestManifestVersionKindSearch() *AppManifestManifestVersionKindSe
 	return &AppManifestManifestVersionKindSearch{
 		Endpoint: (func(input bool) *bool { return &input })(true),
 		Trash:    (func(input bool) *bool { return &input })(true),
+		Hybrid:   (func(input bool) *bool { return &input })(false),
 	}
 }
 
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindSearch.
 func (AppManifestManifestVersionKindSearch) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindSearch"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindEmbed struct {
+	// version identifies the embedding content definition shared by every API version of this kind.
+	Version int64 `json:"version"`
+}
+
+// NewAppManifestManifestVersionKindEmbed creates a new AppManifestManifestVersionKindEmbed object.
+func NewAppManifestManifestVersionKindEmbed() *AppManifestManifestVersionKindEmbed {
+	return &AppManifestManifestVersionKindEmbed{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbed.
+func (AppManifestManifestVersionKindEmbed) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbed"
 }
 
 // +k8s:openapi-gen=true

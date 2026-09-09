@@ -802,6 +802,20 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "embed": {
+                                                                "properties": {
+                                                                    "version": {
+                                                                        "description": "version identifies the embedding content definition shared by every API version of this kind.",
+                                                                        "exclusiveMinimum": true,
+                                                                        "minimum": 0,
+                                                                        "type": "integer"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "version"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "folderScoped": {
                                                                 "default": true,
                                                                 "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
@@ -842,6 +856,11 @@
                                                                         "description": "endpoint declares whether the kind serves the /search endpoint.",
                                                                         "type": "boolean"
                                                                     },
+                                                                    "hybrid": {
+                                                                        "default": false,
+                                                                        "description": "hybrid declares whether the kind serves the /search/hybrid endpoint.",
+                                                                        "type": "boolean"
+                                                                    },
                                                                     "trash": {
                                                                         "default": true,
                                                                         "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
@@ -878,6 +897,11 @@
                                                                         "description": {
                                                                             "description": "description is a human readable description of the field.",
                                                                             "type": "string"
+                                                                        },
+                                                                        "embed": {
+                                                                            "default": false,
+                                                                            "description": "embed includes this field in the text embedded for semantic search.\nRequires a path and type \"string\" (arrays included).",
+                                                                            "type": "boolean"
                                                                         },
                                                                         "emitZeroIfAbsent": {
                                                                             "default": false,
