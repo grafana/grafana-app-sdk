@@ -103,6 +103,7 @@ type SearchField struct {
 	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
 	Description      string   `json:"description,omitempty"`
 	// Embed includes this field's value in the text embedded for semantic search.
+	// Requires Path and the string type, arrays of strings included.
 	Embed bool `json:"embed,omitempty"`
 }
 
