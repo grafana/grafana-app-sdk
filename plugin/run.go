@@ -33,6 +33,11 @@ import (
 //
 //	err = plugin.Run(myapp.Provider(), plugin.WithKubeConfig(kubeConfig))
 //
+// If WithKubeConfig is not used, Run will attempt to build a rest.Config from
+// the plugin's provisioned service account (using the GF_APP_URL and
+// GF_PLUGIN_APP_CLIENT_SECRET environment variables made available by
+// Grafana). If those are not set, the App is given a zero-value rest.Config.
+//
 // Existing plugins that already have a plugin ID and an
 // backendapp.InstanceFactoryFunc (e.g. one built with app.New from an
 // existing datasource or app plugin) can keep using them via WithPluginID
@@ -69,13 +74,27 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
 	}
+
+	// If the caller didn't explicitly provide a KubeConfig, fall back to one
+	// built from the plugin's provisioned service account, if available.
+	if cfg.kubeConfig == nil {
+		cfg.kubeConfig = serviceAccountKubeConfig()
+		if cfg.kubeConfig != nil {
+			backendlog.DefaultLogger.Debug("KubeConfig using plugin service account",
+				"host", cfg.kubeConfig.Host)
+		}
+	}
 	manifestData := provider.Manifest().ManifestData
 	if manifestData == nil {
 		return errors.New("embedded manifest required")
 	}
 
+	var kubeConfig rest.Config
+	if cfg.kubeConfig != nil {
+		kubeConfig = *cfg.kubeConfig
+	}
 	appConfig := app.Config{
-		KubeConfig:     cfg.kubeConfig,
+		KubeConfig:     kubeConfig,
 		ManifestData:   *manifestData,
 		SpecificConfig: provider.SpecificConfig(),
 	}
@@ -125,9 +144,11 @@ func Run(provider app.Provider, opts ...RunOption) error {
 var manage = backendapp.Manage
 
 // WithKubeConfig sets the rest.Config used to communicate with the Kubernetes API server.
+// Setting this overrides any KubeConfig that would otherwise be automatically derived
+// from the plugin's provisioned service account.
 func WithKubeConfig(kubeConfig rest.Config) RunOption {
 	return func(cfg *runConfig) {
-		cfg.kubeConfig = kubeConfig
+		cfg.kubeConfig = &kubeConfig
 	}
 }
 
@@ -156,7 +177,7 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 type RunOption func(cfg *runConfig)
 
 type runConfig struct {
-	kubeConfig rest.Config
+	kubeConfig *rest.Config
 	pluginID   string
 	appFunc    backendapp.InstanceFactoryFunc
 	manageOpts backendapp.ManageOpts
