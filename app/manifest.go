@@ -93,6 +93,9 @@ type ManifestData struct {
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.app"
 	Group string `json:"group" yaml:"group"`
+	// Embed configures embeddings by resource name (the lowercase plural) within Group.
+	// Each resource has one content version shared by all of its API versions.
+	Embed map[string]ManifestResourceEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 	// Versions is a list of versions supported by this App
 	Versions []ManifestVersion `json:"versions" yaml:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
@@ -115,8 +118,15 @@ type ManifestData struct {
 	RoleBindings *ManifestRoleBindings `json:"roleBindings,omitempty" yaml:"roleBindings,omitempty"`
 }
 
+// ManifestResourceEmbed configures embeddings across all API versions of a resource.
+type ManifestResourceEmbed struct {
+	// ContentVersion identifies the embedding content definition.
+	// Bump it when changes to any version's inputs or a custom builder require re-embedding existing resources.
+	ContentVersion int `json:"contentVersion" yaml:"contentVersion"`
+}
+
 func (m *ManifestData) IsEmpty() bool {
-	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
+	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && len(m.Embed) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
 }
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
@@ -227,6 +237,32 @@ func (m *ManifestData) Validate() error {
 			if len(v) > 0 {
 				checkRoleBinding(k, v)
 			}
+		}
+	}
+	return multierror.Append(errs, m.validateEmbed()).ErrorOrNil()
+}
+
+func (m *ManifestData) validateEmbed() error {
+	resources := make(map[string]struct{})
+	var errs error
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			resource := strings.ToLower(kind.Plural)
+			if resource == "" {
+				resource = strings.ToLower(kind.Kind) + "s"
+			}
+			resources[resource] = struct{}{}
+			if _, ok := m.Embed[resource]; kind.Embed != nil && !ok {
+				errs = multierror.Append(errs, fmt.Errorf("kind %q version %q declares embedding fields without embed configuration for resource %q", kind.Kind, version.Name, resource))
+			}
+		}
+	}
+	for _, resource := range slices.Sorted(maps.Keys(m.Embed)) {
+		if _, ok := resources[resource]; !ok {
+			errs = multierror.Append(errs, fmt.Errorf("embed configuration references unknown resource %q", resource))
+		}
+		if m.Embed[resource].ContentVersion <= 0 {
+			errs = multierror.Append(errs, fmt.Errorf("embed contentVersion for resource %q must be greater than zero", resource))
 		}
 	}
 	return errs
@@ -370,8 +406,7 @@ type ManifestVersionKind struct {
 	// Search declares which search endpoints are served for this kind.
 	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
-	// Embed configures embeddings built from this kind's declared search fields.
-	// Kinds whose embeddings are built in code do not set it.
+	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 }
 
@@ -389,11 +424,18 @@ type ManifestVersionKindSearch struct {
 	Hybrid *bool `json:"hybrid,omitempty" yaml:"hybrid,omitempty"`
 }
 
-// ManifestVersionKindEmbed configures embeddings built from a kind's declared search fields.
+// ManifestVersionKindEmbed defines the embedding document independently of search fields.
 type ManifestVersionKindEmbed struct {
-	// Version identifies the text produced from the embed fields. Bumping it re-embeds
-	// every existing resource of the kind, which the search backend pays for.
-	Version int `json:"version" yaml:"version"`
+	// Fields supplies the embedding document inputs in declaration order.
+	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
+}
+
+// ManifestVersionKindEmbedField supplies text for the embedding document without exposing a search field.
+type ManifestVersionKindEmbedField struct {
+	// Name labels this input in the embedding document.
+	Name string `json:"name" yaml:"name"`
+	// Path supplies a string or string array from the resource. When omitted, a custom builder supplies the value.
+	Path string `json:"path,omitempty" yaml:"path,omitempty"`
 }
 
 // HasSearchEndpoint reports whether the kind serves the /search endpoint.
@@ -498,10 +540,6 @@ type ManifestVersionKindSearchField struct {
 	EmitZeroIfAbsent bool `json:"emitZeroIfAbsent,omitempty" yaml:"emitZeroIfAbsent,omitempty"`
 	// Description is a human readable description of the field.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-	// Embed includes this field's value in the text embedded for semantic search,
-	// as one "name: value" line, in declaration order. Requires Path and type
-	// "string" (arrays included).
-	Embed bool `json:"embed,omitempty" yaml:"embed,omitempty"`
 }
 
 const parsedCRDSchemaKindName = "__KIND__"

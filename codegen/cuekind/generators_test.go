@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
+	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 )
@@ -180,6 +181,8 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 			assert.Equal(t, v1alpha2.GroupVersion.String(), manifest.APIVersion)
 			data, err := manifest.Spec.ToManifestData()
 			require.NoError(t, err)
+			assert.Equal(t, map[string]app.ManifestResourceEmbed{"testkinds": {ContentVersion: 1}}, data.Embed)
+			assert.Equal(t, 1, strings.Count(string(files[0].Data), "contentVersion"))
 
 			foundEmbeddedKind := false
 			for _, version := range data.Versions {
@@ -188,21 +191,29 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 						continue
 					}
 					if version.Name != "v2" {
-						assert.Nil(t, kind.Embed)
-						assert.False(t, kind.HasHybridEndpoint())
-						for _, field := range kind.SearchFields {
-							assert.False(t, field.Embed)
+						if version.Name == "v1" {
+							assert.Equal(t, &app.ManifestVersionKindEmbed{
+								Fields: []app.ManifestVersionKindEmbedField{{Name: "details", Path: "spec.stringField"}},
+							}, kind.Embed)
+						} else {
+							assert.Nil(t, kind.Embed)
 						}
+						assert.False(t, kind.HasHybridEndpoint())
 						continue
 					}
 
 					foundEmbeddedKind = true
 					require.NotNil(t, kind.Embed)
-					assert.Equal(t, 1, kind.Embed.Version)
+					assert.Equal(t, &app.ManifestVersionKindEmbed{
+						Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "details", Path: "spec.unionNull.str"},
+							{Name: "summary"},
+						},
+					}, kind.Embed)
 					assert.True(t, kind.HasHybridEndpoint())
 					require.Len(t, kind.SearchFields, 2)
-					assert.True(t, kind.SearchFields[0].Embed)
-					assert.False(t, kind.SearchFields[1].Embed)
+					assert.Equal(t, "stringField", kind.SearchFields[0].Name)
+					assert.Equal(t, "intField", kind.SearchFields[1].Name)
 				}
 			}
 			require.True(t, foundEmbeddedKind)

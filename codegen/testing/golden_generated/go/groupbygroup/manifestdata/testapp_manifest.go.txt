@@ -45,6 +45,9 @@ var appManifestData = app.ManifestData{
 	AppDisplayName:   "test-app",
 	Group:            "testapp.ext.grafana.app",
 	PreferredVersion: "v1",
+	Embed: map[string]app.ManifestResourceEmbed{
+		"testkinds": {ContentVersion: 1},
+	},
 	Versions: []app.ManifestVersion{
 		{
 			Name:   "v1",
@@ -55,6 +58,14 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKinds",
 					Scope:      "Namespaced",
 					Conversion: true,
+					Embed: &app.ManifestVersionKindEmbed{
+						Fields: []app.ManifestVersionKindEmbedField{
+							{
+								Name: "details",
+								Path: "spec.stringField",
+							},
+						},
+					},
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{
@@ -109,7 +120,15 @@ var appManifestData = app.ManifestData{
 						Hybrid: func(b bool) *bool { return &b }(true),
 					},
 					Embed: &app.ManifestVersionKindEmbed{
-						Version: 1,
+						Fields: []app.ManifestVersionKindEmbedField{
+							{
+								Name: "details",
+								Path: "spec.unionNull.str",
+							},
+							{
+								Name: "summary",
+							},
+						},
 					},
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
@@ -139,7 +158,6 @@ var appManifestData = app.ManifestData{
 							Type:         "string",
 							Capabilities: []string{"filter", "text", "sort", "retrieve"},
 							Description:  "The string field",
-							Embed:        true,
 						},
 						{
 							Name:             "intField",

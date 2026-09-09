@@ -229,7 +229,23 @@ func TestProcessKindVersion_Embed(t *testing.T) {
 		expected *app.ManifestVersionKindEmbed
 	}{
 		{name: "unset", embed: nil, expected: nil},
-		{name: "version carried through", embed: &codegen.KindEmbed{Version: 2}, expected: &app.ManifestVersionKindEmbed{Version: 2}},
+		{
+			name: "independent fields retain declaration order",
+			embed: &codegen.KindEmbed{
+				Fields: []codegen.EmbedField{
+					{Name: "summary", Path: "spec.summary"},
+					{Name: "computed"},
+					{Name: "title", Path: "spec.title"},
+				},
+			},
+			expected: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{
+					{Name: "summary", Path: "spec.summary"},
+					{Name: "computed"},
+					{Name: "title", Path: "spec.title"},
+				},
+			},
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			mver, err := processKindVersion(codegen.VersionedKind{
@@ -241,27 +257,111 @@ func TestProcessKindVersion_Embed(t *testing.T) {
 			}, "v1", false)
 			require.NoError(t, err)
 			assert.Equal(t, tc.expected, mver.Embed)
+			assert.Empty(t, mver.SearchFields)
 		})
 	}
 }
 
-func TestProcessKindVersion_RejectsUnreadableEmbedField(t *testing.T) {
-	// A field with no path is filled in by a custom document builder, which the
-	// embedding path never reads, so embedding it would silently produce nothing.
-	_, err := processKindVersion(codegen.VersionedKind{
+func TestProcessKindVersion_IndependentSearchAndEmbedFields(t *testing.T) {
+	schema := cuecontext.New().CompileString(`spec: { title: string, summary: string, count: int }`)
+	require.NoError(t, schema.Err())
+
+	mver, err := processKindVersion(codegen.VersionedKind{
 		Kind:         "Foo",
 		PluralName:   "Foos",
 		Scope:        "Namespaced",
 		FolderScoped: true,
-		SearchFields: []codegen.SearchField{{
-			Name:         "title",
-			Type:         "string",
-			Capabilities: []string{"retrieve"},
-			Embed:        true,
-		}},
+		Schema:       schema,
+		SearchFields: []codegen.SearchField{
+			{Name: "title", Path: "spec.title", Type: "string", Capabilities: []string{"text"}},
+			{Name: "count", Path: "spec.count", Type: "int64", Capabilities: []string{"filter"}},
+		},
+		Embed: &codegen.KindEmbed{
+			Fields: []codegen.EmbedField{
+				{Name: "summary", Path: "spec.summary"},
+				{Name: "computed"},
+			},
+		},
 	}, "v1", false)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "embed requires a path")
+	require.NoError(t, err)
+	assert.Equal(t, []app.ManifestVersionKindSearchField{
+		{Name: "title", Path: "spec.title", Type: "string", Capabilities: []string{"text"}},
+		{Name: "count", Path: "spec.count", Type: "int64", Capabilities: []string{"filter"}},
+	}, mver.SearchFields)
+	require.NotNil(t, mver.Embed)
+	assert.Equal(t, []app.ManifestVersionKindEmbedField{
+		{Name: "summary", Path: "spec.summary"},
+		{Name: "computed"},
+	}, mver.Embed.Fields)
+}
+
+func TestBuildManifestData_GlobalEmbedContentVersion(t *testing.T) {
+	ctx := cuecontext.New()
+	for _, tt := range []struct {
+		name    string
+		embed   map[string]codegen.ResourceEmbed
+		wantErr string
+	}{
+		{
+			name:  "one revision for different versioned fields",
+			embed: map[string]codegen.ResourceEmbed{"foos": {ContentVersion: 3}},
+		},
+		{
+			name:    "versioned fields require a resource revision",
+			wantErr: "foos",
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := &codegen.SimpleManifest{
+				AppManifestProperties: codegen.AppManifestProperties{
+					AppName:   "test",
+					FullGroup: "test.grafana.app",
+					Embed:     tt.embed,
+				},
+				AllVersions: map[string]*codegen.SimpleVersion{
+					"v1": {
+						VersionProperties: codegen.VersionProperties{Name: "v1"},
+						AllKinds: []codegen.VersionedKind{{
+							Kind:       "Foo",
+							PluralName: "Foos",
+							Scope:      "Namespaced",
+							Schema:     ctx.CompileString(`spec: { title: string }`),
+							Embed: &codegen.KindEmbed{
+								Fields: []codegen.EmbedField{{Name: "title", Path: "spec.title"}},
+							},
+						}},
+					},
+					"v2": {
+						VersionProperties: codegen.VersionProperties{Name: "v2"},
+						AllKinds: []codegen.VersionedKind{{
+							Kind:       "Foo",
+							PluralName: "Foos",
+							Scope:      "Namespaced",
+							Schema:     ctx.CompileString(`spec: { displayName: string }`),
+							Embed: &codegen.KindEmbed{
+								Fields: []codegen.EmbedField{{Name: "title", Path: "spec.displayName"}, {Name: "computed"}},
+							},
+						}},
+					},
+				},
+			}
+
+			got, err := buildManifestData(manifest, false)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, map[string]app.ManifestResourceEmbed{"foos": {ContentVersion: 3}}, got.Embed)
+			require.Len(t, got.Versions, 2)
+			require.Len(t, got.Versions[0].Kinds, 1)
+			require.Len(t, got.Versions[1].Kinds, 1)
+			require.NotNil(t, got.Versions[0].Kinds[0].Embed)
+			require.NotNil(t, got.Versions[1].Kinds[0].Embed)
+			assert.Equal(t, []app.ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}}, got.Versions[0].Kinds[0].Embed.Fields)
+			assert.Equal(t, []app.ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}, {Name: "computed"}}, got.Versions[1].Kinds[0].Embed.Fields)
+		})
+	}
 }
 
 func TestBuildManifestData_RejectsReservedKindRoutes(t *testing.T) {

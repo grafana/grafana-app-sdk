@@ -23,6 +23,12 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		Group:          s.Group,
 		Versions:       make([]app.ManifestVersion, len(s.Versions)),
 	}
+	if s.Embed != nil {
+		data.Embed = make(map[string]app.ManifestResourceEmbed, len(s.Embed))
+		for resource, embed := range s.Embed {
+			data.Embed[resource] = app.ManifestResourceEmbed{ContentVersion: int(embed.ContentVersion)}
+		}
+	}
 	// Versions
 	for idx, version := range s.Versions {
 		v := app.ManifestVersion{
@@ -118,9 +124,6 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					if sf.Description != nil {
 						translated.Description = *sf.Description
 					}
-					if sf.Embed != nil {
-						translated.Embed = *sf.Embed
-					}
 					k.SearchFields[i] = translated
 				}
 			}
@@ -133,7 +136,16 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				}
 			}
 			if kind.Embed != nil {
-				k.Embed = &app.ManifestVersionKindEmbed{Version: int(kind.Embed.Version)}
+				k.Embed = &app.ManifestVersionKindEmbed{}
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]app.ManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						if field.Path != nil {
+							k.Embed.Fields[i].Path = *field.Path
+						}
+					}
+				}
 			}
 			// Schema
 			if kind.Schemas != nil {
@@ -332,6 +344,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		Group:          data.Group,
 		Versions:       make([]AppManifestManifestVersion, 0),
 	}
+	if data.Embed != nil {
+		manifestSpec.Embed = make(map[string]AppManifestResourceEmbed, len(data.Embed))
+		for resource, embed := range data.Embed {
+			manifestSpec.Embed[resource] = AppManifestResourceEmbed{ContentVersion: int64(embed.ContentVersion)}
+		}
+	}
 	if data.PreferredVersion != "" {
 		manifestSpec.PreferredVersion = &data.PreferredVersion
 	}
@@ -412,9 +430,6 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					if sf.Description != "" {
 						translated.Description = &sf.Description
 					}
-					if sf.Embed {
-						translated.Embed = &sf.Embed
-					}
 					k.SearchFields[i] = translated
 				}
 			}
@@ -426,7 +441,16 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				}
 			}
 			if kind.Embed != nil {
-				k.Embed = &AppManifestManifestVersionKindEmbed{Version: int64(kind.Embed.Version)}
+				k.Embed = &AppManifestManifestVersionKindEmbed{}
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]AppManifestManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						if field.Path != "" {
+							k.Embed.Fields[i].Path = &field.Path
+						}
+					}
+				}
 			}
 			// Routes
 			if kind.Routes != nil {

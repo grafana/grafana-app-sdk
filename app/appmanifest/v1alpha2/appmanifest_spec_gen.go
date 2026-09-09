@@ -3,6 +3,23 @@
 package v1alpha2
 
 // +k8s:openapi-gen=true
+type AppManifestResourceEmbed struct {
+	// contentVersion identifies the embedding content definition shared by all API versions of this resource.
+	// Bump it when changes to any version's inputs or a custom builder require re-embedding existing resources.
+	ContentVersion int64 `json:"contentVersion"`
+}
+
+// NewAppManifestResourceEmbed creates a new AppManifestResourceEmbed object.
+func NewAppManifestResourceEmbed() *AppManifestResourceEmbed {
+	return &AppManifestResourceEmbed{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestResourceEmbed.
+func (AppManifestResourceEmbed) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestResourceEmbed"
+}
+
+// +k8s:openapi-gen=true
 type AppManifestManifestVersion struct {
 	// Name is the version name string, such as "v1" or "v1alpha1"
 	Name string `json:"name"`
@@ -61,7 +78,7 @@ type AppManifestManifestVersionKind struct {
 	// search declares which search endpoints are served for this kind.
 	// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
-	// embed configures embeddings built from this kind's declared search fields.
+	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
@@ -214,9 +231,6 @@ type AppManifestSearchField struct {
 	EmitZeroIfAbsent *bool `json:"emitZeroIfAbsent,omitempty"`
 	// description is a human readable description of the field.
 	Description *string `json:"description,omitempty"`
-	// embed includes this field in the text embedded for semantic search.
-	// Requires a path and type "string" (arrays included).
-	Embed *bool `json:"embed,omitempty"`
 }
 
 // NewAppManifestSearchField creates a new AppManifestSearchField object.
@@ -225,7 +239,6 @@ func NewAppManifestSearchField() *AppManifestSearchField {
 		Array:            (func(input bool) *bool { return &input })(false),
 		Capabilities:     []AppManifestSearchFieldCapabilities{},
 		EmitZeroIfAbsent: (func(input bool) *bool { return &input })(false),
-		Embed:            (func(input bool) *bool { return &input })(false),
 	}
 }
 
@@ -262,18 +275,40 @@ func (AppManifestManifestVersionKindSearch) OpenAPIModelName() string {
 
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionKindEmbed struct {
-	// version identifies the embedding content definition shared by every API version of this kind.
-	Version int64 `json:"version"`
+	// fields supplies the embedding document inputs in declaration order.
+	Fields []AppManifestManifestVersionKindEmbedField `json:"fields"`
 }
 
 // NewAppManifestManifestVersionKindEmbed creates a new AppManifestManifestVersionKindEmbed object.
 func NewAppManifestManifestVersionKindEmbed() *AppManifestManifestVersionKindEmbed {
-	return &AppManifestManifestVersionKindEmbed{}
+	return &AppManifestManifestVersionKindEmbed{
+		Fields: []AppManifestManifestVersionKindEmbedField{},
+	}
 }
 
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbed.
 func (AppManifestManifestVersionKindEmbed) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbed"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindEmbedField struct {
+	// name labels this input in the embedding document.
+	Name string `json:"name"`
+	// path supplies a string or string array from the resource, using the same
+	// dot-separated paths and [*] projections as searchFields.
+	// When omitted, a custom builder supplies the value.
+	Path *string `json:"path,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindEmbedField creates a new AppManifestManifestVersionKindEmbedField object.
+func NewAppManifestManifestVersionKindEmbedField() *AppManifestManifestVersionKindEmbedField {
+	return &AppManifestManifestVersionKindEmbedField{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindEmbedField.
+func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
 }
 
 // +k8s:openapi-gen=true
@@ -429,6 +464,8 @@ type AppManifestSpec struct {
 	// AppDisplayName is the display name of the app, which can contain any printable characters
 	AppDisplayName string `json:"appDisplayName"`
 	Group          string `json:"group"`
+	// Embed configures embeddings by resource name (the lowercase plural) within this app's group.
+	Embed map[string]AppManifestResourceEmbed `json:"embed,omitempty"`
 	// Versions is the list of versions for this manifest, in order.
 	Versions []AppManifestManifestVersion `json:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.

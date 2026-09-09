@@ -13,15 +13,12 @@ import (
 
 // validateSearchFields checks every search field declared on a kind version:
 // capabilities must be compatible with the declared field type (see the
-// searchfields package), embed fields must be readable from the resource, and
+// searchfields package), and
 // each non-empty path must resolve against the version schema to a field whose
 // type is compatible with the declared type.
 func validateSearchFields(vk codegen.VersionedKind, version string) error {
 	for _, sf := range vk.SearchFields {
 		if err := validateSearchFieldCapabilities(sf); err != nil {
-			return fmt.Errorf("kind %q version %q search field %q: %w", vk.Kind, version, sf.Name, err)
-		}
-		if err := validateSearchFieldEmbed(sf); err != nil {
 			return fmt.Errorf("kind %q version %q search field %q: %w", vk.Kind, version, sf.Name, err)
 		}
 		if sf.Path == "" || !vk.Schema.Exists() {
@@ -53,23 +50,6 @@ func validateSearchFields(vk codegen.VersionedKind, version string) error {
 // types. Grafana's runtime validator consumes the same matrix.
 func validateSearchFieldCapabilities(sf codegen.SearchField) error {
 	return searchfields.Validate(sf.Type, sf.Capabilities)
-}
-
-// validateSearchFieldEmbed checks that an embed field can actually be turned into
-// text. Embeddings are built by reading the path out of the stored resource and
-// writing "name: value", so a field with no path has nothing to read, and a
-// non-string type has nothing meaningful to write.
-func validateSearchFieldEmbed(sf codegen.SearchField) error {
-	if !sf.Embed {
-		return nil
-	}
-	if sf.Path == "" {
-		return fmt.Errorf("embed requires a path: a field with no path is supplied by a custom document builder, which embeddings do not read")
-	}
-	if sf.Type != searchfields.TypeString {
-		return fmt.Errorf("embed requires type %q, got %q", searchfields.TypeString, sf.Type)
-	}
-	return nil
 }
 
 type pathSegment struct {

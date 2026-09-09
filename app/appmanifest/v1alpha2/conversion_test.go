@@ -32,7 +32,6 @@ func TestSearchFieldsConversion(t *testing.T) {
 						Type:         "string",
 						Capabilities: []string{"filter", "text", "retrieve"},
 						Description:  "User email",
-						Embed:        true,
 					},
 					{
 						Name:             "labels",
@@ -57,7 +56,6 @@ func TestSearchFieldsConversion(t *testing.T) {
 		Type:         AppManifestSearchFieldTypeString,
 		Capabilities: []AppManifestSearchFieldCapabilities{"filter", "text", "retrieve"},
 		Description:  ptr("User email"),
-		Embed:        truePtr(),
 	}, spec.Versions[0].Kinds[0].SearchFields[0])
 	assert.Equal(t, AppManifestSearchField{
 		Name:             "labels",
@@ -66,6 +64,9 @@ func TestSearchFieldsConversion(t *testing.T) {
 		Capabilities:     []AppManifestSearchFieldCapabilities{"filter", "retrieve"},
 		EmitZeroIfAbsent: truePtr(),
 	}, spec.Versions[0].Kinds[0].SearchFields[1])
+	encoded, err := json.Marshal(spec.Versions[0].Kinds[0].SearchFields)
+	require.NoError(t, err)
+	assert.NotContains(t, string(encoded), `"embed"`)
 
 	// spec -> manifest: the set pointers are dereferenced back, unset ones stay zero.
 	roundTripped, err := spec.ToManifestData()
@@ -257,12 +258,46 @@ func TestSearchEndpointsConversion(t *testing.T) {
 
 func TestEmbedConversion(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		embed *app.ManifestVersionKindEmbed
+		name           string
+		contentVersion int
+		embed          *app.ManifestVersionKindEmbed
+		wantJSON       string
 	}{
 		{name: "unset"},
-		{name: "initial revision", embed: &app.ManifestVersionKindEmbed{Version: 1}},
-		{name: "increased revision", embed: &app.ManifestVersionKindEmbed{Version: 3}},
+		{
+			name:           "initial content version",
+			contentVersion: 1,
+			embed: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{
+					{Name: "title", Path: "spec.title"},
+				},
+			},
+			wantJSON: `{"fields":[{"name":"title","path":"spec.title"}]}`,
+		},
+		{
+			name:           "increased content version with custom and resource fields",
+			contentVersion: 3,
+			embed: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{
+					{Name: "summary"},
+					{Name: "title", Path: "spec.title"},
+					{Name: "tags", Path: "spec.tags"},
+				},
+			},
+			wantJSON: `{"fields":[{"name":"summary"},{"name":"title","path":"spec.title"},{"name":"tags","path":"spec.tags"}]}`,
+		},
+		{
+			name:           "empty fields",
+			contentVersion: 1,
+			embed: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{},
+			},
+			wantJSON: `{"fields":[]}`,
+		},
+		{
+			name:           "custom builder without declared fields",
+			contentVersion: 2,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			md := app.ManifestData{
@@ -274,19 +309,124 @@ func TestEmbedConversion(t *testing.T) {
 						Kind:  "Foo",
 						Scope: "Namespaced",
 						Embed: tc.embed,
+						SearchFields: []app.ManifestVersionKindSearchField{{
+							Name:         "category",
+							Path:         "spec.category",
+							Type:         "string",
+							Capabilities: []string{"filter"},
+						}},
 					}},
 				}},
+			}
+			if tc.contentVersion != 0 {
+				md.Embed = map[string]app.ManifestResourceEmbed{
+					"foos": {ContentVersion: tc.contentVersion},
+				}
 			}
 
 			spec, err := SpecFromManifestData(md)
 			require.NoError(t, err)
+			kindJSON, err := json.Marshal(spec.Versions[0].Kinds[0])
+			require.NoError(t, err)
+			var kindFields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(kindJSON, &kindFields))
+			if tc.embed == nil {
+				assert.NotContains(t, kindFields, "embed")
+			} else {
+				assert.JSONEq(t, tc.wantJSON, string(kindFields["embed"]))
+			}
+			assert.NotContains(t, string(kindFields["searchFields"]), `"embed"`)
 			encoded, err := json.Marshal(spec)
 			require.NoError(t, err)
+			var specFields map[string]json.RawMessage
+			require.NoError(t, json.Unmarshal(encoded, &specFields))
+			if tc.contentVersion == 0 {
+				assert.NotContains(t, specFields, "embed")
+			} else {
+				wantEmbedJSON, err := json.Marshal(md.Embed)
+				require.NoError(t, err)
+				assert.JSONEq(t, string(wantEmbedJSON), string(specFields["embed"]))
+			}
 			var decoded AppManifestSpec
 			require.NoError(t, json.Unmarshal(encoded, &decoded))
 			roundTripped, err := decoded.ToManifestData()
 			require.NoError(t, err)
+			assert.Equal(t, md.Embed, roundTripped.Embed)
 			assert.Equal(t, tc.embed, roundTripped.Versions[0].Kinds[0].Embed)
+			assert.Equal(t, md.Versions[0].Kinds[0].SearchFields, roundTripped.Versions[0].Kinds[0].SearchFields)
 		})
+	}
+}
+
+func TestEmbedConversion_SharedContentVersion(t *testing.T) {
+	md := app.ManifestData{
+		AppName: "testapp",
+		Group:   "testapp.grafana.app",
+		Embed: map[string]app.ManifestResourceEmbed{
+			"foos":     {ContentVersion: 3},
+			"children": {ContentVersion: 7},
+		},
+		Versions: []app.ManifestVersion{
+			{
+				Name:   "v1",
+				Served: true,
+				Kinds: []app.ManifestVersionKind{
+					{
+						Kind:  "Foo",
+						Scope: "Namespaced",
+						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "title", Path: "spec.title"},
+						}},
+					},
+					{
+						Kind:   "Child",
+						Plural: "children",
+						Scope:  "Namespaced",
+						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "summary"},
+						}},
+					},
+				},
+			},
+			{
+				Name:   "v2",
+				Served: true,
+				Kinds: []app.ManifestVersionKind{
+					{
+						Kind:  "Foo",
+						Scope: "Namespaced",
+						Embed: &app.ManifestVersionKindEmbed{Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "title", Path: "spec.details.title"},
+							{Name: "summary"},
+						}},
+					},
+					{
+						Kind:   "Child",
+						Plural: "children",
+						Scope:  "Namespaced",
+					},
+				},
+			},
+		},
+	}
+
+	spec, err := SpecFromManifestData(md)
+	require.NoError(t, err)
+	encoded, err := json.Marshal(spec)
+	require.NoError(t, err)
+	var specFields map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(encoded, &specFields))
+	assert.JSONEq(t, `{"foos":{"contentVersion":3},"children":{"contentVersion":7}}`, string(specFields["embed"]))
+	assert.NotContains(t, string(specFields["versions"]), `"contentVersion"`)
+
+	var decoded AppManifestSpec
+	require.NoError(t, json.Unmarshal(encoded, &decoded))
+	roundTripped, err := decoded.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, md.Embed, roundTripped.Embed)
+	for vi, version := range md.Versions {
+		for ki, kind := range version.Kinds {
+			assert.Equal(t, kind.Embed, roundTripped.Versions[vi].Kinds[ki].Embed)
+		}
 	}
 }

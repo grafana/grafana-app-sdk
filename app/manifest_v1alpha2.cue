@@ -47,9 +47,6 @@ appManifestv1alpha2: appManifestKind & {
 			emitZeroIfAbsent?: bool | *false
 			// description is a human readable description of the field.
 			description?: string
-			// embed includes this field in the text embedded for semantic search.
-			// Requires a path and type "string" (arrays included).
-			embed?: bool | *false
 		}
 		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
 		#ValidationCapability: {
@@ -97,7 +94,7 @@ appManifestv1alpha2: appManifestKind & {
 			// search declares which search endpoints are served for this kind.
 			// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 			search?: #ManifestVersionKindSearch
-			// embed configures embeddings built from this kind's declared search fields.
+			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
@@ -122,8 +119,21 @@ appManifestv1alpha2: appManifestKind & {
 			hybrid?: bool | *false
 		}
 		#ManifestVersionKindEmbed: {
-			// version identifies the embedding content definition shared by every API version of this kind.
-			version: int & >0
+			// fields supplies the embedding document inputs in declaration order.
+			fields: [...#ManifestVersionKindEmbedField]
+		}
+		#ResourceEmbed: {
+			// contentVersion identifies the embedding content definition shared by all API versions of this resource.
+			// Bump it when changes to any version's inputs or a custom builder require re-embedding existing resources.
+			contentVersion: int & >0
+		}
+		#ManifestVersionKindEmbedField: {
+			// name labels this input in the embedding document.
+			name: string
+			// path supplies a string or string array from the resource, using the same
+			// dot-separated paths and [*] projections as searchFields.
+			// When omitted, a custom builder supplies the value.
+			path?: string
 		}
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
@@ -201,6 +211,10 @@ appManifestv1alpha2: appManifestKind & {
 			// AppDisplayName is the display name of the app, which can contain any printable characters
 			appDisplayName: string
 			group: string
+			// Embed configures embeddings by resource name (the lowercase plural) within this app's group.
+			embed?: {
+				[string]: #ResourceEmbed
+			}
 			// Versions is the list of versions for this manifest, in order.
 			versions: [...#ManifestVersion]
 			// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.

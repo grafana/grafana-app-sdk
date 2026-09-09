@@ -158,7 +158,10 @@ var appManifestData = app.ManifestData{
     AppName: "{{.ManifestData.AppName}}",
     AppDisplayName: "{{.ManifestData.AppDisplayName}}",
     Group: "{{.ManifestData.Group}}",
-    PreferredVersion: "{{.ManifestData.PreferredVersion}}",
+    PreferredVersion: "{{.ManifestData.PreferredVersion}}",{{ if .ManifestData.Embed }}
+    Embed: map[string]app.ManifestResourceEmbed{ {{ range $resource, $embed := .ManifestData.Embed }}
+        {{ goString $resource }}: {ContentVersion: {{ $embed.ContentVersion }}},{{ end }}
+    },{{ end }}
     Versions: []app.ManifestVersion{ {{ range .ManifestData.Versions }}{{$v:=.}}
         {
             Name: "{{.Name}}",
@@ -176,7 +179,12 @@ var appManifestData = app.ManifestData{
                     Hybrid: {{ goBoolPtr .Search.Hybrid }},{{ end }}
                 }, {{ end }}{{ if .Embed }}
                 Embed: &app.ManifestVersionKindEmbed{
-                    Version: {{ .Embed.Version }},
+                    Fields: []app.ManifestVersionKindEmbedField{ {{ range .Embed.Fields }}
+                        {
+                            Name: {{ goString .Name }},{{ if .Path }}
+                            Path: {{ goString .Path }},{{ end }}
+                        },{{ end }}
+                    },
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
@@ -202,8 +210,7 @@ var appManifestData = app.ManifestData{
                         Array: {{.Array}},{{ end }}
                         Capabilities: []string{ {{ range .Capabilities }}{{ goString . }}, {{ end }}},{{ if .EmitZeroIfAbsent }}
                         EmitZeroIfAbsent: {{.EmitZeroIfAbsent}},{{ end }}{{ if .Description }}
-                        Description: {{ goString .Description }},{{ end }}{{ if .Embed }}
-                        Embed: {{.Embed}},{{ end }}
+                        Description: {{ goString .Description }},{{ end }}
                     },{{ end }}
                 },{{end}}{{ if .Routes }}
                 Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}

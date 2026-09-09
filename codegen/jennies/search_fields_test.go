@@ -170,33 +170,6 @@ func TestValidateSearchFieldCapabilities(t *testing.T) {
 	}
 }
 
-func TestValidateSearchFieldEmbed(t *testing.T) {
-	tests := []struct {
-		name    string
-		field   codegen.SearchField
-		wantErr string
-	}{
-		{name: "not embedded needs nothing", field: codegen.SearchField{Type: "int64"}},
-		{name: "string with path", field: codegen.SearchField{Type: "string", Path: "spec.title", Embed: true}},
-		{name: "string array with path", field: codegen.SearchField{Type: "string", Path: "spec.tags", Array: true, Embed: true}},
-		{name: "no path", field: codegen.SearchField{Type: "string", Embed: true}, wantErr: "embed requires a path"},
-		{name: "int64", field: codegen.SearchField{Type: "int64", Path: "spec.count", Embed: true}, wantErr: `embed requires type "string"`},
-		{name: "boolean", field: codegen.SearchField{Type: "boolean", Path: "spec.enabled", Embed: true}, wantErr: `embed requires type "string"`},
-		{name: "date", field: codegen.SearchField{Type: "date", Path: "spec.created", Embed: true}, wantErr: `embed requires type "string"`},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := validateSearchFieldEmbed(tt.field)
-			if tt.wantErr == "" {
-				assert.NoError(t, err)
-				return
-			}
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), tt.wantErr)
-		})
-	}
-}
-
 func TestProcessKindVersion_RejectsInvalidSearchFieldPath(t *testing.T) {
 	ctx := cuecontext.New()
 	schema := ctx.CompileString(`{ spec: { email: string } }`)

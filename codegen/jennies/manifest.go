@@ -195,6 +195,12 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 	manifest.AppName = m.Name()
 	manifest.Group = m.Properties().FullGroup
+	if m.Properties().Embed != nil {
+		manifest.Embed = make(map[string]app.ManifestResourceEmbed, len(m.Properties().Embed))
+		for resource, embed := range m.Properties().Embed {
+			manifest.Embed[resource] = app.ManifestResourceEmbed{ContentVersion: embed.ContentVersion}
+		}
+	}
 
 	hasAnyValidation := false
 	hasAnyMutation := false
@@ -601,7 +607,11 @@ func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
 	if embed == nil {
 		return nil
 	}
-	return &app.ManifestVersionKindEmbed{Version: embed.Version}
+	fields := make([]app.ManifestVersionKindEmbedField, len(embed.Fields))
+	for i, field := range embed.Fields {
+		fields[i] = app.ManifestVersionKindEmbedField{Name: field.Name, Path: field.Path}
+	}
+	return &app.ManifestVersionKindEmbed{Fields: fields}
 }
 
 type simpleOpenAPIDoc[T any] struct {
@@ -613,6 +623,9 @@ type simpleOpenAPIDoc[T any] struct {
 //nolint:revive,funlen,unparam,gocognit
 func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
 	if err := validateSearchFields(vk, version); err != nil {
+		return app.ManifestVersionKind{}, err
+	}
+	if err := validateEmbedFields(vk, version); err != nil {
 		return app.ManifestVersionKind{}, err
 	}
 	mver := app.ManifestVersionKind{
@@ -763,7 +776,6 @@ func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionK
 			Capabilities:     f.Capabilities,
 			EmitZeroIfAbsent: f.EmitZeroIfAbsent,
 			Description:      f.Description,
-			Embed:            f.Embed,
 		}
 	}
 	return out

@@ -1,6 +1,7 @@
 package cuekind
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,41 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
+
+func TestParseManifestEmbedContentVersionLocation(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		global       string
+		versionLocal string
+		wantErr      bool
+	}{
+		{name: "global revision", global: "1"},
+		{name: "zero revision", global: "0", wantErr: true},
+		{name: "negative revision", global: "-1", wantErr: true},
+		{name: "version-local revision is rejected", global: "1", versionLocal: "contentVersion: 1", wantErr: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`manifest: {
+				appName: "embed-app"
+				embed: foos: contentVersion: %s
+				versions: v1: kinds: [{
+					kind: "Foo"
+					schema: spec: title: string
+					embed: {fields: [{name: "title", path: "spec.title"}], %s}
+				}]
+			}`, tt.global, tt.versionLocal))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			_, err = parser.ParseManifest("manifest")
+			if tt.wantErr {
+				require.ErrorContains(t, err, "contentVersion")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
 
 func TestParseManifestTestApp(t *testing.T) {
 	parser, err := NewParser(testingCue(t), false)
@@ -40,6 +76,7 @@ func TestParseManifestTestApp(t *testing.T) {
 	assert.Equal(t, []string{"createFoobar"}, role.Routes)
 
 	require.NotNil(t, props.RoleBindings)
+	assert.Equal(t, map[string]codegen.ResourceEmbed{"testkinds": {ContentVersion: 1}}, props.Embed)
 	assert.Equal(t, []string{"test-app:reader"}, props.RoleBindings.Viewer)
 
 	versions := manifest.Versions()
@@ -98,7 +135,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 	assert.Equal(t, ".spec.stringField", v2Kind.AdditionalPrinterColumns[0].JSONPath)
 
 	// v2 TestKind also declares search fields; the int64 field defaults emitZeroIfAbsent to true
-	// and array to false. The string field opts into embedding, the int64 one does not.
+	// and array to false.
 	require.Len(t, v2Kind.SearchFields, 2)
 	assert.Equal(t, codegen.SearchField{
 		Name:         "stringField",
@@ -106,7 +143,6 @@ func TestParseManifestKindProperties(t *testing.T) {
 		Type:         "string",
 		Capabilities: []string{"filter", "text", "sort", "retrieve"},
 		Description:  "The string field",
-		Embed:        true,
 	}, v2Kind.SearchFields[0])
 	assert.Equal(t, codegen.SearchField{
 		Name:             "intField",
@@ -116,13 +152,19 @@ func TestParseManifestKindProperties(t *testing.T) {
 		EmitZeroIfAbsent: true,
 	}, v2Kind.SearchFields[1])
 
-	// v2 TestKind opts into /search/hybrid and declares an embed version. v1 does
-	// neither, so it keeps the defaults: no hybrid endpoint, no embed block.
+	// Each API version declares its own inputs while sharing one resource content version.
 	assert.True(t, v2Kind.Search.Hybrid)
 	require.NotNil(t, v2Kind.Embed)
-	assert.Equal(t, 1, v2Kind.Embed.Version)
+	assert.Equal(t, &codegen.KindEmbed{
+		Fields: []codegen.EmbedField{
+			{Name: "details", Path: "spec.unionNull.str"},
+			{Name: "summary"},
+		},
+	}, v2Kind.Embed)
 	assert.False(t, testKind.Search.Hybrid)
-	assert.Nil(t, testKind.Embed)
+	assert.Equal(t, &codegen.KindEmbed{
+		Fields: []codegen.EmbedField{{Name: "details", Path: "spec.stringField"}},
+	}, testKind.Embed)
 
 	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
 	v4Kind := versions[3].Kinds()[0]

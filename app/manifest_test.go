@@ -279,6 +279,146 @@ func TestManifestData_Validate(t *testing.T) {
 	}
 }
 
+func TestManifestData_ValidateEmbed(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		embed        map[string]ManifestResourceEmbed
+		kindVersions []ManifestVersionKind
+		wantErr      string
+	}{
+		{
+			name:         "configuration remains optional",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:         "empty configuration remains optional",
+			embed:        map[string]ManifestResourceEmbed{},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:  "positive revision with versioned fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+		},
+		{
+			name:         "custom builder needs no versioned fields",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 2}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:         "zero revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 0}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "contentVersion",
+		},
+		{
+			name:         "negative revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: -1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "contentVersion",
+		},
+		{
+			name:         "unknown resource",
+			embed:        map[string]ManifestResourceEmbed{"missing": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "missing",
+		},
+		{
+			name: "versioned fields require a resource revision",
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+			wantErr: "foos",
+		},
+		{
+			name:         "empty versioned embed still requires a resource revision",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Embed: &ManifestVersionKindEmbed{}}},
+			wantErr:      "foos",
+		},
+		{
+			name:         "resource key uses lowercase plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos"}},
+		},
+		{
+			name:         "resource key cannot use kind name",
+			embed:        map[string]ManifestResourceEmbed{"Foo": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "Foo",
+		},
+		{
+			name:         "resource key uses inferred plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo"}},
+		},
+		{
+			name:         "resource key supports explicit irregular plural",
+			embed:        map[string]ManifestResourceEmbed{"people": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people"}},
+		},
+		{
+			name:  "only some API versions declare fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			kindVersions: []ManifestVersionKind{
+				{Kind: "Foo", Plural: "foos"},
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+			},
+		},
+		{
+			name:  "versioned fields can differ with one resource revision",
+			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 3}},
+			kindVersions: []ManifestVersionKind{
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}, {Name: "computed"}},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{Embed: tt.embed}
+			for i, kind := range tt.kindVersions {
+				manifest.Versions = append(manifest.Versions, ManifestVersion{
+					Name:  fmt.Sprintf("v%d", i+1),
+					Kinds: []ManifestVersionKind{kind},
+				})
+			}
+			err := manifest.Validate()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestManifestVersionKind_Subresources(t *testing.T) {
 	sch1, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{}}`)), "Foo")
 	sch2, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{},"status":{}}`)), "Foo")

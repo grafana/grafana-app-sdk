@@ -102,9 +102,6 @@ type SearchField struct {
 	Capabilities     []string `json:"capabilities"`
 	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
 	Description      string   `json:"description,omitempty"`
-	// Embed includes this field's value in the text embedded for semantic search.
-	// Requires Path and type "string" (arrays included).
-	Embed bool `json:"embed,omitempty"`
 }
 
 // KindSearch controls which search endpoints are served for a kind.
@@ -118,11 +115,17 @@ type KindSearch struct {
 	Hybrid bool `json:"hybrid"`
 }
 
-// KindEmbed configures embeddings built from a kind's declared search fields.
+// KindEmbed defines the embedding document independently of search fields.
 type KindEmbed struct {
-	// Version identifies the text produced from the embed fields; bumping it
-	// re-embeds every existing resource of the kind.
-	Version int `json:"version"`
+	// Fields supplies the embedding document inputs in declaration order.
+	Fields []EmbedField `json:"fields"`
+}
+
+// EmbedField supplies text for the embedding document without exposing a search field.
+type EmbedField struct {
+	Name string `json:"name"`
+	// Path supplies a string or string array from the resource. When omitted, a custom builder supplies the value.
+	Path string `json:"path,omitempty"`
 }
 
 // CustomRouteRequest represents the request part of a custom route definition.

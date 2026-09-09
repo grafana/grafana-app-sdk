@@ -215,11 +215,6 @@ SchemaWithOperatorState: Schema & {
 	emitZeroIfAbsent?: bool | *false
 	// description is a human readable description of the field.
 	description?: string
-	// embed includes this field's value in the text embedded for semantic search,
-	// as one "name: value" line. Fields are embedded in declaration order.
-	//
-	// Requires a path and type "string" (arrays included).
-	embed?: bool | *false
 }
 
 // #KindSearch controls which search endpoints are served for a kind.
@@ -237,20 +232,27 @@ SchemaWithOperatorState: Schema & {
 	hybrid: bool | *false
 }
 
-// #KindEmbed configures embeddings built from a kind's declared search fields.
-// A kind whose search backend builds embeddings in code does not need it.
+// #KindEmbed defines the embedding document independently of search fields.
 #KindEmbed: {
-	// version identifies the text produced from the embed fields. Bump it when a
-	// change to those fields should re-embed resources that already exist:
-	// flagging or unflagging a field, changing a path, reordering them.
-	//
-	// Bumping re-embeds every resource of this kind on every instance, which the
-	// search backend pays for in provider spend and backfill time, so leave it
-	// alone for changes not worth paying for.
-	//
-	// One number per kind: declare the same value on every version. Carry the
-	// current value over when adding a version, rather than restarting at 1.
-	version: int & >0
+	// fields supplies the embedding document inputs in declaration order.
+	fields: [...#EmbedField]
+}
+
+// #ResourceEmbed configures embeddings across all API versions of a resource.
+#ResourceEmbed: {
+	// contentVersion identifies the embedding content definition. Bump it when
+	// changes to any version's inputs or a custom builder should re-embed existing resources.
+	contentVersion: int & >0
+}
+
+// #EmbedField supplies text for the embedding document without exposing a search field.
+#EmbedField: {
+	// name labels this input in the embedding document.
+	name: string
+	// path supplies a string or string array from the resource, using the same
+	// dot-separated paths and [*] projections as searchFields.
+	// When omitted, a custom builder supplies the value.
+	path?: string
 }
 
 // Kind represents an arbitrary kind which can be used for code generation
@@ -339,8 +341,7 @@ Kind: S={
 	// /search and /trash are served unless the kind opts out here; /search/hybrid
 	// is not served unless the kind opts in.
 	search: #KindSearch
-	// embed configures embeddings built from this kind's declared search fields.
-	// Only needed by kinds whose embeddings come from those fields.
+	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
@@ -433,6 +434,11 @@ Version: S={
 
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	// embed configures embeddings by resource name (the lowercase plural) within this app's group.
+	// Each resource has one content version shared by all of its API versions.
+	embed?: {
+		[string]: #ResourceEmbed
+	}
 	// appDisplayName is the display name of the app. Unlike the appName, it can contain any printable characters and will be shown in the UI.
 	appDisplayName: string | *S.appName
 	group:          strings.ToLower(strings.Replace(S.appName, "-", "", -1))

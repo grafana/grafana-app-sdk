@@ -4,6 +4,7 @@ import "time"
 
 testManifest: {
 	appName: "test-app"
+	embed: testkinds: contentVersion: 1
 	kinds: [testKind, testKind2]
 	versions: {
 		"v1": testManifestV1
@@ -93,6 +94,7 @@ testKind: {
 	current: "v1"
 	versions: {
 		"v1": {
+			embed: fields: [{name: "details", path: "spec.stringField"}]
 			schema: {
 				spec: {
 					stringField: string & =~"^[a-zA-Z_][a-zA-Z0-9_-]*$"
@@ -136,7 +138,6 @@ testKind: {
 					type: "string"
 					capabilities: ["filter", "text", "sort", "retrieve"]
 					description: "The string field"
-					embed: true
 				},
 				{
 					name: "intField"
@@ -147,7 +148,12 @@ testKind: {
 				},
 			]
 			search: hybrid: true
-			embed: version: 1
+			embed: {
+				fields: [
+					{name: "details", path: "spec.unionNull.str"},
+					{name: "summary"},
+				]
+			}
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
                 {

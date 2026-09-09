@@ -16,6 +16,8 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
+	// Embed configures embeddings by resource name (the lowercase plural) within this app's group.
+	Embed            map[string]ResourceEmbed              `json:"embed,omitempty"`
 	AppName          string                                `json:"appName"`
 	AppDisplayName   string                                `json:"appDisplayName"`
 	Group            string                                `json:"group"`
@@ -29,6 +31,11 @@ type AppManifestProperties struct {
 	PreferredVersion string                               `json:"preferredVersion"`
 	Roles            map[string]AppManifestPropertiesRole `json:"roles"`
 	RoleBindings     *AppManifestPropertiesRoleBindings   `json:"roleBindings"`
+}
+
+// ResourceEmbed configures embeddings across all API versions of a resource.
+type ResourceEmbed struct {
+	ContentVersion int `json:"contentVersion"`
 }
 
 // AppManifestPropertiesOperatorInfo contains information about the app's operator deployment,
