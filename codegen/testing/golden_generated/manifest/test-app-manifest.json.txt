@@ -506,7 +506,10 @@
                                                 }
                                             }
                                         }
-                                    }
+                                    },
+                                    "x-grafana-declared-authz-resource": "testkinds",
+                                    "x-grafana-declared-authz-subresource": "reconcile",
+                                    "x-grafana-declared-authz-verb": "create"
                                 }
                             },
                             "/search": {
@@ -605,6 +608,7 @@
                                             }
                                         }
                                     },
+                                    "x-grafana-declared-authz-resource": "testkinds",
                                     "x-grafana-test": true,
                                     "x-grafana-test-value": {
                                         "val": "1"

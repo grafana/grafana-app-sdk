@@ -143,6 +143,21 @@ func TestParseManifestRoutes(t *testing.T) {
 		assert.Equal(t, "createReconcileRequest", v3Kind.Routes["/reconcile"]["POST"].Name)
 		require.Contains(t, v3Kind.Routes, "/search")
 		assert.Equal(t, "getTestKindSearchResult", v3Kind.Routes["/search"]["GET"].Name)
+
+		// Route authz, fully and partially specified
+		require.NotNil(t, v3Kind.Routes["/reconcile"]["POST"].Authz)
+		assert.Equal(t, codegen.CustomRouteAuthz{
+			Resource:    "testkinds",
+			Subresource: new("reconcile"),
+			Verb:        new("create"),
+		}, *v3Kind.Routes["/reconcile"]["POST"].Authz)
+		require.NotNil(t, v3Kind.Routes["/search"]["GET"].Authz)
+		assert.Equal(t, codegen.CustomRouteAuthz{
+			Resource: "testkinds",
+		}, *v3Kind.Routes["/search"]["GET"].Authz)
+
+		// Routes with no authz section have no authz information
+		assert.Nil(t, routes.Namespaced["/foobar"]["POST"].Authz)
 	})
 
 	t.Run("integrationManifest", func(t *testing.T) {
@@ -261,6 +276,16 @@ func TestParseManifestInvalidCases(t *testing.T) {
 			name:        "kind route invalid extension key",
 			selector:    "invalidExtensionKey",
 			errContains: `extensions."not-x-prefixed": field not allowed`,
+		},
+		{
+			name:        "kind route authz missing resource",
+			selector:    "invalidRouteAuthzMissingResource",
+			errContains: `routes."/authz".GET.authz.resource: cannot convert non-concrete value`,
+		},
+		{
+			name:        "kind route authz invalid verb",
+			selector:    "invalidRouteAuthzVerb",
+			errContains: `routes."/authz".GET.authz.verb: 8 errors in empty disjunction`,
 		},
 		{
 			name:        "printer column missing fields",
