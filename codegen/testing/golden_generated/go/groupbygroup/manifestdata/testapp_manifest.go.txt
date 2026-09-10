@@ -45,6 +45,9 @@ var appManifestData = app.ManifestData{
 	AppDisplayName:   "test-app",
 	Group:            "testapp.ext.grafana.app",
 	PreferredVersion: "v1",
+	Embed: map[string]app.ManifestResourceEmbed{
+		"testkinds": {ReembedVersion: 1},
+	},
 	Versions: []app.ManifestVersion{
 		{
 			Name:   "v1",
@@ -55,6 +58,14 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKinds",
 					Scope:      "Namespaced",
 					Conversion: true,
+					Embed: &app.ManifestVersionKindEmbed{
+						Fields: []app.ManifestVersionKindEmbedField{
+							{
+								Name: "details",
+								Path: "spec.stringField",
+							},
+						},
+					},
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{
@@ -105,6 +116,17 @@ var appManifestData = app.ManifestData{
 					Plural:     "TestKinds",
 					Scope:      "Namespaced",
 					Conversion: true,
+					Search: &app.ManifestVersionKindSearch{
+						Hybrid: func(b bool) *bool { return &b }(true),
+					},
+					Embed: &app.ManifestVersionKindEmbed{
+						Fields: []app.ManifestVersionKindEmbedField{
+							{
+								Name: "details",
+								Path: "spec.unionNull.str",
+							},
+						},
+					},
 					Admission: &app.AdmissionCapabilities{
 						Validation: &app.ValidationCapability{
 							Operations: []app.AdmissionOperation{

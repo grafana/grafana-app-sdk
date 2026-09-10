@@ -1,6 +1,7 @@
 package cuekind
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +9,48 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 )
+
+func TestParseManifestEmbedConfiguration(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		global       string
+		versionLocal string
+		field        string
+		wantErr      string
+	}{
+		{name: "global revision", global: "1"},
+		{name: "zero revision", global: "0", wantErr: "reembedVersion"},
+		{name: "negative revision", global: "-1", wantErr: "reembedVersion"},
+		{name: "version-local revision is rejected", global: "1", versionLocal: "reembedVersion: 1", wantErr: "reembedVersion"},
+		{name: "missing field path", global: "1", field: `name: "title"`, wantErr: "path"},
+		{name: "empty field path", global: "1", field: `name: "title", path: ""`, wantErr: "path"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			c := testingCue(t)
+			field := tt.field
+			if field == "" {
+				field = `name: "title", path: "spec.title"`
+			}
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`manifest: {
+				appName: "embed-app"
+				embed: foos: reembedVersion: %s
+				versions: v1: kinds: [{
+					kind: "Foo"
+					schema: spec: title: string
+					embed: {fields: [{%s}], %s}
+				}]
+			}`, tt.global, field, tt.versionLocal))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			_, err = parser.ParseManifest("manifest")
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
 
 func TestParseManifestTestApp(t *testing.T) {
 	parser, err := NewParser(testingCue(t), false)
@@ -40,6 +83,7 @@ func TestParseManifestTestApp(t *testing.T) {
 	assert.Equal(t, []string{"createFoobar"}, role.Routes)
 
 	require.NotNil(t, props.RoleBindings)
+	assert.Equal(t, map[string]codegen.ResourceEmbed{"testkinds": {ReembedVersion: 1}}, props.Embed)
 	assert.Equal(t, []string{"test-app:reader"}, props.RoleBindings.Viewer)
 
 	versions := manifest.Versions()
@@ -114,6 +158,19 @@ func TestParseManifestKindProperties(t *testing.T) {
 		Capabilities:     []string{"filter", "retrieve"},
 		EmitZeroIfAbsent: true,
 	}, v2Kind.SearchFields[1])
+
+	// Each API version declares its own inputs while sharing one resource re-embedding version.
+	assert.True(t, v2Kind.Search.Hybrid)
+	require.NotNil(t, v2Kind.Embed)
+	assert.Equal(t, &codegen.KindEmbed{
+		Fields: []codegen.EmbedField{
+			{Name: "details", Path: "spec.unionNull.str"},
+		},
+	}, v2Kind.Embed)
+	assert.False(t, testKind.Search.Hybrid)
+	assert.Equal(t, &codegen.KindEmbed{
+		Fields: []codegen.EmbedField{{Name: "details", Path: "spec.stringField"}},
+	}, testKind.Embed)
 
 	// v4 TestKind: selectable field path crosses a union parent (dashboard VariableKind pattern).
 	v4Kind := versions[3].Kinds()[0]

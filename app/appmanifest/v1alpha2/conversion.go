@@ -23,6 +23,12 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		Group:          s.Group,
 		Versions:       make([]app.ManifestVersion, len(s.Versions)),
 	}
+	if s.Embed != nil {
+		data.Embed = make(map[string]app.ManifestResourceEmbed, len(s.Embed))
+		for resource, embed := range s.Embed {
+			data.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: int(embed.ReembedVersion)}
+		}
+	}
 	// Versions
 	for idx, version := range s.Versions {
 		v := app.ManifestVersion{
@@ -126,6 +132,17 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.Search = &app.ManifestVersionKindSearch{
 					Endpoint: kind.Search.Endpoint,
 					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
+				}
+			}
+			if kind.Embed != nil {
+				k.Embed = &app.ManifestVersionKindEmbed{}
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]app.ManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						k.Embed.Fields[i].Path = field.Path
+					}
 				}
 			}
 			// Schema
@@ -325,6 +342,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		Group:          data.Group,
 		Versions:       make([]AppManifestManifestVersion, 0),
 	}
+	if data.Embed != nil {
+		manifestSpec.Embed = make(map[string]AppManifestResourceEmbed, len(data.Embed))
+		for resource, embed := range data.Embed {
+			manifestSpec.Embed[resource] = AppManifestResourceEmbed{ReembedVersion: int64(embed.ReembedVersion)}
+		}
+	}
 	if data.PreferredVersion != "" {
 		manifestSpec.PreferredVersion = &data.PreferredVersion
 	}
@@ -412,6 +435,17 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				k.Search = &AppManifestManifestVersionKindSearch{
 					Endpoint: kind.Search.Endpoint,
 					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
+				}
+			}
+			if kind.Embed != nil {
+				k.Embed = NewAppManifestManifestVersionKindEmbed()
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]AppManifestManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						k.Embed.Fields[i].Path = field.Path
+					}
 				}
 			}
 			// Routes

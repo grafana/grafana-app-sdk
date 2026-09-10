@@ -13,8 +13,9 @@ import (
 
 // validateSearchFields checks every search field declared on a kind version:
 // capabilities must be compatible with the declared field type (see the
-// searchfields package), and each non-empty path must resolve against the
-// version schema to a field whose type is compatible with the declared type.
+// searchfields package), and
+// each non-empty path must resolve against the version schema to a field whose
+// type is compatible with the declared type.
 func validateSearchFields(vk codegen.VersionedKind, version string) error {
 	for _, sf := range vk.SearchFields {
 		if err := validateSearchFieldCapabilities(sf); err != nil {
@@ -28,8 +29,8 @@ func validateSearchFields(vk codegen.VersionedKind, version string) error {
 			return fmt.Errorf("kind %q version %q search field %q: %w", vk.Kind, version, sf.Name, err)
 		}
 		// resolved is false (with no error) when the path crosses a CUE
-		// disjunction; the type cannot be checked against a single variant, so
-		// the field is left as-is.
+		// disjunction with multiple non-null variants; the field is left as-is
+		// because its type cannot be pinned to a single variant.
 		if resolved {
 			warning, err := searchFieldTypeCompatibility(leaf, sf.Type)
 			if err != nil {
@@ -73,9 +74,10 @@ func parseSearchFieldPath(path string) ([]pathSegment, error) {
 // resolveSearchFieldPath walks a dot-separated path (with optional "[*]" array
 // projection segments) against the schema. It returns the resolved leaf value
 // and resolved=true when every segment resolves to a concrete field. It returns
-// resolved=false with a nil error when the path descends into a CUE disjunction,
-// since the leaf type cannot be pinned to a single variant. It returns an error
-// when the path does not resolve (in any variant) or uses "[*]" on a non-list.
+// resolved=false with a nil error when the path descends into a CUE disjunction
+// with multiple non-null variants, since the leaf type cannot be pinned to a
+// single variant. It returns an error when the path does not resolve (in any
+// variant) or uses "[*]" on a non-list.
 func resolveSearchFieldPath(schema cue.Value, path string) (cue.Value, bool, error) {
 	segs, err := parseSearchFieldPath(path)
 	if err != nil {
@@ -96,6 +98,7 @@ func resolveSearchFieldPath(schema cue.Value, path string) (cue.Value, bool, err
 // nested inside a variant, rather than stopping at the first variant match.
 func resolveSegments(v cue.Value, segs []pathSegment) (cue.Value, bool, error) {
 	for i, seg := range segs {
+		v = resolveNullableSchema(v)
 		next, ok := lookupSchemaField(v, seg.name)
 		if !ok {
 			if variants, _ := disjunctionVariants(v); len(variants) > 0 {
@@ -112,6 +115,7 @@ func resolveSegments(v cue.Value, segs []pathSegment) (cue.Value, bool, error) {
 		v = next
 
 		if seg.projection {
+			v = resolveNullableSchema(v)
 			elem := v.LookupPath(cue.MakePath(cue.AnyIndex))
 			if !elem.Exists() {
 				return cue.Value{}, false, fmt.Errorf("field %q is not a list but is used with [*]", seg.name)
@@ -120,6 +124,17 @@ func resolveSegments(v cue.Value, segs []pathSegment) (cue.Value, bool, error) {
 		}
 	}
 	return v, true, nil
+}
+
+func resolveNullableSchema(v cue.Value) cue.Value {
+	if v.IncompleteKind()&cue.NullKind != 0 {
+		if variants, hadNull := disjunctionVariants(v); hadNull && len(variants) == 1 {
+			// Null contributes no path values. Unify with the original value to
+			// retain constraints outside the nullable disjunction.
+			return v.Unify(variants[0])
+		}
+	}
+	return v
 }
 
 // searchFieldTypeCompatibility classifies a declared search field type against

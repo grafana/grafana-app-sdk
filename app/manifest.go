@@ -93,6 +93,10 @@ type ManifestData struct {
 	// Group is the group used for all kinds maintained by this app.
 	// This is usually "<AppName>.ext.grafana.app"
 	Group string `json:"group" yaml:"group"`
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within Group.
+	// Each resource has one re-embedding version shared by all of its API versions.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	Embed map[string]ManifestResourceEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 	// Versions is a list of versions supported by this App
 	Versions []ManifestVersion `json:"versions" yaml:"versions"`
 	// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.
@@ -115,8 +119,15 @@ type ManifestData struct {
 	RoleBindings *ManifestRoleBindings `json:"roleBindings,omitempty" yaml:"roleBindings,omitempty"`
 }
 
+// ManifestResourceEmbed configures declarative embeddings across all API versions of a resource.
+type ManifestResourceEmbed struct {
+	// ReembedVersion is a manual revision for requesting re-embedding of existing resources.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	ReembedVersion int `json:"reembedVersion" yaml:"reembedVersion"`
+}
+
 func (m *ManifestData) IsEmpty() bool {
-	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
+	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && len(m.Embed) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
 }
 
 // Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
@@ -229,6 +240,36 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
+	return multierror.Append(errs, m.validateEmbed()).ErrorOrNil()
+}
+
+func (m *ManifestData) validateEmbed() error {
+	resources := make(map[string]struct{})
+	var errs error
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			resource := kind.Resource()
+			resources[resource] = struct{}{}
+			if _, ok := m.Embed[resource]; kind.Embed != nil && !ok {
+				errs = multierror.Append(errs, fmt.Errorf("kind %q version %q declares embedding fields without embed configuration for resource %q", kind.Kind, version.Name, resource))
+			}
+			if kind.Embed != nil {
+				for _, field := range kind.Embed.Fields {
+					if field.Path == "" {
+						errs = multierror.Append(errs, fmt.Errorf("kind %q version %q embed field %q requires a path", kind.Kind, version.Name, field.Name))
+					}
+				}
+			}
+		}
+	}
+	for _, resource := range slices.Sorted(maps.Keys(m.Embed)) {
+		if _, ok := resources[resource]; !ok {
+			errs = multierror.Append(errs, fmt.Errorf("embed configuration references unknown resource %q", resource))
+		}
+		if m.Embed[resource].ReembedVersion <= 0 {
+			errs = multierror.Append(errs, fmt.Errorf("embed reembedVersion for resource %q must be greater than zero", resource))
+		}
+	}
 	return errs
 }
 
@@ -236,7 +277,7 @@ func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
 	// These paths remain reserved for kinds that opt out of the built-in endpoints.
 	// Opting out controls which endpoints are served; it does not make their paths
 	// available for custom routes.
-	for _, endpoint = range []string{"search", "trash"} {
+	for _, endpoint = range []string{"search", "trash", "search/hybrid"} {
 		suffix := "/" + endpoint
 		if before, ok0 := strings.CutSuffix(route, suffix); ok0 {
 			resource = before
@@ -368,18 +409,40 @@ type ManifestVersionKind struct {
 	// SearchFields are the fields exposed for search indexing and querying.
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
 	// Search declares which search endpoints are served for this kind.
-	// A nil value, or a nil field within it, means the endpoint is served.
+	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
+	// Embed defines the embedding document independently of search fields.
+	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 }
 
 // ManifestVersionKindSearch declares which search endpoints are served for a kind.
-// Each field is a pointer so that an unset value can keep the default of the endpoint being served.
-// The /search and /trash paths remain reserved for the kind when either endpoint is disabled.
+// Each field is a pointer so that an unset value can keep the endpoint's default.
+// The /search, /trash, and /search/hybrid paths remain reserved for the kind when endpoints are disabled.
 type ManifestVersionKindSearch struct {
 	// Endpoint declares whether the kind serves the /search endpoint. A nil value defaults to true.
 	Endpoint *bool `json:"endpoint,omitempty" yaml:"endpoint,omitempty"`
 	// Trash declares whether the kind serves the /trash endpoint. A nil value defaults to true.
 	Trash *bool `json:"trash,omitempty" yaml:"trash,omitempty"`
+	// Hybrid declares whether the kind serves the /search/hybrid endpoint. A nil value
+	// defaults to false: serving it requires embeddings for the kind, so kinds opt in
+	// rather than out.
+	Hybrid *bool `json:"hybrid,omitempty" yaml:"hybrid,omitempty"`
+}
+
+// ManifestVersionKindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
+type ManifestVersionKindEmbed struct {
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []ManifestVersionKindEmbedField `json:"fields" yaml:"fields"`
+}
+
+// ManifestVersionKindEmbedField supplies text for the embedding document without exposing a search field.
+type ManifestVersionKindEmbedField struct {
+	// Name labels this input in the embedding document.
+	Name string `json:"name" yaml:"name"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path" yaml:"path"`
 }
 
 // Resource defines the k8s resource path for the kind. It is a lowercase version of the plural name.
@@ -400,6 +463,13 @@ func (m *ManifestVersionKind) HasSearchEndpoint() bool {
 // Kinds serve it unless they explicitly opt out.
 func (m *ManifestVersionKind) HasTrashEndpoint() bool {
 	return m.Search == nil || m.Search.Trash == nil || *m.Search.Trash
+}
+
+// HasHybridEndpoint reports whether the kind serves the /search/hybrid endpoint.
+// Kinds do not serve it unless they explicitly opt in, the reverse of the other two:
+// it needs embeddings for the kind, which are neither free nor automatic.
+func (m *ManifestVersionKind) HasHybridEndpoint() bool {
+	return m.Search != nil && m.Search.Hybrid != nil && *m.Search.Hybrid
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer

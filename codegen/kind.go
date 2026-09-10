@@ -110,6 +110,24 @@ type KindSearch struct {
 	Endpoint bool `json:"endpoint"`
 	// Trash controls whether the kind serves the /trash endpoint.
 	Trash bool `json:"trash"`
+	// Hybrid controls whether the kind serves the /search/hybrid endpoint.
+	// Unlike the other two it is off unless the kind opts in.
+	Hybrid bool `json:"hybrid"`
+}
+
+// KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
+type KindEmbed struct {
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []EmbedField `json:"fields"`
+}
+
+// EmbedField supplies text for the embedding document without exposing a search field.
+type EmbedField struct {
+	Name string `json:"name"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path"`
 }
 
 // CustomRouteRequest represents the request part of a custom route definition.

@@ -158,7 +158,10 @@ var appManifestData = app.ManifestData{
     AppName: "{{.ManifestData.AppName}}",
     AppDisplayName: "{{.ManifestData.AppDisplayName}}",
     Group: "{{.ManifestData.Group}}",
-    PreferredVersion: "{{.ManifestData.PreferredVersion}}",
+    PreferredVersion: "{{.ManifestData.PreferredVersion}}",{{ if .ManifestData.Embed }}
+    Embed: map[string]app.ManifestResourceEmbed{ {{ range $resource, $embed := .ManifestData.Embed }}
+        {{ goString $resource }}: {ReembedVersion: {{ $embed.ReembedVersion }}},{{ end }}
+    },{{ end }}
     Versions: []app.ManifestVersion{ {{ range .ManifestData.Versions }}{{$v:=.}}
         {
             Name: "{{.Name}}",
@@ -172,7 +175,16 @@ var appManifestData = app.ManifestData{
                 FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Search }}
                 Search: &app.ManifestVersionKindSearch{ {{ if .Search.Endpoint }}
                     Endpoint: {{ goBoolPtr .Search.Endpoint }},{{ end }}{{ if .Search.Trash }}
-                    Trash: {{ goBoolPtr .Search.Trash }},{{ end }}
+                    Trash: {{ goBoolPtr .Search.Trash }},{{ end }}{{ if .Search.Hybrid }}
+                    Hybrid: {{ goBoolPtr .Search.Hybrid }},{{ end }}
+                }, {{ end }}{{ if .Embed }}
+                Embed: &app.ManifestVersionKindEmbed{
+                    Fields: []app.ManifestVersionKindEmbedField{ {{ range .Embed.Fields }}
+                        {
+                            Name: {{ goString .Name }},
+                            Path: {{ goString .Path }},
+                        },{{ end }}
+                    },
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{

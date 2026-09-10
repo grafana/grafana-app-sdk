@@ -1,5 +1,7 @@
 package app
 
+import "strings"
+
 appManifestv1alpha2: appManifestKind & {
 	schema: {
 		#AdditionalPrinterColumns: {
@@ -92,8 +94,10 @@ appManifestv1alpha2: appManifestKind & {
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 			searchFields?: [...#SearchField]
 			// search declares which search endpoints are served for this kind.
-			// Both are served unless the kind opts out here.
+			// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 			search?: #ManifestVersionKindSearch
+			// embed defines the embedding document independently of search fields.
+			embed?: #ManifestVersionKindEmbed
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -113,6 +117,26 @@ appManifestv1alpha2: appManifestKind & {
 			// trash declares whether the kind serves the /trash endpoint,
 			// which lists deleted resources of the kind.
 			trash?: bool | *true
+			// hybrid declares whether the kind serves the /search/hybrid endpoint.
+			hybrid?: bool | *false
+		}
+		// Kinds with a custom embedding builder omit this section.
+		#ManifestVersionKindEmbed: {
+			// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+			// Declaring an embedding field does not enable filtering embeddings by that field.
+			fields: [...#ManifestVersionKindEmbedField]
+		}
+		#ResourceEmbed: {
+			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
+			// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+			reembedVersion: int & >0
+		}
+		#ManifestVersionKindEmbedField: {
+			// name labels this input in the embedding document.
+			name: string
+			// path supplies a string or string array from the resource, using the same
+			// dot-separated paths and [*] projections as searchFields.
+			path: string & strings.MinRunes(1)
 		}
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
@@ -190,6 +214,11 @@ appManifestv1alpha2: appManifestKind & {
 			// AppDisplayName is the display name of the app, which can contain any printable characters
 			appDisplayName: string
 			group: string
+			// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+			// Custom embedding builders omit their entry and define their content version in Go.
+			embed?: {
+				[string]: #ResourceEmbed
+			}
 			// Versions is the list of versions for this manifest, in order.
 			versions: [...#ManifestVersion]
 			// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.

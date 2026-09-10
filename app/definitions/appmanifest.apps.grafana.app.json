@@ -518,6 +518,24 @@
                                         "description": "DryRunKinds dictates whether this revision should create/update CRD's from the provided kinds,\nOr simply validate and report errors in status.resources.crds.\nIf dryRunKinds is true, CRD change validation will be skipped on ingress and reported in status instead.\nEven if no validation errors exist, CRDs will not be created or updated for a revision with dryRunKinds=true.",
                                         "type": "boolean"
                                     },
+                                    "embed": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "reembedVersion": {
+                                                    "description": "reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.\nIncrease it when a backfill is needed; changing the declared inputs does not require a bump by itself.",
+                                                    "exclusiveMinimum": true,
+                                                    "minimum": 0,
+                                                    "type": "integer"
+                                                }
+                                            },
+                                            "required": [
+                                                "reembedVersion"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.\nCustom embedding builders omit their entry and define their content version in Go.",
+                                        "type": "object"
+                                    },
                                     "extraPermissions": {
                                         "description": "ExtraPermissions contains additional permissions needed for an app's backend component to operate.\nApps implicitly have all permissions for kinds they managed (defined in `kinds`).",
                                         "properties": {
@@ -802,6 +820,37 @@
                                                                 "description": "Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.\nIt may not prevent automatic conversion behavior between versions of the kind when set to false\n(for example, CRDs will always support simple conversion, and this flag enables webhook conversion).\nThis field should be the same for all versions of the kind. Different values will result in an error or undefined behavior.",
                                                                 "type": "boolean"
                                                             },
+                                                            "embed": {
+                                                                "description": "Kinds with a custom embedding builder omit this section.",
+                                                                "properties": {
+                                                                    "fields": {
+                                                                        "description": "fields supplies inputs, in declaration order, used only to generate the text to be embedded.\nDeclaring an embedding field does not enable filtering embeddings by that field.",
+                                                                        "items": {
+                                                                            "properties": {
+                                                                                "name": {
+                                                                                    "description": "name labels this input in the embedding document.",
+                                                                                    "type": "string"
+                                                                                },
+                                                                                "path": {
+                                                                                    "description": "path supplies a string or string array from the resource, using the same\ndot-separated paths and [*] projections as searchFields.",
+                                                                                    "minLength": 1,
+                                                                                    "type": "string"
+                                                                                }
+                                                                            },
+                                                                            "required": [
+                                                                                "name",
+                                                                                "path"
+                                                                            ],
+                                                                            "type": "object"
+                                                                        },
+                                                                        "type": "array"
+                                                                    }
+                                                                },
+                                                                "required": [
+                                                                    "fields"
+                                                                ],
+                                                                "type": "object"
+                                                            },
                                                             "folderScoped": {
                                                                 "default": true,
                                                                 "description": "folderScoped controls whether resources of this kind are scoped to folders.\nOnly meaningful when scope is \"Namespaced\"; for cluster-scoped kinds the field is ignored.\nDefaults to true (folder-scoped).",
@@ -840,6 +889,11 @@
                                                                     "endpoint": {
                                                                         "default": true,
                                                                         "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                                                        "type": "boolean"
+                                                                    },
+                                                                    "hybrid": {
+                                                                        "default": false,
+                                                                        "description": "hybrid declares whether the kind serves the /search/hybrid endpoint.",
                                                                         "type": "boolean"
                                                                     },
                                                                     "trash": {

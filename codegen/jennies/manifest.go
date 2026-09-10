@@ -195,6 +195,12 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 	manifest.AppName = m.Name()
 	manifest.Group = m.Properties().FullGroup
+	if m.Properties().Embed != nil {
+		manifest.Embed = make(map[string]app.ManifestResourceEmbed, len(m.Properties().Embed))
+		for resource, embed := range m.Properties().Embed {
+			manifest.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: embed.ReembedVersion}
+		}
+	}
 
 	hasAnyValidation := false
 	hasAnyMutation := false
@@ -576,10 +582,11 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 }
 
 // manifestKindSearch translates a kind's search endpoint choices into the manifest.
-// Both endpoints default to being served, so only an explicit opt-out is written out,
-// keeping the manifest data clean; a nil pointer is interpreted as served downstream.
+// Only choices that differ from the endpoint's default are written out, keeping the
+// manifest data clean; a nil pointer is interpreted as the default downstream.
+// /search and /trash default to served, /search/hybrid to not served.
 func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearch {
-	if search.Endpoint && search.Trash {
+	if search.Endpoint && search.Trash && !search.Hybrid {
 		return nil
 	}
 	out := &app.ManifestVersionKindSearch{}
@@ -589,7 +596,22 @@ func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearc
 	if !search.Trash {
 		out.Trash = &search.Trash
 	}
+	if search.Hybrid {
+		out.Hybrid = &search.Hybrid
+	}
 	return out
+}
+
+// manifestKindEmbed translates a kind's embed configuration into the manifest.
+func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
+	if embed == nil {
+		return nil
+	}
+	fields := make([]app.ManifestVersionKindEmbedField, len(embed.Fields))
+	for i, field := range embed.Fields {
+		fields[i] = app.ManifestVersionKindEmbedField{Name: field.Name, Path: field.Path}
+	}
+	return &app.ManifestVersionKindEmbed{Fields: fields}
 }
 
 type simpleOpenAPIDoc[T any] struct {
@@ -601,6 +623,9 @@ type simpleOpenAPIDoc[T any] struct {
 //nolint:revive,funlen,unparam,gocognit
 func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
 	if err := validateSearchFields(vk, version); err != nil {
+		return app.ManifestVersionKind{}, err
+	}
+	if err := validateEmbedFields(vk, version); err != nil {
 		return app.ManifestVersionKind{}, err
 	}
 	mver := app.ManifestVersionKind{
@@ -617,6 +642,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		mver.FolderScoped = &folderScoped
 	}
 	mver.Search = manifestKindSearch(vk.Search)
+	mver.Embed = manifestKindEmbed(vk.Embed)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

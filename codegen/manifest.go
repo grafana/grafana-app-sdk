@@ -16,6 +16,9 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	Embed            map[string]ResourceEmbed              `json:"embed,omitempty"`
 	AppName          string                                `json:"appName"`
 	AppDisplayName   string                                `json:"appDisplayName"`
 	Group            string                                `json:"group"`
@@ -29,6 +32,11 @@ type AppManifestProperties struct {
 	PreferredVersion string                               `json:"preferredVersion"`
 	Roles            map[string]AppManifestPropertiesRole `json:"roles"`
 	RoleBindings     *AppManifestPropertiesRoleBindings   `json:"roleBindings"`
+}
+
+// ResourceEmbed configures declarative embeddings across all API versions of a resource.
+type ResourceEmbed struct {
+	ReembedVersion int `json:"reembedVersion"`
 }
 
 // AppManifestPropertiesOperatorInfo contains information about the app's operator deployment,
@@ -222,6 +230,7 @@ type VersionedKind struct {
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
 	SearchFields             []SearchField             `json:"searchFields,omitempty"`
 	Search                   KindSearch                `json:"search"`
+	Embed                    *KindEmbed                `json:"embed,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)

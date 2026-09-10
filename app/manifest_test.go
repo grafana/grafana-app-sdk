@@ -279,6 +279,202 @@ func TestManifestData_Validate(t *testing.T) {
 	}
 }
 
+func TestManifestData_ValidateHybridRoutes(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		search *ManifestVersionKindSearch
+	}{
+		{name: "unset"},
+		{name: "disabled", search: &ManifestVersionKindSearch{Hybrid: new(false)}},
+		{name: "enabled", search: &ManifestVersionKindSearch{Hybrid: new(true)}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{
+				Versions: []ManifestVersion{{
+					Name: "v1",
+					Kinds: []ManifestVersionKind{{
+						Kind:   "Foo",
+						Scope:  "Namespaced",
+						Search: tt.search,
+					}, {
+						Kind:   "Bar",
+						Scope:  "Cluster",
+						Search: tt.search,
+					}},
+					Routes: ManifestVersionRoutes{
+						Namespaced: map[string]spec3.PathProps{
+							"/foos/search/hybrid":       {},
+							"/bars/search/hybrid":       {},
+							"/foos/search/hybrid/stats": {},
+						},
+						Cluster: map[string]spec3.PathProps{
+							"/BARS/SEARCH/HYBRID/":      {},
+							"/foos/search/hybrid":       {},
+							"/other/search/hybrid":      {},
+							"/bars/search/hybrid/stats": {},
+						},
+					},
+				}},
+			}
+			expectedErr := multierror.Append(nil,
+				errors.New("namespaced custom route '/foos/search/hybrid' conflicts with reserved 'search/hybrid' route for kind 'foos'"),
+				errors.New("cluster-scoped custom route '/BARS/SEARCH/HYBRID/' conflicts with reserved 'search/hybrid' route for kind 'bars'"))
+			assert.Equal(t, expectedErr, manifest.Validate())
+		})
+	}
+}
+
+func TestManifestData_ValidateEmbed(t *testing.T) {
+	for _, tt := range []struct {
+		name         string
+		embed        map[string]ManifestResourceEmbed
+		kindVersions []ManifestVersionKind
+		wantErr      string
+	}{
+		{
+			name:         "custom builder omits embedding declarations",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:         "empty configuration remains optional",
+			embed:        map[string]ManifestResourceEmbed{},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:  "positive revision with versioned fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+		},
+		{
+			name:  "declared field requires a path",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{
+				Kind: "Foo",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title"}},
+				},
+			}},
+			wantErr: "embed field \"title\" requires a path",
+		},
+		{
+			name:         "resource revision without versioned fields",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 2}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+		},
+		{
+			name:         "zero revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 0}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "reembedVersion",
+		},
+		{
+			name:         "negative revision",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: -1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "reembedVersion",
+		},
+		{
+			name:         "unknown resource",
+			embed:        map[string]ManifestResourceEmbed{"missing": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "missing",
+		},
+		{
+			name: "versioned fields require a resource revision",
+			kindVersions: []ManifestVersionKind{{
+				Kind:   "Foo",
+				Plural: "foos",
+				Embed: &ManifestVersionKindEmbed{
+					Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+				},
+			}},
+			wantErr: "foos",
+		},
+		{
+			name:         "empty versioned embed still requires a resource revision",
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos", Embed: &ManifestVersionKindEmbed{}}},
+			wantErr:      "foos",
+		},
+		{
+			name:         "resource key uses lowercase plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos"}},
+		},
+		{
+			name:         "resource key cannot use kind name",
+			embed:        map[string]ManifestResourceEmbed{"Foo": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
+			wantErr:      "Foo",
+		},
+		{
+			name:         "resource key uses inferred plural",
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Foo"}},
+		},
+		{
+			name:         "resource key supports explicit irregular plural",
+			embed:        map[string]ManifestResourceEmbed{"people": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people"}},
+		},
+		{
+			name:  "only some API versions declare fields",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
+			kindVersions: []ManifestVersionKind{
+				{Kind: "Foo", Plural: "foos"},
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+			},
+		},
+		{
+			name:  "versioned fields can differ with one resource revision",
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 3}},
+			kindVersions: []ManifestVersionKind{
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.title"}},
+					},
+				},
+				{
+					Kind:   "Foo",
+					Plural: "foos",
+					Embed: &ManifestVersionKindEmbed{
+						Fields: []ManifestVersionKindEmbedField{{Name: "title", Path: "spec.displayName"}},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{Embed: tt.embed}
+			for i, kind := range tt.kindVersions {
+				manifest.Versions = append(manifest.Versions, ManifestVersion{
+					Name:  fmt.Sprintf("v%d", i+1),
+					Kinds: []ManifestVersionKind{kind},
+				})
+			}
+			err := manifest.Validate()
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestManifestVersionKind_Resource(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1160,17 +1356,24 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 		search         *ManifestVersionKindSearch
 		expectedSearch bool
 		expectedTrash  bool
+		expectedHybrid bool
 	}{
-		{name: "unset serves both", search: nil, expectedSearch: true, expectedTrash: true},
-		{name: "empty block serves both", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true},
-		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true},
-		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false},
-		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false},
+		// search and trash are served unless the kind opts out. hybrid is the
+		// reverse: not served unless the kind opts in.
+		{name: "unset", search: nil, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "empty block", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true, expectedHybrid: false},
+		{name: "trash opt-out", search: &ManifestVersionKindSearch{Trash: new(false)}, expectedSearch: true, expectedTrash: false, expectedHybrid: false},
+		{name: "both opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Trash: new(false)}, expectedSearch: false, expectedTrash: false, expectedHybrid: false},
+		{name: "hybrid opt-in", search: &ManifestVersionKindSearch{Hybrid: new(true)}, expectedSearch: true, expectedTrash: true, expectedHybrid: true},
+		{name: "hybrid explicit false", search: &ManifestVersionKindSearch{Hybrid: new(false)}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
+		{name: "hybrid opt-in with search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Hybrid: new(true)}, expectedSearch: false, expectedTrash: true, expectedHybrid: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
 			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
 			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
+			assert.Equal(t, tc.expectedHybrid, kind.HasHybridEndpoint())
 		})
 	}
 }

@@ -74,6 +74,8 @@ spec: {
 	enabled: bool
 	seen: string & time.Time
 	tags: [...string]
+	nullablePanel?: { title: string, count: int64 } | null
+	nullablePanels?: [...({ title: string, count: int64 } | null)] | null
 }
 `)
 	require.NoError(t, schema.Err())
@@ -100,6 +102,12 @@ spec: {
 		{name: "time as string (kept verbatim)", path: "spec.seen", declared: "string"},
 		{name: "string list element", path: "spec.tags", declared: "string"},
 		{name: "string list element as boolean", path: "spec.tags", declared: "boolean", wantErr: true},
+		{name: "string under nullable parent", path: "spec.nullablePanel.title", declared: "string"},
+		{name: "integer under nullable parent", path: "spec.nullablePanel.count", declared: "int64"},
+		{name: "integer under nullable parent as string", path: "spec.nullablePanel.count", declared: "string", wantErr: true},
+		{name: "nullable array projection to string", path: "spec.nullablePanels[*].title", declared: "string"},
+		{name: "nullable array projection to integer", path: "spec.nullablePanels[*].count", declared: "int64"},
+		{name: "nullable array projection to integer as string", path: "spec.nullablePanels[*].count", declared: "string", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
