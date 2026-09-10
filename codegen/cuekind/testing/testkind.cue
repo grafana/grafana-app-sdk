@@ -4,7 +4,7 @@ import "time"
 
 testManifest: {
 	appName: "test-app"
-	embed: testkinds: contentVersion: 1
+	embed: testkinds: reembedVersion: 1
 	kinds: [testKind, testKind2]
 	versions: {
 		"v1": testManifestV1

@@ -198,7 +198,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	if m.Properties().Embed != nil {
 		manifest.Embed = make(map[string]app.ManifestResourceEmbed, len(m.Properties().Embed))
 		for resource, embed := range m.Properties().Embed {
-			manifest.Embed[resource] = app.ManifestResourceEmbed{ContentVersion: embed.ContentVersion}
+			manifest.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: embed.ReembedVersion}
 		}
 	}
 

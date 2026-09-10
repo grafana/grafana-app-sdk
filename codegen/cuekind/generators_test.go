@@ -181,8 +181,8 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 			assert.Equal(t, v1alpha2.GroupVersion.String(), manifest.APIVersion)
 			data, err := manifest.Spec.ToManifestData()
 			require.NoError(t, err)
-			assert.Equal(t, map[string]app.ManifestResourceEmbed{"testkinds": {ContentVersion: 1}}, data.Embed)
-			assert.Equal(t, 1, strings.Count(string(files[0].Data), "contentVersion"))
+			assert.Equal(t, map[string]app.ManifestResourceEmbed{"testkinds": {ReembedVersion: 1}}, data.Embed)
+			assert.Equal(t, 1, strings.Count(string(files[0].Data), "reembedVersion"))
 
 			foundEmbeddedKind := false
 			for _, version := range data.Versions {

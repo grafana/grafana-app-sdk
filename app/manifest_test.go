@@ -342,7 +342,7 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		},
 		{
 			name:  "positive revision with versioned fields",
-			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{
 				Kind:   "Foo",
 				Plural: "foos",
@@ -353,7 +353,7 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		},
 		{
 			name:  "declared field requires a path",
-			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{
 				Kind: "Foo",
 				Embed: &ManifestVersionKindEmbed{
@@ -364,24 +364,24 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		},
 		{
 			name:         "resource revision without versioned fields",
-			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 2}},
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 2}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
 		},
 		{
 			name:         "zero revision",
-			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 0}},
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 0}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
-			wantErr:      "contentVersion",
+			wantErr:      "reembedVersion",
 		},
 		{
 			name:         "negative revision",
-			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: -1}},
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: -1}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
-			wantErr:      "contentVersion",
+			wantErr:      "reembedVersion",
 		},
 		{
 			name:         "unknown resource",
-			embed:        map[string]ManifestResourceEmbed{"missing": {ContentVersion: 1}},
+			embed:        map[string]ManifestResourceEmbed{"missing": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
 			wantErr:      "missing",
 		},
@@ -403,28 +403,28 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		},
 		{
 			name:         "resource key uses lowercase plural",
-			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "Foos"}},
 		},
 		{
 			name:         "resource key cannot use kind name",
-			embed:        map[string]ManifestResourceEmbed{"Foo": {ContentVersion: 1}},
+			embed:        map[string]ManifestResourceEmbed{"Foo": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}},
 			wantErr:      "Foo",
 		},
 		{
 			name:         "resource key uses inferred plural",
-			embed:        map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			embed:        map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{Kind: "Foo"}},
 		},
 		{
 			name:         "resource key supports explicit irregular plural",
-			embed:        map[string]ManifestResourceEmbed{"people": {ContentVersion: 1}},
+			embed:        map[string]ManifestResourceEmbed{"people": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{{Kind: "Person", Plural: "people"}},
 		},
 		{
 			name:  "only some API versions declare fields",
-			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 1}},
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 1}},
 			kindVersions: []ManifestVersionKind{
 				{Kind: "Foo", Plural: "foos"},
 				{
@@ -438,7 +438,7 @@ func TestManifestData_ValidateEmbed(t *testing.T) {
 		},
 		{
 			name:  "versioned fields can differ with one resource revision",
-			embed: map[string]ManifestResourceEmbed{"foos": {ContentVersion: 3}},
+			embed: map[string]ManifestResourceEmbed{"foos": {ReembedVersion: 3}},
 			kindVersions: []ManifestVersionKind{
 				{
 					Kind:   "Foo",

@@ -94,7 +94,7 @@ type ManifestData struct {
 	// This is usually "<AppName>.ext.grafana.app"
 	Group string `json:"group" yaml:"group"`
 	// Embed configures declarative embeddings by resource name (the lowercase plural) within Group.
-	// Each resource has one content version shared by all of its API versions.
+	// Each resource has one re-embedding version shared by all of its API versions.
 	// Custom embedding builders omit their entry and define their content version in Go.
 	Embed map[string]ManifestResourceEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
 	// Versions is a list of versions supported by this App
@@ -121,9 +121,9 @@ type ManifestData struct {
 
 // ManifestResourceEmbed configures declarative embeddings across all API versions of a resource.
 type ManifestResourceEmbed struct {
-	// ContentVersion identifies the embedding content definition.
-	// Bump it when changes to any version's declared inputs require re-embedding existing resources.
-	ContentVersion int `json:"contentVersion" yaml:"contentVersion"`
+	// ReembedVersion is a manual revision for requesting re-embedding of existing resources.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	ReembedVersion int `json:"reembedVersion" yaml:"reembedVersion"`
 }
 
 func (m *ManifestData) IsEmpty() bool {
@@ -266,8 +266,8 @@ func (m *ManifestData) validateEmbed() error {
 		if _, ok := resources[resource]; !ok {
 			errs = multierror.Append(errs, fmt.Errorf("embed configuration references unknown resource %q", resource))
 		}
-		if m.Embed[resource].ContentVersion <= 0 {
-			errs = multierror.Append(errs, fmt.Errorf("embed contentVersion for resource %q must be greater than zero", resource))
+		if m.Embed[resource].ReembedVersion <= 0 {
+			errs = multierror.Append(errs, fmt.Errorf("embed reembedVersion for resource %q must be greater than zero", resource))
 		}
 	}
 	return errs

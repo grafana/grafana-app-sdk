@@ -32,14 +32,14 @@ func validateEmbedFields(vk codegen.VersionedKind, version string) error {
 
 func embedFieldSupportsText(leaf cue.Value) bool {
 	kind := leaf.IncompleteKind() &^ cue.NullKind
-	if kind == 0 || kind&cue.StringKind != 0 {
+	if kind == 0 || kind == cue.StringKind {
 		return true
 	}
-	if kind != cue.ListKind {
+	if kind != cue.ListKind && kind != cue.StringKind|cue.ListKind {
 		return false
 	}
 
-	// Remove null before inspecting the list. Checking only whether it unifies
+	// Isolate the list branch before inspecting its elements. Checking only whether it unifies
 	// with [...string] would also accept [...int], since both permit an empty list.
 	list := leaf.Unify(leaf.Context().CompileString("[...]"))
 	if elem := list.LookupPath(cue.MakePath(cue.AnyIndex)); elem.Exists() && !embedScalarSupportsText(elem) {
@@ -59,5 +59,5 @@ func embedFieldSupportsText(leaf cue.Value) bool {
 
 func embedScalarSupportsText(value cue.Value) bool {
 	kind := value.IncompleteKind() &^ cue.NullKind
-	return kind == 0 || kind&cue.StringKind != 0
+	return kind == 0 || kind == cue.StringKind
 }

@@ -46,7 +46,7 @@ var appManifestData = app.ManifestData{
 	Group:            "testapp.ext.grafana.app",
 	PreferredVersion: "v1",
 	Embed: map[string]app.ManifestResourceEmbed{
-		"testkinds": {ContentVersion: 1},
+		"testkinds": {ReembedVersion: 1},
 	},
 	Versions: []app.ManifestVersion{
 		{

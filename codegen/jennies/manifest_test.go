@@ -291,7 +291,7 @@ func TestProcessKindVersion_IndependentSearchAndEmbedFields(t *testing.T) {
 	}, mver.Embed.Fields)
 }
 
-func TestBuildManifestData_GlobalEmbedContentVersion(t *testing.T) {
+func TestBuildManifestData_GlobalEmbedReembedVersion(t *testing.T) {
 	ctx := cuecontext.New()
 	for _, tt := range []struct {
 		name    string
@@ -300,7 +300,7 @@ func TestBuildManifestData_GlobalEmbedContentVersion(t *testing.T) {
 	}{
 		{
 			name:  "one revision for different versioned fields",
-			embed: map[string]codegen.ResourceEmbed{"foos": {ContentVersion: 3}},
+			embed: map[string]codegen.ResourceEmbed{"foos": {ReembedVersion: 3}},
 		},
 		{
 			name:    "versioned fields require a resource revision",
@@ -348,7 +348,7 @@ func TestBuildManifestData_GlobalEmbedContentVersion(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, map[string]app.ManifestResourceEmbed{"foos": {ContentVersion: 3}}, got.Embed)
+			assert.Equal(t, map[string]app.ManifestResourceEmbed{"foos": {ReembedVersion: 3}}, got.Embed)
 			require.Len(t, got.Versions, 2)
 			require.Len(t, got.Versions[0].Kinds, 1)
 			require.Len(t, got.Versions[1].Kinds, 1)

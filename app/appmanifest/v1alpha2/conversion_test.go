@@ -259,14 +259,15 @@ func TestSearchEndpointsConversion(t *testing.T) {
 func TestEmbedConversion(t *testing.T) {
 	for _, tc := range []struct {
 		name           string
-		contentVersion int
+		reembedVersion int
 		embed          *app.ManifestVersionKindEmbed
 		wantJSON       string
+		wantRoundTrip  *app.ManifestVersionKindEmbed
 	}{
 		{name: "custom builder omits embedding declarations"},
 		{
-			name:           "initial content version",
-			contentVersion: 1,
+			name:           "initial re-embedding version",
+			reembedVersion: 1,
 			embed: &app.ManifestVersionKindEmbed{
 				Fields: []app.ManifestVersionKindEmbedField{
 					{Name: "title", Path: "spec.title"},
@@ -275,8 +276,8 @@ func TestEmbedConversion(t *testing.T) {
 			wantJSON: `{"fields":[{"name":"title","path":"spec.title"}]}`,
 		},
 		{
-			name:           "increased content version with multiple fields",
-			contentVersion: 3,
+			name:           "increased re-embedding version with multiple fields",
+			reembedVersion: 3,
 			embed: &app.ManifestVersionKindEmbed{
 				Fields: []app.ManifestVersionKindEmbedField{
 					{Name: "title", Path: "spec.title"},
@@ -287,15 +288,24 @@ func TestEmbedConversion(t *testing.T) {
 		},
 		{
 			name:           "empty fields",
-			contentVersion: 1,
+			reembedVersion: 1,
 			embed: &app.ManifestVersionKindEmbed{
 				Fields: []app.ManifestVersionKindEmbedField{},
 			},
 			wantJSON: `{"fields":[]}`,
 		},
 		{
+			name:           "zero-value embedding declaration",
+			reembedVersion: 1,
+			embed:          &app.ManifestVersionKindEmbed{},
+			wantJSON:       `{"fields":[]}`,
+			wantRoundTrip: &app.ManifestVersionKindEmbed{
+				Fields: []app.ManifestVersionKindEmbedField{},
+			},
+		},
+		{
 			name:           "resource revision without versioned fields",
-			contentVersion: 2,
+			reembedVersion: 2,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -317,12 +327,13 @@ func TestEmbedConversion(t *testing.T) {
 					}},
 				}},
 			}
-			if tc.contentVersion != 0 {
+			if tc.reembedVersion != 0 {
 				md.Embed = map[string]app.ManifestResourceEmbed{
-					"foos": {ContentVersion: tc.contentVersion},
+					"foos": {ReembedVersion: tc.reembedVersion},
 				}
 			}
 
+			require.NoError(t, md.Validate())
 			spec, err := SpecFromManifestData(md)
 			require.NoError(t, err)
 			kindJSON, err := json.Marshal(spec.Versions[0].Kinds[0])
@@ -339,7 +350,7 @@ func TestEmbedConversion(t *testing.T) {
 			require.NoError(t, err)
 			var specFields map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal(encoded, &specFields))
-			if tc.contentVersion == 0 {
+			if tc.reembedVersion == 0 {
 				assert.NotContains(t, specFields, "embed")
 			} else {
 				wantEmbedJSON, err := json.Marshal(md.Embed)
@@ -351,19 +362,23 @@ func TestEmbedConversion(t *testing.T) {
 			roundTripped, err := decoded.ToManifestData()
 			require.NoError(t, err)
 			assert.Equal(t, md.Embed, roundTripped.Embed)
-			assert.Equal(t, tc.embed, roundTripped.Versions[0].Kinds[0].Embed)
+			wantRoundTrip := tc.wantRoundTrip
+			if wantRoundTrip == nil {
+				wantRoundTrip = tc.embed
+			}
+			assert.Equal(t, wantRoundTrip, roundTripped.Versions[0].Kinds[0].Embed)
 			assert.Equal(t, md.Versions[0].Kinds[0].SearchFields, roundTripped.Versions[0].Kinds[0].SearchFields)
 		})
 	}
 }
 
-func TestEmbedConversion_SharedContentVersion(t *testing.T) {
+func TestEmbedConversion_SharedReembedVersion(t *testing.T) {
 	md := app.ManifestData{
 		AppName: "testapp",
 		Group:   "testapp.grafana.app",
 		Embed: map[string]app.ManifestResourceEmbed{
-			"foos":     {ContentVersion: 3},
-			"children": {ContentVersion: 7},
+			"foos":     {ReembedVersion: 3},
+			"children": {ReembedVersion: 7},
 		},
 		Versions: []app.ManifestVersion{
 			{
@@ -411,8 +426,8 @@ func TestEmbedConversion_SharedContentVersion(t *testing.T) {
 	require.NoError(t, err)
 	var specFields map[string]json.RawMessage
 	require.NoError(t, json.Unmarshal(encoded, &specFields))
-	assert.JSONEq(t, `{"foos":{"contentVersion":3},"children":{"contentVersion":7}}`, string(specFields["embed"]))
-	assert.NotContains(t, string(specFields["versions"]), `"contentVersion"`)
+	assert.JSONEq(t, `{"foos":{"reembedVersion":3},"children":{"reembedVersion":7}}`, string(specFields["embed"]))
+	assert.NotContains(t, string(specFields["versions"]), `"reembedVersion"`)
 
 	var decoded AppManifestSpec
 	require.NoError(t, json.Unmarshal(encoded, &decoded))

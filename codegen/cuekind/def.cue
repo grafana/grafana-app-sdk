@@ -242,9 +242,9 @@ SchemaWithOperatorState: Schema & {
 
 // #ResourceEmbed configures declarative embeddings across all API versions of a resource.
 #ResourceEmbed: {
-	// contentVersion identifies the embedding content definition. Bump it when
-	// changes to any version's declared inputs require re-embedding existing resources.
-	contentVersion: int & >0
+	// reembedVersion is a manual revision for requesting re-embedding of existing resources.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	reembedVersion: int & >0
 }
 
 // #EmbedField supplies text for the embedding document without exposing a search field.
@@ -436,7 +436,7 @@ Version: S={
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
 	// embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
-	// Each resource has one content version shared by all of its API versions.
+	// Each resource has one re-embedding version shared by all of its API versions.
 	// Custom embedding builders omit their entry and define their content version in Go.
 	embed?: {
 		[string]: #ResourceEmbed

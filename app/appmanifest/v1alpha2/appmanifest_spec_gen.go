@@ -4,9 +4,9 @@ package v1alpha2
 
 // +k8s:openapi-gen=true
 type AppManifestResourceEmbed struct {
-	// contentVersion identifies the embedding content definition shared by all API versions of this resource.
-	// Bump it when changes to any version's declared inputs require re-embedding existing resources.
-	ContentVersion int64 `json:"contentVersion"`
+	// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	ReembedVersion int64 `json:"reembedVersion"`
 }
 
 // NewAppManifestResourceEmbed creates a new AppManifestResourceEmbed object.

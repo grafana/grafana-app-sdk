@@ -33,6 +33,15 @@ func TestValidateEmbedFields(t *testing.T) {
 		#Panel: { title: string, count: int }
 		nullablePanel?: #Panel | null
 		nullableListVariants: [...int] | [...bool] | null
+		mixedScalar: string | int
+		nullableMixedScalar: string | int | null
+		mixedArray: [...(string | int)]
+		nullableMixedArray: [...(string | int | null)] | null
+		fixedMixedArray: [string, string | int]
+		nullableStringElements: [...(string | null)] | null
+		stringOrStringArray: string | [...string]
+		nullableStringOrStringArray: string | [...(string | null)] | null
+		stringOrIntegerArray: string | [...int]
 	}`)
 	require.NoError(t, schema.Err())
 
@@ -70,6 +79,16 @@ func TestValidateEmbedFields(t *testing.T) {
 		{name: "fixed integer array", path: "spec.fixedCounts", wantErr: true},
 		{name: "nullable integer array", path: "spec.nullableCounts", wantErr: true},
 		{name: "nullable boolean array", path: "spec.nullableFlags", wantErr: true},
+		{name: "mixed scalar", path: "spec.mixedScalar", wantErr: true},
+		{name: "nullable mixed scalar", path: "spec.nullableMixedScalar", wantErr: true},
+		{name: "mixed array", path: "spec.mixedArray", wantErr: true},
+		{name: "mixed array projection", path: "spec.mixedArray[*]", wantErr: true},
+		{name: "nullable mixed array", path: "spec.nullableMixedArray", wantErr: true},
+		{name: "fixed array with mixed element", path: "spec.fixedMixedArray", wantErr: true},
+		{name: "nullable string elements", path: "spec.nullableStringElements"},
+		{name: "string or string array", path: "spec.stringOrStringArray"},
+		{name: "nullable string or string array", path: "spec.nullableStringOrStringArray"},
+		{name: "string or integer array", path: "spec.stringOrIntegerArray", wantErr: true},
 		{name: "missing path", path: "spec.missing", wantErr: true},
 		{name: "missing projected leaf", path: "spec.panels[*].missing", wantErr: true},
 		{name: "missing nullable projected leaf", path: "spec.nullablePanels[*].missing", wantErr: true},

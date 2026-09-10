@@ -127,9 +127,9 @@ appManifestv1alpha2: appManifestKind & {
 			fields: [...#ManifestVersionKindEmbedField]
 		}
 		#ResourceEmbed: {
-			// contentVersion identifies the embedding content definition shared by all API versions of this resource.
-			// Bump it when changes to any version's declared inputs require re-embedding existing resources.
-			contentVersion: int & >0
+			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
+			// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+			reembedVersion: int & >0
 		}
 		#ManifestVersionKindEmbedField: {
 			// name labels this input in the embedding document.

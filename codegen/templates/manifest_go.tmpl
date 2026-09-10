@@ -160,7 +160,7 @@ var appManifestData = app.ManifestData{
     Group: "{{.ManifestData.Group}}",
     PreferredVersion: "{{.ManifestData.PreferredVersion}}",{{ if .ManifestData.Embed }}
     Embed: map[string]app.ManifestResourceEmbed{ {{ range $resource, $embed := .ManifestData.Embed }}
-        {{ goString $resource }}: {ContentVersion: {{ $embed.ContentVersion }}},{{ end }}
+        {{ goString $resource }}: {ReembedVersion: {{ $embed.ReembedVersion }}},{{ end }}
     },{{ end }}
     Versions: []app.ManifestVersion{ {{ range .ManifestData.Versions }}{{$v:=.}}
         {

@@ -19,9 +19,9 @@ func TestParseManifestEmbedConfiguration(t *testing.T) {
 		wantErr      string
 	}{
 		{name: "global revision", global: "1"},
-		{name: "zero revision", global: "0", wantErr: "contentVersion"},
-		{name: "negative revision", global: "-1", wantErr: "contentVersion"},
-		{name: "version-local revision is rejected", global: "1", versionLocal: "contentVersion: 1", wantErr: "contentVersion"},
+		{name: "zero revision", global: "0", wantErr: "reembedVersion"},
+		{name: "negative revision", global: "-1", wantErr: "reembedVersion"},
+		{name: "version-local revision is rejected", global: "1", versionLocal: "reembedVersion: 1", wantErr: "reembedVersion"},
 		{name: "missing field path", global: "1", field: `name: "title"`, wantErr: "path"},
 		{name: "empty field path", global: "1", field: `name: "title", path: ""`, wantErr: "path"},
 	} {
@@ -33,7 +33,7 @@ func TestParseManifestEmbedConfiguration(t *testing.T) {
 			}
 			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`manifest: {
 				appName: "embed-app"
-				embed: foos: contentVersion: %s
+				embed: foos: reembedVersion: %s
 				versions: v1: kinds: [{
 					kind: "Foo"
 					schema: spec: title: string
@@ -83,7 +83,7 @@ func TestParseManifestTestApp(t *testing.T) {
 	assert.Equal(t, []string{"createFoobar"}, role.Routes)
 
 	require.NotNil(t, props.RoleBindings)
-	assert.Equal(t, map[string]codegen.ResourceEmbed{"testkinds": {ContentVersion: 1}}, props.Embed)
+	assert.Equal(t, map[string]codegen.ResourceEmbed{"testkinds": {ReembedVersion: 1}}, props.Embed)
 	assert.Equal(t, []string{"test-app:reader"}, props.RoleBindings.Viewer)
 
 	versions := manifest.Versions()
@@ -159,7 +159,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 		EmitZeroIfAbsent: true,
 	}, v2Kind.SearchFields[1])
 
-	// Each API version declares its own inputs while sharing one resource content version.
+	// Each API version declares its own inputs while sharing one resource re-embedding version.
 	assert.True(t, v2Kind.Search.Hybrid)
 	require.NotNil(t, v2Kind.Embed)
 	assert.Equal(t, &codegen.KindEmbed{

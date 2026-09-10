@@ -36,7 +36,7 @@ type AppManifestProperties struct {
 
 // ResourceEmbed configures declarative embeddings across all API versions of a resource.
 type ResourceEmbed struct {
-	ContentVersion int `json:"contentVersion"`
+	ReembedVersion int `json:"reembedVersion"`
 }
 
 // AppManifestPropertiesOperatorInfo contains information about the app's operator deployment,

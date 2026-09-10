@@ -26,7 +26,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	if s.Embed != nil {
 		data.Embed = make(map[string]app.ManifestResourceEmbed, len(s.Embed))
 		for resource, embed := range s.Embed {
-			data.Embed[resource] = app.ManifestResourceEmbed{ContentVersion: int(embed.ContentVersion)}
+			data.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: int(embed.ReembedVersion)}
 		}
 	}
 	// Versions
@@ -345,7 +345,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	if data.Embed != nil {
 		manifestSpec.Embed = make(map[string]AppManifestResourceEmbed, len(data.Embed))
 		for resource, embed := range data.Embed {
-			manifestSpec.Embed[resource] = AppManifestResourceEmbed{ContentVersion: int64(embed.ContentVersion)}
+			manifestSpec.Embed[resource] = AppManifestResourceEmbed{ReembedVersion: int64(embed.ReembedVersion)}
 		}
 	}
 	if data.PreferredVersion != "" {
@@ -439,7 +439,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				}
 			}
 			if kind.Embed != nil {
-				k.Embed = &AppManifestManifestVersionKindEmbed{}
+				k.Embed = NewAppManifestManifestVersionKindEmbed()
 				if kind.Embed.Fields != nil {
 					k.Embed.Fields = make([]AppManifestManifestVersionKindEmbedField, len(kind.Embed.Fields))
 					for i, field := range kind.Embed.Fields {

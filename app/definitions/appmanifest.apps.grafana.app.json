@@ -521,15 +521,15 @@
                                     "embed": {
                                         "additionalProperties": {
                                             "properties": {
-                                                "contentVersion": {
-                                                    "description": "contentVersion identifies the embedding content definition shared by all API versions of this resource.\nBump it when changes to any version's declared inputs require re-embedding existing resources.",
+                                                "reembedVersion": {
+                                                    "description": "reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.\nIncrease it when a backfill is needed; changing the declared inputs does not require a bump by itself.",
                                                     "exclusiveMinimum": true,
                                                     "minimum": 0,
                                                     "type": "integer"
                                                 }
                                             },
                                             "required": [
-                                                "contentVersion"
+                                                "reembedVersion"
                                             ],
                                             "type": "object"
                                         },
