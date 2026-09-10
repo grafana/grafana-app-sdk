@@ -279,6 +279,36 @@ func TestManifestData_Validate(t *testing.T) {
 	}
 }
 
+func TestManifestVersionKind_Resource(t *testing.T) {
+	tests := []struct {
+		name     string
+		kind     ManifestVersionKind
+		expected string
+	}{
+		{
+			name: "explicit plural",
+			kind: ManifestVersionKind{
+				Kind:   "Person",
+				Plural: "People",
+			},
+			expected: "people",
+		},
+		{
+			name: "plural derived from kind",
+			kind: ManifestVersionKind{
+				Kind: "Widget",
+			},
+			expected: "widgets",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			assert.Equal(t, test.expected, test.kind.Resource())
+		})
+	}
+}
+
 func TestManifestVersionKind_Subresources(t *testing.T) {
 	sch1, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{}}`)), "Foo")
 	sch2, _ := VersionSchemaFromMap(jsonToMap([]byte(`{"spec":{"properties":{"foo":{"type":"string"}}},"metadata":{},"status":{}}`)), "Foo")
