@@ -39,9 +39,17 @@ func TestValidateEmbedFields(t *testing.T) {
 		nullableMixedArray: [...(string | int | null)] | null
 		fixedMixedArray: [string, string | int]
 		nullableStringElements: [...(string | null)] | null
+		nullValue: null
+		nullElements: [...null]
+		nullableNullElements: [...null] | null
+		fixedNullElements: [null, null]
+		fixedStringAndNull: [string, null]
+		stringWithNullTail: [string, ...null]
 		stringOrStringArray: string | [...string]
 		nullableStringOrStringArray: string | [...(string | null)] | null
+		stringOrNullArray: string | [...null]
 		stringOrIntegerArray: string | [...int]
+		variant: { text: { body: string } } | { numeric: { body: int } }
 	}`)
 	require.NoError(t, schema.Err())
 
@@ -86,9 +94,19 @@ func TestValidateEmbedFields(t *testing.T) {
 		{name: "nullable mixed array", path: "spec.nullableMixedArray", wantErr: true},
 		{name: "fixed array with mixed element", path: "spec.fixedMixedArray", wantErr: true},
 		{name: "nullable string elements", path: "spec.nullableStringElements"},
+		{name: "null-only scalar", path: "spec.nullValue", wantErr: true},
+		{name: "null-only array", path: "spec.nullElements", wantErr: true},
+		{name: "nullable null-only array", path: "spec.nullableNullElements", wantErr: true},
+		{name: "fixed null-only array", path: "spec.fixedNullElements", wantErr: true},
+		{name: "null-only array projection", path: "spec.nullElements[*]", wantErr: true},
+		{name: "fixed string array with null placeholder", path: "spec.fixedStringAndNull"},
+		{name: "string array with null-only tail", path: "spec.stringWithNullTail"},
 		{name: "string or string array", path: "spec.stringOrStringArray"},
 		{name: "nullable string or string array", path: "spec.nullableStringOrStringArray"},
+		{name: "string or null-only array", path: "spec.stringOrNullArray"},
 		{name: "string or integer array", path: "spec.stringOrIntegerArray", wantErr: true},
+		{name: "unresolved string in object variant", path: "spec.variant.text.body", wantErr: true},
+		{name: "unresolved integer in object variant", path: "spec.variant.numeric.body", wantErr: true},
 		{name: "missing path", path: "spec.missing", wantErr: true},
 		{name: "missing projected leaf", path: "spec.panels[*].missing", wantErr: true},
 		{name: "missing nullable projected leaf", path: "spec.nullablePanels[*].missing", wantErr: true},
