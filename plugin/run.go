@@ -74,8 +74,22 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return errors.New("embedded manifest required")
 	}
 
+	if cfg.kubeConfig == nil {
+		kubeConfig, err := BuildKubeConfig(*manifestData)
+		if err != nil {
+			logging.DefaultLogger.Warn("no kube config for api access", "error", err)
+		} else {
+			cfg.kubeConfig = kubeConfig
+		}
+	}
+
+	var kubeConfig rest.Config
+	if cfg.kubeConfig != nil {
+		kubeConfig = *cfg.kubeConfig
+	}
+
 	appConfig := app.Config{
-		KubeConfig:     cfg.kubeConfig,
+		KubeConfig:     kubeConfig,
 		ManifestData:   *manifestData,
 		SpecificConfig: provider.SpecificConfig(),
 	}
@@ -125,9 +139,10 @@ func Run(provider app.Provider, opts ...RunOption) error {
 var manage = backendapp.Manage
 
 // WithKubeConfig sets the rest.Config used to communicate with the Kubernetes API server.
+// If not provided, Run will attempt to build one via BuildKubeConfig.
 func WithKubeConfig(kubeConfig rest.Config) RunOption {
 	return func(cfg *runConfig) {
-		cfg.kubeConfig = kubeConfig
+		cfg.kubeConfig = &kubeConfig
 	}
 }
 
@@ -156,7 +171,7 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 type RunOption func(cfg *runConfig)
 
 type runConfig struct {
-	kubeConfig rest.Config
+	kubeConfig *rest.Config
 	pluginID   string
 	appFunc    backendapp.InstanceFactoryFunc
 	manageOpts backendapp.ManageOpts
