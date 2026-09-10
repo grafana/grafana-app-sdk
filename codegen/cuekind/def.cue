@@ -162,7 +162,22 @@ SchemaWithOperatorState: Schema & {
 	extensions: {
 		[=~"^x-(.+)$"]: _
 	}
+	// authz declares the authorization attributes which are checked for this route.
+	// If present, each provided field is emitted as an openAPI extension on the route
+	// (x-grafana-declared-authz-resource, x-grafana-declared-authz-subresource, x-grafana-declared-authz-verb).
+	// If absent, no authz extensions are added to the route.
+	authz?: #CustomRouteAuthz
 }
+#CustomRouteAuthz: {
+	// resource is the resource the authz check is performed against.
+	resource: string
+	// subresource is the subresource the authz check is performed against, if applicable.
+	subresource?: string
+	// verb is the verb the authz check is performed with, if it differs from the one implied by the route's method.
+	verb?: #CustomRouteAuthzVerb
+}
+// #CustomRouteAuthzVerb is the set of kubernetes verbs which an authz check can be performed with.
+#CustomRouteAuthzVerb: "get" | "list" | "watch" | "create" | "update" | "patch" | "delete" | "deletecollection"
 #CustomRoutePath:   string
 #CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
 #CustomRouteCapability: {
