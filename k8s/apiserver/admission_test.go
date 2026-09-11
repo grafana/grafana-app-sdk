@@ -26,6 +26,7 @@ func TestAppAdmission_Admit(t *testing.T) {
 	badReq := admission.NewAttributesRecord(&metav1.Status{}, &metav1.Status{}, TestKind.GroupVersionKind(), "default", "foo", TestKind.GroupVersionResource(), "", admission.Operation("foo"), &metav1.UpdateOptions{}, false, nil)
 	manifestWithMutation := func(ops []app.AdmissionOperation) app.ManifestData {
 		return app.ManifestData{
+			Group: TestKind.Group(),
 			Versions: []app.ManifestVersion{{
 				Name:   TestKind.Version(),
 				Served: true,
@@ -148,6 +149,7 @@ func TestAppAdmission_Validate(t *testing.T) {
 	badReq := admission.NewAttributesRecord(&metav1.Status{}, &metav1.Status{}, TestKind.GroupVersionKind(), "default", "foo", TestKind.GroupVersionResource(), "", admission.Operation("foo"), &metav1.UpdateOptions{}, false, nil)
 	manifestWithValidation := func(ops []app.AdmissionOperation) app.ManifestData {
 		return app.ManifestData{
+			Group: TestKind.Group(),
 			Versions: []app.ManifestVersion{{
 				Name:   TestKind.Version(),
 				Served: true,
