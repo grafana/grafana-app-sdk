@@ -1,6 +1,6 @@
 module github.com/grafana/grafana-app-sdk
 
-go 1.26.5
+go 1.27
 
 retract (
 	v0.48.6 // CUE version mismatch between app-sdk and cog caused some strange codegen errors involving list defaults
@@ -48,7 +48,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/kube-openapi v0.0.0-20260821135717-be32def86098
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
-	sigs.k8s.io/structured-merge-diff/v6 v6.4.2
+	sigs.k8s.io/structured-merge-diff/v7 v7.0.0
 	sigs.k8s.io/yaml v1.6.0
 )
 
@@ -155,6 +155,7 @@ require (
 	sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
+	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 )
 
 replace github.com/google/cel-go => github.com/google/cel-go v0.31.0
