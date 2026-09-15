@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"cuelang.org/go/cue"
+	"github.com/grafana/codejen"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -29,7 +28,6 @@ var (
 		Name:                       "foo",
 		GenerateName:               "bar",
 		Namespace:                  "foo",
-		SelfLink:                   "bar",
 		UID:                        types.UID("foo"),
 		ResourceVersion:            "bar",
 		Generation:                 i64,

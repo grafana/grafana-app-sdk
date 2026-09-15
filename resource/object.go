@@ -180,11 +180,11 @@ func CopyObjectInto[T any](out T, in T) error {
 	srcType := reflect.TypeOf(in)
 	dstType := reflect.TypeOf(out)
 	// T must be a pointer to a struct
-	if dstType.Kind() != reflect.Ptr {
+	if dstType.Kind() != reflect.Pointer {
 		return errors.New("out must be a pointer to a struct")
 	}
 	// srcType.NumField() panics on a nil type
-	if srcType.Kind() == reflect.Ptr && srcVal.IsNil() {
+	if srcType.Kind() == reflect.Pointer && srcVal.IsNil() {
 		return errors.New("in must not be nil")
 	}
 	// Trying to set values on a nil panics
@@ -192,11 +192,11 @@ func CopyObjectInto[T any](out T, in T) error {
 		return errors.New("out must not be nil")
 	}
 	// Before we can work with in and out, we actually need the values the T pointers are referencing
-	for dstType.Kind() == reflect.Ptr {
+	for dstType.Kind() == reflect.Pointer {
 		dstType = dstType.Elem()
 		dstVal = dstVal.Elem()
 	}
-	for srcType.Kind() == reflect.Ptr {
+	for srcType.Kind() == reflect.Pointer {
 		srcType = srcType.Elem()
 		srcVal = srcVal.Elem()
 	}
@@ -228,7 +228,7 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 	}
 
 	switch src.Type().Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		// If the pointer is nil, just make a new one for the copy
 		if src.IsNil() {
 			if !dst.IsNil() {
@@ -289,7 +289,7 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 		for _, key := range src.MapKeys() {
 			srcKeyVal := src.MapIndex(key)
 			dstKeyVal := reflect.New(srcKeyVal.Type()).Elem()
-			if srcKeyVal.Kind() == reflect.Ptr && srcKeyVal.Elem().Kind() == reflect.Struct {
+			if srcKeyVal.Kind() == reflect.Pointer && srcKeyVal.Elem().Kind() == reflect.Struct {
 				// Copy using CopyObjectInto
 				if srcKeyVal.IsNil() {
 					dstKeyVal = reflect.New(srcKeyVal.Elem().Type())
