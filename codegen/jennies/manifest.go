@@ -183,7 +183,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive,gocognit,funlen
+//nolint:revive,gocognit,funlen,gocyclo
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
@@ -620,7 +620,7 @@ type simpleOpenAPIDoc[T any] struct {
 	} `json:"components" yaml:"components"`
 }
 
-//nolint:revive,funlen,unparam,gocognit
+//nolint:revive,funlen,unparam,gocognit,gocyclo
 func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
 	if err := validateSearchFields(vk, version); err != nil {
 		return app.ManifestVersionKind{}, err
