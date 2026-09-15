@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 type SchemaScope string
@@ -172,8 +174,8 @@ func NewSimpleSchema(group, version string, zeroVal Object, zeroList ListObject,
 	s := SimpleSchema{
 		group:    group,
 		version:  version,
-		zero:     zeroVal,
-		zeroList: zeroList,
+		zero:     zeroVal.Copy(),
+		zeroList: zeroList.Copy(),
 	}
 	for _, opt := range opts {
 		opt(&s)
@@ -191,6 +193,19 @@ func NewSimpleSchema(group, version string, zeroVal Object, zeroList ListObject,
 	if s.plural == "" {
 		s.plural = fmt.Sprintf("%ss", strings.ToLower(s.kind))
 	}
+
+	s.zero.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   group,
+		Version: version,
+		Kind:    s.kind,
+	})
+
+	s.zeroList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   group,
+		Version: version,
+		Kind:    s.plural,
+	})
+
 	return &s
 }
 
