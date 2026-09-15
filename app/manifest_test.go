@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
@@ -23,8 +24,62 @@ func TestManifestData_Validate(t *testing.T) {
 		data        ManifestData
 		expectedErr error
 	}{{
-		name: "valid (empty manifest)",
-		data: ManifestData{},
+		name:        "empty manifest",
+		data:        ManifestData{},
+		expectedErr: errors.New("no API versions are defined"),
+	}, {
+		name:        "empty versions slice",
+		data:        ManifestData{Versions: []ManifestVersion{}},
+		expectedErr: errors.New("no API versions are defined"),
+	}, {
+		name:        "app metadata without versions",
+		data:        ManifestData{AppName: "myapp", Group: "myapp.grafana.app"},
+		expectedErr: errors.New("no API versions are defined"),
+	}, {
+		name: "valid without preferred version",
+		data: ManifestData{Versions: []ManifestVersion{{Name: "v1"}}},
+	}, {
+		name: "valid preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}, {Name: "v2"}},
+			PreferredVersion: "v2",
+		},
+	}, {
+		name: "valid alpha preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1alpha1"}, {Name: "v1"}},
+			PreferredVersion: "v1alpha1",
+		},
+	}, {
+		name: "unknown preferred version",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}},
+			PreferredVersion: "v2",
+		},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "v2"`)),
+	}, {
+		name:        "preferred version without versions",
+		data:        ManifestData{PreferredVersion: "v1"},
+		expectedErr: errors.New("no API versions are defined"),
+	}, {
+		name: "preferred version must match exactly",
+		data: ManifestData{
+			Versions:         []ManifestVersion{{Name: "v1"}},
+			PreferredVersion: "V1",
+		},
+		expectedErr: multierror.Append(nil, errors.New(`unknown preferred version: "V1"`)),
+	}, {
+		name: "preferred version error is combined with kind errors",
+		data: ManifestData{
+			Versions: []ManifestVersion{
+				{Name: "v1", Kinds: []ManifestVersionKind{{Kind: "Foo", Plural: "foos"}}},
+				{Name: "v2", Kinds: []ManifestVersionKind{{Kind: "Foo", Plural: "bars"}}},
+			},
+			PreferredVersion: "v3",
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("kind 'Foo' has a different plural in versions 'v1' and 'v2'"),
+			errors.New(`unknown preferred version: "v3"`)),
 	}, {
 		name: "plural mismatch",
 		data: ManifestData{
@@ -207,7 +262,8 @@ func TestManifestData_Validate(t *testing.T) {
 	}, {
 		name: "rolebindings for missing roles (no roles in manifest)",
 		data: ManifestData{
-			AppName: "myapp",
+			AppName:  "myapp",
+			Versions: []ManifestVersion{{Name: "v1"}},
 			RoleBindings: &ManifestRoleBindings{
 				Viewer: []string{"viewer-role"},
 				Editor: []string{"editor-role"},
@@ -225,7 +281,8 @@ func TestManifestData_Validate(t *testing.T) {
 	}, {
 		name: "rolebindings for missing roles (no matching role)",
 		data: ManifestData{
-			AppName: "myapp",
+			AppName:  "myapp",
+			Versions: []ManifestVersion{{Name: "v1"}},
 			Roles: map[string]ManifestRole{
 				"viewer-role": {
 					Title: "Viewer Role",
@@ -274,7 +331,20 @@ func TestManifestData_Validate(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			assert.Equal(t, test.expectedErr, test.data.Validate())
+			err := test.data.Validate()
+			if test.expectedErr == nil {
+				require.NoError(t, err)
+				return
+			}
+			var expected *multierror.Error
+			if !errors.As(test.expectedErr, &expected) {
+				require.EqualError(t, err, test.expectedErr.Error())
+				return
+			}
+			var actual *multierror.Error
+			require.ErrorAs(t, err, &actual)
+			// Route and role errors can be collected in map iteration order.
+			assert.ElementsMatch(t, expected.Errors, actual.Errors)
 		})
 	}
 }
@@ -1374,6 +1444,107 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
 			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
 			assert.Equal(t, tc.expectedHybrid, kind.HasHybridEndpoint())
+		})
+	}
+}
+
+func TestManifestData_APIGroup(t *testing.T) {
+	v1alpha1 := metav1.GroupVersionForDiscovery{GroupVersion: "test.grafana.app/v1alpha1", Version: "v1alpha1"}
+	v2alpha1 := metav1.GroupVersionForDiscovery{GroupVersion: "test.grafana.app/v2alpha1", Version: "v2alpha1"}
+	v1beta1 := metav1.GroupVersionForDiscovery{GroupVersion: "test.grafana.app/v1beta1", Version: "v1beta1"}
+	v1 := metav1.GroupVersionForDiscovery{GroupVersion: "test.grafana.app/v1", Version: "v1"}
+	v2 := metav1.GroupVersionForDiscovery{GroupVersion: "test.grafana.app/v2", Version: "v2"}
+
+	for _, tt := range []struct {
+		name             string
+		versions         []string
+		preferredVersion string
+		wantVersions     []metav1.GroupVersionForDiscovery
+		wantPreferred    metav1.GroupVersionForDiscovery
+	}{
+		{
+			name:         "nil versions",
+			wantVersions: []metav1.GroupVersionForDiscovery{},
+		},
+		{
+			name:         "empty versions",
+			versions:     []string{},
+			wantVersions: []metav1.GroupVersionForDiscovery{},
+		},
+		{
+			name:             "preferred version without versions",
+			preferredVersion: "v1",
+			wantVersions:     []metav1.GroupVersionForDiscovery{},
+		},
+		{
+			name:          "single version",
+			versions:      []string{"v1"},
+			wantVersions:  []metav1.GroupVersionForDiscovery{v1},
+			wantPreferred: v1,
+		},
+		{
+			name:             "explicit preferred version overrides fallback",
+			versions:         []string{"v1", "v2"},
+			preferredVersion: "v1",
+			wantVersions:     []metav1.GroupVersionForDiscovery{v1, v2},
+			wantPreferred:    v1,
+		},
+		{
+			name:             "explicit alpha version is honored",
+			versions:         []string{"v1alpha1", "v1"},
+			preferredVersion: "v1alpha1",
+			wantVersions:     []metav1.GroupVersionForDiscovery{v1alpha1, v1},
+			wantPreferred:    v1alpha1,
+		},
+		{
+			name:          "last non-alpha version skips trailing alphas",
+			versions:      []string{"v1beta1", "v1", "v1alpha1", "v2alpha1"},
+			wantVersions:  []metav1.GroupVersionForDiscovery{v1beta1, v1, v1alpha1, v2alpha1},
+			wantPreferred: v1,
+		},
+		{
+			name:          "beta counts as non-alpha",
+			versions:      []string{"v1", "v1beta1", "v2alpha1"},
+			wantVersions:  []metav1.GroupVersionForDiscovery{v1, v1beta1, v2alpha1},
+			wantPreferred: v1beta1,
+		},
+		{
+			name:          "manifest order determines fallback",
+			versions:      []string{"v2", "v1"},
+			wantVersions:  []metav1.GroupVersionForDiscovery{v2, v1},
+			wantPreferred: v1,
+		},
+		{
+			name:          "all alpha versions use last entry",
+			versions:      []string{"v2alpha1", "v1alpha1"},
+			wantVersions:  []metav1.GroupVersionForDiscovery{v2alpha1, v1alpha1},
+			wantPreferred: v1alpha1,
+		},
+		{
+			name:             "unknown preferred version uses fallback",
+			versions:         []string{"v1", "v2alpha1"},
+			preferredVersion: "v3",
+			wantVersions:     []metav1.GroupVersionForDiscovery{v1, v2alpha1},
+			wantPreferred:    v1,
+		},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := ManifestData{Group: "test.grafana.app", PreferredVersion: tt.preferredVersion}
+			if tt.versions != nil {
+				manifest.Versions = make([]ManifestVersion, len(tt.versions))
+				for i, version := range tt.versions {
+					manifest.Versions[i] = ManifestVersion{Name: version}
+				}
+			}
+			original := manifest
+			original.Versions = slices.Clone(manifest.Versions)
+
+			assert.Equal(t, metav1.APIGroup{
+				Name:             "test.grafana.app",
+				Versions:         tt.wantVersions,
+				PreferredVersion: tt.wantPreferred,
+			}, manifest.APIGroup())
+			assert.Equal(t, original, manifest, "discovery must not modify the manifest")
 		})
 	}
 }
