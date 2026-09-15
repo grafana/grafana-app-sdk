@@ -12,7 +12,6 @@ linters:
     - funlen
     - gochecknoinits
     - gocognit
-    - goconst
     - gocritic
     - gocyclo
     - goprintffuncname
@@ -20,6 +19,7 @@ linters:
     - govet
     - ineffassign
     - misspell
+    - modernize
     - nakedret
     - prealloc
     - revive
@@ -37,6 +37,9 @@ linters:
       min-complexity: 50
     misspell:
       locale: US
+    modernize:
+      disable:
+        - omitzero
     mnd:
       checks:
         - argument

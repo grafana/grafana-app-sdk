@@ -117,7 +117,7 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 		Name:                       in.GetName(),
 		GenerateName:               in.GetGenerateName(),
 		Namespace:                  in.GetNamespace(),
-		SelfLink:                   in.GetSelfLink(),
+		SelfLink:                   in.GetSelfLink(), // nolint: staticcheck
 		UID:                        in.GetUID(),
 		ResourceVersion:            in.GetResourceVersion(),
 		Generation:                 in.GetGeneration(),

@@ -27,7 +27,7 @@ func WriteGrafanaAnnotation(annotations map[string]string, field string, value a
 		return nil
 	}
 	typ := reflect.TypeOf(value)
-	for typ.Kind() == reflect.Ptr {
+	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	marshaled, err := json.Marshal(value)
