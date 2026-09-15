@@ -507,7 +507,7 @@ func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
 	case reflect.Map:
 		if val.IsNil() {
 			ok := false
-			t.Subresources, ok = reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())).Interface().(Sub)
+			t.Subresources, ok = reflect.TypeAssert[Sub](reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())))
 			if !ok {
 				return errors.New("subresource catalog is a nil map which could not be instantiated")
 			}
