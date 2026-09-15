@@ -33,22 +33,70 @@ func TestKind_GroupVersionKind(t *testing.T) {
 }
 
 func TestKind_GroupVersionResource(t *testing.T) {
-	// nil Schema
-	k := Kind{}
-	gvr := k.GroupVersionResource()
-	assert.Equal(t, schema.GroupVersionResource{}, gvr)
-	// Values
-	k.Schema = NewSimpleSchema("group", "version", &UntypedObject{}, &UntypedList{}, WithPlural("plural"))
-	gvr = k.GroupVersionResource()
-	assert.Equal(t, schema.GroupVersionResource{
-		Group:    k.Schema.Group(),
-		Version:  k.Schema.Version(),
-		Resource: k.Schema.Plural(),
-	}, gvr)
+	tests := []struct {
+		name     string
+		kind     string
+		plural   string
+		resource string
+	}{
+		{
+			name:     "lowercase plural",
+			kind:     "Widget",
+			plural:   "widgets",
+			resource: "widgets",
+		},
+		{
+			name:     "mixed-case plural is lowercased",
+			kind:     "Widget",
+			plural:   "WidgetItems",
+			resource: "widgetitems",
+		},
+		{
+			name:     "missing plural falls back to lowercased kind",
+			kind:     "WidgetItem",
+			resource: "widgetitems",
+		},
+	}
 
-	require.Equal(t, gvr, Kind{
-		Schema: k.Schema,
-		Codecs: k.Codecs,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resourceSchema := NewSimpleSchema(
+				"group",
+				"version",
+				&UntypedObject{},
+				&UntypedList{},
+				WithKind(tt.kind),
+			)
+			// NewSimpleSchema supplies a default plural, so set the field directly to
+			// exercise Kind's behavior when a Schema returns an empty plural.
+			resourceSchema.plural = tt.plural
+			kind := Kind{
+				Schema: resourceSchema,
+			}
+
+			expected := schema.GroupVersionResource{
+				Group:    "group",
+				Version:  "version",
+				Resource: tt.resource,
+			}
+			assert.Equal(t, expected, kind.GroupVersionResource())
+		})
+	}
+
+	t.Run("nil schema", func(t *testing.T) {
+		assert.Equal(t, schema.GroupVersionResource{}, Kind{}.GroupVersionResource())
+	})
+
+	kind := Kind{Schema: NewSimpleSchema(
+		"group",
+		"version",
+		&UntypedObject{},
+		&UntypedList{},
+		WithKind("Widget"),
+	)}
+	require.Equal(t, kind.GroupVersionResource(), Kind{
+		Schema: kind.Schema,
+		Codecs: kind.Codecs,
 	}.GroupVersionResource(), "GVR does not require pointer")
 }
 
