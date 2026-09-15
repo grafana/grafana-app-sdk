@@ -162,7 +162,7 @@ func (m *ManifestData) APIGroup() metav1.APIGroup {
 // Validate requires at least one API version and validates kind consistency,
 // route conflicts, role bindings, the preferred version, and embedding configuration.
 //
-//nolint:gocognit,funlen
+//nolint:gocognit,funlen,gocyclo
 func (m *ManifestData) Validate() error {
 	if len(m.Versions) == 0 {
 		return errors.New("no API versions are defined")
