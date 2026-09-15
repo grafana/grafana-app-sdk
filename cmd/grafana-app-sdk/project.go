@@ -143,7 +143,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 		cueModName = strings.Join(cueModSegments, "/")
 	}
 	cueModPath := filepath.Join(path, "kinds/cue.mod", "module.cue")
-	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName))
+	cueModContents := fmt.Appendf(nil, "module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName)
 	if _, err = os.Stat(cueModPath); err == nil && !overwrite {
 		if promptYN(fmt.Sprintf("CUE module already exists at '%s', overwrite?", cueModPath), true) {
 			err = writeFile(cueModPath, cueModContents)
@@ -228,7 +228,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 func projectWriteGoModule(path, moduleName string, overwrite bool) (string, error) {
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
-	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.22\n", moduleName))
+	goModContents := fmt.Appendf(nil, "module %s\n\ngo 1.22\n", moduleName)
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {

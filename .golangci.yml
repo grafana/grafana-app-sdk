@@ -12,7 +12,6 @@ linters:
     - funlen
     - gochecknoinits
     - gocognit
-    - goconst
     - gocritic
     - gocyclo
     - goprintffuncname

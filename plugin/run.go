@@ -5,11 +5,12 @@ import (
 	"errors"
 	"sync"
 
+	"k8s.io/client-go/rest"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	backendlog "github.com/grafana/grafana-plugin-sdk-go/backend/log"
-	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -122,15 +123,12 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		runnerCancel()
 		runnerWait.Wait()
 	}()
-	runnerWait.Add(1)
-	go func() {
-		defer runnerWait.Done()
-
+	runnerWait.Go(func() {
 		err := runner.Run(runnerCtx)
 		if err != nil && !errors.Is(err, context.Canceled) {
 			backendlog.DefaultLogger.Error(err.Error())
 		}
-	}()
+	})
 
 	return manage(cfg.pluginID, cfg.appFunc, cfg.manageOpts)
 }

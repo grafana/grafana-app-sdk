@@ -565,7 +565,7 @@ func (t *TypedObject[Spec, Sub]) MarshalJSON() ([]byte, error) {
 	m["metadata"] = t.ObjectMeta
 	m["spec"] = t.Spec
 	v := reflect.ValueOf(t.Subresources)
-	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
 	typ := v.Type()

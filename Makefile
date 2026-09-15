@@ -36,7 +36,7 @@ check-go-version:
 		exit 1; \
 	fi
 
-LINTER_VERSION := 2.11.4
+LINTER_VERSION := 2.13.2
 LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint
@@ -44,7 +44,7 @@ lint: $(LINTER_BINARY)
 	$(LINTER_BINARY) run $(LINT_ARGS) $(SUBMODULES)
 
 $(LINTER_BINARY):
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN_DIR) v$(LINTER_VERSION)
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(BIN_DIR) v$(LINTER_VERSION)
 	@mv $(BIN_DIR)/golangci-lint $@
 
 BENCHSTAT_VERSION := latest
