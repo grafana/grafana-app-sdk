@@ -19,8 +19,7 @@ type Error struct {
 
 // FromError attempts to parse `err` into Error and falls back to `NewError` with 500 status code if it fails.
 func FromError(err error) Error {
-	var res Error
-	if errors.As(err, &res) {
+	if res, ok := errors.AsType[Error](err); ok {
 		return res
 	}
 

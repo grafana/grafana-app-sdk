@@ -27,7 +27,7 @@ func NewTypedStore[ObjectType Object](kind Kind, generator ClientGenerator) (*Ty
 	providedType := reflect.TypeFor[ObjectType]()
 	// Get the actual underlying types
 	// Do both at once, because there needs to be casting ability between them
-	for schemaType.Kind() == reflect.Ptr && providedType.Kind() == reflect.Ptr {
+	for schemaType.Kind() == reflect.Pointer && providedType.Kind() == reflect.Pointer {
 		schemaType = schemaType.Elem()
 		providedType = providedType.Elem()
 	}

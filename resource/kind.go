@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -87,10 +88,16 @@ func (k Kind) GroupVersionResource() schema.GroupVersionResource {
 	if k.Schema == nil {
 		return schema.GroupVersionResource{}
 	}
+
+	resource := strings.ToLower(k.Plural())
+	if resource == "" {
+		resource = strings.ToLower(k.Kind()) + "s"
+	}
+
 	return schema.GroupVersionResource{
 		Group:    k.Group(),
 		Version:  k.Version(),
-		Resource: k.Plural(),
+		Resource: resource,
 	}
 }
 
@@ -117,7 +124,7 @@ func (*JSONCodec) Write(out io.Writer, in Object) error {
 		Name:                       in.GetName(),
 		GenerateName:               in.GetGenerateName(),
 		Namespace:                  in.GetNamespace(),
-		SelfLink:                   in.GetSelfLink(),
+		SelfLink:                   in.GetSelfLink(), // nolint: staticcheck
 		UID:                        in.GetUID(),
 		ResourceVersion:            in.GetResourceVersion(),
 		Generation:                 in.GetGeneration(),

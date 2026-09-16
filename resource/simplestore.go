@@ -219,7 +219,7 @@ func (s *SimpleStore[T]) cast(obj Object) (*TypedObject[T, MapSubresourceCatalog
 			Name:                       obj.GetName(),
 			GenerateName:               obj.GetGenerateName(),
 			Namespace:                  obj.GetNamespace(),
-			SelfLink:                   obj.GetSelfLink(),
+			SelfLink:                   obj.GetSelfLink(), // nolint: staticcheck
 			UID:                        obj.GetUID(),
 			ResourceVersion:            obj.GetResourceVersion(),
 			Generation:                 obj.GetGeneration(),
