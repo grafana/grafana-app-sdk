@@ -52,7 +52,7 @@ func TestListMap_AddItem(t *testing.T) {
 
 	t.Run("concurrent adds, different keys", func(t *testing.T) {
 		m := NewListMap[string]()
-		final := xsync.NewMapOf[[]string]()
+		final := xsync.NewMap[string, []string]()
 		wg := sync.WaitGroup{}
 		perGoroutine := 1000
 

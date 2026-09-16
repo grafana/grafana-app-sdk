@@ -27,12 +27,12 @@ var dynamicPatcherCodecs = map[resource.KindEncoding]resource.Codec{
 type DynamicPatcher struct {
 	clients resource.ClientGenerator
 
-	preferred  *xsync.MapOf[string, metav1.APIResource] // keyed by schema.GroupKind.String()
-	lastUpdate *xsync.MapOf[string, time.Time]          // keyed by API group
+	preferred  *xsync.Map[string, metav1.APIResource] // keyed by schema.GroupKind.String()
+	lastUpdate *xsync.Map[string, time.Time]          // keyed by API group
 	// kindCache memoizes the synthesized Kind per (groupKind, preferred version) so hot-path
 	// Get/Patch calls don't allocate a new Schema + codec map each invocation. Keyed by
 	// "groupKind.String()/version".
-	kindCache *xsync.MapOf[string, resource.Kind]
+	kindCache *xsync.Map[string, resource.Kind]
 
 	updateInterval time.Duration
 	group          singleflight.Group
@@ -50,9 +50,9 @@ func NewDynamicPatcher(clients resource.ClientGenerator, cacheUpdateInterval tim
 	}
 	return &DynamicPatcher{
 		clients:        clients,
-		preferred:      xsync.NewMapOf[metav1.APIResource](),
-		lastUpdate:     xsync.NewMapOf[time.Time](),
-		kindCache:      xsync.NewMapOf[resource.Kind](),
+		preferred:      xsync.NewMap[string, metav1.APIResource](),
+		lastUpdate:     xsync.NewMap[string, time.Time](),
+		kindCache:      xsync.NewMap[string, resource.Kind](),
 		updateInterval: cacheUpdateInterval,
 	}, nil
 }
@@ -117,7 +117,7 @@ func (d *DynamicPatcher) clientForPreferred(groupKind schema.GroupKind) (resourc
 		return nil, nil, err
 	}
 	cacheKey := groupKind.String() + "/" + preferred.Version
-	kind, _ := d.kindCache.LoadOrCompute(cacheKey, func() resource.Kind {
+	kind, _ := d.kindCache.LoadOrCompute(cacheKey, func() (resource.Kind, bool) {
 		scope := resource.NamespacedScope
 		if !preferred.Namespaced {
 			scope = resource.ClusterScope
@@ -127,7 +127,7 @@ func (d *DynamicPatcher) clientForPreferred(groupKind schema.GroupKind) (resourc
 			resource.WithPlural(preferred.Name),
 			resource.WithScope(scope),
 		)
-		return resource.Kind{Schema: sch, Codecs: dynamicPatcherCodecs}
+		return resource.Kind{Schema: sch, Codecs: dynamicPatcherCodecs}, false
 	})
 	client, err := d.clients.ClientFor(kind)
 	if err != nil {
