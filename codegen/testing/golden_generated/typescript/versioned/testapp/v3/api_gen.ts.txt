@@ -3,15 +3,22 @@
  */
 import { createApi } from '@reduxjs/toolkit/query/react';
 
-import { createBaseQuery, getAPIBaseURL, type ListMeta, type Patch, type Status } from '../../createBaseQuery.gen';
-import { type TestKind } from './testkind_object_gen';
+import { createBaseQuery, getAPIBaseURL, getClusterAPIBaseURL, type ListMeta, type Patch, type Status } from '../../createBaseQuery.gen';
+import { type TestKind } from '../../testkind/v3/testkind_object_gen';
+import { type CreateReconcileRequestResponse } from './testkind_createreconcilerequest_response.gen';
+import { type CreateReconcileRequestRequestBody } from './testkind_createreconcilerequest_request_body.gen';
+import { type GetTestKindSearchResultResponseBody } from './testkind_gettestkindsearchresult_response.gen';
+import { type GetTestKindSearchResultRequestParams } from './testkind_gettestkindsearchresult_request_params.gen';
+import { type CreateFoobarResponseBody } from './createfoobar_response.gen';
+import { type CreateFoobarRequestBody } from './createfoobar_request_body.gen';
 
 export const API_GROUP = 'testapp.ext.grafana.app' as const;
-export const API_VERSION = 'v2' as const;
+export const API_VERSION = 'v3' as const;
 export const BASE_URL = getAPIBaseURL(API_GROUP, API_VERSION);
+export const CLUSTER_URL = getClusterAPIBaseURL(API_GROUP, API_VERSION);
 
 export const api = createApi({
-    reducerPath: 'testKindAPIv2',
+    reducerPath: 'testappExtAPIv3',
     baseQuery: createBaseQuery(BASE_URL),
     endpoints: () => ({}),
 });
@@ -168,17 +175,36 @@ const injectedRtkApi = api
                 }),
                 invalidatesTags: ['TestKind'],
             }),
+            createReconcileRequest: build.mutation<CreateReconcileRequestApiResponse, CreateReconcileRequestApiArg>({
+                query: (queryArg) => ({
+                    url: `/testkinds/${queryArg.name}/reconcile`,
+                    method: 'POST',
+                    body: queryArg.body,
+                }),
+                invalidatesTags: ['TestKind'],
+            }),
+            getTestKindSearchResult: build.query<GetTestKindSearchResultApiResponse, GetTestKindSearchResultApiArg>({
+                query: (queryArg) => ({
+                    url: `/testkinds/${queryArg.name}/search`,
+                    params: {
+                        q: queryArg.q,
+                        limit: queryArg.limit,
+                        offset: queryArg.offset,
+                    },
+                }),
+                providesTags: ['TestKind'],
+            }),
+            createFoobar: build.mutation<CreateFoobarApiResponse, CreateFoobarApiArg>({
+                query: (queryArg) => ({
+                    url: `/foobar`,
+                    method: 'POST',
+                    body: queryArg.body,
+                }),
+            }),
         }),
         overrideExisting: false,
     });
 export { injectedRtkApi as generatedAPI };
-
-export type TestKindList = {
-    apiVersion?: string;
-    kind?: string;
-    metadata: ListMeta;
-    items: TestKind[];
-};
 
 type PrettyParam = {
     /** If 'true', then the output is pretty printed. */
@@ -231,6 +257,12 @@ type DeleteParams = PrettyParam & {
     propagationPolicy?: string;
 };
 
+export type TestKindList = {
+    apiVersion?: string;
+    kind?: string;
+    metadata: ListMeta;
+    items: TestKind[];
+};
 export type ListTestKindApiResponse = /** status 200 OK */ TestKindList;
 export type ListTestKindApiArg =
     | (ListParams & {
@@ -274,6 +306,21 @@ export type ReplaceTestKindStatusApiResponse = ReplaceTestKindApiResponse;
 export type ReplaceTestKindStatusApiArg = ReplaceTestKindApiArg;
 export type UpdateTestKindStatusApiResponse = UpdateTestKindApiResponse;
 export type UpdateTestKindStatusApiArg = UpdateTestKindApiArg;
+export type CreateReconcileRequestApiResponse = /** status 200 OK */ CreateReconcileRequestResponse;
+export type CreateReconcileRequestApiArg = {
+    /** name of the TestKind */
+    name: string;
+    body: CreateReconcileRequestRequestBody;
+};
+export type GetTestKindSearchResultApiResponse = /** status 200 OK */ GetTestKindSearchResultResponseBody & { apiVersion?: string; kind?: string };
+export type GetTestKindSearchResultApiArg = GetTestKindSearchResultRequestParams & {
+    /** name of the TestKind */
+    name: string;
+};
+export type CreateFoobarApiResponse = /** status 200 OK */ CreateFoobarResponseBody & { apiVersion?: string; kind?: string };
+export type CreateFoobarApiArg = {
+    body: CreateFoobarRequestBody;
+};
 
 export const {
     useListTestKindQuery,
@@ -289,4 +336,8 @@ export const {
     useLazyGetTestKindStatusQuery,
     useReplaceTestKindStatusMutation,
     useUpdateTestKindStatusMutation,
+    useCreateReconcileRequestMutation,
+    useGetTestKindSearchResultQuery,
+    useLazyGetTestKindSearchResultQuery,
+    useCreateFoobarMutation,
 } = injectedRtkApi;

@@ -1,0 +1,18 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+export interface GetTestKindSearchResultResponseBody {
+	items: {
+		name: string;
+		score: number;
+		list: {
+			foo: string;
+		}[];
+	}[];
+	total: number;
+}
+
+export const defaultGetTestKindSearchResultResponseBody = (): GetTestKindSearchResultResponseBody => ({
+	items: [],
+	total: 0,
+});
+

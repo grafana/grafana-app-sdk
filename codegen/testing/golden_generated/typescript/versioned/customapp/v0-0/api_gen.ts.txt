@@ -3,15 +3,16 @@
  */
 import { createApi } from '@reduxjs/toolkit/query/react';
 
-import { createBaseQuery, getAPIBaseURL, type ListMeta, type Patch, type Status } from '../../createBaseQuery.gen';
-import { type CustomKind } from './customkind_object_gen';
+import { createBaseQuery, getAPIBaseURL, getClusterAPIBaseURL, type ListMeta, type Patch, type Status } from '../../createBaseQuery.gen';
+import { type CustomKind } from '../../customkind/v0-0/customkind_object_gen';
 
 export const API_GROUP = 'customapp.ext.grafana.app' as const;
 export const API_VERSION = 'v0-0' as const;
 export const BASE_URL = getAPIBaseURL(API_GROUP, API_VERSION);
+export const CLUSTER_URL = getClusterAPIBaseURL(API_GROUP, API_VERSION);
 
 export const api = createApi({
-    reducerPath: 'customKindAPIv0-0',
+    reducerPath: 'customappExtAPIv0-0',
     baseQuery: createBaseQuery(BASE_URL),
     endpoints: () => ({}),
 });
@@ -173,13 +174,6 @@ const injectedRtkApi = api
     });
 export { injectedRtkApi as generatedAPI };
 
-export type CustomKindList = {
-    apiVersion?: string;
-    kind?: string;
-    metadata: ListMeta;
-    items: CustomKind[];
-};
-
 type PrettyParam = {
     /** If 'true', then the output is pretty printed. */
     pretty?: string;
@@ -231,6 +225,12 @@ type DeleteParams = PrettyParam & {
     propagationPolicy?: string;
 };
 
+export type CustomKindList = {
+    apiVersion?: string;
+    kind?: string;
+    metadata: ListMeta;
+    items: CustomKind[];
+};
 export type ListCustomKindApiResponse = /** status 200 OK */ CustomKindList;
 export type ListCustomKindApiArg =
     | (ListParams & {

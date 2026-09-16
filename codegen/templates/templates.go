@@ -152,24 +152,65 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 	return templateTSType.Execute(out, metadata)
 }
 
-// TSRTKAPITemplateMetadata is the metadata required by the TypeScript RTK Query API template
+// TSRTKAPITemplateMetadata is the metadata required by the TypeScript RTK Query API template,
+// which generates one API per app manifest version.
 type TSRTKAPITemplateMetadata struct {
+	Group   string
+	Version string
+	// ReducerPath is the redux reducer path, e.g. "playlistAPIv1"
+	ReducerPath string
+	// BaseQueryImport is the import path of the shared createBaseQuery module relative to the generated file
+	BaseQueryImport string
+	Kinds           []TSRTKKind
+	// Routes are version-level custom routes not attached to a kind
+	Routes []TSRTKRoute
+	// TypeImports are the generated custom route type files to import
+	TypeImports []TSRTKTypeImport
+}
+
+// TSRTKKind describes one kind served by the API
+type TSRTKKind struct {
 	TypeName    string
 	Kind        string
 	MachineName string
 	Plural      string
-	Group       string
-	Version     string
-	Namespaced  bool
-	// FilePrefix is prepended to sibling generated file names (used when generating only the current version)
-	FilePrefix string
-	// RuntimeImport is the import path of the shared createBaseQuery module relative to the generated file
-	RuntimeImport string
-	// APIName is the lowerCamel kind name used for the reducerPath, e.g. "playlistAPI"
-	APIName string
 	// ArgName is the lowerCamel kind name used as the request body field in mutation args, e.g. "playlist"
-	ArgName      string
+	ArgName string
+	// ObjectImport is the import path of the kind's generated object type
+	ObjectImport string
+	// URLPrefix is empty for namespaced kinds (served under BASE_URL), or "${CLUSTER_URL}" for cluster-scoped kinds
+	URLPrefix    string
 	Subresources []SubresourceMetadata
+	Routes       []TSRTKRoute
+}
+
+// TSRTKRoute describes one custom route
+type TSRTKRoute struct {
+	// Name is the operation name, e.g. "createReconcileRequest"
+	Name string
+	// TypeName is the exported name, e.g. "CreateReconcileRequest"
+	TypeName string
+	Method   string
+	// Path is the route path with path parameters rewritten to `${queryArg.<param>}`
+	Path string
+	// URLPrefix is used for version-level routes: empty (namespaced) or "${CLUSTER_URL}" (cluster)
+	URLPrefix string
+	IsGet     bool
+	IsQuery   bool
+	HasBody   bool
+	HasArgs   bool
+	// Params are the query parameter names
+	Params []string
+	// ParamsType, BodyType and ResponseType are TypeScript type names; ParamsType and BodyType may be empty
+	ParamsType   string
+	BodyType     string
+	ResponseType string
+}
+
+// TSRTKTypeImport is a generated type file imported by the API file
+type TSRTKTypeImport struct {
+	TypeName string
+	File     string
 }
 
 // WriteTSBaseQuery writes the shared createBaseQuery module used by all generated RTK Query APIs

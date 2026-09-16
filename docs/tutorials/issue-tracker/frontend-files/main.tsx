@@ -7,7 +7,7 @@ import {
     useCreateIssueMutation,
     useReplaceIssueMutation,
     useDeleteIssueMutation,
-} from '../generated/issue/v1alpha1/issue_api_gen';
+} from '../generated/issuetrackerproject/v1alpha1/api_gen';
 import { PluginPage } from '@grafana/runtime';
 
 // This is used for the create new issue form

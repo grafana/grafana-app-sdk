@@ -1,0 +1,16 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+export interface Spec {
+	stringField: string;
+	intField: number;
+	timeField: string;
+	boolField: boolean;
+}
+
+export const defaultSpec = (): Spec => ({
+	stringField: "",
+	intField: 0,
+	timeField: "",
+	boolField: false,
+});
+

@@ -1,5 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
-import { api as issueAPI } from './generated/issue/v1alpha1/issue_api_gen';
+import { api as issueAPI } from './generated/issuetrackerproject/v1alpha1/api_gen';
 
 export const store = configureStore({
     reducer: {

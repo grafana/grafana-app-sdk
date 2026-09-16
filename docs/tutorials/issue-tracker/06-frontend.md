@@ -6,7 +6,7 @@ We're still going to keep our front-end pretty simple, so all we're going to do 
 
 ## API Client
 
-`grafana-app-sdk generate` already gave us an [RTK Query](https://redux-toolkit.js.org/rtk-query/overview) API alongside the generated types: `plugin/src/generated/issue/v1alpha1/issue_api_gen.ts`. It has the same shape as the clients core Grafana generates for its own APIs in `@grafana/api-clients`, with a React hook per operation:
+`grafana-app-sdk generate` already gave us an [RTK Query](https://redux-toolkit.js.org/rtk-query/overview) API alongside the generated types: `plugin/src/generated/issuetrackerproject/v1alpha1/api_gen.ts` (one API per app version, covering every kind and custom route in it). It has the same shape as the clients core Grafana generates for its own APIs in `@grafana/api-clients`, with a React hook per operation:
 
 ```TypeScript
 const { data, isLoading } = useListIssueQuery({ labelSelector: 'team=foo' });

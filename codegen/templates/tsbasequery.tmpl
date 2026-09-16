@@ -18,6 +18,8 @@ export const getAPIBaseURL = (group: string, version: string) =>
 /** Base URL of a cluster-scoped app platform API group version. */
 export const getClusterAPIBaseURL = (group: string, version: string) => `/apis/${group}/${version}` as const;
 
+// createBaseQuery prefixes relative request URLs with baseURL. URLs already starting with '/apis/'
+// (cluster-scoped kinds and routes) are sent as-is.
 export function createBaseQuery(baseURL: string): BaseQueryFn<RequestOptions> {
     return async function backendSrvBaseQuery(requestOptions: RequestOptions) {
         try {
@@ -35,7 +37,7 @@ export function createBaseQuery(baseURL: string): BaseQueryFn<RequestOptions> {
             const { data: responseData, ...meta } = await lastValueFrom(
                 getBackendSrv().fetch({
                     ...requestOptions,
-                    url: baseURL + requestOptions.url,
+                    url: requestOptions.url.startsWith('/apis/') ? requestOptions.url : baseURL + requestOptions.url,
                     method: requestOptions.method ?? 'GET',
                     showErrorAlert: requestOptions.showErrorAlert ?? false,
                     data: requestOptions.body,

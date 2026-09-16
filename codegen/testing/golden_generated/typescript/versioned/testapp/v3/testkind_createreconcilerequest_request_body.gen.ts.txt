@@ -1,0 +1,11 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+export interface CreateReconcileRequestRequestBody {
+	force: boolean;
+	reason?: string;
+}
+
+export const defaultCreateReconcileRequestRequestBody = (): CreateReconcileRequestRequestBody => ({
+	force: false,
+});
+
