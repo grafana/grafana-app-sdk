@@ -103,8 +103,20 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 8)
+		// 2 kind versions x (object, spec, metadata, status) + 2 version APIs + shared createBaseQuery
+		assert.Len(t, files, 11)
 		// Check content against the golden files
+		compareToGolden(t, files, "typescript/versioned")
+	})
+
+	t.Run("custom routes", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+		files, err := TypeScriptResourceGenerator().Generate(kinds...)
+		require.NoError(t, err)
+		// v2 and v3 have TypeScript enabled: 2 x (object, spec, metadata, status) + 2 version APIs
+		// + 3 custom routes in v3 (response each, 2 bodies, 1 params) + shared createBaseQuery
+		assert.Len(t, files, 17)
 		compareToGolden(t, files, "typescript/versioned")
 	})
 }

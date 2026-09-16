@@ -837,7 +837,44 @@ func addComponentFrontend(projectRootPath string, manifestGroup string) error {
 	if err != nil {
 		return err
 	}
+	err = addPluginDependencies(filepath.Join(projectRootPath, "plugin/package.json"), rtkDependencies)
+	if err != nil {
+		return err
+	}
 	return os.Remove("./tmp-tmp-app")
+}
+
+// rtkDependencies are required by the generated RTK Query APIs in the plugin frontend.
+var rtkDependencies = map[string]string{
+	"@reduxjs/toolkit": "^2.0.0",
+	"react-redux":      "^9.0.0",
+}
+
+// addPluginDependencies adds any missing entries in deps to the "dependencies" of the package.json at path.
+func addPluginDependencies(path string, deps map[string]string) error {
+	b, err := os.ReadFile(path) //nolint:gosec
+	if err != nil {
+		return err
+	}
+	pkg := make(map[string]any)
+	if err = json.Unmarshal(b, &pkg); err != nil {
+		return err
+	}
+	existing, ok := pkg["dependencies"].(map[string]any)
+	if !ok {
+		existing = make(map[string]any)
+	}
+	for name, version := range deps {
+		if _, ok := existing[name]; !ok {
+			existing[name] = version
+		}
+	}
+	pkg["dependencies"] = existing
+	out, err := json.MarshalIndent(pkg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return writeFile(path, append(out, '\n'))
 }
 
 func moveFiles(srcDir, destDir string) error {
