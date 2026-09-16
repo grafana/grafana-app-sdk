@@ -289,29 +289,8 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 		for _, key := range src.MapKeys() {
 			srcKeyVal := src.MapIndex(key)
 			dstKeyVal := reflect.New(srcKeyVal.Type()).Elem()
-			if srcKeyVal.Kind() == reflect.Pointer && srcKeyVal.Elem().Kind() == reflect.Struct {
-				// Copy using CopyObjectInto
-				if srcKeyVal.IsNil() {
-					dstKeyVal = reflect.New(srcKeyVal.Elem().Type())
-				} else {
-					// find the type of the pointer, then copy that
-					typ := srcKeyVal.Type().Elem()
-					dstPtr := reflect.New(typ).Interface()
-					err := CopyObjectInto(dstPtr, srcKeyVal.Interface())
-					if err != nil {
-						return err
-					}
-					dstKeyVal = reflect.ValueOf(dstPtr)
-				}
-			} else if srcKeyVal.Kind() == reflect.Struct {
-				// Copy using CopyObjectInto
-				dst := reflect.New(srcKeyVal.Type()).Interface()
-				if err := CopyObjectInto(dst, srcKeyVal.Interface()); err != nil {
-					return err
-				}
-				dstKeyVal = reflect.ValueOf(dst).Elem()
-			} else {
-				dstKeyVal.Set(srcKeyVal)
+			if err := copyReflectValueInto(dstKeyVal, srcKeyVal); err != nil {
+				return err
 			}
 			dstMap.SetMapIndex(key, dstKeyVal)
 		}
@@ -323,10 +302,24 @@ func copyReflectValueInto(dst reflect.Value, src reflect.Value) error {
 			}
 			return nil
 		}
-		// Copy slice elements
+		// Copy each element recursively: a new slice alone still shares nested maps, slices, and pointers.
 		dstSlice := reflect.MakeSlice(src.Type(), src.Len(), src.Cap())
-		reflect.Copy(dstSlice, src)
+		for i := 0; i < src.Len(); i++ {
+			if err := copyReflectValueInto(dstSlice.Index(i), src.Index(i)); err != nil {
+				return err
+			}
+		}
 		dst.Set(dstSlice)
+	case reflect.Interface:
+		if src.IsNil() {
+			dst.SetZero()
+			return nil
+		}
+		dstValue := reflect.New(src.Elem().Type()).Elem()
+		if err := copyReflectValueInto(dstValue, src.Elem()); err != nil {
+			return err
+		}
+		dst.Set(dstValue)
 	default:
 		// Just copy the value over
 		dst.Set(src)
