@@ -20,6 +20,41 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+// RESTOptionsGetterForResource is an optional interface a generic.RESTOptionsGetter
+// may implement to be told which group+version+resource's storage is being built.
+//
+// GetRESTOptions only receives a GroupResource, which carries no version, and the
+// runtime.Object passed alongside it comes from the store's NewFunc, whose
+// TypeMeta is empty for a typed kind. A storage backend that configures itself
+// per resource therefore cannot tell two versions of one kind apart. A getter
+// implementing this interface is asked first, and answers with the getter to use
+// for that exact GroupVersionResource.
+//
+// Implementing it is optional: a getter that does not is used unchanged.
+type RESTOptionsGetterForResource interface {
+	generic.RESTOptionsGetter
+
+	// ForResource returns the RESTOptionsGetter to build gvr's storage with.
+	// Returning nil selects the receiver, so an implementation may decline a
+	// resource it has nothing specific to say about.
+	ForResource(gvr schema.GroupVersionResource) generic.RESTOptionsGetter
+}
+
+// restOptionsGetterForResource narrows optsGetter to gvr where it supports it,
+// and returns it unchanged where it does not.
+func restOptionsGetterForResource(
+	optsGetter generic.RESTOptionsGetter, gvr schema.GroupVersionResource,
+) generic.RESTOptionsGetter {
+	forResource, ok := optsGetter.(RESTOptionsGetterForResource)
+	if !ok {
+		return optsGetter
+	}
+	if scoped := forResource.ForResource(gvr); scoped != nil {
+		return scoped
+	}
+	return optsGetter
+}
+
 func newGenericStoreForKind(scheme *runtime.Scheme, kind resource.Kind, optsGetter generic.RESTOptionsGetter) (*genericregistry.Store, error) {
 	strategy := newStrategy(scheme, kind)
 
