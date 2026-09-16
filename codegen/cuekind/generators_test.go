@@ -103,7 +103,8 @@ func TestTypeScriptResourceGenerator(t *testing.T) {
 		files, err := TypeScriptResourceGenerator().Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 8)
+		// 2 kind versions x (object, spec, metadata, status, api) + shared createBaseQuery
+		assert.Len(t, files, 11)
 		// Check content against the golden files
 		compareToGolden(t, files, "typescript/versioned")
 	})

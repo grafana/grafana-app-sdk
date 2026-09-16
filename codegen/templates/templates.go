@@ -60,6 +60,8 @@ var (
 	templateThemaCodec, _             = template.ParseFS(templates, "themacodec.tmpl")
 	templateWrappedType, _            = template.ParseFS(templates, "wrappedtype.tmpl")
 	templateTSType, _                 = template.ParseFS(templates, "tstype.tmpl")
+	templateTSBaseQuery, _            = template.ParseFS(templates, "tsbasequery.tmpl")
+	templateTSRTKAPI, _               = template.ParseFS(templates, "tsrtkapi.tmpl")
 	templateConstants, _              = template.ParseFS(templates, "constants.tmpl")
 	templateGoResourceClient, _       = template.ParseFS(templates, "resourceclient.tmpl")
 	templateGoVersionedRouteClient, _ = template.ParseFS(templates, "client.tmpl")
@@ -148,6 +150,36 @@ type ResourceTSTemplateMetadata struct {
 
 func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) error {
 	return templateTSType.Execute(out, metadata)
+}
+
+// TSRTKAPITemplateMetadata is the metadata required by the TypeScript RTK Query API template
+type TSRTKAPITemplateMetadata struct {
+	TypeName    string
+	Kind        string
+	MachineName string
+	Plural      string
+	Group       string
+	Version     string
+	Namespaced  bool
+	// FilePrefix is prepended to sibling generated file names (used when generating only the current version)
+	FilePrefix string
+	// RuntimeImport is the import path of the shared createBaseQuery module relative to the generated file
+	RuntimeImport string
+	// APIName is the lowerCamel kind name used for the reducerPath, e.g. "playlistAPI"
+	APIName string
+	// ArgName is the lowerCamel kind name used as the request body field in mutation args, e.g. "playlist"
+	ArgName      string
+	Subresources []SubresourceMetadata
+}
+
+// WriteTSBaseQuery writes the shared createBaseQuery module used by all generated RTK Query APIs
+func WriteTSBaseQuery(out io.Writer) error {
+	return templateTSBaseQuery.Execute(out, nil)
+}
+
+// WriteTSRTKAPI writes an RTK Query API for a kind
+func WriteTSRTKAPI(metadata TSRTKAPITemplateMetadata, out io.Writer) error {
+	return templateTSRTKAPI.Execute(out, metadata)
 }
 
 // SchemaMetadata is the metadata required by the Resource Schema template

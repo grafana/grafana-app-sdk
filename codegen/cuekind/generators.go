@@ -92,7 +92,7 @@ func TypeScriptResourceGenerator() *codejen.JennyList[codegen.AppManifest] {
 	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
 	g.Append(&jennies.TypeScriptTypes{
 		Depth: 1,
-	}, &jennies.TypeScriptResourceTypes{})
+	}, &jennies.TypeScriptResourceTypes{}, &jennies.TypeScriptRTKAPI{}, &jennies.TypeScriptBaseQuery{})
 	return g
 }
 

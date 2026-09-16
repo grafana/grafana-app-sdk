@@ -14,6 +14,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 type TypeScriptResourceTypes struct {
@@ -217,4 +218,89 @@ func generateTypescriptBytes(v cue.Value, packageName string, name string, tsCon
 	}
 
 	return files[0].Data, nil
+}
+
+// TypeScriptRTKAPI generates an RTK Query API per kind, matching the shape of the generated clients in
+// grafana/grafana's @grafana/api-clients package. The APIs share the createBaseQuery module written by TypeScriptBaseQuery.
+type TypeScriptRTKAPI struct {
+	GenerateOnlyCurrent bool
+}
+
+func (*TypeScriptRTKAPI) JennyName() string { return "TypeScriptRTKAPI" }
+
+func (t *TypeScriptRTKAPI) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
+	files := make(codejen.Files, 0)
+	kinds := codegen.VersionedKinds(appManifest)
+	if t.GenerateOnlyCurrent {
+		kinds = codegen.PreferredVersionKinds(appManifest)
+	}
+	for version, kind := range kinds {
+		if !kind.Codegen.TS.Enabled {
+			continue
+		}
+		lowerKind := strings.ToLower(kind.Kind[:1]) + kind.Kind[1:]
+		metadata := templates.TSRTKAPITemplateMetadata{
+			TypeName:      exportField(kind.Kind),
+			Kind:          kind.Kind,
+			MachineName:   kind.MachineName,
+			Plural:        kind.PluralMachineName,
+			Group:         appManifest.Properties().FullGroup,
+			Version:       version.Name(),
+			Namespaced:    kind.Scope != string(resource.ClusterScope),
+			RuntimeImport: "../../createBaseQuery.gen",
+			APIName:       lowerKind + "API",
+			ArgName:       lowerKind,
+			Subresources:  make([]templates.SubresourceMetadata, 0),
+		}
+		relativePath := fmt.Sprintf("%s/%s/%s_api_gen.ts", kind.MachineName, version.Name(), kind.MachineName)
+		if t.GenerateOnlyCurrent {
+			metadata.FilePrefix = strings.ToLower(kind.MachineName) + "_"
+			metadata.RuntimeImport = "../createBaseQuery.gen"
+			relativePath = fmt.Sprintf("%s/%s_api_gen.ts", kind.MachineName, kind.MachineName)
+		}
+		it, err := kind.Schema.Fields()
+		if err != nil {
+			return nil, err
+		}
+		for it.Next() {
+			if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+				continue
+			}
+			metadata.Subresources = append(metadata.Subresources, templates.SubresourceMetadata{
+				TypeName: exportField(it.Selector().String()),
+				JSONName: it.Selector().String(),
+			})
+		}
+		b := &bytes.Buffer{}
+		if err := templates.WriteTSRTKAPI(metadata, b); err != nil {
+			return nil, err
+		}
+		files = append(files, codejen.File{RelativePath: relativePath, Data: b.Bytes(), From: []codejen.NamedJenny{t}})
+	}
+	return files, nil
+}
+
+// TypeScriptBaseQuery writes the single shared createBaseQuery.gen.ts module the generated RTK Query APIs import.
+// It is a no-op when no kind has TypeScript codegen enabled.
+type TypeScriptBaseQuery struct{}
+
+func (*TypeScriptBaseQuery) JennyName() string { return "TypeScriptBaseQuery" }
+
+func (t *TypeScriptBaseQuery) Generate(manifests ...codegen.AppManifest) (*codejen.File, error) {
+	enabled := false
+	for _, m := range manifests {
+		for _, kind := range codegen.VersionedKinds(m) {
+			if kind.Codegen.TS.Enabled {
+				enabled = true
+			}
+		}
+	}
+	if !enabled {
+		return nil, nil
+	}
+	b := &bytes.Buffer{}
+	if err := templates.WriteTSBaseQuery(b); err != nil {
+		return nil, err
+	}
+	return &codejen.File{RelativePath: "createBaseQuery.gen.ts", Data: b.Bytes(), From: []codejen.NamedJenny{t}}, nil
 }
