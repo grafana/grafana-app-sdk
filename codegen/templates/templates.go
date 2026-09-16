@@ -195,10 +195,10 @@ type TSRTKRoute struct {
 	Path string
 	// URLPrefix is used for version-level routes: empty (namespaced) or "${CLUSTER_URL}" (cluster)
 	URLPrefix string
-	IsGet     bool
-	IsQuery   bool
-	HasBody   bool
-	HasArgs   bool
+	// IsQuery is true for GET routes, which become RTK queries; all other methods become mutations
+	IsQuery bool
+	HasBody bool
+	HasArgs bool
 	// Params are the query parameter names
 	Params []string
 	// ParamsType, BodyType and ResponseType are TypeScript type names; ParamsType and BodyType may be empty

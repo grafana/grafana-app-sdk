@@ -264,7 +264,7 @@ func (t *TypeScriptRTKAPI) generateVersion(appManifest codegen.AppManifest, vers
 		dir = appManifest.Properties().Group
 		metadata.BaseQueryImport = "../createBaseQuery.gen"
 		kindImport = func(kind codegen.VersionedKind) string {
-			return fmt.Sprintf("../%s/%s_%s_object_gen", kind.MachineName, strings.ToLower(kind.MachineName), kind.MachineName)
+			return fmt.Sprintf("../%s/%s_object_gen", kind.MachineName, kind.MachineName)
 		}
 	}
 
@@ -370,7 +370,6 @@ func (t *TypeScriptRTKAPI) routes(routeMap map[string]map[string]codegen.CustomR
 				Method:    strings.ToUpper(method),
 				Path:      pathParamRegex.ReplaceAllString(routePath, "${queryArg.$1}"),
 				URLPrefix: urlPrefix,
-				IsGet:     strings.ToUpper(method) == http.MethodGet,
 				IsQuery:   strings.ToUpper(method) == http.MethodGet,
 			}
 			// Response

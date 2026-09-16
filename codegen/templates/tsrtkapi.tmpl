@@ -183,7 +183,7 @@ const injectedRtkApi = api
             {{ .Name }}: build.{{ if .IsQuery }}query{{ else }}mutation{{ end }}<{{ .TypeName }}ApiResponse, {{ .TypeName }}ApiArg>({
                 query: ({{ if .HasArgs }}queryArg{{ end }}) => ({
                     url: `{{ $kind.URLPrefix }}/{{ $kind.Plural }}/${queryArg.name}{{ .Path }}`,
-{{- if not .IsGet }}
+{{- if not .IsQuery }}
                     method: '{{ .Method }}',
 {{- end }}
 {{- if .HasBody }}
@@ -205,7 +205,7 @@ const injectedRtkApi = api
             {{ .Name }}: build.{{ if .IsQuery }}query{{ else }}mutation{{ end }}<{{ .TypeName }}ApiResponse, {{ .TypeName }}ApiArg>({
                 query: ({{ if .HasArgs }}queryArg{{ end }}) => ({
                     url: `{{ .URLPrefix }}{{ .Path }}`,
-{{- if not .IsGet }}
+{{- if not .IsQuery }}
                     method: '{{ .Method }}',
 {{- end }}
 {{- if .HasBody }}
