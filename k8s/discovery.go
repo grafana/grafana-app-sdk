@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v4"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -25,7 +25,7 @@ var _ resource.DiscoveryClient = (*DiscoveryClient)(nil)
 type DiscoveryClient struct {
 	defaultKubeConfig  rest.Config
 	kubeConfigProvider func(kind resource.Kind, kubeConfig rest.Config) rest.Config
-	clients            *xsync.MapOf[string, *discovery.DiscoveryClient]
+	clients            *xsync.Map[string, *discovery.DiscoveryClient]
 }
 
 // NewDiscoveryClient returns a new DiscoveryClient. If kubeConfigProvider is non-nil, it is used
@@ -36,7 +36,7 @@ func NewDiscoveryClient(cfg rest.Config, kubeConfigProvider func(kind resource.K
 	return &DiscoveryClient{
 		defaultKubeConfig:  cfg,
 		kubeConfigProvider: kubeConfigProvider,
-		clients:            xsync.NewMapOf[*discovery.DiscoveryClient](),
+		clients:            xsync.NewMap[string, *discovery.DiscoveryClient](),
 	}
 }
 
@@ -122,20 +122,20 @@ func (d *DiscoveryClient) getClient(group string) (*discovery.DiscoveryClient, e
 		return c, nil
 	}
 	// Compute holds the shard lock for `group`, so concurrent first-time callers for the same
-	// group won't both construct a discovery client. On failure we return delete=true so the
+	// group won't both construct a discovery client. On failure we return xsync.DeleteOp so the
 	// failure isn't cached and a subsequent call gets to retry.
 	var createErr error
-	c, _ := d.clients.Compute(group, func(existing *discovery.DiscoveryClient, loaded bool) (*discovery.DiscoveryClient, bool) {
+	c, _ := d.clients.Compute(group, func(existing *discovery.DiscoveryClient, loaded bool) (*discovery.DiscoveryClient, xsync.ComputeOp) {
 		if loaded {
-			return existing, false
+			return existing, xsync.CancelOp
 		}
 		cfg := d.kubeConfigForGroup(group)
 		newClient, err := discovery.NewDiscoveryClientForConfig(&cfg)
 		if err != nil {
 			createErr = err
-			return nil, true
+			return nil, xsync.DeleteOp
 		}
-		return newClient, false
+		return newClient, xsync.UpdateOp
 	})
 	if createErr != nil {
 		return nil, fmt.Errorf("error creating discovery client for group %q: %w", group, createErr)
