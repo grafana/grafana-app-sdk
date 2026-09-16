@@ -52,7 +52,7 @@ const injectedRtkApi = api
                 query: (queryArg) => ({
                     url: `{{ .URLPrefix }}/{{ .Plural }}`,
                     method: 'POST',
-                    body: queryArg.{{ .ArgName }},
+                    body: { ...queryArg.{{ .ArgName }}, apiVersion: `${API_GROUP}/${API_VERSION}`, kind: '{{ .Kind }}' },
                     params: {
                         pretty: queryArg.pretty,
                         dryRun: queryArg.dryRun,
@@ -99,7 +99,7 @@ const injectedRtkApi = api
                 query: (queryArg) => ({
                     url: `{{ .URLPrefix }}/{{ .Plural }}/${queryArg.name}`,
                     method: 'PUT',
-                    body: queryArg.{{ .ArgName }},
+                    body: { ...queryArg.{{ .ArgName }}, apiVersion: `${API_GROUP}/${API_VERSION}`, kind: '{{ .Kind }}' },
                     params: {
                         pretty: queryArg.pretty,
                         dryRun: queryArg.dryRun,
@@ -153,7 +153,7 @@ const injectedRtkApi = api
                 query: (queryArg) => ({
                     url: `{{ $kind.URLPrefix }}/{{ $kind.Plural }}/${queryArg.name}/{{ .JSONName }}`,
                     method: 'PUT',
-                    body: queryArg.{{ $kind.ArgName }},
+                    body: { ...queryArg.{{ $kind.ArgName }}, apiVersion: `${API_GROUP}/${API_VERSION}`, kind: '{{ $kind.Kind }}' },
                     params: {
                         pretty: queryArg.pretty,
                         dryRun: queryArg.dryRun,

@@ -44,7 +44,7 @@ const injectedRtkApi = api
                 query: (queryArg) => ({
                     url: `/customkinds`,
                     method: 'POST',
-                    body: queryArg.customKind,
+                    body: { ...queryArg.customKind, apiVersion: `${API_GROUP}/${API_VERSION}`, kind: 'CustomKind' },
                     params: {
                         pretty: queryArg.pretty,
                         dryRun: queryArg.dryRun,
@@ -91,7 +91,7 @@ const injectedRtkApi = api
                 query: (queryArg) => ({
                     url: `/customkinds/${queryArg.name}`,
                     method: 'PUT',
-                    body: queryArg.customKind,
+                    body: { ...queryArg.customKind, apiVersion: `${API_GROUP}/${API_VERSION}`, kind: 'CustomKind' },
                     params: {
                         pretty: queryArg.pretty,
                         dryRun: queryArg.dryRun,
@@ -144,7 +144,7 @@ const injectedRtkApi = api
                 query: (queryArg) => ({
                     url: `/customkinds/${queryArg.name}/status`,
                     method: 'PUT',
-                    body: queryArg.customKind,
+                    body: { ...queryArg.customKind, apiVersion: `${API_GROUP}/${API_VERSION}`, kind: 'CustomKind' },
                     params: {
                         pretty: queryArg.pretty,
                         dryRun: queryArg.dryRun,
