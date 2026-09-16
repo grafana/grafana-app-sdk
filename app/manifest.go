@@ -130,10 +130,43 @@ func (m *ManifestData) IsEmpty() bool {
 	return m.AppName == "" && m.Group == "" && len(m.Versions) == 0 && len(m.Embed) == 0 && m.PreferredVersion == "" && m.ExtraPermissions == nil && m.Operator == nil
 }
 
-// Validate validates the ManifestData to ensure that the kind data across all Versions is consistent
+// Manifest data defines a set of API versions
+func (m *ManifestData) APIGroup() metav1.APIGroup {
+	g := metav1.APIGroup{
+		Name:     m.Group,
+		Versions: make([]metav1.GroupVersionForDiscovery, len(m.Versions)),
+	}
+	for i, v := range m.Versions {
+		g.Versions[i] = metav1.GroupVersionForDiscovery{
+			GroupVersion: fmt.Sprintf("%s/%s", g.Name, v.Name),
+			Version:      v.Name,
+		}
+		if v.Name == m.PreferredVersion {
+			g.PreferredVersion = g.Versions[i]
+		}
+	}
+
+	// When the preferred version is not specified, pick the last non-alpha version
+	if g.PreferredVersion.Version == "" && len(g.Versions) > 0 {
+		for _, v := range slices.Backward(g.Versions) {
+			if !strings.Contains(v.Version, "alpha") {
+				g.PreferredVersion = v
+				return g
+			}
+		}
+		g.PreferredVersion = g.Versions[len(g.Versions)-1]
+	}
+	return g
+}
+
+// Validate requires at least one API version and validates kind consistency,
+// route conflicts, role bindings, the preferred version, and embedding configuration.
 //
-//nolint:gocognit,funlen
+//nolint:gocognit,funlen,gocyclo
 func (m *ManifestData) Validate() error {
+	if len(m.Versions) == 0 {
+		return errors.New("no API versions are defined")
+	}
 	type kindData struct {
 		kind         string
 		plural       string
@@ -143,11 +176,15 @@ func (m *ManifestData) Validate() error {
 		folderScoped bool
 		version      string
 	}
+	hasPreferredVersion := false
 	var errs error
 	kinds := make(map[string]kindData)
 	for _, version := range m.Versions {
 		namespacedRoutes := make(map[string]struct{})
 		clusterRoutes := make(map[string]struct{})
+		if version.Name == m.PreferredVersion {
+			hasPreferredVersion = true
+		}
 		for _, kind := range version.Kinds {
 			if kind.Scope == "Cluster" {
 				clusterRoutes[kind.Resource()] = struct{}{}
@@ -240,6 +277,11 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
+
+	if !hasPreferredVersion && m.PreferredVersion != "" {
+		errs = multierror.Append(errs, fmt.Errorf("unknown preferred version: %q", m.PreferredVersion))
+	}
+
 	return multierror.Append(errs, m.validateEmbed()).ErrorOrNil()
 }
 

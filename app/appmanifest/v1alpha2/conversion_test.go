@@ -157,7 +157,7 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 			AppName: "foo",
 		}
 		md, err := v1alpha2.ToManifestData()
-		require.NoError(t, err)
+		require.EqualError(t, err, "no API versions are defined")
 		assert.Equal(t, app.ManifestData{
 			AppName:  "foo",
 			Versions: []app.ManifestVersion{},
@@ -182,7 +182,8 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		var roleKind2Unmarshaled any
 		assert.Nil(t, json.Unmarshal(roleKind2Json, &roleKind2Unmarshaled))
 		v1alpha1 := AppManifestSpec{
-			AppName: "foo",
+			AppName:  "foo",
+			Versions: []AppManifestManifestVersion{{Name: "v1"}},
 			Roles: map[string]AppManifestRole{
 				"foo": {
 					Title:       "Foo",
@@ -195,8 +196,13 @@ func TestAppManifestSpec_ToManifestData(t *testing.T) {
 		require.NoError(t, err)
 		permSet := string(roleKind1.PermissionSet)
 		assert.Equal(t, app.ManifestData{
-			AppName:  "foo",
-			Versions: []app.ManifestVersion{},
+			AppName:          "foo",
+			PreferredVersion: "v1",
+			Versions: []app.ManifestVersion{{
+				Name:   "v1",
+				Served: true,
+				Kinds:  []app.ManifestVersionKind{},
+			}},
 			Roles: map[string]app.ManifestRole{
 				"foo": {
 					Title:       "Foo",
