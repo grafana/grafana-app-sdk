@@ -1110,6 +1110,12 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 			Nullable:    sch.Value.Nullable,
 		},
 	}
+	// The kubernetes OpenAPI types have no field for `const`, so write it out as a one-value
+	// `enum`, which means the same thing. Without this, a fixed value - like the one that tells
+	// two `oneOf` branches apart - would disappear here with no warning.
+	if sch.Value.Const != nil && len(resSchema.Enum) == 0 {
+		resSchema.Enum = []any{sch.Value.Const}
+	}
 	// Differing types between k8s and openapi3
 	if sch.Value.MinLength != 0 {
 		ml := convertUint64(sch.Value.MinLength)
@@ -1339,6 +1345,11 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		AllOf:                make([]*openapi3.SchemaRef, 0),
 		OneOf:                make([]*openapi3.SchemaRef, 0),
 		AnyOf:                make([]*openapi3.SchemaRef, 0),
+	}
+
+	// CRD schemas can't express `const` either, so use a one-value `enum` here too.
+	if sch.Value.Const != nil && len(result.Enum) == 0 {
+		result.Enum = []any{sch.Value.Const}
 	}
 
 	// Fix additionalProperties being an empty object for what kubernetes CRD's expect (using the `x-kubernetes-preserve-unknown-fields` extension)
