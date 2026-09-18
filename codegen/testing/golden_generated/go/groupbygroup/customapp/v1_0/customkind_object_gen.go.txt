@@ -352,15 +352,3 @@ func (s *CustomKindSpec) DeepCopy() *CustomKindSpec {
 func (s *CustomKindSpec) DeepCopyInto(dst *CustomKindSpec) {
 	resource.CopyObjectInto(dst, s)
 }
-
-// DeepCopy creates a full deep copy of CustomKindStatus
-func (s *CustomKindStatus) DeepCopy() *CustomKindStatus {
-	cpy := &CustomKindStatus{}
-	s.DeepCopyInto(cpy)
-	return cpy
-}
-
-// DeepCopyInto deep copies CustomKindStatus into another CustomKindStatus object
-func (s *CustomKindStatus) DeepCopyInto(dst *CustomKindStatus) {
-	resource.CopyObjectInto(dst, s)
-}
