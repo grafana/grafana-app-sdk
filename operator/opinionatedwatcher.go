@@ -289,35 +289,8 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 	logger := logging.FromContext(ctx).With("action", "update", "component", "OpinionatedWatcher", "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
 	logger.Debug("Handling update")
 
-	// Only fire off Update if the generation has changed (so skip subresource updates)
-	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
-		return nil
-	}
-
-	// TODO: finalizers part of object metadata?
 	oldFinalizers := o.getFinalizers(src)
 	newFinalizers := o.getFinalizers(tgt)
-	if !slices.Contains(newFinalizers, o.finalizer) && tgt.GetDeletionTimestamp() == nil {
-		// Either the add somehow snuck past us (unlikely), or the original AddFunc call failed, and should be retried.
-		// Either way, we need to try calling AddFunc
-		logger.Debug("Missing finalizer, calling Add")
-		err := o.addFunc(ctx, tgt)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("watcher add error: %s", err.Error()))
-			return err
-		}
-		// Add the finalizer (which also updates `new` inline)
-		logger.Debug("Successful call to Add, add the finalizer to the object", "finalizer", o.finalizer)
-		err = o.finalizerUpdater.ReplaceFinalizer(ctx, tgt, o.addPendingFinalizer, o.finalizer)
-		if err != nil {
-			span.SetStatus(codes.Error, fmt.Sprintf("watcher add finalizer error: %s", err.Error()))
-			if chk, ok := errors.AsType[FinalizerError](err); ok {
-				logger = logger.With("status", chk.Status().Code, "message", chk.Status().Message, "request", chk.PatchRequest())
-			}
-			logger.Error("error adding finalizer", "error", err.Error(), "kind", tgt.GroupVersionKind().Kind, "namespace", tgt.GetNamespace(), "name", tgt.GetName())
-			return fmt.Errorf("error adding finalizer: %w", err)
-		}
-	}
 
 	// Check if the deletion timestamp is non-nil.
 	// This denotes that the resource was deletes, but has one or more finalizers blocking it from actually deleting.
@@ -364,9 +337,32 @@ func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tg
 		return nil
 	}
 
+	if !slices.Contains(newFinalizers, o.finalizer) {
+		// Either the add event was missed, or the original AddFunc call failed. Use the
+		// complete Add path so the in-progress finalizer protects the side effect.
+		logger.Debug("Missing finalizer, calling Add")
+		return o.Add(ctx, tgt)
+	}
+
 	// Check if this was us adding our finalizer. If it was, we can ignore it.
 	if !slices.Contains(oldFinalizers, o.finalizer) && slices.Contains(newFinalizers, o.finalizer) {
 		logger.Debug("Finalizer add update, ignoring")
+		return nil
+	}
+
+	// A cache resync emits an update with the same resource version. It must call
+	// Sync even though the generation is unchanged so external state is verified.
+	if src.GetResourceVersion() != "" && src.GetResourceVersion() == tgt.GetResourceVersion() {
+		err := o.syncFunc(ctx, tgt)
+		if err != nil {
+			span.SetStatus(codes.Error, fmt.Sprintf("watcher sync error: %s", err.Error()))
+			return err
+		}
+		return nil
+	}
+
+	// Only fire off Update if the generation has changed (so skip subresource updates).
+	if tgt.GetGeneration() > 0 && src.GetGeneration() == tgt.GetGeneration() {
 		return nil
 	}
 
