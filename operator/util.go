@@ -4,23 +4,23 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v4"
 )
 
 // NewListMap returns a pointer to a new properly-initialized ListMap.
 // The type parameter is the type of elements in the lists
 func NewListMap[T any]() *ListMap[string, T] {
 	return &ListMap[string, T]{
-		internal: xsync.NewMapOf[[]T](),
-		muxes:    xsync.NewMapOf[*sync.RWMutex](),
+		internal: xsync.NewMap[string, []T](),
+		muxes:    xsync.NewMap[string, *sync.RWMutex](),
 	}
 }
 
 // ListMap is a map of lists which is thread-safe, with read and write distinction.
 // The underlying map and slice(s) are not directly accessible, as it would prevent the read/write safety.
 type ListMap[K comparable, V any] struct {
-	internal *xsync.MapOf[K, []V]
-	muxes    *xsync.MapOf[K, *sync.RWMutex]
+	internal *xsync.Map[K, []V]
+	muxes    *xsync.Map[K, *sync.RWMutex]
 }
 
 // ItemAt returns the item at index `index` in the list for the map key `key`.

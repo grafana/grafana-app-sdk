@@ -442,15 +442,14 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	for gv, kinds := range kindsByGV {
 		storage := map[string]rest.Storage{}
 		for _, kind := range kinds {
-			if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
-				Group:    gv.Group,
-				Version:  gv.Version,
-				Resource: kind.Kind.Plural(),
-			}) {
+			gvr := gv.WithResource(kind.Kind.Plural())
+			if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(gvr) {
 				logging.DefaultLogger.Info("Skipping resource based on provided ResourceConfig", "kind", kind.Kind, "version", gv.Version, "group", group)
 				continue
 			}
-			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
+			// The subresource and custom route storages below wrap s, so they
+			// inherit whatever options it resolved for this group+version+resource.
+			s, err := newGenericStoreForKind(r.scheme, kind.Kind, restOptionsGetterForResource(optsGetter, gvr))
 			if err != nil {
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
 			}

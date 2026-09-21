@@ -620,13 +620,23 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 	})
 }
 
+var _ GenericAPIServer = &MockGenericAPIServer{}
+
 type MockGenericAPIServer struct {
-	InstallAPIGroupFunc func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	InstallAPIGroupFunc       func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	RegisteredWebServicesFunc func() []*restful.WebService
 }
 
 func (m *MockGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error {
 	if m.InstallAPIGroupFunc != nil {
 		return m.InstallAPIGroupFunc(apiGroupInfo)
+	}
+	return nil
+}
+
+func (m *MockGenericAPIServer) RegisteredWebServices() []*restful.WebService {
+	if m.RegisteredWebServicesFunc != nil {
+		return m.RegisteredWebServicesFunc()
 	}
 	return nil
 }
