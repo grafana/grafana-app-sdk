@@ -18,12 +18,13 @@ import (
 // #SearchField.type and Grafana's SearchFieldType. TypeUnknown is the zero
 // value used for column shapes that have no dedicated type.
 const (
-	TypeUnknown = ""
-	TypeString  = "string"
-	TypeInt64   = "int64"
-	TypeDouble  = "double"
-	TypeBoolean = "boolean"
-	TypeDate    = "date"
+	TypeUnknown   = ""
+	TypeString    = "string"
+	TypeInt64     = "int64"
+	TypeDouble    = "double"
+	TypeBoolean   = "boolean"
+	TypeDate      = "date"
+	TypeStringMap = "stringMap"
 )
 
 // Capabilities identify what a search field can be used for at query time.
@@ -50,8 +51,10 @@ const (
 
 // allowedTypes maps a capability to the field types it may be declared on.
 //
-// A capability that is absent from this map (filter, retrieve, unranked) is
-// valid on any field type. The restricted capabilities are:
+// For scalar field types, a capability that is absent from this map (filter,
+// retrieve, unranked) is valid on any type. String maps are validated
+// separately because they support only filter and retrieve. The restricted
+// scalar capabilities are:
 //
 //   - text, partial, facet: rely on text or keyword analysis under the bleve
 //     text engine and have no meaning on numeric or boolean fields, so they
@@ -65,18 +68,43 @@ var allowedTypes = map[string][]string{
 	CapabilitySort:    {TypeString, TypeInt64, TypeDouble, TypeBoolean},
 }
 
+var stringMapCapabilities = []string{CapabilityFilter, CapabilityRetrieve}
+
+// Field contains the shape and capabilities needed for validation.
+type Field struct {
+	Type         string
+	Array        bool
+	Capabilities []string
+}
+
 // Validate reports whether every capability is allowed on the given field
 // type. It returns a joined error with one clear message per violation, or
 // nil when all capabilities are valid for the type.
 func Validate(fieldType string, capabilities []string) error {
+	return ValidateField(Field{Type: fieldType, Capabilities: capabilities})
+}
+
+// ValidateField reports whether the field's shape and capabilities are valid.
+func ValidateField(field Field) error {
 	var violations []error
-	for _, c := range capabilities {
+	if field.Type == TypeStringMap {
+		if field.Array {
+			violations = append(violations, errors.New("type \"stringMap\" cannot be an array"))
+		}
+		for _, c := range field.Capabilities {
+			if !slices.Contains(stringMapCapabilities, c) {
+				violations = append(violations, fmt.Errorf("capability %q is not supported for type %q", c, field.Type))
+			}
+		}
+		return errors.Join(violations...)
+	}
+	for _, c := range field.Capabilities {
 		types, restricted := allowedTypes[c]
 		if !restricted {
 			continue
 		}
-		if !slices.Contains(types, fieldType) {
-			violations = append(violations, fmt.Errorf("capability %q is not supported for type %q", c, fieldType))
+		if !slices.Contains(types, field.Type) {
+			violations = append(violations, fmt.Errorf("capability %q is not supported for type %q", c, field.Type))
 		}
 	}
 	return errors.Join(violations...)

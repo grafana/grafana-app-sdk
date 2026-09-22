@@ -50,3 +50,17 @@ func TestValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateField_StringMap(t *testing.T) {
+	if err := ValidateField(Field{Type: TypeStringMap, Capabilities: []string{CapabilityFilter, CapabilityRetrieve}}); err != nil {
+		t.Fatalf("valid string map: %v", err)
+	}
+	for _, capability := range []string{CapabilityText, CapabilityPartial, CapabilitySort, CapabilityFacet, CapabilityUnranked} {
+		if err := ValidateField(Field{Type: TypeStringMap, Capabilities: []string{capability}}); err == nil {
+			t.Fatalf("string map capability %q: expected error", capability)
+		}
+	}
+	if err := ValidateField(Field{Type: TypeStringMap, Array: true, Capabilities: []string{CapabilityFilter}}); err == nil {
+		t.Fatal("string map array: expected error")
+	}
+}

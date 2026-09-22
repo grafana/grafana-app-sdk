@@ -953,7 +953,8 @@
                                                                                 "int64",
                                                                                 "double",
                                                                                 "boolean",
-                                                                                "date"
+                                                                                "date",
+                                                                                "stringMap"
                                                                             ],
                                                                             "type": "string"
                                                                         }

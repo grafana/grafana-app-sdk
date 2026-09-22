@@ -542,7 +542,7 @@ type ManifestVersionKindSearchField struct {
 	// (for example "spec.email"). When empty, the field is populated by a custom
 	// document builder rather than read directly from the resource.
 	Path string `json:"path,omitempty" yaml:"path,omitempty"`
-	// Type is the value type of the field. One of: string, int64, double, boolean, date.
+	// Type is the value type of the field. One of: string, int64, double, boolean, date, stringMap.
 	Type string `json:"type" yaml:"type"`
 	// Array indicates that the field holds a list of values of the given type.
 	Array bool `json:"array,omitempty" yaml:"array,omitempty"`

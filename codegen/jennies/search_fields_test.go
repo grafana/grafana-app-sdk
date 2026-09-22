@@ -74,6 +74,8 @@ spec: {
 	enabled: bool
 	seen: string & time.Time
 	tags: [...string]
+	labels: {[string]: string}
+	badLabels: {[string]: int64}
 	nullablePanel?: { title: string, count: int64 } | null
 	nullablePanels?: [...({ title: string, count: int64 } | null)] | null
 }
@@ -102,6 +104,8 @@ spec: {
 		{name: "time as string (kept verbatim)", path: "spec.seen", declared: "string"},
 		{name: "string list element", path: "spec.tags", declared: "string"},
 		{name: "string list element as boolean", path: "spec.tags", declared: "boolean", wantErr: true},
+		{name: "string map", path: "spec.labels", declared: "stringMap"},
+		{name: "non-string map", path: "spec.badLabels", declared: "stringMap", wantErr: true},
 		{name: "string under nullable parent", path: "spec.nullablePanel.title", declared: "string"},
 		{name: "integer under nullable parent", path: "spec.nullablePanel.count", declared: "int64"},
 		{name: "integer under nullable parent as string", path: "spec.nullablePanel.count", declared: "string", wantErr: true},
@@ -165,6 +169,13 @@ func TestValidateSearchFieldCapabilities(t *testing.T) {
 		{name: "boolean with facet", field: codegen.SearchField{Type: "boolean", Capabilities: []string{"facet"}}, wantErr: true},
 		{name: "date with text", field: codegen.SearchField{Type: "date", Capabilities: []string{"text"}}, wantErr: true},
 		{name: "double with partial", field: codegen.SearchField{Type: "double", Capabilities: []string{"partial"}}, wantErr: true},
+		{name: "string map with filter and retrieve", field: codegen.SearchField{Type: "stringMap", Capabilities: []string{"filter", "retrieve"}}},
+		{name: "string map array", field: codegen.SearchField{Type: "stringMap", Array: true, Capabilities: []string{"filter"}}, wantErr: true},
+		{name: "string map with text", field: codegen.SearchField{Type: "stringMap", Capabilities: []string{"text"}}, wantErr: true},
+		{name: "string map with partial", field: codegen.SearchField{Type: "stringMap", Capabilities: []string{"partial"}}, wantErr: true},
+		{name: "string map with sort", field: codegen.SearchField{Type: "stringMap", Capabilities: []string{"sort"}}, wantErr: true},
+		{name: "string map with facet", field: codegen.SearchField{Type: "stringMap", Capabilities: []string{"facet"}}, wantErr: true},
+		{name: "string map with unranked", field: codegen.SearchField{Type: "stringMap", Capabilities: []string{"unranked"}}, wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -561,11 +561,12 @@ func (AppManifestManifestVersionKindScope) OpenAPIModelName() string {
 type AppManifestSearchFieldType string
 
 const (
-	AppManifestSearchFieldTypeString  AppManifestSearchFieldType = "string"
-	AppManifestSearchFieldTypeInt64   AppManifestSearchFieldType = "int64"
-	AppManifestSearchFieldTypeDouble  AppManifestSearchFieldType = "double"
-	AppManifestSearchFieldTypeBoolean AppManifestSearchFieldType = "boolean"
-	AppManifestSearchFieldTypeDate    AppManifestSearchFieldType = "date"
+	AppManifestSearchFieldTypeString    AppManifestSearchFieldType = "string"
+	AppManifestSearchFieldTypeInt64     AppManifestSearchFieldType = "int64"
+	AppManifestSearchFieldTypeDouble    AppManifestSearchFieldType = "double"
+	AppManifestSearchFieldTypeBoolean   AppManifestSearchFieldType = "boolean"
+	AppManifestSearchFieldTypeDate      AppManifestSearchFieldType = "date"
+	AppManifestSearchFieldTypeStringMap AppManifestSearchFieldType = "stringMap"
 )
 
 // OpenAPIModelName returns the OpenAPI model name for AppManifestSearchFieldType.

@@ -49,7 +49,7 @@ func validateSearchFields(vk codegen.VersionedKind, version string) error {
 // the single source of truth for which capabilities are valid on which field
 // types. Grafana's runtime validator consumes the same matrix.
 func validateSearchFieldCapabilities(sf codegen.SearchField) error {
-	return searchfields.Validate(sf.Type, sf.Capabilities)
+	return searchfields.ValidateField(searchfields.Field{Type: sf.Type, Array: sf.Array, Capabilities: sf.Capabilities})
 }
 
 type pathSegment struct {
@@ -191,6 +191,15 @@ func searchTypesForSchema(v cue.Value) []string {
 		return []string{"int64", "double"}
 	case cue.BoolKind:
 		return []string{"boolean"}
+	case cue.StructKind:
+		if elem := v.LookupPath(cue.MakePath(cue.AnyString)); elem.Exists() {
+			if elem.IncompleteKind() == cue.StringKind {
+				return []string{"stringMap"}
+			}
+			return []string{}
+		}
+	default:
+		return nil
 	}
 	return nil
 }

@@ -37,7 +37,7 @@ appManifestv1alpha2: appManifestKind & {
 			// document builder rather than read directly from the resource.
 			path?: string
 			// type is the value type of the field.
-			type: "string" | "int64" | "double" | "boolean" | "date"
+			type: "string" | "int64" | "double" | "boolean" | "date" | "stringMap"
 			// array indicates that the field holds a list of values of the given type.
 			array?: bool | *false
 			// capabilities lists what the field can be used for at query time, such as
