@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -31,26 +32,39 @@ func setupVersionCmd() {
 	versionCmd.Flags().BoolP("verbose", "v", false, "verbose output")
 }
 
+func resolveVersion() {
+	if version != "" {
+		return
+	}
+	// If this was installed via `go install`, we can get the version info from debug
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
+		version = info.Main.Version
+		source = "go install"
+		for _, s := range info.Settings {
+			if s.Key == "vcs.revision" {
+				commit = s.Value
+			}
+			if s.Key == "vcs.time" {
+				date = s.Value
+			}
+		}
+	} else {
+		version = "dev"
+		source = "unknown"
+	}
+}
+
+func releaseVersion() string {
+	resolveVersion()
+	if strings.HasPrefix(version, "v") && !strings.Contains(version, "devel") {
+		return version
+	}
+	return ""
+}
+
 //nolint:revive
 func getVersion(cmd *cobra.Command, args []string) error {
-	if version == "" {
-		// If this was installed via `go install`, we can get the version info from debug
-		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" {
-			version = info.Main.Version
-			source = "go install"
-			for _, s := range info.Settings {
-				if s.Key == "vcs.revision" {
-					commit = s.Value
-				}
-				if s.Key == "vcs.time" {
-					date = s.Value
-				}
-			}
-		} else {
-			version = "dev"
-			source = "unknown"
-		}
-	}
+	resolveVersion()
 	if verbose, _ := cmd.Flags().GetBool("verbose"); verbose {
 		fmt.Printf(versionOutputTemplateVerbose, version, source, commit, date)
 	} else {
