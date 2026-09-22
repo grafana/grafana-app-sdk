@@ -229,6 +229,9 @@ func projectWriteGoModule(path, moduleName string, overwrite bool) (string, erro
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
 	goModContents := fmt.Appendf(nil, "module %s\n\ngo 1.22\n", moduleName)
+	if v := releaseVersion(); v != "" {
+		goModContents = fmt.Appendf(goModContents, "\nrequire github.com/grafana/grafana-app-sdk %s\n", v)
+	}
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {

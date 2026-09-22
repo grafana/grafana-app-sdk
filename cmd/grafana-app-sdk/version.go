@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"runtime/debug"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -57,4 +58,15 @@ func getVersion(cmd *cobra.Command, args []string) error {
 		fmt.Printf(versionOutputTemplate, version)
 	}
 	return nil
+}
+
+func releaseVersion() string {
+	v := version
+	if info, ok := debug.ReadBuildInfo(); v == "" && ok {
+		v = info.Main.Version
+	}
+	if !strings.HasPrefix(v, "v") || strings.Contains(v, "+") {
+		return ""
+	}
+	return v
 }
