@@ -52,9 +52,15 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 			return err
 		}
 	case OTelConnTypeHTTP:
-		// TODO: better?
+		var opts []otlptracehttp.Option
+		if cfg.Host != "" {
+			opts = append(opts,
+				otlptracehttp.WithEndpoint(fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)),
+				otlptracehttp.WithInsecure(),
+			)
+		}
 		var err error
-		exp, err = otlptracehttp.New(context.Background())
+		exp, err = otlptracehttp.New(context.Background(), opts...)
 		if err != nil {
 			return err
 		}
