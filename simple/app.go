@@ -360,11 +360,9 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 	}
-<<<<<<< Updated upstream
 	if provider, ok := clients.(metrics.Provider); ok {
 		a.collectors = append(a.collectors, provider.PrometheusCollectors()...)
 	}
-=======
 	// Create admission chain metrics
 	mcfg := config.MetricsConfig
 	a.admissionLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -439,7 +437,6 @@ func NewApp(config AppConfig) (*App, error) {
 		a.customRouteLatency, a.customRouteTotal, a.customRouteInflight,
 	)
 
->>>>>>> Stashed changes
 	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
 	}
