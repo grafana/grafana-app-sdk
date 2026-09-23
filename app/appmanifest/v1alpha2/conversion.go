@@ -23,6 +23,12 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 		Group:          s.Group,
 		Versions:       make([]app.ManifestVersion, len(s.Versions)),
 	}
+	if s.Embed != nil {
+		data.Embed = make(map[string]app.ManifestResourceEmbed, len(s.Embed))
+		for resource, embed := range s.Embed {
+			data.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: int(embed.ReembedVersion)}
+		}
+	}
 	// Versions
 	for idx, version := range s.Versions {
 		v := app.ManifestVersion{
@@ -41,6 +47,10 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				SelectableFields: kind.SelectableFields,
 				Scope:            string(kind.Scope),
 			}
+			if kind.UserReadable != nil {
+				k.UserReadable = *kind.UserReadable
+			}
+			k.FolderScoped = kind.FolderScoped
 			if kind.Plural != nil {
 				k.Plural = strings.ToLower(*kind.Plural)
 			}
@@ -88,6 +98,51 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 						translated.Priority = &copied
 					}
 					k.AdditionalPrinterColumns[i] = translated
+				}
+			}
+			// SearchFields
+			if len(kind.SearchFields) > 0 {
+				k.SearchFields = make([]app.ManifestVersionKindSearchField, len(kind.SearchFields))
+				for i, sf := range kind.SearchFields {
+					translated := app.ManifestVersionKindSearchField{
+						Name:         sf.Name,
+						Type:         string(sf.Type),
+						Capabilities: make([]string, len(sf.Capabilities)),
+					}
+					for ci, c := range sf.Capabilities {
+						translated.Capabilities[ci] = string(c)
+					}
+					if sf.Path != nil {
+						translated.Path = *sf.Path
+					}
+					if sf.Array != nil {
+						translated.Array = *sf.Array
+					}
+					if sf.EmitZeroIfAbsent != nil {
+						translated.EmitZeroIfAbsent = *sf.EmitZeroIfAbsent
+					}
+					if sf.Description != nil {
+						translated.Description = *sf.Description
+					}
+					k.SearchFields[i] = translated
+				}
+			}
+			// Search endpoints
+			if kind.Search != nil {
+				k.Search = &app.ManifestVersionKindSearch{
+					Endpoint: kind.Search.Endpoint,
+					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
+				}
+			}
+			if kind.Embed != nil {
+				k.Embed = &app.ManifestVersionKindEmbed{}
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]app.ManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						k.Embed.Fields[i].Path = field.Path
+					}
 				}
 			}
 			// Schema
@@ -287,6 +342,12 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		Group:          data.Group,
 		Versions:       make([]AppManifestManifestVersion, 0),
 	}
+	if data.Embed != nil {
+		manifestSpec.Embed = make(map[string]AppManifestResourceEmbed, len(data.Embed))
+		for resource, embed := range data.Embed {
+			manifestSpec.Embed[resource] = AppManifestResourceEmbed{ReembedVersion: int64(embed.ReembedVersion)}
+		}
+	}
 	if data.PreferredVersion != "" {
 		manifestSpec.PreferredVersion = &data.PreferredVersion
 	}
@@ -303,6 +364,8 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Scope:            AppManifestManifestVersionKindScope(kind.Scope),
 				SelectableFields: kind.SelectableFields,
 				Conversion:       &kind.Conversion,
+				UserReadable:     &kind.UserReadable,
+				FolderScoped:     kind.FolderScoped,
 			}
 			if kind.Schema != nil {
 				k.Schemas = kind.Schema.AsOpenAPI3SchemasMap()
@@ -339,6 +402,49 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 						Description: &kind.AdditionalPrinterColumns[i].Description,
 						Priority:    kind.AdditionalPrinterColumns[i].Priority,
 						JsonPath:    kind.AdditionalPrinterColumns[i].JSONPath,
+					}
+				}
+			}
+			if len(kind.SearchFields) > 0 {
+				k.SearchFields = make([]AppManifestSearchField, len(kind.SearchFields))
+				for i, sf := range kind.SearchFields {
+					translated := AppManifestSearchField{
+						Name:         sf.Name,
+						Type:         AppManifestSearchFieldType(sf.Type),
+						Capabilities: make([]AppManifestSearchFieldCapabilities, len(sf.Capabilities)),
+					}
+					for ci, c := range sf.Capabilities {
+						translated.Capabilities[ci] = AppManifestSearchFieldCapabilities(c)
+					}
+					if sf.Path != "" {
+						translated.Path = &sf.Path
+					}
+					if sf.Array {
+						translated.Array = &sf.Array
+					}
+					if sf.EmitZeroIfAbsent {
+						translated.EmitZeroIfAbsent = &sf.EmitZeroIfAbsent
+					}
+					if sf.Description != "" {
+						translated.Description = &sf.Description
+					}
+					k.SearchFields[i] = translated
+				}
+			}
+			if kind.Search != nil {
+				k.Search = &AppManifestManifestVersionKindSearch{
+					Endpoint: kind.Search.Endpoint,
+					Trash:    kind.Search.Trash,
+					Hybrid:   kind.Search.Hybrid,
+				}
+			}
+			if kind.Embed != nil {
+				k.Embed = NewAppManifestManifestVersionKindEmbed()
+				if kind.Embed.Fields != nil {
+					k.Embed.Fields = make([]AppManifestManifestVersionKindEmbedField, len(kind.Embed.Fields))
+					for i, field := range kind.Embed.Fields {
+						k.Embed.Fields[i].Name = field.Name
+						k.Embed.Fields[i].Path = field.Path
 					}
 				}
 			}

@@ -229,7 +229,7 @@ Our grafana is now available at [grafana.k3d.localhost:9999](http://grafana.k3d.
 By default, the credentials to log in are `admin`/`admin`. You'll be prompted to change the password upon logging in (though you can skip this). 
 Note that if you do, you'll need to modify the cURL commands used later in this tutorial. You can also click `Skip` to avoid updating the password. 
 Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, 
-and we can now interact with our exposed API at [grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues](http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues).
+and we can now interact with our exposed API at [grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues](http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues).
 
 Right now, if I do a curl to our plugin list endpoint, we'll get back a response with an empty list:
 ```shell
@@ -242,7 +242,7 @@ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerpr
 $ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues | jq .
 {
   "kind": "IssueList",
-  "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
+  "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
   "metadata": {
     "resourceVersion": "1552"
   },
@@ -253,12 +253,12 @@ $ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetracker
 Our kinds are also available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
 Let's also list our issues that way:
 ```shell
-curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
+curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 ```
 ```shell
-$ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
+$ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 {
-  "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
+  "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
   "items": [],
   "kind": "IssueList",
   "metadata": {
@@ -270,19 +270,19 @@ $ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject
 We can see the output is nearly identical, as the plugin backend is just a proxy to the API server. From this point, we could use the plugin backend or API server API, 
 but seeing as the plugin backend will eventually be phased out of the default path, let's use the API server here, and create an Issue:
 ```shell
-curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
+curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.app/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 ```
 ```shell
-$ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.com/v1alpha1/namespaces/default/issues
+$ curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.app/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 {
-  "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
+  "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
   "kind": "Issue",
   "metadata": {
     "creationTimestamp": "2025-07-10T15:58:33Z",
     "generation": 1,
     "managedFields": [
       {
-        "apiVersion": "issuetrackerproject.ext.grafana.com/v1alpha1",
+        "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
         "fieldsType": "FieldsV1",
         "fieldsV1": {
           "f:spec": {
@@ -319,7 +319,7 @@ kubectl get issue test-issue -o yaml
 ```
 ```shell
 $ kubectl get issue test-issue -o yaml
-apiVersion: issuetrackerproject.ext.grafana.com/v1alpha1
+apiVersion: issuetrackerproject.ext.grafana.app/v1alpha1
 kind: Issue
 metadata:
   creationTimestamp: "2025-07-10T15:58:33Z"

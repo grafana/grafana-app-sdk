@@ -169,7 +169,7 @@ For our purposes, we care about the secureJSONData because we're going to store 
 > The backend (go) plugin code in your app is meant to serve as a proxy to the API server backend. 
 > This is legacy behavior that is still supported for a few specialized edge cases, 
 > but for most use-cases you will want to have your front-end talk directly to the grafana API server at 
-> `/apis/issuetrackerproject.ext.grafana.com/v1alpha1`, rather than via the `/api/plugins/issuetrackerproject-app/resources` endpoint
+> `/apis/issuetrackerproject.ext.grafana.app/v1alpha1`, rather than via the `/api/plugins/issuetrackerproject-app/resources` endpoint
 
 The code in `pkg/plugin` is split into two files: 
 * `plugin.go`, which defines our `Plugin` type we'll run everything from, which embeds a router and defines routes.

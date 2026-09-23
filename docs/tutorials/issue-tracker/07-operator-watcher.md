@@ -295,11 +295,11 @@ make local/down && make local/up
 ```
 Now, if you make a new issue, you'll see the `status.processedTimestamp` get updated.
 ```shell
-echo '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.com/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Foo","description":"bar","status":"open"}}' | kubectl create -f -
+echo '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.app/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Foo","description":"bar","status":"open"}}' | kubectl create -f -
 ```
 ```
 % kubectl get issue test-issue -oyaml
-apiVersion: issuetrackerproject.ext.grafana.com/v1alpha1
+apiVersion: issuetrackerproject.ext.grafana.app/v1alpha1
 kind: Issue
 metadata:
   creationTimestamp: "2025-07-10T16:21:45Z"

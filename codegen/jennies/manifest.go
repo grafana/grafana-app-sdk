@@ -10,21 +10,20 @@ import (
 	"maps"
 	"path/filepath"
 	"slices"
-	"sort"
 	"strings"
 
 	"cuelang.org/go/cue"
-	"github.com/grafana/codejen"
 	"golang.org/x/tools/imports"
 	"k8s.io/kube-openapi/pkg/spec3"
+	"k8s.io/kube-openapi/pkg/validation/spec"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha1"
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-
-	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
 const (
@@ -32,12 +31,22 @@ const (
 	VersionV1Alpha2 = "v1alpha2"
 )
 
+const (
+	keyAPIVersion = "apiVersion"
+	keyKind       = "kind"
+	keyMetadata   = "metadata"
+	keySpec       = "spec"
+)
+
 type ManifestOutputEncoder func(any) ([]byte, error)
 
 // ManifestGenerator generates a JSON/YAML App Manifest.
 type ManifestGenerator struct {
-	Encoder         ManifestOutputEncoder
-	FileExtension   string
+	Encoder       ManifestOutputEncoder
+	FileExtension string
+	// FileName overrides the generated manifest's filename. When empty, the filename
+	// defaults to "<appName>-manifest.<FileExtension>".
+	FileName        string
 	IncludeSchemas  bool
 	ManifestVersion string
 }
@@ -60,7 +69,7 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.app", manifestData.AppName)
 	}
 
 	// Whether or not the schema is CRD-compatible determines which version of AppManifest to use.
@@ -83,20 +92,24 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 
 	// Make into kubernetes format
 	output := make(map[string]any)
-	output["apiVersion"] = apiVersion.String()
-	output["kind"] = "AppManifest"
-	output["metadata"] = map[string]string{
+	output[keyAPIVersion] = apiVersion.String()
+	output[keyKind] = "AppManifest"
+	output[keyMetadata] = map[string]string{
 		"name": manifestData.AppName,
 	}
-	output["spec"] = manifestSpec
+	output[keySpec] = manifestSpec
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	out, err := m.Encoder(output)
 	if err != nil {
 		return nil, err
 	}
+	fileName := m.FileName
+	if fileName == "" {
+		fileName = fmt.Sprintf("%s-manifest.%s", manifestData.AppName, m.FileExtension)
+	}
 	files = append(files, codejen.File{
-		RelativePath: fmt.Sprintf("%s-manifest.%s", manifestData.AppName, m.FileExtension),
+		RelativePath: fileName,
 		Data:         out,
 		From:         []codejen.NamedJenny{m},
 	})
@@ -130,7 +143,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 			return nil, errors.New("all APIResource kinds must have a non-empty group")
 		}
 		// No kinds, make an assumption for the group name
-		manifestData.Group = fmt.Sprintf("%s.ext.grafana.com", manifestData.AppName)
+		manifestData.Group = fmt.Sprintf("%s.ext.grafana.app", manifestData.AppName)
 	}
 
 	buf := bytes.Buffer{}
@@ -160,7 +173,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 		}
 	}
 
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	files = append(files, codejen.File{
 		Data:         formatted,
 		RelativePath: filepath.Join(g.DestinationPath, fmt.Sprintf("%s_manifest.go", appManifest.Properties().Group)),
@@ -170,7 +183,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive,gocognit,funlen
+//nolint:revive,gocognit,funlen,gocyclo
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
@@ -182,6 +195,12 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 
 	manifest.AppName = m.Name()
 	manifest.Group = m.Properties().FullGroup
+	if m.Properties().Embed != nil {
+		manifest.Embed = make(map[string]app.ManifestResourceEmbed, len(m.Properties().Embed))
+		for resource, embed := range m.Properties().Embed {
+			manifest.Embed[resource] = app.ManifestResourceEmbed{ReembedVersion: embed.ReembedVersion}
+		}
+	}
 
 	hasAnyValidation := false
 	hasAnyMutation := false
@@ -264,19 +283,24 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	if m.Properties().OperatorURL != nil {
+	operatorURL, err := resolveOperatorURL(m.Properties())
+	if err != nil {
+		return nil, err
+	}
+	if operatorURL != nil {
+		conversionPath, validationPath, mutationPath := operatorWebhookPaths(m.Properties())
 		webhooks := app.ManifestOperatorWebhookProperties{}
 		if hasAnyConversion {
-			webhooks.ConversionPath = "/convert"
+			webhooks.ConversionPath = conversionPath
 		}
 		if hasAnyValidation {
-			webhooks.ValidationPath = "/validate"
+			webhooks.ValidationPath = validationPath
 		}
 		if hasAnyMutation {
-			webhooks.MutationPath = "/mutate"
+			webhooks.MutationPath = mutationPath
 		}
 		manifest.Operator = &app.ManifestOperatorInfo{
-			URL:      *m.Properties().OperatorURL,
+			URL:      *operatorURL,
 			Webhooks: &webhooks,
 		}
 	}
@@ -324,7 +348,47 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	return &manifest, validateManifestRoles(manifest, includeSchemas)
+	return &manifest, errors.Join(validateManifestRoles(manifest, includeSchemas), manifest.Validate())
+}
+
+// resolveOperatorURL determines the operator URL from the manifest properties.
+// The structured operator.url takes precedence over the deprecated operatorURL,
+// but if both are set they must have the same value. It returns nil if neither is set.
+func resolveOperatorURL(props codegen.AppManifestProperties) (*string, error) {
+	var structuredURL *string
+	if props.Operator != nil {
+		structuredURL = props.Operator.URL
+	}
+	deprecatedURL := props.OperatorURL //nolint:staticcheck // fallback support for the deprecated field is the purpose of this function
+
+	if structuredURL != nil && deprecatedURL != nil && *structuredURL != *deprecatedURL {
+		return nil, fmt.Errorf("operatorURL (%q) and operator.url (%q) are both set but differ; set only operator.url", *deprecatedURL, *structuredURL)
+	}
+	if structuredURL != nil {
+		return structuredURL, nil
+	}
+	return deprecatedURL, nil
+}
+
+// operatorWebhookPaths returns the conversion, validation, and mutation webhook paths
+// from the manifest properties, falling back to the default paths when not configured.
+func operatorWebhookPaths(props codegen.AppManifestProperties) (conversionPath, validationPath, mutationPath string) {
+	conversionPath = "/convert"
+	validationPath = "/validate"
+	mutationPath = "/mutate"
+	if props.Operator == nil || props.Operator.Webhooks == nil {
+		return conversionPath, validationPath, mutationPath
+	}
+	if props.Operator.Webhooks.ConversionPath != "" {
+		conversionPath = props.Operator.Webhooks.ConversionPath
+	}
+	if props.Operator.Webhooks.ValidationPath != "" {
+		validationPath = props.Operator.Webhooks.ValidationPath
+	}
+	if props.Operator.Webhooks.MutationPath != "" {
+		mutationPath = props.Operator.Webhooks.MutationPath
+	}
+	return conversionPath, validationPath, mutationPath
 }
 
 // joinKindNames joins a sorted list of kind plural names into a
@@ -392,7 +456,7 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 				return nil, codegen.AppManifestPropertiesRoleBindings{}, err
 			}
 			for it.Next() {
-				if it.Selector().String() == "spec" || it.Selector().String() == "metadata" {
+				if it.Selector().String() == keySpec || it.Selector().String() == keyMetadata {
 					continue
 				}
 				sr := fmt.Sprintf("%s/%s", k.Kind, it.Selector().String())
@@ -415,7 +479,7 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 	for k := range kindListMap {
 		kindList = append(kindList, k)
 	}
-	sort.Strings(kindList)
+	slices.Sort(kindList)
 	allKindsDesc := joinKindNames(kindList)
 	roles := map[string]codegen.AppManifestPropertiesRole{
 		readerKey: {
@@ -517,20 +581,68 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 	return errs
 }
 
+// manifestKindSearch translates a kind's search endpoint choices into the manifest.
+// Only choices that differ from the endpoint's default are written out, keeping the
+// manifest data clean; a nil pointer is interpreted as the default downstream.
+// /search and /trash default to served, /search/hybrid to not served.
+func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearch {
+	if search.Endpoint && search.Trash && !search.Hybrid {
+		return nil
+	}
+	out := &app.ManifestVersionKindSearch{}
+	if !search.Endpoint {
+		out.Endpoint = &search.Endpoint
+	}
+	if !search.Trash {
+		out.Trash = &search.Trash
+	}
+	if search.Hybrid {
+		out.Hybrid = &search.Hybrid
+	}
+	return out
+}
+
+// manifestKindEmbed translates a kind's embed configuration into the manifest.
+func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
+	if embed == nil {
+		return nil
+	}
+	fields := make([]app.ManifestVersionKindEmbedField, len(embed.Fields))
+	for i, field := range embed.Fields {
+		fields[i] = app.ManifestVersionKindEmbedField{Name: field.Name, Path: field.Path}
+	}
+	return &app.ManifestVersionKindEmbed{Fields: fields}
+}
+
 type simpleOpenAPIDoc[T any] struct {
 	Components struct {
 		Schemas map[string]T `json:"schemas" yaml:"schemas"`
 	} `json:"components" yaml:"components"`
 }
 
-//nolint:revive,funlen,unparam,gocognit
-func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) (app.ManifestVersionKind, error) {
-	mver := app.ManifestVersionKind{
-		Kind:       vk.Kind,
-		Plural:     vk.PluralName,
-		Scope:      vk.Scope,
-		Conversion: vk.Conversion,
+//nolint:revive,funlen,unparam,gocognit,gocyclo
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+	if err := validateSearchFields(vk, version); err != nil {
+		return app.ManifestVersionKind{}, err
 	}
+	if err := validateEmbedFields(vk, version); err != nil {
+		return app.ManifestVersionKind{}, err
+	}
+	mver := app.ManifestVersionKind{
+		Kind:         vk.Kind,
+		Plural:       vk.PluralName,
+		Scope:        vk.Scope,
+		UserReadable: vk.UserReadable,
+		Conversion:   vk.Conversion,
+	}
+	// FolderScoped defaults to true, so only carry an explicit opt-out (false) to keep
+	// the manifest data clean; a nil pointer is interpreted as folder-scoped downstream.
+	if !vk.FolderScoped {
+		folderScoped := vk.FolderScoped
+		mver.FolderScoped = &folderScoped
+	}
+	mver.Search = manifestKindSearch(vk.Search)
+	mver.Embed = manifestKindEmbed(vk.Embed)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {
@@ -607,7 +719,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		props := make(map[string]any)
 		for it.Next() {
 			field := it.Selector().String()
-			if field == "metadata" || field == "apiVersion" || field == "kind" { //nolint:goconst
+			if field == keyMetadata || field == keyAPIVersion || field == keyKind { //nolint:goconst
 				continue // skip metadata (and apiVersion/kind if they exist)
 			}
 			oapiBytes, err := cueToOpenAPIBytes(it.Value(), field)
@@ -634,7 +746,7 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		}
 		schemas[vk.Kind] = map[string]any{
 			"properties": props,
-			"required":   []string{"spec"},
+			"required":   []string{keySpec},
 		}
 		mver.Schema, err = app.VersionSchemaFromMap(map[string]any{
 			"components": map[string]any{
@@ -646,7 +758,27 @@ func processKindVersion(vk codegen.VersionedKind, _ string, includeSchema bool) 
 		}
 	}
 	mver.SelectableFields = vk.SelectableFields
+	mver.SearchFields = searchFieldsToManifest(vk.SearchFields)
 	return mver, nil
+}
+
+func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionKindSearchField {
+	if len(fields) == 0 {
+		return nil
+	}
+	out := make([]app.ManifestVersionKindSearchField, len(fields))
+	for i, f := range fields {
+		out[i] = app.ManifestVersionKindSearchField{
+			Name:             f.Name,
+			Path:             f.Path,
+			Type:             f.Type,
+			Array:            f.Array,
+			Capabilities:     f.Capabilities,
+			EmitZeroIfAbsent: f.EmitZeroIfAbsent,
+			Description:      f.Description,
+		}
+	}
+	return out
 }
 
 var validAdmissionOperations = map[codegen.KindAdmissionCapabilityOperation]app.AdmissionOperation{
@@ -678,6 +810,34 @@ func toKindPermissionActions(actions []string) []app.KindPermissionAction {
 		a[i] = app.KindPermissionAction(strings.ToLower(action))
 	}
 	return a
+}
+
+// openAPI extension keys used for the declared authz attributes of a custom route.
+const (
+	extDeclaredAuthzResource    = "x-grafana-declared-authz-resource"
+	extDeclaredAuthzSubresource = "x-grafana-declared-authz-subresource"
+	extDeclaredAuthzVerb        = "x-grafana-declared-authz-verb"
+)
+
+// customRouteExtensions returns the openAPI extensions for a custom route, which are the route's
+// explicitly-declared extensions plus any extensions derived from the route's authz section.
+// It returns nil if the route has no extensions.
+func customRouteExtensions(route codegen.CustomRoute) spec.Extensions {
+	if len(route.Extensions) == 0 && route.Authz == nil {
+		return nil
+	}
+	extensions := make(spec.Extensions, len(route.Extensions))
+	maps.Copy(extensions, route.Extensions)
+	if route.Authz != nil {
+		extensions[extDeclaredAuthzResource] = route.Authz.Resource
+		if route.Authz.Subresource != nil {
+			extensions[extDeclaredAuthzSubresource] = *route.Authz.Subresource
+		}
+		if route.Authz.Verb != nil {
+			extensions[extDeclaredAuthzVerb] = *route.Authz.Verb
+		}
+	}
+	return extensions
 }
 
 func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]codegen.CustomRoute) (spec3.PathProps, map[string]spec.SchemaProps, error) {
@@ -719,12 +879,7 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 				OperationId: operationID,
 			},
 		}
-		if len(sourceRoute.Extensions) > 0 {
-			targetOperation.Extensions = make(spec.Extensions)
-			for k, v := range sourceRoute.Extensions {
-				targetOperation.Extensions[k] = v
-			}
-		}
+		targetOperation.Extensions = customRouteExtensions(sourceRoute)
 
 		switch upperMethod {
 		case "GET":
@@ -766,7 +921,7 @@ func cueSchemaToParameters(v cue.Value) ([]*spec3.Parameter, error) {
 	for name := range schemaProps.Properties {
 		paramNames = append(paramNames, name)
 	}
-	sort.Strings(paramNames)
+	slices.Sort(paramNames)
 
 	parameters := make([]*spec3.Parameter, 0, len(paramNames))
 	// Iterate through sorted names
@@ -830,22 +985,22 @@ func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata code
 		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
 	if metadata.TypeMeta {
-		schemaProps.Properties["apiVersion"] = apiVersionPropSchema
-		schemaProps.Properties["kind"] = kindPropSchema
-		schemaProps.Required = append(schemaProps.Required, "apiVersion", "kind")
+		schemaProps.Properties[keyAPIVersion] = apiVersionPropSchema
+		schemaProps.Properties[keyKind] = kindPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyAPIVersion, keyKind)
 	}
 	if metadata.ObjectMeta {
-		if _, exists := schemaProps.Properties["metadata"]; exists {
+		if _, exists := schemaProps.Properties[keyMetadata]; exists {
 			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ObjectMeta")
 		}
-		schemaProps.Properties["metadata"] = objectMetaPropSchema
-		schemaProps.Required = append(schemaProps.Required, "metadata")
+		schemaProps.Properties[keyMetadata] = objectMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyMetadata)
 	} else if metadata.ListMeta {
-		if _, exists := schemaProps.Properties["metadata"]; exists {
+		if _, exists := schemaProps.Properties[keyMetadata]; exists {
 			return nil, nil, errors.New("response schema already contains 'metadata' key, cannot add ListMeta")
 		}
-		schemaProps.Properties["metadata"] = listMetaPropSchema
-		schemaProps.Required = append(schemaProps.Required, "metadata")
+		schemaProps.Properties[keyMetadata] = listMetaPropSchema
+		schemaProps.Required = append(schemaProps.Required, keyMetadata)
 	}
 
 	response := spec3.Response{
@@ -1035,12 +1190,12 @@ var (
 								SchemaProps: spec.SchemaProps{
 									Type: []string{"object"},
 									Properties: map[string]spec.Schema{
-										"apiVersion": {
+										keyAPIVersion: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
 										},
-										"kind": {
+										keyKind: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},
@@ -1066,7 +1221,7 @@ var (
 											},
 										},
 									},
-									Required: []string{"apiVersion", "kind", "name", "uid"},
+									Required: []string{keyAPIVersion, keyKind, "name", "uid"},
 								},
 							},
 						},
@@ -1102,7 +1257,7 @@ var (
 												Type: []string{"string"},
 											},
 										},
-										"apiVersion": {
+										keyAPIVersion: {
 											SchemaProps: spec.SchemaProps{
 												Type: []string{"string"},
 											},

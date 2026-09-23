@@ -2,10 +2,12 @@ package k8s
 
 import (
 	"errors"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
@@ -19,6 +21,7 @@ var _ resource.ClientGenerator = &ClientRegistry{}
 func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *ClientRegistry {
 	kubeCconfig.NegotiatedSerializer = &GenericNegotiatedSerializer{}
 	kubeCconfig.UserAgent = rest.DefaultKubernetesUserAgent()
+	kubeCconfig.Wrap(func(rt http.RoundTripper) http.RoundTripper { return otelhttp.NewTransport(rt) })
 
 	// Apply stream error handling if enabled
 	if clientConfig.EnableStreamErrorHandling {
@@ -66,6 +69,7 @@ func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *Clie
 type ClientRegistry struct {
 	clients          map[schema.GroupVersionKind]rest.Interface
 	crClients        map[schema.GroupVersion]rest.Interface
+	discoveryClient  *DiscoveryClient
 	cfg              rest.Config
 	clientConfig     ClientConfig
 	mutex            sync.Mutex
@@ -146,6 +150,19 @@ func (c *ClientRegistry) getCustomRouteClient(gv schema.GroupVersion) (rest.Inte
 	}
 	c.crClients[gv] = restClient
 	return restClient, nil
+}
+
+// DiscoveryClient returns a DiscoveryClient configured with the registry's kubeconfig and
+// KubeConfigProvider, so per-group routing (if any) is preserved. The DiscoveryClient is
+// cached on first call and reused, so its internal per-group client cache is shared across
+// callers.
+func (c *ClientRegistry) DiscoveryClient() (resource.DiscoveryClient, error) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+	if c.discoveryClient == nil {
+		c.discoveryClient = NewDiscoveryClient(c.cfg, c.clientConfig.KubeConfigProvider)
+	}
+	return c.discoveryClient, nil
 }
 
 func (c *ClientRegistry) getClientFor(sch resource.Kind) (rest.Interface, error) {

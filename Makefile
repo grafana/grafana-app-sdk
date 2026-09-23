@@ -12,6 +12,12 @@ COVOUT  	:= coverage.out
 GOVERSION   := $(shell awk '/^go / {print $$2}' go.mod)
 GOBINARY    := $(shell which go)
 
+# Keep all build tools on the Go version supported by the SDK. In particular,
+# golangci-lint cannot analyze packages from a newer Go standard library than
+# the one it was built with.
+GOTOOLCHAIN ?= go$(GOVERSION)
+export GOTOOLCHAIN
+
 BIN_DIR := target
 
 all: check-go-version deps lint test build
@@ -30,7 +36,7 @@ check-go-version:
 		exit 1; \
 	fi
 
-LINTER_VERSION := 2.5.0
+LINTER_VERSION := 2.13.2
 LINTER_BINARY  := $(BIN_DIR)/golangci-lint-$(LINTER_VERSION)
 
 .PHONY: lint
@@ -38,7 +44,7 @@ lint: $(LINTER_BINARY)
 	$(LINTER_BINARY) run $(LINT_ARGS) $(SUBMODULES)
 
 $(LINTER_BINARY):
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(BIN_DIR) v$(LINTER_VERSION)
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s -- -b $(BIN_DIR) v$(LINTER_VERSION)
 	@mv $(BIN_DIR)/golangci-lint $@
 
 BENCHSTAT_VERSION := latest

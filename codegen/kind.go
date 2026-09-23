@@ -7,6 +7,7 @@ import (
 // Kind is a common interface declaration for code generation.
 // Any type parser should be able to parse a kind into this definition to supply
 // to various common Jennies in the codegen package.
+//
 // Deprecated: use AppManifest instead
 type Kind interface {
 	Name() string
@@ -33,6 +34,8 @@ type KindProperties struct {
 	// This does not have to be the latest, but determines preference when generating code.
 	Current                string                      `json:"current"`
 	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`
@@ -91,6 +94,42 @@ type AdditionalPrinterColumn struct {
 	JSONPath    string  `json:"jsonPath"`
 }
 
+type SearchField struct {
+	Name             string   `json:"name"`
+	Path             string   `json:"path,omitempty"`
+	Type             string   `json:"type"`
+	Array            bool     `json:"array,omitempty"`
+	Capabilities     []string `json:"capabilities"`
+	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
+	Description      string   `json:"description,omitempty"`
+}
+
+// KindSearch controls which search endpoints are served for a kind.
+type KindSearch struct {
+	// Endpoint controls whether the kind serves the /search endpoint.
+	Endpoint bool `json:"endpoint"`
+	// Trash controls whether the kind serves the /trash endpoint.
+	Trash bool `json:"trash"`
+	// Hybrid controls whether the kind serves the /search/hybrid endpoint.
+	// Unlike the other two it is off unless the kind opts in.
+	Hybrid bool `json:"hybrid"`
+}
+
+// KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this configuration.
+type KindEmbed struct {
+	// Fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	Fields []EmbedField `json:"fields"`
+}
+
+// EmbedField supplies text for the embedding document without exposing a search field.
+type EmbedField struct {
+	Name string `json:"name"`
+	// Path supplies a string or string array from the resource and must not be empty.
+	Path string `json:"path"`
+}
+
 // CustomRouteRequest represents the request part of a custom route definition.
 type CustomRouteRequest struct {
 	Query cue.Value `json:"query,omitempty"`
@@ -103,6 +142,17 @@ type CustomRouteResponseMetadata struct {
 	ObjectMeta bool `json:"objectMeta"`
 }
 
+// CustomRouteAuthz represents the declared authorization attributes of a custom route.
+// Each set field is emitted as an openAPI extension on the generated route.
+type CustomRouteAuthz struct {
+	// Resource is the resource the authz check is performed against.
+	Resource string `json:"resource"`
+	// Subresource is the subresource the authz check is performed against, if applicable.
+	Subresource *string `json:"subresource,omitempty"`
+	// Verb is the verb the authz check is performed with, if it differs from the one implied by the route's method.
+	Verb *string `json:"verb,omitempty"`
+}
+
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
 	Name             string                      `json:"name"`
@@ -110,6 +160,9 @@ type CustomRoute struct {
 	Response         cue.Value                   `json:"response"`
 	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
 	Extensions       map[string]any              `json:"extensions,omitempty"`
+	// Authz is the optional declared authorization information for the route. If nil,
+	// no authz openAPI extensions are added to the generated route.
+	Authz *CustomRouteAuthz `json:"authz,omitempty"`
 }
 
 type KindVersion struct {
@@ -123,6 +176,7 @@ type KindVersion struct {
 	Validation               KindAdmissionCapability           `json:"validation"`
 	Mutation                 KindAdmissionCapability           `json:"mutation"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn         `json:"additionalPrinterColumns"`
+	SearchFields             []SearchField                     `json:"searchFields,omitempty"`
 	Routes                   map[string]map[string]CustomRoute `json:"routes,omitempty"`
 }
 

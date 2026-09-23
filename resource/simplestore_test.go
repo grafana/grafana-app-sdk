@@ -358,7 +358,7 @@ func TestSimpleStore_List(t *testing.T) {
 		ret, err := store.List(ctx, ns)
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.Items), len(ret))
-		for i := 0; i < len(ret); i++ {
+		for i := range ret {
 			assert.Equal(t, list.Items[i].Spec, ret[i].Spec)
 			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret[i].GetStaticMetadata())
 			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret[i].GetCommonMetadata())
@@ -377,7 +377,7 @@ func TestSimpleStore_List(t *testing.T) {
 		ret, err := store.ListWithFiltersAndSelectors(ctx, ns, filters, nil)
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.Items), len(ret))
-		for i := 0; i < len(ret); i++ {
+		for i := range ret {
 			assert.Equal(t, list.Items[i].Spec, ret[i].Spec)
 			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret[i].GetStaticMetadata())
 			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret[i].GetCommonMetadata())
@@ -396,7 +396,7 @@ func TestSimpleStore_List(t *testing.T) {
 		ret, err := store.ListWithFiltersAndSelectors(ctx, ns, nil, selectors)
 		assert.Nil(t, err)
 		assert.Equal(t, len(list.Items), len(ret))
-		for i := 0; i < len(ret); i++ {
+		for i := range ret {
 			assert.Equal(t, list.Items[i].Spec, ret[i].Spec)
 			assert.Equal(t, list.Items[i].GetStaticMetadata(), ret[i].GetStaticMetadata())
 			assert.Equal(t, list.Items[i].GetCommonMetadata(), ret[i].GetCommonMetadata())

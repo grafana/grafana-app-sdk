@@ -23,7 +23,14 @@ func SetTracer(t trace.Tracer) {
 // otel.GetTracerProvider().Tracer("k8s") if none has been set.
 func GetTracer() trace.Tracer {
 	tracerMux.RLock()
-	defer tracerMux.RUnlock()
+	t := tracer
+	tracerMux.RUnlock()
+	if t != nil {
+		return t
+	}
+
+	tracerMux.Lock()
+	defer tracerMux.Unlock()
 	if tracer == nil {
 		tracer = otel.GetTracerProvider().Tracer("k8s")
 	}

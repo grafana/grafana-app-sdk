@@ -19,12 +19,11 @@ import (
     {{ end }}
 )
 
-{{ $needs_str_ptr_func := false }}
 {{ define "schema" }}
 SchemaProps: spec.SchemaProps{
     {{ if .Type }}Type: []string{ {{ range $index, $type := .Type }}{{ if $index }}, {{ end }}"{{$type}}"{{ end }} },{{ end }}{{ if .Format }}
     Format: "{{.Format}}",{{ end }}{{ if .Description }}
-    Description: "{{ escapeQuotes .Description }}",{{ end }}{{ if .Enum }}
+    Description: {{ goString .Description }},{{ end }}{{ if .Enum }}
     Enum: []interface{}{ {{ range .Enum }}
         "{{.}}",{{ end }}
     },{{ end }}{{ if .Properties }}
@@ -59,7 +58,7 @@ VendorExtensible: spec.VendorExtensible{
     ParameterProps: spec3.ParameterProps{
         Name: "{{.Name}}",{{ end }}{{ if .In }}
         In: "{{.In}}",{{ end }}{{ if .Description }}
-        Description: "{{ escapeQuotes .Description }}",{{ end }}{{ if .Required }}
+        Description: {{ goString .Description }},{{ end }}{{ if .Required }}
         Required: {{.Required}},{{ end }}{{ if .Schema }}
         Schema: &spec.Schema{ {{ template "schema" .Schema }}
         },
@@ -74,7 +73,7 @@ MediaTypeProps: spec3.MediaTypeProps{
         {{ range $key, $example := .Examples }}"{{$key}}": {
             ExampleProps: spec3.ExampleProps{
                 {{ if $example.Summary }}Summary: "{{$example.Summary}}",{{ end }}
-                {{ if $example.Description }}Description: "{{ escapeQuotes $example.Description }}",{{ end }}
+                {{ if $example.Description }}Description: {{ goString $example.Description }},{{ end }}
                 {{ if $example.Value }}Value: map[string]interface{}{
                     {{- range $k, $v := $example.Value }}
                     "{{$k}}": {{- if eq (printf "%T" $v) "string" -}}"{{$v}}"{{- else -}}{{printf "%#v" $v}}{{- end -}},
@@ -97,7 +96,7 @@ ResponsesProps: spec3.ResponsesProps{
 {{ define "response" }}
 &spec3.Response{
     ResponseProps: spec3.ResponseProps{
-        {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
+        {{ if .Description }}Description: {{ goString .Description }},{{ end }}
         {{ if .Content }}Content: map[string]*spec3.MediaType{ {{ range $contentType, $mediaType := .Content }}
             "{{$contentType}}": { {{ template "mediaTypeContent" $mediaType }} },{{ end }}
         },{{ end }}
@@ -106,7 +105,7 @@ ResponsesProps: spec3.ResponsesProps{
 
 {{ define "requestBody" }}
 RequestBodyProps: spec3.RequestBodyProps{
-    {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
+    {{ if .Description }}Description: {{ goString .Description }},{{ end }}
     {{ if .Required }}Required: {{.Required}},{{ end }}
     {{ if .Content }}Content: map[string]*spec3.MediaType{ {{ range $contentType, $mediaType := .Content }}
         "{{$contentType}}": { {{ template "mediaTypeContent" $mediaType }} },{{ end }}
@@ -116,12 +115,12 @@ RequestBodyProps: spec3.RequestBodyProps{
 {{ define "operation" }}
 OperationProps: spec3.OperationProps{
     {{ if .Summary }}Summary: "{{.Summary}}",{{ end }}
-    {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
+    {{ if .Description }}Description: {{ goString .Description }},{{ end }}
     {{ if .OperationId }}OperationId: "{{.OperationId}}",{{ end }}
     {{ if .Tags }}Tags: []string{ {{ range $index, $tag := .Tags }}{{ if $index }}, {{ end }}"{{$tag}}"{{ end }} },{{ end }}
     {{ if .ExternalDocs }}ExternalDocs: &spec3.ExternalDocumentation{
         {{ if .ExternalDocs.URL }}URL: "{{.ExternalDocs.URL}}",{{ end }}
-        {{ if .ExternalDocs.Description }}Description: "{{ escapeQuotes .ExternalDocs.Description }}",{{ end }}
+        {{ if .ExternalDocs.Description }}Description: {{ goString .ExternalDocs.Description }},{{ end }}
     },{{ end }}
     {{ if .Parameters }}Parameters: []*spec3.Parameter{ {{ range .Parameters }}
         {{ template "parameter" . }}{{ end }}
@@ -137,7 +136,7 @@ OperationProps: spec3.OperationProps{
     {{ if .Servers }}Servers: []*spec3.Server{ {{ range .Servers }}
         {
             {{ if .URL }}URL: "{{.URL}}",{{ end }}
-            {{ if .Description }}Description: "{{ escapeQuotes .Description }}",{{ end }}
+            {{ if .Description }}Description: {{ goString .Description }},{{ end }}
         },{{ end }}
     },{{ end }}
 },{{ if .Extensions }}
@@ -159,7 +158,10 @@ var appManifestData = app.ManifestData{
     AppName: "{{.ManifestData.AppName}}",
     AppDisplayName: "{{.ManifestData.AppDisplayName}}",
     Group: "{{.ManifestData.Group}}",
-    PreferredVersion: "{{.ManifestData.PreferredVersion}}",
+    PreferredVersion: "{{.ManifestData.PreferredVersion}}",{{ if .ManifestData.Embed }}
+    Embed: map[string]app.ManifestResourceEmbed{ {{ range $resource, $embed := .ManifestData.Embed }}
+        {{ goString $resource }}: {ReembedVersion: {{ $embed.ReembedVersion }}},{{ end }}
+    },{{ end }}
     Versions: []app.ManifestVersion{ {{ range .ManifestData.Versions }}{{$v:=.}}
         {
             Name: "{{.Name}}",
@@ -169,7 +171,21 @@ var appManifestData = app.ManifestData{
                 Kind: "{{.Kind}}",
                 Plural: "{{.Plural}}",
                 Scope: "{{.Scope}}",
-                Conversion: {{.Conversion}}, {{ if .Admission }}
+                Conversion: {{.Conversion}}, {{ if .FolderScoped }}
+                FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Search }}
+                Search: &app.ManifestVersionKindSearch{ {{ if .Search.Endpoint }}
+                    Endpoint: {{ goBoolPtr .Search.Endpoint }},{{ end }}{{ if .Search.Trash }}
+                    Trash: {{ goBoolPtr .Search.Trash }},{{ end }}{{ if .Search.Hybrid }}
+                    Hybrid: {{ goBoolPtr .Search.Hybrid }},{{ end }}
+                }, {{ end }}{{ if .Embed }}
+                Embed: &app.ManifestVersionKindEmbed{
+                    Fields: []app.ManifestVersionKindEmbedField{ {{ range .Embed.Fields }}
+                        {
+                            Name: {{ goString .Name }},
+                            Path: {{ goString .Path }},
+                        },{{ end }}
+                    },
+                }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{
                         {{ if .Admission.Validation.Operations }} Operations: []app.AdmissionOperation{
@@ -185,11 +201,22 @@ var appManifestData = app.ManifestData{
                 Schema: &versionSchema{{.Kind}}{{$.ToPackageName $v.Name}},{{end}}{{ if .SelectableFields }}
                 SelectableFields: []string{ {{ range .SelectableFields }}
                     "{{.}}",{{ end }}
+                },{{end}}{{ if .SearchFields }}
+                SearchFields: []app.ManifestVersionKindSearchField{ {{ range .SearchFields }}
+                    {
+                        Name: {{ goString .Name }},{{ if .Path }}
+                        Path: {{ goString .Path }},{{ end }}
+                        Type: {{ goString .Type }},{{ if .Array }}
+                        Array: {{.Array}},{{ end }}
+                        Capabilities: []string{ {{ range .Capabilities }}{{ goString . }}, {{ end }}},{{ if .EmitZeroIfAbsent }}
+                        EmitZeroIfAbsent: {{.EmitZeroIfAbsent}},{{ end }}{{ if .Description }}
+                        Description: {{ goString .Description }},{{ end }}
+                    },{{ end }}
                 },{{end}}{{ if .Routes }}
                 Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{ (escapeQuotes $props.Description) }}",{{ end }}{{ if $props.Parameters }}
+                        Description: {{ goString $props.Description }},{{ end }}{{ if $props.Parameters }}
                         Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
                             {{ template "parameter" . }}{{ end }}
                         },{{ end }}{{ if $props.Get }}
@@ -211,7 +238,7 @@ var appManifestData = app.ManifestData{
                 Namespaced: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Namespaced }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{ escapeQuotes $props.Description }}",{{ end }}{{ if $props.Parameters }}
+                        Description: {{ goString $props.Description }},{{ end }}{{ if $props.Parameters }}
                         Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
                             {{ template "parameter" . }}{{ end }}
                         },{{ end }}{{ if $props.Get }}
@@ -230,7 +257,7 @@ var appManifestData = app.ManifestData{
                 Cluster: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Cluster }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
-                        Description: "{{ escapeQuotes $props.Description }}",{{ end }}{{ if $props.Parameters }}
+                        Description: {{ goString $props.Description }},{{ end }}{{ if $props.Parameters }}
                         Parameters: []spec3.Parameter{ {{ range $props.Parameters }}
                             {{ template "parameter" . }}{{ end }}
                         },{{ end }}{{ if $props.Get }}
@@ -274,12 +301,12 @@ var appManifestData = app.ManifestData{
     },{{ end }}{{ if .ManifestData.Roles }}
     Roles: map[string]app.ManifestRole{
         {{ range $key := $.SortedRoleKeys }}{{ $val := index $.ManifestData.Roles $key }}"{{ $key }}": {
-            Title: "{{ $val.Title }}",
-            Description: "{{ $val.Description }}",
+            Title: {{ goString $val.Title }},
+            Description: {{ goString $val.Description }},
             Kinds: []app.ManifestRoleKind{ {{ range $val.Kinds }}
                 {
-                    Kind: "{{ .Kind }}",{{ if .PermissionSet }}{{ $needs_str_ptr_func = true }}
-                    PermissionSet: strPtr("{{ .PermissionSet }}"),{{ else }}
+                    Kind: "{{ .Kind }}",{{ if .PermissionSet }}
+                    PermissionSet: new("{{ .PermissionSet }}"),{{ else }}
                     Verbs: []string{ 
                     {{ range .Verbs }}"{{ . }}",
                     {{ end }} },{{ end }}
@@ -431,7 +458,3 @@ func (g *GoTypeAssociator) CustomRouteQueryGoType(kind, version, path, verb stri
 func (g *GoTypeAssociator) CustomRouteRequestBodyGoType(kind, version, path, verb string) (goType any, exists bool) {
     return ManifestCustomRouteRequestBodyAssociator(kind, version, path, verb)
 }
-{{ if $needs_str_ptr_func }}func strPtr(s string) *string {
-    return &s
-}
-{{ end }}

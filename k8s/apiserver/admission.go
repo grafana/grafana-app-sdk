@@ -32,7 +32,7 @@ func newAppAdmission(md app.ManifestData, appGetter func() app.App) *appAdmissio
 				if !k.Admission.SupportsAnyValidation() && !k.Admission.SupportsAnyMutation() {
 					continue
 				}
-				adm.perKindAdmission[fmt.Sprintf("%s/%s", v.Name, k.Kind)] = *k.Admission
+				adm.perKindAdmission[admissionKindKey(md.Group, v.Name, k.Kind)] = *k.Admission
 			}
 		}
 	}
@@ -150,10 +150,20 @@ func (ad *appAdmission) Handles(op admission.Operation) bool {
 }
 
 func (ad *appAdmission) getAdmissionInfo(gvk schema.GroupVersionKind) *app.AdmissionCapabilities {
-	if adm, ok := ad.perKindAdmission[fmt.Sprintf("%s/%s", gvk.Version, gvk.Kind)]; ok {
+	if adm, ok := ad.perKindAdmission[admissionKindKey(gvk.Group, gvk.Version, gvk.Kind)]; ok {
 		return &adm
 	}
 	return nil
+}
+
+// admissionKindKey builds the perKindAdmission map key for a group/version/kind. The group must be
+// included: appAdmission instances from every installed app are chained together into one
+// admission.Interface (see appinstaller.RegisterAdmission in Grafana core) and run against every
+// request regardless of which app it targets, so a group-less "version/kind" key lets two unrelated
+// apps whose kinds happen to share a Kind name and version (e.g. two apps both defining "Example"
+// v1alpha1) collide and answer admission requests for each other's objects.
+func admissionKindKey(group, version, kind string) string {
+	return fmt.Sprintf("%s/%s/%s", group, version, kind)
 }
 
 func translateAdmissionAttributes(a admission.Attributes) (*app.AdmissionRequest, error) {

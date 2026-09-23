@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/puzpuzpuz/xsync/v2"
+	"github.com/puzpuzpuz/xsync/v4"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -13,16 +13,16 @@ func TestListMap_AddItem(t *testing.T) {
 	// Ensure that concurrent adds don't get lost
 	t.Run("concurrent adds, same key", func(t *testing.T) {
 		m := NewListMap[string]()
-		c := make(chan []string, 0)
+		c := make(chan []string)
 		wg := sync.WaitGroup{}
 		key := "foo"
 		perGoroutine := 1000
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			wg.Add(1)
 			go func(idx int) {
 				finalList := make([]string, perGoroutine)
-				for i := 0; i < perGoroutine; i++ {
+				for i := range perGoroutine {
 					val := fmt.Sprintf("%d-%d", idx, i)
 					finalList[i] = val
 					m.AddItem(key, val)
@@ -52,16 +52,16 @@ func TestListMap_AddItem(t *testing.T) {
 
 	t.Run("concurrent adds, different keys", func(t *testing.T) {
 		m := NewListMap[string]()
-		final := xsync.NewMapOf[[]string]()
+		final := xsync.NewMap[string, []string]()
 		wg := sync.WaitGroup{}
 		perGoroutine := 1000
 
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			wg.Add(1)
 			go func(idx int) {
 				finalList := make([]string, perGoroutine)
 				key := fmt.Sprintf("k%d", idx)
-				for i := 0; i < perGoroutine; i++ {
+				for i := range perGoroutine {
 					val := fmt.Sprintf("%d-%d", idx, i)
 					finalList[i] = val
 					m.AddItem(key, val)

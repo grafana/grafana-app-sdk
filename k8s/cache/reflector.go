@@ -185,10 +185,7 @@ func NewReflectorWithOptions(
 	if reflectorClock == nil {
 		reflectorClock = clock.RealClock{}
 	}
-	minWatchTimeout := defaultMinWatchTimeout
-	if options.MinWatchTimeout > defaultMinWatchTimeout {
-		minWatchTimeout = options.MinWatchTimeout
-	}
+	minWatchTimeout := max(options.MinWatchTimeout, defaultMinWatchTimeout)
 	r := &Reflector{
 		name:            options.Name,
 		resyncPeriod:    options.ResyncPeriod,
@@ -225,7 +222,7 @@ func NewReflectorWithOptions(
 	} else if r.UseWatchList == nil {
 		// don't overwrite UseWatchList if already set
 		// because the higher layers (e.g. storage/cacher) disabled it on purpose
-		r.UseWatchList = ptr.To(clientfeatures.FeatureGates().Enabled(clientfeatures.WatchListClient))
+		r.UseWatchList = new(clientfeatures.FeatureGates().Enabled(clientfeatures.WatchListClient))
 	}
 
 	return r
@@ -331,7 +328,7 @@ func (r *Reflector) list(ctx context.Context) error {
 	var paginatedResult bool
 	var err error
 	listCh := make(chan struct{}, 1)
-	panicCh := make(chan interface{}, 1)
+	panicCh := make(chan any, 1)
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
@@ -678,7 +675,7 @@ func (r *Reflector) startResync(ctx context.Context, resyncerrc chan error) {
 
 // syncWith replaces the store's items with the given list.
 func (r *Reflector) syncWith(items []runtime.Object, resourceVersion string) error {
-	found := make([]interface{}, 0, len(items))
+	found := make([]any, 0, len(items))
 	for _, item := range items {
 		found = append(found, item)
 	}
@@ -1062,7 +1059,7 @@ func checkWatchListDataConsistencyIfRequested[T runtime.Object, U any](ctx conte
 	consistencydetector.CheckDataConsistency(ctx, identity, lastSyncedResourceVersion, listFn, transFn, metav1.ListOptions{}, retrieveItemsFn)
 }
 
-func getTypeDescriptionFromObject(expectedType interface{}) string {
+func getTypeDescriptionFromObject(expectedType any) string {
 	if expectedType == nil {
 		return defaultExpectedTypeName
 	}
@@ -1082,7 +1079,7 @@ func getTypeDescriptionFromObject(expectedType interface{}) string {
 	return gvk.String()
 }
 
-func getExpectedGVKFromObject(expectedType interface{}) *schema.GroupVersionKind {
+func getExpectedGVKFromObject(expectedType any) *schema.GroupVersionKind {
 	obj, ok := expectedType.(*unstructured.Unstructured)
 	if !ok {
 		return nil

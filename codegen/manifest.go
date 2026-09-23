@@ -16,15 +16,41 @@ type AppManifest interface {
 }
 
 type AppManifestProperties struct {
+	// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	Embed            map[string]ResourceEmbed              `json:"embed,omitempty"`
 	AppName          string                                `json:"appName"`
 	AppDisplayName   string                                `json:"appDisplayName"`
 	Group            string                                `json:"group"`
 	FullGroup        string                                `json:"fullGroup"`
 	ExtraPermissions AppManifestPropertiesExtraPermissions `json:"extraPermissions"`
-	OperatorURL      *string                               `json:"operatorURL,omitempty"`
-	PreferredVersion string                                `json:"preferredVersion"`
-	Roles            map[string]AppManifestPropertiesRole  `json:"roles"`
-	RoleBindings     *AppManifestPropertiesRoleBindings    `json:"roleBindings"`
+	// OperatorURL is the HTTPS URL of the app's operator.
+	//
+	// Deprecated: use Operator.URL instead. If both are set, they must have the same value.
+	OperatorURL      *string                              `json:"operatorURL,omitempty"`
+	Operator         *AppManifestPropertiesOperatorInfo   `json:"operator,omitempty"`
+	PreferredVersion string                               `json:"preferredVersion"`
+	Roles            map[string]AppManifestPropertiesRole `json:"roles"`
+	RoleBindings     *AppManifestPropertiesRoleBindings   `json:"roleBindings"`
+}
+
+// ResourceEmbed configures declarative embeddings across all API versions of a resource.
+type ResourceEmbed struct {
+	ReembedVersion int `json:"reembedVersion"`
+}
+
+// AppManifestPropertiesOperatorInfo contains information about the app's operator deployment,
+// used to construct webhook configurations.
+type AppManifestPropertiesOperatorInfo struct {
+	URL      *string                                         `json:"url,omitempty"`
+	Webhooks *AppManifestPropertiesOperatorWebhookProperties `json:"webhooks,omitempty"`
+}
+
+// AppManifestPropertiesOperatorWebhookProperties contains the paths the operator serves webhooks on.
+type AppManifestPropertiesOperatorWebhookProperties struct {
+	ConversionPath string `json:"conversionPath"`
+	ValidationPath string `json:"validationPath"`
+	MutationPath   string `json:"mutationPath"`
 }
 
 type AppManifestPropertiesExtraPermissions struct {
@@ -94,6 +120,8 @@ func (m *SimpleManifest) Kinds() []Kind {
 						PluralName:             kind.PluralName,
 						Current:                m.PreferredVersion,
 						Scope:                  kind.Scope,
+						UserReadable:           kind.UserReadable,
+						FolderScoped:           kind.FolderScoped,
 						Validation:             kind.Validation,
 						Mutation:               kind.Mutation,
 						Conversion:             kind.Conversion,
@@ -112,6 +140,7 @@ func (m *SimpleManifest) Kinds() []Kind {
 				Validation:               kind.Validation,
 				Mutation:                 kind.Mutation,
 				AdditionalPrinterColumns: kind.AdditionalPrinterColumns,
+				SearchFields:             kind.SearchFields,
 				Routes:                   kind.Routes,
 			})
 			kinds[kind.Kind] = k
@@ -188,6 +217,8 @@ type VersionedKind struct {
 	// PluralName is the plural of the Kind
 	PluralName             string                      `json:"pluralName"`
 	Scope                  string                      `json:"scope"`
+	UserReadable           bool                        `json:"userReadable"`
+	FolderScoped           bool                        `json:"folderScoped"`
 	Validation             KindAdmissionCapability     `json:"validation"`
 	Mutation               KindAdmissionCapability     `json:"mutation"`
 	Conversion             bool                        `json:"conversion"`
@@ -197,6 +228,9 @@ type VersionedKind struct {
 	Served                   bool                      `json:"served"`
 	SelectableFields         []string                  `json:"selectableFields"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
+	SearchFields             []SearchField             `json:"searchFields,omitempty"`
+	Search                   KindSearch                `json:"search"`
+	Embed                    *KindEmbed                `json:"embed,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
 	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)

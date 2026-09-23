@@ -128,16 +128,19 @@ type RemoteRestConfig struct {
 func NewClientConfigWithExternalClients(remoteRestConfigsByGroup map[string]*RemoteRestConfig) ClientConfig {
 	config := DefaultClientConfig()
 	config.KubeConfigProvider = func(kind resource.Kind, kubeConfig rest.Config) rest.Config {
-		if kubeConfig.APIPath != "" {
-			return kubeConfig // Don't modify the kubeConfig if the APIPath is already configured
-		}
-		// If it isn't configured, set the APIPath based on the kind's group
-		if kind.Group() == "" {
-			kubeConfig.APIPath = "/api"
-		} else {
-			kubeConfig.APIPath = "/apis"
+		// Set APIPath if not already configured
+		if kubeConfig.APIPath == "" {
+			if kind.Group() == "" {
+				kubeConfig.APIPath = "/api"
+			} else {
+				kubeConfig.APIPath = "/apis"
+			}
 		}
 
+		// Always apply remote config overlay when one exists for this group.
+		// This must run independently of the APIPath check above, because
+		// configs created by NewTokenExchangeRestConfig already have APIPath
+		// set and still need the remote host/TLS/auth overlay applied.
 		if remoteCfg, ok := remoteRestConfigsByGroup[kind.Group()]; ok && remoteCfg != nil {
 			kubeConfig = overlayRemoteRestConfig(kubeConfig, remoteCfg)
 		}
@@ -157,6 +160,7 @@ func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig
 	kubeConfig.Host = remoteCfg.Host
 	kubeConfig.TLSClientConfig = remoteCfg.TLSClientConfig
 	kubeConfig.WrapTransport = remoteCfg.WrapTransport
+	kubeConfig.Transport = nil
 
 	// Clear inherited auth that doesn't apply to the remote target.
 	if remoteCfg.OverrideAuth {
@@ -166,6 +170,7 @@ func overlayRemoteRestConfig(kubeConfig rest.Config, remoteCfg *RemoteRestConfig
 		kubeConfig.CertFile = ""
 		kubeConfig.KeyData = nil
 		kubeConfig.KeyFile = ""
+		kubeConfig.Transport = nil
 	}
 
 	return kubeConfig

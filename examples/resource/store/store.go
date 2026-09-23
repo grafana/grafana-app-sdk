@@ -177,7 +177,7 @@ func useStore(generator resource.ClientGenerator) {
 // The trade-off is that the SimpleStore can only be tied to one specific Schema.
 func useSimpleStore(generator resource.ClientGenerator) {
 	// SimpleStore can only manipulate one Custom Resource type, but allows for direct manipulation of the Spec object
-	simpleStore, _ := resource.NewSimpleStore[Obj2Spec](obj2Kind, generator)
+	simpleStore, _ := resource.NewSimpleStore[Obj2Spec](obj2Kind, generator) //nolint:staticcheck
 	added, err := simpleStore.Add(context.TODO(), resource.Identifier{
 		Namespace: "default",
 		Name:      "example-2",

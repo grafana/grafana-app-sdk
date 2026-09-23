@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/yaml"
 
+	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 )
 
@@ -81,7 +83,8 @@ func TestResourceGenerator(t *testing.T) {
 		files, err := ResourceGenerator("codegen-tests", "pkg/generated", true).Generate(sameGroupKinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		assert.Len(t, files, 23, "should be 23 files generated, got %d", len(files))
+		// Prior: 23 for v1–v3; +6 for v4 TestKind (object, spec, status, schema, codec, constants)
+		assert.Len(t, files, 29, "should be 29 files generated, got %d", len(files))
 		// Check content against the golden files
 		compareToGolden(t, files, "go/groupbygroup")
 	})
@@ -113,7 +116,11 @@ func TestManifestGenerator(t *testing.T) {
 	t.Run("resource", func(t *testing.T) {
 		kinds, err := parser.ManifestParser().Parse("testManifest")
 		require.NoError(t, err)
-		files, err := ManifestGenerator("json", true, jennies.VersionV1Alpha1).Generate(kinds...)
+		files, err := ManifestGenerator(ManifestGeneratorConfig{
+			Extension:      "json",
+			IncludeSchemas: true,
+			Version:        jennies.VersionV1Alpha1,
+		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
 		// 5 -> object, spec, metadata, status, schema
@@ -121,6 +128,96 @@ func TestManifestGenerator(t *testing.T) {
 		// Check content against the golden files
 		compareToGolden(t, files, "manifest")
 	})
+
+	t.Run("filename override", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+		files, err := ManifestGenerator(ManifestGeneratorConfig{
+			Extension:      "json",
+			FileName:       "my-manifest.json",
+			IncludeSchemas: true,
+			Version:        jennies.VersionV1Alpha1,
+		}).Generate(kinds...)
+		require.NoError(t, err)
+		require.Len(t, files, 1)
+		assert.Equal(t, "my-manifest.json", files[0].RelativePath)
+	})
+
+	t.Run("empty filename uses the default", func(t *testing.T) {
+		kinds, err := parser.ManifestParser().Parse("testManifest")
+		require.NoError(t, err)
+		files, err := ManifestGenerator(ManifestGeneratorConfig{
+			Extension:      "yaml",
+			IncludeSchemas: true,
+			Version:        jennies.VersionV1Alpha1,
+		}).Generate(kinds...)
+		require.NoError(t, err)
+		require.Len(t, files, 1)
+		assert.Equal(t, "test-app-manifest.yaml", files[0].RelativePath)
+	})
+}
+
+func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
+	parser, err := NewParser(testingCue(t), true)
+	require.NoError(t, err)
+	manifests, err := parser.ManifestParser().Parse("testManifest")
+	require.NoError(t, err)
+
+	for _, extension := range []string{"json", "yaml"} {
+		t.Run(extension, func(t *testing.T) {
+			files, err := ManifestGenerator(ManifestGeneratorConfig{
+				Extension:      extension,
+				IncludeSchemas: true,
+				Version:        jennies.VersionV1Alpha2,
+			}).Generate(manifests...)
+			require.NoError(t, err)
+			require.Len(t, files, 1)
+
+			var manifest struct {
+				APIVersion string                   `json:"apiVersion"`
+				Spec       v1alpha2.AppManifestSpec `json:"spec"`
+			}
+			require.NoError(t, yaml.Unmarshal(files[0].Data, &manifest))
+			assert.Equal(t, v1alpha2.GroupVersion.String(), manifest.APIVersion)
+			data, err := manifest.Spec.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, map[string]app.ManifestResourceEmbed{"testkinds": {ReembedVersion: 1}}, data.Embed)
+			assert.Equal(t, 1, strings.Count(string(files[0].Data), "reembedVersion"))
+
+			foundEmbeddedKind := false
+			for _, version := range data.Versions {
+				for _, kind := range version.Kinds {
+					if kind.Kind != "TestKind" {
+						continue
+					}
+					if version.Name != "v2" {
+						if version.Name == "v1" {
+							assert.Equal(t, &app.ManifestVersionKindEmbed{
+								Fields: []app.ManifestVersionKindEmbedField{{Name: "details", Path: "spec.stringField"}},
+							}, kind.Embed)
+						} else {
+							assert.Nil(t, kind.Embed)
+						}
+						assert.False(t, kind.HasHybridEndpoint())
+						continue
+					}
+
+					foundEmbeddedKind = true
+					require.NotNil(t, kind.Embed)
+					assert.Equal(t, &app.ManifestVersionKindEmbed{
+						Fields: []app.ManifestVersionKindEmbedField{
+							{Name: "details", Path: "spec.unionNull.str"},
+						},
+					}, kind.Embed)
+					assert.True(t, kind.HasHybridEndpoint())
+					require.Len(t, kind.SearchFields, 2)
+					assert.Equal(t, "stringField", kind.SearchFields[0].Name)
+					assert.Equal(t, "intField", kind.SearchFields[1].Name)
+				}
+			}
+			require.True(t, foundEmbeddedKind)
+		})
+	}
 }
 
 func TestManifestGoGenerator(t *testing.T) {
@@ -140,8 +237,8 @@ func TestManifestGoGenerator(t *testing.T) {
 		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
-		// 15 -> manifest file (1), then the custom route response+query+body for reconcile (3), response body and wrapper+query+body for search in v3 (4), request, response, and wrapper for /foobar in v3 (3), the resource clients for v1-v3 (3), and the version-level client for v3 routes (1)
-		require.Len(t, files, 15, "should be 15 files generated, got %d", len(files))
+		// 16 -> prior 15 (manifest, reconcile/search/foobar routes + v1–v3 clients + v3 route client) + v4 resource client (1)
+		require.Len(t, files, 16, "should be 16 files generated, got %d", len(files))
 		// Check content against the golden files
 		for _, file := range files {
 			compareToGolden(t, codejen.Files{file}, "go/groupbygroup")
@@ -178,7 +275,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 
 		var reference codejen.Files
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
 				Package:            "manifestdata",
 				IncludeSchemas:     true,
@@ -205,7 +302,7 @@ func TestManifestGoGenerator_Deterministic(t *testing.T) {
 		require.NoError(t, err)
 
 		var reference codejen.Files
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			files, err := ManifestGoGenerator(ManifestGoGeneratorConfig{
 				Package:            "manifestdata",
 				IncludeSchemas:     true,
@@ -253,7 +350,7 @@ func TestManifestGoGenerator_RolesAreSorted(t *testing.T) {
 
 	// Find all quoted role keys in order of appearance
 	var keys []string
-	for _, line := range strings.Split(rolesSection, "\n") {
+	for line := range strings.SplitSeq(rolesSection, "\n") {
 		trimmed := strings.TrimSpace(line)
 		if strings.HasPrefix(trimmed, `"`) && strings.Contains(trimmed, `": {`) {
 			key := strings.SplitN(trimmed, `"`, 3)[1]

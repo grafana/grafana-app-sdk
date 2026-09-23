@@ -507,7 +507,7 @@ func (t *TypedObject[Spec, Sub]) SetSubresource(key string, value any) error {
 	case reflect.Map:
 		if val.IsNil() {
 			ok := false
-			t.Subresources, ok = reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())).Interface().(Sub)
+			t.Subresources, ok = reflect.TypeAssert[Sub](reflect.MakeMap(reflect.MapOf(typ.Key(), typ.Elem())))
 			if !ok {
 				return errors.New("subresource catalog is a nil map which could not be instantiated")
 			}
@@ -565,7 +565,7 @@ func (t *TypedObject[Spec, Sub]) MarshalJSON() ([]byte, error) {
 	m["metadata"] = t.ObjectMeta
 	m["spec"] = t.Spec
 	v := reflect.ValueOf(t.Subresources)
-	for v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		v = v.Elem()
 	}
 	typ := v.Type()

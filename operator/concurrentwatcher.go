@@ -116,10 +116,7 @@ func (w *concurrentWatcher) Delete(ctx context.Context, object resource.Object) 
 func (w *concurrentWatcher) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	for _, queue := range w.workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			// Start the background process responsible for emitting the events from queue.
 			go queue.run()
 			defer queue.stop()
@@ -149,7 +146,7 @@ func (w *concurrentWatcher) Run(ctx context.Context) {
 					}
 				}
 			}, 1*time.Second, ctx.Done())
-		}()
+		})
 	}
 
 	wg.Wait()

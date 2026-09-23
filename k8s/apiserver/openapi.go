@@ -134,7 +134,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.GroupVersionForDiscovery{}.OpenAPIModelName()),
 									},
 								},
@@ -144,7 +144,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 					"preferredVersion": {
 						SchemaProps: spec.SchemaProps{
 							Description: "preferredVersion is the version preferred by the API server, which probably is the storage version.",
-							Default:     map[string]interface{}{},
+							Default:     map[string]any{},
 							Ref:         ref(v1.GroupVersionForDiscovery{}.OpenAPIModelName()),
 						},
 					},
@@ -160,7 +160,7 @@ func schema_pkg_apis_meta_v1_APIGroup(ref common.ReferenceCallback) common.OpenA
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.ServerAddressByClientCIDR{}.OpenAPIModelName()),
 									},
 								},
@@ -209,7 +209,7 @@ func schema_pkg_apis_meta_v1_APIGroupList(ref common.ReferenceCallback) common.O
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.APIGroup{}.OpenAPIModelName()),
 									},
 								},
@@ -388,7 +388,7 @@ func schema_pkg_apis_meta_v1_APIResourceList(ref common.ReferenceCallback) commo
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.APIResource{}.OpenAPIModelName()),
 									},
 								},
@@ -457,7 +457,7 @@ func schema_pkg_apis_meta_v1_APIVersions(ref common.ReferenceCallback) common.Op
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.ServerAddressByClientCIDR{}.OpenAPIModelName()),
 									},
 								},
@@ -1094,7 +1094,7 @@ func schema_pkg_apis_meta_v1_LabelSelector(ref common.ReferenceCallback) common.
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.LabelSelectorRequirement{}.OpenAPIModelName()),
 									},
 								},
@@ -1188,7 +1188,7 @@ func schema_pkg_apis_meta_v1_List(ref common.ReferenceCallback) common.OpenAPIDe
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Default:     map[string]interface{}{},
+							Default:     map[string]any{},
 							Ref:         ref(v1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
@@ -1536,7 +1536,7 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 					"ownerReferences": {
 						VendorExtensible: spec.VendorExtensible{
 							Extensions: spec.Extensions{
-								"x-kubernetes-list-map-keys": []interface{}{
+								"x-kubernetes-list-map-keys": []any{
 									"uid",
 								},
 								"x-kubernetes-list-type":       "map",
@@ -1550,7 +1550,7 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.OwnerReference{}.OpenAPIModelName()),
 									},
 								},
@@ -1590,7 +1590,7 @@ func schema_pkg_apis_meta_v1_ObjectMeta(ref common.ReferenceCallback) common.Ope
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.ManagedFieldsEntry{}.OpenAPIModelName()),
 									},
 								},
@@ -1694,7 +1694,7 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadata(ref common.ReferenceCallback)
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata",
-							Default:     map[string]interface{}{},
+							Default:     map[string]any{},
 							Ref:         ref(v1.ObjectMeta{}.OpenAPIModelName()),
 						},
 					},
@@ -1730,7 +1730,7 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref common.ReferenceCallb
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Default:     map[string]interface{}{},
+							Default:     map[string]any{},
 							Ref:         ref(v1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
@@ -1741,7 +1741,7 @@ func schema_pkg_apis_meta_v1_PartialObjectMetadataList(ref common.ReferenceCallb
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.PartialObjectMetadata{}.OpenAPIModelName()),
 									},
 								},
@@ -1951,7 +1951,7 @@ func schema_pkg_apis_meta_v1_Status(ref common.ReferenceCallback) common.OpenAPI
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Default:     map[string]interface{}{},
+							Default:     map[string]any{},
 							Ref:         ref(v1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
@@ -2078,7 +2078,7 @@ func schema_pkg_apis_meta_v1_StatusDetails(ref common.ReferenceCallback) common.
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.StatusCause{}.OpenAPIModelName()),
 									},
 								},
@@ -2124,7 +2124,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 					"metadata": {
 						SchemaProps: spec.SchemaProps{
 							Description: "Standard list metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
-							Default:     map[string]interface{}{},
+							Default:     map[string]any{},
 							Ref:         ref(v1.ListMeta{}.OpenAPIModelName()),
 						},
 					},
@@ -2140,7 +2140,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.TableColumnDefinition{}.OpenAPIModelName()),
 									},
 								},
@@ -2159,7 +2159,7 @@ func schema_pkg_apis_meta_v1_Table(ref common.ReferenceCallback) common.OpenAPID
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.TableRow{}.OpenAPIModelName()),
 									},
 								},
@@ -2301,7 +2301,7 @@ func schema_pkg_apis_meta_v1_TableRow(ref common.ReferenceCallback) common.OpenA
 							Items: &spec.SchemaOrArray{
 								Schema: &spec.Schema{
 									SchemaProps: spec.SchemaProps{
-										Default: map[string]interface{}{},
+										Default: map[string]any{},
 										Ref:     ref(v1.TableRowCondition{}.OpenAPIModelName()),
 									},
 								},

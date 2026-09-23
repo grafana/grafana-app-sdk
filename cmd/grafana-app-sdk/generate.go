@@ -86,8 +86,10 @@ func generateCmdFunc(cmd *cobra.Command, _ []string) error {
 			}
 		}
 
-		// Jennies that need to be run post-file-write
-		if cfg.Codegen.EnableK8sPostProcessing {
+		// Jennies that need to be run post-file-write.
+		// Post-processing is go-only (it reads the generated go types off disk), so it is skipped
+		// entirely when go codegen is disabled, regardless of enableK8sPostProcessing.
+		if cfg.Codegen.EnableK8sPostProcessing && cfg.Codegen.GoEnabled {
 			files, err = postGenerateFilesCue(parser, cfg)
 			if err != nil {
 				return err
@@ -113,8 +115,10 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 		return nil, err
 	}
 
+	// The go module path is only needed when go code is generated. A frontend-only project with
+	// `codegen: goEnabled: false` may have no go.mod at all, so only resolve it if it's needed.
 	goModule := cfg.Codegen.GoModule
-	if goModule == "" {
+	if goModule == "" && cfg.Codegen.GoEnabled {
 		goModule, err = getGoModule("go.mod")
 		if err != nil {
 			return nil, fmt.Errorf("unable to load go module from ./go.mod: %w. Set config.codegen.goModule with a value", err)
@@ -127,12 +131,15 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 	}
 
 	// Resource
-	resourceFiles, err := generatorForManifest.Generate(cuekind.ResourceGenerator(goModule, goModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
-	if err != nil {
-		return nil, err
-	}
-	for i, f := range resourceFiles {
-		resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
+	var resourceFiles codejen.Files
+	if cfg.Codegen.GoEnabled {
+		resourceFiles, err = generatorForManifest.Generate(cuekind.ResourceGenerator(goModule, goModGenPath, cfg.GroupKinds()), cfg.ManifestSelectors...)
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range resourceFiles {
+			resourceFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
+		}
 	}
 	tsResourceFiles, err := generatorForManifest.Generate(cuekind.TypeScriptResourceGenerator(), cfg.ManifestSelectors...)
 	if err != nil {
@@ -159,46 +166,63 @@ func generateKindsCue(parser *cuekind.Parser, cfg *config.Config) (codejen.Files
 		}
 	}
 
-	// Backwards-compatibility for manifests written to the base generated path
-	manifestPath := "manifestdata"
-	if m, _ := filepath.Glob(filepath.Join(goModGenPath, "*_manifest.go")); len(m) > 0 {
-		manifestPath = ""
-	}
-
-	manifestPkg := filepath.Base(manifestPath)
-	if manifestPath == "" {
-		manifestPkg = filepath.Base(goModGenPath)
-	}
-
 	// Manifest
-	goManifestFiles, err := generatorForManifest.Generate(cuekind.ManifestGoGenerator(cuekind.ManifestGoGeneratorConfig{
-		Package:            manifestPkg,
-		IncludeSchemas:     cfg.Definitions.ManifestSchemas,
-		ProjectRepo:        goModule,
-		GoGenPath:          goModGenPath,
-		ManifestGoFilePath: manifestPath,
-		GroupKinds:         cfg.GroupKinds(),
-	}), cfg.ManifestSelectors...)
-	if err != nil {
-		return nil, err
-	}
-	for i, f := range goManifestFiles {
-		goManifestFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
+	var goManifestFiles codejen.Files
+	if cfg.Codegen.GoEnabled {
+		// Backwards-compatibility for manifests written to the base generated path
+		manifestPath := "manifestdata"
+		if m, _ := filepath.Glob(filepath.Join(goModGenPath, "*_manifest.go")); len(m) > 0 {
+			manifestPath = ""
+		}
+
+		manifestPkg := filepath.Base(manifestPath)
+		if manifestPath == "" {
+			manifestPkg = filepath.Base(goModGenPath)
+		}
+
+		goManifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGoGenerator(cuekind.ManifestGoGeneratorConfig{
+			Package:            manifestPkg,
+			IncludeSchemas:     cfg.Definitions.ManifestSchemas,
+			ProjectRepo:        goModule,
+			GoGenPath:          goModGenPath,
+			ManifestGoFilePath: manifestPath,
+			GroupKinds:         cfg.GroupKinds(),
+		}), cfg.ManifestSelectors...)
+		if err != nil {
+			return nil, err
+		}
+		for i, f := range goManifestFiles {
+			goManifestFiles[i].RelativePath = filepath.Join(cfg.Codegen.GoGenPath, f.RelativePath)
+		}
 	}
 
 	// Manifest CRD
 	var manifestFiles codejen.Files
 	if cfg.Definitions.GenManifest {
-		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(
-			cfg.Definitions.Encoding,
-			cfg.Definitions.ManifestSchemas,
-			cfg.Definitions.ManifestVersion),
-			cfg.ManifestSelectors...)
+		// One manifest is generated per manifest selector, and a fixed filename would make
+		// every one of them collide on the same path, so reject the combination up-front.
+		if cfg.Definitions.ManifestFileName != "" && len(cfg.ManifestSelectors) > 1 {
+			return nil, fmt.Errorf("definitions.manifestFileName cannot be used with multiple "+
+				"manifestSelectors (%d configured): all manifests would be written to %q",
+				len(cfg.ManifestSelectors), cfg.Definitions.ManifestFileName)
+		}
+
+		manifestFiles, err = generatorForManifest.Generate(cuekind.ManifestGenerator(cuekind.ManifestGeneratorConfig{
+			Extension:      cfg.Definitions.Encoding,
+			FileName:       cfg.Definitions.ManifestFileName,
+			IncludeSchemas: cfg.Definitions.ManifestSchemas,
+			Version:        cfg.Definitions.ManifestVersion,
+		}), cfg.ManifestSelectors...)
 		if err != nil {
 			return nil, err
 		}
+		seenManifestPaths := make(map[string]struct{}, len(manifestFiles))
 		for i, f := range manifestFiles {
 			manifestFiles[i].RelativePath = filepath.Join(cfg.Definitions.Path, f.RelativePath)
+			if _, dup := seenManifestPaths[manifestFiles[i].RelativePath]; dup {
+				return nil, fmt.Errorf("multiple app manifests would be written to the same file %q", manifestFiles[i].RelativePath)
+			}
+			seenManifestPaths[manifestFiles[i].RelativePath] = struct{}{}
 		}
 	}
 

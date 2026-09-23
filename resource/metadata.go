@@ -27,7 +27,7 @@ func WriteGrafanaAnnotation(annotations map[string]string, field string, value a
 		return nil
 	}
 	typ := reflect.TypeOf(value)
-	for typ.Kind() == reflect.Ptr {
+	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 	marshaled, err := json.Marshal(value)
@@ -53,7 +53,7 @@ func ReadGrafanaAnnotation[T any](annotations map[string]string, field string) (
 		typ = typ.Elem()
 	}
 	// TODO: special case for time.Time, should we determine a more generic way to handle things that marshal to strings?
-	if typ.Kind() == reflect.String || (typ.Kind() == reflect.Struct && typ.AssignableTo(reflect.TypeOf(time.Time{}))) {
+	if typ.Kind() == reflect.String || (typ.Kind() == reflect.Struct && typ.AssignableTo(reflect.TypeFor[time.Time]())) {
 		// We have to put extra quotes around the string types before unmarshaling
 		val = fmt.Sprintf(`"%s"`, val)
 	}

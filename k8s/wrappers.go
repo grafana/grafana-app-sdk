@@ -27,7 +27,7 @@ func (o *TypedObjectWrapper) DeepCopyObject() runtime.Object {
 	cpy.Elem().Set(val)
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
+	if obj, ok := reflect.TypeAssert[runtime.Object](cpy); ok {
 		return obj
 	}
 
@@ -56,7 +56,7 @@ func (o *UntypedObjectWrapper) DeepCopyObject() runtime.Object {
 	cpy.Elem().Set(val)
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
+	if obj, ok := reflect.TypeAssert[runtime.Object](cpy); ok {
 		return obj
 	}
 
@@ -92,7 +92,7 @@ func (w *UntypedWatchObject) DeepCopyObject() runtime.Object {
 	cpy.Elem().Set(val)
 
 	// Using the <obj>, <ok> for the type conversion ensures that it doesn't panic if it can't be converted
-	if obj, ok := cpy.Interface().(runtime.Object); ok {
+	if obj, ok := reflect.TypeAssert[runtime.Object](cpy); ok {
 		return obj
 	}
 

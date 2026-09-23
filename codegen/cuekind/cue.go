@@ -37,6 +37,18 @@ func LoadCue(files fs.FS) (*Cue, error) {
 	}, nil
 }
 
+func FromCueValue(value cue.Value) (*Cue, error) {
+	defs, err := loadDefs()
+	if err != nil {
+		return nil, err
+	}
+
+	return &Cue{
+		Root: value,
+		Defs: defs,
+	}, nil
+}
+
 func loadRoot(files fs.FS) (cue.Value, error) {
 	// Load the FS
 	// Get the module from cue.mod/module.cue

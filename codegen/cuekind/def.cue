@@ -41,6 +41,11 @@ _kubeObjectMetadata: {
 	// Encoding for kubernetes manifest files.
 	// Allowed values are "json" and "yaml"
 	encoding: *"json" | "yaml"
+	// Filename for the generated app manifest, relative to `path`.
+	// When empty, the filename defaults to "<appName>-manifest.<encoding>".
+	// Cannot be used when more than one manifest is generated (see manifestSelectors),
+	// as all manifests would be written to the same file.
+	manifestFileName: string | *""
 	// Whether the generated manifest JSON/YAML has CRD-compatible schemas or the default OpenAPI documents.
 	// Use "v1alpha1" for legacy CRD-compatible schemas and "v1alpha2" for the default format.
 	manifestVersion: "v1alpha1" | *"v1alpha2"
@@ -50,6 +55,11 @@ _kubeObjectMetadata: {
 }
 
 #CodegenConfig: {
+	// Whether to generate go code.
+	// Set this to false for frontend-only apps which have no go module: when false, no go files
+	// are generated, and neither a go.mod nor the `go` binary is required to run codegen.
+	// TypeScript, CRD, and app manifest JSON/YAML generation are unaffected.
+	goEnabled: bool | *true
 	// Module name found in go.mod.
 	// If absent it will be inferred from ./go.mod.
 	goModule: string | *""
@@ -152,7 +162,22 @@ SchemaWithOperatorState: Schema & {
 	extensions: {
 		[=~"^x-(.+)$"]: _
 	}
+	// authz declares the authorization attributes which are checked for this route.
+	// If present, each provided field is emitted as an openAPI extension on the route
+	// (x-grafana-declared-authz-resource, x-grafana-declared-authz-subresource, x-grafana-declared-authz-verb).
+	// If absent, no authz extensions are added to the route.
+	authz?: #CustomRouteAuthz
 }
+#CustomRouteAuthz: {
+	// resource is the resource the authz check is performed against.
+	resource: string
+	// subresource is the subresource the authz check is performed against, if applicable.
+	subresource?: string
+	// verb is the verb the authz check is performed with, if it differs from the one implied by the route's method.
+	verb?: #CustomRouteAuthzVerb
+}
+// #CustomRouteAuthzVerb is the set of kubernetes verbs which an authz check can be performed with.
+#CustomRouteAuthzVerb: "get" | "list" | "watch" | "create" | "update" | "patch" | "delete" | "deletecollection"
 #CustomRoutePath:   string
 #CustomRouteMethod: "GET" | "POST" | "PUT" | "DELETE" | "PATCH" | "*"
 #CustomRouteCapability: {
@@ -180,6 +205,71 @@ SchemaWithOperatorState: Schema & {
 	// each custom resource to produce the value for this column.
 	jsonPath: string
 }
+// #SearchField describes a field exposed for search indexing and querying.
+// The type and capabilities values, and which capabilities are valid on which
+// type, are defined by the searchfields package
+// (github.com/grafana/grafana-app-sdk/searchfields), the shared source of
+// truth for both the SDK codegen validator and the runtime search backend.
+#SearchField: {
+	// name is the field name as it appears in search documents and queries.
+	name: string
+	// path is the JSON path within the resource that supplies this field's value
+	// (for example "spec.email"). When omitted, the field is populated by a custom
+	// document builder rather than read directly from the resource.
+	path?: string
+	// type is the value type of the field.
+	type: "string" | "int64" | "double" | "boolean" | "date"
+	// array indicates that the field holds a list of values of the given type.
+	array?: bool | *false
+	// capabilities lists what the field can be used for at query time, such as
+	// filtering, full-text search, sorting, or faceting.
+	capabilities: [...("filter" | "text" | "partial" | "sort" | "facet" | "retrieve" | "unranked")]
+	// emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,
+	// so sort and range queries see every document. Without it, a document missing
+	// the path omits the field entirely.
+	emitZeroIfAbsent?: bool | *false
+	// description is a human readable description of the field.
+	description?: string
+}
+
+// #KindSearch controls which search endpoints are served for a kind.
+#KindSearch: {
+	// endpoint controls whether the kind serves the /search endpoint.
+	endpoint: bool | *true
+	// trash controls whether the kind serves the /trash endpoint,
+	// which lists deleted resources of the kind.
+	trash: bool | *true
+	// hybrid controls whether the kind serves the /search/hybrid endpoint,
+	// which combines lexical and semantic search.
+	//
+	// Defaults off, unlike the two above: serving it requires embeddings for the
+	// kind, which cost money to generate and must also be enabled on the server.
+	hybrid: bool | *false
+}
+
+// #KindEmbed defines the embedding document independently of search fields.
+// Kinds with a custom embedding builder omit this section.
+#KindEmbed: {
+	// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+	// Declaring an embedding field does not enable filtering embeddings by that field.
+	fields: [...#EmbedField]
+}
+
+// #ResourceEmbed configures declarative embeddings across all API versions of a resource.
+#ResourceEmbed: {
+	// reembedVersion is a manual revision for requesting re-embedding of existing resources.
+	// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+	reembedVersion: int & >0
+}
+
+// #EmbedField supplies text for the embedding document without exposing a search field.
+#EmbedField: {
+	// name labels this input in the embedding document.
+	name: string
+	// path supplies a string or string array from the resource, using the same
+	// dot-separated paths and [*] projections as searchFields.
+	path: string & strings.MinRunes(1)
+}
 
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
@@ -191,6 +281,13 @@ Kind: S={
 	// scope determines whether resources of this kind exist globally ("Cluster") or
 	// within Kubernetes namespaces.
 	scope: "Cluster" | *"Namespaced"
+	// userReadable controls whether end users can read cluster-scoped resources of this kind.
+	// Only meaningful when scope is "Cluster". Service identities are always allowed full access via normal authorization.
+	userReadable: bool | *false
+	// folderScoped controls whether resources of this kind are scoped to folders.
+	// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+	// Defaults to true (folder-scoped).
+	folderScoped: bool | *true
 	// validation determines whether there is code-based validation for this kind.
 	validation: #AdmissionCapability | *{
 		operations: []
@@ -254,6 +351,14 @@ Kind: S={
 	selectableFields: [...string]
 	// additionalPrinterColumns is a list of additional columns to be printed in kubectl output
 	additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+	// searchFields is a list of fields exposed for search indexing and querying
+	searchFields?: [...#SearchField]
+	// search controls which search endpoints are served for this kind.
+	// /search and /trash are served unless the kind opts out here; /search/hybrid
+	// is not served unless the kind opts in.
+	search: #KindSearch
+	// embed defines the embedding document independently of search fields.
+	embed?: #KindEmbed
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability
@@ -345,6 +450,12 @@ Version: S={
 
 Manifest: S={
 	appName: =~"^([a-z][a-z0-9-]*[a-z0-9])$"
+	// embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+	// Each resource has one re-embedding version shared by all of its API versions.
+	// Custom embedding builders omit their entry and define their content version in Go.
+	embed?: {
+		[string]: #ResourceEmbed
+	}
 	// appDisplayName is the display name of the app. Unlike the appName, it can contain any printable characters and will be shown in the UI.
 	appDisplayName: string | *S.appName
 	group:          strings.ToLower(strings.Replace(S.appName, "-", "", -1))
@@ -364,7 +475,22 @@ Manifest: S={
 	// operatorURL is the HTTPS URL of your operator, including port if non-standard (443).
 	// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
 	// This is used to construct validation, mutations, or conversion webhooks for your deployment.
+	// Deprecated: use operator.url instead. If both are set, they must have the same value.
 	operatorURL?: string
+
+	// operator contains information about the app's operator deployment, used to construct webhook configurations.
+	operator?: {
+		// url is the HTTPS URL of the operator, including port if non-standard (443).
+		// If you do not deploy an operator, or if your operator does not expose an HTTPS server for webhooks, this can be omitted.
+		url?: string
+		// webhooks configures the paths the operator serves validation, mutation, and conversion webhooks on.
+		// Override these if your operator serves webhooks on non-default paths.
+		webhooks?: {
+			conversionPath: string & =~"^/" | *"/convert"
+			validationPath: string & =~"^/" | *"/validate"
+			mutationPath:   string & =~"^/" | *"/mutate"
+		}
+	}
 
 	// groupOverride is used to override the auto-generated group of "<group>.ext.grafana.app"
 	// if present, this value is used for the full group instead.
@@ -379,7 +505,7 @@ Manifest: S={
 		if S.groupOverride != _|_ {
 			strings.ToLower(S.groupOverride)
 		},
-		strings.ToLower(strings.Replace(S.group, "_", "-", -1)) + ".ext.grafana.com", // TODO: change to ext.grafana.app?
+		strings.ToLower(strings.Replace(S.group, "_", "-", -1)) + ".ext.grafana.app",
 	]
 
 	// fullGroup is used as the CRD group name in the GVK.

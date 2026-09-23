@@ -4,7 +4,6 @@ on:
   pull_request:
     branches:
     - main
-    - "lts/v0.24"
     - "feat/*"
 
 permissions:
@@ -20,12 +19,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
 
       - name: Set go version
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
 
@@ -45,21 +44,17 @@ jobs:
     steps:
     # git checkout
     - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       with:
         fetch-depth: 0
         persist-credentials: false
     # go env
     - name: Set up Go
-      uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+      uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
       with:
         go-version-file: 'go.mod'
     # make lint
     - name: Lint
-      uses: golangci/golangci-lint-action@b002b6ecfcabe6ac0e2c6cba1bcc779eb34ac51f # v9
-      with:
-        version: v2.5.0
-        only-new-issues: true
-        args: --timeout 5m $(go list -f '{{.Dir}}/...' -m  | tr '\n' ' ')
+      run: make lint
   test:
     uses: ./.github/workflows/test.yml

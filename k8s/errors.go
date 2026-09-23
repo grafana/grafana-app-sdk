@@ -84,8 +84,7 @@ func ParseKubernetesError(responseBytes []byte, statusCode int, err error) error
 	}
 
 	if err != nil {
-		var statusErr *apierrors.StatusError
-		if errors.As(err, &statusErr) {
+		if statusErr, ok := errors.AsType[*apierrors.StatusError](err); ok {
 			return statusErr
 		}
 	}

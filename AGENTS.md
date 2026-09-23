@@ -30,7 +30,7 @@ make build                 # Output: target/grafana-app-sdk
 make install
 
 # Run linter
-make lint                  # Uses golangci-lint v2.5.0
+make lint                  # Uses golangci-lint v2.13.2
 
 # Update go.mod and go.work files
 make update-workspace
@@ -932,7 +932,6 @@ The codebase is actively being optimized for production scale (10k-50k resources
 
 **Examples**:
 - Simple operator: `/examples/operator/simple/`
-- API server: `/examples/apiserver/`
 - Resource usage: `/examples/resource/`
 
 **Community**:

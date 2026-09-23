@@ -9,8 +9,9 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/grafana/codejen"
 	"golang.org/x/tools/imports"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
@@ -30,7 +31,7 @@ func (*ClientJenny) JennyName() string {
 }
 
 func (r *ClientJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 
 	groupVersionFiles, err := r.generateCustomRouteClients(appManifest)
 	if err != nil {
@@ -48,7 +49,7 @@ func (r *ClientJenny) Generate(appManifest codegen.AppManifest) (codejen.Files, 
 }
 
 func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		if !kind.Codegen.Go.Enabled {
 			continue
@@ -118,7 +119,7 @@ func (r *ClientJenny) generateResourceClients(appManifest codegen.AppManifest) (
 }
 
 func (r *ClientJenny) generateCustomRouteClients(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for _, version := range appManifest.Versions() {
 		md := templates.GoCustomRouteClientMetadata{
 			PackageName: ToPackageName(version.Name()),

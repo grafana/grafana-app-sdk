@@ -1,18 +1,27 @@
 package apiserver
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"testing"
 
+	"github.com/emicklei/go-restful/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	endpointmetrics "k8s.io/apiserver/pkg/endpoints/metrics"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 	clientrest "k8s.io/client-go/rest"
+	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -77,10 +86,10 @@ func TestDefaultInstaller_AddToScheme(t *testing.T) {
 		assert.Equal(t, 10, len(known))
 		testKindVal, ok := known[TestKind.Kind()]
 		require.True(t, ok)
-		assert.Equal(t, reflect.TypeOf(resource.UntypedObject{}), testKindVal)
+		assert.Equal(t, reflect.TypeFor[resource.UntypedObject](), testKindVal)
 		testKindListVal, ok := known[TestKind.Kind()+"List"]
 		require.True(t, ok)
-		assert.Equal(t, reflect.TypeOf(resource.UntypedList{}), testKindListVal)
+		assert.Equal(t, reflect.TypeFor[resource.UntypedList](), testKindListVal)
 	})
 }
 
@@ -175,6 +184,45 @@ func TestDefaultInstaller_GetOpenAPIDefinitions(t *testing.T) {
 	res := installer.GetOpenAPIDefinitions(refCallback)
 	require.Equal(t, len(expected), len(res))
 	assert.Equal(t, expected, res)
+}
+
+// TestEmptyObject_OpenAPIDefinitionKeyMatchesModelName guards the invariant
+// that EmptyObject's OpenAPI definition is registered under the same key the
+// builder uses to look it up (its OpenAPIModelName()). A mismatch produces a
+// dangling $ref in the served OpenAPI document for custom routes that fall
+// back to EmptyObject as their response type.
+func TestEmptyObject_OpenAPIDefinitionKeyMatchesModelName(t *testing.T) {
+	sch, err := app.VersionSchemaFromMap(map[string]any{
+		"spec": map[string]any{"type": "object"},
+	}, TestKind.Kind())
+	require.Nil(t, err)
+	md := app.ManifestData{
+		Group: TestKind.Group(),
+		Versions: []app.ManifestVersion{{
+			Name: TestKind.Version(),
+			Kinds: []app.ManifestVersionKind{{
+				Kind:   TestKind.Kind(),
+				Schema: sch,
+				Routes: map[string]spec3.PathProps{
+					"/foo": {Get: &spec3.Operation{}},
+				},
+			}},
+		}},
+	}
+	installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(md), nil, nil), app.Config{}, &mockGoTypeResolver{
+		KindToGoTypeFunc: func(k, v string) (resource.Kind, bool) {
+			return TestKind, true
+		},
+	})
+	require.Nil(t, err)
+	scheme := newScheme()
+	require.Nil(t, installer.AddToScheme(scheme))
+	defs := installer.GetOpenAPIDefinitions(func(path string) spec.Ref {
+		ref, _ := spec.NewRef(path)
+		return ref
+	})
+	_, ok := defs[EmptyObject{}.OpenAPIModelName()]
+	assert.True(t, ok, "EmptyObject must be registered in GetOpenAPIDefinitions under its OpenAPIModelName %q", EmptyObject{}.OpenAPIModelName())
 }
 
 type getFooResponse struct{}
@@ -442,13 +490,153 @@ func TestDefaultInstaller_ManifestData(t *testing.T) {
 	assert.Equal(t, &data, installer.ManifestData())
 }
 
+func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
+	const group = "instrumentation-test.ext.grafana.com"
+	const version = "v1"
+
+	newInstaller := func(t *testing.T, callCustomRoute func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error) *defaultInstaller {
+		installer, err := NewDefaultAppInstaller(simple.NewAppProvider(app.NewEmbeddedManifest(app.ManifestData{
+			Group: group,
+		}), nil, nil), app.Config{}, &mockGoTypeResolver{
+			CustomRouteReturnGoTypeFunc: func(kind, ver, path, verb string) (any, bool) {
+				return &EmptyObject{}, true
+			},
+		})
+		require.NoError(t, err)
+		installer.app = &MockApp{CallCustomRouteFunc: callCustomRoute}
+		return installer
+	}
+
+	newServer := func(t *testing.T, installer *defaultInstaller, rpath string) (*httptest.Server, *restful.WebService) {
+		ws := new(restful.WebService)
+		ws.Path("/apis/" + group + "/" + version)
+		container := restful.NewContainer()
+		container.Add(ws)
+		err := installer.registerResourceRouteOperation(ws, schema.GroupVersion{Group: group, Version: version}, rpath, &spec3.Operation{}, resource.NamespacedScope, "GET")
+		require.NoError(t, err)
+		return httptest.NewServer(container), ws
+	}
+
+	countAPIServerRequests := func(t *testing.T, rpath string) map[string]float64 {
+		t.Helper()
+		endpointmetrics.Register()
+		families, err := legacyregistry.DefaultGatherer.Gather()
+		require.NoError(t, err)
+		counts := map[string]float64{}
+		for _, family := range families {
+			if family.GetName() != "apiserver_request_total" {
+				continue
+			}
+			for _, m := range family.GetMetric() {
+				labels := map[string]string{}
+				for _, lp := range m.GetLabel() {
+					labels[lp.GetName()] = lp.GetValue()
+				}
+				if labels["group"] == group && labels["version"] == version && labels["resource"] == rpath {
+					counts[labels["code"]] += m.GetCounter().GetValue()
+				}
+			}
+		}
+		return counts
+	}
+
+	t.Run("records apiserver_request_total on success", func(t *testing.T) {
+		rpath := "instrument-success"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			w.WriteHeader(http.StatusOK)
+			return nil
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		before := countAPIServerRequests(t, rpath)
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+		after := countAPIServerRequests(t, rpath)
+		assert.Equal(t, before["200"]+1, after["200"], "expected exactly one new apiserver_request_total sample recorded under code=200")
+	})
+
+	t.Run("records apiserver_request_total on failure with the status code", func(t *testing.T) {
+		rpath := "instrument-failure"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			return apierrors.NewBadRequest("prefix and contains are mutually exclusive")
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		before := countAPIServerRequests(t, rpath)
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		after := countAPIServerRequests(t, rpath)
+		assert.Equal(t, before["400"]+1, after["400"], "expected exactly one new apiserver_request_total sample recorded under code=400")
+		assert.Zero(t, after["200"]-before["200"], "a failed request must not be recorded as code=200")
+	})
+
+	t.Run("preserves APIStatus code and reason on error", func(t *testing.T) {
+		rpath := "instrument-bad-request"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			return apierrors.NewBadRequest("bad request")
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+		var status metav1.Status
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
+		assert.Equal(t, metav1.StatusReasonBadRequest, status.Reason)
+		assert.Equal(t, "bad request", status.Message)
+	})
+
+	t.Run("falls back to 500 for non-status errors", func(t *testing.T) {
+		rpath := "instrument-plain-error"
+		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+			return errors.New("boom")
+		})
+		srv, _ := newServer(t, installer, rpath)
+		defer srv.Close()
+
+		before := countAPIServerRequests(t, rpath)
+		resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + rpath)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+
+		var status metav1.Status
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
+		assert.Equal(t, "boom", status.Message)
+
+		after := countAPIServerRequests(t, rpath)
+		assert.Equal(t, before["500"]+1, after["500"], "expected exactly one new apiserver_request_total sample recorded under code=500")
+	})
+}
+
+var _ GenericAPIServer = &MockGenericAPIServer{}
+
 type MockGenericAPIServer struct {
-	InstallAPIGroupFunc func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	InstallAPIGroupFunc       func(apiGroupInfo *genericapiserver.APIGroupInfo) error
+	RegisteredWebServicesFunc func() []*restful.WebService
 }
 
 func (m *MockGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error {
 	if m.InstallAPIGroupFunc != nil {
 		return m.InstallAPIGroupFunc(apiGroupInfo)
+	}
+	return nil
+}
+
+func (m *MockGenericAPIServer) RegisteredWebServices() []*restful.WebService {
+	if m.RegisteredWebServicesFunc != nil {
+		return m.RegisteredWebServicesFunc()
 	}
 	return nil
 }

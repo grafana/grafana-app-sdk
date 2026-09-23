@@ -4,11 +4,13 @@ import "time"
 
 testManifest: {
 	appName: "test-app"
+	embed: testkinds: reembedVersion: 1
 	kinds: [testKind, testKind2]
 	versions: {
 		"v1": testManifestV1
 		"v2": testManifestV2
 		"v3": testManifestV3
+		"v4": testManifestV4
 	}
 	preferredVersion: "v1"
 	extraPermissions: {
@@ -18,7 +20,12 @@ testManifest: {
 			actions: ["get","list","watch"]
 		}]
 	}
-	operatorURL: "https://foo.bar:8443"
+	operator: {
+		url: "https://foo.bar:8443"
+		webhooks: {
+			validationPath: "/validate/test-app.ext.grafana.app/v1"
+		}
+	}
 	roles: {
 		"test-app:reader": {
 			title: "Test App Viewer"
@@ -55,6 +62,9 @@ testManifestV3: {
 		"/foobar": {
 			"POST": {
 				name: "createFoobar"
+				// Key identifies a foobar entry.
+				// It is referenced by a custom route, so its multi-line
+				// description exercises the route schema codegen path.
 				#Key: {
 					name: string
 					match?: string
@@ -70,6 +80,11 @@ testManifestV3: {
 	}
 }
 
+testManifestV4: {
+	codegen: ts: enabled: false
+	kinds: [testKind & testKind.versions["v4"]]
+}
+
 testKind: {
 	kind: "TestKind"
 	plural: "testkinds"
@@ -79,20 +94,64 @@ testKind: {
 	current: "v1"
 	versions: {
 		"v1": {
+			embed: fields: [{name: "details", path: "spec.stringField"}]
 			schema: {
 				spec: {
 					stringField: string & =~"^[a-zA-Z_][a-zA-Z0-9_-]*$"
 				}
 			}
+			selectableFields: [".spec.stringField"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+			]
 		}
 		"v2": {
 			codegen: ts: enabled: true
 			schema: {
+				#Def: {
+					str: string
+					i: int
+				}
+				#Def2: {
+					str: string
+					b: bool
+				}
 				spec: {
 					stringField: string
 					intField: int64
 					timeField: string & time.Time
+					unionNull?: #Def | null // This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction
+					unionNull2?: #Def | #Def2 | null // null variant should be ignore in disjunction when generating the selectable field
 				}
+			}
+			selectableFields: [".spec.stringField", ".spec.intField", ".spec.unionNull.str", ".spec.unionNull2.str"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+				{
+					name: "intField"
+					path: "spec.intField"
+					type: "int64"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+			]
+			search: hybrid: true
+			embed: {
+				fields: [
+					{name: "details", path: "spec.unionNull.str"},
+				]
 			}
 			mutation: operations: ["create","update"]
 			additionalPrinterColumns: [
@@ -112,6 +171,30 @@ testKind: {
 					boolField: bool
 				}
 			}
+			selectableFields: [".spec.stringField", ".spec.intField", ".spec.boolField"]
+			searchFields: [
+				{
+					name: "stringField"
+					path: "spec.stringField"
+					type: "string"
+					capabilities: ["filter", "text", "sort", "retrieve"]
+					description: "The string field"
+				},
+				{
+					name: "intField"
+					path: "spec.intField"
+					type: "int64"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+				{
+					name: "boolField"
+					path: "spec.boolField"
+					type: "boolean"
+					capabilities: ["filter", "retrieve"]
+					emitZeroIfAbsent: true
+				},
+			]
 			mutation: operations: ["create","update"]
 			validation: operations: ["create","update"]
 			routes: {
@@ -130,11 +213,18 @@ testKind: {
 							message: string
 						}
 						responseMetadata: typeMeta: false
+						authz: {
+							resource: "testkinds"
+							subresource: "reconcile"
+							verb: "create"
+						}
 					}
 				}
 				"/search": {
 					GET: {
 						name: "getTestKindSearchResult"
+						// Only the resource is declared here, so only the resource extension is generated.
+						authz: resource: "testkinds"
 						extensions: {
 							"x-grafana-test": true
 							"x-grafana-test-value": {
@@ -161,6 +251,24 @@ testKind: {
 					}
 				}
 			}
+		}
+		// v4: selectable field crosses a union nested under spec (spec.union is the disjunction; path .spec.union.spec.name).
+		"v4": {
+			schema: {
+				#UnionVariantA: {
+					kind: "VariantA"
+					spec: {name: string}
+				}
+				#UnionVariantB: {
+					kind: "VariantB"
+					spec: {name: string}
+				}
+				spec: {
+					union: #UnionVariantA | #UnionVariantB
+				}
+			}
+			selectableFields: [".spec.union.spec.name"]
+			validation: operations: ["create", "update"]
 		}
 	}
 }

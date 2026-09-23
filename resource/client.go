@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -280,4 +281,16 @@ type ClientGenerator interface {
 	// GetCustomRouteClient returns a Client for the provided GroupVersion. This returned Client is not guaranteed to be unique,
 	// and can be shared by other ClientForGV calls.
 	GetCustomRouteClient(schema.GroupVersion, string) (CustomRouteClient, error)
+	// DiscoveryClient returns a DiscoveryClient that can be used to inspect API groups exposed by the
+	// underlying API server. Implementations may keep per-group clients internally to handle
+	// setups where different groups are routed to different hosts.
+	DiscoveryClient() (DiscoveryClient, error)
+}
+
+// DiscoveryClient inspects the API groups and resources exposed by the underlying API server.
+type DiscoveryClient interface {
+	// PreferredVersion returns the APIResourceList for the preferred version of the given API group.
+	// The returned list's GroupVersion is the preferred GroupVersion; each APIResource entry's
+	// Group and Version fields are also populated with that same GroupVersion for caller convenience.
+	PreferredVersion(apiGroup string) (*metav1.APIResourceList, error)
 }

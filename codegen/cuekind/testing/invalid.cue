@@ -214,6 +214,55 @@ invalidExtensionKey: {
 	}
 }
 
+// #CustomRouteAuthz requires a resource if authz is present
+invalidRouteAuthzMissingResource: {
+	appName: "authz-app"
+	versions: {
+		"v1": {
+			kinds: [{
+				kind: "AuthzKind"
+				schema: spec: field: string
+				routes: {
+					"/authz": {
+						"GET": {
+							name: "getAuthz"
+							response: ok: bool
+							authz: {
+								verb: "get"
+							}
+						}
+					}
+				}
+			}]
+		}
+	}
+}
+
+// #CustomRouteAuthz.verb must be a kubernetes verb
+invalidRouteAuthzVerb: {
+	appName: "authz-app"
+	versions: {
+		"v1": {
+			kinds: [{
+				kind: "AuthzKind"
+				schema: spec: field: string
+				routes: {
+					"/authz": {
+						"GET": {
+							name: "getAuthz"
+							response: ok: bool
+							authz: {
+								resource: "authzkinds"
+								verb: "read"
+							}
+						}
+					}
+				}
+			}]
+		}
+	}
+}
+
 // #AdditionalPrinterColumns requires name, type, and jsonPath
 invalidPrinterColumnMissingFields: {
 	appName: "printer-app"

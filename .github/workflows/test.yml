@@ -9,13 +9,13 @@ jobs:
     steps:
       # git checkout
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
       # go env
       - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: "go.mod"
       # make test
@@ -27,13 +27,13 @@ jobs:
     steps:
       # git checkout
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           persist-credentials: false
       # go env
       - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: "go.mod"
           # Preflight checks
@@ -47,14 +47,14 @@ jobs:
     steps:
       # git checkout
       - name: Checkout code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
           path: "grafana-app-sdk"
           persist-credentials: false
       # Go env
       - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: "./grafana-app-sdk/go.mod"
       # Install the CLI
@@ -82,7 +82,7 @@ jobs:
           difflines=$(wc -l diff.txt | awk '{ print $1 }')
           echo "GoGroupByKindDiff=${difflines}" >> $GITHUB_ENV
       - name: Compare generated code
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const fs = require('fs');
@@ -150,6 +150,7 @@ jobs:
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
+          go mod edit -require=github.com/grafana/grafana-app-sdk@v0.0.0
           cp ../grafana-app-sdk/codegen/cuekind/testing/integration.cue kinds/integration.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/config.cue kinds/config.cue
           grafana-app-sdk generate --config configIntegrationGen3

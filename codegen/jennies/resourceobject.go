@@ -28,7 +28,6 @@ var (
 		Name:                       "foo",
 		GenerateName:               "bar",
 		Namespace:                  "foo",
-		SelfLink:                   "bar",
 		UID:                        types.UID("foo"),
 		ResourceVersion:            "bar",
 		Generation:                 i64,
@@ -71,7 +70,7 @@ func (*ResourceObjectGenerator) JennyName() string {
 }
 
 func (r *ResourceObjectGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.VersionedKinds(appManifest) {
 		openAPIName := ""
 		if r.OpenAPINamer != nil {

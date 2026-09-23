@@ -64,7 +64,7 @@ type routerHandlerCodeGenerator struct {
 }
 
 func (h *routerHandlerCodeGenerator) Generate(appManifest codegen.AppManifest) (codejen.Files, error) {
-	files := make(codejen.Files, 0)
+	files := make(codejen.Files, 0, 1)
 	for version, kind := range codegen.PreferredVersionKinds(appManifest) {
 		b := bytes.Buffer{}
 		err := templates.WriteBackendPluginHandler(templates.BackendPluginHandlerTemplateMetadata{

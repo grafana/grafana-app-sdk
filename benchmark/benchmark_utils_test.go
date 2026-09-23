@@ -40,7 +40,7 @@ func generateTestObjects(count int) []resource.Object {
 	objects := make([]resource.Object, count)
 	now := time.Now()
 
-	for i := 0; i < count; i++ {
+	for i := range count {
 		obj := &resource.UntypedObject{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: "foo/v1",

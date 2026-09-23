@@ -7,7 +7,7 @@
     "spec": {
         "appName": "test-app",
         "appDisplayName": "test-app",
-        "group": "testapp.ext.grafana.com",
+        "group": "testapp.ext.grafana.app",
         "versions": [
             {
                 "name": "v1",
@@ -84,6 +84,9 @@
                                 "type": "object"
                             }
                         },
+                        "selectableFields": [
+                            ".spec.stringField"
+                        ],
                         "conversion": true
                     },
                     {
@@ -186,6 +189,103 @@
                                     "timeField": {
                                         "format": "date-time",
                                         "type": "string"
+                                    },
+                                    "unionNull": {
+                                        "allOf": [
+                                            {
+                                                "required": [
+                                                    "str",
+                                                    "i"
+                                                ]
+                                            }
+                                        ],
+                                        "description": "This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction",
+                                        "nullable": true,
+                                        "properties": {
+                                            "i": {
+                                                "type": "integer"
+                                            },
+                                            "str": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "unionNull2": {
+                                        "description": "null variant should be ignore in disjunction when generating the selectable field",
+                                        "oneOf": [
+                                            {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "b"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "required": [
+                                                    "str",
+                                                    "i"
+                                                ]
+                                            },
+                                            {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "i"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "required": [
+                                                    "str",
+                                                    "b"
+                                                ]
+                                            },
+                                            {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "str"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "required": [
+                                                                "i"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "required": [
+                                                                "str"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "required": [
+                                                                "b"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ],
+                                        "properties": {
+                                            "b": {
+                                                "type": "boolean"
+                                            },
+                                            "i": {
+                                                "type": "integer"
+                                            },
+                                            "str": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": [
+                                            "object",
+                                            "null"
+                                        ]
                                     }
                                 },
                                 "required": [
@@ -241,6 +341,12 @@
                                 "type": "object"
                             }
                         },
+                        "selectableFields": [
+                            ".spec.stringField",
+                            ".spec.intField",
+                            ".spec.unionNull.str",
+                            ".spec.unionNull2.str"
+                        ],
                         "conversion": true
                     }
                 ]
@@ -338,6 +444,11 @@
                                 "type": "object"
                             }
                         },
+                        "selectableFields": [
+                            ".spec.stringField",
+                            ".spec.intField",
+                            ".spec.boolField"
+                        ],
                         "conversion": true,
                         "routes": {
                             "/reconcile": {
@@ -395,7 +506,10 @@
                                                 }
                                             }
                                         }
-                                    }
+                                    },
+                                    "x-grafana-declared-authz-resource": "testkinds",
+                                    "x-grafana-declared-authz-subresource": "reconcile",
+                                    "x-grafana-declared-authz-verb": "create"
                                 }
                             },
                             "/search": {
@@ -494,6 +608,7 @@
                                             }
                                         }
                                     },
+                                    "x-grafana-declared-authz-resource": "testkinds",
                                     "x-grafana-test": true,
                                     "x-grafana-test-value": {
                                         "val": "1"
@@ -501,6 +616,117 @@
                                 }
                             }
                         }
+                    }
+                ]
+            },
+            {
+                "name": "v4",
+                "served": true,
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "union": {
+                                        "oneOf": [
+                                            {
+                                                "required": [
+                                                    "kind",
+                                                    "spec"
+                                                ]
+                                            },
+                                            {
+                                                "required": [
+                                                    "kind",
+                                                    "spec"
+                                                ]
+                                            }
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "spec": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name"
+                                                ],
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "union"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "selectableFields": [
+                            ".spec.union.spec.name"
+                        ],
+                        "conversion": true
                     }
                 ]
             }
@@ -523,7 +749,7 @@
             "url": "https://foo.bar:8443",
             "webhooks": {
                 "conversionPath": "/convert",
-                "validationPath": "/validate",
+                "validationPath": "/validate/test-app.ext.grafana.app/v1",
                 "mutationPath": "/mutate"
             }
         },

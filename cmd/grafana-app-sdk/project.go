@@ -14,8 +14,9 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/grafana/codejen"
 	"github.com/spf13/cobra"
+
+	"github.com/grafana/codejen"
 
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/config"
@@ -142,7 +143,7 @@ func projectInit(cmd *cobra.Command, args []string) error {
 		cueModName = strings.Join(cueModSegments, "/")
 	}
 	cueModPath := filepath.Join(path, "kinds/cue.mod", "module.cue")
-	cueModContents := []byte(fmt.Sprintf("module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName))
+	cueModContents := fmt.Appendf(nil, "module: \"%s/kinds\"\nlanguage: version: \"v0.8.2\"\n", cueModName)
 	if _, err = os.Stat(cueModPath); err == nil && !overwrite {
 		if promptYN(fmt.Sprintf("CUE module already exists at '%s', overwrite?", cueModPath), true) {
 			err = writeFile(cueModPath, cueModContents)
@@ -227,7 +228,10 @@ func projectInit(cmd *cobra.Command, args []string) error {
 func projectWriteGoModule(path, moduleName string, overwrite bool) (string, error) {
 	goModPath := filepath.Join(path, "go.mod")
 	goSumPath := filepath.Join(path, "go.sum")
-	goModContents := []byte(fmt.Sprintf("module %s\n\ngo 1.22\n", moduleName))
+	goModContents := fmt.Appendf(nil, "module %s\n\ngo 1.22\n", moduleName)
+	if v := releaseVersion(); v != "" {
+		goModContents = fmt.Appendf(goModContents, "\nrequire github.com/grafana/grafana-app-sdk %s\n", v)
+	}
 
 	// If we weren't instructed to overwrite without prompting, let's check if the go.mod file already exists
 	if _, err := os.Stat(goModPath); err == nil && !overwrite {
@@ -468,7 +472,7 @@ func projectAddKindCUE(srcPath, manifestFileName, fieldName, kindName, version, 
 	if err != nil {
 		return nil, err
 	}
-	files := make(codejen.Files, 2)
+	files := make(codejen.Files, 2) //nolint:prealloc
 	files[0] = codejen.File{
 		RelativePath: fmt.Sprintf("%s.cue", strings.ToLower(kindName)),
 		Data:         buf.Bytes(),
@@ -856,19 +860,19 @@ func moveFiles(srcDir, destDir string) error {
 				if err != nil {
 					return err
 				}
-				if err = os.Remove(path); err != nil {
+				if err = os.Remove(path); err != nil { //nolint:gosec
 					return err
 				}
 				return fs.SkipDir
 			}
-			err = os.Rename(path, filepath.Join(destDir, d.Name()))
+			err = os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 			if err != nil {
 				return err
 			}
 			return fs.SkipDir
 		}
 
-		return os.Rename(path, filepath.Join(destDir, d.Name()))
+		return os.Rename(path, filepath.Join(destDir, d.Name())) //nolint:gosec
 	})
 }
 

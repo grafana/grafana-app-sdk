@@ -33,6 +33,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/config"
 	"github.com/grafana/grafana-app-sdk/codegen/cuekind"
+	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 )
 
 //go:embed templates/local/* templates/local/scripts/* templates/local/generated/datasources/*
@@ -762,7 +763,13 @@ func localGenerateGrafanaYAML(envCfg localEnvConfig, props *yamlGenProperties, o
 		props.SecureJSONData[k] = val
 	}
 
-	tmplGrafana, err := template.ParseFS(localEnvFiles, "templates/local/generated/grafana.yaml")
+	funcMap := template.FuncMap{
+		"replaceGroupName": func(s, replacement string) string {
+			return strings.ReplaceAll(s, ".", replacement)
+		},
+	}
+
+	tmplGrafana, err := template.New("grafana.yaml").Funcs(funcMap).ParseFS(localEnvFiles, "templates/local/generated/grafana.yaml")
 	if err != nil {
 		return err
 	}
@@ -1018,12 +1025,10 @@ func updateLocalConfigFromManifest(envCfg *localEnvConfig, format, cuePath, conf
 			return err
 		}
 
-		fs, err := generator.Generate(cuekind.ManifestGenerator(
-			"json",
-			false,
-			"v1alpha1"),
-			cfg.ManifestSelectors...,
-		)
+		fs, err := generator.Generate(cuekind.ManifestGenerator(cuekind.ManifestGeneratorConfig{
+			Extension: "json",
+			Version:   jennies.VersionV1Alpha1,
+		}), cfg.ManifestSelectors...)
 		if err != nil {
 			return err
 		}

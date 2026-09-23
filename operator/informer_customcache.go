@@ -3,6 +3,7 @@ package operator
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -536,6 +537,12 @@ func processDeltas(
 				return err
 			}
 			handler.OnDelete(obj)
+		case cache.Bookmark:
+			info, ok := obj.(cache.BookmarkInfo)
+			if !ok {
+				return fmt.Errorf("bookmark delta did not contain BookmarkInfo: %T", obj)
+			}
+			clientState.Bookmark(info.ResourceVersion)
 		default:
 		}
 	}

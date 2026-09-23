@@ -12,6 +12,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 
 	"github.com/grafana/grafana-app-sdk/health"
+	"github.com/grafana/grafana-app-sdk/metrics"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -78,6 +79,12 @@ type InformerOptions struct {
 	// Events for a particular object are assigned to the same worker to maintain in-order delivery per object.
 	// An empty value (0) will use the default of 10 workers.
 	MaxConcurrentWorkers uint64
+	// MetricsConfig controls the namespace and histogram settings for Prometheus metrics
+	// exposed by components that use these options (e.g., ConcurrentInformer queue depth).
+	MetricsConfig metrics.Config
+	// ResourceKind is used as the "kind" label on queue depth metrics.
+	// When empty, the label value defaults to an empty string.
+	ResourceKind string
 }
 
 // NewKubernetesBasedInformer creates a new KubernetesBasedInformer for the provided kind and options,
@@ -241,6 +248,15 @@ func toResourceObject(obj any, kind resource.Kind) (resource.Object, error) {
 		// TODO: better
 		err := cast.Into(newObj, kind.Codec(resource.KindEncodingJSON))
 		return newObj, err
+	}
+
+	// Deletes which are missed while the watch is disconnected are delivered on relist
+	// as cache.DeletedFinalStateUnknown tombstones wrapping the last known state of the object
+	if tombstone, ok := obj.(cache.DeletedFinalStateUnknown); ok {
+		if tombstone.Obj == nil {
+			return nil, fmt.Errorf("cannot convert DeletedFinalStateUnknown tombstone for %q: it contains no object", tombstone.Key)
+		}
+		return toResourceObject(tombstone.Obj, kind)
 	}
 	// TODO: other methods...?
 

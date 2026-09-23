@@ -211,7 +211,8 @@ func TestResourceManager_WaitForAvailability(t *testing.T) {
 		server.responseFunc = func(writer http.ResponseWriter, request *http.Request) {
 			writer.WriteHeader(http.StatusBadRequest)
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), time.Second)
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second)
+		defer cancel()
 		err := manager.WaitForAvailability(ctx, testSchema)
 		assert.NotNil(t, err)
 	})
@@ -222,7 +223,8 @@ func TestResourceManager_WaitForAvailability(t *testing.T) {
 			requestCount++
 			writer.WriteHeader(http.StatusNotFound)
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), time.Second*2)
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*2)
+		defer cancel()
 		err := manager.WaitForAvailability(ctx, testSchema)
 		assert.NotNil(t, err)
 		assert.Contains(t, err.Error(), "context deadline exceeded")
@@ -241,7 +243,8 @@ func TestResourceManager_WaitForAvailability(t *testing.T) {
 			}
 			requestCount++
 		}
-		ctx, _ := context.WithTimeout(context.TODO(), time.Second*5)
+		ctx, cancel := context.WithTimeout(context.TODO(), time.Second*5)
+		defer cancel()
 		err := manager.WaitForAvailability(ctx, testSchema)
 		assert.Nil(t, err)
 		assert.GreaterOrEqual(t, 2, requestCount)
@@ -277,9 +280,9 @@ func TestToOpenAPIV3(t *testing.T) {
 			Inner string `json:"inner"`
 		}
 		type L1 struct {
-			l2 *L2 `json:"next"`
+			L2 *L2 `json:"next"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(&L1{}))
+		res := toOpenAPIV3(reflect.TypeFor[*L1]())
 		assert.Equal(t, res, map[string]any{
 			"next": map[string]any{
 				"properties": map[string]any{
@@ -300,7 +303,7 @@ func TestToOpenAPIV3(t *testing.T) {
 		type Spec struct {
 			M
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"x-kubernetes-preserve-unknown-fields": true,
 		})
@@ -310,7 +313,7 @@ func TestToOpenAPIV3(t *testing.T) {
 		type Spec struct {
 			M map[string]any `json:"map"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"map": map[string]any{
 				"type":                                 "object",
@@ -326,7 +329,7 @@ func TestToOpenAPIV3(t *testing.T) {
 			I32 int32 `json:"i32"`
 			I64 int64 `json:"i64"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"i": map[string]any{
 				"type": "integer",
@@ -348,7 +351,7 @@ func TestToOpenAPIV3(t *testing.T) {
 			F32 float32 `json:"f32"`
 			F64 float64 `json:"f64"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"f32": map[string]any{
 				"type": "number",
@@ -363,7 +366,7 @@ func TestToOpenAPIV3(t *testing.T) {
 		type Spec struct {
 			B bool `json:"b"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"b": map[string]any{
 				"type": "boolean",
@@ -376,15 +379,15 @@ func TestToOpenAPIV3(t *testing.T) {
 			Foo string `json:"foo"`
 		}
 		type Spec struct {
-			S   []string      `json:"slice"`
-			A   [1]int        `json:"array"`
-			OS  []Element     `json:"objslice"`
-			IS  []*int32      `json:"islice"`
-			FS  []float64     `json:"fslice"`
-			BS  []bool        `json:"bslice"`
-			Any []interface{} `json:"any"`
+			S   []string  `json:"slice"`
+			A   [1]int    `json:"array"`
+			OS  []Element `json:"objslice"`
+			IS  []*int32  `json:"islice"`
+			FS  []float64 `json:"fslice"`
+			BS  []bool    `json:"bslice"`
+			Any []any     `json:"any"`
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{
 			"slice": map[string]any{
 				"type": "array",
@@ -441,7 +444,7 @@ func TestToOpenAPIV3(t *testing.T) {
 		type Spec struct {
 			Ch chan string
 		}
-		res := toOpenAPIV3(reflect.TypeOf(Spec{}))
+		res := toOpenAPIV3(reflect.TypeFor[Spec]())
 		assert.Equal(t, res, map[string]any{})
 	})
 }
@@ -451,7 +454,7 @@ func TestGetFieldKey(t *testing.T) {
 		type Foo struct {
 			Bar string
 		}
-		field := reflect.TypeOf(Foo{}).Field(0)
+		field := reflect.TypeFor[Foo]().Field(0)
 		assert.Equal(t, "Bar", getFieldKey(&field))
 	})
 
@@ -459,7 +462,7 @@ func TestGetFieldKey(t *testing.T) {
 		type Foo struct {
 			Bar string `json:"bar"`
 		}
-		field := reflect.TypeOf(Foo{}).Field(0)
+		field := reflect.TypeFor[Foo]().Field(0)
 		assert.Equal(t, "bar", getFieldKey(&field))
 	})
 
@@ -467,7 +470,7 @@ func TestGetFieldKey(t *testing.T) {
 		type Foo struct {
 			Bar string `json:"bar,omitempty"`
 		}
-		field := reflect.TypeOf(Foo{}).Field(0)
+		field := reflect.TypeFor[Foo]().Field(0)
 		assert.Equal(t, "bar", getFieldKey(&field))
 	})
 }

@@ -90,7 +90,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 	}
 	numHandlers := 100
 	wg := sync.WaitGroup{}
-	for i := 0; i < numHandlers; i++ {
+	for range numHandlers {
 		inf.AddEventHandler(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				assert.Equal(t, addObj, object)
@@ -111,8 +111,7 @@ func TestCustomCacheInformer_Run_DistributeEvents(t *testing.T) {
 		})
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go inf.Run(ctx)
 	waitForInitialEvents.Wait()
 
@@ -177,7 +176,7 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 	addWG := sync.WaitGroup{}
 	updateWG := sync.WaitGroup{}
 	deleteWG := sync.WaitGroup{}
-	for i := 0; i < numHandlers; i++ {
+	for range numHandlers {
 		inf.AddEventHandler(&SimpleWatcher{
 			AddFunc: func(ctx context.Context, object resource.Object) error {
 				addWG.Done()
@@ -193,11 +192,10 @@ func TestCustomCacheInformer_Run_ManyEvents(t *testing.T) {
 			},
 		})
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	go inf.Run(ctx)
 	waitForInitialEvents.Wait()
-	for i := 0; i < numEvents; i++ {
+	for i := range numEvents {
 		etype := watch.Added
 		switch i % 3 {
 		case 0:
@@ -344,15 +342,31 @@ func (lw *mockListWatcher) Watch(options metav1.ListOptions) (watch.Interface, e
 	return nil, nil
 }
 
+// mockWatch implements watch.Interface and resource.WatchResponse, so it can be returned from a
+// ListWatchClient's Watch call. WatchEvents is a stub: consumers check KubernetesCompatibleWatch
+// first and use the underlying watch.Interface directly.
 type mockWatch struct {
 	events chan watch.Event
 }
+
+var (
+	_ resource.WatchResponse    = &mockWatch{}
+	_ KubernetesCompatibleWatch = &mockWatch{}
+)
 
 func (w *mockWatch) ResultChan() <-chan watch.Event {
 	return w.events
 }
 
 func (*mockWatch) Stop() {}
+
+func (*mockWatch) WatchEvents() <-chan resource.WatchEvent {
+	return nil
+}
+
+func (w *mockWatch) KubernetesWatch() watch.Interface {
+	return w
+}
 
 func newUnsafeCache() *unsafeCache {
 	return &unsafeCache{
@@ -362,8 +376,9 @@ func newUnsafeCache() *unsafeCache {
 }
 
 type unsafeCache struct {
-	items   map[string]any
-	keyFunc func(any) (string, error)
+	items               map[string]any
+	keyFunc             func(any) (string, error)
+	lastResourceVersion string
 }
 
 func (u *unsafeCache) Add(obj any) error {
@@ -421,4 +436,12 @@ func (u *unsafeCache) Replace([]any, string) error {
 
 func (u *unsafeCache) Resync() error {
 	return nil
+}
+
+func (u *unsafeCache) Bookmark(rv string) {
+	u.lastResourceVersion = rv
+}
+
+func (u *unsafeCache) LastStoreSyncResourceVersion() string {
+	return u.lastResourceVersion
 }

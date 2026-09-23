@@ -1,5 +1,7 @@
 package app
 
+import "strings"
+
 appManifestv1alpha2: appManifestKind & {
 	schema: {
 		#AdditionalPrinterColumns: {
@@ -21,6 +23,32 @@ appManifestv1alpha2: appManifestKind & {
 			// jsonPath is a simple JSON path (i.e. with array notation) which is evaluated against
 			// each custom resource to produce the value for this column.
 			jsonPath: string
+		}
+		// #SearchField describes a field exposed for search indexing and querying.
+		// The type and capabilities values, and which capabilities are valid on which
+		// type, are defined by the searchfields package
+		// (github.com/grafana/grafana-app-sdk/searchfields), the shared source of
+		// truth for both the SDK codegen validator and the runtime search backend.
+		#SearchField: {
+			// name is the field name as it appears in search documents and queries.
+			name: string
+			// path is the JSON path within the resource that supplies this field's value
+			// (for example "spec.email"). When omitted, the field is populated by a custom
+			// document builder rather than read directly from the resource.
+			path?: string
+			// type is the value type of the field.
+			type: "string" | "int64" | "double" | "boolean" | "date"
+			// array indicates that the field holds a list of values of the given type.
+			array?: bool | *false
+			// capabilities lists what the field can be used for at query time, such as
+			// filtering, full-text search, sorting, or faceting.
+			capabilities: [...("filter" | "text" | "partial" | "sort" | "facet" | "retrieve" | "unranked")]
+			// emitZeroIfAbsent indexes the type's zero value when path resolves to nothing,
+			// so sort and range queries see every document. Without it, a document missing
+			// the path omits the field entirely.
+			emitZeroIfAbsent?: bool | *false
+			// description is a human readable description of the field.
+			description?: string
 		}
 		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
 		#ValidationCapability: {
@@ -44,6 +72,13 @@ appManifestv1alpha2: appManifestKind & {
 			// Scope dictates the scope of the kind. This field must be the same for all versions of the kind.
 			// Different values will result in an error or undefined behavior.
 			scope: *"Namespaced" | "Cluster"
+			// userReadable controls whether end users may get/list cluster-scoped resources of this kind.
+			// Only meaningful when scope is "Cluster"; for namespaced kinds the field is ignored.
+			userReadable?: bool | *false
+			// folderScoped controls whether resources of this kind are scoped to folders.
+			// Only meaningful when scope is "Namespaced"; for cluster-scoped kinds the field is ignored.
+			// Defaults to true (folder-scoped).
+			folderScoped?: bool | *true
 			admission?: #AdmissionCapabilities
 			// Schemas is the components.schemas section of an OpenAPI document describing this Kind.
 			// It must contain a key named the same as the `kind` field of the Kind.
@@ -57,6 +92,12 @@ appManifestv1alpha2: appManifestKind & {
 			}
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			searchFields?: [...#SearchField]
+			// search declares which search endpoints are served for this kind.
+			// /search and /trash default to enabled; /search/hybrid defaults to disabled.
+			search?: #ManifestVersionKindSearch
+			// embed defines the embedding document independently of search fields.
+			embed?: #ManifestVersionKindEmbed
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -68,6 +109,34 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		// #ManifestVersionKindSearch declares which search endpoints are served for a kind.
+		#ManifestVersionKindSearch: {
+			// endpoint declares whether the kind serves the /search endpoint.
+			endpoint?: bool | *true
+			// trash declares whether the kind serves the /trash endpoint,
+			// which lists deleted resources of the kind.
+			trash?: bool | *true
+			// hybrid declares whether the kind serves the /search/hybrid endpoint.
+			hybrid?: bool | *false
+		}
+		// Kinds with a custom embedding builder omit this section.
+		#ManifestVersionKindEmbed: {
+			// fields supplies inputs, in declaration order, used only to generate the text to be embedded.
+			// Declaring an embedding field does not enable filtering embeddings by that field.
+			fields: [...#ManifestVersionKindEmbedField]
+		}
+		#ResourceEmbed: {
+			// reembedVersion is a manual revision for requesting re-embedding of existing resources, shared by all API versions.
+			// Increase it when a backfill is needed; changing the declared inputs does not require a bump by itself.
+			reembedVersion: int & >0
+		}
+		#ManifestVersionKindEmbedField: {
+			// name labels this input in the embedding document.
+			name: string
+			// path supplies a string or string array from the resource, using the same
+			// dot-separated paths and [*] projections as searchFields.
+			path: string & strings.MinRunes(1)
 		}
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
@@ -145,6 +214,11 @@ appManifestv1alpha2: appManifestKind & {
 			// AppDisplayName is the display name of the app, which can contain any printable characters
 			appDisplayName: string
 			group: string
+			// Embed configures declarative embeddings by resource name (the lowercase plural) within this app's group.
+			// Custom embedding builders omit their entry and define their content version in Go.
+			embed?: {
+				[string]: #ResourceEmbed
+			}
 			// Versions is the list of versions for this manifest, in order.
 			versions: [...#ManifestVersion]
 			// PreferredVersion is the preferred version for API use. If empty, it will use the latest from versions.

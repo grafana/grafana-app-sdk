@@ -4,12 +4,16 @@ import (
 	"context"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/grafana/grafana-app-sdk/health"
+	"github.com/grafana/grafana-app-sdk/metrics"
 )
 
 var (
-	_ Informer       = &ConcurrentInformer{}
-	_ health.Checker = &ConcurrentInformer{}
+	_ Informer         = &ConcurrentInformer{}
+	_ health.Checker   = &ConcurrentInformer{}
+	_ metrics.Provider = &ConcurrentInformer{}
 )
 
 // ConcurrentInformer implements the Informer interface, wrapping another Informer implementation
@@ -23,6 +27,7 @@ type ConcurrentInformer struct {
 	informer             Informer
 	watchers             []*concurrentWatcher
 	maxConcurrentWorkers uint64
+	queueDepth           prometheus.GaugeFunc
 
 	mtx sync.RWMutex
 }
@@ -36,9 +41,15 @@ type ConcurrentInformerOptions struct {
 	// to the same worker, as to maintain the guarantee of in-order delivery of events per object.
 	// By default, a single worker is run to process all events sequentially.
 	MaxConcurrentWorkers uint64
+	// MetricsConfig controls the namespace for Prometheus metrics exposed by the ConcurrentInformer.
+	MetricsConfig metrics.Config
+	// ResourceKind is used as the "kind" label on queue depth metrics.
+	// When empty, the label value defaults to an empty string.
+	ResourceKind string
 }
 
 // NewConcurrentInformer creates a new ConcurrentInformer wrapping the provided Informer.
+//
 // Deprecated: Use NewConcurrentInformerFromOptions instead, which accepts InformerOptions.
 func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 	*ConcurrentInformer, error) {
@@ -54,6 +65,13 @@ func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 	if opts.MaxConcurrentWorkers > 0 {
 		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
 	}
+	ci.queueDepth = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   opts.MetricsConfig.Namespace,
+		Subsystem:   "concurrent_watcher",
+		Name:        "queue_depth",
+		Help:        "Current number of pending events across all concurrent watcher worker queues.",
+		ConstLabels: prometheus.Labels{"kind": opts.ResourceKind},
+	}, ci.sumQueueDepth)
 
 	return ci, nil
 }
@@ -74,6 +92,13 @@ func NewConcurrentInformerFromOptions(inf Informer, opts InformerOptions) (
 	if opts.MaxConcurrentWorkers > 0 {
 		ci.maxConcurrentWorkers = opts.MaxConcurrentWorkers
 	}
+	ci.queueDepth = prometheus.NewGaugeFunc(prometheus.GaugeOpts{
+		Namespace:   opts.MetricsConfig.Namespace,
+		Subsystem:   "concurrent_watcher",
+		Name:        "queue_depth",
+		Help:        "Current number of pending events across all concurrent watcher worker queues.",
+		ConstLabels: prometheus.Labels{"kind": opts.ResourceKind},
+	}, ci.sumQueueDepth)
 
 	return ci, nil
 }
@@ -114,7 +139,7 @@ func (ci *ConcurrentInformer) Run(ctx context.Context) error {
 }
 
 func (ci *ConcurrentInformer) HealthChecks() []health.Check {
-	checks := make([]health.Check, 0)
+	checks := make([]health.Check, 0, 2)
 	if cast, ok := ci.informer.(health.Check); ok {
 		checks = append(checks, cast)
 	}
@@ -128,4 +153,21 @@ func (ci *ConcurrentInformer) HealthChecks() []health.Check {
 // If the sync is not complete within the context deadline, it will return a timeout error.
 func (ci *ConcurrentInformer) WaitForSync(ctx context.Context) error {
 	return ci.informer.WaitForSync(ctx)
+}
+
+// PrometheusCollectors implements metrics.Provider.
+func (ci *ConcurrentInformer) PrometheusCollectors() []prometheus.Collector {
+	return []prometheus.Collector{ci.queueDepth}
+}
+
+func (ci *ConcurrentInformer) sumQueueDepth() float64 {
+	ci.mtx.RLock()
+	defer ci.mtx.RUnlock()
+	var total int64
+	for _, cw := range ci.watchers {
+		for _, q := range cw.workers {
+			total += q.Len()
+		}
+	}
+	return float64(total)
 }

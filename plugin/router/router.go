@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -224,12 +225,12 @@ func (r *Router) getHandler(ctx context.Context, path string, method string, mat
 			// handler found, apply middleware chain
 			var handler HandlerFunc = routeHandler.handleFunc
 			// middlewares attached to this router first
-			for i := len(r.middlewares) - 1; i >= 0; i-- {
-				handler = r.middlewares[i].Middleware(handler)
+			for _, v := range slices.Backward(r.middlewares) {
+				handler = v.Middleware(handler)
 			}
 			// middlewares from parent routers next
-			for i := len(applyMiddlewares) - 1; i >= 0; i-- {
-				handler = applyMiddlewares[i].Middleware(handler)
+			for _, applyMiddleware := range slices.Backward(applyMiddlewares) {
+				handler = applyMiddleware.Middleware(handler)
 			}
 
 			// Add the matched route info to the context
@@ -262,8 +263,8 @@ func (r *Router) CallResource(
 
 		// Return not found
 		handler = r.NotFoundHandler
-		for i := len(r.middlewares) - 1; i >= 0; i-- {
-			handler = r.middlewares[i].Middleware(handler)
+		for _, v := range slices.Backward(r.middlewares) {
+			handler = v.Middleware(handler)
 		}
 		ctx = context.WithValue(ctx, ctxMatchedRouteKey{}, RouteInfo{
 			Name:   "NotFoundHandler",

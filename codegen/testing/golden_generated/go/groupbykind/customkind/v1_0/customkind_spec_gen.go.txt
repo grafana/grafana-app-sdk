@@ -3,6 +3,7 @@
 package v1_0
 
 import (
+	json "encoding/json"
 	time "time"
 )
 
@@ -47,17 +48,25 @@ func (InnerObject2) OpenAPIModelName() string {
 }
 
 // +k8s:openapi-gen=true
-type UnionType interface{}
+type UnionType = Type1OrType2
+
+// NewUnionType creates a new UnionType object.
+func NewUnionType() *UnionType {
+	return NewType1OrType2()
+}
 
 // +k8s:openapi-gen=true
 type Type1 struct {
-	Group   string   `json:"group"`
-	Options []string `json:"options,omitempty"`
+	Type    UnionTypeDiscriminator `json:"type"`
+	Group   string                 `json:"group"`
+	Options []string               `json:"options,omitempty"`
 }
 
 // NewType1 creates a new Type1 object.
 func NewType1() *Type1 {
-	return &Type1{}
+	return &Type1{
+		Type: UnionTypeDiscriminatorType1,
+	}
 }
 
 // OpenAPIModelName returns the OpenAPI model name for Type1.
@@ -66,7 +75,21 @@ func (Type1) OpenAPIModelName() string {
 }
 
 // +k8s:openapi-gen=true
+type UnionTypeDiscriminator string
+
+const (
+	UnionTypeDiscriminatorType1 UnionTypeDiscriminator = "Type1"
+	UnionTypeDiscriminatorType2 UnionTypeDiscriminator = "Type2"
+)
+
+// OpenAPIModelName returns the OpenAPI model name for UnionTypeDiscriminator.
+func (UnionTypeDiscriminator) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.UnionTypeDiscriminator"
+}
+
+// +k8s:openapi-gen=true
 type Type2 struct {
+	Type    UnionTypeDiscriminator `json:"type"`
 	Group   string                 `json:"group"`
 	Details map[string]interface{} `json:"details"`
 }
@@ -74,6 +97,7 @@ type Type2 struct {
 // NewType2 creates a new Type2 object.
 func NewType2() *Type2 {
 	return &Type2{
+		Type:    UnionTypeDiscriminatorType2,
 		Details: map[string]interface{}{},
 	}
 }
@@ -119,6 +143,7 @@ type Spec struct {
 func NewSpec() *Spec {
 	return &Spec{
 		Inner:      *NewInnerObject1(),
+		Union:      *NewUnionType(),
 		Map:        map[string]Type2{},
 		Enum:       SpecEnumDefault,
 		BoolField:  false,
@@ -145,4 +170,71 @@ const (
 // OpenAPIModelName returns the OpenAPI model name for SpecEnum.
 func (SpecEnum) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.customkind.v1_0.SpecEnum"
+}
+
+// +k8s:openapi-gen=true
+type Type1OrType2 struct {
+	Type1 *Type1 `json:"Type1,omitempty"`
+	Type2 *Type2 `json:"Type2,omitempty"`
+}
+
+// NewType1OrType2 creates a new Type1OrType2 object.
+func NewType1OrType2() *Type1OrType2 {
+	return &Type1OrType2{}
+}
+
+// MarshalJSON implements a custom JSON marshalling logic to encode `Type1OrType2` as JSON.
+func (resource Type1OrType2) MarshalJSON() ([]byte, error) {
+	if resource.Type1 != nil {
+		return json.Marshal(resource.Type1)
+	}
+	if resource.Type2 != nil {
+		return json.Marshal(resource.Type2)
+	}
+
+	return []byte("null"), nil
+}
+
+// UnmarshalJSON implements a custom JSON unmarshalling logic to decode `Type1OrType2` from JSON.
+func (resource *Type1OrType2) UnmarshalJSON(raw []byte) error {
+	if raw == nil {
+		return nil
+	}
+
+	// FIXME: this is wasteful, we need to find a more efficient way to unmarshal this.
+	parsedAsMap := make(map[string]interface{})
+	if err := json.Unmarshal(raw, &parsedAsMap); err != nil {
+		return err
+	}
+
+	discriminator, found := parsedAsMap["type"]
+	if !found {
+		return nil
+	}
+
+	switch discriminator {
+	case "Type1":
+		var type1 Type1
+		if err := json.Unmarshal(raw, &type1); err != nil {
+			return err
+		}
+
+		resource.Type1 = &type1
+		return nil
+	case "Type2":
+		var type2 Type2
+		if err := json.Unmarshal(raw, &type2); err != nil {
+			return err
+		}
+
+		resource.Type2 = &type2
+		return nil
+	}
+
+	return nil
+}
+
+// OpenAPIModelName returns the OpenAPI model name for Type1OrType2.
+func (Type1OrType2) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.customkind.v1_0.Type1OrType2"
 }

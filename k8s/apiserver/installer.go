@@ -13,9 +13,9 @@ import (
 	"reflect"
 	"regexp"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -26,6 +26,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/apimachinery/pkg/version"
 	"k8s.io/apiserver/pkg/admission"
+	endpointmetrics "k8s.io/apiserver/pkg/endpoints/metrics"
+	endpointrequest "k8s.io/apiserver/pkg/endpoints/request"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic"
 	"k8s.io/apiserver/pkg/registry/rest"
 	genericapiserver "k8s.io/apiserver/pkg/server"
@@ -225,7 +227,7 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 
 	internalKinds := map[string]resource.Kind{}
 	kindsByGroup := map[string][]resource.Kind{}
-	groupVersions := make([]schema.GroupVersion, 0)
+	groupVersions := make([]schema.GroupVersion, 0) // nolint:prealloc
 	kindVersionPriorities := make(map[string][]string)
 	for gv, kinds := range kindsByGV {
 		for _, kind := range kinds {
@@ -305,14 +307,14 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 		}
 	}
 
-	sort.Slice(groupVersions, func(i, j int) bool {
-		if groupVersions[i].Version == r.appConfig.ManifestData.PreferredVersion {
-			return true
+	slices.SortFunc(groupVersions, func(a, b schema.GroupVersion) int {
+		if a.Version == r.appConfig.ManifestData.PreferredVersion {
+			return -1
 		}
-		if groupVersions[j].Version == r.appConfig.ManifestData.PreferredVersion {
-			return false
+		if b.Version == r.appConfig.ManifestData.PreferredVersion {
+			return 1
 		}
-		return version.CompareKubeAwareVersionStrings(groupVersions[i].Version, groupVersions[j].Version) > 0
+		return -version.CompareKubeAwareVersionStrings(a.Version, b.Version)
 	})
 	if len(groupVersions) > 0 {
 		if err = scheme.SetVersionPriority(groupVersions...); err != nil {
@@ -440,15 +442,14 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	for gv, kinds := range kindsByGV {
 		storage := map[string]rest.Storage{}
 		for _, kind := range kinds {
-			if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(schema.GroupVersionResource{
-				Group:    gv.Group,
-				Version:  gv.Version,
-				Resource: kind.Kind.Plural(),
-			}) {
+			gvr := gv.WithResource(kind.Kind.Plural())
+			if r.resourceConfig != nil && !r.resourceConfig.ResourceEnabled(gvr) {
 				logging.DefaultLogger.Info("Skipping resource based on provided ResourceConfig", "kind", kind.Kind, "version", gv.Version, "group", group)
 				continue
 			}
-			s, err := newGenericStoreForKind(r.scheme, kind.Kind, optsGetter)
+			// The subresource and custom route storages below wrap s, so they
+			// inherit whatever options it resolved for this group+version+resource.
+			s, err := newGenericStoreForKind(r.scheme, kind.Kind, restOptionsGetterForResource(optsGetter, gvr))
 			if err != nil {
 				return fmt.Errorf("failed to create store for kind %s: %w", kind.Kind.Kind(), err)
 			}
@@ -687,15 +688,11 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		}
 	}
 
-	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(func(req *restful.Request, resp *restful.Response) {
+	routeFunc := restful.RouteFunction(func(req *restful.Request, resp *restful.Response) {
 		a, err := r.App()
 		if err != nil {
-			resp.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(resp).Encode(metav1.Status{
-				Status:  metav1.StatusFailure,
-				Code:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
+			writeCustomRouteError(resp, err)
+			return
 		}
 		identifier := resource.FullIdentifier{
 			Group:   r.appConfig.ManifestData.Group,
@@ -713,15 +710,83 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 			Body:               req.Request.Body,
 		})
 		if err != nil {
-			resp.WriteHeader(http.StatusInternalServerError)
-			_ = json.NewEncoder(resp).Encode(metav1.Status{
-				Status:  metav1.StatusFailure,
-				Code:    http.StatusInternalServerError,
-				Message: err.Error(),
-			})
+			writeCustomRouteError(resp, err)
 		}
-	}).Returns(200, "OK", responseType))
+	})
+
+	staticScope := "cluster"
+	if scope == resource.NamespacedScope {
+		staticScope = "namespace"
+	}
+	instrumented := instrumentRouteFunc(
+		httpMethodToK8sVerb[strings.ToUpper(method)],
+		gv.Group,
+		gv.Version,
+		rpath,
+		staticScope,
+		routeFunc,
+	)
+
+	ws.Route(builder.Operation(prefixRouteIDWithK8sVerbIfNotPresent(op.OperationId, method)).To(instrumented).Returns(200, "OK", responseType))
 	return nil
+}
+
+// instrumentRouteFunc wraps routeFunc to record apiserver metrics. The scope label is
+// resolved from the request's RequestInfo when present (falling back to staticScope), since a
+// custom route may target a specific resource via a path parameter.
+func instrumentRouteFunc(verb, group, apiVersion, resourceName, staticScope string, routeFunc restful.RouteFunction) restful.RouteFunction {
+	return restful.RouteFunction(func(req *restful.Request, resp *restful.Response) {
+		startTime := time.Now()
+
+		routeFunc(req, resp)
+
+		scope := staticScope
+		if reqInfo, ok := endpointrequest.RequestInfoFrom(req.Request.Context()); ok && reqInfo != nil {
+			scope = endpointmetrics.CleanScope(reqInfo)
+		}
+
+		endpointmetrics.MonitorRequest(
+			req.Request,
+			verb,
+			group,
+			apiVersion,
+			resourceName,
+			"",
+			scope,
+			endpointmetrics.APIServerComponent,
+			false,
+			"",
+			resp.StatusCode(),
+			0,
+			time.Since(startTime),
+		)
+	})
+}
+
+func writeCustomRouteError(resp *restful.Response, err error) {
+	code := int32(http.StatusInternalServerError)
+	reason := metav1.StatusReasonInternalError
+	message := err.Error()
+	var apiStatus apierrors.APIStatus
+	if errors.As(err, &apiStatus) {
+		st := apiStatus.Status()
+		if st.Code != 0 {
+			code = st.Code
+		}
+		if st.Reason != "" {
+			reason = st.Reason
+		}
+		if st.Message != "" {
+			message = st.Message
+		}
+	}
+	resp.WriteHeader(int(code))
+	_ = json.NewEncoder(resp).Encode(metav1.Status{
+		Status:  metav1.StatusFailure,
+		Code:    code,
+		Reason:  reason,
+		Message: message,
+	})
 }
 
 var allowedK8sVerbs = []string{
@@ -798,7 +863,7 @@ func (r *defaultInstaller) App() (app.App, error) {
 }
 
 func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
-	groupVersions := make([]schema.GroupVersion, 0)
+	groupVersions := make([]schema.GroupVersion, 0, len(r.appConfig.ManifestData.Versions))
 	for _, gv := range r.appConfig.ManifestData.Versions {
 		groupVersions = append(groupVersions, schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: gv.Name})
 	}
@@ -1567,7 +1632,7 @@ func copySpec3MediaType(mt *spec3.MediaType) *spec3.MediaType {
 type EmptyObject struct{}
 
 func (EmptyObject) OpenAPIModelName() string {
-	return "com.github.grafana-app-sdk.k8s.apiserver.EmptyObject"
+	return "com.github.grafana.grafana-app-sdk.k8s.apiserver.EmptyObject"
 }
 
 func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value string) (string, string, error) {
