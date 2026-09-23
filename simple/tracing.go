@@ -27,6 +27,9 @@ type OpenTelemetryConfig struct {
 	Port        int
 	ConnType    OTelConnType
 	ServiceName string
+	// Sampler overrides the default sampler. When nil, the SDK uses OTEL_TRACES_SAMPLER and
+	// OTEL_TRACES_SAMPLER_ARG if set, otherwise ParentBased(AlwaysSample).
+	Sampler trace.Sampler
 }
 
 // SetTraceProvider creates a trace.TracerProvider and sets it as the global TracerProvider which is used by
@@ -70,10 +73,14 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 		return err
 	}
 
-	otel.SetTracerProvider(trace.NewTracerProvider(
+	opts := []trace.TracerProviderOption{
 		trace.WithBatcher(exp),
 		trace.WithResource(r),
-	))
+	}
+	if cfg.Sampler != nil {
+		opts = append(opts, trace.WithSampler(cfg.Sampler))
+	}
+	otel.SetTracerProvider(trace.NewTracerProvider(opts...))
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 		propagation.TraceContext{},
 		propagation.Baggage{},
