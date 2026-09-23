@@ -3,7 +3,6 @@ package simple
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -35,22 +34,16 @@ func SetTraceProvider(cfg OpenTelemetryConfig) error {
 	var exp trace.SpanExporter
 	switch cfg.ConnType {
 	case OTelConnTypeGRPC:
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		defer cancel()
-
-		// TODO: replace with grpc.NewClient, before we upgrade to 2.x.
-		// nolint: staticcheck
-		conn, err := grpc.DialContext(ctx, fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
+		conn, err := grpc.NewClient(fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 			// Note the use of insecure transport here. TLS is recommended in production.
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithBlock(),
 		)
 		if err != nil {
 			return fmt.Errorf("failed to create gRPC connection to collector: %w", err)
 		}
 
 		// Set up a trace exporter
-		exp, err = otlptracegrpc.New(ctx, otlptracegrpc.WithGRPCConn(conn))
+		exp, err = otlptracegrpc.New(context.Background(), otlptracegrpc.WithGRPCConn(conn))
 		if err != nil {
 			return err
 		}
