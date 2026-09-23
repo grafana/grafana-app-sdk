@@ -339,6 +339,9 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 	}
+	if provider, ok := clients.(metrics.Provider); ok {
+		a.collectors = append(a.collectors, provider.PrometheusCollectors()...)
+	}
 	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
 	}
