@@ -172,7 +172,10 @@ var appManifestData = app.ManifestData{
                 Plural: "{{.Plural}}",
                 Scope: "{{.Scope}}",
                 Conversion: {{.Conversion}}, {{ if .FolderScoped }}
-                FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Search }}
+                FolderScoped: {{ goBoolPtr .FolderScoped }}, {{ end }}{{ if .Storage }}
+                Storage: &app.ManifestVersionKindStorage{
+                    ListKeys: {{ goBoolPtr .Storage.ListKeys }},
+                }, {{ end }}{{ if .Search }}
                 Search: &app.ManifestVersionKindSearch{ {{ if .Search.Endpoint }}
                     Endpoint: {{ goBoolPtr .Search.Endpoint }},{{ end }}{{ if .Search.Trash }}
                     Trash: {{ goBoolPtr .Search.Trash }},{{ end }}{{ if .Search.Hybrid }}

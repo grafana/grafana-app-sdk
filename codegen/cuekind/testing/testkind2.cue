@@ -5,6 +5,7 @@ testKind2: {
 	plural: "testkind2s"
 	current: "v1"
 	codegen: ts: enabled: false
+	listKeys: false
 	search: trash: false
 	versions: {
 		"v1": {

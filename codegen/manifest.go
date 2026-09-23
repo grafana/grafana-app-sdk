@@ -229,6 +229,7 @@ type VersionedKind struct {
 	SelectableFields         []string                  `json:"selectableFields"`
 	AdditionalPrinterColumns []AdditionalPrinterColumn `json:"additionalPrinterColumns"`
 	SearchFields             []SearchField             `json:"searchFields,omitempty"`
+	ListKeys                 *bool                     `json:"listKeys"`
 	Search                   KindSearch                `json:"search"`
 	Embed                    *KindEmbed                `json:"embed,omitempty"`
 	// Schema is the CUE schema for the version
