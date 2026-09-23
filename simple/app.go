@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -339,6 +340,9 @@ func NewApp(config AppConfig) (*App, error) {
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 	}
+	if provider, ok := clients.(metrics.Provider); ok {
+		a.collectors = append(a.collectors, provider.PrometheusCollectors()...)
+	}
 	if config.InformerConfig.InformerOptions.ErrorHandler != nil {
 		a.informerController.ErrorHandler = config.InformerConfig.InformerOptions.ErrorHandler
 	}
@@ -588,7 +592,11 @@ func (a *App) HealthChecks() []health.Check {
 // by any Runnables the app will run as part of Runner(). These additional prometheus collectors are exposed
 // as a part of the list returned by PrometheusCollectors().
 func (a *App) RegisterMetricsCollectors(collectors ...prometheus.Collector) {
-	a.collectors = append(a.collectors, collectors...)
+	for _, c := range collectors {
+		if !slices.Contains(a.collectors, c) {
+			a.collectors = append(a.collectors, c)
+		}
+	}
 }
 
 // Validate implements app.App and handles Validating Admission Requests
