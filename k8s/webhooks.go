@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"gomodules.xyz/jsonpatch/v2"
 	admission "k8s.io/api/admission/v1beta1"
 	conversion "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -193,7 +194,7 @@ func (w *WebhookServer) Run(closeChan <-chan struct{}) error {
 	w.Register(mux)
 	server := &http.Server{
 		Addr:              fmt.Sprintf(":%d", w.port),
-		Handler:           mux,
+		Handler:           otelhttp.NewHandler(mux, "webhook"),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	errCh := make(chan error, 1)
