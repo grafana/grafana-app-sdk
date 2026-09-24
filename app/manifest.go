@@ -242,7 +242,33 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
-	return multierror.Append(errs, m.validateEmbed()).ErrorOrNil()
+	return multierror.Append(errs, m.validateEmbed(), m.validateKV()).ErrorOrNil()
+}
+
+func (m *ManifestData) validateKV() error {
+	var errs error
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			if kind.KV == nil {
+				continue
+			}
+			// Zero means "use the platform default". The platform enforces its own upper
+			// bound when mounting, so only negative values are invalid here.
+			if kind.KV.MaxValueBytes < 0 {
+				errs = multierror.Append(errs, fmt.Errorf(
+					"kind %q version %q: kv.maxValueBytes must not be negative, got %d",
+					kind.Kind, version.Name, kind.KV.MaxValueBytes,
+				))
+			}
+			if kind.KV.MaxKeysPerOwner < 0 {
+				errs = multierror.Append(errs, fmt.Errorf(
+					"kind %q version %q: kv.maxKeysPerOwner must not be negative, got %d",
+					kind.Kind, version.Name, kind.KV.MaxKeysPerOwner,
+				))
+			}
+		}
+	}
+	return errs
 }
 
 func (m *ManifestData) validateEmbed() error {
@@ -419,6 +445,9 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+	// KV declares that this kind supports the kv subresource.
+	// A nil value means the kind does not support kv.
+	KV *ManifestVersionKindKV `json:"kv,omitempty" yaml:"kv,omitempty"`
 }
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.
@@ -464,6 +493,20 @@ type ManifestVersionKindEmbedField struct {
 	Name string `json:"name" yaml:"name"`
 	// Path supplies a string or string array from the resource and must not be empty.
 	Path string `json:"path" yaml:"path"`
+}
+
+// ManifestVersionKindKV declares that a kind supports the kv subresource.
+// Presence of the struct (non-nil pointer) enables the subresource; both fields are optional overrides.
+type ManifestVersionKindKV struct {
+	// MaxValueBytes lowers the byte size cap of a single JSON value. Zero means the platform default.
+	MaxValueBytes int `json:"maxValueBytes,omitempty" yaml:"maxValueBytes,omitempty"`
+	// MaxKeysPerOwner caps how many keys one owner prefix may hold per resource. Zero means platform default (100).
+	MaxKeysPerOwner int `json:"maxKeysPerOwner,omitempty" yaml:"maxKeysPerOwner,omitempty"`
+}
+
+// HasKV reports whether this kind declares the kv subresource.
+func (m *ManifestVersionKind) HasKV() bool {
+	return m.KV != nil
 }
 
 // Resource defines the k8s resource path for the kind. It is a lowercase version of the plural name.

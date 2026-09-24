@@ -371,6 +371,17 @@ func TestParseManifestInvalidCases(t *testing.T) {
 			selector:    "invalidClusterRouteBadName",
 			errContains: `routes.cluster."/bad".POST.name: invalid value "invalidPrefix"`,
 		},
+		// KV constraint validation
+		{
+			name:        "kv maxValueBytes zero violates >0 constraint",
+			selector:    "invalidKVMaxValueBytesZero",
+			errContains: `kv.maxValueBytes`,
+		},
+		{
+			name:        "kv maxKeysPerOwner zero violates >0 constraint",
+			selector:    "invalidKVMaxKeysPerOwnerZero",
+			errContains: `kv.maxKeysPerOwner`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

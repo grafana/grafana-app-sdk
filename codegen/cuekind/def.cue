@@ -271,6 +271,16 @@ SchemaWithOperatorState: Schema & {
 	path: string & strings.MinRunes(1)
 }
 
+// #KindKV declares that this kind supports the kv subresource.
+// Presence of the block enables it; all fields are optional overrides.
+#KindKV: {
+	// maxValueBytes lowers the byte size cap of a single JSON value. The platform
+	// default and upper bound are enforced by the server that mounts the subresource.
+	maxValueBytes?: int & >0
+	// maxKeysPerOwner caps how many keys one owner prefix may hold per resource (default 100).
+	maxKeysPerOwner?: int & >0
+}
+
 // Kind represents an arbitrary kind which can be used for code generation
 Kind: S={
 	kind:  =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])$"
@@ -367,6 +377,9 @@ Kind: S={
 	// routes is a map of path patterns to custom routes that will be exposed as subresources for this kind.
 	// entries here should not conflict with subresources (like spec and status) in the schema for the kind.
 	routes?: #CustomRouteCapability
+	// kv declares that this kind supports the kv subresource.
+	// Kinds without this block have no kv subresource.
+	kv?: #KindKV
 
 	_computedGroupKind: S.machineName+"."+group & =~"^([a-z][a-z0-9-.]{0,63}[a-z0-9])$"
 }

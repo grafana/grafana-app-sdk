@@ -115,6 +115,15 @@ type KindSearch struct {
 	Hybrid bool `json:"hybrid"`
 }
 
+// KindKV declares that a kind supports the kv subresource.
+// A nil value means the kind does not support kv.
+type KindKV struct {
+	// MaxValueBytes lowers the byte size cap of a single JSON value. Zero means the platform default.
+	MaxValueBytes int `json:"maxValueBytes,omitempty"`
+	// MaxKeysPerOwner caps how many keys one owner prefix may hold per resource. Zero means platform default (100).
+	MaxKeysPerOwner int `json:"maxKeysPerOwner,omitempty"`
+}
+
 // KindEmbed defines the embedding document independently of search fields.
 // Kinds with a custom embedding builder omit this configuration.
 type KindEmbed struct {

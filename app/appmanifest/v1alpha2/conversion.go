@@ -145,6 +145,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					Hybrid:   kind.Search.Hybrid,
 				}
 			}
+			// The kv declaration is not part of the v1alpha2 AppManifest schema yet, so
+			// kinds loaded from an AppManifest resource can't opt in to the kv subresource.
 			if kind.Embed != nil {
 				k.Embed = &app.ManifestVersionKindEmbed{}
 				if kind.Embed.Fields != nil {

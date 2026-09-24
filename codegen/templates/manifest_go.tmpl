@@ -188,6 +188,10 @@ var appManifestData = app.ManifestData{
                             Path: {{ goString .Path }},
                         },{{ end }}
                     },
+                }, {{ end }}{{ if .KV }}
+                KV: &app.ManifestVersionKindKV{ {{ if .KV.MaxValueBytes }}
+                    MaxValueBytes: {{ .KV.MaxValueBytes }},{{ end }}{{ if .KV.MaxKeysPerOwner }}
+                    MaxKeysPerOwner: {{ .KV.MaxKeysPerOwner }},{{ end }}
                 }, {{ end }}{{ if .Admission }}
                 Admission: &app.AdmissionCapabilities{
                     {{ if .Admission.Validation }} Validation: &app.ValidationCapability{

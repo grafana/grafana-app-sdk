@@ -603,6 +603,17 @@ func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearc
 	return out
 }
 
+// manifestKindKV translates a kind's kv configuration into the manifest type.
+func manifestKindKV(kv *codegen.KindKV) *app.ManifestVersionKindKV {
+	if kv == nil {
+		return nil
+	}
+	return &app.ManifestVersionKindKV{
+		MaxValueBytes:   kv.MaxValueBytes,
+		MaxKeysPerOwner: kv.MaxKeysPerOwner,
+	}
+}
+
 // manifestKindEmbed translates a kind's embed configuration into the manifest.
 func manifestKindEmbed(embed *codegen.KindEmbed) *app.ManifestVersionKindEmbed {
 	if embed == nil {
@@ -648,6 +659,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver.Search = manifestKindSearch(vk.Search)
 	mver.Embed = manifestKindEmbed(vk.Embed)
+	mver.KV = manifestKindKV(vk.KV)
 	if len(vk.Mutation.Operations) > 0 {
 		operations, err := sanitizeAdmissionOperations(vk.Mutation.Operations)
 		if err != nil {

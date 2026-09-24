@@ -320,3 +320,35 @@ invalidPluralName: {
 	}
 }
 
+// kv.maxValueBytes must be >0; 0 violates the >0 constraint
+invalidKVMaxValueBytesZero: {
+	appName: "kv-zero-app"
+	versions: {
+		"v1": {
+			kinds: [{
+				kind: "KVKind"
+				kv: {
+					maxValueBytes: 0
+				}
+				schema: spec: field: string
+			}]
+		}
+	}
+}
+
+// kv.maxKeysPerOwner must be >0; 0 violates the >0 constraint
+invalidKVMaxKeysPerOwnerZero: {
+	appName: "kv-keys-zero-app"
+	versions: {
+		"v1": {
+			kinds: [{
+				kind: "KVKind"
+				kv: {
+					maxKeysPerOwner: 0
+				}
+				schema: spec: field: string
+			}]
+		}
+	}
+}
+
