@@ -1,13 +1,16 @@
 package plugin
 
 import (
+	"context"
 	"errors"
 	"os"
 
+	"github.com/grafana/grafana-plugin-sdk-go/config"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/k8s"
+	"github.com/grafana/grafana-app-sdk/logging"
 )
 
 // KubeConfigOptions configures token exchange for a plugin's resource client.
@@ -40,6 +43,22 @@ func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
 // BuildKubeConfigWithOptions builds the same environment-based configuration as
 // BuildKubeConfig, with optional additional token-exchange audiences.
 func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfigOptions) (*rest.Config, error) {
+	// Check if managed service accounts are configured.
+	// We explicitly don't pass a context here, as we _only_ want
+	// configuration to be collected from environment variables.
+	gcfg := config.GrafanaConfigFromContext(context.Background())
+	appURL, _ := gcfg.AppURL()
+	secret, _ := gcfg.PluginAppClientSecret()
+	if appURL != "" && secret != "" {
+		logging.DefaultLogger.Info("authenticating using grafana provided secret", "app_url", appURL)
+
+		return &rest.Config{
+			Host:        appURL,
+			APIPath:     "/apis",
+			BearerToken: secret,
+		}, nil
+	}
+
 	routerURL := os.Getenv("API_ACCESS_ROUTER_URL")
 	if routerURL == "" {
 		return nil, errors.New("no url provided: set API_ACCESS_ROUTER_URL")
@@ -49,6 +68,9 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 	tokenExchangeURL := os.Getenv("API_ACCESS_TOKEN_EXCHANGE_URL")
 	capToken := os.Getenv("API_ACCESS_CAP_TOKEN")
 	if tokenExchangeURL != "" || capToken != "" {
+		logging.DefaultLogger.Info("authenticating using token exchange",
+			"router_url", routerURL, "token_exchange_url", tokenExchangeURL)
+
 		return k8s.NewTokenExchangeRestConfig(
 			k8s.TokenExchangeCredentials{
 				Token:            capToken,
@@ -74,6 +96,9 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 	}
 
 	if bearerToken := os.Getenv("API_ACCESS_BEARER_TOKEN"); bearerToken != "" {
+		logging.DefaultLogger.Info("authenticating using bearer token",
+			"router_url", routerURL)
+
 		cfg.BearerToken = bearerToken
 		return cfg, nil
 	}
@@ -81,6 +106,9 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 	username := os.Getenv("API_ACCESS_USERNAME")
 	password := os.Getenv("API_ACCESS_PASSWORD")
 	if username != "" && password != "" {
+		logging.DefaultLogger.Info("authenticating using basic auth",
+			"router_url", routerURL, "user", username)
+
 		cfg.Username = username
 		cfg.Password = password
 		return cfg, nil
