@@ -10,21 +10,13 @@ import (
 	"github.com/grafana/grafana-app-sdk/k8s"
 )
 
-// accessAudiences returns the deduped token-exchange audiences this app needs: its own group,
-// plus the group of every kind it accesses via manifestData.ExtraPermissions.
-func accessAudiences(manifestData app.ManifestData) []string {
-	seen := map[string]bool{manifestData.Group: true}
-	audiences := []string{manifestData.Group}
-	if manifestData.ExtraPermissions != nil {
-		for _, accessKind := range manifestData.ExtraPermissions.AccessKinds {
-			if seen[accessKind.Group] {
-				continue
-			}
-			seen[accessKind.Group] = true
-			audiences = append(audiences, accessKind.Group)
-		}
-	}
-	return audiences
+// KubeConfigOptions configures token exchange for a plugin's resource client.
+// The zero value preserves BuildKubeConfig's authentication behavior.
+type KubeConfigOptions struct {
+	// AdditionalTokenAudiences are added to the audiences derived from the manifest.
+	// Empty additions and duplicates are ignored. The Cloud Access Policy (CAP) must allow all
+	// requested audiences. These values are unused with basic or bearer authentication.
+	AdditionalTokenAudiences []string
 }
 
 // BuildKubeConfig builds the rest.Config from environment variables.
@@ -42,6 +34,12 @@ func accessAudiences(manifestData app.ManifestData) []string {
 // - API_ACCESS_BEARER_TOKEN or
 // - API_ACCESS_USERNAME/API_ACCESS_PASSWORD
 func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
+	return BuildKubeConfigWithOptions(manifestData, KubeConfigOptions{})
+}
+
+// BuildKubeConfigWithOptions builds the same environment-based configuration as
+// BuildKubeConfig, with optional additional token-exchange audiences.
+func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfigOptions) (*rest.Config, error) {
 	routerURL := os.Getenv("API_ACCESS_ROUTER_URL")
 	if routerURL == "" {
 		return nil, errors.New("no url provided: set API_ACCESS_ROUTER_URL")
@@ -58,7 +56,7 @@ func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
 			},
 			k8s.RemoteServiceTarget{
 				Host:        routerURL,
-				Audiences:   accessAudiences(manifestData),
+				Audiences:   TokenExchangeAudiences(manifestData, options.AdditionalTokenAudiences...),
 				InsecureTLS: os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
 				CAFile:      os.Getenv("API_ACCESS_CA_FILE"),
 			},
@@ -89,4 +87,30 @@ func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
 	}
 
 	return nil, errors.New("no credentials provided: set API_ACCESS_BEARER_TOKEN or API_ACCESS_USERNAME/API_ACCESS_PASSWORD")
+}
+
+// TokenExchangeAudiences returns the manifest's API-group audiences followed by
+// additional audiences, with duplicates removed. Empty additions are ignored;
+// manifest groups retain their existing behavior, including empty values.
+// The returned slice is independent of the inputs. Custom transports can use this
+// helper to share BuildKubeConfigWithOptions' audience selection.
+func TokenExchangeAudiences(manifestData app.ManifestData, additionalAudiences ...string) []string {
+	seen := map[string]bool{manifestData.Group: true}
+	audiences := []string{manifestData.Group}
+	if manifestData.ExtraPermissions != nil {
+		for _, accessKind := range manifestData.ExtraPermissions.AccessKinds {
+			if !seen[accessKind.Group] {
+				seen[accessKind.Group] = true
+				audiences = append(audiences, accessKind.Group)
+			}
+		}
+	}
+	for _, audience := range additionalAudiences {
+		if audience == "" || seen[audience] {
+			continue
+		}
+		seen[audience] = true
+		audiences = append(audiences, audience)
+	}
+	return audiences
 }
