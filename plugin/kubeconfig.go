@@ -10,6 +10,10 @@ import (
 	"github.com/grafana/grafana-app-sdk/k8s"
 )
 
+const (
+	grafanaAudience = "grafana"
+)
+
 // KubeConfigOptions configures token exchange for a plugin's resource client.
 // The zero value preserves BuildKubeConfig's authentication behavior.
 type KubeConfigOptions struct {
@@ -97,6 +101,11 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 func TokenExchangeAudiences(manifestData app.ManifestData, additionalAudiences ...string) []string {
 	seen := map[string]bool{manifestData.Group: true}
 	audiences := []string{manifestData.Group}
+
+	// Always include grafana as an audience.
+	seen[grafanaAudience] = true
+	audiences = append(audiences, grafanaAudience)
+
 	if manifestData.ExtraPermissions != nil {
 		for _, accessKind := range manifestData.ExtraPermissions.AccessKinds {
 			if !seen[accessKind.Group] {
