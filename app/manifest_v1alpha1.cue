@@ -48,6 +48,8 @@ appManifestv1alpha1: appManifestKind & {
 			schema: #ManifestVersionKindSchema
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
+			// storage declares storage-related behavior for this kind.
+			storage?: #ManifestVersionKindStorage
 			// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 			// It may not prevent automatic conversion behavior between versions of the kind when set to false
 			// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -59,6 +61,10 @@ appManifestv1alpha1: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		#ManifestVersionKindStorage: {
+			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
+			listKeys?: bool
 		}
 		#ManifestVersion: {
 			// Name is the version name string, such as "v1" or "v1alpha1"

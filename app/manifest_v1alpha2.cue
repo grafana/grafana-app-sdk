@@ -93,6 +93,8 @@ appManifestv1alpha2: appManifestKind & {
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 			searchFields?: [...#SearchField]
+			// storage declares storage-related behavior for this kind.
+			storage?: #ManifestVersionKindStorage
 			// search declares which search endpoints are served for this kind.
 			// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 			search?: #ManifestVersionKindSearch
@@ -109,6 +111,10 @@ appManifestv1alpha2: appManifestKind & {
 			routes?: {
 				[string]: _
 			}
+		}
+		#ManifestVersionKindStorage: {
+			// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
+			listKeys?: bool
 		}
 		// #ManifestVersionKindSearch declares which search endpoints are served for a kind.
 		#ManifestVersionKindSearch: {

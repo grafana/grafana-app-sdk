@@ -353,6 +353,8 @@ Kind: S={
 	additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 	// searchFields is a list of fields exposed for search indexing and querying
 	searchFields?: [...#SearchField]
+	// listKeys controls whether generic list-keys endpoints are served for this kind.
+	listKeys: bool | *true
 	// search controls which search endpoints are served for this kind.
 	// /search and /trash are served unless the kind opts out here; /search/hybrid
 	// is not served unless the kind opts in.

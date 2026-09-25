@@ -379,3 +379,38 @@ func TestParseManifestInvalidCases(t *testing.T) {
 		})
 	}
 }
+
+func TestParseManifestListKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name, declaration string
+		want              bool
+	}{
+		{name: "omitted", want: true},
+		{name: "enabled", declaration: "listKeys: true", want: true},
+		{name: "disabled", declaration: "listKeys: false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				shared: {kind: "Foo", schema: spec: title: string, %s}
+				manifest: {
+					appName: "keys-app"
+					versions: {
+						v1: kinds: [shared]
+						v2: kinds: [shared]
+					}
+				}`, tc.declaration))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			require.NoError(t, err)
+			require.Len(t, manifest.Versions(), 2)
+			for _, version := range manifest.Versions() {
+				kinds := version.Kinds()
+				require.Len(t, kinds, 1)
+				require.NotNil(t, kinds[0].ListKeys)
+				assert.Equal(t, tc.want, *kinds[0].ListKeys)
+			}
+		})
+	}
+}

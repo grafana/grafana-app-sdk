@@ -40,6 +40,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				SelectableFields: kind.SelectableFields,
 				Scope:            string(kind.Scope),
 			}
+			if kind.Storage != nil {
+				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
+			}
 			if kind.Plural != nil {
 				k.Plural = strings.ToLower(*kind.Plural)
 			}
@@ -274,6 +277,9 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Scope:            AppManifestManifestVersionKindScope(kind.Scope),
 				SelectableFields: kind.SelectableFields,
 				Conversion:       &kind.Conversion,
+			}
+			if kind.Storage != nil {
+				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			// Convert the ManifestData's Schema into CRD Schema for v1alpha1
 			if kind.Schema != nil {

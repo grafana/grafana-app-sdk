@@ -236,6 +236,10 @@
                                             "type": "string"
                                         },
                                         "type": "array"
+                                    },
+                                    "storage": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindStorage",
+                                        "description": "storage declares storage-related behavior for this kind."
                                     }
                                 },
                                 "required": [
@@ -247,6 +251,16 @@
                             },
                             "ManifestVersionKindSchema": {
                                 "additionalProperties": true,
+                                "type": "object"
+                            },
+                            "ManifestVersionKindStorage": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "listKeys": {
+                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                        "type": "boolean"
+                                    }
+                                },
                                 "type": "object"
                             },
                             "MutationCapability": {
@@ -816,6 +830,10 @@
                                         },
                                         "type": "array"
                                     },
+                                    "storage": {
+                                        "$ref": "#/components/schemas/ManifestVersionKindStorage",
+                                        "description": "storage declares storage-related behavior for this kind."
+                                    },
                                     "userReadable": {
                                         "default": false,
                                         "description": "userReadable controls whether end users may get/list cluster-scoped resources of this kind.\nOnly meaningful when scope is \"Cluster\"; for namespaced kinds the field is ignored.",
@@ -882,6 +900,16 @@
                                     "trash": {
                                         "default": true,
                                         "description": "trash declares whether the kind serves the /trash endpoint,\nwhich lists deleted resources of the kind.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "type": "object"
+                            },
+                            "ManifestVersionKindStorage": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "listKeys": {
+                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
                                         "type": "boolean"
                                     }
                                 },

@@ -143,6 +143,8 @@ spec:
               type: object
           type: object
       scope: Namespaced
+      storage:
+        listKeys: false
     name: v1
     served: true
   - kinds:

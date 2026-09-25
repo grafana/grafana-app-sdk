@@ -75,6 +75,8 @@ type AppManifestManifestVersionKind struct {
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
+	// storage declares storage-related behavior for this kind.
+	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
 	// search declares which search endpoints are served for this kind.
 	// /search and /trash default to enabled; /search/hybrid defaults to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
@@ -245,6 +247,22 @@ func NewAppManifestSearchField() *AppManifestSearchField {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestSearchField.
 func (AppManifestSearchField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSearchField"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindStorage struct {
+	// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
+	ListKeys *bool `json:"listKeys,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindStorage creates a new AppManifestManifestVersionKindStorage object.
+func NewAppManifestManifestVersionKindStorage() *AppManifestManifestVersionKindStorage {
+	return &AppManifestManifestVersionKindStorage{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindStorage.
+func (AppManifestManifestVersionKindStorage) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindStorage"
 }
 
 // #ManifestVersionKindSearch declares which search endpoints are served for a kind.
