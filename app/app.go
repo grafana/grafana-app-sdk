@@ -12,6 +12,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/health"
 	"github.com/grafana/grafana-app-sdk/metrics"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -63,6 +64,9 @@ type CustomRouteRequest struct {
 	// (see godoc for io.Reader). A consumer SHOULD call Body.Close() when they are finished consuming the body,
 	// especially in the case of incomplete data, to signal to the runner that the handler has finished consuming the payload.
 	Body io.ReadCloser
+
+	// For sub-resource requests, the parent includes the body and decrypted secrets
+	Parent *pluginv3.RouteResource
 }
 
 // CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects. It mirrors http.ResponseWriter,
