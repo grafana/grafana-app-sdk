@@ -2,10 +2,12 @@ package k8s
 
 import (
 	"errors"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
@@ -19,6 +21,7 @@ var _ resource.ClientGenerator = &ClientRegistry{}
 func NewClientRegistry(kubeCconfig rest.Config, clientConfig ClientConfig) *ClientRegistry {
 	kubeCconfig.NegotiatedSerializer = &GenericNegotiatedSerializer{}
 	kubeCconfig.UserAgent = rest.DefaultKubernetesUserAgent()
+	kubeCconfig.Wrap(func(rt http.RoundTripper) http.RoundTripper { return otelhttp.NewTransport(rt) })
 
 	// Apply stream error handling if enabled
 	if clientConfig.EnableStreamErrorHandling {
