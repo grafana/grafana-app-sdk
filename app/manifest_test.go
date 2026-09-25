@@ -1141,6 +1141,50 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				},
 			},
 		},
+	}, {
+		name:   "const becomes a single-value enum",
+		schema: []byte(`{"spec":{"type":"object","properties":{"foo":{"type":"string","const":"bar"}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+								Enum: []any{"bar"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+		err: nil,
+	}, {
+		name:   "an existing enum wins over const",
+		schema: []byte(`{"spec":{"type":"object","properties":{"foo":{"type":"string","const":"bar","enum":["baz"]}}}}`),
+		gvk:    gvk,
+		ref:    ref,
+		want: map[string]common.OpenAPIDefinition{
+			"test.grafana.app/v1.Foo": kubeOpenAPIKindWithProps(gvk, ref, map[string]spec.SchemaProps{
+				"spec": {
+					Type: spec.StringOrArray{"object"},
+					Properties: map[string]spec.Schema{
+						"foo": {
+							SchemaProps: spec.SchemaProps{
+								Type: []string{"string"},
+								Enum: []any{"baz"},
+							},
+						},
+					},
+				},
+			}),
+			"test.grafana.app/v1.FooList": kubeOpenAPIList(gvk, ref),
+		},
+		err: nil,
 	}}
 
 	for _, test := range tests {
@@ -1202,6 +1246,11 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"foo":{"oneOf":[{"type":"object","properties":{"foo":{"type":"string"}},"required":["foo"]},{}]}}}}`),
 		outputJSON: []byte(`{"type":"object","properties":{"foo":{"type":"string"}},"oneOf":[{"required":["foo"]},{"not":{"anyOf":[{"required":["foo"]}]}}]}`),
+	}, {
+		name:       "const becomes a single-value enum",
+		schemaName: "foo",
+		jsonData:   []byte(`{"components":{"schemas":{"foo":{"type":"object","properties":{"bar":{"type":"string","const":"baz"}}}}}}`),
+		outputJSON: []byte(`{"type":"object","properties":{"bar":{"type":"string","enum":["baz"]}}}`),
 	}, {
 		name:       "preserve oneOf primitive union",
 		schemaName: "foo",
