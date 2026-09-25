@@ -37,28 +37,28 @@ func TestTokenExchangeAudiences(t *testing.T) {
 		{
 			name:     "manifest audiences are preserved",
 			manifest: manifest,
-			want:     []string{"example.test", "other.test"},
+			want:     []string{"example.test", "grafana", "other.test"},
 		},
 		{
 			name:      "additional audience is appended",
 			manifest:  manifest,
 			additions: []string{"router.test"},
-			want:      []string{"example.test", "other.test", "router.test"},
+			want:      []string{"example.test", "grafana", "other.test", "router.test"},
 		},
 		{
 			name:      "duplicate and empty additions are ignored",
 			manifest:  manifest,
 			additions: []string{"other.test", "router.test", "", "router.test"},
-			want:      []string{"example.test", "other.test", "router.test"},
+			want:      []string{"example.test", "grafana", "other.test", "router.test"},
 		},
 		{
 			name: "empty manifest group retains existing behavior",
-			want: []string{""},
+			want: []string{"", "grafana"},
 		},
 		{
 			name:      "empty additions do not remove an empty manifest group",
 			additions: []string{"", "router.test"},
-			want:      []string{"", "router.test"},
+			want:      []string{"", "grafana", "router.test"},
 		},
 	}
 	for _, tt := range tests {
@@ -157,9 +157,9 @@ func TestBuildKubeConfigWithOptions_TokenExchange(t *testing.T) {
 		wantAudiences []string
 		deny          bool
 	}{
-		{name: "manifest audiences", wantAudiences: []string{"example.test"}},
-		{name: "additional audience", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "router.test"}},
-		{name: "unauthorized audience", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "router.test"}, deny: true},
+		{name: "manifest audiences", wantAudiences: []string{"example.test", "grafana"}},
+		{name: "additional audience", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "grafana", "router.test"}},
+		{name: "unauthorized audience", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "grafana", "router.test"}, deny: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -223,5 +223,5 @@ func TestTokenExchangeAudiences_CopiesAdditions(t *testing.T) {
 	additions := []string{"router.test"}
 	got := TokenExchangeAudiences(app.ManifestData{Group: "example.test"}, additions...)
 	additions[0] = "changed.test"
-	assert.Equal(t, []string{"example.test", "router.test"}, got)
+	assert.Equal(t, []string{"example.test", "grafana", "router.test"}, got)
 }
