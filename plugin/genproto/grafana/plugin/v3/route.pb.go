@@ -25,15 +25,16 @@ const (
 
 // RouteResource is the resource referenced by the requested subresource path.
 type RouteResource struct {
-	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Resource    *string                `protobuf:"bytes,1,opt,name=resource"`
-	xxx_hidden_Name        *string                `protobuf:"bytes,2,opt,name=name"`
-	xxx_hidden_Rv          *string                `protobuf:"bytes,3,opt,name=rv"`
-	xxx_hidden_Raw         []byte                 `protobuf:"bytes,4,opt,name=raw"`
-	XXX_raceDetectHookData protoimpl.RaceDetectHookData
-	XXX_presence           [1]uint32
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	state                            protoimpl.MessageState `protogen:"opaque.v1"`
+	xxx_hidden_Resource              *string                `protobuf:"bytes,1,opt,name=resource"`
+	xxx_hidden_Name                  *string                `protobuf:"bytes,2,opt,name=name"`
+	xxx_hidden_Rv                    *string                `protobuf:"bytes,3,opt,name=rv"`
+	xxx_hidden_Raw                   []byte                 `protobuf:"bytes,4,opt,name=raw"`
+	xxx_hidden_DecryptedSecureValues map[string]string      `protobuf:"bytes,5,rep,name=decrypted_secure_values,json=decryptedSecureValues" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	XXX_raceDetectHookData           protoimpl.RaceDetectHookData
+	XXX_presence                     [1]uint32
+	unknownFields                    protoimpl.UnknownFields
+	sizeCache                        protoimpl.SizeCache
 }
 
 func (x *RouteResource) Reset() {
@@ -98,19 +99,26 @@ func (x *RouteResource) GetRaw() []byte {
 	return nil
 }
 
+func (x *RouteResource) GetDecryptedSecureValues() map[string]string {
+	if x != nil {
+		return x.xxx_hidden_DecryptedSecureValues
+	}
+	return nil
+}
+
 func (x *RouteResource) SetResource(v string) {
 	x.xxx_hidden_Resource = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 4)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 5)
 }
 
 func (x *RouteResource) SetName(v string) {
 	x.xxx_hidden_Name = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 4)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 5)
 }
 
 func (x *RouteResource) SetRv(v string) {
 	x.xxx_hidden_Rv = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 4)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 5)
 }
 
 func (x *RouteResource) SetRaw(v []byte) {
@@ -118,7 +126,11 @@ func (x *RouteResource) SetRaw(v []byte) {
 		v = []byte{}
 	}
 	x.xxx_hidden_Raw = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 4)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 5)
+}
+
+func (x *RouteResource) SetDecryptedSecureValues(v map[string]string) {
+	x.xxx_hidden_DecryptedSecureValues = v
 }
 
 func (x *RouteResource) HasResource() bool {
@@ -180,6 +192,8 @@ type RouteResource_builder struct {
 	Rv *string
 	// raw is the complete JSON-encoded parent resource.
 	Raw []byte
+	// The decrypted values referenced in this resource
+	DecryptedSecureValues map[string]string
 }
 
 func (b0 RouteResource_builder) Build() *RouteResource {
@@ -187,21 +201,22 @@ func (b0 RouteResource_builder) Build() *RouteResource {
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.Resource != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 4)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 5)
 		x.xxx_hidden_Resource = b.Resource
 	}
 	if b.Name != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 4)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 5)
 		x.xxx_hidden_Name = b.Name
 	}
 	if b.Rv != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 4)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 5)
 		x.xxx_hidden_Rv = b.Rv
 	}
 	if b.Raw != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 4)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 5)
 		x.xxx_hidden_Raw = b.Raw
 	}
+	x.xxx_hidden_DecryptedSecureValues = b.DecryptedSecureValues
 	return m0
 }
 
@@ -665,12 +680,16 @@ var File_grafana_plugin_v3_route_proto protoreflect.FileDescriptor
 
 const file_grafana_plugin_v3_route_proto_rawDesc = "" +
 	"\n" +
-	"\x1dgrafana/plugin/v3/route.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"a\n" +
+	"\x1dgrafana/plugin/v3/route.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\"\xa0\x02\n" +
 	"\rRouteResource\x12\x1a\n" +
 	"\bresource\x18\x01 \x01(\tR\bresource\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x0e\n" +
 	"\x02rv\x18\x03 \x01(\tR\x02rv\x12\x10\n" +
-	"\x03raw\x18\x04 \x01(\fR\x03raw\"\x93\x03\n" +
+	"\x03raw\x18\x04 \x01(\fR\x03raw\x12s\n" +
+	"\x17decrypted_secure_values\x18\x05 \x03(\v2;.grafana.plugin.v3.RouteResource.DecryptedSecureValuesEntryR\x15decryptedSecureValues\x1aH\n" +
+	"\x1aDecryptedSecureValuesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x93\x03\n" +
 	"\x10CallRouteRequest\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1c\n" +
@@ -692,32 +711,34 @@ const file_grafana_plugin_v3_route_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x123\n" +
 	"\x05value\x18\x02 \x01(\v2\x1d.grafana.plugin.v3.StringListR\x05value:\x028\x012h\n" +
 	"\fRouteService\x12X\n" +
-	"\tCallRoute\x12#.grafana.plugin.v3.CallRouteRequest\x1a$.grafana.plugin.v3.CallRouteResponse0\x01B\xd8\x01\n" +
+	"\tCallRoute\x12#.grafana.plugin.v3.CallRouteRequest\x1a$.grafana.plugin.v3.CallRouteResponse0\x01B\xd6\x01\n" +
 	"\x15com.grafana.plugin.v3B\n" +
-	"RouteProtoP\x01ZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
+	"RouteProtoZMgithub.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3;pluginv3\xa2\x02\x03GPX\xaa\x02\x11Grafana.Plugin.V3\xca\x02\x11Grafana\\Plugin\\V3\xe2\x02\x1dGrafana\\Plugin\\V3\\GPBMetadata\xea\x02\x13Grafana::Plugin::V3b\beditionsp\xe9\a"
 
-var file_grafana_plugin_v3_route_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_grafana_plugin_v3_route_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_grafana_plugin_v3_route_proto_goTypes = []any{
 	(*RouteResource)(nil),     // 0: grafana.plugin.v3.RouteResource
 	(*CallRouteRequest)(nil),  // 1: grafana.plugin.v3.CallRouteRequest
 	(*CallRouteResponse)(nil), // 2: grafana.plugin.v3.CallRouteResponse
-	nil,                       // 3: grafana.plugin.v3.CallRouteRequest.HeadersEntry
-	nil,                       // 4: grafana.plugin.v3.CallRouteResponse.HeadersEntry
-	(*StringList)(nil),        // 5: grafana.plugin.v3.StringList
+	nil,                       // 3: grafana.plugin.v3.RouteResource.DecryptedSecureValuesEntry
+	nil,                       // 4: grafana.plugin.v3.CallRouteRequest.HeadersEntry
+	nil,                       // 5: grafana.plugin.v3.CallRouteResponse.HeadersEntry
+	(*StringList)(nil),        // 6: grafana.plugin.v3.StringList
 }
 var file_grafana_plugin_v3_route_proto_depIdxs = []int32{
-	0, // 0: grafana.plugin.v3.CallRouteRequest.parent:type_name -> grafana.plugin.v3.RouteResource
-	3, // 1: grafana.plugin.v3.CallRouteRequest.headers:type_name -> grafana.plugin.v3.CallRouteRequest.HeadersEntry
-	4, // 2: grafana.plugin.v3.CallRouteResponse.headers:type_name -> grafana.plugin.v3.CallRouteResponse.HeadersEntry
-	5, // 3: grafana.plugin.v3.CallRouteRequest.HeadersEntry.value:type_name -> grafana.plugin.v3.StringList
-	5, // 4: grafana.plugin.v3.CallRouteResponse.HeadersEntry.value:type_name -> grafana.plugin.v3.StringList
-	1, // 5: grafana.plugin.v3.RouteService.CallRoute:input_type -> grafana.plugin.v3.CallRouteRequest
-	2, // 6: grafana.plugin.v3.RouteService.CallRoute:output_type -> grafana.plugin.v3.CallRouteResponse
-	6, // [6:7] is the sub-list for method output_type
-	5, // [5:6] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	3, // 0: grafana.plugin.v3.RouteResource.decrypted_secure_values:type_name -> grafana.plugin.v3.RouteResource.DecryptedSecureValuesEntry
+	0, // 1: grafana.plugin.v3.CallRouteRequest.parent:type_name -> grafana.plugin.v3.RouteResource
+	4, // 2: grafana.plugin.v3.CallRouteRequest.headers:type_name -> grafana.plugin.v3.CallRouteRequest.HeadersEntry
+	5, // 3: grafana.plugin.v3.CallRouteResponse.headers:type_name -> grafana.plugin.v3.CallRouteResponse.HeadersEntry
+	6, // 4: grafana.plugin.v3.CallRouteRequest.HeadersEntry.value:type_name -> grafana.plugin.v3.StringList
+	6, // 5: grafana.plugin.v3.CallRouteResponse.HeadersEntry.value:type_name -> grafana.plugin.v3.StringList
+	1, // 6: grafana.plugin.v3.RouteService.CallRoute:input_type -> grafana.plugin.v3.CallRouteRequest
+	2, // 7: grafana.plugin.v3.RouteService.CallRoute:output_type -> grafana.plugin.v3.CallRouteResponse
+	7, // [7:8] is the sub-list for method output_type
+	6, // [6:7] is the sub-list for method input_type
+	6, // [6:6] is the sub-list for extension type_name
+	6, // [6:6] is the sub-list for extension extendee
+	0, // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_grafana_plugin_v3_route_proto_init() }
@@ -732,7 +753,7 @@ func file_grafana_plugin_v3_route_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_grafana_plugin_v3_route_proto_rawDesc), len(file_grafana_plugin_v3_route_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

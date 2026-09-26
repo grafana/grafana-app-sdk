@@ -19,6 +19,7 @@ require (
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.1.23
 	github.com/grafana/grafana-app-sdk/logging v0.60.2
+	github.com/grafana/grafana-app-sdk/plugin v0.60.3
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.24.1
 	github.com/prometheus/client_model v0.6.3
@@ -102,7 +103,6 @@ require (
 	github.com/huandu/xstrings v1.5.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.20.0 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
