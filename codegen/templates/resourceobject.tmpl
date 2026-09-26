@@ -286,7 +286,7 @@ var _ resource.ListObject = &{{.TypeName}}List{}
 
 // Copy methods for all subresource types
 
-// DeepCopy creates a full deep copy of Spec
+{{ if not .SpecIsExternalGoType }}// DeepCopy creates a full deep copy of Spec
 func (s *{{.SpecTypeName}}) DeepCopy() *{{.SpecTypeName}} {
 	cpy := &{{.SpecTypeName}}{}
 	s.DeepCopyInto(cpy)
@@ -297,8 +297,8 @@ func (s *{{.SpecTypeName}}) DeepCopy() *{{.SpecTypeName}} {
 func (s *{{.SpecTypeName}}) DeepCopyInto(dst *{{.SpecTypeName}}) {
 	resource.CopyObjectInto(dst, s)
 }
-
-{{ range .Subresources }}// DeepCopy creates a full deep copy of {{.TypeName}}
+{{ end }}
+{{ range .Subresources }}{{ if not .IsExternalGoType }}// DeepCopy creates a full deep copy of {{.TypeName}}
 func(s *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
 	cpy := &{{.TypeName}}{}
 	s.DeepCopyInto(cpy)
@@ -309,4 +309,4 @@ func(s *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
 func(s *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
 	resource.CopyObjectInto(dst, s)
 }
-{{ end }}
+{{ end }}{{ end }}
