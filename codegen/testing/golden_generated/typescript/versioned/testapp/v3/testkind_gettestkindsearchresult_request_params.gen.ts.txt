@@ -1,0 +1,14 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+export interface GetTestKindSearchResultRequestParams {
+	q: string;
+	limit?: number;
+	offset?: number;
+}
+
+export const defaultGetTestKindSearchResultRequestParams = (): GetTestKindSearchResultRequestParams => ({
+	q: "",
+	limit: 10,
+	offset: 0,
+});
+
