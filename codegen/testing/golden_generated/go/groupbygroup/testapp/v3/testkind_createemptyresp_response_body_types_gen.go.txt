@@ -1,0 +1,16 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+// +k8s:openapi-gen=true
+type CreateEmptyRespBody struct{}
+
+// NewCreateEmptyRespBody creates a new CreateEmptyRespBody object.
+func NewCreateEmptyRespBody() *CreateEmptyRespBody {
+	return &CreateEmptyRespBody{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for CreateEmptyRespBody.
+func (CreateEmptyRespBody) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateEmptyRespBody"
+}

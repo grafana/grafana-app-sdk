@@ -293,12 +293,59 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		return nil, fmt.Errorf("expected one file to be generated, got %d", len(files))
 	}
 
-	formatted, err := format.Source(files[0].Data)
+	data := files[0].Data
+	empty, err := isEmptyStruct(v)
+	if err != nil {
+		return nil, err
+	}
+	if empty {
+		// cog doesn't generate an envelope type for a struct with no fields (e.g. `response: {}`),
+		// but callers expect the named type to exist, so we append an empty struct type ourselves.
+		data = append(data, emptyStructGoType(cfg, namerFunc)...)
+	}
+
+	formatted, err := format.Source(data)
 	if err != nil {
 		return nil, err
 	}
 
 	return formatted, nil
+}
+
+// isEmptyStruct returns true if v is a struct with no regular (non-definition) fields.
+func isEmptyStruct(v cue.Value) (bool, error) {
+	if v.IncompleteKind() != cue.StructKind {
+		return false, nil
+	}
+	i, err := v.Fields(cue.Definitions(true), cue.Optional(true))
+	if err != nil {
+		return false, err
+	}
+	for i.Next() {
+		if !i.Selector().IsDefinition() {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// emptyStructGoType returns the go code for an empty struct type named according to cfg,
+// matching what cog would generate for a struct type with fields.
+func emptyStructGoType(cfg CUEGoConfig, namerFunc func(string) string) []byte {
+	name := cfg.NamePrefix + cfg.Name
+	sb := strings.Builder{}
+	sb.WriteString("\n")
+	if cfg.AddKubernetesOpenAPIGenComment {
+		sb.WriteString("// +k8s:openapi-gen=true\n")
+	}
+	fmt.Fprintf(&sb, "type %s struct{}\n\n", name)
+	fmt.Fprintf(&sb, "// New%s creates a new %s object.\n", name, name)
+	fmt.Fprintf(&sb, "func New%s() *%s {\n\treturn &%s{}\n}\n", name, name, name)
+	if namerFunc != nil {
+		fmt.Fprintf(&sb, "\n// OpenAPIModelName returns the OpenAPI model name for %s.\n", name)
+		fmt.Fprintf(&sb, "func (%s) OpenAPIModelName() string {\n\treturn %q\n}\n", name, namerFunc(name))
+	}
+	return []byte(sb.String())
 }
 
 // SanitizeLabelString strips characters from a string that are not allowed for
