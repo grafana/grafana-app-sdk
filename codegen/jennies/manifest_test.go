@@ -474,3 +474,50 @@ func TestProcessKindVersion_ListKeys(t *testing.T) {
 		})
 	}
 }
+
+func TestCustomRouteResponseToSpec3Responses_EmptyResponse(t *testing.T) {
+	tests := []struct {
+		name         string
+		metadata     codegen.CustomRouteResponseMetadata
+		wantProps    []string
+		wantRequired []string
+	}{
+		{
+			name:     "no metadata",
+			metadata: codegen.CustomRouteResponseMetadata{},
+		},
+		{
+			name:         "typeMeta",
+			metadata:     codegen.CustomRouteResponseMetadata{TypeMeta: true},
+			wantProps:    []string{keyAPIVersion, keyKind},
+			wantRequired: []string{keyAPIVersion, keyKind},
+		},
+		{
+			name:         "typeMeta and objectMeta",
+			metadata:     codegen.CustomRouteResponseMetadata{TypeMeta: true, ObjectMeta: true},
+			wantProps:    []string{keyAPIVersion, keyKind, keyMetadata},
+			wantRequired: []string{keyAPIVersion, keyKind, keyMetadata},
+		},
+		{
+			name:         "typeMeta and listMeta",
+			metadata:     codegen.CustomRouteResponseMetadata{TypeMeta: true, ListMeta: true},
+			wantProps:    []string{keyAPIVersion, keyKind, keyMetadata},
+			wantRequired: []string{keyAPIVersion, keyKind, keyMetadata},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := cuecontext.New().CompileString(`{}`)
+			responses, _, err := customRouteResponseToSpec3Responses(v, tt.metadata, "test")
+			require.NoError(t, err)
+			require.NotNil(t, responses.Default)
+			schema := responses.Default.Content["application/json"].Schema
+			props := make([]string, 0, len(schema.Properties))
+			for k := range schema.Properties {
+				props = append(props, k)
+			}
+			assert.ElementsMatch(t, tt.wantProps, props)
+			assert.ElementsMatch(t, tt.wantRequired, schema.Required)
+		})
+	}
+}

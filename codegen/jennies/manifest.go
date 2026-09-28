@@ -991,6 +991,10 @@ func customRouteResponseToSpec3Responses(responseSchema cue.Value, metadata code
 	if err != nil {
 		return nil, nil, fmt.Errorf("error converting response CUE schema to OpenAPI props: %w", err)
 	}
+	// An empty response schema (e.g. `response: {}`) has no properties
+	if schemaProps.Properties == nil && (metadata.TypeMeta || metadata.ObjectMeta || metadata.ListMeta) {
+		schemaProps.Properties = make(map[string]spec.Schema)
+	}
 	if metadata.TypeMeta {
 		schemaProps.Properties[keyAPIVersion] = apiVersionPropSchema
 		schemaProps.Properties[keyKind] = kindPropSchema
