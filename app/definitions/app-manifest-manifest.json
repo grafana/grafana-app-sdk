@@ -824,6 +824,12 @@
                                         },
                                         "type": "array"
                                     },
+                                    "secure": {
+                                        "items": {
+                                            "$ref": "#/components/schemas/SecureValue"
+                                        },
+                                        "type": "array"
+                                    },
                                     "selectableFields": {
                                         "items": {
                                             "type": "string"
@@ -1170,6 +1176,23 @@
                                     "name",
                                     "type",
                                     "capabilities"
+                                ],
+                                "type": "object"
+                            },
+                            "SecureValue": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "description": {
+                                        "description": "Description explains how the secure value is used and where it should come from.\nthis text will be exposed in the openapi schema",
+                                        "type": "string"
+                                    },
+                                    "key": {
+                                        "description": "Key used in the secure value map",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "key"
                                 ],
                                 "type": "object"
                             },

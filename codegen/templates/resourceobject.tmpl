@@ -19,7 +19,8 @@ type {{.TypeName}} struct {
 	metav1.TypeMeta `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
 
-	// Spec is the spec of the {{.TypeName}}
+{{ if .HasSecureValues }}	Secure resource.InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
+{{ end }}	// Spec is the spec of the {{.TypeName}}
 	Spec	   {{.SpecTypeName}} `json:"spec" yaml:"spec"`
 
 	{{ range .Subresources }}
@@ -30,7 +31,9 @@ type {{.TypeName}} struct {
 	{{ end }}
 }
 
-func New{{.TypeName}}() *{{.TypeName}} {
+{{ if .HasSecureValues }}func ({{.ObjectShortName}} *{{.TypeName}}) GetSecureValues() resource.InlineSecureValues { return {{.ObjectShortName}}.Secure }
+func ({{.ObjectShortName}} *{{.TypeName}}) SetSecureValues(values resource.InlineSecureValues) error { {{.ObjectShortName}}.Secure = values; return nil }
+{{ end }}func New{{.TypeName}}() *{{.TypeName}} {
     return &{{.TypeName}}{
         Spec: *New{{.SpecTypeName}}(),
         {{ range .Subresources }}{{ .Name }}: *New{{.TypeName}}(),
@@ -213,7 +216,8 @@ func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopy() *{{.TypeName}} {
 }
 
 func ({{.ObjectShortName}} *{{.TypeName}}) DeepCopyInto(dst *{{.TypeName}}) {
-	dst.TypeMeta.APIVersion = {{.ObjectShortName}}.TypeMeta.APIVersion
+	{{ if .HasSecureValues }}dst.Secure = resource.CopySecureValues({{.ObjectShortName}}.Secure)
+	{{ end }}dst.TypeMeta.APIVersion = {{.ObjectShortName}}.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = {{.ObjectShortName}}.TypeMeta.Kind
 	{{.ObjectShortName}}.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)
 	{{.ObjectShortName}}.Spec.DeepCopyInto(&dst.Spec){{ range .Subresources }}

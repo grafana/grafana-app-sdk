@@ -117,6 +117,7 @@ var (
 
 // ResourceObjectTemplateMetadata is the metadata required by the Resource Object template
 type ResourceObjectTemplateMetadata struct {
+	HasSecureValues      bool
 	Package              string
 	TypeName             string
 	SpecTypeName         string
@@ -141,9 +142,10 @@ func WriteResourceObject(metadata ResourceObjectTemplateMetadata, out io.Writer)
 }
 
 type ResourceTSTemplateMetadata struct {
-	TypeName     string
-	FilePrefix   string
-	Subresources []SubresourceMetadata
+	HasSecureValues bool
+	TypeName        string
+	FilePrefix      string
+	Subresources    []SubresourceMetadata
 }
 
 func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) error {

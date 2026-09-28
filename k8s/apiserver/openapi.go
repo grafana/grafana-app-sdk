@@ -8,13 +8,15 @@ import (
 	version "k8s.io/apimachinery/pkg/version"
 	common "k8s.io/kube-openapi/pkg/common"
 	spec "k8s.io/kube-openapi/pkg/validation/spec"
+
+	sdkresource "github.com/grafana/grafana-app-sdk/resource"
 )
 
 // GetCommonOpenAPIDefinitions returns a map of the kubernetes common OpenAPI definitions copied from
 // https://raw.githubusercontent.com/kubernetes/sample-apiserver/refs/heads/master/pkg/generated/openapi/zz_generated.openapi.go
 // TODO: can we automate this and use the kube-codegen tooling to make this function?
 func GetCommonOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
-	return map[string]common.OpenAPIDefinition{
+	definitions := map[string]common.OpenAPIDefinition{
 		resource.Quantity{}.OpenAPIModelName():            schema_apimachinery_pkg_api_resource_Quantity(ref),
 		v1.APIGroup{}.OpenAPIModelName():                  schema_pkg_apis_meta_v1_APIGroup(ref),
 		v1.APIGroupList{}.OpenAPIModelName():              schema_pkg_apis_meta_v1_APIGroupList(ref),
@@ -71,6 +73,8 @@ func GetCommonOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common
 		runtime.Unknown{}.OpenAPIModelName():              schema_k8sio_apimachinery_pkg_runtime_Unknown(ref),
 		version.Info{}.OpenAPIModelName():                 schema_k8sio_apimachinery_pkg_version_Info(ref),
 	}
+	definitions[sdkresource.InlineSecureValue{}.OpenAPIModelName()] = sdkresource.InlineSecureValue{}.OpenAPIDefinition()
+	return definitions
 }
 
 func schema_apimachinery_pkg_api_resource_Quantity(ref common.ReferenceCallback) common.OpenAPIDefinition {

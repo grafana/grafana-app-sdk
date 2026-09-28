@@ -17,6 +17,8 @@ import (
 	"k8s.io/kube-openapi/pkg/common"
 	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
+
+	sdkresource "github.com/grafana/grafana-app-sdk/resource"
 )
 
 const (
@@ -395,6 +397,8 @@ type ManifestVersionKind struct {
 	// Schema is the schema of this version, as an OpenAPI document.
 	// This is currently an `any` type as implementation is incomplete.
 	Schema *VersionSchema `json:"schema,omitempty" yaml:"schema,omitempty"`
+	// SecureValues describes the secure values used by this kind.
+	SecureValues []ManifestVersionKindSecureValue `json:"secure,omitempty" yaml:"secure,omitempty"`
 	// SelectableFields are the set of JSON paths in the schema which can be used as field selectors
 	SelectableFields []string `json:"selectableFields,omitempty" yaml:"selectableFields,omitempty"`
 	// Routes is a map of path patterns to custom routes for this kind to be used as custom subresource routes.
@@ -415,6 +419,15 @@ type ManifestVersionKind struct {
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+}
+
+// ManifestVersionKindSecureValue describes a secure value used by a kind.
+type ManifestVersionKindSecureValue struct {
+	// Key is the key used in the secure value map.
+	Key string `json:"key" yaml:"key"`
+	// Description explains how the secure value is used and where it should come from.
+	// This text is intended to be exposed in the OpenAPI schema.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 }
 
 // ManifestVersionKindStorage declares storage-related behavior for a kind.
@@ -493,7 +506,7 @@ func isFolderScoped(folderScoped *bool) bool {
 }
 
 // Subresources returns a list of all (stored) subresources for the kind.
-// The list of subresources will not include "spec" or "metadata" as they are not subresources.
+// The list of subresources will not include "spec", "secure" or "metadata" as they are not subresources.
 // Routes for the kind (subresource routes) will also not be included, as they are not stored.
 //
 //nolint:goconst
@@ -520,7 +533,7 @@ func (m *ManifestVersionKind) Subresources() []string {
 	}
 	subresources := make([]string, 0)
 	for k := range cast {
-		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" {
+		if k == "spec" || k == "metadata" || k == "apiVersion" || k == "kind" || k == "secure" {
 			continue
 		}
 		subresources = append(subresources, k)
@@ -935,11 +948,12 @@ func KubeOpenAPIReferenceReplacerFunc(pkgPrefix string, gvk schema.GroupVersionK
 //
 // If you wish to exclude a field from your kind's object, ensure that the field name begins with a `#`, which will be treated as a definition.
 // Definitions are included in the returned map as types, but are not included as fields (alongside "spec","status", etc.) in the kind object.
+// When secureValues are provided, a secure object property is added with an optional InlineSecureValue property for each key.
 //
 // It will error if the underlying schema cannot be parsed as valid openAPI.
 //
 //nolint:funlen
-func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback, pkgPrefix string) (map[string]common.OpenAPIDefinition, error) {
+func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.ReferenceCallback, pkgPrefix string, secureValues ...ManifestVersionKindSecureValue) (map[string]common.OpenAPIDefinition, error) {
 	// Convert the kin-openapi to kube-openapi
 	oapi, err := v.AsOpenAPI3()
 	if err != nil {
@@ -1029,6 +1043,10 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 		if k == "spec" {
 			kind.Schema.Required = append(kind.Schema.Required, k)
 		}
+	}
+
+	if len(secureValues) > 0 {
+		kind.Schema.Properties["secure"] = SecureValuesOpenAPISchema(secureValues)
 	}
 
 	// For each schema, create an entry in the result
@@ -1268,7 +1286,16 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 	}
 
 	visited := make(map[string]bool)
-	return resolveSchema(sch, components, visited)
+	resolved, err := resolveSchema(sch, components, visited)
+	if err != nil {
+		return nil, err
+	}
+	// CRDs cannot combine named properties with a typed additionalProperties map.
+	// Keep the value schema; declared-key descriptions remain in served OpenAPI.
+	if secure := resolved.Properties["secure"]; secure != nil && secure.Value != nil && secure.Value.AdditionalProperties.Schema != nil {
+		secure.Value.Properties = nil
+	}
+	return resolved, nil
 }
 
 // resolveSchema does three things:
@@ -1416,6 +1443,16 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 	// AllOf, OneOf, and AnyOf need to resolve the schema into a structural one, based on requirements in
 	// https://kubernetes.io/blog/2019/06/20/crd-structural-schema/, to pass apiextensions validations
 	// https://github.com/kubernetes/apiextensions-apiserver/blob/master/pkg/apiserver/schema/validation.go#L309
+
+	// Preserve negated validation rules, such as description requiring create
+	// on an inline secure value.
+	if sch.Value.Not != nil {
+		resolved, err := resolveSchema(sch.Value.Not, components, visited)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve not schema: %w", err)
+		}
+		result.Not = openapi3.NewSchemaRef("", resolved)
+	}
 
 	// Resolve AllOf schemas
 	for _, s := range sch.Value.AllOf {
@@ -1672,4 +1709,20 @@ func mergeValidationFields(mergeInto, toMerge *openapi3.Schema) {
 func getRefName(ref string) string {
 	parts := strings.Split(ref, "/")
 	return parts[len(parts)-1]
+}
+
+// SecureValuesOpenAPISchema describes an optional map of inline secure values.
+// Named properties document manifest-declared keys; additional keys use the same value schema.
+func SecureValuesOpenAPISchema(values []ManifestVersionKindSecureValue) spec.Schema {
+	properties := make(map[string]spec.Schema, len(values))
+	for _, value := range values {
+		valueSchema := sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
+		valueSchema.Description = value.Description
+		properties[value.Key] = valueSchema
+	}
+	additional := sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
+	return spec.Schema{SchemaProps: spec.SchemaProps{
+		Type: []string{"object"}, Properties: properties,
+		AdditionalProperties: &spec.SchemaOrBool{Allows: true, Schema: &additional},
+	}}
 }

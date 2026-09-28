@@ -347,6 +347,8 @@ Kind: S={
 		}
 	}
 
+	// secure declares the keys used in the top-level secure value map.
+	secure?: [...{key: string, description?: string}]
 	schema: _
 	selectableFields: [...string]
 	// additionalPrinterColumns is a list of additional columns to be printed in kubectl output

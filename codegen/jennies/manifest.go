@@ -630,6 +630,7 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 	}
 	mver := app.ManifestVersionKind{
 		Kind:         vk.Kind,
+		SecureValues: vk.SecureValues,
 		Plural:       vk.PluralName,
 		Scope:        vk.Scope,
 		UserReadable: vk.UserReadable,
@@ -746,6 +747,9 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			props[field] = map[string]any{
 				"$ref": "#/components/schemas/" + field,
 			}
+		}
+		if len(vk.SecureValues) > 0 {
+			props["secure"] = app.SecureValuesOpenAPISchema(vk.SecureValues)
 		}
 		schemas[vk.Kind] = map[string]any{
 			"properties": props,

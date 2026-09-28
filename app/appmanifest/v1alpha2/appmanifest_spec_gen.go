@@ -72,6 +72,7 @@ type AppManifestManifestVersionKind struct {
 	// If route responses in the `routes` section reference a definition in '#/components/schemas',
 	// that schema definition must exist in this section.
 	Schemas                  map[string]interface{}                `json:"schemas"`
+	Secure                   []AppManifestSecureValue              `json:"secure,omitempty"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
 	SearchFields             []AppManifestSearchField              `json:"searchFields,omitempty"`
@@ -173,6 +174,25 @@ func NewAppManifestMutationCapability() *AppManifestMutationCapability {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestMutationCapability.
 func (AppManifestMutationCapability) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestMutationCapability"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestSecureValue struct {
+	// Key used in the secure value map
+	Key string `json:"key"`
+	// Description explains how the secure value is used and where it should come from.
+	// this text will be exposed in the openapi schema
+	Description *string `json:"description,omitempty"`
+}
+
+// NewAppManifestSecureValue creates a new AppManifestSecureValue object.
+func NewAppManifestSecureValue() *AppManifestSecureValue {
+	return &AppManifestSecureValue{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestSecureValue.
+func (AppManifestSecureValue) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSecureValue"
 }
 
 // +k8s:openapi-gen=true

@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
+	"github.com/grafana/grafana-app-sdk/app"
 )
 
 type AppManifest interface {
@@ -208,6 +210,7 @@ func (v *SimpleVersion) Routes() VersionCustomRoutes {
 }
 
 type VersionedKind struct {
+	SecureValues []app.ManifestVersionKindSecureValue `json:"secure,omitempty"`
 	// Kind is the unique-within-the-group name of the kind
 	Kind string `json:"kind"`
 	// MachineName is the machine version of the Kind, which follows the regex: /^[a-z]+[a-z0-9]*$/

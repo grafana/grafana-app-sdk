@@ -60,9 +60,10 @@ func (t *TypeScriptResourceTypes) Generate(appManifest codegen.AppManifest) (cod
 
 func (*TypeScriptResourceTypes) generateObjectFile(vk *codegen.VersionedKind, tsTypePrefix string) ([]byte, error) {
 	metadata := templates.ResourceTSTemplateMetadata{
-		TypeName:     exportField(vk.Kind),
-		Subresources: make([]templates.SubresourceMetadata, 0),
-		FilePrefix:   tsTypePrefix,
+		TypeName:        exportField(vk.Kind),
+		HasSecureValues: len(vk.SecureValues) > 0,
+		Subresources:    make([]templates.SubresourceMetadata, 0),
+		FilePrefix:      tsTypePrefix,
 	}
 
 	it, err := vk.Schema.Fields()

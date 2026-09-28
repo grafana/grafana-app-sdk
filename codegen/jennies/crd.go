@@ -132,6 +132,13 @@ func KindVersionToCRDSpecVersion(schema cue.Value, kind codegen.VersionedKind, v
 		return k8s.CustomResourceDefinitionSpecVersion{}, err
 	}
 
+	if len(kind.SecureValues) > 0 {
+		// CRDs require maps to use additionalProperties without named properties,
+		// and prune unknown object fields instead of accepting additionalProperties:false.
+		secure := app.SecureValuesOpenAPISchema(nil)
+		secure.AdditionalProperties.Schema.AdditionalProperties = nil
+		props["secure"] = secure
+	}
 	def := k8s.CustomResourceDefinitionSpecVersion{
 		Name:    version,
 		Served:  true,
@@ -180,7 +187,7 @@ func KindVersionToCRDSpecVersion(schema cue.Value, kind codegen.VersionedKind, v
 	}
 
 	for k := range props {
-		if k != "spec" {
+		if k != "spec" && k != "secure" {
 			def.Subresources[k] = struct{}{}
 		}
 	}

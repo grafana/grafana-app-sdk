@@ -1160,6 +1160,46 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 	}
 }
 
+func TestVersionSchema_AsKubeOpenAPI_SecureValues(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "test.grafana.app", Version: "v1", Kind: "Foo"}
+	ref := func(path string) spec.Ref { return spec.MustCreateRef(path) }
+	vs, err := VersionSchemaFromMap(map[string]any{
+		"spec": map[string]any{"type": "object"},
+	}, gvk.Kind)
+	require.NoError(t, err)
+	for _, test := range []struct {
+		name   string
+		values []ManifestVersionKindSecureValue
+	}{
+		{name: "multiple keys", values: []ManifestVersionKindSecureValue{
+			{Key: "apiKey", Description: "API key supplied by the service."},
+			{Key: "token"},
+		}},
+		{name: "nil"},
+		{name: "empty", values: []ManifestVersionKindSecureValue{}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			definitions, err := vs.AsKubeOpenAPI(gvk, ref, "test.grafana.app/v1", test.values...)
+			require.NoError(t, err)
+			kind := definitions["test.grafana.app/v1.Foo"].Schema
+			secure, exists := kind.Properties["secure"]
+			if len(test.values) == 0 {
+				assert.False(t, exists)
+				return
+			}
+			require.True(t, exists)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Type)
+			require.Len(t, secure.Properties, 2)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Properties["apiKey"].Type)
+			assert.Equal(t, "API key supplied by the service.", secure.Properties["apiKey"].Description)
+			assert.Equal(t, spec.StringOrArray{"object"}, secure.Properties["token"].Type)
+			assert.Empty(t, secure.Properties["token"].Description)
+			assert.Empty(t, secure.Required)
+			assert.NotContains(t, kind.Required, "secure")
+		})
+	}
+}
+
 func TestGetCRDOpenAPISchema(t *testing.T) {
 	tests := []struct {
 		name          string
