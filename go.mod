@@ -15,7 +15,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.149.0
-	github.com/grafana/authlib v0.0.0-20260814184937-0d62418c2815
+	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.1.23
 	github.com/grafana/grafana-app-sdk/logging v0.60.2
@@ -37,7 +37,7 @@ require (
 	golang.org/x/sync v0.23.0
 	golang.org/x/tools v0.50.0
 	gomodules.xyz/jsonpatch/v2 v2.5.0
-	google.golang.org/grpc v1.83.2
+	google.golang.org/grpc v1.84.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.37.0
 	k8s.io/apiextensions-apiserver v0.37.0
