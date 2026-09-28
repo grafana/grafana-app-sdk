@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/k8s"
 )
 
 // Keep compatibility with callers that store the original function value.
@@ -215,6 +216,53 @@ func TestBuildKubeConfigWithOptions_TokenExchange(t *testing.T) {
 			defer func() { _ = response.Body.Close() }()
 			assert.Equal(t, http.StatusOK, response.StatusCode)
 			assert.Equal(t, int32(1), resourceCalls.Load())
+		})
+	}
+}
+
+func TestBuildKubeConfigWithOptions_ExchangesOnBehalfOfCaller(t *testing.T) {
+	tests := []struct {
+		name             string
+		idToken          string
+		wantSubjectToken string
+	}{
+		{name: "with caller", idToken: "caller-id-token", wantSubjectToken: "caller-id-token"},
+		{name: "without caller"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setKubeConfigEnv(t)
+			var gotSubjectToken string
+			signer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var body struct {
+					SubjectToken string `json:"subjectToken"`
+				}
+				assert.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				gotSubjectToken = body.SubjectToken
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"data":{"token":"test-access-token"}}`)
+			}))
+			defer signer.Close()
+			backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer backend.Close()
+			t.Setenv("API_ACCESS_ROUTER_URL", backend.URL)
+			t.Setenv("API_ACCESS_TOKEN_EXCHANGE_URL", signer.URL)
+			t.Setenv("API_ACCESS_CAP_TOKEN", "test-cap")
+
+			cfg, err := BuildKubeConfigWithOptions(app.ManifestData{Group: "example.test"}, KubeConfigOptions{})
+			require.NoError(t, err)
+			client, err := rest.HTTPClientFor(cfg)
+			require.NoError(t, err)
+			ctx := k8s.WithIDToken(t.Context(), tt.idToken)
+			request, err := http.NewRequestWithContext(ctx, http.MethodGet, backend.URL+"/apis/example.test/v1/examples", nil)
+			require.NoError(t, err)
+			response, err := client.Do(request)
+			require.NoError(t, err)
+			defer func() { _ = response.Body.Close() }()
+
+			assert.Equal(t, tt.wantSubjectToken, gotSubjectToken)
 		})
 	}
 }

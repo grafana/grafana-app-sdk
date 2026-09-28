@@ -2,9 +2,11 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -392,4 +394,48 @@ func TestTokenExchangeTransportClonesRequest(t *testing.T) {
 	assert.Empty(t, original.Header.Get("X-Access-Token"))
 	// The cloned request sent to base should have the header.
 	assert.Equal(t, "tok", base.lastReq.Header.Get("X-Access-Token"))
+}
+
+func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
+	tests := []struct {
+		name             string
+		ctx              context.Context
+		wantSubjectToken string
+	}{
+		{name: "caller", ctx: WithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
+		{name: "no caller", ctx: context.Background()},
+		{name: "empty caller", ctx: WithIDToken(context.Background(), "")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotReq struct {
+				SubjectToken string `json:"subjectToken"`
+			}
+			signer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = io.WriteString(w, `{"data":{"token":"tok"}}`)
+			}))
+			defer signer.Close()
+			exchangeFunc, err := newTokenExchangeFunc(TokenExchangeCredentials{TokenExchangeURL: signer.URL, Token: "cap"})
+			require.NoError(t, err)
+			base := &capturingRoundTripper{}
+			transport := &tokenExchangeTransport{
+				exchangeFunc: exchangeFunc,
+				base:         base,
+				audiences:    []string{"aud"},
+				namespace:    "*",
+			}
+
+			req, err := http.NewRequestWithContext(tt.ctx, http.MethodGet, "https://host/apis", nil)
+			require.NoError(t, err)
+			_, err = transport.RoundTrip(req)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.wantSubjectToken, gotReq.SubjectToken)
+			assert.Equal(t, "tok", base.lastReq.Header.Get("X-Access-Token"))
+			// The caller is carried in the access token, not sent separately.
+			assert.Empty(t, base.lastReq.Header.Values("X-Grafana-Id"))
+		})
+	}
 }
