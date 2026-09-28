@@ -3,16 +3,18 @@ package cuekind
 import (
 	"context"
 	"encoding/json"
-	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
-	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	crdvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
+	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	crdvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/validation/spec"
+	"k8s.io/kube-openapi/pkg/validation/strfmt"
+	"k8s.io/kube-openapi/pkg/validation/validate"
 
 	v1alpha2 "github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
@@ -60,6 +62,9 @@ func TestSecureValuesGeneration(t *testing.T) {
 	require.NoError(t, err)
 	found := false
 	for _, file := range goFiles {
+		if file.RelativePath == "connection/v1/connection_codec_gen.go" {
+			assert.Contains(t, string(file.Data), "resource.NewJSONCodec().Write(writer, from)")
+		}
 		if file.RelativePath == "connection/v1/connection_object_gen.go" {
 			found = true
 			assert.Contains(t, string(file.Data), "Secure resource.InlineSecureValues")
@@ -98,6 +103,25 @@ func TestSecureValuesGeneration(t *testing.T) {
 		assert.Equal(t, []string{"description"}, secureValue.Not.Required)
 		require.NotNil(t, secureValue.Not.Not)
 		assert.Equal(t, []string{"create"}, secureValue.Not.Not.Required)
+		// A structurally valid schema must also accept valid secure operations.
+		valueJSON, err := json.Marshal(secureValue)
+		require.NoError(t, err)
+		var valueSchema spec.Schema
+		require.NoError(t, json.Unmarshal(valueJSON, &valueSchema))
+		for _, tc := range []struct {
+			value map[string]any
+			valid bool
+		}{
+			{map[string]any{"create": "secret", "description": "from service"}, true},
+			{map[string]any{"name": "existing"}, true},
+			{map[string]any{"remove": true}, true},
+			{map[string]any{"create": "secret", "name": "existing"}, false},
+			{map[string]any{"name": "existing", "description": "not allowed"}, false},
+			{map[string]any{"remove": true, "description": "not allowed"}, false},
+		} {
+			result := validate.NewSchemaValidator(&valueSchema, nil, "", strfmt.Default).Validate(tc.value)
+			assert.Equal(t, tc.valid, result.IsValid(), "value %v: %v", tc.value, result.Errors)
+		}
 		var validationSchema apiext.JSONSchemaProps
 		require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&wireSchema, &validationSchema, nil))
 		// Validate the new secure property independently of existing spec generation.

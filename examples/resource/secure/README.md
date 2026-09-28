@@ -43,8 +43,9 @@ err := codec.Write(writer, obj)
 ```
 
 Encoding does not consume the source values, so they remain available for retries.
-`PassthroughJSONCodec` and codecs that directly use `encoding/json` retain the
-redacting behavior.
+Generated codecs for kinds declaring secure values also preserve plaintext
+`create` values. `PassthroughJSONCodec` and direct `encoding/json` calls retain
+the redacting behavior.
 
 The SDK supplies types, serialization, and schemas. Resolving references and
 processing create/remove operations still requires Grafana's secure-value

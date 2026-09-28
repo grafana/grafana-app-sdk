@@ -154,6 +154,7 @@ func WriteResourceTSType(metadata ResourceTSTemplateMetadata, out io.Writer) err
 
 // SchemaMetadata is the metadata required by the Resource Schema template
 type SchemaMetadata struct {
+	HasSecureValues  bool
 	Package          string
 	Group            string
 	Version          string

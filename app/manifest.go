@@ -1507,7 +1507,7 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 			// Add the required fields to OneOf, rather than the whole schema
 			notReq := make([]*openapi3.SchemaRef, 0)
 			for _, v := range allRequired {
-				if _, has := resolved.Properties[v]; !has {
+				if _, has := resolved.Properties[v]; !has && !slices.Contains(resolved.Required, v) {
 					notReq = append(notReq, openapi3.NewSchemaRef("", &openapi3.Schema{
 						Required: []string{v},
 					}))
