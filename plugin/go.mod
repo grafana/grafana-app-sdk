@@ -16,7 +16,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
-	google.golang.org/grpc v1.83.2
+	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 	k8s.io/apimachinery v0.37.0
 	k8s.io/client-go v0.37.0
@@ -60,7 +60,7 @@ require (
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grafana/authlib v0.0.0-20260814184937-0d62418c2815 // indirect
+	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d // indirect
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 // indirect
 	github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 // indirect
 	github.com/grafana/otel-profiling-go v0.6.0 // indirect
