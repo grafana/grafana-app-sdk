@@ -44,11 +44,15 @@ var _ app.App = (*fakeApp)(nil)
 // fakeStream is a minimal grpc.ServerStreamingServer[*pluginv3.CallRouteResponse]
 // that records the responses sent to it.
 type fakeStream struct {
-	ctx  context.Context
-	sent []*pluginv3.CallRouteResponse
+	ctx     context.Context
+	sent    []*pluginv3.CallRouteResponse
+	sendErr error
 }
 
 func (s *fakeStream) Send(rsp *pluginv3.CallRouteResponse) error {
+	if s.sendErr != nil {
+		return s.sendErr
+	}
 	s.sent = append(s.sent, rsp)
 	return nil
 }
@@ -170,6 +174,115 @@ func TestRouteAdapter_CallRoute(t *testing.T) {
 		err := a.CallRoute(req, stream)
 		if !errors.Is(err, wantErr) {
 			t.Fatalf("expected wrapped %v, got %v", wantErr, err)
+		}
+	})
+
+	t.Run("sends a message for each flush", func(t *testing.T) {
+		a := NewRouteAdapter(&fakeApp{
+			callCustomRoute: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+				writer.Header().Set("Content-Type", "text/event-stream")
+				writer.WriteHeader(http.StatusAccepted)
+				_, _ = writer.Write([]byte("data: one\n\n"))
+				writer.(http.Flusher).Flush()
+				// Flushing with nothing buffered sends nothing.
+				writer.(http.Flusher).Flush()
+				// The status and headers were sent with the first message.
+				writer.Header().Set("X-Late", "ignored")
+				writer.WriteHeader(http.StatusTeapot)
+				_, _ = writer.Write([]byte("data: two\n\n"))
+				writer.(http.Flusher).Flush()
+				_, err := writer.Write([]byte("data: three\n\n"))
+				return err
+			},
+		})
+
+		req := &pluginv3.CallRouteRequest{}
+		req.SetUrl("https://example.com/foo")
+
+		stream := newStream()
+		if err := a.CallRoute(req, stream); err != nil {
+			t.Fatalf("CallRoute returned error: %v", err)
+		}
+
+		if len(stream.sent) != 3 {
+			t.Fatalf("expected 3 streamed responses, got %d", len(stream.sent))
+		}
+		first := stream.sent[0]
+		if first.GetCode() != http.StatusAccepted || string(first.GetBody()) != "data: one\n\n" {
+			t.Fatalf("unexpected first response: %d %q", first.GetCode(), first.GetBody())
+		}
+		if got := first.GetHeaders()["Content-Type"].GetValues(); len(got) != 1 || got[0] != "text/event-stream" {
+			t.Fatalf("unexpected headers: %+v", first.GetHeaders())
+		}
+		for i, want := range []string{"data: two\n\n", "data: three\n\n"} {
+			rsp := stream.sent[i+1]
+			if rsp.GetCode() != 0 || len(rsp.GetHeaders()) != 0 || string(rsp.GetBody()) != want {
+				t.Fatalf("unexpected response %d: %d %+v %q", i+1, rsp.GetCode(), rsp.GetHeaders(), rsp.GetBody())
+			}
+		}
+	})
+
+	t.Run("sends headers when the handler writes no body", func(t *testing.T) {
+		a := NewRouteAdapter(&fakeApp{
+			callCustomRoute: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+				writer.WriteHeader(http.StatusNoContent)
+				return nil
+			},
+		})
+
+		req := &pluginv3.CallRouteRequest{}
+		req.SetUrl("https://example.com/foo")
+
+		stream := newStream()
+		if err := a.CallRoute(req, stream); err != nil {
+			t.Fatalf("CallRoute returned error: %v", err)
+		}
+		if len(stream.sent) != 1 || stream.sent[0].GetCode() != http.StatusNoContent || len(stream.sent[0].GetBody()) != 0 {
+			t.Fatalf("unexpected responses: %+v", stream.sent)
+		}
+	})
+
+	t.Run("returns send errors to the handler and the caller", func(t *testing.T) {
+		sendErr := errors.New("stream closed")
+		var writeErr error
+		a := NewRouteAdapter(&fakeApp{
+			callCustomRoute: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+				_, _ = writer.Write([]byte("data: one\n\n"))
+				writer.(http.Flusher).Flush()
+				_, writeErr = writer.Write([]byte("data: two\n\n"))
+				return nil
+			},
+		})
+
+		req := &pluginv3.CallRouteRequest{}
+		req.SetUrl("https://example.com/foo")
+
+		stream := newStream()
+		stream.sendErr = sendErr
+		if err := a.CallRoute(req, stream); !errors.Is(err, sendErr) {
+			t.Fatalf("expected %v, got %v", sendErr, err)
+		}
+		if !errors.Is(writeErr, sendErr) {
+			t.Fatalf("expected Write to return %v, got %v", sendErr, writeErr)
+		}
+	})
+
+	t.Run("does not map ErrCustomRouteNotFound after the response has started", func(t *testing.T) {
+		a := NewRouteAdapter(&fakeApp{
+			callCustomRoute: func(_ context.Context, writer app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+				_, _ = writer.Write([]byte("partial"))
+				writer.(http.Flusher).Flush()
+				return app.ErrCustomRouteNotFound
+			},
+		})
+
+		req := &pluginv3.CallRouteRequest{}
+		req.SetUrl("https://example.com/foo")
+
+		stream := newStream()
+		err := a.CallRoute(req, stream)
+		if !errors.Is(err, app.ErrCustomRouteNotFound) || status.Code(err) == codes.NotFound {
+			t.Fatalf("expected the unmapped error, got %v", err)
 		}
 	})
 

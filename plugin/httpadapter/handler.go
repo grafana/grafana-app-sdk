@@ -88,7 +88,9 @@ func requestFromHTTP(r *http.Request) (*pluginv3.CallRouteRequest, error) {
 
 func forwardResponse(w http.ResponseWriter, stream pluginv3.RouteService_CallRouteClient) {
 	wroteHeader := false
-	flusher, canFlush := w.(http.Flusher)
+	// ResponseController also finds a Flusher behind wrappers that only
+	// implement Unwrap, so flushes aren't dropped by middleware.
+	controller := http.NewResponseController(w)
 	for {
 		resp, err := stream.Recv()
 		if err == io.EOF {
@@ -112,9 +114,9 @@ func forwardResponse(w http.ResponseWriter, stream pluginv3.RouteService_CallRou
 		if _, err := w.Write(resp.GetBody()); err != nil {
 			return
 		}
-		if canFlush {
-			flusher.Flush()
-		}
+		// Flushing is best effort: a writer that can't flush still receives
+		// the whole response, just not incrementally.
+		_ = controller.Flush()
 	}
 }
 

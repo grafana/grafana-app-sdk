@@ -46,7 +46,7 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	rec := newResponseRecorder()
+	rec := newResponseRecorder(stream)
 	customReq := &app.CustomRouteRequest{
 		ResourceIdentifier: routeResourceIdentifier(req),
 		Path:               req.GetPath(),
@@ -57,13 +57,16 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 	}
 
 	if err := a.app.CallCustomRoute(stream.Context(), rec, customReq); err != nil {
-		if errors.Is(err, app.ErrCustomRouteNotFound) {
+		if errors.Is(err, app.ErrCustomRouteNotFound) && !rec.sentHeader {
 			return status.Error(codes.NotFound, err.Error())
 		}
 		return err
 	}
 
-	return stream.Send(rec.toCallRouteResponse())
+	// Send whatever the handler has not flushed. For a handler that never
+	// flushes, this is the whole response in a single message.
+	rec.Flush()
+	return rec.sendErr
 }
 
 // routeResourceIdentifier builds a resource.FullIdentifier from the parts of
@@ -94,17 +97,24 @@ func routeHeaders(headers map[string]*pluginv3.StringList) http.Header {
 	return h
 }
 
-// responseRecorder is a minimal app.CustomRouteResponseWriter that buffers the
-// status code, headers, and body so they can be translated into a single
-// CallRouteResponse.
+// responseRecorder is an app.CustomRouteResponseWriter that translates the
+// response into CallRouteResponse messages. It buffers the body until Flush is
+// called, then sends it as one message. The status code and headers are sent
+// only in the first message, so they are fixed once the response is flushed.
 type responseRecorder struct {
+	stream     grpc.ServerStreamingServer[pluginv3.CallRouteResponse]
 	header     http.Header
 	body       bytes.Buffer
 	statusCode int
+	sentHeader bool
+	sendErr    error
 }
 
-func newResponseRecorder() *responseRecorder {
+var _ http.Flusher = (*responseRecorder)(nil)
+
+func newResponseRecorder(stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) *responseRecorder {
 	return &responseRecorder{
+		stream:     stream,
 		header:     make(http.Header),
 		statusCode: http.StatusOK,
 	}
@@ -114,15 +124,41 @@ func (r *responseRecorder) Header() http.Header {
 	return r.header
 }
 
+// Write buffers b until the next Flush. It returns the error from a previous
+// failed send, so a handler stops writing once the caller has gone away.
 func (r *responseRecorder) Write(b []byte) (int, error) {
+	if r.sendErr != nil {
+		return 0, r.sendErr
+	}
 	return r.body.Write(b)
 }
 
 func (r *responseRecorder) WriteHeader(statusCode int) {
+	if r.sentHeader {
+		return
+	}
 	r.statusCode = statusCode
 }
 
+// Flush implements [http.Flusher] by sending the buffered body as one
+// CallRouteResponse message.
+func (r *responseRecorder) Flush() {
+	if r.sendErr != nil || r.sentHeader && r.body.Len() == 0 {
+		return
+	}
+	r.sendErr = r.stream.Send(r.toCallRouteResponse())
+	r.body.Reset()
+}
+
 func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
+	rsp := &pluginv3.CallRouteResponse{}
+	if r.body.Len() > 0 {
+		rsp.SetBody(bytes.Clone(r.body.Bytes()))
+	}
+	if r.sentHeader {
+		return rsp
+	}
+
 	headers := make(map[string]*pluginv3.StringList, len(r.header))
 	for k, v := range r.header {
 		sl := &pluginv3.StringList{}
@@ -135,9 +171,8 @@ func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
 		code = http.StatusInternalServerError
 	}
 
-	rsp := &pluginv3.CallRouteResponse{}
 	rsp.SetCode(int32(code))
 	rsp.SetHeaders(headers)
-	rsp.SetBody(r.body.Bytes())
+	r.sentHeader = true
 	return rsp
 }
