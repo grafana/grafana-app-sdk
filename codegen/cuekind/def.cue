@@ -348,6 +348,7 @@ Kind: S={
 	}
 
 	// secure declares the keys used in the top-level secure value map.
+	// A key of "*" accepts any key, validated as an inline secure value.
 	secure?: [...{key: string, description?: string}]
 	schema: _
 	selectableFields: [...string]

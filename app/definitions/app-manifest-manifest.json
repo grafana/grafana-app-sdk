@@ -1187,7 +1187,7 @@
                                         "type": "string"
                                     },
                                     "key": {
-                                        "description": "Key used in the secure value map",
+                                        "description": "Key used in the secure value map\n\"*\" indicates that any key will be accepted",
                                         "type": "string"
                                     }
                                 },

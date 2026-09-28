@@ -84,6 +84,9 @@ func (InlineSecureValue) OpenAPIDefinition() common.OpenAPIDefinition {
 // InlineSecureValues is a map of resource-local keys to secure value operations or references.
 type InlineSecureValues = map[string]InlineSecureValue
 
+// DecryptedSecureValues expose the raw values already decrypted
+type DecryptedSecureValues = map[string]RawSecureValue
+
 // ObjectWithSecureValues is an optional capability for objects with a top-level secure map.
 // Secure values are not REST subresources.
 type ObjectWithSecureValues interface {

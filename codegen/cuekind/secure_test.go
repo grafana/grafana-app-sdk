@@ -10,6 +10,8 @@ import (
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	crdvalidation "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/validation"
+	structuralschema "k8s.io/apiextensions-apiserver/pkg/apiserver/schema"
+	"k8s.io/apiextensions-apiserver/pkg/apiserver/schema/pruning"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/kube-openapi/pkg/validation/spec"
@@ -55,8 +57,23 @@ func TestSecureValuesGeneration(t *testing.T) {
 	secure := definitions["example.Connection"].Schema.Properties["secure"]
 	assert.Equal(t, "API key from the service", secure.Properties["apiKey"].Description)
 	require.NotNil(t, secure.AdditionalProperties)
-	require.NotNil(t, secure.AdditionalProperties.Schema)
-	assert.Len(t, secure.AdditionalProperties.Schema.OneOf, 3)
+	assert.False(t, secure.AdditionalProperties.Allows)
+	assert.Nil(t, secure.AdditionalProperties.Schema)
+	assert.Len(t, secure.Properties["apiKey"].OneOf, 3)
+	for _, tc := range []struct {
+		name  string
+		value map[string]any
+		valid bool
+	}{
+		{"declared key", map[string]any{"apiKey": map[string]any{"create": "secret"}}, true},
+		{"undeclared key", map[string]any{"other": map[string]any{"create": "secret"}}, false},
+		{"mixed keys", map[string]any{"apiKey": map[string]any{"name": "existing"}, "other": map[string]any{"remove": true}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			result := validate.NewSchemaValidator(&secure, nil, "", strfmt.Default).Validate(tc.value)
+			assert.Equal(t, tc.valid, result.IsValid(), "%v", result.Errors)
+		})
+	}
 
 	goFiles, err := ResourceGenerator("example.org/test", "generated", false).Generate(manifest)
 	require.NoError(t, err)
@@ -98,7 +115,11 @@ func TestSecureValuesGeneration(t *testing.T) {
 		require.NoError(t, err)
 		var wireSchema apiextv1.JSONSchemaProps
 		require.NoError(t, json.Unmarshal(encoded, &wireSchema))
-		secureValue := wireSchema.Properties["secure"].AdditionalProperties.Schema
+		secureSchema := wireSchema.Properties["secure"]
+		assert.Nil(t, secureSchema.AdditionalProperties)
+		require.Len(t, secureSchema.Properties, 2)
+		secureValue := secureSchema.Properties["apiKey"]
+		assert.Equal(t, "API key from the service", secureValue.Description)
 		require.NotNil(t, secureValue.Not)
 		assert.Equal(t, []string{"description"}, secureValue.Not.Required)
 		require.NotNil(t, secureValue.Not.Not)
@@ -137,6 +158,15 @@ func TestSecureValuesGeneration(t *testing.T) {
 			Status: apiext.CustomResourceDefinitionStatus{StoredVersions: []string{"v1"}},
 		}
 		assert.Empty(t, crdvalidation.ValidateCustomResourceDefinition(context.Background(), definition))
+		structural, err := structuralschema.NewStructural(&validationSchema)
+		require.NoError(t, err)
+		value := map[string]any{"secure": map[string]any{
+			"apiKey":     map[string]any{"name": "existing"},
+			"undeclared": map[string]any{"name": "other"},
+		}}
+		pruning.Prune(value, structural, true)
+		assert.Equal(t, map[string]any{"apiKey": map[string]any{"name": "existing"}}, value["secure"])
+
 	}
 
 	// Check that Go manifest generation retains declarations as well as schemas.
@@ -147,4 +177,102 @@ func TestSecureValuesGeneration(t *testing.T) {
 	assert.Contains(t, string(manifestFiles[0].Data), "SecureValues: []app.ManifestVersionKindSecureValue")
 	assert.Contains(t, string(manifestFiles[0].Data), `Key: "apiKey"`)
 
+}
+
+func TestWildcardSecureValuesGeneration(t *testing.T) {
+	for _, tc := range []struct {
+		name, declarations string
+		named              bool
+	}{
+		{"wildcard only", `[{key: "*", description: "Any credential"}]`, false},
+		{"wildcard first", `[{key: "*", description: "Any credential"}, {key: "apiKey", description: "Specific credential"}]`, true},
+		{"wildcard last", `[{key: "apiKey", description: "Specific credential"}, {key: "*", description: "Any credential"}]`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(`manifest: {
+    appName: "secure-example"
+    versions: v1: kinds: [{
+     kind: "Connection"
+     schema: spec: endpoint: string
+     secure: ` + tc.declarations + `
+    }]
+   }`)
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			require.NoError(t, err)
+			kind := manifest.Versions()[0].Kinds()[0]
+			generator := &jennies.ManifestGenerator{ManifestVersion: jennies.VersionV1Alpha2, IncludeSchemas: true, Encoder: json.Marshal}
+			files, err := generator.Generate(manifest)
+			require.NoError(t, err)
+			require.Len(t, files, 1)
+			var document struct {
+				Spec v1alpha2.AppManifestSpec `json:"spec"`
+			}
+			require.NoError(t, json.Unmarshal(files[0].Data, &document))
+			data, err := document.Spec.ToManifestData()
+			require.NoError(t, err)
+			converted := data.Versions[0].Kinds[0]
+			assert.Equal(t, kind.SecureValues, converted.SecureValues)
+			definitions, err := converted.Schema.AsKubeOpenAPI(schema.GroupVersionKind{Group: data.Group, Version: "v1", Kind: "Connection"}, spec.MustCreateRef, "example", converted.SecureValues...)
+			require.NoError(t, err)
+			secure := definitions["example.Connection"].Schema.Properties["secure"]
+			require.NotNil(t, secure.AdditionalProperties)
+			assert.True(t, secure.AdditionalProperties.Allows)
+			require.NotNil(t, secure.AdditionalProperties.Schema)
+			assert.Equal(t, "Any credential", secure.AdditionalProperties.Schema.Description)
+			assert.NotContains(t, secure.Properties, "*")
+			if tc.named {
+				assert.Equal(t, "Specific credential", secure.Properties["apiKey"].Description)
+			} else {
+				assert.Empty(t, secure.Properties)
+			}
+
+			crd, err := jennies.KindVersionToCRDSpecVersion(kind.Schema, kind, "v1", true)
+			require.NoError(t, err)
+			convertedCRD, err := converted.Schema.AsCRDOpenAPI3("Connection")
+			require.NoError(t, err)
+			schemas := map[string]any{"served OpenAPI": secure}
+			for name, source := range map[string]any{"generated CRD": crd.Schema["openAPIV3Schema"], "converted CRD": convertedCRD} {
+				encoded, err := json.Marshal(source)
+				require.NoError(t, err)
+				var wire apiextv1.JSONSchemaProps
+				require.NoError(t, json.Unmarshal(encoded, &wire))
+				secureCRD := wire.Properties["secure"]
+				assert.Empty(t, secureCRD.Properties)
+				require.NotNil(t, secureCRD.AdditionalProperties)
+				require.NotNil(t, secureCRD.AdditionalProperties.Schema)
+				assert.Equal(t, "Any credential", secureCRD.AdditionalProperties.Schema.Description)
+				var internal apiext.JSONSchemaProps
+				require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&secureCRD, &internal, nil))
+				root := &apiext.JSONSchemaProps{Type: "object", Properties: map[string]apiext.JSONSchemaProps{"secure": internal}}
+				structural, err := structuralschema.NewStructural(root)
+				require.NoError(t, err)
+				require.Empty(t, structuralschema.ValidateStructural(nil, structural))
+				value := map[string]any{"secure": map[string]any{"arbitrary": map[string]any{"name": "existing"}}}
+				pruning.Prune(value, structural, true)
+				assert.Equal(t, map[string]any{"arbitrary": map[string]any{"name": "existing"}}, value["secure"])
+				schemas[name] = secureCRD
+			}
+			for name, source := range schemas {
+				t.Run(name, func(t *testing.T) {
+					encoded, err := json.Marshal(source)
+					require.NoError(t, err)
+					var sch spec.Schema
+					require.NoError(t, json.Unmarshal(encoded, &sch))
+					for _, value := range []map[string]any{
+						{"create": "secret", "description": "new credential"}, {"name": "existing"}, {"remove": true},
+					} {
+						result := validate.NewSchemaValidator(&sch, nil, "", strfmt.Default).Validate(map[string]any{"arbitrary": value})
+						assert.True(t, result.IsValid(), "%v", result.Errors)
+					}
+					for _, value := range []any{"plaintext", map[string]any{"create": "secret", "name": "existing"}, map[string]any{"name": "existing", "description": "not allowed"}} {
+						result := validate.NewSchemaValidator(&sch, nil, "", strfmt.Default).Validate(map[string]any{"arbitrary": value})
+						assert.False(t, result.IsValid())
+					}
+				})
+			}
+		})
+	}
 }

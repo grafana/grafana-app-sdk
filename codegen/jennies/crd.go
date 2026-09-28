@@ -133,10 +133,19 @@ func KindVersionToCRDSpecVersion(schema cue.Value, kind codegen.VersionedKind, v
 	}
 
 	if len(kind.SecureValues) > 0 {
-		// CRDs require maps to use additionalProperties without named properties,
-		// and prune unknown object fields instead of accepting additionalProperties:false.
-		secure := app.SecureValuesOpenAPISchema(nil)
-		secure.AdditionalProperties.Schema.AdditionalProperties = nil
+		// CRDs prune undeclared fields instead of accepting additionalProperties:false.
+		secure := app.SecureValuesOpenAPISchema(kind.SecureValues)
+		if secure.AdditionalProperties.Schema != nil {
+			// A wildcard uses a typed map; CRDs cannot also declare named keys.
+			secure.Properties = nil
+			secure.AdditionalProperties.Schema.AdditionalProperties = nil
+		} else {
+			secure.AdditionalProperties = nil
+		}
+		for key, value := range secure.Properties {
+			value.AdditionalProperties = nil
+			secure.Properties[key] = value
+		}
 		props["secure"] = secure
 	}
 	def := k8s.CustomResourceDefinitionSpecVersion{

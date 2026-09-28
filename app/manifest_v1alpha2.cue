@@ -52,6 +52,7 @@ appManifestv1alpha2: appManifestKind & {
 		}
 		#SecureValue: {
 			// Key used in the secure value map
+			// "*" indicates that any key will be accepted
 			key: string
 			// Description explains how the secure value is used and where it should come from.
 			// this text will be exposed in the openapi schema

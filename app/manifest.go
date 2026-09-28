@@ -423,7 +423,7 @@ type ManifestVersionKind struct {
 
 // ManifestVersionKindSecureValue describes a secure value used by a kind.
 type ManifestVersionKindSecureValue struct {
-	// Key is the key used in the secure value map.
+	// Key is the key used in the secure value map. "*" accepts any key.
 	Key string `json:"key" yaml:"key"`
 	// Description explains how the secure value is used and where it should come from.
 	// This text is intended to be exposed in the OpenAPI schema.
@@ -1290,8 +1290,9 @@ func GetCRDOpenAPISchema(components *openapi3.Components, schemaName string) (*o
 	if err != nil {
 		return nil, err
 	}
-	// CRDs cannot combine named properties with a typed additionalProperties map.
-	// Keep the value schema; declared-key descriptions remain in served OpenAPI.
+	// Kubernetes does not permit named properties alongside a typed map.
+	// Wildcard secure maps retain their value schema; named-key documentation
+	// remains in the manifest and served OpenAPI.
 	if secure := resolved.Properties["secure"]; secure != nil && secure.Value != nil && secure.Value.AdditionalProperties.Schema != nil {
 		secure.Value.Properties = nil
 	}
@@ -1712,17 +1713,21 @@ func getRefName(ref string) string {
 }
 
 // SecureValuesOpenAPISchema describes an optional map of inline secure values.
-// Named properties document manifest-declared keys; additional keys use the same value schema.
+// Only manifest-declared keys are allowed unless a "*" entry enables arbitrary keys.
 func SecureValuesOpenAPISchema(values []ManifestVersionKindSecureValue) spec.Schema {
+	additional := &spec.SchemaOrBool{Allows: false}
 	properties := make(map[string]spec.Schema, len(values))
 	for _, value := range values {
 		valueSchema := sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
 		valueSchema.Description = value.Description
+		if value.Key == "*" {
+			additional = &spec.SchemaOrBool{Allows: true, Schema: &valueSchema}
+			continue
+		}
 		properties[value.Key] = valueSchema
 	}
-	additional := sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
 	return spec.Schema{SchemaProps: spec.SchemaProps{
 		Type: []string{"object"}, Properties: properties,
-		AdditionalProperties: &spec.SchemaOrBool{Allows: true, Schema: &additional},
+		AdditionalProperties: additional,
 	}}
 }

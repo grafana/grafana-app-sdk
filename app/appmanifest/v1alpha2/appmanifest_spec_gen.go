@@ -179,6 +179,7 @@ func (AppManifestMutationCapability) OpenAPIModelName() string {
 // +k8s:openapi-gen=true
 type AppManifestSecureValue struct {
 	// Key used in the secure value map
+	// "*" indicates that any key will be accepted
 	Key string `json:"key"`
 	// Description explains how the secure value is used and where it should come from.
 	// this text will be exposed in the openapi schema

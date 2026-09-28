@@ -24,10 +24,14 @@ versions: v1: kinds: [{
 
 Generation adds an optional top-level `secure` map to the Go and TypeScript
 resource types and their schemas. Declared keys carry their descriptions;
-additional keys accept the same inline-value object. CRD schemas use a generic
-map value schema because Kubernetes does not allow named properties alongside
-a typed map; declared-key descriptions remain in the manifest and served OpenAPI. `secure` is not a REST
-subresource. Each value supplies exactly one of `create`, `name`, or `remove`,
+undeclared keys are rejected by the served OpenAPI schema. CRDs retain the
+named properties and descriptions, with Kubernetes pruning undeclared keys.
+Add `{key: "*", description: "Service credentials"}` to the declaration to accept
+any key. Explicit keys can be combined with the wildcard in any order and retain
+their individual descriptions in served OpenAPI. Wildcard CRDs use a typed map
+and preserve arbitrary keys. Each value still has to match `InlineSecureValue`.
+
+`secure` is not a REST subresource. Each value supplies exactly one of `create`, `name`, or `remove`,
 with an optional `description` only when `create` is supplied:
 
 ```json
