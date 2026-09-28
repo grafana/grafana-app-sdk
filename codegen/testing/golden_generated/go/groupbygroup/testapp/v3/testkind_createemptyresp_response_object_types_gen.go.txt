@@ -1,0 +1,41 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package v3
+
+import (
+	"github.com/grafana/grafana-app-sdk/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
+
+// +k8s:openapi-gen=true
+type CreateEmptyRespResponse struct {
+	metav1.TypeMeta     `json:",inline"`
+	CreateEmptyRespBody `json:",inline"`
+}
+
+func NewCreateEmptyRespResponse() *CreateEmptyRespResponse {
+	return &CreateEmptyRespResponse{}
+}
+
+func (t *CreateEmptyRespBody) DeepCopyInto(dst *CreateEmptyRespBody) {
+	_ = resource.CopyObjectInto(dst, t)
+}
+
+func (o *CreateEmptyRespResponse) DeepCopyObject() runtime.Object {
+	dst := NewCreateEmptyRespResponse()
+	o.DeepCopyInto(dst)
+	return dst
+}
+
+func (o *CreateEmptyRespResponse) DeepCopyInto(dst *CreateEmptyRespResponse) {
+	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
+	dst.TypeMeta.Kind = o.TypeMeta.Kind
+	o.CreateEmptyRespBody.DeepCopyInto(&dst.CreateEmptyRespBody)
+}
+
+func (CreateEmptyRespResponse) OpenAPIModelName() string {
+	return "codegen-tests.pkg.generated.testapp.v3.CreateEmptyRespResponse"
+}
+
+var _ runtime.Object = NewCreateEmptyRespResponse()

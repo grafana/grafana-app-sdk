@@ -198,6 +198,13 @@ testKind: {
 			mutation: operations: ["create","update"]
 			validation: operations: ["create","update"]
 			routes: {
+				"/emptyresp": {
+					POST: {
+						name: "createEmptyResp"
+						request: {}
+						response: {}
+					}
+				}
 				"/reconcile": {
 					POST: {
 						name: "createReconcileRequest"
