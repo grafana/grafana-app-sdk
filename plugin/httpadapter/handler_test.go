@@ -189,6 +189,20 @@ func TestHandlerFuncResponseWriterVariants(t *testing.T) {
 		require.Equal(t, "response", writer.body.String())
 	})
 
+	t.Run("flushes through a wrapper that only implements Unwrap", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{
+			stream: &testCallRouteResponseReceiver{
+				responses: []*pluginv3.CallRouteResponse{callRouteResponse(http.StatusOK, nil, []byte("response"))},
+			},
+		}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(&testUnwrappingResponseWriter{ResponseWriter: recorder}, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.True(t, recorder.Flushed)
+		require.Equal(t, "response", recorder.Body.String())
+	})
+
 	t.Run("stops when writing the response fails", func(t *testing.T) {
 		writeErr := errors.New("write failed")
 		grpcClient := &testRouteServiceClient{
@@ -273,6 +287,16 @@ func (w *testHTTPResponseWriter) Write(body []byte) (int, error) {
 
 func (w *testHTTPResponseWriter) WriteHeader(status int) {
 	w.status = status
+}
+
+// testUnwrappingResponseWriter hides the wrapped writer's optional interfaces,
+// as middleware wrappers typically do, but exposes it through Unwrap.
+type testUnwrappingResponseWriter struct {
+	http.ResponseWriter
+}
+
+func (w *testUnwrappingResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func callRouteResponse(code int, headers map[string][]string, body []byte) *pluginv3.CallRouteResponse {
