@@ -63,6 +63,12 @@ type CustomRouteRequest struct {
 	// (see godoc for io.Reader). A consumer SHOULD call Body.Close() when they are finished consuming the body,
 	// especially in the case of incomplete data, to signal to the runner that the handler has finished consuming the payload.
 	Body io.ReadCloser
+
+	// For sub-resource requests
+	Parent *RawObject
+
+	// When the parent resource contains secure values
+	DecryptedSecureValues map[string]string
 }
 
 // CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects. It mirrors http.ResponseWriter,
