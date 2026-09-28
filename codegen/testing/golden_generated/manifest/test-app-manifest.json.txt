@@ -151,6 +151,9 @@
                                 "type": "object"
                             }
                         },
+                        "storage": {
+                            "listKeys": false
+                        },
                         "conversion": false
                     }
                 ]

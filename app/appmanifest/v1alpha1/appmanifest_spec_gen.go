@@ -41,6 +41,8 @@ type AppManifestManifestVersionKind struct {
 	Schema                   AppManifestManifestVersionKindSchema  `json:"schema"`
 	SelectableFields         []string                              `json:"selectableFields,omitempty"`
 	AdditionalPrinterColumns []AppManifestAdditionalPrinterColumns `json:"additionalPrinterColumns,omitempty"`
+	// storage declares storage-related behavior for this kind.
+	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
 	// Conversion indicates whether this kind supports custom conversion behavior exposed by the Convert method in the App.
 	// It may not prevent automatic conversion behavior between versions of the kind when set to false
 	// (for example, CRDs will always support simple conversion, and this flag enables webhook conversion).
@@ -169,6 +171,22 @@ func NewAppManifestAdditionalPrinterColumns() *AppManifestAdditionalPrinterColum
 // OpenAPIModelName returns the OpenAPI model name for AppManifestAdditionalPrinterColumns.
 func (AppManifestAdditionalPrinterColumns) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestAdditionalPrinterColumns"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionKindStorage struct {
+	// listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.
+	ListKeys *bool `json:"listKeys,omitempty"`
+}
+
+// NewAppManifestManifestVersionKindStorage creates a new AppManifestManifestVersionKindStorage object.
+func NewAppManifestManifestVersionKindStorage() *AppManifestManifestVersionKindStorage {
+	return &AppManifestManifestVersionKindStorage{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionKindStorage.
+func (AppManifestManifestVersionKindStorage) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha1.AppManifestManifestVersionKindStorage"
 }
 
 // +k8s:openapi-gen=true

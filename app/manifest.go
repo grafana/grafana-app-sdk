@@ -408,11 +408,19 @@ type ManifestVersionKind struct {
 	AdditionalPrinterColumns []ManifestVersionKindAdditionalPrinterColumn `json:"additionalPrinterColumns,omitempty" yaml:"additionalPrinterColumns,omitempty"`
 	// SearchFields are the fields exposed for search indexing and querying.
 	SearchFields []ManifestVersionKindSearchField `json:"searchFields,omitempty" yaml:"searchFields,omitempty"`
+	// Storage declares storage-related behavior for this kind.
+	Storage *ManifestVersionKindStorage `json:"storage,omitempty" yaml:"storage,omitempty"`
 	// Search declares which search endpoints are served for this kind.
 	// A nil value, or a nil field within it, means the endpoint takes its default.
 	Search *ManifestVersionKindSearch `json:"search,omitempty" yaml:"search,omitempty"`
 	// Embed defines the embedding document independently of search fields.
 	Embed *ManifestVersionKindEmbed `json:"embed,omitempty" yaml:"embed,omitempty"`
+}
+
+// ManifestVersionKindStorage declares storage-related behavior for a kind.
+type ManifestVersionKindStorage struct {
+	// ListKeys controls whether the kind serves generic list-keys endpoints. Nil defaults to true.
+	ListKeys *bool `json:"listKeys,omitempty" yaml:"listKeys,omitempty"`
 }
 
 // ManifestVersionKindSearch declares which search endpoints are served for a kind.
@@ -451,6 +459,12 @@ func (m *ManifestVersionKind) Resource() string {
 		return strings.ToLower(m.Plural)
 	}
 	return strings.ToLower(m.Kind) + "s"
+}
+
+// HasListKeysEndpoint reports whether the kind serves generic list-keys endpoints.
+// Kinds serve them unless they explicitly opt out.
+func (m *ManifestVersionKind) HasListKeysEndpoint() bool {
+	return m.Storage == nil || m.Storage.ListKeys == nil || *m.Storage.ListKeys
 }
 
 // HasSearchEndpoint reports whether the kind serves the /search endpoint.

@@ -51,6 +51,9 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 				k.UserReadable = *kind.UserReadable
 			}
 			k.FolderScoped = kind.FolderScoped
+			if kind.Storage != nil {
+				k.Storage = &app.ManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
+			}
 			if kind.Plural != nil {
 				k.Plural = strings.ToLower(*kind.Plural)
 			}
@@ -366,6 +369,9 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 				Conversion:       &kind.Conversion,
 				UserReadable:     &kind.UserReadable,
 				FolderScoped:     kind.FolderScoped,
+			}
+			if kind.Storage != nil {
+				k.Storage = &AppManifestManifestVersionKindStorage{ListKeys: kind.Storage.ListKeys}
 			}
 			if kind.Schema != nil {
 				k.Schemas = kind.Schema.AsOpenAPI3SchemasMap()

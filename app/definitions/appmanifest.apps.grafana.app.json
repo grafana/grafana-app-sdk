@@ -344,6 +344,15 @@
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
+                                                            },
+                                                            "storage": {
+                                                                "properties": {
+                                                                    "listKeys": {
+                                                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                                                        "type": "boolean"
+                                                                    }
+                                                                },
+                                                                "type": "object"
                                                             }
                                                         },
                                                         "required": [
@@ -972,6 +981,15 @@
                                                                     "type": "string"
                                                                 },
                                                                 "type": "array"
+                                                            },
+                                                            "storage": {
+                                                                "properties": {
+                                                                    "listKeys": {
+                                                                        "description": "listKeys controls whether generic list-keys endpoints are served. Omission defaults to enabled.",
+                                                                        "type": "boolean"
+                                                                    }
+                                                                },
+                                                                "type": "object"
                                                             },
                                                             "userReadable": {
                                                                 "default": false,

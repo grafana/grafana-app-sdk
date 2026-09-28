@@ -450,3 +450,27 @@ func TestCustomRouteExtensions(t *testing.T) {
 		})
 	}
 }
+
+func TestProcessKindVersion_ListKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		value, want *bool
+	}{
+		{name: "omitted"},
+		{name: "enabled", value: new(true)},
+		{name: "disabled", value: new(false), want: new(false)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind, err := processKindVersion(codegen.VersionedKind{
+				Kind: "Foo", Scope: "Namespaced", ListKeys: tc.value,
+			}, "v1", false)
+			require.NoError(t, err)
+			if tc.want == nil {
+				assert.Nil(t, kind.Storage)
+			} else {
+				require.NotNil(t, kind.Storage)
+				assert.Equal(t, tc.want, kind.Storage.ListKeys)
+			}
+		})
+	}
+}

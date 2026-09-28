@@ -1377,3 +1377,27 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 		})
 	}
 }
+
+func TestManifestVersionKind_ListKeysEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		storage *ManifestVersionKindStorage
+		want    bool
+	}{
+		{name: "omitted", want: true},
+		{name: "empty storage", storage: &ManifestVersionKindStorage{}, want: true},
+		{name: "enabled", storage: &ManifestVersionKindStorage{ListKeys: new(true)}, want: true},
+		{name: "disabled", storage: &ManifestVersionKindStorage{ListKeys: new(false)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			kind := ManifestVersionKind{Storage: tc.storage}
+			assert.Equal(t, tc.want, kind.HasListKeysEndpoint())
+			data, err := json.Marshal(kind)
+			require.NoError(t, err)
+			var decoded ManifestVersionKind
+			require.NoError(t, json.Unmarshal(data, &decoded))
+			assert.Equal(t, kind.Storage, decoded.Storage)
+			assert.Equal(t, tc.want, decoded.HasListKeysEndpoint())
+		})
+	}
+}

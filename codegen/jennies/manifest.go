@@ -641,6 +641,9 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		folderScoped := vk.FolderScoped
 		mver.FolderScoped = &folderScoped
 	}
+	if vk.ListKeys != nil && !*vk.ListKeys {
+		mver.Storage = &app.ManifestVersionKindStorage{ListKeys: new(false)}
+	}
 	mver.Search = manifestKindSearch(vk.Search)
 	mver.Embed = manifestKindEmbed(vk.Embed)
 	if len(vk.Mutation.Operations) > 0 {
