@@ -268,11 +268,11 @@ func (o *OpinionatedWatcher) Add(ctx context.Context, object resource.Object) er
 	return nil
 }
 
-// Update is part of implementing ResourceWatcher
-// and calls the underlying UpdateFunc or DeleteFunc based on internal logic.
-// If the new object has a non-nil ObjectMetadata.DeletionTimestamp in its metadata, DeleteFunc will be called,
-// and the object's finalizer will be removed to allow kubernetes to hard delete it.
-// Otherwise, UpdateFunc is called, provided the update is non-trivial (that is, the metadata.Generation has changed).
+// Update handles deletion and missing-finalizer recovery before filtering updates.
+// Deletion runs cleanup when an owned finalizer is present and removes it on success.
+// Missing finalizers use Add; cache resyncs use Sync. Other same-generation updates
+// are ignored when the generation is positive, as are updates that add our finalizer.
+// Remaining updates call UpdateFunc.
 //
 //nolint:funlen
 func (o *OpinionatedWatcher) Update(ctx context.Context, src resource.Object, tgt resource.Object) error {
