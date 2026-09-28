@@ -54,7 +54,13 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 		Method:             req.GetMethod(),
 		Headers:            routeHeaders(req.GetHeaders()),
 		Body:               io.NopCloser(bytes.NewReader(req.GetBody())),
-		Parent:             req.GetParent(),
+	}
+
+	if parent := req.GetParent(); parent != nil {
+		customReq.DecryptedSecureValues = parent.GetDecryptedSecureValues()
+		customReq.Parent = &app.RawObject{
+			Raw: parent.GetRaw(),
+		}
 	}
 
 	if err := a.app.CallCustomRoute(stream.Context(), rec, customReq); err != nil {
