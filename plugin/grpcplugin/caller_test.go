@@ -41,12 +41,12 @@ func TestCallerIDTokenIsPassedToEveryService(t *testing.T) {
 		ctx         context.Context
 		wantIDToken string
 	}{
-		{name: "caller", ctx: k8s.WithIDToken(context.Background(), "caller-id-token"), wantIDToken: "caller-id-token"},
+		{name: "caller", ctx: k8s.ContextWithIDToken(context.Background(), "caller-id-token"), wantIDToken: "caller-id-token"},
 		{name: "no caller", ctx: context.Background()},
 		// The context is the source of truth for who the caller is.
 		{
 			name:        "replaces metadata already set",
-			ctx:         metadata.AppendToOutgoingContext(k8s.WithIDToken(context.Background(), "caller-id-token"), idTokenMetadataKey, "other-id-token"),
+			ctx:         metadata.AppendToOutgoingContext(k8s.ContextWithIDToken(context.Background(), "caller-id-token"), idTokenMetadataKey, "other-id-token"),
 			wantIDToken: "caller-id-token",
 		},
 	}

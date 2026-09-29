@@ -402,9 +402,9 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 		ctx              context.Context
 		wantSubjectToken string
 	}{
-		{name: "caller", ctx: WithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
+		{name: "caller", ctx: ContextWithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
 		{name: "no caller", ctx: context.Background()},
-		{name: "empty caller", ctx: WithIDToken(context.Background(), "")},
+		{name: "empty caller", ctx: ContextWithIDToken(context.Background(), "")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -14,7 +14,7 @@ import (
 // ID token from Grafana to the plugin.
 const idTokenMetadataKey = "x-grafana-id" //nolint:gosec // A metadata key, not a credential.
 
-// outgoingCallerContext sends the caller's ID token on ctx (see k8s.WithIDToken)
+// outgoingCallerContext sends the caller's ID token on ctx (see k8s.ContextWithIDToken)
 // as gRPC metadata.
 func outgoingCallerContext(ctx context.Context) context.Context {
 	token, ok := k8s.IDTokenFromContext(ctx)
@@ -33,7 +33,7 @@ func outgoingCallerContext(ctx context.Context) context.Context {
 func incomingCallerContext(ctx context.Context) context.Context {
 	md, _ := metadata.FromIncomingContext(ctx)
 	if tokens := md.Get(idTokenMetadataKey); len(tokens) > 0 {
-		return k8s.WithIDToken(ctx, tokens[0])
+		return k8s.ContextWithIDToken(ctx, tokens[0])
 	}
 	return ctx
 }

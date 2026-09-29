@@ -35,7 +35,7 @@ type KubeConfigOptions struct {
 // - API_ACCESS_TOKEN_EXCHANGE_URL
 //
 // With token exchange, a request whose context carries the caller's ID token
-// (see k8s.WithIDToken) is made as that caller, limited to the permissions the
+// (see k8s.ContextWithIDToken) is made as that caller, limited to the permissions the
 // access policy delegates. Plugin protocol v3 handlers, such as admission,
 // conversion and custom route handlers, get this by passing on the context
 // they were called with. Other requests act as the plugin.

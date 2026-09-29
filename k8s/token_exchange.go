@@ -167,7 +167,7 @@ func newTokenExchangeFunc(creds TokenExchangeCredentials) (func(ctx context.Cont
 
 type idTokenContextKey struct{}
 
-// WithIDToken returns a copy of ctx carrying the caller's Grafana ID token.
+// ContextWithIDToken returns a copy of ctx carrying the caller's Grafana ID token.
 // An empty token returns ctx unchanged.
 //
 // Requests made with the returned context by a client from
@@ -178,7 +178,7 @@ type idTokenContextKey struct{}
 // This is deliberate: work done for a caller should not use the service's own
 // permissions. Work that should act as the service, such as reconciling, should
 // use a context without a caller.
-func WithIDToken(ctx context.Context, token string) context.Context {
+func ContextWithIDToken(ctx context.Context, token string) context.Context {
 	if token == "" {
 		return ctx
 	}
@@ -193,7 +193,7 @@ func IDTokenFromContext(ctx context.Context) (string, bool) {
 
 // tokenExchangeTransport injects an X-Access-Token header by exchanging
 // credentials before each request, on behalf of the caller when the request
-// context carries one (see WithIDToken). Follows the same transport wrapper
+// context carries one (see ContextWithIDToken). Follows the same transport wrapper
 // pattern as streamErrorTransport.
 type tokenExchangeTransport struct {
 	exchangeFunc func(ctx context.Context, audiences []string, namespace string) (string, error)

@@ -255,7 +255,7 @@ func TestBuildKubeConfigWithOptions_ExchangesOnBehalfOfCaller(t *testing.T) {
 			require.NoError(t, err)
 			client, err := rest.HTTPClientFor(cfg)
 			require.NoError(t, err)
-			ctx := k8s.WithIDToken(t.Context(), tt.idToken)
+			ctx := k8s.ContextWithIDToken(t.Context(), tt.idToken)
 			request, err := http.NewRequestWithContext(ctx, http.MethodGet, backend.URL+"/apis/example.test/v1/examples", nil)
 			require.NoError(t, err)
 			response, err := client.Do(request)
