@@ -28,6 +28,8 @@ type TypedSpecObject[T any] struct {
 	metav1.TypeMeta   `  json:",inline"`
 	metav1.ObjectMeta `  json:"metadata"`
 	Spec              T `json:"spec"`
+
+	Secure InlineSecureValues `json:"secure,omitempty"`
 }
 
 func (t *TypedSpecObject[T]) GetStaticMetadata() StaticMetadata {
@@ -153,6 +155,7 @@ func (t *TypedSpecObject[T]) Copy() Object {
 	cpy.APIVersion = t.APIVersion
 	cpy.Kind = t.Kind
 	cpy.ObjectMeta = *t.ObjectMeta.DeepCopy()
+	cpy.Secure = CopySecureValues(t.Secure)
 	// Copying spec is just json marshal/unmarshal--it's a bit slower, but less complicated for now
 	// Efficient implementations of Copy()/DeepCopyObject() should be bespoke in implementations of Object
 	specBytes, err := json.Marshal(t.Spec)
@@ -167,6 +170,7 @@ func (t *TypedSpecObject[T]) Copy() Object {
 // TypedSpecStatusObject is an implementation of Object which has a typed Spec and Status subresource.
 // Other subresources are not encapsulated by this object implementation.
 type TypedSpecStatusObject[Spec, Status any] struct {
+	Secure            InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
 	metav1.TypeMeta   `       json:",inline"`
 	metav1.ObjectMeta `       json:"metadata"`
 	Spec              Spec   `json:"spec"`
@@ -307,6 +311,7 @@ func (t *TypedSpecStatusObject[T, S]) Copy() Object {
 	cpy.APIVersion = t.APIVersion
 	cpy.Kind = t.Kind
 	cpy.ObjectMeta = *t.ObjectMeta.DeepCopy()
+	cpy.Secure = CopySecureValues(t.Secure)
 	// Copying spec is just json marshal/unmarshal--it's a bit slower, but less complicated for now
 	// Efficient implementations of Copy()/DeepCopyObject() should be bespoke in implementations of Object
 	specBytes, err := json.Marshal(t.Spec)
@@ -330,6 +335,7 @@ func (t *TypedSpecStatusObject[T, S]) Copy() Object {
 // as this type requires the use of more complex generic logic for JSON marshal/unmarshal and the Subresource methods
 // used in Object.
 type TypedObject[Spec, SubresourceCatalog any] struct {
+	Secure            InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
 	metav1.TypeMeta   `                   json:",inline"`
 	metav1.ObjectMeta `                   json:"metadata"`
 	Spec              Spec               `json:"spec"`
@@ -541,6 +547,7 @@ func (t *TypedObject[Spec, Sub]) Copy() Object {
 	cpy.APIVersion = t.APIVersion
 	cpy.Kind = t.Kind
 	cpy.ObjectMeta = *t.ObjectMeta.DeepCopy()
+	cpy.Secure = CopySecureValues(t.Secure)
 	// Copying spec is just json marshal/unmarshal--it's a bit slower, but less complicated for now
 	// Efficient implementations of Copy()/DeepCopyObject() should be bespoke in implementations of Object
 	specBytes, err := json.Marshal(t.Spec)
@@ -585,6 +592,9 @@ func (t *TypedObject[Spec, Sub]) MarshalJSON() ([]byte, error) {
 			return nil, err
 		}
 	}
+	if len(t.Secure) > 0 {
+		m["secure"] = t.Secure
+	}
 	return json.Marshal(m)
 }
 
@@ -606,6 +616,12 @@ func (t *TypedObject[Spec, Sub]) UnmarshalJSON(data []byte) error {
 	if err = json.Unmarshal(m["spec"], &t.Spec); err != nil {
 		return fmt.Errorf("error reading spec: %w", err)
 	}
+	t.Secure = nil
+	if raw, ok := m["secure"]; ok {
+		if err := json.Unmarshal(raw, &t.Secure); err != nil {
+			return err
+		}
+	}
 	return json.Unmarshal(data, &t.Subresources)
 }
 
@@ -616,4 +632,22 @@ func getFieldName(field reflect.StructField) string {
 		name = split[0]
 	}
 	return name
+}
+
+func (t *TypedSpecObject[T]) GetSecureValues() InlineSecureValues { return t.Secure }
+func (t *TypedSpecObject[T]) SetSecureValues(values InlineSecureValues) error {
+	t.Secure = values
+	return nil
+}
+
+func (t *TypedSpecStatusObject[T, S]) GetSecureValues() InlineSecureValues { return t.Secure }
+func (t *TypedSpecStatusObject[T, S]) SetSecureValues(values InlineSecureValues) error {
+	t.Secure = values
+	return nil
+}
+
+func (t *TypedObject[Spec, Sub]) GetSecureValues() InlineSecureValues { return t.Secure }
+func (t *TypedObject[Spec, Sub]) SetSecureValues(values InlineSecureValues) error {
+	t.Secure = values
+	return nil
 }

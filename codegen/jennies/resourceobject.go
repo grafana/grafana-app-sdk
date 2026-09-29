@@ -134,6 +134,7 @@ func (r *ResourceObjectGenerator) generateObjectFile(kind codegen.VersionedKind,
 	}
 	md := templates.ResourceObjectTemplateMetadata{
 		Package:              pkg,
+		HasSecureValues:      len(kind.SecureValues) > 0,
 		TypeName:             kind.Kind,
 		SpecTypeName:         typePrefix + "Spec",
 		ObjectTypeName:       "Object", // Package is the machine name of the object, so this makes it machinename.Object

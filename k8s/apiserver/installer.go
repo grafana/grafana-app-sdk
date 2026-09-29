@@ -361,7 +361,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			if idx := strings.LastIndex(pkgPrefix, "."); idx > 0 {
 				pkgPrefix = pkgPrefix[0:idx]
 			}
-			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix)
+			oapi, err := manifestKind.Schema.AsKubeOpenAPI(kind.GroupVersionKind(), callback, pkgPrefix, manifestKind.SecureValues...)
 			if err != nil {
 				fmt.Printf("failed to convert kind %s to KubeOpenAPI: %v\n", kind.GroupVersionKind().Kind, err) //nolint:revive
 				continue

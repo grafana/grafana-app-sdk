@@ -44,7 +44,16 @@ export interface {{.TypeName}} {
     kind: string;
     apiVersion: string;
     metadata: Metadata;
-    spec: Spec;{{ range .Subresources }}{{ if ne .Comment "" }}
+    spec: Spec;{{ if .HasSecureValues }}
+    secure?: Record<string, InlineSecureValue>;{{ end }}{{ range .Subresources }}{{ if ne .Comment "" }}
     // {{.Comment }}{{end}}
     {{ .JSONName }}: {{.TypeName}};{{ end }}
-}
+}{{ if .HasSecureValues }}
+
+// Exactly one operation is supplied for each secure value.
+export type InlineSecureValue = (
+    | { create: string; description?: string; name?: never; remove?: never }
+    | { name: string; create?: never; remove?: never; description?: never }
+    | { remove: boolean; create?: never; name?: never; description?: never }
+);
+{{ end }}

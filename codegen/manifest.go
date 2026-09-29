@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"cuelang.org/go/cue"
+
+	"github.com/grafana/grafana-app-sdk/app"
 )
 
 type AppManifest interface {
@@ -234,8 +236,9 @@ type VersionedKind struct {
 	Embed                    *KindEmbed                `json:"embed,omitempty"`
 	// Schema is the CUE schema for the version
 	// This should eventually be changed to JSONSchema/OpenAPI(/AST?)
-	Schema cue.Value                         `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
-	Routes map[string]map[string]CustomRoute `json:"routes,omitempty"`
+	Schema       cue.Value                            `json:"schema"` // TODO: this should eventually be OpenAPI/JSONSchema (ast or bytes?)
+	SecureValues []app.ManifestVersionKindSecureValue `json:"secure,omitempty"`
+	Routes       map[string]map[string]CustomRoute    `json:"routes,omitempty"`
 }
 
 // VersionedKinds returns a sequence of all VersionedKinds in version order.

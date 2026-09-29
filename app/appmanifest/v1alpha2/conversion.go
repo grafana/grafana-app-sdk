@@ -103,6 +103,13 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					k.AdditionalPrinterColumns[i] = translated
 				}
 			}
+			for _, value := range kind.Secure {
+				entry := app.ManifestVersionKindSecureValue{Key: value.Key}
+				if value.Description != nil {
+					entry.Description = *value.Description
+				}
+				k.SecureValues = append(k.SecureValues, entry)
+			}
 			// SearchFields
 			if len(kind.SearchFields) > 0 {
 				k.SearchFields = make([]app.ManifestVersionKindSearchField, len(kind.SearchFields))
@@ -410,6 +417,14 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 						JsonPath:    kind.AdditionalPrinterColumns[i].JSONPath,
 					}
 				}
+			}
+			for _, value := range kind.SecureValues {
+				entry := AppManifestSecureValue{Key: value.Key}
+				if value.Description != "" {
+					description := value.Description
+					entry.Description = &description
+				}
+				k.Secure = append(k.Secure, entry)
 			}
 			if len(kind.SearchFields) > 0 {
 				k.SearchFields = make([]AppManifestSearchField, len(kind.SearchFields))

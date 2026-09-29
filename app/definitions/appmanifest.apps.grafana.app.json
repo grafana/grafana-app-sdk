@@ -976,6 +976,25 @@
                                                                 },
                                                                 "type": "array"
                                                             },
+                                                            "secure": {
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "description": {
+                                                                            "description": "Description explains how the secure value is used and where it should come from.\nthis text will be exposed in the openapi schema",
+                                                                            "type": "string"
+                                                                        },
+                                                                        "key": {
+                                                                            "description": "Key used in the secure value map\n\"*\" indicates that any key will be accepted",
+                                                                            "type": "string"
+                                                                        }
+                                                                    },
+                                                                    "required": [
+                                                                        "key"
+                                                                    ],
+                                                                    "type": "object"
+                                                                },
+                                                                "type": "array"
+                                                            },
                                                             "selectableFields": {
                                                                 "items": {
                                                                     "type": "string"

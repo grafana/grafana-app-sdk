@@ -50,6 +50,14 @@ appManifestv1alpha2: appManifestKind & {
 			// description is a human readable description of the field.
 			description?: string
 		}
+		#SecureValue: {
+			// Key used in the secure value map
+			// "*" indicates that any key will be accepted
+			key: string
+			// Description explains how the secure value is used and where it should come from.
+			// this text will be exposed in the openapi schema
+			description?: string
+		}
 		#AdmissionOperation: "CREATE" | "UPDATE" | "DELETE" | "CONNECT" | "*" @cog(kind="enum",memberNames="create|update|delete|connect|all")
 		#ValidationCapability: {
 			operations: [...#AdmissionOperation]
@@ -90,6 +98,7 @@ appManifestv1alpha2: appManifestKind & {
 				// The schema must contain an object for the kind. All other top-level fields can be referenced by the kind schema
 				[S.kind]: _
 			}
+			secure?: [...#SecureValue]
 			selectableFields?: [...string]
 			additionalPrinterColumns?: [...#AdditionalPrinterColumns]
 			searchFields?: [...#SearchField]
