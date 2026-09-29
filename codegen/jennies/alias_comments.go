@@ -18,40 +18,7 @@ func alignAliasComments(data []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	types := make(map[string]*ast.GenDecl)
-	var names []string
-	for _, decl := range file.Decls {
-		gen, ok := decl.(*ast.GenDecl)
-		if !ok || gen.Tok != token.TYPE || len(gen.Specs) != 1 || gen.Lparen.IsValid() {
-			continue
-		}
-		spec := gen.Specs[0].(*ast.TypeSpec)
-		types[spec.Name.Name] = gen
-		names = append(names, spec.Name.Name)
-	}
-
-	groups := make(map[string][]*ast.GenDecl)
-	for _, name := range names {
-		target := name
-		seen := make(map[string]bool)
-		for types[target] != nil && !seen[target] {
-			seen[target] = true
-			spec := types[target].Specs[0].(*ast.TypeSpec)
-			if !spec.Assign.IsValid() {
-				break
-			}
-			ref, ok := spec.Type.(*ast.Ident)
-			if !ok {
-				target = ""
-				break
-			}
-			target = ref.Name
-		}
-		if types[target] == nil || types[target].Specs[0].(*ast.TypeSpec).Assign.IsValid() {
-			continue
-		}
-		groups[target] = append(groups[target], types[name])
-	}
+	groups := groupAliasDeclarations(file)
 
 	type edit struct {
 		start, end int
@@ -66,7 +33,7 @@ groupsLoop:
 		var descriptions, directives []string
 		for i, decl := range group {
 			var description, tags []string
-			for _, line := range strings.Split(strings.TrimSpace(decl.Doc.Text()), "\n") {
+			for line := range strings.SplitSeq(strings.TrimSpace(decl.Doc.Text()), "\n") {
 				if strings.HasPrefix(strings.TrimSpace(line), "+") {
 					tags = append(tags, line)
 				} else {
@@ -114,4 +81,50 @@ groupsLoop:
 	}
 	out.Write(data[last:])
 	return out.Bytes(), nil
+}
+
+func groupAliasDeclarations(file *ast.File) map[string][]*ast.GenDecl {
+	type declaration struct {
+		gen  *ast.GenDecl
+		spec *ast.TypeSpec
+	}
+	types := make(map[string]declaration)
+	var names []string
+	for _, decl := range file.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.TYPE || len(gen.Specs) != 1 || gen.Lparen.IsValid() {
+			continue
+		}
+		spec, ok := gen.Specs[0].(*ast.TypeSpec)
+		if !ok {
+			continue
+		}
+		types[spec.Name.Name] = declaration{gen: gen, spec: spec}
+		names = append(names, spec.Name.Name)
+	}
+
+	groups := make(map[string][]*ast.GenDecl)
+	for _, name := range names {
+		target := name
+		seen := make(map[string]bool)
+		for types[target].spec != nil && !seen[target] {
+			seen[target] = true
+			spec := types[target].spec
+			if !spec.Assign.IsValid() {
+				break
+			}
+			ref, ok := spec.Type.(*ast.Ident)
+			if !ok {
+				target = ""
+				break
+			}
+			target = ref.Name
+		}
+		if types[target].spec == nil || types[target].spec.Assign.IsValid() {
+			continue
+		}
+		groups[target] = append(groups[target], types[name].gen)
+	}
+
+	return groups
 }
