@@ -104,70 +104,70 @@ func TestSecureValuesGeneration(t *testing.T) {
 	crd, err := jennies.KindVersionToCRDSpecVersion(kind.Schema, kind, "v1", true)
 	require.NoError(t, err)
 	assert.NotContains(t, crd.Subresources, "secure")
-	assert.Contains(t, crd.Schema["openAPIV3Schema"].(map[string]any)["properties"], "secure")
+	assert.NotContains(t, crd.Schema["openAPIV3Schema"].(map[string]any)["properties"], "secure")
+	kindWithoutSecure := kind
+	kindWithoutSecure.SecureValues = nil
+	crdWithoutSecure, err := jennies.KindVersionToCRDSpecVersion(kind.Schema, kindWithoutSecure, "v1", true)
+	require.NoError(t, err)
+	assert.Equal(t, crdWithoutSecure, crd)
 
-	for _, source := range []any{crd.Schema["openAPIV3Schema"], func() any {
-		schema, err := converted.Schema.AsCRDOpenAPI3("Connection")
-		require.NoError(t, err)
-		return schema
-	}()} {
-		encoded, err := json.Marshal(source)
-		require.NoError(t, err)
-		var wireSchema apiextv1.JSONSchemaProps
-		require.NoError(t, json.Unmarshal(encoded, &wireSchema))
-		secureSchema := wireSchema.Properties["secure"]
-		assert.Nil(t, secureSchema.AdditionalProperties)
-		require.Len(t, secureSchema.Properties, 2)
-		secureValue := secureSchema.Properties["apiKey"]
-		assert.Equal(t, "API key from the service", secureValue.Description)
-		require.NotNil(t, secureValue.Not)
-		assert.Equal(t, []string{"description"}, secureValue.Not.Required)
-		require.NotNil(t, secureValue.Not.Not)
-		assert.Equal(t, []string{"create"}, secureValue.Not.Not.Required)
-		// A structurally valid schema must also accept valid secure operations.
-		valueJSON, err := json.Marshal(secureValue)
-		require.NoError(t, err)
-		var valueSchema spec.Schema
-		require.NoError(t, json.Unmarshal(valueJSON, &valueSchema))
-		for _, tc := range []struct {
-			value map[string]any
-			valid bool
-		}{
-			{map[string]any{"create": "secret", "description": "from service"}, true},
-			{map[string]any{"name": "existing"}, true},
-			{map[string]any{"remove": true}, true},
-			{map[string]any{"create": "secret", "name": "existing"}, false},
-			{map[string]any{"name": "existing", "description": "not allowed"}, false},
-			{map[string]any{"remove": true, "description": "not allowed"}, false},
-		} {
-			result := validate.NewSchemaValidator(&valueSchema, nil, "", strfmt.Default).Validate(tc.value)
-			assert.Equal(t, tc.valid, result.IsValid(), "value %v: %v", tc.value, result.Errors)
-		}
-		var validationSchema apiext.JSONSchemaProps
-		require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&wireSchema, &validationSchema, nil))
-		// Validate the new secure property independently of existing spec generation.
-		validationSchema = apiext.JSONSchemaProps{Type: "object", Properties: map[string]apiext.JSONSchemaProps{"secure": validationSchema.Properties["secure"]}}
-		definition := &apiext.CustomResourceDefinition{
-			ObjectMeta: metav1.ObjectMeta{Name: "connections.example.grafana.app"},
-			Spec: apiext.CustomResourceDefinitionSpec{
-				Group: "example.grafana.app", Scope: apiext.NamespaceScoped,
-				Names:      apiext.CustomResourceDefinitionNames{Plural: "connections", Singular: "connection", Kind: "Connection", ListKind: "ConnectionList"},
-				Versions:   []apiext.CustomResourceDefinitionVersion{{Name: "v1", Served: true, Storage: true}},
-				Validation: &apiext.CustomResourceValidation{OpenAPIV3Schema: &validationSchema},
-			},
-			Status: apiext.CustomResourceDefinitionStatus{StoredVersions: []string{"v1"}},
-		}
-		assert.Empty(t, crdvalidation.ValidateCustomResourceDefinition(context.Background(), definition))
-		structural, err := structuralschema.NewStructural(&validationSchema)
-		require.NoError(t, err)
-		value := map[string]any{"secure": map[string]any{
-			"apiKey":     map[string]any{"name": "existing"},
-			"undeclared": map[string]any{"name": "other"},
-		}}
-		pruning.Prune(value, structural, true)
-		assert.Equal(t, map[string]any{"apiKey": map[string]any{"name": "existing"}}, value["secure"])
-
+	convertedCRD, err := converted.Schema.AsCRDOpenAPI3("Connection")
+	require.NoError(t, err)
+	encoded, err := json.Marshal(convertedCRD)
+	require.NoError(t, err)
+	var wireSchema apiextv1.JSONSchemaProps
+	require.NoError(t, json.Unmarshal(encoded, &wireSchema))
+	secureSchema := wireSchema.Properties["secure"]
+	assert.Nil(t, secureSchema.AdditionalProperties)
+	require.Len(t, secureSchema.Properties, 2)
+	secureValue := secureSchema.Properties["apiKey"]
+	assert.Equal(t, "API key from the service", secureValue.Description)
+	require.NotNil(t, secureValue.Not)
+	assert.Equal(t, []string{"description"}, secureValue.Not.Required)
+	require.NotNil(t, secureValue.Not.Not)
+	assert.Equal(t, []string{"create"}, secureValue.Not.Not.Required)
+	// A structurally valid schema must also accept valid secure operations.
+	valueJSON, err := json.Marshal(secureValue)
+	require.NoError(t, err)
+	var valueSchema spec.Schema
+	require.NoError(t, json.Unmarshal(valueJSON, &valueSchema))
+	for _, tc := range []struct {
+		value map[string]any
+		valid bool
+	}{
+		{map[string]any{"create": "secret", "description": "from service"}, true},
+		{map[string]any{"name": "existing"}, true},
+		{map[string]any{"remove": true}, true},
+		{map[string]any{"create": "secret", "name": "existing"}, false},
+		{map[string]any{"name": "existing", "description": "not allowed"}, false},
+		{map[string]any{"remove": true, "description": "not allowed"}, false},
+	} {
+		result := validate.NewSchemaValidator(&valueSchema, nil, "", strfmt.Default).Validate(tc.value)
+		assert.Equal(t, tc.valid, result.IsValid(), "value %v: %v", tc.value, result.Errors)
 	}
+	var validationSchema apiext.JSONSchemaProps
+	require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&wireSchema, &validationSchema, nil))
+	// Validate the new secure property independently of existing spec generation.
+	validationSchema = apiext.JSONSchemaProps{Type: "object", Properties: map[string]apiext.JSONSchemaProps{"secure": validationSchema.Properties["secure"]}}
+	definition := &apiext.CustomResourceDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "connections.example.grafana.app"},
+		Spec: apiext.CustomResourceDefinitionSpec{
+			Group: "example.grafana.app", Scope: apiext.NamespaceScoped,
+			Names:      apiext.CustomResourceDefinitionNames{Plural: "connections", Singular: "connection", Kind: "Connection", ListKind: "ConnectionList"},
+			Versions:   []apiext.CustomResourceDefinitionVersion{{Name: "v1", Served: true, Storage: true}},
+			Validation: &apiext.CustomResourceValidation{OpenAPIV3Schema: &validationSchema},
+		},
+		Status: apiext.CustomResourceDefinitionStatus{StoredVersions: []string{"v1"}},
+	}
+	assert.Empty(t, crdvalidation.ValidateCustomResourceDefinition(context.Background(), definition))
+	structural, err := structuralschema.NewStructural(&validationSchema)
+	require.NoError(t, err)
+	value := map[string]any{"secure": map[string]any{
+		"apiKey":     map[string]any{"name": "existing"},
+		"undeclared": map[string]any{"name": "other"},
+	}}
+	pruning.Prune(value, structural, true)
+	assert.Equal(t, map[string]any{"apiKey": map[string]any{"name": "existing"}}, value["secure"])
 
 	// Check that Go manifest generation retains declarations as well as schemas.
 	goManifest := &jennies.ManifestGoGenerator{Package: "manifestdata", ProjectRepo: "example.org/test", CodegenPath: "generated", GroupByKind: true, IncludeSchemas: true, SkipImportsProcess: true}
@@ -231,30 +231,36 @@ func TestWildcardSecureValuesGeneration(t *testing.T) {
 
 			crd, err := jennies.KindVersionToCRDSpecVersion(kind.Schema, kind, "v1", true)
 			require.NoError(t, err)
+			assert.NotContains(t, crd.Subresources, "secure")
+			assert.NotContains(t, crd.Schema["openAPIV3Schema"].(map[string]any)["properties"], "secure")
+			kindWithoutSecure := kind
+			kindWithoutSecure.SecureValues = nil
+			crdWithoutSecure, err := jennies.KindVersionToCRDSpecVersion(kind.Schema, kindWithoutSecure, "v1", true)
+			require.NoError(t, err)
+			assert.Equal(t, crdWithoutSecure, crd)
 			convertedCRD, err := converted.Schema.AsCRDOpenAPI3("Connection")
 			require.NoError(t, err)
 			schemas := map[string]any{"served OpenAPI": secure}
-			for name, source := range map[string]any{"generated CRD": crd.Schema["openAPIV3Schema"], "converted CRD": convertedCRD} {
-				encoded, err := json.Marshal(source)
-				require.NoError(t, err)
-				var wire apiextv1.JSONSchemaProps
-				require.NoError(t, json.Unmarshal(encoded, &wire))
-				secureCRD := wire.Properties["secure"]
-				assert.Empty(t, secureCRD.Properties)
-				require.NotNil(t, secureCRD.AdditionalProperties)
-				require.NotNil(t, secureCRD.AdditionalProperties.Schema)
-				assert.Equal(t, "Any credential", secureCRD.AdditionalProperties.Schema.Description)
-				var internal apiext.JSONSchemaProps
-				require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&secureCRD, &internal, nil))
-				root := &apiext.JSONSchemaProps{Type: "object", Properties: map[string]apiext.JSONSchemaProps{"secure": internal}}
-				structural, err := structuralschema.NewStructural(root)
-				require.NoError(t, err)
-				require.Empty(t, structuralschema.ValidateStructural(nil, structural))
-				value := map[string]any{"secure": map[string]any{"arbitrary": map[string]any{"name": "existing"}}}
-				pruning.Prune(value, structural, true)
-				assert.Equal(t, map[string]any{"arbitrary": map[string]any{"name": "existing"}}, value["secure"])
-				schemas[name] = secureCRD
-			}
+			encoded, err := json.Marshal(convertedCRD)
+			require.NoError(t, err)
+			var wire apiextv1.JSONSchemaProps
+			require.NoError(t, json.Unmarshal(encoded, &wire))
+			secureCRD := wire.Properties["secure"]
+			assert.Empty(t, secureCRD.Properties)
+			require.NotNil(t, secureCRD.AdditionalProperties)
+			require.NotNil(t, secureCRD.AdditionalProperties.Schema)
+			assert.Equal(t, "Any credential", secureCRD.AdditionalProperties.Schema.Description)
+			var internal apiext.JSONSchemaProps
+			require.NoError(t, apiextv1.Convert_v1_JSONSchemaProps_To_apiextensions_JSONSchemaProps(&secureCRD, &internal, nil))
+			root := &apiext.JSONSchemaProps{Type: "object", Properties: map[string]apiext.JSONSchemaProps{"secure": internal}}
+			structural, err := structuralschema.NewStructural(root)
+			require.NoError(t, err)
+			require.Empty(t, structuralschema.ValidateStructural(nil, structural))
+			value := map[string]any{"secure": map[string]any{"arbitrary": map[string]any{"name": "existing"}}}
+			pruning.Prune(value, structural, true)
+			assert.Equal(t, map[string]any{"arbitrary": map[string]any{"name": "existing"}}, value["secure"])
+			schemas["converted CRD"] = secureCRD
+
 			for name, source := range schemas {
 				t.Run(name, func(t *testing.T) {
 					encoded, err := json.Marshal(source)
