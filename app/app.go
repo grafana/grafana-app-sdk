@@ -68,7 +68,7 @@ type CustomRouteRequest struct {
 	Parent *RawObject
 
 	// When the parent resource contains secure values
-	DecryptedSecureValues map[string]string
+	DecryptedSecureValues resource.DecryptedSecureValues
 }
 
 // CustomRouteResponseWriter is a ResponseWriter for CustomRouteResponse objects. It mirrors http.ResponseWriter,

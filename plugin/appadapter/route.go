@@ -57,9 +57,16 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 	}
 
 	if parent := req.GetParent(); parent != nil {
-		customReq.DecryptedSecureValues = parent.GetDecryptedSecureValues()
 		customReq.Parent = &app.RawObject{
 			Raw: parent.GetRaw(),
+		}
+
+		sv := parent.GetDecryptedSecureValues()
+		if len(sv) > 0 {
+			customReq.DecryptedSecureValues = make(resource.DecryptedSecureValues, len(sv))
+			for key, value := range sv {
+				customReq.DecryptedSecureValues[key] = resource.RawSecureValue(value)
+			}
 		}
 	}
 
