@@ -61,7 +61,7 @@ configKind: {
 configIntegrationGen1: {
 	definitions: {
 		manifestSchemas: true
-		manifestVersion: "v1alpha1"
+		manifestVersion: configJson.definitions.manifestVersion
 		encoding:        "json"
 	}
 	codegen: {
@@ -78,7 +78,7 @@ configIntegrationGen1: {
 configIntegrationGen2: {
 	definitions: {
 		manifestSchemas: true
-		manifestVersion: "v1alpha1"
+		manifestVersion: configYaml.definitions.manifestVersion
 		encoding:        "yaml"
 	}
 	codegen: {
