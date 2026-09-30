@@ -2,6 +2,9 @@ package grpcplugin
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"slices"
 
 	"github.com/grafana/authlib/authn"
@@ -15,6 +18,10 @@ import (
 )
 
 func authenticate(ctx context.Context, authenticator authn.Authenticator) (context.Context, error) {
+	// Serving without authentication requires ServeOpts.InsecureSkipAuthentication.
+	if authenticator == nil {
+		return nil, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
+	}
 	md, _ := metadata.FromIncomingContext(ctx)
 	// Delegation has one source of identity: the exchanged access token.
 	// Reject ambiguous credentials before invoking even a custom authenticator.
@@ -51,6 +58,9 @@ func (s *authenticatedAdmissionServer) AdmissionReview(ctx context.Context, req 
 	if err := checkAudience(ctx, req.GetKind().GetGroup()); err != nil {
 		return nil, err
 	}
+	if err := checkObjectNamespaces(ctx, req.GetObjectBytes(), req.GetOldObjectBytes()); err != nil {
+		return nil, err
+	}
 	return s.AdmissionServiceServer.AdmissionReview(ctx, req)
 }
 
@@ -71,6 +81,13 @@ func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req 
 	if err := checkAudience(ctx, group); err != nil {
 		return nil, err
 	}
+	raws := make([][]byte, 0, len(req.GetObjects()))
+	for _, obj := range req.GetObjects() {
+		raws = append(raws, obj.GetRaw())
+	}
+	if err := checkObjectNamespaces(ctx, raws...); err != nil {
+		return nil, err
+	}
 	return s.ConversionServiceServer.ConvertObjects(ctx, req)
 }
 
@@ -87,9 +104,8 @@ func (s *authenticatedRouteServer) CallRoute(req *pluginv3.CallRouteRequest, str
 	if err := checkAudience(ctx, req.GetGroup()); err != nil {
 		return err
 	}
-	info, _ := types.AuthInfoFrom(ctx)
-	if !types.NamespaceMatches(info.GetNamespace(), req.GetNamespace()) {
-		return status.Error(codes.PermissionDenied, "access token does not cover the requested namespace")
+	if err := checkNamespace(ctx, req.GetNamespace()); err != nil {
+		return err
 	}
 	return s.RouteServiceServer.CallRoute(req, &authenticatedRouteStream{stream, ctx})
 }
@@ -104,6 +120,7 @@ func (s *authenticatedRouteStream) Context() context.Context {
 }
 
 // authenticatedAuthInfo preserves the verified token for onward delegation.
+// Its formatting methods omit the token, so logging the identity is safe.
 type authenticatedAuthInfo struct {
 	types.AuthInfo
 	accessToken string
@@ -111,6 +128,18 @@ type authenticatedAuthInfo struct {
 
 func (a *authenticatedAuthInfo) GetAccessToken() string {
 	return a.accessToken
+}
+
+func (a *authenticatedAuthInfo) String() string {
+	return fmt.Sprintf("AuthInfo{subject: %q, namespace: %q}", a.GetSubject(), a.GetNamespace())
+}
+
+func (a *authenticatedAuthInfo) GoString() string {
+	return a.String()
+}
+
+func (a *authenticatedAuthInfo) LogValue() slog.Value {
+	return slog.GroupValue(slog.String("subject", a.GetSubject()), slog.String("namespace", a.GetNamespace()))
 }
 
 // The verifier checks the service's configured audiences. Also bind the token
@@ -124,4 +153,52 @@ func checkAudience(ctx context.Context, group string) error {
 		return status.Error(codes.PermissionDenied, "access token does not cover the requested API group")
 	}
 	return nil
+}
+
+// checkNamespace requires the token to cover namespace. Cluster-scoped
+// requests, with an empty namespace, need a wildcard token.
+func checkNamespace(ctx context.Context, namespace string) error {
+	info, _ := types.AuthInfoFrom(ctx)
+	if !types.NamespaceMatches(info.GetNamespace(), namespace) {
+		return status.Error(codes.PermissionDenied, "access token does not cover the requested namespace")
+	}
+	return nil
+}
+
+// checkObjectNamespaces requires at least one object and a token that covers
+// the namespace of every object, as these are what the handler acts on.
+func checkObjectNamespaces(ctx context.Context, raws ...[]byte) error {
+	namespaces, err := objectNamespaces(raws...)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	if len(namespaces) == 0 {
+		return status.Error(codes.InvalidArgument, "request carries no objects")
+	}
+	for _, ns := range namespaces {
+		if err := checkNamespace(ctx, ns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// objectNamespaces returns metadata.namespace of each non-empty JSON object.
+func objectNamespaces(raws ...[]byte) ([]string, error) {
+	namespaces := make([]string, 0, len(raws))
+	for _, raw := range raws {
+		if len(raw) == 0 {
+			continue
+		}
+		var obj struct {
+			Metadata struct {
+				Namespace string `json:"namespace"`
+			} `json:"metadata"`
+		}
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			return nil, fmt.Errorf("decode object metadata: %w", err)
+		}
+		namespaces = append(namespaces, obj.Metadata.Namespace)
+	}
+	return namespaces, nil
 }

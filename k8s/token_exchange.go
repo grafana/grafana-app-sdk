@@ -24,13 +24,21 @@ type TokenExchangeCredentials struct {
 	// Ignored if ExchangerFunc is set.
 	Token string
 
+	// IsServiceIdentity reports whether ctx carries an in-process service
+	// identity, which has no signed token to exchange. Such requests act as the
+	// service. Grafana passes identity.IsServiceIdentity. If nil, a request
+	// whose AuthInfo has no signed token fails rather than act as the service.
+	// Ignored if ExchangerFunc is set.
+	IsServiceIdentity func(ctx context.Context) bool
+
 	// ExchangerFunc, when set, is called to obtain access tokens instead of
 	// creating an internal authlib TokenExchangeClient from TokenExchangeURL/Token.
 	// The function receives the request context plus the audiences and namespace
 	// from the RemoteServiceTarget, and should return a valid signed access token.
 	// When the context carries AuthInfo or a legacy caller ID token (see
 	// IDTokenFromContext), exchange on behalf of that caller. Prefer AuthInfo's
-	// access token over its ID token to preserve the delegation chain.
+	// access token over its ID token to preserve the delegation chain, and act
+	// as the service only for in-process service identities.
 	//
 	// Use this to bring your own authlib version or a custom token source:
 	//
@@ -38,7 +46,9 @@ type TokenExchangeCredentials struct {
 	//   creds := k8s.TokenExchangeCredentials{
 	//       ExchangerFunc: func(ctx context.Context, audiences []string, namespace string) (string, error) {
 	//           subjectToken, _ := k8s.IDTokenFromContext(ctx)
-	//           if info, ok := types.AuthInfoFrom(ctx); ok && info != nil {
+	//           if identity.IsServiceIdentity(ctx) {
+	//               subjectToken = ""
+	//           } else if info, ok := types.AuthInfoFrom(ctx); ok && info != nil {
 	//               subjectToken = info.GetAccessToken()
 	//               if subjectToken == "" { subjectToken = info.GetIDToken() }
 	//               if subjectToken == "" { return "", errors.New("caller has no signed token") }
@@ -161,7 +171,10 @@ func newTokenExchangeFunc(creds TokenExchangeCredentials) (func(ctx context.Cont
 	return func(ctx context.Context, audiences []string, namespace string) (string, error) {
 		// The caller's identity becomes part of the exchanged access token.
 		subjectToken, _ := IDTokenFromContext(ctx)
-		if info, ok := types.AuthInfoFrom(ctx); ok && info != nil {
+		if creds.IsServiceIdentity != nil && creds.IsServiceIdentity(ctx) {
+			// The service acts as itself, as it has no caller to delegate.
+			subjectToken = ""
+		} else if info, ok := types.AuthInfoFrom(ctx); ok && info != nil {
 			// Preserve the full delegation chain when invoked by an authenticated
 			// plugin handler. Never downgrade a caller to service credentials.
 			subjectToken = info.GetAccessToken()
@@ -169,7 +182,7 @@ func newTokenExchangeFunc(creds TokenExchangeCredentials) (func(ctx context.Cont
 				subjectToken = info.GetIDToken()
 			}
 			if subjectToken == "" {
-				return "", errors.New("caller auth info has no access or ID token")
+				return "", errors.New("caller auth info has no access or ID token; set TokenExchangeCredentials.IsServiceIdentity to let service identities act as the service")
 			}
 		}
 		resp, err := exchanger.Exchange(ctx, authnlib.TokenExchangeRequest{
@@ -196,7 +209,8 @@ type idTokenContextKey struct{}
 // as the service.
 // This is deliberate: work done for a caller should not use the service's own
 // permissions. Work that should act as the service, such as reconciling, should
-// use a context without a caller. AuthInfo in the context takes precedence over
+// use a context without a caller, or with a service identity recognized by
+// TokenExchangeCredentials.IsServiceIdentity. AuthInfo in the context takes precedence over
 // this legacy ID-token value; its access token (or ID token) is exchanged instead.
 func ContextWithIDToken(ctx context.Context, token string) context.Context {
 	if token == "" {

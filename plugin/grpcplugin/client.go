@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/grafana/authlib/authn"
 	authlib "github.com/grafana/authlib/types"
@@ -14,6 +15,42 @@ import (
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
+// V3Client groups the plugin protocol v3 RPCs. Implementations handle caller
+// authentication, so the methods take no gRPC call options.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
+type V3Client interface {
+	AdmissionReview(ctx context.Context, in *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error)
+	ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error)
+	CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error)
+}
+
+// ClientV3Options configures how ClientV3 authenticates requests to a plugin.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
+type ClientV3Options struct {
+	// TokenExchanger exchanges the caller's signed access or ID token for an
+	// access token scoped to the request's namespace and API group. Missing
+	// caller credentials fail the request; they never fall back to service
+	// access, except as allowed by IsServiceIdentity.
+	// If nil, requests carry no credentials, and plugins that authenticate
+	// requests reject them.
+	TokenExchanger authn.TokenExchanger
+
+	// Groups lists the API groups the plugin serves. It is required with
+	// TokenExchanger: tokens are only minted for these audiences, so a request
+	// routed to the wrong plugin cannot hand it a token for another app.
+	Groups []string
+
+	// IsServiceIdentity reports whether ctx carries the host's own in-process
+	// service identity, which has no signed token to exchange. Such requests
+	// use the host's service token instead of a delegated one. Grafana passes
+	// identity.IsServiceIdentity. If nil, every request needs a caller token.
+	IsServiceIdentity func(ctx context.Context) bool
+}
+
 // ClientV3 groups clients for the grafana.plugin.v3 services.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
@@ -23,21 +60,29 @@ type ClientV3 struct {
 	conversion pluginv3.ConversionServiceClient
 	route      pluginv3.RouteServiceClient
 
-	tokenExchange authn.TokenExchanger
+	tokenExchange     authn.TokenExchanger
+	groups            []string
+	isServiceIdentity func(ctx context.Context) bool
 }
 
-var _ pluginv3.Client = (*ClientV3)(nil)
+var _ V3Client = (*ClientV3)(nil)
 
 // NewClientV3 dispenses clients for all grafana.plugin.v3 services from a
-// negotiated go-plugin client connection. If tokenExchange is non-nil, each
-// request exchanges the caller's signed access or ID token for an access token
-// scoped to the caller's namespace and the requested resource API group. Missing
-// caller credentials fail the request; they never fall back to service access.
-// A nil tokenExchange leaves outgoing metadata unchanged.
+// negotiated go-plugin client connection. See ClientV3Options for how requests
+// are authenticated.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-func NewClientV3(rpcClient plugin.ClientProtocol, tokenExchange authn.TokenExchanger) (*ClientV3, error) {
+func NewClientV3(rpcClient plugin.ClientProtocol, opts ClientV3Options) (*ClientV3, error) {
+	if opts.TokenExchanger != nil {
+		if len(opts.Groups) == 0 {
+			return nil, errors.New("plugin token exchange: the plugin's API groups are required")
+		}
+		if slices.Contains(opts.Groups, "") {
+			return nil, errors.New("plugin token exchange: API groups must not be empty")
+		}
+	}
+
 	admission, err := dispense[pluginv3.AdmissionServiceClient](rpcClient, pluginKeyAdmission)
 	if err != nil {
 		return nil, err
@@ -54,10 +99,12 @@ func NewClientV3(rpcClient plugin.ClientProtocol, tokenExchange authn.TokenExcha
 	}
 
 	return &ClientV3{
-		admission:     admission,
-		conversion:    conversion,
-		route:         router,
-		tokenExchange: tokenExchange,
+		admission:         admission,
+		conversion:        conversion,
+		route:             router,
+		tokenExchange:     opts.TokenExchanger,
+		groups:            slices.Clone(opts.Groups),
+		isServiceIdentity: opts.IsServiceIdentity,
 	}, nil
 }
 
@@ -75,31 +122,45 @@ func dispense[T any](rpcClient plugin.ClientProtocol, key string) (T, error) {
 	return client, nil
 }
 
-func (c *ClientV3) addMetadataToContext(ctx context.Context, group string) (context.Context, error) {
+// addMetadataToContext attaches an access token for group. The token is scoped
+// to namespace when the request has a single one, and otherwise to the caller's.
+func (c *ClientV3) addMetadataToContext(ctx context.Context, group, namespace string) (context.Context, error) {
 	if c.tokenExchange == nil {
 		return ctx, nil
 	}
 	if group == "" {
 		return nil, errors.New("plugin token exchange: API group is required")
 	}
+	if !slices.Contains(c.groups, group) {
+		return nil, fmt.Errorf("plugin token exchange: API group %q is not served by this plugin", group)
+	}
 	caller, ok := authlib.AuthInfoFrom(ctx)
 	if !ok || caller == nil {
 		return nil, errors.New("plugin token exchange: caller auth info is required")
 	}
-	// Prefer the access token to preserve an existing delegation chain.
-	// An ID token starts a new on-behalf-of exchange for a user.
-	subjectToken := caller.GetAccessToken()
-	if subjectToken == "" {
-		subjectToken = caller.GetIDToken()
-	}
-	if subjectToken == "" {
-		return nil, errors.New("plugin token exchange: caller access or ID token is required")
+	// An empty subject token requests the host's own service token.
+	subjectToken := ""
+	if c.isServiceIdentity == nil || !c.isServiceIdentity(ctx) {
+		// Prefer the access token to preserve an existing delegation chain.
+		// An ID token starts a new on-behalf-of exchange for a user.
+		subjectToken = caller.GetAccessToken()
+		if subjectToken == "" {
+			subjectToken = caller.GetIDToken()
+		}
+		if subjectToken == "" {
+			return nil, errors.New("plugin token exchange: caller access or ID token is required")
+		}
 	}
 	if caller.GetNamespace() == "" {
 		return nil, errors.New("plugin token exchange: caller namespace is required")
 	}
+	if namespace == "" {
+		namespace = caller.GetNamespace()
+	} else if !authlib.NamespaceMatches(caller.GetNamespace(), namespace) {
+		return nil, errors.New("plugin token exchange: caller namespace does not cover the requested namespace")
+	}
 	rsp, err := c.tokenExchange.Exchange(ctx, authn.TokenExchangeRequest{
-		Namespace:    caller.GetNamespace(),
+		Namespace:    namespace,
 		Audiences:    []string{group},
 		SubjectToken: subjectToken,
 	})
@@ -119,35 +180,51 @@ func (c *ClientV3) addMetadataToContext(ctx context.Context, group string) (cont
 	return metadata.NewOutgoingContext(ctx, md), nil
 }
 
-// AdmissionReview implements [pluginv3.Client].
+// AdmissionReview implements [V3Client].
 func (c *ClientV3) AdmissionReview(ctx context.Context, in *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
-	ctx, err := c.addMetadataToContext(ctx, in.GetKind().GetGroup())
+	namespace := ""
+	if c.tokenExchange != nil {
+		var err error
+		namespace, err = singleNamespace(in.GetObjectBytes(), in.GetOldObjectBytes())
+		if err != nil {
+			return nil, err
+		}
+	}
+	ctx, err := c.addMetadataToContext(ctx, in.GetKind().GetGroup(), namespace)
 	if err != nil {
 		return nil, err
 	}
 	return c.admission.AdmissionReview(ctx, in)
 }
 
-// CallRoute implements [pluginv3.Client].
+// CallRoute implements [V3Client].
 func (c *ClientV3) CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
-	ctx, err := c.addMetadataToContext(ctx, in.GetGroup())
+	ctx, err := c.addMetadataToContext(ctx, in.GetGroup(), in.GetNamespace())
 	if err != nil {
 		return nil, err
 	}
 	return c.route.CallRoute(ctx, in)
 }
 
-// ConvertObjects implements [pluginv3.Client].
+// ConvertObjects implements [V3Client].
 func (c *ClientV3) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
-	group := ""
+	group, namespace := "", ""
 	if c.tokenExchange != nil {
 		var err error
 		group, err = conversionGroup(in)
 		if err != nil {
 			return nil, err
 		}
+		raws := make([][]byte, 0, len(in.GetObjects()))
+		for _, obj := range in.GetObjects() {
+			raws = append(raws, obj.GetRaw())
+		}
+		namespace, err = singleNamespace(raws...)
+		if err != nil {
+			return nil, err
+		}
 	}
-	ctx, err := c.addMetadataToContext(ctx, group)
+	ctx, err := c.addMetadataToContext(ctx, group, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -168,4 +245,23 @@ func conversionGroup(req *pluginv3.ConvertObjectsRequest) (string, error) {
 		return "", errors.New("conversion requires objects with a non-empty API group")
 	}
 	return group, nil
+}
+
+// singleNamespace returns the namespace shared by all non-empty objects, or ""
+// if they span several namespaces or are cluster-scoped. The token is then
+// scoped to the caller's namespace, which the server checks against each object.
+func singleNamespace(raws ...[]byte) (string, error) {
+	namespaces, err := objectNamespaces(raws...)
+	if err != nil {
+		return "", err
+	}
+	if len(namespaces) == 0 {
+		return "", nil
+	}
+	for _, ns := range namespaces[1:] {
+		if ns != namespaces[0] {
+			return "", nil
+		}
+	}
+	return namespaces[0], nil
 }

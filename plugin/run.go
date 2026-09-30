@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/grafana/authlib/authn"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
@@ -20,10 +21,11 @@ import (
 // Run is a convinience entry point for plugin backends to use, when they have
 // implement App SDK functionality. It wraps plugin Manage().
 //
-// In the simplest case, no options are needed:
+// Plugin protocol v3 requests are authenticated with WithAuthenticator, which
+// is required unless WithInsecureSkipAuthentication is set for local development:
 //
 //	func main() {
-//		if err := plugin.Run(myapp.Provider()); err != nil {
+//		if err := plugin.Run(myapp.Provider(), plugin.WithAuthenticator(authenticator)); err != nil {
 //			backendlog.DefaultLogger.Error(err.Error())
 //			os.Exit(1)
 //		}
@@ -70,6 +72,9 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
 	}
+	if cfg.authenticator == nil && !cfg.insecureSkipAuthentication {
+		return errors.New("an authenticator is required: use WithAuthenticator, or WithInsecureSkipAuthentication for local development")
+	}
 	manifestData := provider.Manifest().ManifestData
 	if manifestData == nil {
 		return errors.New("embedded manifest required")
@@ -113,7 +118,10 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	if len(cfg.manageOpts.ExtraPlugins) > 0 {
 		return errors.New("ExtraPlugins cannot be overridden")
 	}
-	cfg.manageOpts.ExtraPlugins = appadapter.New(a)
+	serveOpts := appadapter.ServeOpts(a)
+	serveOpts.Authenticator = cfg.authenticator
+	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
+	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
 
 	// Start any background operations that the App requires.
 	runner := a.Runner()
@@ -166,13 +174,32 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 	}
 }
 
+// WithAuthenticator sets the authenticator that verifies the access token on
+// each plugin protocol v3 request (see grpcplugin.ServeOpts.Authenticator).
+func WithAuthenticator(authenticator authn.Authenticator) RunOption {
+	return func(cfg *runConfig) {
+		cfg.authenticator = authenticator
+	}
+}
+
+// WithInsecureSkipAuthentication serves plugin protocol v3 requests without
+// authentication when no authenticator is set. Handlers then get no caller
+// identity, so their outbound requests act as the plugin. Use it only for local development.
+func WithInsecureSkipAuthentication() RunOption {
+	return func(cfg *runConfig) {
+		cfg.insecureSkipAuthentication = true
+	}
+}
+
 type RunOption func(cfg *runConfig)
 
 type runConfig struct {
-	kubeConfig *rest.Config
-	pluginID   string
-	appFunc    backendapp.InstanceFactoryFunc
-	manageOpts backendapp.ManageOpts
+	kubeConfig                 *rest.Config
+	pluginID                   string
+	appFunc                    backendapp.InstanceFactoryFunc
+	manageOpts                 backendapp.ManageOpts
+	authenticator              authn.Authenticator
+	insecureSkipAuthentication bool
 }
 
 type stubInstance struct{}

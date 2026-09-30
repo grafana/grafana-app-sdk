@@ -38,7 +38,8 @@ type KubeConfigOptions struct {
 // legacy ID token (see k8s.ContextWithIDToken) is made as that caller, limited to
 // the permissions the access policy delegates. Plugin protocol v3 handlers, such as admission,
 // conversion and custom route handlers, get this by passing on the context
-// they were called with. Other requests act as the plugin.
+// they were called with, provided the plugin authenticates requests (see
+// grpcplugin.ServeOpts.Authenticator). Other requests act as the plugin.
 //
 // Otherwise falls back to standard auth, using either:
 // - API_ACCESS_BEARER_TOKEN or

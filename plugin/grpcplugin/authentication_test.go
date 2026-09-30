@@ -29,7 +29,9 @@ func TestServerAuthentication(t *testing.T) {
 				handlerErr error
 				disabled   bool
 				fallback   bool
-				want       codes.Code
+				// noAuthenticator configures neither an authenticator nor InsecureSkipAuthentication.
+				noAuthenticator bool
+				want            codes.Code
 			}{
 				{name: "authenticated", token: "valid"},
 				{name: "missing token", want: codes.Unauthenticated},
@@ -37,6 +39,7 @@ func TestServerAuthentication(t *testing.T) {
 				{name: "authenticator failure", token: "valid", authErr: errors.New("unavailable"), want: codes.Internal},
 				{name: "handler error", token: "valid", handlerErr: handlerErr, want: codes.FailedPrecondition},
 				{name: "disabled", disabled: true},
+				{name: "no authenticator rejects requests", token: "valid", noAuthenticator: true, want: codes.FailedPrecondition},
 				{name: "fallback rejects unauthenticated", fallback: true, want: codes.Unauthenticated},
 				{name: "authenticated fallback", token: "valid", fallback: true, want: codes.Unimplemented},
 			} {
@@ -57,7 +60,8 @@ func TestServerAuthentication(t *testing.T) {
 						return tt.handlerErr
 					}}
 					opts := ServeOpts{AdmissionServer: server, ConversionServer: server, RouteServer: server}
-					if !tt.disabled {
+					opts.InsecureSkipAuthentication = tt.disabled
+					if !tt.disabled && !tt.noAuthenticator {
 						opts.Authenticator = authenticatorFunc(func(ctx context.Context, provider authn.TokenProvider) (types.AuthInfo, error) {
 							token, ok := provider.AccessToken(ctx)
 							if !ok {
@@ -83,8 +87,10 @@ func TestServerAuthentication(t *testing.T) {
 					kind.SetGroup(delegationGroup)
 					admissionReq := &pluginv3.AdmissionReviewRequest{}
 					admissionReq.SetKind(kind)
+					admissionReq.SetObjectBytes(delegationObject)
 					object := &pluginv3.ConvertObjectsRequest_Object{}
 					object.SetGvk(kind)
+					object.SetRaw(delegationObject)
 					conversionReq := &pluginv3.ConvertObjectsRequest{}
 					conversionReq.SetObjects([]*pluginv3.ConvertObjectsRequest_Object{object})
 					routeReq := &pluginv3.CallRouteRequest{}
@@ -101,7 +107,7 @@ func TestServerAuthentication(t *testing.T) {
 						require.Equal(t, called, stream.sent)
 					}
 					require.Equal(t, tt.want, status.Code(err))
-					require.Equal(t, !tt.fallback && (tt.disabled || (tt.token != "" && tt.authErr == nil)), called)
+					require.Equal(t, !tt.fallback && !tt.noAuthenticator && (tt.disabled || (tt.token != "" && tt.authErr == nil)), called)
 				})
 			}
 		})

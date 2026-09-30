@@ -48,7 +48,7 @@ func TestServerRejectsCredentialConfusion(t *testing.T) {
 				called := make(chan struct{}, 1)
 				server := &authenticationTestServer{check: func(context.Context) error { called <- struct{}{}; return nil }}
 				protocol := delegationProtocol(t, ServeOpts{AdmissionServer: server, ConversionServer: server, RouteServer: server, Authenticator: authenticator})
-				client, err := NewClientV3(protocol, nil)
+				client, err := NewClientV3(protocol, ClientV3Options{})
 				require.NoError(t, err)
 				ctx, cancel := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), tt.md), 5*time.Second)
 				defer cancel()

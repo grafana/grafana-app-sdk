@@ -22,12 +22,18 @@ type ServeOpts struct {
 	ConversionServer pluginv3.ConversionServiceServer
 	RouteServer      pluginv3.RouteServiceServer
 
-	// Authenticator must verify the access token's signature and allowed audiences.
-	// Requests require a single access token, with no separate ID token. The
-	// wrappers check the requested group and route namespace against AuthInfo.
-	// Handlers remain responsible for resource authorization and object validation.
-	// If nil, requests are passed through without authentication.
+	// Authenticator must verify the access token's signature and allowed audiences,
+	// for example authn.NewAccessTokenAuthenticator. Requests require a single
+	// access token, with no separate ID token. The wrappers check the requested
+	// group and namespaces against AuthInfo. Handlers remain responsible for
+	// resource authorization and object validation.
+	// If nil, every request is rejected unless InsecureSkipAuthentication is set.
 	Authenticator authn.Authenticator
+
+	// InsecureSkipAuthentication serves requests without authenticating them
+	// when Authenticator is nil. Handlers then get no caller identity, so their
+	// outbound requests act as the plugin itself. Use it only for local development.
+	InsecureSkipAuthentication bool
 }
 
 const (
@@ -62,7 +68,8 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 		routeServer = fallback
 	}
 
-	if opts.Authenticator != nil {
+	// A nil Authenticator rejects requests unless authentication is explicitly skipped.
+	if opts.Authenticator != nil || !opts.InsecureSkipAuthentication {
 		admissionServer = &authenticatedAdmissionServer{admissionServer, opts.Authenticator}
 		conversionServer = &authenticatedConversionServer{conversionServer, opts.Authenticator}
 		routeServer = &authenticatedRouteServer{routeServer, opts.Authenticator}

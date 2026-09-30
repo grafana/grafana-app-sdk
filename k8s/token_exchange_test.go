@@ -398,11 +398,18 @@ func TestTokenExchangeTransportClonesRequest(t *testing.T) {
 }
 
 func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
+	// isService marks contexts carrying serviceIdentityKey as in-process service identities.
+	isService := func(ctx context.Context) bool { return ctx.Value(serviceIdentityKey{}) != nil }
+	service := func(ctx context.Context) context.Context {
+		return context.WithValue(types.WithAuthInfo(ctx, &tokenExchangeAuthInfo{}), serviceIdentityKey{}, true)
+	}
 	tests := []struct {
 		name             string
 		ctx              context.Context
 		wantSubjectToken string
 	}{
+		{name: "service identity acts as the service", ctx: service(context.Background())},
+		{name: "service identity ignores legacy token", ctx: service(ContextWithIDToken(context.Background(), "stale-id"))},
 		{name: "caller", ctx: ContextWithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
 		{name: "no caller", ctx: context.Background()},
 		{name: "empty caller", ctx: ContextWithIDToken(context.Background(), "")},
@@ -421,7 +428,7 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 				_, _ = io.WriteString(w, `{"data":{"token":"tok"}}`)
 			}))
 			defer signer.Close()
-			exchangeFunc, err := newTokenExchangeFunc(TokenExchangeCredentials{TokenExchangeURL: signer.URL, Token: "cap"})
+			exchangeFunc, err := newTokenExchangeFunc(TokenExchangeCredentials{TokenExchangeURL: signer.URL, Token: "cap", IsServiceIdentity: isService})
 			require.NoError(t, err)
 			base := &capturingRoundTripper{}
 			transport := &tokenExchangeTransport{
@@ -444,6 +451,8 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 	}
 }
 
+type serviceIdentityKey struct{}
+
 // Only token accessors are needed by the transport.
 type tokenExchangeAuthInfo struct {
 	types.AuthInfo
@@ -457,6 +466,13 @@ func TestTokenExchangeRejectsCallerWithoutSignedToken(t *testing.T) {
 	exchange, err := newTokenExchangeFunc(TokenExchangeCredentials{Token: "cap", TokenExchangeURL: "http://unused.invalid"})
 	require.NoError(t, err)
 	ctx := types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{})
+	_, err = exchange(ctx, []string{"example.app"}, "stacks-1")
+	require.ErrorContains(t, err, "caller auth info has no access or ID token")
+	require.ErrorContains(t, err, "IsServiceIdentity")
+
+	// A hook that does not recognize the identity keeps rejecting it.
+	exchange, err = newTokenExchangeFunc(TokenExchangeCredentials{Token: "cap", TokenExchangeURL: "http://unused.invalid", IsServiceIdentity: func(context.Context) bool { return false }})
+	require.NoError(t, err)
 	_, err = exchange(ctx, []string{"example.app"}, "stacks-1")
 	require.ErrorContains(t, err, "caller auth info has no access or ID token")
 }

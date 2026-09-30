@@ -29,6 +29,9 @@ import (
 
 const delegationGroup = "example.grafana.app"
 
+// delegationObject is a minimal admission or conversion object in the caller's namespace.
+var delegationObject = []byte(`{"metadata":{"namespace":"stacks-1"}}`)
+
 // Exercise the actual registration, protobuf transport, verification and stream
 // context wrapping. The exchanger models the auth service's signed response;
 // it also checks the subject token supplied by the SDK on every hop.
@@ -58,7 +61,7 @@ func TestDelegationOverGRPC(t *testing.T) {
 			claims.Actor = &authn.ActorClaims{Subject: "access-policy:grafana", Actor: actor}
 			secondToken := signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:plugin", delegationGroup, claims)
 			calls := 0
-			client, err := NewClientV3(protocol, tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+			client, err := NewClientV3(protocol, ClientV3Options{Groups: []string{delegationGroup}, TokenExchanger: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 				require.Equal(t, "stacks-1", req.Namespace)
 				require.Equal(t, []string{delegationGroup}, req.Audiences)
 				require.Nil(t, req.Subject)
@@ -69,7 +72,7 @@ func TestDelegationOverGRPC(t *testing.T) {
 				}
 				require.Equal(t, firstToken, req.SubjectToken)
 				return &authn.TokenExchangeResponse{Token: secondToken}, nil
-			}))
+			})})
 			require.NoError(t, err)
 			original := metadata.Pairs("x-access-token", "stale-access", "x-id-token", "stale-identity", "trace-id", "trace")
 			ctx, cancel := context.WithTimeout(types.WithAuthInfo(metadata.NewOutgoingContext(context.Background(), original), caller), 5*time.Second)
@@ -111,7 +114,7 @@ func TestDelegationOverGRPC(t *testing.T) {
 					received := make(chan struct{}, 1)
 					server := &authenticationTestServer{check: func(context.Context) error { received <- struct{}{}; return nil }}
 					protocol := delegationProtocol(t, ServeOpts{AdmissionServer: server, ConversionServer: server, RouteServer: server, Authenticator: authenticator})
-					client, err := NewClientV3(protocol, authn.NewStaticTokenExchanger(tt.token))
+					client, err := NewClientV3(protocol, ClientV3Options{Groups: []string{delegationGroup}, TokenExchanger: authn.NewStaticTokenExchanger(tt.token)})
 					require.NoError(t, err)
 					ctx, cancel := context.WithTimeout(types.WithAuthInfo(context.Background(), caller), 5*time.Second)
 					defer cancel()
@@ -145,7 +148,7 @@ func TestDelegationFailsBeforeRPC(t *testing.T) {
 			t.Run(method+"/"+tt.name, func(t *testing.T) {
 				exchanged := false
 				// Nil RPC clients panic if failure accidentally falls through to an RPC.
-				client := &ClientV3{tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+				client := &ClientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 					exchanged = true
 					require.Equal(t, "access", req.SubjectToken, "access token takes precedence over ID token")
 					return tt.response, tt.err
@@ -173,7 +176,7 @@ func TestConversionAudienceValidation(t *testing.T) {
 		{name: "empty batch"}, {name: "missing group", groups: []string{""}}, {name: "mixed groups", groups: []string{delegationGroup, "other.app"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &ClientV3{tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+			client := &ClientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 				t.Fatal("invalid conversion must not exchange tokens")
 				return nil, nil
 			})}
@@ -189,7 +192,7 @@ func TestConversionAudienceValidation(t *testing.T) {
 
 func TestDelegationDisabledPreservesContext(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", "existing"))
-	got, err := (&ClientV3{}).addMetadataToContext(ctx, "")
+	got, err := (&ClientV3{}).addMetadataToContext(ctx, "", "")
 	require.NoError(t, err)
 	require.Same(t, ctx, got)
 }
@@ -197,12 +200,12 @@ func TestDelegationDisabledPreservesContext(t *testing.T) {
 func callDelegationMethod(ctx context.Context, client *ClientV3, method string) error {
 	switch method {
 	case pluginKeyAdmission:
-		_, err := client.AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build()}.Build())
+		_, err := client.AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), ObjectBytes: delegationObject}.Build())
 		return err
 	case pluginKeyConversion:
 		_, err := client.ConvertObjects(ctx, pluginv3.ConvertObjectsRequest_builder{
 			Api:     pluginv3.GroupVersion_builder{Group: new("apiextensions.k8s.io"), Version: new("v1")}.Build(),
-			Objects: []*pluginv3.ConvertObjectsRequest_Object{pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build()}.Build()},
+			Objects: []*pluginv3.ConvertObjectsRequest_Object{pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), Raw: delegationObject}.Build()},
 		}.Build())
 		return err
 	default:
@@ -267,7 +270,7 @@ func signDelegationToken(t *testing.T, key *ecdsa.PrivateKey, typ, subject, audi
 }
 
 func TestDelegationRequiresResourceGroup(t *testing.T) {
-	client := &ClientV3{tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+	client := &ClientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 		t.Fatal("missing audience must not exchange tokens")
 		return nil, nil
 	})}

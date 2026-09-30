@@ -33,6 +33,9 @@ func main() {
 		RouteServer:      httpadapter.NewServer(echo),
 		AdmissionServer:  mt,
 		ConversionServer: mt,
+		// This example trusts every caller, so handlers get no caller identity.
+		// Production plugins must set Authenticator to verify access tokens.
+		InsecureSkipAuthentication: true,
 	}
 
 	// Start both the managed app and the process-wide v3 services.

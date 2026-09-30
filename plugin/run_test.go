@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/grafana/authlib/authn"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
@@ -115,7 +116,7 @@ func TestRun(t *testing.T) {
 		call := stubManage(t, nil)
 		p := newFakeProvider("my-app")
 
-		if err := Run(p); err != nil {
+		if err := Run(p, WithInsecureSkipAuthentication()); err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
 
@@ -145,7 +146,7 @@ func TestRun(t *testing.T) {
 		p.specificConfig = "specific"
 		kubeConfig := rest.Config{Host: "https://example.com"}
 
-		if err := Run(p, WithKubeConfig(kubeConfig)); err != nil {
+		if err := Run(p, WithKubeConfig(kubeConfig), WithInsecureSkipAuthentication()); err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
 
@@ -166,7 +167,7 @@ func TestRun(t *testing.T) {
 		p := newFakeProvider("my-app")
 		runner := p.app.runner.(*fakeRunner)
 
-		if err := Run(p); err != nil {
+		if err := Run(p, WithInsecureSkipAuthentication()); err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
 
@@ -191,7 +192,7 @@ func TestRun(t *testing.T) {
 			return stubInstance{}, nil
 		}
 
-		err := Run(p, WithPluginID("override-id"), WithAppFunc(appFunc))
+		err := Run(p, WithPluginID("override-id"), WithAppFunc(appFunc), WithInsecureSkipAuthentication())
 		if err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
@@ -207,6 +208,18 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("serves plugin v3 with the authenticator", func(t *testing.T) {
+		call := stubManage(t, nil)
+		authenticator := authn.NewAccessTokenAuthenticator(authn.NewUnsafeAccessTokenVerifier(authn.VerifierConfig{}))
+
+		if err := Run(newFakeProvider("my-app"), WithAuthenticator(authenticator)); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		if len(call.opts.ExtraPlugins) == 0 {
+			t.Error("expected ExtraPlugins to be set by Run")
+		}
+	})
+
 	t.Run("errors", func(t *testing.T) {
 		newAppErr := errors.New("new app failed")
 		manageErr := errors.New("manage failed")
@@ -218,6 +231,7 @@ func TestRun(t *testing.T) {
 			manageErr error
 			wantErr   error
 			wantMsg   string
+			noAuth    bool
 		}{
 			{
 				name:    "nil provider",
@@ -242,6 +256,12 @@ func TestRun(t *testing.T) {
 				wantMsg: "ExtraPlugins cannot be overridden",
 			},
 			{
+				name:     "no authenticator",
+				provider: newFakeProvider("my-app"),
+				noAuth:   true,
+				wantMsg:  "an authenticator is required: use WithAuthenticator, or WithInsecureSkipAuthentication for local development",
+			},
+			{
 				name:      "Manage fails",
 				provider:  newFakeProvider("my-app"),
 				manageErr: manageErr,
@@ -251,7 +271,11 @@ func TestRun(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				stubManage(t, tt.manageErr)
 
-				err := Run(tt.provider, tt.opts...)
+				opts := tt.opts
+				if !tt.noAuth {
+					opts = append(opts, WithInsecureSkipAuthentication())
+				}
+				err := Run(tt.provider, opts...)
 				if err == nil {
 					t.Fatal("expected an error")
 				}
