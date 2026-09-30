@@ -3,6 +3,7 @@ package grpcplugin
 import (
 	"context"
 
+	"github.com/grafana/authlib/authn"
 	plugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
@@ -20,6 +21,27 @@ type ServeOpts struct {
 	AdmissionServer  pluginv3.AdmissionServiceServer
 	ConversionServer pluginv3.ConversionServiceServer
 	RouteServer      pluginv3.RouteServiceServer
+
+	// Authenticator must verify the access token's signature and allowed audiences,
+	// for example authn.NewAccessTokenAuthenticator. Requests require a single
+	// access token, with no separate ID token. The wrappers check the requested
+	// group and namespaces against AuthInfo. Handlers remain responsible for
+	// resource authorization and object validation.
+	// If nil, every request is rejected unless InsecureSkipAuthentication is set.
+	Authenticator authn.Authenticator
+
+	// PluginID, when set, is accepted as an access token audience covering every
+	// API group the plugin serves. Otherwise a token's audiences must include
+	// the request's API group. Namespace checks apply either way.
+	PluginID string
+
+	// InsecureSkipAuthentication serves requests without verifying them when
+	// Authenticator is nil. A request's access token is parsed without checking
+	// its signature, or the request's audience and namespaces, so handlers get
+	// the identity the token claims. Requests without a token are served with no
+	// identity, and their outbound requests act as the plugin itself.
+	// Use it only for local development.
+	InsecureSkipAuthentication bool
 }
 
 const (
@@ -53,6 +75,16 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	if routeServer == nil {
 		routeServer = fallback
 	}
+
+	// A nil Authenticator rejects requests unless authentication is explicitly skipped.
+	auth := serverAuth{authenticator: opts.Authenticator, pluginID: opts.PluginID}
+	if opts.Authenticator == nil && opts.InsecureSkipAuthentication {
+		auth.authenticator = authn.NewAccessTokenAuthenticator(authn.NewUnsafeAccessTokenVerifier(authn.VerifierConfig{}))
+		auth.insecure = true
+	}
+	admissionServer = &authenticatedAdmissionServer{admissionServer, auth}
+	conversionServer = &authenticatedConversionServer{conversionServer, auth}
+	routeServer = &authenticatedRouteServer{routeServer, auth}
 
 	pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: admissionServer}
 	pSet[pluginKeyConversion] = &conversionGRPCPlugin{server: conversionServer}
@@ -110,8 +142,7 @@ var _ V3Server = UnimplementedV3Server{}
 // The types below are thin go-plugin adapters. go-plugin dispenses plugins by
 // name and requires each to implement plugin.GRPCPlugin; the generated code
 // only provides Register*Server / New*Client. Each adapter registers the
-// generated gRPC service, wrapped only to pass the caller's ID token between
-// Grafana and the plugin (see caller.go).
+// generated gRPC service with authentication wrappers when configured.
 
 type admissionGRPCPlugin struct {
 	plugin.NetRPCUnsupportedPlugin
@@ -120,12 +151,12 @@ type admissionGRPCPlugin struct {
 }
 
 func (p *admissionGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterAdmissionServiceServer(s, callerAdmissionServer{p.server})
+	pluginv3.RegisterAdmissionServiceServer(s, p.server)
 	return nil
 }
 
 func (*admissionGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return callerAdmissionClient{pluginv3.NewAdmissionServiceClient(c)}, nil
+	return pluginv3.NewAdmissionServiceClient(c), nil
 }
 
 type conversionGRPCPlugin struct {
@@ -135,12 +166,12 @@ type conversionGRPCPlugin struct {
 }
 
 func (p *conversionGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterConversionServiceServer(s, callerConversionServer{p.server})
+	pluginv3.RegisterConversionServiceServer(s, p.server)
 	return nil
 }
 
 func (*conversionGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return callerConversionClient{pluginv3.NewConversionServiceClient(c)}, nil
+	return pluginv3.NewConversionServiceClient(c), nil
 }
 
 type routeGRPCPlugin struct {
@@ -150,10 +181,10 @@ type routeGRPCPlugin struct {
 }
 
 func (p *routeGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterRouteServiceServer(s, callerRouteServer{p.server})
+	pluginv3.RegisterRouteServiceServer(s, p.server)
 	return nil
 }
 
 func (*routeGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return callerRouteClient{pluginv3.NewRouteServiceClient(c)}, nil
+	return pluginv3.NewRouteServiceClient(c), nil
 }

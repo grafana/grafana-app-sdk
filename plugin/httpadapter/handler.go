@@ -5,20 +5,25 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	clientv3 "github.com/grafana/grafana-app-sdk/plugin/client/v3"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
 // HandlerFunc creates an HTTP handler that forwards requests to a
-// RouteServiceClient. Use [WithRouteInfo] when the URL path alone does not
+// RouteClient, such as the client returned by grpcplugin.NewClientV3. Use [WithRouteInfo] when the URL path alone does not
 // contain the App Platform routing metadata. The HTTP Host is intentionally
 // not forwarded; plugin route handlers must not rely on host-based routing.
+// Credential headers, such as Authorization, Cookie and X-Grafana-Id, are not
+// forwarded either: the caller's identity reaches the plugin only as the
+// access token the client adds to each request.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
+func HandlerFunc(client clientv3.RouteClient) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if client == nil {
 			http.Error(w, "route service client is not configured", http.StatusInternalServerError)
@@ -49,6 +54,28 @@ func HandlerFunc(client pluginv3.RouteServiceClient) http.HandlerFunc {
 	}
 }
 
+// credentialHeaders carry the caller's credentials to the host. Forwarding them
+// would let a plugin act as the caller outside the delegated access token.
+var credentialHeaders = []string{
+	"Authorization",
+	"Proxy-Authorization",
+	"Cookie",
+	"X-Grafana-Id",
+	"X-Id-Token",
+	"X-Access-Token",
+}
+
+// isCredentialHeader matches case-insensitively, as hosts may build header
+// maps with non-canonical keys.
+func isCredentialHeader(key string) bool {
+	for _, name := range credentialHeaders {
+		if strings.EqualFold(key, name) {
+			return true
+		}
+	}
+	return false
+}
+
 func requestFromHTTP(r *http.Request) (*pluginv3.CallRouteRequest, error) {
 	var body []byte
 	if r.Body != nil {
@@ -61,6 +88,9 @@ func requestFromHTTP(r *http.Request) (*pluginv3.CallRouteRequest, error) {
 
 	headers := make(map[string]*pluginv3.StringList, len(r.Header))
 	for key, values := range r.Header {
+		if isCredentialHeader(key) {
+			continue
+		}
 		headers[key] = pluginv3.StringList_builder{Values: values}.Build()
 	}
 

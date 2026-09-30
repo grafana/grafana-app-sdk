@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/rest"
@@ -397,14 +398,24 @@ func TestTokenExchangeTransportClonesRequest(t *testing.T) {
 }
 
 func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
+	// isService marks contexts carrying serviceIdentityKey as in-process service identities.
+	isService := func(ctx context.Context) bool { return ctx.Value(serviceIdentityKey{}) != nil }
+	service := func(ctx context.Context) context.Context {
+		return context.WithValue(types.WithAuthInfo(ctx, &tokenExchangeAuthInfo{}), serviceIdentityKey{}, true)
+	}
 	tests := []struct {
 		name             string
 		ctx              context.Context
 		wantSubjectToken string
 	}{
+		{name: "service identity acts as the service", ctx: service(context.Background())},
+		{name: "service identity ignores legacy token", ctx: service(ContextWithIDToken(context.Background(), "stale-id"))},
 		{name: "caller", ctx: ContextWithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
 		{name: "no caller", ctx: context.Background()},
 		{name: "empty caller", ctx: ContextWithIDToken(context.Background(), "")},
+		{name: "verified access token", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access", id: "id"}), wantSubjectToken: "verified-access"},
+		{name: "verified ID token", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{id: "verified-id"}), wantSubjectToken: "verified-id"},
+		{name: "verified caller overrides legacy token", ctx: types.WithAuthInfo(ContextWithIDToken(context.Background(), "stale-id"), &tokenExchangeAuthInfo{access: "verified-access"}), wantSubjectToken: "verified-access"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -417,7 +428,7 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 				_, _ = io.WriteString(w, `{"data":{"token":"tok"}}`)
 			}))
 			defer signer.Close()
-			exchangeFunc, err := newTokenExchangeFunc(TokenExchangeCredentials{TokenExchangeURL: signer.URL, Token: "cap"})
+			exchangeFunc, err := newTokenExchangeFunc(TokenExchangeCredentials{TokenExchangeURL: signer.URL, Token: "cap", IsServiceIdentity: isService})
 			require.NoError(t, err)
 			base := &capturingRoundTripper{}
 			transport := &tokenExchangeTransport{
@@ -438,4 +449,58 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 			assert.Empty(t, base.lastReq.Header.Values("X-Grafana-Id"))
 		})
 	}
+}
+
+type serviceIdentityKey struct{}
+
+// Only token accessors are needed by the transport.
+type tokenExchangeAuthInfo struct {
+	types.AuthInfo
+	access, id string
+}
+
+func (i *tokenExchangeAuthInfo) GetAccessToken() string { return i.access }
+func (i *tokenExchangeAuthInfo) GetIDToken() string     { return i.id }
+
+func TestTokenExchangeRejectsCallerWithoutSignedToken(t *testing.T) {
+	exchange, err := newTokenExchangeFunc(TokenExchangeCredentials{Token: "cap", TokenExchangeURL: "http://unused.invalid"})
+	require.NoError(t, err)
+	ctx := types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{})
+	_, err = exchange(ctx, []string{"example.app"}, "stacks-1")
+	require.ErrorContains(t, err, "caller auth info has no access or ID token")
+	require.ErrorContains(t, err, "IsServiceIdentity")
+
+	// A hook that does not recognize the identity keeps rejecting it.
+	exchange, err = newTokenExchangeFunc(TokenExchangeCredentials{Token: "cap", TokenExchangeURL: "http://unused.invalid", IsServiceIdentity: func(context.Context) bool { return false }})
+	require.NoError(t, err)
+	_, err = exchange(ctx, []string{"example.app"}, "stacks-1")
+	require.ErrorContains(t, err, "caller auth info has no access or ID token")
+}
+
+func TestTokenExchangeTransportRemovesConflictingCredentials(t *testing.T) {
+	base := &capturingRoundTripper{}
+	transport := &tokenExchangeTransport{exchangeFunc: staticExchangeFunc(), base: base}
+	req, err := http.NewRequest(http.MethodGet, "https://host/apis", nil)
+	require.NoError(t, err)
+	// Include non-canonical map keys, as route headers can originate in protobuf maps.
+	req.Header = http.Header{
+		"x-grafana-id": {"other-user"}, "X-Grafana-Id": {"another-user"},
+		"authorization": {"Bearer old"}, "x-access-token": {"old-token"},
+		"Trace-Id": {"trace"},
+	}
+	resp, err := transport.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.Header{"X-Access-Token": {"tok"}, "Authorization": {"Bearer tok"}, "Trace-Id": {"trace"}}, base.lastReq.Header)
+	require.Equal(t, []string{"other-user"}, req.Header["x-grafana-id"])
+}
+
+func TestTokenExchangeTransportRejectsEmptyToken(t *testing.T) {
+	base := &capturingRoundTripper{}
+	transport := &tokenExchangeTransport{base: base, exchangeFunc: func(context.Context, []string, string) (string, error) { return "", nil }}
+	req, err := http.NewRequest(http.MethodGet, "https://host/apis", nil)
+	require.NoError(t, err)
+	_, err = transport.RoundTrip(req)
+	require.Error(t, err)
+	require.Nil(t, base.lastReq)
 }
