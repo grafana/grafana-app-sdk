@@ -21,11 +21,15 @@ import (
 // Run is a convinience entry point for plugin backends to use, when they have
 // implement App SDK functionality. It wraps plugin Manage().
 //
-// Plugin protocol v3 requests are authenticated with WithAuthenticator, which
-// is required unless WithInsecureSkipAuthentication is set for local development:
+// Plugin protocol v3 requests are authenticated with the authenticator from
+// WithAuthenticator or, without one, from GRAFANA_AUTHENTICATION_JWKS_URL or
+// GRAFANA_AUTHENTICATION_JWKS. Tokens must have the plugin ID or the manifest's
+// API group as an audience. Run fails if
+// neither is available, unless WithInsecureSkipAuthentication is set for local
+// development. When the host sets either variable, no options are needed:
 //
 //	func main() {
-//		if err := plugin.Run(myapp.Provider(), plugin.WithAuthenticator(authenticator)); err != nil {
+//		if err := plugin.Run(myapp.Provider()); err != nil {
 //			backendlog.DefaultLogger.Error(err.Error())
 //			os.Exit(1)
 //		}
@@ -72,12 +76,29 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	if provider == nil {
 		return errors.New("provider cannot be nil")
 	}
-	if cfg.authenticator == nil && !cfg.insecureSkipAuthentication {
-		return errors.New("an authenticator is required: use WithAuthenticator, or WithInsecureSkipAuthentication for local development")
-	}
 	manifestData := provider.Manifest().ManifestData
 	if manifestData == nil {
 		return errors.New("embedded manifest required")
+	}
+
+	// If the pluginID was not given, we can assume it from the manifest.
+	// The authenticator accepts it as a token audience.
+	if cfg.pluginID == "" {
+		cfg.pluginID = manifestData.AppName
+	}
+
+	if cfg.authenticator == nil {
+		authenticator, err := buildAuthenticator(cfg.pluginID, manifestData)
+		switch {
+		case err == nil:
+			cfg.authenticator = authenticator
+		case !errors.Is(err, ErrNoSigningKeys):
+			return err
+		case !cfg.insecureSkipAuthentication:
+			return errors.New("an authenticator is required: set " + EnvVarGrafanaAuthenticationJWKSURL + " or " + EnvVarGrafanaAuthenticationJWKS + ", or use WithAuthenticator, or WithInsecureSkipAuthentication for local development")
+		default:
+			// Authentication is explicitly skipped.
+		}
 	}
 
 	if cfg.kubeConfig == nil {
@@ -104,11 +125,6 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return err
 	}
 
-	// If the pluginID was not given, we can assume it from the manifest.
-	if cfg.pluginID == "" {
-		cfg.pluginID = manifestData.AppName
-	}
-
 	// If a standard plugin backend app was not given, use our stub one.
 	if cfg.appFunc == nil {
 		cfg.appFunc = newStubAppInstance
@@ -120,6 +136,7 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	}
 	serveOpts := appadapter.ServeOpts(a)
 	serveOpts.Authenticator = cfg.authenticator
+	serveOpts.PluginID = cfg.pluginID
 	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
 	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
 
@@ -175,7 +192,8 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 }
 
 // WithAuthenticator sets the authenticator that verifies the access token on
-// each plugin protocol v3 request (see grpcplugin.ServeOpts.Authenticator).
+// each plugin protocol v3 request (see grpcplugin.ServeOpts.Authenticator),
+// instead of building one from GRAFANA_AUTHENTICATION_JWKS_URL or GRAFANA_AUTHENTICATION_JWKS.
 func WithAuthenticator(authenticator authn.Authenticator) RunOption {
 	return func(cfg *runConfig) {
 		cfg.authenticator = authenticator
@@ -183,7 +201,8 @@ func WithAuthenticator(authenticator authn.Authenticator) RunOption {
 }
 
 // WithInsecureSkipAuthentication serves plugin protocol v3 requests without
-// authentication when no authenticator is set. Handlers then get no caller
+// authentication when no authenticator is set or configured by
+// GRAFANA_AUTHENTICATION_JWKS_URL or GRAFANA_AUTHENTICATION_JWKS. Handlers then get no caller
 // identity, so their outbound requests act as the plugin. Use it only for local development.
 func WithInsecureSkipAuthentication() RunOption {
 	return func(cfg *runConfig) {

@@ -3,8 +3,10 @@ package grpcplugin
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grafana/authlib/authn"
 	"github.com/grafana/authlib/types"
@@ -37,6 +39,10 @@ func TestServerAuthentication(t *testing.T) {
 				{name: "missing token", want: codes.Unauthenticated},
 				{name: "invalid token", token: "invalid", authErr: authn.ErrInvalidAudience, want: codes.Unauthenticated},
 				{name: "authenticator failure", token: "valid", authErr: errors.New("unavailable"), want: codes.Internal},
+				{name: "signing keys unavailable", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", authn.ErrFetchingSigningKey), want: codes.Internal},
+				{name: "signature mismatch", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", jose.ErrCryptoFailure), want: codes.Unauthenticated},
+				{name: "not yet valid", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", jwt.ErrNotValidYet), want: codes.Unauthenticated},
+				{name: "issued in the future", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", jwt.ErrIssuedInTheFuture), want: codes.Unauthenticated},
 				{name: "handler error", token: "valid", handlerErr: handlerErr, want: codes.FailedPrecondition},
 				{name: "disabled", disabled: true},
 				{name: "no authenticator rejects requests", token: "valid", noAuthenticator: true, want: codes.FailedPrecondition},

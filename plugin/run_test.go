@@ -2,19 +2,33 @@ package plugin
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"errors"
+	"net"
+	"strings"
 	"testing"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/grafana/authlib/authn"
+	goplugin "github.com/hashicorp/go-plugin"
+	"github.com/prometheus/client_golang/prometheus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/grpc/test/bufconn"
+	"k8s.io/client-go/rest"
+
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
-	goplugin "github.com/hashicorp/go-plugin"
-	"github.com/prometheus/client_golang/prometheus"
-	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -82,7 +96,7 @@ var _ app.Provider = (*fakeProvider)(nil)
 func newFakeProvider(appName string) *fakeProvider {
 	return &fakeProvider{
 		manifest: app.Manifest{
-			ManifestData: &app.ManifestData{AppName: appName},
+			ManifestData: &app.ManifestData{AppName: appName, Group: appName + ".grafana.app"},
 			Location:     app.ManifestLocation{Type: app.ManifestLocationEmbedded},
 		},
 		app: &fakeApp{runner: newFakeRunner()},
@@ -220,6 +234,63 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("builds the authenticator from the environment", func(t *testing.T) {
+		call := stubManage(t, nil)
+		t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, "https://auth.example.com/jwks")
+
+		if err := Run(newFakeProvider("my-app")); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		if len(call.opts.ExtraPlugins) == 0 {
+			t.Error("expected ExtraPlugins to be set by Run")
+		}
+	})
+
+	t.Run("authenticates with the manifest-derived plugin ID as an audience", func(t *testing.T) {
+		call := stubManage(t, nil)
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(EnvVarGrafanaAuthenticationJWKS, testJWKS(t, jose.JSONWebKey{Key: &key.PublicKey, KeyID: "test", Algorithm: string(jose.ES256), Use: "sig"}))
+
+		if err := Run(newFakeProvider("my-app")); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		admission := serveAdmission(t, call.opts.ExtraPlugins)
+
+		for _, tt := range []struct {
+			audience string
+			want     codes.Code
+		}{
+			// The API group is accepted for requests to that group.
+			{audience: "my-app.grafana.app", want: codes.OK},
+			// The plugin ID covers every API group the plugin serves.
+			{audience: "my-app", want: codes.OK},
+			{audience: "other-app", want: codes.Unauthenticated},
+		} {
+			ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", signTestToken(t, key, "test", tt.audience)))
+			req := pluginv3.AdmissionReviewRequest_builder{
+				Kind:        pluginv3.GroupVersionKind_builder{Group: new("my-app.grafana.app")}.Build(),
+				ObjectBytes: []byte(`{"metadata":{"namespace":"stacks-1"}}`),
+			}.Build()
+			_, err := admission.AdmissionReview(ctx, req)
+			if got := status.Code(err); got != tt.want {
+				t.Errorf("audience %q: expected %v, got %v (%v)", tt.audience, tt.want, got, err)
+			}
+		}
+	})
+
+	t.Run("rejects an invalid signing keys URL even when skipping authentication", func(t *testing.T) {
+		stubManage(t, nil)
+		t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, "http://auth.example.com/jwks")
+
+		err := Run(newFakeProvider("my-app"), WithInsecureSkipAuthentication())
+		if err == nil || !strings.Contains(err.Error(), "https is required") {
+			t.Fatalf("expected an https error, got %v", err)
+		}
+	})
+
 	t.Run("errors", func(t *testing.T) {
 		newAppErr := errors.New("new app failed")
 		manageErr := errors.New("manage failed")
@@ -259,7 +330,7 @@ func TestRun(t *testing.T) {
 				name:     "no authenticator",
 				provider: newFakeProvider("my-app"),
 				noAuth:   true,
-				wantMsg:  "an authenticator is required: use WithAuthenticator, or WithInsecureSkipAuthentication for local development",
+				wantMsg:  "an authenticator is required: set GRAFANA_AUTHENTICATION_JWKS_URL or GRAFANA_AUTHENTICATION_JWKS, or use WithAuthenticator, or WithInsecureSkipAuthentication for local development",
 			},
 			{
 				name:      "Manage fails",
@@ -288,4 +359,26 @@ func TestRun(t *testing.T) {
 			})
 		}
 	})
+}
+
+// serveAdmission serves the v3 plugins over an in-memory gRPC connection and
+// returns an admission client for them.
+func serveAdmission(t *testing.T, plugins goplugin.PluginSet) pluginv3.AdmissionServiceClient {
+	t.Helper()
+	listener := bufconn.Listen(1024 * 1024)
+	server := grpc.NewServer()
+	for name, p := range plugins {
+		if err := p.(goplugin.GRPCPlugin).GRPCServer(nil, server); err != nil {
+			t.Fatalf("register %s: %v", name, err)
+		}
+	}
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(func() { server.Stop(); _ = listener.Close() })
+	conn, err := grpc.NewClient("passthrough:///bufnet", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return pluginv3.NewAdmissionServiceClient(conn)
 }

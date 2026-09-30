@@ -3,10 +3,13 @@ package grpcplugin
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
 
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grafana/authlib/authn"
 	"github.com/grafana/authlib/types"
 	"google.golang.org/grpc"
@@ -31,7 +34,7 @@ func authenticate(ctx context.Context, authenticator authn.Authenticator) (conte
 	}
 	info, err := authenticator.Authenticate(ctx, authn.NewGRPCTokenProvider(md))
 	if err != nil {
-		if authn.IsUnauthenticatedErr(err) {
+		if isInvalidTokenErr(err) {
 			return nil, status.Error(codes.Unauthenticated, "invalid access token")
 		}
 		return nil, status.Error(codes.Internal, "authentication failed")
@@ -45,17 +48,55 @@ func authenticate(ctx context.Context, authenticator authn.Authenticator) (conte
 	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: tokens[0]}), nil
 }
 
+// invalidTokenErrs are errors about the token itself that authlib passes on
+// from go-jose without marking them as unauthenticated.
+var invalidTokenErrs = []error{
+	jose.ErrCryptoFailure, // Signature mismatch, including a key of the wrong type.
+	jwt.ErrNotValidYet,
+	jwt.ErrIssuedInTheFuture,
+	jwt.ErrExpired,
+	jwt.ErrInvalidAudience,
+	jwt.ErrInvalidIssuer,
+	jwt.ErrInvalidSubject,
+	jwt.ErrInvalidID,
+	jwt.ErrInvalidClaims,
+	jwt.ErrInvalidContentType,
+	jwt.ErrUnmarshalAudience,
+	jwt.ErrUnmarshalNumericDate,
+}
+
+// isInvalidTokenErr reports whether err is the caller's fault, rather than a
+// failure of the plugin such as fetching signing keys.
+func isInvalidTokenErr(err error) bool {
+	if authn.IsUnauthenticatedErr(err) {
+		return true
+	}
+	for _, target := range invalidTokenErrs {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+	return false
+}
+
+// serverAuth configures how the service wrappers authenticate requests.
+type serverAuth struct {
+	authenticator authn.Authenticator
+	// pluginID, if set, is an audience covering every API group the plugin serves.
+	pluginID string
+}
+
 type authenticatedAdmissionServer struct {
 	pluginv3.AdmissionServiceServer
-	authenticator authn.Authenticator
+	auth serverAuth
 }
 
 func (s *authenticatedAdmissionServer) AdmissionReview(ctx context.Context, req *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
-	ctx, err := authenticate(ctx, s.authenticator)
+	ctx, err := authenticate(ctx, s.auth.authenticator)
 	if err != nil {
 		return nil, err
 	}
-	if err := checkAudience(ctx, req.GetKind().GetGroup()); err != nil {
+	if err := s.auth.checkAudience(ctx, req.GetKind().GetGroup()); err != nil {
 		return nil, err
 	}
 	if err := checkObjectNamespaces(ctx, req.GetObjectBytes(), req.GetOldObjectBytes()); err != nil {
@@ -66,11 +107,11 @@ func (s *authenticatedAdmissionServer) AdmissionReview(ctx context.Context, req 
 
 type authenticatedConversionServer struct {
 	pluginv3.ConversionServiceServer
-	authenticator authn.Authenticator
+	auth serverAuth
 }
 
 func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
-	ctx, err := authenticate(ctx, s.authenticator)
+	ctx, err := authenticate(ctx, s.auth.authenticator)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +119,7 @@ func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req 
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-	if err := checkAudience(ctx, group); err != nil {
+	if err := s.auth.checkAudience(ctx, group); err != nil {
 		return nil, err
 	}
 	raws := make([][]byte, 0, len(req.GetObjects()))
@@ -93,15 +134,15 @@ func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req 
 
 type authenticatedRouteServer struct {
 	pluginv3.RouteServiceServer
-	authenticator authn.Authenticator
+	auth serverAuth
 }
 
 func (s *authenticatedRouteServer) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
-	ctx, err := authenticate(stream.Context(), s.authenticator)
+	ctx, err := authenticate(stream.Context(), s.auth.authenticator)
 	if err != nil {
 		return err
 	}
-	if err := checkAudience(ctx, req.GetGroup()); err != nil {
+	if err := s.auth.checkAudience(ctx, req.GetGroup()); err != nil {
 		return err
 	}
 	if err := checkNamespace(ctx, req.GetNamespace()); err != nil {
@@ -143,13 +184,15 @@ func (a *authenticatedAuthInfo) LogValue() slog.Value {
 }
 
 // The verifier checks the service's configured audiences. Also bind the token
-// to this particular request, as a plugin may serve more than one API group.
-func checkAudience(ctx context.Context, group string) error {
+// to this particular request, as a plugin may serve more than one API group:
+// the token must name the request's group, or the plugin, which covers all of them.
+func (a serverAuth) checkAudience(ctx context.Context, group string) error {
 	if group == "" {
 		return status.Error(codes.InvalidArgument, "API group is required")
 	}
 	info, _ := types.AuthInfoFrom(ctx)
-	if !slices.Contains(info.GetAudience(), group) {
+	audience := info.GetAudience()
+	if !slices.Contains(audience, group) && (a.pluginID == "" || !slices.Contains(audience, a.pluginID)) {
 		return status.Error(codes.PermissionDenied, "access token does not cover the requested API group")
 	}
 	return nil

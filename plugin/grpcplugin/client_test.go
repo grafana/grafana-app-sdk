@@ -19,9 +19,11 @@ func TestNewClientV3(t *testing.T) {
 	client, err := NewClientV3(protocol, ClientV3Options{})
 
 	require.NoError(t, err)
-	require.NotNil(t, client.admission)
-	require.NotNil(t, client.conversion)
-	require.NotNil(t, client.route)
+	impl, ok := client.(*clientV3)
+	require.True(t, ok)
+	require.NotNil(t, impl.admission)
+	require.NotNil(t, impl.conversion)
+	require.NotNil(t, impl.route)
 }
 
 func TestNewClientV3ReturnsDispenseError(t *testing.T) {

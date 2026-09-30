@@ -30,6 +30,11 @@ type ServeOpts struct {
 	// If nil, every request is rejected unless InsecureSkipAuthentication is set.
 	Authenticator authn.Authenticator
 
+	// PluginID, when set, is accepted as an access token audience covering every
+	// API group the plugin serves. Otherwise a token's audiences must include
+	// the request's API group. Namespace checks apply either way.
+	PluginID string
+
 	// InsecureSkipAuthentication serves requests without authenticating them
 	// when Authenticator is nil. Handlers then get no caller identity, so their
 	// outbound requests act as the plugin itself. Use it only for local development.
@@ -70,9 +75,10 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 
 	// A nil Authenticator rejects requests unless authentication is explicitly skipped.
 	if opts.Authenticator != nil || !opts.InsecureSkipAuthentication {
-		admissionServer = &authenticatedAdmissionServer{admissionServer, opts.Authenticator}
-		conversionServer = &authenticatedConversionServer{conversionServer, opts.Authenticator}
-		routeServer = &authenticatedRouteServer{routeServer, opts.Authenticator}
+		auth := serverAuth{authenticator: opts.Authenticator, pluginID: opts.PluginID}
+		admissionServer = &authenticatedAdmissionServer{admissionServer, auth}
+		conversionServer = &authenticatedConversionServer{conversionServer, auth}
+		routeServer = &authenticatedRouteServer{routeServer, auth}
 	}
 
 	pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: admissionServer}

@@ -105,10 +105,17 @@ func TestDelegationOverGRPC(t *testing.T) {
 	}
 
 	t.Run("invalid exchanged credentials never reach handlers", func(t *testing.T) {
+		otherKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		notYetValid := map[string]any{"namespace": "stacks-1", "nbf": time.Now().Add(time.Hour).Unix()}
+		issuedInFuture := map[string]any{"namespace": "stacks-1", "iat": time.Now().Add(time.Hour).Unix()}
 		for _, method := range []string{pluginKeyAdmission, pluginKeyConversion, pluginKeyRouter} {
 			for _, tt := range []struct{ name, token string }{
 				{"wrong audience", signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:grafana", "other.app", authn.AccessTokenClaims{Namespace: "stacks-1"})},
 				{"malformed", "not-a-token"},
+				{"wrong signing key", signDelegationToken(t, otherKey, authn.TokenTypeAccess, "access-policy:grafana", delegationGroup, authn.AccessTokenClaims{Namespace: "stacks-1"})},
+				{"not yet valid", signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:grafana", delegationGroup, notYetValid)},
+				{"issued in the future", signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:grafana", delegationGroup, issuedInFuture)},
 			} {
 				t.Run(method+"/"+tt.name, func(t *testing.T) {
 					received := make(chan struct{}, 1)
@@ -148,7 +155,7 @@ func TestDelegationFailsBeforeRPC(t *testing.T) {
 			t.Run(method+"/"+tt.name, func(t *testing.T) {
 				exchanged := false
 				// Nil RPC clients panic if failure accidentally falls through to an RPC.
-				client := &ClientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+				client := &clientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 					exchanged = true
 					require.Equal(t, "access", req.SubjectToken, "access token takes precedence over ID token")
 					return tt.response, tt.err
@@ -176,7 +183,7 @@ func TestConversionAudienceValidation(t *testing.T) {
 		{name: "empty batch"}, {name: "missing group", groups: []string{""}}, {name: "mixed groups", groups: []string{delegationGroup, "other.app"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &ClientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+			client := &clientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 				t.Fatal("invalid conversion must not exchange tokens")
 				return nil, nil
 			})}
@@ -192,12 +199,12 @@ func TestConversionAudienceValidation(t *testing.T) {
 
 func TestDelegationDisabledPreservesContext(t *testing.T) {
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", "existing"))
-	got, err := (&ClientV3{}).addMetadataToContext(ctx, "", "")
+	got, err := (&clientV3{}).addMetadataToContext(ctx, "", "")
 	require.NoError(t, err)
 	require.Same(t, ctx, got)
 }
 
-func callDelegationMethod(ctx context.Context, client *ClientV3, method string) error {
+func callDelegationMethod(ctx context.Context, client ClientV3, method string) error {
 	switch method {
 	case pluginKeyAdmission:
 		_, err := client.AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), ObjectBytes: delegationObject}.Build())
@@ -270,7 +277,7 @@ func signDelegationToken(t *testing.T, key *ecdsa.PrivateKey, typ, subject, audi
 }
 
 func TestDelegationRequiresResourceGroup(t *testing.T) {
-	client := &ClientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+	client := &clientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 		t.Fatal("missing audience must not exchange tokens")
 		return nil, nil
 	})}

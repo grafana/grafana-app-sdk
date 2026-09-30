@@ -15,12 +15,12 @@ import (
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
-// V3Client groups the plugin protocol v3 RPCs. Implementations handle caller
+// ClientV3 groups the plugin protocol v3 RPCs. Implementations handle caller
 // authentication, so the methods take no gRPC call options.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-type V3Client interface {
+type ClientV3 interface {
 	AdmissionReview(ctx context.Context, in *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error)
 	ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error)
 	CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error)
@@ -55,7 +55,7 @@ type ClientV3Options struct {
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-type ClientV3 struct {
+type clientV3 struct {
 	admission  pluginv3.AdmissionServiceClient
 	conversion pluginv3.ConversionServiceClient
 	route      pluginv3.RouteServiceClient
@@ -65,7 +65,7 @@ type ClientV3 struct {
 	isServiceIdentity func(ctx context.Context) bool
 }
 
-var _ V3Client = (*ClientV3)(nil)
+var _ ClientV3 = (*clientV3)(nil)
 
 // NewClientV3 dispenses clients for all grafana.plugin.v3 services from a
 // negotiated go-plugin client connection. See ClientV3Options for how requests
@@ -73,7 +73,7 @@ var _ V3Client = (*ClientV3)(nil)
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-func NewClientV3(rpcClient plugin.ClientProtocol, opts ClientV3Options) (*ClientV3, error) {
+func NewClientV3(rpcClient plugin.ClientProtocol, opts ClientV3Options) (ClientV3, error) {
 	if opts.TokenExchanger != nil {
 		if len(opts.Groups) == 0 {
 			return nil, errors.New("plugin token exchange: the plugin's API groups are required")
@@ -98,7 +98,7 @@ func NewClientV3(rpcClient plugin.ClientProtocol, opts ClientV3Options) (*Client
 		return nil, err
 	}
 
-	return &ClientV3{
+	return &clientV3{
 		admission:         admission,
 		conversion:        conversion,
 		route:             router,
@@ -124,7 +124,7 @@ func dispense[T any](rpcClient plugin.ClientProtocol, key string) (T, error) {
 
 // addMetadataToContext attaches an access token for group. The token is scoped
 // to namespace when the request has a single one, and otherwise to the caller's.
-func (c *ClientV3) addMetadataToContext(ctx context.Context, group, namespace string) (context.Context, error) {
+func (c *clientV3) addMetadataToContext(ctx context.Context, group, namespace string) (context.Context, error) {
 	if c.tokenExchange == nil {
 		return ctx, nil
 	}
@@ -180,8 +180,8 @@ func (c *ClientV3) addMetadataToContext(ctx context.Context, group, namespace st
 	return metadata.NewOutgoingContext(ctx, md), nil
 }
 
-// AdmissionReview implements [V3Client].
-func (c *ClientV3) AdmissionReview(ctx context.Context, in *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
+// AdmissionReview implements [ClientV3].
+func (c *clientV3) AdmissionReview(ctx context.Context, in *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
 	namespace := ""
 	if c.tokenExchange != nil {
 		var err error
@@ -197,8 +197,8 @@ func (c *ClientV3) AdmissionReview(ctx context.Context, in *pluginv3.AdmissionRe
 	return c.admission.AdmissionReview(ctx, in)
 }
 
-// CallRoute implements [V3Client].
-func (c *ClientV3) CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
+// CallRoute implements [ClientV3].
+func (c *clientV3) CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
 	ctx, err := c.addMetadataToContext(ctx, in.GetGroup(), in.GetNamespace())
 	if err != nil {
 		return nil, err
@@ -206,8 +206,8 @@ func (c *ClientV3) CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest)
 	return c.route.CallRoute(ctx, in)
 }
 
-// ConvertObjects implements [V3Client].
-func (c *ClientV3) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
+// ConvertObjects implements [ClientV3].
+func (c *clientV3) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
 	group, namespace := "", ""
 	if c.tokenExchange != nil {
 		var err error
