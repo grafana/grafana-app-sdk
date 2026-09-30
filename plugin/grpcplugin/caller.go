@@ -12,20 +12,7 @@ import (
 
 // idTokenMetadataKey is the gRPC metadata key that carries the caller's Grafana
 // ID token from Grafana to the plugin.
-const idTokenMetadataKey = "x-grafana-id" //nolint:gosec // A metadata key, not a credential.
-
-// outgoingCallerContext sends the caller's ID token on ctx (see k8s.ContextWithIDToken)
-// as gRPC metadata.
-func outgoingCallerContext(ctx context.Context) context.Context {
-	token, ok := k8s.IDTokenFromContext(ctx)
-	if !ok {
-		return ctx
-	}
-	md, _ := metadata.FromOutgoingContext(ctx)
-	md = md.Copy()
-	md.Set(idTokenMetadataKey, token)
-	return metadata.NewOutgoingContext(ctx, md)
-}
+const idTokenMetadataKey = "x-grafana-auth-info" //nolint:gosec // A metadata key, not a credential.
 
 // incomingCallerContext puts the caller's ID token sent as gRPC metadata on
 // ctx, so token exchange clients, such as those built with
@@ -36,33 +23,6 @@ func incomingCallerContext(ctx context.Context) context.Context {
 		return k8s.ContextWithIDToken(ctx, tokens[0])
 	}
 	return ctx
-}
-
-// The types below pass the caller's ID token between Grafana and the plugin
-// for every v3 RPC, so the services themselves don't need to.
-
-type callerAdmissionClient struct {
-	pluginv3.AdmissionServiceClient
-}
-
-func (c callerAdmissionClient) AdmissionReview(ctx context.Context, in *pluginv3.AdmissionReviewRequest, opts ...grpc.CallOption) (*pluginv3.AdmissionReviewResponse, error) {
-	return c.AdmissionServiceClient.AdmissionReview(outgoingCallerContext(ctx), in, opts...)
-}
-
-type callerConversionClient struct {
-	pluginv3.ConversionServiceClient
-}
-
-func (c callerConversionClient) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest, opts ...grpc.CallOption) (*pluginv3.ConvertObjectsResponse, error) {
-	return c.ConversionServiceClient.ConvertObjects(outgoingCallerContext(ctx), in, opts...)
-}
-
-type callerRouteClient struct {
-	pluginv3.RouteServiceClient
-}
-
-func (c callerRouteClient) CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
-	return c.RouteServiceClient.CallRoute(outgoingCallerContext(ctx), in, opts...)
 }
 
 type callerAdmissionServer struct {
