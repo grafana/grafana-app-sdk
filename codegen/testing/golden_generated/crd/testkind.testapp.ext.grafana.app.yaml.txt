@@ -280,6 +280,9 @@ spec:
           spec:
             properties:
               union:
+                description: |-
+                  Supported union variants.
+                  The kind field selects the variant's spec.
                 oneOf:
                 - required:
                   - kind

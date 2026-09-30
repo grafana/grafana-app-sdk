@@ -6,6 +6,16 @@ import (
 	json "encoding/json"
 )
 
+// Supported union variants.
+// The kind field selects the variant's spec.
+// +k8s:openapi-gen=true
+type TestKindUnion = TestKindUnionVariantAOrUnionVariantB
+
+// NewTestKindUnion creates a new TestKindUnion object.
+func NewTestKindUnion() *TestKindUnion {
+	return NewTestKindUnionVariantAOrUnionVariantB()
+}
+
 // +k8s:openapi-gen=true
 type TestKindUnionVariantA struct {
 	Kind string                      `json:"kind"`
@@ -46,13 +56,13 @@ func (TestKindUnionVariantB) OpenAPIModelName() string {
 
 // +k8s:openapi-gen=true
 type TestKindSpec struct {
-	Union TestKindUnionVariantAOrUnionVariantB `json:"union"`
+	Union TestKindUnion `json:"union"`
 }
 
 // NewTestKindSpec creates a new TestKindSpec object.
 func NewTestKindSpec() *TestKindSpec {
 	return &TestKindSpec{
-		Union: *NewTestKindUnionVariantAOrUnionVariantB(),
+		Union: *NewTestKindUnion(),
 	}
 }
 
@@ -91,6 +101,8 @@ func (TestKindV4UnionVariantBSpec) OpenAPIModelName() string {
 	return "codegen-tests.pkg.generated.testapp.v4.TestKindV4UnionVariantBSpec"
 }
 
+// Supported union variants.
+// The kind field selects the variant's spec.
 // +k8s:openapi-gen=true
 type TestKindUnionVariantAOrUnionVariantB struct {
 	UnionVariantA *TestKindUnionVariantA `json:"UnionVariantA,omitempty"`

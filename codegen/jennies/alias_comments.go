@@ -83,6 +83,11 @@ groupsLoop:
 	return out.Bytes(), nil
 }
 
+// groupAliasDeclarations groups standalone type declarations by their final local,
+// non-alias target, following chains of aliases to identifiers. Each group includes
+// the target and its aliases in source order, keyed by the target's name; types
+// without aliases form singleton groups. Parenthesized declarations and aliases
+// with cyclic, unresolved, or non-identifier targets are excluded.
 func groupAliasDeclarations(file *ast.File) map[string][]*ast.GenDecl {
 	type declaration struct {
 		gen  *ast.GenDecl

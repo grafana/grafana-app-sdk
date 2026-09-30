@@ -55,8 +55,8 @@ require (
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d // indirect
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 // indirect
 	github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 // indirect
-	github.com/grafana/grafana-app-sdk v0.60.4 // indirect
-	github.com/grafana/grafana-app-sdk/logging v0.60.4 // indirect
+	github.com/grafana/grafana-app-sdk v0.60.5 // indirect
+	github.com/grafana/grafana-app-sdk/logging v0.60.5 // indirect
 	github.com/grafana/otel-profiling-go v0.6.0 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.12 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
