@@ -25,6 +25,7 @@ import (
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
+	"github.com/grafana/grafana-plugin-sdk-go/build/buildinfo"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
@@ -309,6 +310,20 @@ func TestRun(t *testing.T) {
 
 		if err := Run(newFakeProvider("my-app")); err == nil {
 			t.Fatal("expected an error without an authenticator")
+		}
+	})
+
+	t.Run("defaults the plugin ID to the plugin.json ID from the build", func(t *testing.T) {
+		call := stubManage(t, nil)
+		orig := buildinfo.GetBuildInfo
+		buildinfo.GetBuildInfo = func() (buildinfo.Info, error) { return buildinfo.Info{PluginID: "my-plugin-json-id"}, nil }
+		t.Cleanup(func() { buildinfo.GetBuildInfo = orig })
+
+		if err := Run(newFakeProvider("my-app"), WithInsecureSkipAuthentication()); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		if call.pluginID != "my-plugin-json-id" {
+			t.Errorf("expected pluginID %q, got %q", "my-plugin-json-id", call.pluginID)
 		}
 	})
 

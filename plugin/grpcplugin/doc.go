@@ -14,7 +14,9 @@
 // ServeOpts.Authenticator must verify access-token signatures and the plugin's
 // allowed API-group audiences (for example, with authn.NewAccessTokenAuthenticator).
 // Without one, servers reject every request unless ServeOpts.InsecureSkipAuthentication
-// is set. Servers require exactly one access token and reject a separate ID token
+// is set, for local development only: tokens are then parsed without verifying
+// them, so handlers get whatever identity a token claims, and the audience and
+// namespace checks below are skipped. Servers require exactly one access token and reject a separate ID token
 // to prevent conflicting identities. They also check the request's API group
 // against the verified audiences, and the token namespace against the route
 // namespace and against metadata.namespace of every admission and conversion

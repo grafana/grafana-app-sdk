@@ -33,8 +33,8 @@ func main() {
 		RouteServer:      httpadapter.NewServer(echo),
 		AdmissionServer:  mt,
 		ConversionServer: mt,
-		// This example trusts every caller, so handlers get no caller identity.
-		// Production plugins must set Authenticator to verify access tokens.
+		// This example does not verify callers: handlers get whatever identity a
+		// request's token claims. Production plugins must set Authenticator.
 		InsecureSkipAuthentication: true,
 	}
 

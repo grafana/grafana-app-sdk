@@ -13,6 +13,7 @@ import (
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	backendlog "github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/build/buildinfo"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -84,10 +85,15 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return errors.New("embedded manifest required")
 	}
 
-	// If the pluginID was not given, we can assume it from the manifest.
-	// The authenticator accepts it as a token audience.
+	// If the pluginID was not given, use the plugin.json ID that the plugin SDK
+	// build compiles in, or else the manifest's app name. The authenticator
+	// accepts it as a token audience, and Grafana sets that to the plugin.json ID.
 	if cfg.pluginID == "" {
-		cfg.pluginID = manifestData.AppName
+		if info, err := buildinfo.GetBuildInfo(); err == nil && info.PluginID != "" {
+			cfg.pluginID = info.PluginID
+		} else {
+			cfg.pluginID = manifestData.AppName
+		}
 	}
 
 	if os.Getenv(EnvVarInsecureSkipAuthentication) == "true" {
@@ -104,7 +110,10 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		case !cfg.insecureSkipAuthentication:
 			return errors.New("an authenticator is required: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS + ", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set " + EnvVarInsecureSkipAuthentication + "=true")
 		default:
-			// Authentication is explicitly skipped.
+			// Authentication is explicitly skipped. Anything that can reach the
+			// plugin can then claim any identity, so make that visible.
+			logging.DefaultLogger.Warn("plugin protocol v3 requests are not verified: callers can claim any identity; use this only for local development",
+				"pluginId", cfg.pluginID)
 		}
 	}
 
