@@ -3,14 +3,17 @@ package plugin
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 
+	"github.com/grafana/authlib/authn"
 	"k8s.io/client-go/rest"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	backendapp "github.com/grafana/grafana-plugin-sdk-go/backend/app"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
 	backendlog "github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/grafana/grafana-plugin-sdk-go/build/buildinfo"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/logging"
@@ -20,7 +23,14 @@ import (
 // Run is a convinience entry point for plugin backends to use, when they have
 // implement App SDK functionality. It wraps plugin Manage().
 //
-// In the simplest case, no options are needed:
+// Plugin protocol v3 requests are authenticated with the authenticator from
+// WithAuthenticator or, without one, from GRAFANA_JWKS_URL or
+// GRAFANA_JWKS. Tokens must have the plugin ID or the manifest's
+// API group as an audience. Run fails if
+// neither is available, unless authentication is skipped for local development
+// with WithInsecureSkipAuthentication or GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true,
+// which Grafana sets from insecure_skip_authentication = true in the plugin's
+// [plugin.<id>] settings. When the host sets any of these, no options are needed:
 //
 //	func main() {
 //		if err := plugin.Run(myapp.Provider()); err != nil {
@@ -75,6 +85,38 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return errors.New("embedded manifest required")
 	}
 
+	// If the pluginID was not given, use the plugin.json ID that the plugin SDK
+	// build compiles in, or else the manifest's app name. The authenticator
+	// accepts it as a token audience, and Grafana sets that to the plugin.json ID.
+	if cfg.pluginID == "" {
+		if info, err := buildinfo.GetBuildInfo(); err == nil && info.PluginID != "" {
+			cfg.pluginID = info.PluginID
+		} else {
+			cfg.pluginID = manifestData.AppName
+		}
+	}
+
+	if os.Getenv(EnvVarInsecureSkipAuthentication) == "true" {
+		cfg.insecureSkipAuthentication = true
+	}
+
+	if cfg.authenticator == nil {
+		authenticator, err := buildAuthenticator(cfg.pluginID, manifestData)
+		switch {
+		case err == nil:
+			cfg.authenticator = authenticator
+		case !errors.Is(err, ErrNoSigningKeys):
+			return err
+		case !cfg.insecureSkipAuthentication:
+			return errors.New("an authenticator is required: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS + ", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set " + EnvVarInsecureSkipAuthentication + "=true")
+		default:
+			// Authentication is explicitly skipped. Anything that can reach the
+			// plugin can then claim any identity, so make that visible.
+			logging.DefaultLogger.Warn("plugin protocol v3 requests are not verified: callers can claim any identity; use this only for local development",
+				"pluginId", cfg.pluginID)
+		}
+	}
+
 	if cfg.kubeConfig == nil {
 		kubeConfig, err := BuildKubeConfig(*manifestData)
 		if err != nil {
@@ -99,11 +141,6 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		return err
 	}
 
-	// If the pluginID was not given, we can assume it from the manifest.
-	if cfg.pluginID == "" {
-		cfg.pluginID = manifestData.AppName
-	}
-
 	// If a standard plugin backend app was not given, use our stub one.
 	if cfg.appFunc == nil {
 		cfg.appFunc = newStubAppInstance
@@ -113,7 +150,11 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	if len(cfg.manageOpts.ExtraPlugins) > 0 {
 		return errors.New("ExtraPlugins cannot be overridden")
 	}
-	cfg.manageOpts.ExtraPlugins = appadapter.New(a)
+	serveOpts := appadapter.ServeOpts(a)
+	serveOpts.Authenticator = cfg.authenticator
+	serveOpts.PluginID = cfg.pluginID
+	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
+	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
 
 	// Start any background operations that the App requires.
 	runner := a.Runner()
@@ -166,13 +207,36 @@ func WithManageOpts(manageOpts backendapp.ManageOpts) RunOption {
 	}
 }
 
+// WithAuthenticator sets the authenticator that verifies the access token on
+// each plugin protocol v3 request (see grpcplugin.ServeOpts.Authenticator),
+// instead of building one from GRAFANA_JWKS_URL or GRAFANA_JWKS.
+func WithAuthenticator(authenticator authn.Authenticator) RunOption {
+	return func(cfg *runConfig) {
+		cfg.authenticator = authenticator
+	}
+}
+
+// WithInsecureSkipAuthentication serves plugin protocol v3 requests without
+// verifying them when no authenticator is set or configured by
+// GRAFANA_JWKS_URL or GRAFANA_JWKS. A request's access token is parsed without
+// checking its signature, so handlers get the identity it claims; requests
+// without one have no identity, and their outbound requests act as the plugin
+// (see grpcplugin.ServeOpts.InsecureSkipAuthentication). Use it only for local development.
+func WithInsecureSkipAuthentication() RunOption {
+	return func(cfg *runConfig) {
+		cfg.insecureSkipAuthentication = true
+	}
+}
+
 type RunOption func(cfg *runConfig)
 
 type runConfig struct {
-	kubeConfig *rest.Config
-	pluginID   string
-	appFunc    backendapp.InstanceFactoryFunc
-	manageOpts backendapp.ManageOpts
+	kubeConfig                 *rest.Config
+	pluginID                   string
+	appFunc                    backendapp.InstanceFactoryFunc
+	manageOpts                 backendapp.ManageOpts
+	authenticator              authn.Authenticator
+	insecureSkipAuthentication bool
 }
 
 type stubInstance struct{}

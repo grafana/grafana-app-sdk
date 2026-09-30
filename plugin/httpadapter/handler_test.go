@@ -43,6 +43,13 @@ func TestHandlerFunc(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/route?query=1", strings.NewReader("request body")).WithContext(ctx)
 	req.Header.Add("X-Request", "one")
 	req.Header.Add("X-Request", "two")
+	// Credentials must not reach the plugin, whatever the header key's case.
+	req.Header.Set("Authorization", "Bearer user-token")
+	req.Header.Set("Cookie", "grafana_session=secret")
+	req.Header.Set("X-Grafana-Id", "user-id-token")
+	req.Header["x-access-token"] = []string{"access-token"}
+	req.Header["proxy-authorization"] = []string{"Basic secret"}
+	req.Header.Set("X-Id-Token", "user-id-token")
 	recorder := httptest.NewRecorder()
 
 	handler(recorder, req)
@@ -55,6 +62,7 @@ func TestHandlerFunc(t *testing.T) {
 	require.Equal(t, "widgets/widget-1/render", grpcClient.req.GetPath())
 	require.Equal(t, "/route?query=1", grpcClient.req.GetUrl())
 	require.Equal(t, []string{"one", "two"}, grpcClient.req.GetHeaders()["X-Request"].GetValues())
+	require.Len(t, grpcClient.req.GetHeaders(), 1, "only non-credential headers are forwarded: %v", grpcClient.req.GetHeaders())
 	require.Equal(t, "request body", string(grpcClient.req.GetBody()))
 	require.Same(t, parent, grpcClient.req.GetParent())
 
@@ -226,7 +234,7 @@ type testRouteServiceClient struct {
 	err    error
 }
 
-func (c *testRouteServiceClient) CallRoute(ctx context.Context, req *pluginv3.CallRouteRequest, _ ...grpc.CallOption) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
+func (c *testRouteServiceClient) CallRoute(ctx context.Context, req *pluginv3.CallRouteRequest) (grpc.ServerStreamingClient[pluginv3.CallRouteResponse], error) {
 	c.ctx = ctx
 	c.req = req
 	return c.stream, c.err

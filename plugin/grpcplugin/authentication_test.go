@@ -1,0 +1,162 @@
+package grpcplugin
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/grafana/authlib/authn"
+	"github.com/grafana/authlib/types"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
+	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
+)
+
+func TestServerAuthentication(t *testing.T) {
+	info := authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{Claims: jwt.Claims{Audience: jwt.Audience{delegationGroup}}, Rest: authn.AccessTokenClaims{Namespace: "stacks-1"}})
+	handlerErr := status.Error(codes.FailedPrecondition, "handler error")
+	for _, service := range []string{pluginKeyAdmission, pluginKeyConversion, pluginKeyRouter} {
+		t.Run(service, func(t *testing.T) {
+			for _, tt := range []struct {
+				name       string
+				token      string
+				authErr    error
+				handlerErr error
+				disabled   bool
+				fallback   bool
+				// noAuthenticator configures neither an authenticator nor InsecureSkipAuthentication.
+				noAuthenticator bool
+				want            codes.Code
+			}{
+				{name: "authenticated", token: "valid"},
+				{name: "missing token", want: codes.Unauthenticated},
+				{name: "invalid token", token: "invalid", authErr: authn.ErrInvalidAudience, want: codes.Unauthenticated},
+				{name: "authenticator failure", token: "valid", authErr: errors.New("unavailable"), want: codes.Internal},
+				{name: "signing keys unavailable", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", authn.ErrFetchingSigningKey), want: codes.Internal},
+				{name: "signature mismatch", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", jose.ErrCryptoFailure), want: codes.Unauthenticated},
+				{name: "not yet valid", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", jwt.ErrNotValidYet), want: codes.Unauthenticated},
+				{name: "issued in the future", token: "valid", authErr: fmt.Errorf("failed to verify access token: %w", jwt.ErrIssuedInTheFuture), want: codes.Unauthenticated},
+				{name: "handler error", token: "valid", handlerErr: handlerErr, want: codes.FailedPrecondition},
+				{name: "disabled", disabled: true},
+				{name: "no authenticator rejects requests", token: "valid", noAuthenticator: true, want: codes.FailedPrecondition},
+				{name: "fallback rejects unauthenticated", fallback: true, want: codes.Unauthenticated},
+				{name: "authenticated fallback", token: "valid", fallback: true, want: codes.Unimplemented},
+			} {
+				t.Run(tt.name, func(t *testing.T) {
+					ctx := context.Background()
+					if tt.token != "" {
+						ctx = metadata.NewIncomingContext(ctx, metadata.Pairs("x-access-token", tt.token))
+					}
+					called := false
+					server := &authenticationTestServer{check: func(got context.Context) error {
+						called = true
+						gotInfo, ok := types.AuthInfoFrom(got)
+						require.Equal(t, !tt.disabled, ok)
+						if !tt.disabled {
+							require.Same(t, info, gotInfo.(*authenticatedAuthInfo).AuthInfo)
+							require.Equal(t, tt.token, gotInfo.GetAccessToken())
+						}
+						return tt.handlerErr
+					}}
+					opts := ServeOpts{AdmissionServer: server, ConversionServer: server, RouteServer: server}
+					opts.InsecureSkipAuthentication = tt.disabled
+					if !tt.disabled && !tt.noAuthenticator {
+						opts.Authenticator = authenticatorFunc(func(ctx context.Context, provider authn.TokenProvider) (types.AuthInfo, error) {
+							token, ok := provider.AccessToken(ctx)
+							if !ok {
+								return nil, authn.ErrMissingRequiredToken
+							}
+							require.Equal(t, tt.token, token)
+							return info, tt.authErr
+						})
+					}
+					if tt.fallback {
+						switch service {
+						case pluginKeyAdmission:
+							opts.AdmissionServer = nil
+						case pluginKeyConversion:
+							opts.ConversionServer = nil
+						case pluginKeyRouter:
+							opts.RouteServer = nil
+						}
+					}
+					plugins := opts.PluginSet()
+					var err error
+					kind := &pluginv3.GroupVersionKind{}
+					kind.SetGroup(delegationGroup)
+					admissionReq := &pluginv3.AdmissionReviewRequest{}
+					admissionReq.SetKind(kind)
+					admissionReq.SetObjectBytes(delegationObject)
+					object := &pluginv3.ConvertObjectsRequest_Object{}
+					object.SetGvk(kind)
+					object.SetRaw(delegationObject)
+					conversionReq := &pluginv3.ConvertObjectsRequest{}
+					conversionReq.SetObjects([]*pluginv3.ConvertObjectsRequest_Object{object})
+					routeReq := &pluginv3.CallRouteRequest{}
+					routeReq.SetGroup(delegationGroup)
+					routeReq.SetNamespace("stacks-1")
+					switch service {
+					case pluginKeyAdmission:
+						_, err = plugins[service].(*admissionGRPCPlugin).server.AdmissionReview(ctx, admissionReq)
+					case pluginKeyConversion:
+						_, err = plugins[service].(*conversionGRPCPlugin).server.ConvertObjects(ctx, conversionReq)
+					case pluginKeyRouter:
+						stream := &authenticationTestStream{ctx: ctx}
+						err = plugins[service].(*routeGRPCPlugin).server.CallRoute(routeReq, stream)
+						require.Equal(t, called, stream.sent)
+					}
+					require.Equal(t, tt.want, status.Code(err))
+					require.Equal(t, !tt.fallback && !tt.noAuthenticator && (tt.disabled || (tt.token != "" && tt.authErr == nil)), called)
+				})
+			}
+		})
+	}
+}
+
+type authenticatorFunc func(context.Context, authn.TokenProvider) (types.AuthInfo, error)
+
+func (f authenticatorFunc) Authenticate(ctx context.Context, provider authn.TokenProvider) (types.AuthInfo, error) {
+	return f(ctx, provider)
+}
+
+type authenticationTestServer struct {
+	UnimplementedV3Server
+	check func(context.Context) error
+}
+
+func (s *authenticationTestServer) AdmissionReview(ctx context.Context, _ *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
+	return &pluginv3.AdmissionReviewResponse{}, s.check(ctx)
+}
+func (s *authenticationTestServer) ConvertObjects(ctx context.Context, _ *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
+	return &pluginv3.ConvertObjectsResponse{}, s.check(ctx)
+}
+func (s *authenticationTestServer) CallRoute(_ *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+	if err := stream.Send(&pluginv3.CallRouteResponse{}); err != nil {
+		return err
+	}
+	return s.check(stream.Context())
+}
+
+type authenticationTestStream struct {
+	grpc.ServerStreamingServer[pluginv3.CallRouteResponse]
+	ctx  context.Context
+	sent bool
+}
+
+func (s *authenticationTestStream) Context() context.Context               { return s.ctx }
+func (s *authenticationTestStream) Send(*pluginv3.CallRouteResponse) error { s.sent = true; return nil }
+
+func TestAuthenticateRejectsMissingIdentity(t *testing.T) {
+	ctx, _, err := serverAuth{authenticator: authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
+		return nil, nil
+	})}.authenticate(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid")))
+	require.Nil(t, ctx)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+}
