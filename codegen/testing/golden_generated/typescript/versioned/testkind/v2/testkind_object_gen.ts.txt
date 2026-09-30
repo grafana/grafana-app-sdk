@@ -55,4 +55,3 @@ export type InlineSecureValue = (
     | { name: string; create?: never; remove?: never; description?: never }
     | { remove: boolean; create?: never; name?: never; description?: never }
 );
-

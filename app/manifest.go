@@ -977,11 +977,16 @@ func (v *VersionSchema) AsKubeOpenAPI(gvk schema.GroupVersionKind, ref common.Re
 			kindSchemaKey = k
 			break
 		}
-		parts := strings.Split(k, ".")
-		if len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], gvk.Kind) {
-			kindSchema = oapi.Schemas[k]
-			kindSchemaKey = k
-			break
+	}
+	// Prefer the unqualified kind over shared definitions with the same suffix.
+	if kindSchema == nil {
+		for k := range oapi.Schemas {
+			parts := strings.Split(k, ".")
+			if len(parts) > 1 && strings.EqualFold(parts[len(parts)-1], gvk.Kind) {
+				kindSchema = oapi.Schemas[k]
+				kindSchemaKey = k
+				break
+			}
 		}
 	}
 	if kindSchema == nil {
@@ -1726,22 +1731,26 @@ func getRefName(ref string) string {
 // SecureValuesOpenAPISchema describes an optional map of inline secure values.
 // Only manifest-declared keys are allowed unless a "*" entry enables arbitrary keys.
 func SecureValuesOpenAPISchema(values []ManifestVersionKindSecureValue) spec.Schema {
-	return secureValuesOpenAPISchema(values, sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema)
+	return secureValuesOpenAPISchema(values, func() spec.Schema {
+		return sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
+	})
 }
 
 // SecureValuesOpenAPISchemaWithReference describes secure values using a shared value schema.
 // The caller must include the referenced definition in the OpenAPI document.
 func SecureValuesOpenAPISchemaWithReference(values []ManifestVersionKindSecureValue, ref spec.Ref) spec.Schema {
-	return secureValuesOpenAPISchema(values, spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}})
+	return secureValuesOpenAPISchema(values, func() spec.Schema {
+		return spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}}
+	})
 }
 
-func secureValuesOpenAPISchema(values []ManifestVersionKindSecureValue, s spec.Schema) spec.Schema {
+func secureValuesOpenAPISchema(values []ManifestVersionKindSecureValue, newValueSchema func() spec.Schema) spec.Schema {
 	additional := &spec.SchemaOrBool{Allows: false}
 	properties := make(map[string]spec.Schema, len(values))
 	for _, value := range values {
-		valueSchema := s
-		if value.Description != "" && s.Ref.String() != "" {
-			valueSchema = spec.Schema{SchemaProps: spec.SchemaProps{AllOf: []spec.Schema{s}}}
+		valueSchema := newValueSchema()
+		if value.Description != "" && valueSchema.Ref.String() != "" {
+			valueSchema = spec.Schema{SchemaProps: spec.SchemaProps{AllOf: []spec.Schema{valueSchema}}}
 		}
 		valueSchema.Description = value.Description
 		if value.Key == "*" {

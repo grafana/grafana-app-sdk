@@ -22,7 +22,7 @@ type TestKind struct {
 	// Spec is the spec of the TestKind
 	Spec TestKindSpec `json:"spec" yaml:"spec"`
 
-	// Secure holds references for TestKind
+	// Secure holds secret operations or references for TestKind.
 	Secure resource.InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
 
 	Status TestKindStatus `json:"status" yaml:"status"`

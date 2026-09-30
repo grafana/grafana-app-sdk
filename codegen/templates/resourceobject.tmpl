@@ -22,10 +22,10 @@ type {{.TypeName}} struct {
 	// Spec is the spec of the {{.TypeName}}
 	Spec	   {{.SpecTypeName}} `json:"spec" yaml:"spec"`
 
-{{ if .HasSecureValues }}	
-	// Secure holds references for {{.TypeName}}
+{{ if .HasSecureValues }}
+	// Secure holds secret operations or references for {{.TypeName}}.
 	Secure resource.InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
-{{ end }}	
+{{ end }}
 
 	{{ range .Subresources }}
 		{{ if ne .Comment "" }}
