@@ -50,7 +50,8 @@ func TestServerAuthentication(t *testing.T) {
 						gotInfo, ok := types.AuthInfoFrom(got)
 						require.Equal(t, !tt.disabled, ok)
 						if !tt.disabled {
-							require.Same(t, info, gotInfo)
+							require.Same(t, info, gotInfo.(*authenticatedAuthInfo).AuthInfo)
+							require.Equal(t, tt.token, gotInfo.GetAccessToken())
 						}
 						return tt.handlerErr
 					}}
@@ -127,3 +128,11 @@ type authenticationTestStream struct {
 
 func (s *authenticationTestStream) Context() context.Context               { return s.ctx }
 func (s *authenticationTestStream) Send(*pluginv3.CallRouteResponse) error { s.sent = true; return nil }
+
+func TestAuthenticateRejectsMissingIdentity(t *testing.T) {
+	ctx, err := authenticate(context.Background(), authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
+		return nil, nil
+	}))
+	require.Nil(t, ctx)
+	require.Equal(t, codes.Unauthenticated, status.Code(err))
+}

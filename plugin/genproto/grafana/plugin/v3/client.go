@@ -6,7 +6,7 @@ import (
 	grpc "google.golang.org/grpc"
 )
 
-// Client
+// Client groups the plugin protocol v3 RPCs. Implementations handle caller authentication.
 type Client interface {
 	AdmissionReview(ctx context.Context, in *AdmissionReviewRequest) (*AdmissionReviewResponse, error)
 	ConvertObjects(ctx context.Context, in *ConvertObjectsRequest) (*ConvertObjectsResponse, error)

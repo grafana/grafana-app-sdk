@@ -22,7 +22,14 @@ func authenticate(ctx context.Context, authenticator authn.Authenticator) (conte
 		}
 		return nil, status.Error(codes.Internal, err.Error())
 	}
-	return types.WithAuthInfo(ctx, info), nil
+	if info == nil {
+		return nil, status.Error(codes.Unauthenticated, "authenticator returned no identity")
+	}
+	// authlib's AuthInfo does not retain the raw access token. Keep the token
+	// only after successful authentication so downstream clients can exchange
+	// it without losing the caller's identity or delegation chain.
+	token, _ := authn.NewGRPCTokenProvider(md).AccessToken(ctx)
+	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: token}), nil
 }
 
 type authenticatedAdmissionServer struct {
@@ -71,4 +78,14 @@ type authenticatedRouteStream struct {
 
 func (s *authenticatedRouteStream) Context() context.Context {
 	return s.ctx
+}
+
+// authenticatedAuthInfo preserves the verified token for onward delegation.
+type authenticatedAuthInfo struct {
+	types.AuthInfo
+	accessToken string
+}
+
+func (a *authenticatedAuthInfo) GetAccessToken() string {
+	return a.accessToken
 }

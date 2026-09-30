@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	authnlib "github.com/grafana/authlib/authn"
+	"github.com/grafana/authlib/types"
 	"k8s.io/client-go/rest"
 )
 
@@ -26,19 +27,25 @@ type TokenExchangeCredentials struct {
 	// creating an internal authlib TokenExchangeClient from TokenExchangeURL/Token.
 	// The function receives the request context plus the audiences and namespace
 	// from the RemoteServiceTarget, and should return a valid signed access token.
-	// When the context carries a caller's ID token (see IDTokenFromContext), the
-	// token should be exchanged on behalf of that caller.
+	// When the context carries AuthInfo or a legacy caller ID token (see
+	// IDTokenFromContext), exchange on behalf of that caller. Prefer AuthInfo's
+	// access token over its ID token to preserve the delegation chain.
 	//
 	// Use this to bring your own authlib version or a custom token source:
 	//
 	//   exchanger, _ := authnlib.NewTokenExchangeClient(myConfig)
 	//   creds := k8s.TokenExchangeCredentials{
 	//       ExchangerFunc: func(ctx context.Context, audiences []string, namespace string) (string, error) {
-	//           idToken, _ := k8s.IDTokenFromContext(ctx)
+	//           subjectToken, _ := k8s.IDTokenFromContext(ctx)
+	//           if info, ok := types.AuthInfoFrom(ctx); ok && info != nil {
+	//               subjectToken = info.GetAccessToken()
+	//               if subjectToken == "" { subjectToken = info.GetIDToken() }
+	//               if subjectToken == "" { return "", errors.New("caller has no signed token") }
+	//           }
 	//           resp, err := exchanger.Exchange(ctx, authnlib.TokenExchangeRequest{
 	//               Audiences:    audiences,
 	//               Namespace:    namespace,
-	//               SubjectToken: idToken,
+	//               SubjectToken: subjectToken,
 	//           })
 	//           if err != nil { return "", err }
 	//           return resp.Token, nil
@@ -152,11 +159,22 @@ func newTokenExchangeFunc(creds TokenExchangeCredentials) (func(ctx context.Cont
 
 	return func(ctx context.Context, audiences []string, namespace string) (string, error) {
 		// The caller's identity becomes part of the exchanged access token.
-		idToken, _ := IDTokenFromContext(ctx)
+		subjectToken, _ := IDTokenFromContext(ctx)
+		if info, ok := types.AuthInfoFrom(ctx); ok && info != nil {
+			// Preserve the full delegation chain when invoked by an authenticated
+			// plugin handler. Never downgrade a caller to service credentials.
+			subjectToken = info.GetAccessToken()
+			if subjectToken == "" {
+				subjectToken = info.GetIDToken()
+			}
+			if subjectToken == "" {
+				return "", errors.New("caller auth info has no access or ID token")
+			}
+		}
 		resp, err := exchanger.Exchange(ctx, authnlib.TokenExchangeRequest{
 			Audiences:    audiences,
 			Namespace:    namespace,
-			SubjectToken: idToken,
+			SubjectToken: subjectToken,
 		})
 		if err != nil {
 			return "", err
@@ -177,7 +195,8 @@ type idTokenContextKey struct{}
 // as the service.
 // This is deliberate: work done for a caller should not use the service's own
 // permissions. Work that should act as the service, such as reconciling, should
-// use a context without a caller.
+// use a context without a caller. AuthInfo in the context takes precedence over
+// this legacy ID-token value; its access token (or ID token) is exchanged instead.
 func ContextWithIDToken(ctx context.Context, token string) context.Context {
 	if token == "" {
 		return ctx
@@ -193,7 +212,8 @@ func IDTokenFromContext(ctx context.Context) (string, bool) {
 
 // tokenExchangeTransport injects an X-Access-Token header by exchanging
 // credentials before each request, on behalf of the caller when the request
-// context carries one (see ContextWithIDToken). Follows the same transport wrapper
+// context carries AuthInfo or a legacy ID token (see ContextWithIDToken).
+// Follows the same transport wrapper
 // pattern as streamErrorTransport.
 type tokenExchangeTransport struct {
 	exchangeFunc func(ctx context.Context, audiences []string, namespace string) (string, error)

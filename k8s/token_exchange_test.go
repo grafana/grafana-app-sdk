@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/rest"
@@ -405,6 +406,9 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 		{name: "caller", ctx: ContextWithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
 		{name: "no caller", ctx: context.Background()},
 		{name: "empty caller", ctx: ContextWithIDToken(context.Background(), "")},
+		{name: "verified access token", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access", id: "id"}), wantSubjectToken: "verified-access"},
+		{name: "verified ID token", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{id: "verified-id"}), wantSubjectToken: "verified-id"},
+		{name: "verified caller overrides legacy token", ctx: types.WithAuthInfo(ContextWithIDToken(context.Background(), "stale-id"), &tokenExchangeAuthInfo{access: "verified-access"}), wantSubjectToken: "verified-access"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -438,4 +442,21 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 			assert.Empty(t, base.lastReq.Header.Values("X-Grafana-Id"))
 		})
 	}
+}
+
+// Only token accessors are needed by the transport.
+type tokenExchangeAuthInfo struct {
+	types.AuthInfo
+	access, id string
+}
+
+func (i *tokenExchangeAuthInfo) GetAccessToken() string { return i.access }
+func (i *tokenExchangeAuthInfo) GetIDToken() string     { return i.id }
+
+func TestTokenExchangeRejectsCallerWithoutSignedToken(t *testing.T) {
+	exchange, err := newTokenExchangeFunc(TokenExchangeCredentials{Token: "cap", TokenExchangeURL: "http://unused.invalid"})
+	require.NoError(t, err)
+	ctx := types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{})
+	_, err = exchange(ctx, []string{"example.app"}, "stacks-1")
+	require.ErrorContains(t, err, "caller auth info has no access or ID token")
 }
