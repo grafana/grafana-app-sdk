@@ -110,7 +110,8 @@ var _ V3Server = UnimplementedV3Server{}
 // The types below are thin go-plugin adapters. go-plugin dispenses plugins by
 // name and requires each to implement plugin.GRPCPlugin; the generated code
 // only provides Register*Server / New*Client. Each adapter registers the
-// generated gRPC service directly — no wrapping server type is inserted.
+// generated gRPC service, wrapped only to pass the caller's ID token between
+// Grafana and the plugin (see caller.go).
 
 type admissionGRPCPlugin struct {
 	plugin.NetRPCUnsupportedPlugin
@@ -119,12 +120,12 @@ type admissionGRPCPlugin struct {
 }
 
 func (p *admissionGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterAdmissionServiceServer(s, p.server)
+	pluginv3.RegisterAdmissionServiceServer(s, callerAdmissionServer{p.server})
 	return nil
 }
 
 func (*admissionGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return pluginv3.NewAdmissionServiceClient(c), nil
+	return callerAdmissionClient{pluginv3.NewAdmissionServiceClient(c)}, nil
 }
 
 type conversionGRPCPlugin struct {
@@ -134,12 +135,12 @@ type conversionGRPCPlugin struct {
 }
 
 func (p *conversionGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterConversionServiceServer(s, p.server)
+	pluginv3.RegisterConversionServiceServer(s, callerConversionServer{p.server})
 	return nil
 }
 
 func (*conversionGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return pluginv3.NewConversionServiceClient(c), nil
+	return callerConversionClient{pluginv3.NewConversionServiceClient(c)}, nil
 }
 
 type routeGRPCPlugin struct {
@@ -149,10 +150,10 @@ type routeGRPCPlugin struct {
 }
 
 func (p *routeGRPCPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pluginv3.RegisterRouteServiceServer(s, p.server)
+	pluginv3.RegisterRouteServiceServer(s, callerRouteServer{p.server})
 	return nil
 }
 
 func (*routeGRPCPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc.ClientConn) (any, error) {
-	return pluginv3.NewRouteServiceClient(c), nil
+	return callerRouteClient{pluginv3.NewRouteServiceClient(c)}, nil
 }
