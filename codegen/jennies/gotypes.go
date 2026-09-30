@@ -132,7 +132,14 @@ func (g *GoTypes) Generate(appManifest codegen.AppManifest) (codejen.Files, erro
 			return nil, fmt.Errorf("expected one file to be generated, got %d", len(generated))
 		}
 
-		formatted, err := format.Source(generated[0].Data)
+		data := generated[0].Data
+		if g.AddKubernetesCodegen {
+			data, err = alignAliasComments(data)
+			if err != nil {
+				return nil, err
+			}
+		}
+		formatted, err := format.Source(data)
 		if err != nil {
 			return nil, err
 		}
@@ -304,6 +311,12 @@ func GoTypesFromCUE(v cue.Value, cfg CUEGoConfig, maxNamingDepth int, namerFunc 
 		data = append(data, emptyStructGoType(cfg, namerFunc)...)
 	}
 
+	if cfg.AddKubernetesOpenAPIGenComment {
+		data, err = alignAliasComments(data)
+		if err != nil {
+			return nil, err
+		}
+	}
 	formatted, err := format.Source(data)
 	if err != nil {
 		return nil, err

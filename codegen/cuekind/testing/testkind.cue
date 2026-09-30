@@ -262,6 +262,9 @@ testKind: {
 		// v4: selectable field crosses a union nested under spec (spec.union is the disjunction; path .spec.union.spec.name).
 		"v4": {
 			schema: {
+				// Supported union variants.
+				// The kind field selects the variant's spec.
+				#Union: #UnionVariantA | #UnionVariantB
 				#UnionVariantA: {
 					kind: "VariantA"
 					spec: {name: string}
@@ -271,7 +274,7 @@ testKind: {
 					spec: {name: string}
 				}
 				spec: {
-					union: #UnionVariantA | #UnionVariantB
+					union: #Union
 				}
 			}
 			selectableFields: [".spec.union.spec.name"]

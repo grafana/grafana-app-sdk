@@ -396,6 +396,7 @@
                             "spec": {
                                 "properties": {
                                     "union": {
+                                        "description": "Supported union variants.\nThe kind field selects the variant's spec.",
                                         "oneOf": [
                                             {
                                                 "required": [
