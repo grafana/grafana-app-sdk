@@ -22,7 +22,7 @@ type ClientV3 struct {
 	conversion pluginv3.ConversionServiceClient
 	route      pluginv3.RouteServiceClient
 
-	idTokenDeriver authn.IDTokenDeriver
+	tokenExchange *authn.TokenExchangeClient
 }
 
 var (
@@ -34,7 +34,7 @@ var (
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-func NewClientV3(rpcClient plugin.ClientProtocol, idTokenDeriver authn.IDTokenDeriver) (*ClientV3, error) {
+func NewClientV3(rpcClient plugin.ClientProtocol, tokenExchange *authn.TokenExchangeClient) (*ClientV3, error) {
 	admission, err := dispense[pluginv3.AdmissionServiceClient](rpcClient, pluginKeyAdmission)
 	if err != nil {
 		return nil, err
@@ -51,10 +51,10 @@ func NewClientV3(rpcClient plugin.ClientProtocol, idTokenDeriver authn.IDTokenDe
 	}
 
 	return &ClientV3{
-		admission:      admission,
-		conversion:     conversion,
-		route:          router,
-		idTokenDeriver: idTokenDeriver,
+		admission:     admission,
+		conversion:    conversion,
+		route:         router,
+		tokenExchange: tokenExchange,
 	}, nil
 }
 
@@ -73,18 +73,19 @@ func dispense[T any](rpcClient plugin.ClientProtocol, key string) (T, error) {
 }
 
 func (c *ClientV3) addMetadataToContext(ctx context.Context, group string) (context.Context, error) {
-	if c.idTokenDeriver == nil {
-		return ctx, nil
-	}
-
 	user, ok := authlib.AuthInfoFrom(ctx)
-	if ok && c.idTokenDeriver != nil {
-		// ???? Dragons here!!!
-		token := "???" + user.GetSubject()
+	if ok && c.tokenExchange != nil {
+		rsp, err := c.tokenExchange.Exchange(ctx, authn.TokenExchangeRequest{
+			Namespace: user.GetNamespace(),
+			Audiences: []string{group}, // and the pluginID?
+		})
+		if err != nil {
+			return nil, err
+		}
 
 		md, _ := metadata.FromOutgoingContext(ctx)
 		md = md.Copy()
-		md.Set(idTokenMetadataKey, token)
+		md.Set("x-access-token", rsp.Token)
 		return metadata.NewOutgoingContext(ctx, md), nil
 	}
 	return ctx, nil

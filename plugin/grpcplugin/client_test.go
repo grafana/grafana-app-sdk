@@ -16,19 +16,19 @@ func TestNewClientV3(t *testing.T) {
 		pluginKeyRouter:     pluginv3.NewRouteServiceClient(nil),
 	}}
 
-	client, err := NewClientV3(protocol)
+	client, err := NewClientV3(protocol, nil)
 
 	require.NoError(t, err)
-	require.NotNil(t, client.AdmissionServiceClient)
-	require.NotNil(t, client.ConversionServiceClient)
-	require.NotNil(t, client.RouteServiceClient)
+	require.NotNil(t, client.admission)
+	require.NotNil(t, client.conversion)
+	require.NotNil(t, client.route)
 }
 
 func TestNewClientV3ReturnsDispenseError(t *testing.T) {
 	dispenseErr := errors.New("not available")
 	protocol := &testClientProtocol{dispenseErr: dispenseErr}
 
-	client, err := NewClientV3(protocol)
+	client, err := NewClientV3(protocol, nil)
 
 	require.Nil(t, client)
 	require.ErrorIs(t, err, dispenseErr)
@@ -40,7 +40,7 @@ func TestNewClientV3RejectsUnexpectedClientType(t *testing.T) {
 		pluginKeyAdmission: "not an admission client",
 	}}
 
-	client, err := NewClientV3(protocol)
+	client, err := NewClientV3(protocol, nil)
 
 	require.Nil(t, client)
 	require.ErrorContains(t, err, pluginKeyAdmission)
