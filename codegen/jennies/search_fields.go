@@ -21,6 +21,16 @@ func validateSearchFields(vk codegen.VersionedKind, version string) error {
 		if err := validateSearchFieldCapabilities(sf); err != nil {
 			return fmt.Errorf("kind %q version %q search field %q: %w", vk.Kind, version, sf.Name, err)
 		}
+		if sf.Source != nil {
+			if sf.Path != "" {
+				return fmt.Errorf("kind %q version %q search field %q: path and source are mutually exclusive", vk.Kind, version, sf.Name)
+			}
+			if sf.Array {
+				return fmt.Errorf("kind %q version %q search field %q: kv source fields must not be arrays", vk.Kind, version, sf.Name)
+			}
+			// A kv-sourced field has no resource path to resolve.
+			continue
+		}
 		if sf.Path == "" || !vk.Schema.Exists() {
 			continue
 		}

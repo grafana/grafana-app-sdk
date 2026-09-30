@@ -102,6 +102,23 @@ type SearchField struct {
 	Capabilities     []string `json:"capabilities"`
 	EmitZeroIfAbsent bool     `json:"emitZeroIfAbsent,omitempty"`
 	Description      string   `json:"description,omitempty"`
+	// Source describes where a KV-sourced field gets its value, as an
+	// alternative to Path. At most one of Path or Source is set.
+	Source *SearchFieldSource `json:"source,omitempty"`
+}
+
+// SearchFieldSource is the set of supported search field sources. Only KV is
+// defined this round.
+type SearchFieldSource struct {
+	KV *SearchFieldKVSource `json:"kv,omitempty"`
+}
+
+// SearchFieldKVSource describes a field value read from a resource's kv
+// subresource document rather than from the resource itself.
+type SearchFieldKVSource struct {
+	Owner string `json:"owner"`
+	Key   string `json:"key"`
+	Path  string `json:"path"`
 }
 
 // KindSearch controls which search endpoints are served for a kind.

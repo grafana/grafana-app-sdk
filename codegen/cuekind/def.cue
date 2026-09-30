@@ -230,6 +230,27 @@ SchemaWithOperatorState: Schema & {
 	emitZeroIfAbsent?: bool | *false
 	// description is a human readable description of the field.
 	description?: string
+	// source describes where a KV-sourced field gets its value, as an alternative
+	// to path. Exactly one of path or source may be set; the SDK codegen validator
+	// rejects a field that sets both, and rejects source on an array field.
+	source?: #SearchFieldSource
+}
+
+// #SearchFieldKVSource describes a field value read from a resource's kv
+// subresource document rather than from the resource itself.
+#SearchFieldKVSource: {
+	// owner is the app that owns the kv document, e.g. "usageinsights.grafana.app".
+	owner: string & =~"^[a-z0-9.-]+$"
+	// key is the kv document's key, e.g. "stats".
+	key: string & =~"^[a-z0-9][a-z0-9_.-]{0,127}(/[a-z0-9][a-z0-9_.-]{0,127})*$"
+	// path is a dotted path (no array indices) within the kv document's JSON value.
+	path: string & =~"^[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$"
+}
+
+// #SearchFieldSource is the set of supported search field sources. Only kv is
+// defined this round.
+#SearchFieldSource: {
+	kv: #SearchFieldKVSource
 }
 
 // #KindSearch controls which search endpoints are served for a kind.

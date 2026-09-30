@@ -156,6 +156,18 @@ func (m *ManifestData) Validate() error {
 			} else {
 				namespacedRoutes[kind.Resource()] = struct{}{}
 			}
+			for _, sf := range kind.SearchFields {
+				kvSource := sf.KVSource()
+				if kvSource == nil {
+					continue
+				}
+				if sf.Path != "" {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' version '%s' search field '%s': path and source are mutually exclusive", kind.Kind, version.Name, sf.Name))
+				}
+				if kvSource.Owner == "" || kvSource.Key == "" || kvSource.Path == "" {
+					errs = multierror.Append(errs, fmt.Errorf("kind '%s' version '%s' search field '%s': source.kv owner, key and path must not be empty", kind.Kind, version.Name, sf.Name))
+				}
+			}
 			if k, ok := kinds[kind.Kind]; !ok {
 				k = kindData{
 					kind:         kind.Kind,
@@ -625,6 +637,31 @@ type ManifestVersionKindSearchField struct {
 	EmitZeroIfAbsent bool `json:"emitZeroIfAbsent,omitempty" yaml:"emitZeroIfAbsent,omitempty"`
 	// Description is a human readable description of the field.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// Source describes where a KV-sourced field gets its value, as an
+	// alternative to Path. At most one of Path or Source is set.
+	Source *ManifestVersionKindSearchFieldSource `json:"source,omitempty" yaml:"source,omitempty"`
+}
+
+// KVSource returns the field's KV source, or nil when it has none.
+func (f ManifestVersionKindSearchField) KVSource() *ManifestVersionKindSearchFieldKVSource {
+	if f.Source == nil {
+		return nil
+	}
+	return f.Source.KV
+}
+
+// ManifestVersionKindSearchFieldSource is the set of supported search field
+// sources. Only KV is defined this round.
+type ManifestVersionKindSearchFieldSource struct {
+	KV *ManifestVersionKindSearchFieldKVSource `json:"kv,omitempty" yaml:"kv,omitempty"`
+}
+
+// ManifestVersionKindSearchFieldKVSource describes a field value read from a
+// resource's kv subresource document rather than from the resource itself.
+type ManifestVersionKindSearchFieldKVSource struct {
+	Owner string `json:"owner" yaml:"owner"`
+	Key   string `json:"key" yaml:"key"`
+	Path  string `json:"path" yaml:"path"`
 }
 
 const parsedCRDSchemaKindName = "__KIND__"

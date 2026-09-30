@@ -799,9 +799,26 @@ func searchFieldsToManifest(fields []codegen.SearchField) []app.ManifestVersionK
 			Capabilities:     f.Capabilities,
 			EmitZeroIfAbsent: f.EmitZeroIfAbsent,
 			Description:      f.Description,
+			Source:           searchFieldSourceToManifest(f.Source),
 		}
 	}
 	return out
+}
+
+// searchFieldSourceToManifest copies a codegen.SearchFieldSource across
+// verbatim into its app.ManifestVersionKindSearchFieldSource equivalent.
+// Returns nil when source is nil.
+func searchFieldSourceToManifest(source *codegen.SearchFieldSource) *app.ManifestVersionKindSearchFieldSource {
+	if source == nil || source.KV == nil {
+		return nil
+	}
+	return &app.ManifestVersionKindSearchFieldSource{
+		KV: &app.ManifestVersionKindSearchFieldKVSource{
+			Owner: source.KV.Owner,
+			Key:   source.KV.Key,
+			Path:  source.KV.Path,
+		},
+	}
 }
 
 var validAdmissionOperations = map[codegen.KindAdmissionCapabilityOperation]app.AdmissionOperation{
