@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	authnlib "github.com/grafana/authlib/authn"
 	"github.com/grafana/authlib/types"
@@ -227,7 +228,17 @@ func (t *tokenExchangeTransport) RoundTrip(req *http.Request) (*http.Response, e
 	if err != nil {
 		return nil, fmt.Errorf("token exchange failed: %w", err)
 	}
+	if strings.TrimSpace(token) == "" {
+		return nil, errors.New("token exchange returned an empty access token")
+	}
 	req = req.Clone(req.Context())
+	// The new access token carries the delegated identity. Remove old identity
+	// and access credentials, including non-canonical header map keys.
+	for name := range req.Header {
+		if strings.EqualFold(name, "X-Grafana-Id") || strings.EqualFold(name, "X-Access-Token") || strings.EqualFold(name, "Authorization") {
+			delete(req.Header, name)
+		}
+	}
 	req.Header.Set("X-Access-Token", token)
 	req.Header.Set("Authorization", "Bearer "+token)
 	return t.base.RoundTrip(req)

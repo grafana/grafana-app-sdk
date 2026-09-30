@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
-	"google.golang.org/protobuf/proto"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
@@ -180,7 +179,7 @@ func TestConversionAudienceValidation(t *testing.T) {
 			})}
 			req := &pluginv3.ConvertObjectsRequest{}
 			for _, group := range tt.groups {
-				req.SetObjects(append(req.GetObjects(), pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: proto.String(group)}.Build()}.Build()))
+				req.SetObjects(append(req.GetObjects(), pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(group)}.Build()}.Build()))
 			}
 			_, err := client.ConvertObjects(context.Background(), req)
 			require.ErrorContains(t, err, "API group")
@@ -198,16 +197,16 @@ func TestDelegationDisabledPreservesContext(t *testing.T) {
 func callDelegationMethod(ctx context.Context, client *ClientV3, method string) error {
 	switch method {
 	case pluginKeyAdmission:
-		_, err := client.AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: proto.String(delegationGroup)}.Build()}.Build())
+		_, err := client.AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build()}.Build())
 		return err
 	case pluginKeyConversion:
 		_, err := client.ConvertObjects(ctx, pluginv3.ConvertObjectsRequest_builder{
-			Api:     pluginv3.GroupVersion_builder{Group: proto.String("apiextensions.k8s.io"), Version: proto.String("v1")}.Build(),
-			Objects: []*pluginv3.ConvertObjectsRequest_Object{pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: proto.String(delegationGroup)}.Build()}.Build()},
+			Api:     pluginv3.GroupVersion_builder{Group: new("apiextensions.k8s.io"), Version: new("v1")}.Build(),
+			Objects: []*pluginv3.ConvertObjectsRequest_Object{pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build()}.Build()},
 		}.Build())
 		return err
 	default:
-		stream, err := client.CallRoute(ctx, pluginv3.CallRouteRequest_builder{Group: proto.String(delegationGroup)}.Build())
+		stream, err := client.CallRoute(ctx, pluginv3.CallRouteRequest_builder{Group: new(delegationGroup), Namespace: new("stacks-1")}.Build())
 		if err != nil {
 			return err
 		}

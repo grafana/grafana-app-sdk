@@ -9,9 +9,14 @@
 //
 // ServeOpts.Authenticator must verify access-token signatures and the plugin's
 // allowed API-group audiences (for example, with authn.NewAccessTokenAuthenticator).
+// Servers require exactly one access token and reject a separate ID token to
+// prevent conflicting identities. They also check the request's API group against
+// the verified audiences and route namespaces against the token namespace.
+// Cluster-scoped routes require a wildcard namespace in the token.
 // Successful handlers receive AuthInfo including the verified access token for
 // onward delegation. Authentication does not replace resource authorization:
-// handlers must enforce the caller's permissions for the requested operation.
+// handlers must enforce the caller's permissions for the requested operation
+// and validate namespaces and kinds inside admission/conversion object payloads.
 //
 // Admission and route audiences come from the request's resource API group.
 // Conversion derives the audience from object GVKs, which must have the same

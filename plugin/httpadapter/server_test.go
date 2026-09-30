@@ -37,18 +37,18 @@ func TestHTTPRouteHandler(t *testing.T) {
 		require.NoError(t, err)
 
 		parent := pluginv3.RouteResource_builder{
-			Resource: proto.String("widgets"),
-			Name:     proto.String("widget-1"),
-			Rv:       proto.String("42"),
+			Resource: new("widgets"),
+			Name:     new("widget-1"),
+			Rv:       new("42"),
 			Raw:      []byte(`{"spec":{"enabled":true}}`),
 		}.Build()
 		req := pluginv3.CallRouteRequest_builder{
-			Group:   proto.String("my-plugin"),
-			Version: proto.String("v1alpha1"),
+			Group:   new("my-plugin"),
+			Version: new("v1alpha1"),
 			Parent:  parent,
-			Method:  proto.String(http.MethodPost),
-			Path:    proto.String("path"),
-			Url:     proto.String("/api/plugins/plugin-abc/resources/path?query=1"),
+			Method:  new(http.MethodPost),
+			Path:    new("path"),
+			Url:     new("/api/plugins/plugin-abc/resources/path?query=1"),
 			Headers: map[string]*pluginv3.StringList{
 				"X-Header-In-1": pluginv3.StringList_builder{Values: []string{"D", "E"}}.Build(),
 				"X-Header-In-2": pluginv3.StringList_builder{Values: []string{"F"}}.Build(),
@@ -126,10 +126,10 @@ func TestHTTPRouteHandler(t *testing.T) {
 		}
 		resourceHandler := NewServer(httpHandler)
 		req := pluginv3.CallRouteRequest_builder{
-			Group:  proto.String("my-plugin"),
-			Method: proto.String(http.MethodPost),
-			Path:   proto.String("path"),
-			Url:    proto.String("/api/plugins/plugin-abc/resources/path?query=1"),
+			Group:  new("my-plugin"),
+			Method: new(http.MethodPost),
+			Path:   new("path"),
+			Url:    new("/api/plugins/plugin-abc/resources/path?query=1"),
 			Headers: map[string]*pluginv3.StringList{
 				"X-Header-In-1": pluginv3.StringList_builder{Values: []string{"D", "E"}}.Build(),
 				"X-Header-In-2": pluginv3.StringList_builder{Values: []string{"F"}}.Build(),
@@ -174,10 +174,10 @@ func TestServeMuxHandler(t *testing.T) {
 		resourceHandler := NewServer(mux)
 
 		req := pluginv3.CallRouteRequest_builder{
-			Group:  proto.String("my-plugin"),
-			Method: proto.String(http.MethodGet),
-			Path:   proto.String("test"),
-			Url:    proto.String("/test?query=1"),
+			Group:  new("my-plugin"),
+			Method: new(http.MethodGet),
+			Path:   new("test"),
+			Url:    new("/test?query=1"),
 		}.Build()
 		err := resourceHandler.CallRoute(req, testSender)
 		require.NoError(t, err)
@@ -193,15 +193,15 @@ func TestCallRouteErrors(t *testing.T) {
 		{
 			name: "invalid URL",
 			req: pluginv3.CallRouteRequest_builder{
-				Method: proto.String(http.MethodGet),
-				Url:    proto.String("%"),
+				Method: new(http.MethodGet),
+				Url:    new("%"),
 			}.Build(),
 		},
 		{
 			name: "invalid HTTP method",
 			req: pluginv3.CallRouteRequest_builder{
-				Method: proto.String("invalid\nmethod"),
-				Url:    proto.String("/valid"),
+				Method: new("invalid\nmethod"),
+				Url:    new("/valid"),
 			}.Build(),
 		},
 	}
@@ -229,9 +229,9 @@ func TestCallRouteReturnsStreamSendError(t *testing.T) {
 		require.NoError(t, err)
 	}))
 	req := pluginv3.CallRouteRequest_builder{
-		Method: proto.String(http.MethodGet),
-		Path:   proto.String("test"),
-		Url:    proto.String("/test"),
+		Method: new(http.MethodGet),
+		Path:   new("test"),
+		Url:    new("/test"),
 	}.Build()
 
 	err := handler.CallRoute(req, sender)
@@ -253,9 +253,9 @@ func TestCallRouteWithoutOptionalRequestFields(t *testing.T) {
 		rw.WriteHeader(http.StatusNoContent)
 	}))
 	req := pluginv3.CallRouteRequest_builder{
-		Method: proto.String(http.MethodGet),
-		Path:   proto.String("/already-absolute"),
-		Url:    proto.String("/already-absolute"),
+		Method: new(http.MethodGet),
+		Path:   new("/already-absolute"),
+		Url:    new("/already-absolute"),
 	}.Build()
 
 	err := handler.CallRoute(req, sender)

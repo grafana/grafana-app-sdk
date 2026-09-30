@@ -460,3 +460,31 @@ func TestTokenExchangeRejectsCallerWithoutSignedToken(t *testing.T) {
 	_, err = exchange(ctx, []string{"example.app"}, "stacks-1")
 	require.ErrorContains(t, err, "caller auth info has no access or ID token")
 }
+
+func TestTokenExchangeTransportRemovesConflictingCredentials(t *testing.T) {
+	base := &capturingRoundTripper{}
+	transport := &tokenExchangeTransport{exchangeFunc: staticExchangeFunc(), base: base}
+	req, err := http.NewRequest(http.MethodGet, "https://host/apis", nil)
+	require.NoError(t, err)
+	// Include non-canonical map keys, as route headers can originate in protobuf maps.
+	req.Header = http.Header{
+		"x-grafana-id": {"other-user"}, "X-Grafana-Id": {"another-user"},
+		"authorization": {"Bearer old"}, "x-access-token": {"old-token"},
+		"Trace-Id": {"trace"},
+	}
+	resp, err := transport.RoundTrip(req)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.Header{"X-Access-Token": {"tok"}, "Authorization": {"Bearer tok"}, "Trace-Id": {"trace"}}, base.lastReq.Header)
+	require.Equal(t, []string{"other-user"}, req.Header["x-grafana-id"])
+}
+
+func TestTokenExchangeTransportRejectsEmptyToken(t *testing.T) {
+	base := &capturingRoundTripper{}
+	transport := &tokenExchangeTransport{base: base, exchangeFunc: func(context.Context, []string, string) (string, error) { return "", nil }}
+	req, err := http.NewRequest(http.MethodGet, "https://host/apis", nil)
+	require.NoError(t, err)
+	_, err = transport.RoundTrip(req)
+	require.Error(t, err)
+	require.Nil(t, base.lastReq)
+}

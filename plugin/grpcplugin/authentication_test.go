@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grafana/authlib/authn"
 	"github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/require"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestServerAuthentication(t *testing.T) {
-	info := authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{})
+	info := authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{Claims: jwt.Claims{Audience: jwt.Audience{delegationGroup}}, Rest: authn.AccessTokenClaims{Namespace: "stacks-1"}})
 	handlerErr := status.Error(codes.FailedPrecondition, "handler error")
 	for _, service := range []string{pluginKeyAdmission, pluginKeyConversion, pluginKeyRouter} {
 		t.Run(service, func(t *testing.T) {
@@ -78,14 +79,25 @@ func TestServerAuthentication(t *testing.T) {
 					}
 					plugins := opts.PluginSet()
 					var err error
+					kind := &pluginv3.GroupVersionKind{}
+					kind.SetGroup(delegationGroup)
+					admissionReq := &pluginv3.AdmissionReviewRequest{}
+					admissionReq.SetKind(kind)
+					object := &pluginv3.ConvertObjectsRequest_Object{}
+					object.SetGvk(kind)
+					conversionReq := &pluginv3.ConvertObjectsRequest{}
+					conversionReq.SetObjects([]*pluginv3.ConvertObjectsRequest_Object{object})
+					routeReq := &pluginv3.CallRouteRequest{}
+					routeReq.SetGroup(delegationGroup)
+					routeReq.SetNamespace("stacks-1")
 					switch service {
 					case pluginKeyAdmission:
-						_, err = plugins[service].(*admissionGRPCPlugin).server.AdmissionReview(ctx, &pluginv3.AdmissionReviewRequest{})
+						_, err = plugins[service].(*admissionGRPCPlugin).server.AdmissionReview(ctx, admissionReq)
 					case pluginKeyConversion:
-						_, err = plugins[service].(*conversionGRPCPlugin).server.ConvertObjects(ctx, &pluginv3.ConvertObjectsRequest{})
+						_, err = plugins[service].(*conversionGRPCPlugin).server.ConvertObjects(ctx, conversionReq)
 					case pluginKeyRouter:
 						stream := &authenticationTestStream{ctx: ctx}
-						err = plugins[service].(*routeGRPCPlugin).server.CallRoute(&pluginv3.CallRouteRequest{}, stream)
+						err = plugins[service].(*routeGRPCPlugin).server.CallRoute(routeReq, stream)
 						require.Equal(t, called, stream.sent)
 					}
 					require.Equal(t, tt.want, status.Code(err))
@@ -130,7 +142,7 @@ func (s *authenticationTestStream) Context() context.Context               { ret
 func (s *authenticationTestStream) Send(*pluginv3.CallRouteResponse) error { s.sent = true; return nil }
 
 func TestAuthenticateRejectsMissingIdentity(t *testing.T) {
-	ctx, err := authenticate(context.Background(), authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
+	ctx, err := authenticate(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid")), authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
 		return nil, nil
 	}))
 	require.Nil(t, ctx)

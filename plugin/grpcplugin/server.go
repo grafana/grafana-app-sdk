@@ -22,7 +22,10 @@ type ServeOpts struct {
 	ConversionServer pluginv3.ConversionServiceServer
 	RouteServer      pluginv3.RouteServiceServer
 
-	// Authenticator validates requests and adds AuthInfo to handler contexts.
+	// Authenticator must verify the access token's signature and allowed audiences.
+	// Requests require a single access token, with no separate ID token. The
+	// wrappers check the requested group and route namespace against AuthInfo.
+	// Handlers remain responsible for resource authorization and object validation.
 	// If nil, requests are passed through without authentication.
 	Authenticator authn.Authenticator
 }

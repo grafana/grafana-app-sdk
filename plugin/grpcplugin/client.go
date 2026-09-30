@@ -139,16 +139,12 @@ func (c *ClientV3) CallRoute(ctx context.Context, in *pluginv3.CallRouteRequest)
 
 // ConvertObjects implements [pluginv3.Client].
 func (c *ClientV3) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
-	// The request's API describes the conversion envelope, not the resources.
-	// All converted objects must belong to the same API group.
 	group := ""
 	if c.tokenExchange != nil {
-		for i, obj := range in.GetObjects() {
-			objectGroup := obj.GetGvk().GetGroup()
-			if objectGroup == "" || (i > 0 && objectGroup != group) {
-				return nil, errors.New("plugin token exchange: conversion objects must have the same non-empty API group")
-			}
-			group = objectGroup
+		var err error
+		group, err = conversionGroup(in)
+		if err != nil {
+			return nil, err
 		}
 	}
 	ctx, err := c.addMetadataToContext(ctx, group)
@@ -156,4 +152,20 @@ func (c *ClientV3) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjec
 		return nil, err
 	}
 	return c.conversion.ConvertObjects(ctx, in)
+}
+
+func conversionGroup(req *pluginv3.ConvertObjectsRequest) (string, error) {
+	// The envelope's API describes the conversion protocol, not the resources.
+	group := ""
+	for i, obj := range req.GetObjects() {
+		objectGroup := obj.GetGvk().GetGroup()
+		if objectGroup == "" || (i > 0 && objectGroup != group) {
+			return "", errors.New("conversion objects must have the same non-empty API group")
+		}
+		group = objectGroup
+	}
+	if group == "" {
+		return "", errors.New("conversion requires objects with a non-empty API group")
+	}
+	return group, nil
 }
