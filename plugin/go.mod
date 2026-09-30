@@ -11,7 +11,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
-	github.com/grafana/grafana-app-sdk v0.60.5
+	github.com/grafana/grafana-app-sdk v0.60.8
 	github.com/grafana/grafana-app-sdk/logging v0.60.5
 	github.com/grafana/grafana-plugin-sdk-go v0.296.5
 	github.com/hashicorp/go-plugin v1.8.0
