@@ -20,6 +20,7 @@ import (
 
 	v1alpha2 "github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 func TestSecureValuesGeneration(t *testing.T) {
@@ -50,6 +51,19 @@ func TestSecureValuesGeneration(t *testing.T) {
 	data, err := document.Spec.ToManifestData()
 	require.NoError(t, err)
 	converted := data.Versions[0].Kinds[0]
+	openAPI, err := converted.Schema.AsOpenAPI3()
+	require.NoError(t, err)
+	sharedName := resource.InlineSecureValue{}.OpenAPIModelName()
+	require.Contains(t, openAPI.Schemas, sharedName)
+	assert.Len(t, openAPI.Schemas[sharedName].Value.OneOf, 3)
+	secureProperties := openAPI.Schemas["Connection"].Value.Properties["secure"].Value.Properties
+	assert.Equal(t, "#/components/schemas/"+sharedName, secureProperties["token"].Ref)
+	apiKey := secureProperties["apiKey"].Value
+	assert.Equal(t, "API key from the service", apiKey.Description)
+	require.Len(t, apiKey.AllOf, 1)
+	assert.Equal(t, "#/components/schemas/"+sharedName, apiKey.AllOf[0].Ref)
+	assert.Empty(t, apiKey.Properties)
+	assert.Empty(t, apiKey.OneOf)
 	assert.Equal(t, kind.SecureValues, converted.SecureValues)
 	assert.NotContains(t, converted.Subresources(), "secure")
 	definitions, err := converted.Schema.AsKubeOpenAPI(schema.GroupVersionKind{Group: data.Group, Version: "v1", Kind: "Connection"}, spec.MustCreateRef, "example", converted.SecureValues...)
@@ -122,10 +136,12 @@ func TestSecureValuesGeneration(t *testing.T) {
 	require.Len(t, secureSchema.Properties, 2)
 	secureValue := secureSchema.Properties["apiKey"]
 	assert.Equal(t, "API key from the service", secureValue.Description)
-	require.NotNil(t, secureValue.Not)
-	assert.Equal(t, []string{"description"}, secureValue.Not.Required)
-	require.NotNil(t, secureValue.Not.Not)
-	assert.Equal(t, []string{"create"}, secureValue.Not.Not.Required)
+	require.Len(t, secureValue.AllOf, 1)
+	constraints := secureValue.AllOf[0]
+	require.NotNil(t, constraints.Not)
+	assert.Equal(t, []string{"description"}, constraints.Not.Required)
+	require.NotNil(t, constraints.Not.Not)
+	assert.Equal(t, []string{"create"}, constraints.Not.Not.Required)
 	// A structurally valid schema must also accept valid secure operations.
 	valueJSON, err := json.Marshal(secureValue)
 	require.NoError(t, err)
@@ -214,6 +230,15 @@ func TestWildcardSecureValuesGeneration(t *testing.T) {
 			data, err := document.Spec.ToManifestData()
 			require.NoError(t, err)
 			converted := data.Versions[0].Kinds[0]
+			openAPI, err := converted.Schema.AsOpenAPI3()
+			require.NoError(t, err)
+			sharedName := resource.InlineSecureValue{}.OpenAPIModelName()
+			require.Contains(t, openAPI.Schemas, sharedName)
+			wildcard := openAPI.Schemas["Connection"].Value.Properties["secure"].Value.AdditionalProperties.Schema.Value
+			assert.Equal(t, "Any credential", wildcard.Description)
+			require.Len(t, wildcard.AllOf, 1)
+			assert.Equal(t, "#/components/schemas/"+sharedName, wildcard.AllOf[0].Ref)
+			assert.Empty(t, wildcard.Properties)
 			assert.Equal(t, kind.SecureValues, converted.SecureValues)
 			definitions, err := converted.Schema.AsKubeOpenAPI(schema.GroupVersionKind{Group: data.Group, Version: "v1", Kind: "Connection"}, spec.MustCreateRef, "example", converted.SecureValues...)
 			require.NoError(t, err)

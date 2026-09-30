@@ -22,9 +22,17 @@ type TestKind struct {
 	// Spec is the spec of the TestKind
 	Spec TestKindSpec `json:"spec" yaml:"spec"`
 
+	// Secure holds references for TestKind
+	Secure resource.InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
+
 	Status TestKindStatus `json:"status" yaml:"status"`
 }
 
+func (o *TestKind) GetSecureValues() resource.InlineSecureValues { return o.Secure }
+func (o *TestKind) SetSecureValues(values resource.InlineSecureValues) error {
+	o.Secure = values
+	return nil
+}
 func NewTestKind() *TestKind {
 	return &TestKind{
 		Spec:   *NewTestKindSpec(),
@@ -236,6 +244,7 @@ func (o *TestKind) DeepCopy() *TestKind {
 }
 
 func (o *TestKind) DeepCopyInto(dst *TestKind) {
+	dst.Secure = resource.CopySecureValues(o.Secure)
 	dst.TypeMeta.APIVersion = o.TypeMeta.APIVersion
 	dst.TypeMeta.Kind = o.TypeMeta.Kind
 	o.ObjectMeta.DeepCopyInto(&dst.ObjectMeta)

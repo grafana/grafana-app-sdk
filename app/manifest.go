@@ -1471,6 +1471,17 @@ func resolveSchema(sch *openapi3.SchemaRef, components *openapi3.Components, vis
 		}
 		resolved.Required = nil
 
+		// Keep nested validation rules when lifting the structural fields out
+		// of an allOf member, including a referenced shared value schema.
+		if len(resolved.AllOf) > 0 || len(resolved.OneOf) > 0 || len(resolved.AnyOf) > 0 || resolved.Not != nil {
+			result.AllOf = append(result.AllOf, openapi3.NewSchemaRef("", &openapi3.Schema{
+				AllOf: resolved.AllOf,
+				OneOf: resolved.OneOf,
+				AnyOf: resolved.AnyOf,
+				Not:   resolved.Not,
+			}))
+		}
+
 		// merge schema into existing schema, sans "required" section
 		err = mergeSchemas(result, resolved)
 		if err != nil {
@@ -1715,10 +1726,23 @@ func getRefName(ref string) string {
 // SecureValuesOpenAPISchema describes an optional map of inline secure values.
 // Only manifest-declared keys are allowed unless a "*" entry enables arbitrary keys.
 func SecureValuesOpenAPISchema(values []ManifestVersionKindSecureValue) spec.Schema {
+	return secureValuesOpenAPISchema(values, sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema)
+}
+
+// SecureValuesOpenAPISchemaWithReference describes secure values using a shared value schema.
+// The caller must include the referenced definition in the OpenAPI document.
+func SecureValuesOpenAPISchemaWithReference(values []ManifestVersionKindSecureValue, ref spec.Ref) spec.Schema {
+	return secureValuesOpenAPISchema(values, spec.Schema{SchemaProps: spec.SchemaProps{Ref: ref}})
+}
+
+func secureValuesOpenAPISchema(values []ManifestVersionKindSecureValue, s spec.Schema) spec.Schema {
 	additional := &spec.SchemaOrBool{Allows: false}
 	properties := make(map[string]spec.Schema, len(values))
 	for _, value := range values {
-		valueSchema := sdkresource.InlineSecureValue{}.OpenAPIDefinition().Schema
+		valueSchema := s
+		if value.Description != "" && s.Ref.String() != "" {
+			valueSchema = spec.Schema{SchemaProps: spec.SchemaProps{AllOf: []spec.Schema{s}}}
+		}
 		valueSchema.Description = value.Description
 		if value.Key == "*" {
 			additional = &spec.SchemaOrBool{Allows: true, Schema: &valueSchema}

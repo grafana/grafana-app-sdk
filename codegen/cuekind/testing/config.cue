@@ -3,7 +3,7 @@ package testing
 configJson: {
 	definitions: {
 		manifestSchemas: true
-		manifestVersion: "v1alpha1"
+		manifestVersion: "v1alpha2"
 		path:            "codegen/testing/golden_generated/crd"
 		encoding:        "json"
 	}
@@ -22,7 +22,7 @@ configJson: {
 configYaml: {
 	definitions: {
 		manifestSchemas: true
-		manifestVersion: "v1alpha1"
+		manifestVersion: "v1alpha2"
 		path:            "codegen/testing/golden_generated/crd"
 		encoding:        "yaml"
 	}

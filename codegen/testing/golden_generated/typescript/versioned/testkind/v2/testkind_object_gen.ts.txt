@@ -45,5 +45,14 @@ export interface TestKind {
     apiVersion: string;
     metadata: Metadata;
     spec: Spec;
+    secure?: Record<string, InlineSecureValue>;
     status: Status;
 }
+
+// Exactly one operation is supplied for each secure value.
+export type InlineSecureValue = (
+    | { create: string; description?: string; name?: never; remove?: never }
+    | { name: string; create?: never; remove?: never; description?: never }
+    | { remove: boolean; create?: never; name?: never; description?: never }
+);
+

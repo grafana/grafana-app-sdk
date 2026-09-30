@@ -24,6 +24,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 const (
@@ -749,7 +750,10 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			}
 		}
 		if len(vk.SecureValues) > 0 {
-			props["secure"] = app.SecureValuesOpenAPISchema(vk.SecureValues)
+			value := resource.InlineSecureValue{}
+			name := value.OpenAPIModelName()
+			schemas[name] = value.OpenAPIDefinition().Schema
+			props["secure"] = app.SecureValuesOpenAPISchemaWithReference(vk.SecureValues, spec.MustCreateRef("#/components/schemas/"+name))
 		}
 		schemas[vk.Kind] = map[string]any{
 			"properties": props,

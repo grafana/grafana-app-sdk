@@ -19,9 +19,13 @@ type {{.TypeName}} struct {
 	metav1.TypeMeta `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
 
-{{ if .HasSecureValues }}	Secure resource.InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
-{{ end }}	// Spec is the spec of the {{.TypeName}}
+	// Spec is the spec of the {{.TypeName}}
 	Spec	   {{.SpecTypeName}} `json:"spec" yaml:"spec"`
+
+{{ if .HasSecureValues }}	
+	// Secure holds references for {{.TypeName}}
+	Secure resource.InlineSecureValues `json:"secure,omitempty" yaml:"secure,omitempty"`
+{{ end }}	
 
 	{{ range .Subresources }}
 		{{ if ne .Comment "" }}

@@ -25,7 +25,7 @@ func testConfig(goEnabled bool) *config.Config {
 			ManifestSchemas: true,
 			Encoding:        "json",
 			Path:            "definitions",
-			ManifestVersion: jennies.VersionV1Alpha1,
+			ManifestVersion: jennies.VersionV1Alpha2,
 		},
 		Codegen: &config.CodegenConfig{
 			GoEnabled:    goEnabled,

@@ -1,10 +1,13 @@
-apiVersion: apps.grafana.app/v1alpha1
+apiVersion: apps.grafana.app/v1alpha2
 kind: AppManifest
 metadata:
   name: test-app
 spec:
   appDisplayName: test-app
   appName: test-app
+  embed:
+    testkinds:
+      reembedVersion: 1
   extraPermissions:
     accessKinds:
     - actions:
@@ -41,10 +44,50 @@ spec:
           - CREATE
           - UPDATE
       conversion: true
+      embed:
+        fields:
+        - name: details
+          path: spec.stringField
       kind: TestKind
       plural: TestKinds
-      schema:
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
         spec:
+          additionalProperties: false
           properties:
             stringField:
               pattern: ^[a-zA-Z_][a-zA-Z0-9_-]*$
@@ -53,51 +96,75 @@ spec:
           - stringField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      searchFields:
+      - capabilities:
+        - filter
+        - text
+        - sort
+        - retrieve
+        description: The string field
+        name: stringField
+        path: spec.stringField
+        type: string
       selectableFields:
       - .spec.stringField
+      userReadable: false
     - conversion: false
       kind: TestKind2
       plural: TestKind2s
-      schema:
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind2:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
         spec:
+          additionalProperties: false
           properties:
             testField:
               type: string
@@ -105,46 +172,26 @@ spec:
           - testField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      search:
+        trash: false
       storage:
         listKeys: false
+      userReadable: false
     name: v1
     served: true
   - kinds:
@@ -158,10 +205,118 @@ spec:
           - CREATE
           - UPDATE
       conversion: true
+      embed:
+        fields:
+        - name: details
+          path: spec.unionNull.str
       kind: TestKind
       plural: TestKinds
-      schema:
+      schemas:
+        Def:
+          additionalProperties: false
+          properties:
+            i:
+              type: integer
+            str:
+              type: string
+          required:
+          - str
+          - i
+          type: object
+        Def2:
+          additionalProperties: false
+          properties:
+            b:
+              type: boolean
+            str:
+              type: string
+          required:
+          - str
+          - b
+          type: object
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            secure:
+              additionalProperties: false
+              properties:
+                apiKey:
+                  allOf:
+                  - $ref: '#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue'
+                  description: note this only exists in the v2 schema!
+                token:
+                  $ref: '#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue'
+              type: object
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
+        com.github.grafana.grafana-app-sdk.resource.InlineSecureValue:
+          additionalProperties: false
+          not:
+            not:
+              required:
+              - create
+            required:
+            - description
+          oneOf:
+          - required:
+            - create
+          - required:
+            - name
+          - required:
+            - remove
+          properties:
+            create:
+              description: Plaintext value to create in the secret service. Used only
+                in create or update requests.
+              maxLength: 24576
+              minLength: 1
+              type: string
+            description:
+              description: Optional description for a newly created secret. Only valid
+                when create is set.
+              type: string
+            name:
+              description: Reference to an existing value in the secret service.
+              maxLength: 253
+              minLength: 1
+              type: string
+            remove:
+              description: Remove this entry from the secure value map, deleting the
+                secret if it is owned by this resource.
+              type: boolean
+          type: object
         spec:
+          additionalProperties: false
           properties:
             intField:
               type: integer
@@ -172,106 +327,68 @@ spec:
               type: string
             unionNull:
               allOf:
-              - required:
-                - str
-                - i
+              - $ref: '#/components/schemas/Def'
               description: This generates a normal go pointer field, but needs to
                 be handled correctly as a selectable field, as the schema logic registers
                 it as a disjunction
               nullable: true
-              properties:
-                i:
-                  type: integer
-                str:
-                  type: string
-              type: object
             unionNull2:
               description: null variant should be ignore in disjunction when generating
                 the selectable field
               oneOf:
-              - not:
-                  anyOf:
-                  - required:
-                    - b
-                required:
-                - str
-                - i
-              - not:
-                  anyOf:
-                  - required:
-                    - i
-                required:
-                - str
-                - b
-              - not:
-                  anyOf:
-                  - required:
-                    - str
-                  - required:
-                    - i
-                  - required:
-                    - str
-                  - required:
-                    - b
-              properties:
-                b:
-                  type: boolean
-                i:
-                  type: integer
-                str:
-                  type: string
-              type:
-              - object
-              - "null"
+              - $ref: '#/components/schemas/Def'
+              - $ref: '#/components/schemas/Def2'
+              - type: "null"
           required:
           - stringField
           - intField
           - timeField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      search:
+        hybrid: true
+      searchFields:
+      - capabilities:
+        - filter
+        - text
+        - sort
+        - retrieve
+        description: The string field
+        name: stringField
+        path: spec.stringField
+        type: string
+      - capabilities:
+        - filter
+        - retrieve
+        emitZeroIfAbsent: true
+        name: intField
+        path: spec.intField
+        type: int64
+      secure:
+      - description: note this only exists in the v2 schema!
+        key: apiKey
+      - key: token
       selectableFields:
       - .spec.stringField
       - .spec.intField
       - .spec.unionNull.str
       - .spec.unionNull2.str
+      userReadable: false
     name: v2
     served: true
   - kinds:
@@ -432,8 +549,44 @@ spec:
             x-grafana-test: true
             x-grafana-test-value:
               val: "1"
-      schema:
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
         spec:
+          additionalProperties: false
           properties:
             boolField:
               type: boolean
@@ -451,49 +604,114 @@ spec:
           - boolField
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
               type: object
           type: object
       scope: Namespaced
+      searchFields:
+      - capabilities:
+        - filter
+        - text
+        - sort
+        - retrieve
+        description: The string field
+        name: stringField
+        path: spec.stringField
+        type: string
+      - capabilities:
+        - filter
+        - retrieve
+        emitZeroIfAbsent: true
+        name: intField
+        path: spec.intField
+        type: int64
+      - capabilities:
+        - filter
+        - retrieve
+        emitZeroIfAbsent: true
+        name: boolField
+        path: spec.boolField
+        type: boolean
       selectableFields:
       - .spec.stringField
       - .spec.intField
       - .spec.boolField
+      userReadable: false
     name: v3
+    routes:
+      namespaced:
+        /foobar:
+          post:
+            operationId: createFoobar
+            requestBody:
+              content:
+                application/json:
+                  schema:
+                    additionalProperties: false
+                    properties:
+                      keys:
+                        items:
+                          $ref: '#/components/schemas/createFoobarKey'
+                        type: array
+                    required:
+                    - keys
+                    type: object
+              required: true
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        altered:
+                          items:
+                            $ref: '#/components/schemas/createFoobarKey'
+                          type: array
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - altered
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+      schemas:
+        createFoobarKey:
+          additionalProperties: false
+          description: |-
+            Key identifies a foobar entry.
+            It is referenced by a custom route, so its multi-line
+            description exercises the route schema codegen path.
+          properties:
+            match:
+              type: string
+            name:
+              type: string
+          required:
+          - name
+          type: object
     served: true
   - kinds:
     - admission:
@@ -504,67 +722,103 @@ spec:
       conversion: true
       kind: TestKind
       plural: TestKinds
-      schema:
+      schemas:
+        OperatorState:
+          additionalProperties: false
+          properties:
+            descriptiveState:
+              description: descriptiveState is an optional more descriptive state
+                field which has no requirements on format
+              type: string
+            details:
+              additionalProperties: true
+              description: details contains any extra information that is operator-specific
+              type: object
+            lastEvaluation:
+              description: lastEvaluation is the ResourceVersion last evaluated
+              type: string
+            state:
+              description: |-
+                state describes the state of the lastEvaluation.
+                It is limited to three possible states for machine evaluation.
+              enum:
+              - success
+              - in_progress
+              - failed
+              type: string
+          required:
+          - lastEvaluation
+          - state
+          type: object
+        TestKind:
+          properties:
+            spec:
+              $ref: '#/components/schemas/spec'
+            status:
+              $ref: '#/components/schemas/status'
+          required:
+          - spec
+        Union:
+          description: |-
+            Supported union variants.
+            The kind field selects the variant's spec.
+          oneOf:
+          - $ref: '#/components/schemas/UnionVariantA'
+          - $ref: '#/components/schemas/UnionVariantB'
+        UnionVariantA:
+          additionalProperties: false
+          properties:
+            kind:
+              const: VariantA
+              type: string
+            spec:
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+              type: object
+          required:
+          - kind
+          - spec
+          type: object
+        UnionVariantB:
+          additionalProperties: false
+          properties:
+            kind:
+              const: VariantB
+              type: string
+            spec:
+              additionalProperties: false
+              properties:
+                name:
+                  type: string
+              required:
+              - name
+              type: object
+          required:
+          - kind
+          - spec
+          type: object
         spec:
+          additionalProperties: false
           properties:
             union:
-              description: |-
-                Supported union variants.
-                The kind field selects the variant's spec.
-              oneOf:
-              - required:
-                - kind
-                - spec
-              - required:
-                - kind
-                - spec
-              properties:
-                kind:
-                  type: string
-                spec:
-                  properties:
-                    name:
-                      type: string
-                  required:
-                  - name
-                  type: object
-              type: object
+              $ref: '#/components/schemas/Union'
           required:
           - union
           type: object
         status:
+          additionalProperties: false
           properties:
             additionalFields:
+              additionalProperties: true
               description: additionalFields is reserved for future use
               type: object
-              x-kubernetes-preserve-unknown-fields: true
             operatorStates:
               additionalProperties:
-                properties:
-                  descriptiveState:
-                    description: descriptiveState is an optional more descriptive
-                      state field which has no requirements on format
-                    type: string
-                  details:
-                    description: details contains any extra information that is operator-specific
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  lastEvaluation:
-                    description: lastEvaluation is the ResourceVersion last evaluated
-                    type: string
-                  state:
-                    description: |-
-                      state describes the state of the lastEvaluation.
-                      It is limited to three possible states for machine evaluation.
-                    enum:
-                    - success
-                    - in_progress
-                    - failed
-                    type: string
-                required:
-                - lastEvaluation
-                - state
-                type: object
+                $ref: '#/components/schemas/OperatorState'
               description: |-
                 operatorStates is a map of operator ID to operator state evaluations.
                 Any operator which consumes this kind SHOULD add its state evaluation information to this field.
@@ -573,5 +827,6 @@ spec:
       scope: Namespaced
       selectableFields:
       - .spec.union.spec.name
+      userReadable: false
     name: v4
     served: true

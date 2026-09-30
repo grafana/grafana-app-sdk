@@ -119,7 +119,7 @@ func TestManifestGenerator(t *testing.T) {
 		files, err := ManifestGenerator(ManifestGeneratorConfig{
 			Extension:      "json",
 			IncludeSchemas: true,
-			Version:        jennies.VersionV1Alpha1,
+			Version:        jennies.VersionV1Alpha2,
 		}).Generate(kinds...)
 		require.NoError(t, err)
 		// Check number of files generated
