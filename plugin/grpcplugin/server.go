@@ -35,9 +35,12 @@ type ServeOpts struct {
 	// the request's API group. Namespace checks apply either way.
 	PluginID string
 
-	// InsecureSkipAuthentication serves requests without authenticating them
-	// when Authenticator is nil. Handlers then get no caller identity, so their
-	// outbound requests act as the plugin itself. Use it only for local development.
+	// InsecureSkipAuthentication serves requests without verifying them when
+	// Authenticator is nil. A request's access token is parsed without checking
+	// its signature, or the request's audience and namespaces, so handlers get
+	// the identity the token claims. Requests without a token are served with no
+	// identity, and their outbound requests act as the plugin itself.
+	// Use it only for local development.
 	InsecureSkipAuthentication bool
 }
 
@@ -74,12 +77,14 @@ func (opts ServeOpts) PluginSet() plugin.PluginSet {
 	}
 
 	// A nil Authenticator rejects requests unless authentication is explicitly skipped.
-	if opts.Authenticator != nil || !opts.InsecureSkipAuthentication {
-		auth := serverAuth{authenticator: opts.Authenticator, pluginID: opts.PluginID}
-		admissionServer = &authenticatedAdmissionServer{admissionServer, auth}
-		conversionServer = &authenticatedConversionServer{conversionServer, auth}
-		routeServer = &authenticatedRouteServer{routeServer, auth}
+	auth := serverAuth{authenticator: opts.Authenticator, pluginID: opts.PluginID}
+	if opts.Authenticator == nil && opts.InsecureSkipAuthentication {
+		auth.authenticator = authn.NewAccessTokenAuthenticator(authn.NewUnsafeAccessTokenVerifier(authn.VerifierConfig{}))
+		auth.insecure = true
 	}
+	admissionServer = &authenticatedAdmissionServer{admissionServer, auth}
+	conversionServer = &authenticatedConversionServer{conversionServer, auth}
+	routeServer = &authenticatedRouteServer{routeServer, auth}
 
 	pSet[pluginKeyAdmission] = &admissionGRPCPlugin{server: admissionServer}
 	pSet[pluginKeyConversion] = &conversionGRPCPlugin{server: conversionServer}

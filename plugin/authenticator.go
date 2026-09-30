@@ -23,6 +23,13 @@ const EnvVarGrafanaJWKSURL = "GRAFANA_JWKS_URL"
 // JWKS used to verify access tokens, as a JSON document.
 const EnvVarGrafanaJWKS = "GRAFANA_JWKS"
 
+// EnvVarInsecureSkipAuthentication names the environment variable that, when
+// "true", makes Run serve plugin protocol v3 requests without verifying them
+// if no signing keys are configured (see WithInsecureSkipAuthentication).
+// Grafana sets it from insecure_skip_authentication = true in the plugin's
+// [plugin.<id>] settings. Use it only for local development.
+const EnvVarInsecureSkipAuthentication = "GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION"
+
 // ErrNoSigningKeys is returned by buildAuthenticator when neither
 // EnvVarGrafanaJWKSURL nor EnvVarGrafanaJWKS is set.
 var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS)

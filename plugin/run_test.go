@@ -291,6 +291,27 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("skips authentication when the host asks for local development", func(t *testing.T) {
+		call := stubManage(t, nil)
+		t.Setenv(EnvVarInsecureSkipAuthentication, "true")
+
+		if err := Run(newFakeProvider("my-app")); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		if len(call.opts.ExtraPlugins) == 0 {
+			t.Error("expected ExtraPlugins to be set by Run")
+		}
+	})
+
+	t.Run("only \"true\" skips authentication", func(t *testing.T) {
+		stubManage(t, nil)
+		t.Setenv(EnvVarInsecureSkipAuthentication, "1")
+
+		if err := Run(newFakeProvider("my-app")); err == nil {
+			t.Fatal("expected an error without an authenticator")
+		}
+	})
+
 	t.Run("errors", func(t *testing.T) {
 		newAppErr := errors.New("new app failed")
 		manageErr := errors.New("manage failed")
@@ -330,7 +351,7 @@ func TestRun(t *testing.T) {
 				name:     "no authenticator",
 				provider: newFakeProvider("my-app"),
 				noAuth:   true,
-				wantMsg:  "an authenticator is required: set GRAFANA_JWKS_URL or GRAFANA_JWKS, or use WithAuthenticator, or WithInsecureSkipAuthentication for local development",
+				wantMsg:  "an authenticator is required: set GRAFANA_JWKS_URL or GRAFANA_JWKS, or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true",
 			},
 			{
 				name:      "Manage fails",

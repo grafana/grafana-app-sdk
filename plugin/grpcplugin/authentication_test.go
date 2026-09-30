@@ -154,9 +154,9 @@ func (s *authenticationTestStream) Context() context.Context               { ret
 func (s *authenticationTestStream) Send(*pluginv3.CallRouteResponse) error { s.sent = true; return nil }
 
 func TestAuthenticateRejectsMissingIdentity(t *testing.T) {
-	ctx, err := authenticate(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid")), authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
+	ctx, _, err := serverAuth{authenticator: authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
 		return nil, nil
-	}))
+	})}.authenticate(metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid")))
 	require.Nil(t, ctx)
 	require.Equal(t, codes.Unauthenticated, status.Code(err))
 }

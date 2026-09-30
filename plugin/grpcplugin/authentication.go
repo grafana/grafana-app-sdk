@@ -20,32 +20,38 @@ import (
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
-func authenticate(ctx context.Context, authenticator authn.Authenticator) (context.Context, error) {
+// authenticate puts the caller's AuthInfo on ctx. It reports whether the token
+// was verified; the request's audience and namespaces are only checked then.
+func (a serverAuth) authenticate(ctx context.Context) (context.Context, bool, error) {
 	// Serving without authentication requires ServeOpts.InsecureSkipAuthentication.
-	if authenticator == nil {
-		return nil, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
+	if a.authenticator == nil {
+		return nil, false, status.Error(codes.FailedPrecondition, "plugin has no authenticator configured")
 	}
 	md, _ := metadata.FromIncomingContext(ctx)
+	tokens := md.Get("x-access-token")
+	if a.insecure && len(tokens) == 0 && len(md.Get("x-id-token")) == 0 {
+		// Without verification, a request without a token has no identity.
+		return ctx, false, nil
+	}
 	// Delegation has one source of identity: the exchanged access token.
 	// Reject ambiguous credentials before invoking even a custom authenticator.
-	tokens := md.Get("x-access-token")
 	if len(tokens) != 1 || tokens[0] == "" || len(md.Get("x-id-token")) != 0 {
-		return nil, status.Error(codes.Unauthenticated, "a single access token and no separate ID token are required")
+		return nil, false, status.Error(codes.Unauthenticated, "a single access token and no separate ID token are required")
 	}
-	info, err := authenticator.Authenticate(ctx, authn.NewGRPCTokenProvider(md))
+	info, err := a.authenticator.Authenticate(ctx, authn.NewGRPCTokenProvider(md))
 	if err != nil {
 		if isInvalidTokenErr(err) {
-			return nil, status.Error(codes.Unauthenticated, "invalid access token")
+			return nil, false, status.Error(codes.Unauthenticated, "invalid access token")
 		}
-		return nil, status.Error(codes.Internal, "authentication failed")
+		return nil, false, status.Error(codes.Internal, "authentication failed")
 	}
 	if info == nil {
-		return nil, status.Error(codes.Unauthenticated, "authenticator returned no identity")
+		return nil, false, status.Error(codes.Unauthenticated, "authenticator returned no identity")
 	}
 	// authlib's AuthInfo does not retain the raw access token. Keep the token
 	// only after successful authentication so downstream clients can exchange
 	// it without losing the caller's identity or delegation chain.
-	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: tokens[0]}), nil
+	return types.WithAuthInfo(ctx, &authenticatedAuthInfo{AuthInfo: info, accessToken: tokens[0]}), !a.insecure, nil
 }
 
 // invalidTokenErrs are errors about the token itself that authlib passes on
@@ -84,6 +90,9 @@ type serverAuth struct {
 	authenticator authn.Authenticator
 	// pluginID, if set, is an audience covering every API group the plugin serves.
 	pluginID string
+	// insecure parses tokens without verifying them, and serves requests
+	// without a token (see ServeOpts.InsecureSkipAuthentication).
+	insecure bool
 }
 
 type authenticatedAdmissionServer struct {
@@ -92,15 +101,17 @@ type authenticatedAdmissionServer struct {
 }
 
 func (s *authenticatedAdmissionServer) AdmissionReview(ctx context.Context, req *pluginv3.AdmissionReviewRequest) (*pluginv3.AdmissionReviewResponse, error) {
-	ctx, err := authenticate(ctx, s.auth.authenticator)
+	ctx, verified, err := s.auth.authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.auth.checkAudience(ctx, req.GetKind().GetGroup()); err != nil {
-		return nil, err
-	}
-	if err := checkObjectNamespaces(ctx, req.GetObjectBytes(), req.GetOldObjectBytes()); err != nil {
-		return nil, err
+	if verified {
+		if err := s.auth.checkAudience(ctx, req.GetKind().GetGroup()); err != nil {
+			return nil, err
+		}
+		if err := checkObjectNamespaces(ctx, req.GetObjectBytes(), req.GetOldObjectBytes()); err != nil {
+			return nil, err
+		}
 	}
 	return s.AdmissionServiceServer.AdmissionReview(ctx, req)
 }
@@ -111,23 +122,25 @@ type authenticatedConversionServer struct {
 }
 
 func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
-	ctx, err := authenticate(ctx, s.auth.authenticator)
+	ctx, verified, err := s.auth.authenticate(ctx)
 	if err != nil {
 		return nil, err
 	}
-	group, err := conversionGroup(req)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	if err := s.auth.checkAudience(ctx, group); err != nil {
-		return nil, err
-	}
-	raws := make([][]byte, 0, len(req.GetObjects()))
-	for _, obj := range req.GetObjects() {
-		raws = append(raws, obj.GetRaw())
-	}
-	if err := checkObjectNamespaces(ctx, raws...); err != nil {
-		return nil, err
+	if verified {
+		group, err := conversionGroup(req)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		if err := s.auth.checkAudience(ctx, group); err != nil {
+			return nil, err
+		}
+		raws := make([][]byte, 0, len(req.GetObjects()))
+		for _, obj := range req.GetObjects() {
+			raws = append(raws, obj.GetRaw())
+		}
+		if err := checkObjectNamespaces(ctx, raws...); err != nil {
+			return nil, err
+		}
 	}
 	return s.ConversionServiceServer.ConvertObjects(ctx, req)
 }
@@ -138,15 +151,17 @@ type authenticatedRouteServer struct {
 }
 
 func (s *authenticatedRouteServer) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
-	ctx, err := authenticate(stream.Context(), s.auth.authenticator)
+	ctx, verified, err := s.auth.authenticate(stream.Context())
 	if err != nil {
 		return err
 	}
-	if err := s.auth.checkAudience(ctx, req.GetGroup()); err != nil {
-		return err
-	}
-	if err := checkNamespace(ctx, req.GetNamespace()); err != nil {
-		return err
+	if verified {
+		if err := s.auth.checkAudience(ctx, req.GetGroup()); err != nil {
+			return err
+		}
+		if err := checkNamespace(ctx, req.GetNamespace()); err != nil {
+			return err
+		}
 	}
 	return s.RouteServiceServer.CallRoute(req, &authenticatedRouteStream{stream, ctx})
 }

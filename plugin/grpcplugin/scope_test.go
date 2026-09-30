@@ -260,3 +260,52 @@ func TestServerPluginIDAudience(t *testing.T) {
 		}
 	}
 }
+
+func TestInsecureSkipAuthenticationParsesUnverifiedTokens(t *testing.T) {
+	// Signed by a key the plugin has never seen, as a local host would.
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	actor := &authn.ActorClaims{Subject: "user:42", IDTokenClaims: authn.IDTokenClaims{Identifier: "42", Type: types.TypeUser, Username: "alice"}}
+	// Neither the audience nor the namespace match the request; they are not checked.
+	token := signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:grafana", "other.app", authn.AccessTokenClaims{Namespace: "stacks-9", Actor: actor})
+	idToken := signDelegationToken(t, key, authn.TokenTypeID, "user:42", delegationGroup, authn.IDTokenClaims{Identifier: "42", Type: types.TypeUser})
+
+	for _, method := range []string{pluginKeyAdmission, pluginKeyConversion, pluginKeyRouter} {
+		for _, tt := range []struct {
+			name     string
+			md       metadata.MD
+			want     codes.Code
+			wantUser string
+		}{
+			{name: "unverified token", md: metadata.Pairs("x-access-token", token), wantUser: "alice"},
+			{name: "no token", md: metadata.MD{}},
+			{name: "malformed token", md: metadata.Pairs("x-access-token", "not-a-token"), want: codes.Unauthenticated},
+			{name: "ID token instead of an access token", md: metadata.Pairs("x-access-token", idToken), want: codes.Unauthenticated},
+			{name: "separate ID token", md: metadata.Pairs("x-access-token", token, "x-id-token", idToken), want: codes.Unauthenticated},
+		} {
+			t.Run(method+"/"+tt.name, func(t *testing.T) {
+				received := make(chan context.Context, 1)
+				server := &authenticationTestServer{check: func(ctx context.Context) error { received <- ctx; return nil }}
+				protocol := delegationProtocol(t, ServeOpts{AdmissionServer: server, ConversionServer: server, RouteServer: server, InsecureSkipAuthentication: true})
+				client, err := NewClientV3(protocol, ClientV3Options{})
+				require.NoError(t, err)
+				ctx, cancel := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), tt.md), 5*time.Second)
+				defer cancel()
+				require.Equal(t, tt.want, status.Code(callDelegationMethod(ctx, client, method)))
+				if tt.want != codes.OK {
+					require.Empty(t, received, "rejected requests must not invoke handlers")
+					return
+				}
+				info, ok := types.AuthInfoFrom(<-received)
+				if tt.wantUser == "" {
+					require.False(t, ok, "a request without a token has no identity")
+					return
+				}
+				require.True(t, ok)
+				require.Equal(t, tt.wantUser, info.GetUsername())
+				require.Equal(t, "user:42", info.GetSubject())
+				require.Equal(t, token, info.GetAccessToken(), "the token is kept for onward requests")
+			})
+		}
+	}
+}

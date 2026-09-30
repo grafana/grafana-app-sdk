@@ -3,6 +3,7 @@ package plugin
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 
 	"github.com/grafana/authlib/authn"
@@ -25,8 +26,10 @@ import (
 // WithAuthenticator or, without one, from GRAFANA_JWKS_URL or
 // GRAFANA_JWKS. Tokens must have the plugin ID or the manifest's
 // API group as an audience. Run fails if
-// neither is available, unless WithInsecureSkipAuthentication is set for local
-// development. When the host sets either variable, no options are needed:
+// neither is available, unless authentication is skipped for local development
+// with WithInsecureSkipAuthentication or GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true,
+// which Grafana sets from insecure_skip_authentication = true in the plugin's
+// [plugin.<id>] settings. When the host sets any of these, no options are needed:
 //
 //	func main() {
 //		if err := plugin.Run(myapp.Provider()); err != nil {
@@ -87,6 +90,10 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		cfg.pluginID = manifestData.AppName
 	}
 
+	if os.Getenv(EnvVarInsecureSkipAuthentication) == "true" {
+		cfg.insecureSkipAuthentication = true
+	}
+
 	if cfg.authenticator == nil {
 		authenticator, err := buildAuthenticator(cfg.pluginID, manifestData)
 		switch {
@@ -95,7 +102,7 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		case !errors.Is(err, ErrNoSigningKeys):
 			return err
 		case !cfg.insecureSkipAuthentication:
-			return errors.New("an authenticator is required: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS + ", or use WithAuthenticator, or WithInsecureSkipAuthentication for local development")
+			return errors.New("an authenticator is required: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS + ", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set " + EnvVarInsecureSkipAuthentication + "=true")
 		default:
 			// Authentication is explicitly skipped.
 		}
@@ -201,9 +208,11 @@ func WithAuthenticator(authenticator authn.Authenticator) RunOption {
 }
 
 // WithInsecureSkipAuthentication serves plugin protocol v3 requests without
-// authentication when no authenticator is set or configured by
-// GRAFANA_JWKS_URL or GRAFANA_JWKS. Handlers then get no caller
-// identity, so their outbound requests act as the plugin. Use it only for local development.
+// verifying them when no authenticator is set or configured by
+// GRAFANA_JWKS_URL or GRAFANA_JWKS. A request's access token is parsed without
+// checking its signature, so handlers get the identity it claims; requests
+// without one have no identity, and their outbound requests act as the plugin
+// (see grpcplugin.ServeOpts.InsecureSkipAuthentication). Use it only for local development.
 func WithInsecureSkipAuthentication() RunOption {
 	return func(cfg *runConfig) {
 		cfg.insecureSkipAuthentication = true
