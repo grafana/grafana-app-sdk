@@ -34,10 +34,10 @@ func TestBuildAuthenticatorVerifiesSignedAccessTokens(t *testing.T) {
 				_, _ = w.Write([]byte(jwks))
 			}))
 			t.Cleanup(server.Close)
-			t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, server.URL)
+			t.Setenv(EnvVarGrafanaJWKSURL, server.URL)
 		}},
 		{name: "explicit JWKS", env: func(t *testing.T) {
-			t.Setenv(EnvVarGrafanaAuthenticationJWKS, jwks)
+			t.Setenv(EnvVarGrafanaJWKS, jwks)
 		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -94,7 +94,7 @@ func TestBuildAuthenticatorConfiguration(t *testing.T) {
 		{name: "http on IPv6 loopback", url: "http://[::1]:3000/jwks", manifest: manifest},
 		{name: "explicit JWKS", jwks: validJWKS, manifest: manifest},
 		{name: "explicit JWKS with several keys", jwks: testJWKS(t, public, withKID(public, "b")), manifest: manifest},
-		{name: "missing", manifest: manifest, wantErr: "set GRAFANA_AUTHENTICATION_JWKS_URL or GRAFANA_AUTHENTICATION_JWKS"},
+		{name: "missing", manifest: manifest, wantErr: "set GRAFANA_JWKS_URL or GRAFANA_JWKS"},
 		{name: "both sources", url: "https://auth.example.com/v1/jwks", jwks: validJWKS, manifest: manifest, wantErr: "set only one of"},
 		{name: "http on remote host", url: "http://auth.example.com/jwks", manifest: manifest, wantErr: "https is required"},
 		{name: "relative", url: "/jwks", manifest: manifest, wantErr: "absolute URL"},
@@ -112,8 +112,8 @@ func TestBuildAuthenticatorConfiguration(t *testing.T) {
 		{name: "no audience without manifest", url: "https://auth.example.com/v1/jwks", wantErr: "a plugin ID or manifest API group is required"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, tt.url)
-			t.Setenv(EnvVarGrafanaAuthenticationJWKS, tt.jwks)
+			t.Setenv(EnvVarGrafanaJWKSURL, tt.url)
+			t.Setenv(EnvVarGrafanaJWKS, tt.jwks)
 			authenticator, err := buildAuthenticator(tt.pluginID, tt.manifest)
 			if tt.wantErr != "" {
 				require.ErrorContains(t, err, tt.wantErr)
@@ -125,8 +125,8 @@ func TestBuildAuthenticatorConfiguration(t *testing.T) {
 		})
 	}
 
-	t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, "")
-	t.Setenv(EnvVarGrafanaAuthenticationJWKS, "")
+	t.Setenv(EnvVarGrafanaJWKSURL, "")
+	t.Setenv(EnvVarGrafanaJWKS, "")
 	_, err = buildAuthenticator("example-app", manifest)
 	require.ErrorIs(t, err, ErrNoSigningKeys)
 }

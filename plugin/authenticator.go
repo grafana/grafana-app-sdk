@@ -15,24 +15,24 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 )
 
-// EnvVarGrafanaAuthenticationJWKSURL names the environment variable holding the
+// EnvVarGrafanaJWKSURL names the environment variable holding the
 // URL of the JWKS used to verify access tokens. Keys are downloaded on demand.
-const EnvVarGrafanaAuthenticationJWKSURL = "GRAFANA_AUTHENTICATION_JWKS_URL"
+const EnvVarGrafanaJWKSURL = "GRAFANA_JWKS_URL"
 
-// EnvVarGrafanaAuthenticationJWKS names the environment variable holding the
+// EnvVarGrafanaJWKS names the environment variable holding the
 // JWKS used to verify access tokens, as a JSON document.
-const EnvVarGrafanaAuthenticationJWKS = "GRAFANA_AUTHENTICATION_JWKS"
+const EnvVarGrafanaJWKS = "GRAFANA_JWKS"
 
 // ErrNoSigningKeys is returned by buildAuthenticator when neither
-// EnvVarGrafanaAuthenticationJWKSURL nor EnvVarGrafanaAuthenticationJWKS is set.
-var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafanaAuthenticationJWKSURL + " or " + EnvVarGrafanaAuthenticationJWKS)
+// EnvVarGrafanaJWKSURL nor EnvVarGrafanaJWKS is set.
+var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS)
 
 // buildAuthenticator builds the authenticator for plugin protocol v3 requests
 // (see grpcplugin.ServeOpts.Authenticator) from environment variables.
 //
 // Picks up the signing keys from exactly one of:
-// - GRAFANA_AUTHENTICATION_JWKS_URL, the JWKS endpoint of the service that signs access tokens
-// - GRAFANA_AUTHENTICATION_JWKS, the JWKS itself, as a JSON document
+// - GRAFANA_JWKS_URL, the JWKS endpoint of the service that signs access tokens
+// - GRAFANA_JWKS, the JWKS itself, as a JSON document
 //
 // Access tokens must be signed by one of those keys and have the plugin ID or
 // the manifest's API group as an audience. The host requests the API group
@@ -40,14 +40,14 @@ var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafa
 // development, as the keys decide which tokens the plugin trusts. An explicit
 // JWKS must contain only public signing keys, each with a key ID.
 func buildAuthenticator(pluginID string, manifestData *app.ManifestData) (authn.Authenticator, error) {
-	keysURL := os.Getenv(EnvVarGrafanaAuthenticationJWKSURL)
-	keysJSON := os.Getenv(EnvVarGrafanaAuthenticationJWKS)
+	keysURL := os.Getenv(EnvVarGrafanaJWKSURL)
+	keysJSON := os.Getenv(EnvVarGrafanaJWKS)
 	if keysURL == "" && keysJSON == "" {
 		return nil, ErrNoSigningKeys
 	}
 	// Two sources of trusted keys would be ambiguous.
 	if keysURL != "" && keysJSON != "" {
-		return nil, fmt.Errorf("set only one of %s and %s", EnvVarGrafanaAuthenticationJWKSURL, EnvVarGrafanaAuthenticationJWKS)
+		return nil, fmt.Errorf("set only one of %s and %s", EnvVarGrafanaJWKSURL, EnvVarGrafanaJWKS)
 	}
 
 	var audiences []string
@@ -65,13 +65,13 @@ func buildAuthenticator(pluginID string, manifestData *app.ManifestData) (authn.
 	var keys authn.KeyRetriever
 	if keysURL != "" {
 		if err := validateSigningKeysURL(keysURL); err != nil {
-			return nil, fmt.Errorf("invalid %s: %w", EnvVarGrafanaAuthenticationJWKSURL, err)
+			return nil, fmt.Errorf("invalid %s: %w", EnvVarGrafanaJWKSURL, err)
 		}
 		keys = authn.NewKeyRetriever(authn.KeyRetrieverConfig{SigningKeysURL: keysURL})
 	} else {
 		static, err := parseSigningKeys(keysJSON)
 		if err != nil {
-			return nil, fmt.Errorf("invalid %s: %w", EnvVarGrafanaAuthenticationJWKS, err)
+			return nil, fmt.Errorf("invalid %s: %w", EnvVarGrafanaJWKS, err)
 		}
 		keys = static
 	}

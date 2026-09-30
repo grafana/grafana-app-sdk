@@ -236,7 +236,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("builds the authenticator from the environment", func(t *testing.T) {
 		call := stubManage(t, nil)
-		t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, "https://auth.example.com/jwks")
+		t.Setenv(EnvVarGrafanaJWKSURL, "https://auth.example.com/jwks")
 
 		if err := Run(newFakeProvider("my-app")); err != nil {
 			t.Fatalf("Run returned error: %v", err)
@@ -252,7 +252,7 @@ func TestRun(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Setenv(EnvVarGrafanaAuthenticationJWKS, testJWKS(t, jose.JSONWebKey{Key: &key.PublicKey, KeyID: "test", Algorithm: string(jose.ES256), Use: "sig"}))
+		t.Setenv(EnvVarGrafanaJWKS, testJWKS(t, jose.JSONWebKey{Key: &key.PublicKey, KeyID: "test", Algorithm: string(jose.ES256), Use: "sig"}))
 
 		if err := Run(newFakeProvider("my-app")); err != nil {
 			t.Fatalf("Run returned error: %v", err)
@@ -283,7 +283,7 @@ func TestRun(t *testing.T) {
 
 	t.Run("rejects an invalid signing keys URL even when skipping authentication", func(t *testing.T) {
 		stubManage(t, nil)
-		t.Setenv(EnvVarGrafanaAuthenticationJWKSURL, "http://auth.example.com/jwks")
+		t.Setenv(EnvVarGrafanaJWKSURL, "http://auth.example.com/jwks")
 
 		err := Run(newFakeProvider("my-app"), WithInsecureSkipAuthentication())
 		if err == nil || !strings.Contains(err.Error(), "https is required") {
@@ -330,7 +330,7 @@ func TestRun(t *testing.T) {
 				name:     "no authenticator",
 				provider: newFakeProvider("my-app"),
 				noAuth:   true,
-				wantMsg:  "an authenticator is required: set GRAFANA_AUTHENTICATION_JWKS_URL or GRAFANA_AUTHENTICATION_JWKS, or use WithAuthenticator, or WithInsecureSkipAuthentication for local development",
+				wantMsg:  "an authenticator is required: set GRAFANA_JWKS_URL or GRAFANA_JWKS, or use WithAuthenticator, or WithInsecureSkipAuthentication for local development",
 			},
 			{
 				name:      "Manage fails",
