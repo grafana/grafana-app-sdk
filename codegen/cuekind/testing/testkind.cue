@@ -130,6 +130,10 @@ testKind: {
 					unionNull2?: #Def | #Def2 | null // null variant should be ignore in disjunction when generating the selectable field
 				}
 			}
+			secure: [
+				{key: "apiKey", description: "note this only exists in the v2 schema!"},
+				{key: "token"},
+			]
 			selectableFields: [".spec.stringField", ".spec.intField", ".spec.unionNull.str", ".spec.unionNull2.str"]
 			searchFields: [
 				{

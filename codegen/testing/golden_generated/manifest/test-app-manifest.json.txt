@@ -1,5 +1,5 @@
 {
-    "apiVersion": "apps.grafana.app/v1alpha1",
+    "apiVersion": "apps.grafana.app/v1alpha2",
     "kind": "AppManifest",
     "metadata": {
         "name": "test-app"
@@ -8,6 +8,11 @@
         "appName": "test-app",
         "appDisplayName": "test-app",
         "group": "testapp.ext.grafana.app",
+        "embed": {
+            "testkinds": {
+                "reembedVersion": 1
+            }
+        },
         "versions": [
             {
                 "name": "v1",
@@ -17,6 +22,7 @@
                         "kind": "TestKind",
                         "plural": "TestKinds",
                         "scope": "Namespaced",
+                        "userReadable": false,
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -25,8 +31,54 @@
                                 ]
                             }
                         },
-                        "schema": {
+                        "schemas": {
+                            "OperatorState": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "TestKind": {
+                                "properties": {
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
                             "spec": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "stringField": {
                                         "pattern": "^[a-zA-Z_][a-zA-Z0-9_-]*$",
@@ -39,43 +91,16 @@
                                 "type": "object"
                             },
                             "status": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
-                                        "type": "object",
-                                        "x-kubernetes-preserve-unknown-fields": true
+                                        "type": "object"
                                     },
                                     "operatorStates": {
                                         "additionalProperties": {
-                                            "properties": {
-                                                "descriptiveState": {
-                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                                    "type": "string"
-                                                },
-                                                "details": {
-                                                    "description": "details contains any extra information that is operator-specific",
-                                                    "type": "object",
-                                                    "x-kubernetes-preserve-unknown-fields": true
-                                                },
-                                                "lastEvaluation": {
-                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                                    "type": "string"
-                                                },
-                                                "state": {
-                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                                    "enum": [
-                                                        "success",
-                                                        "in_progress",
-                                                        "failed"
-                                                    ],
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "required": [
-                                                "lastEvaluation",
-                                                "state"
-                                            ],
-                                            "type": "object"
+                                            "$ref": "#/components/schemas/OperatorState"
                                         },
                                         "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
                                         "type": "object"
@@ -87,14 +112,83 @@
                         "selectableFields": [
                             ".spec.stringField"
                         ],
+                        "searchFields": [
+                            {
+                                "name": "stringField",
+                                "path": "spec.stringField",
+                                "type": "string",
+                                "capabilities": [
+                                    "filter",
+                                    "text",
+                                    "sort",
+                                    "retrieve"
+                                ],
+                                "description": "The string field"
+                            }
+                        ],
+                        "embed": {
+                            "fields": [
+                                {
+                                    "name": "details",
+                                    "path": "spec.stringField"
+                                }
+                            ]
+                        },
                         "conversion": true
                     },
                     {
                         "kind": "TestKind2",
                         "plural": "TestKind2s",
                         "scope": "Namespaced",
-                        "schema": {
+                        "userReadable": false,
+                        "schemas": {
+                            "OperatorState": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "TestKind2": {
+                                "properties": {
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
                             "spec": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "testField": {
                                         "type": "string"
@@ -106,43 +200,16 @@
                                 "type": "object"
                             },
                             "status": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
-                                        "type": "object",
-                                        "x-kubernetes-preserve-unknown-fields": true
+                                        "type": "object"
                                     },
                                     "operatorStates": {
                                         "additionalProperties": {
-                                            "properties": {
-                                                "descriptiveState": {
-                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                                    "type": "string"
-                                                },
-                                                "details": {
-                                                    "description": "details contains any extra information that is operator-specific",
-                                                    "type": "object",
-                                                    "x-kubernetes-preserve-unknown-fields": true
-                                                },
-                                                "lastEvaluation": {
-                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                                    "type": "string"
-                                                },
-                                                "state": {
-                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                                    "enum": [
-                                                        "success",
-                                                        "in_progress",
-                                                        "failed"
-                                                    ],
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "required": [
-                                                "lastEvaluation",
-                                                "state"
-                                            ],
-                                            "type": "object"
+                                            "$ref": "#/components/schemas/OperatorState"
                                         },
                                         "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
                                         "type": "object"
@@ -153,6 +220,9 @@
                         },
                         "storage": {
                             "listKeys": false
+                        },
+                        "search": {
+                            "trash": false
                         },
                         "conversion": false
                     }
@@ -166,6 +236,7 @@
                         "kind": "TestKind",
                         "plural": "TestKinds",
                         "scope": "Namespaced",
+                        "userReadable": false,
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -180,8 +251,156 @@
                                 ]
                             }
                         },
-                        "schema": {
+                        "schemas": {
+                            "Def": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "i": {
+                                        "type": "integer"
+                                    },
+                                    "str": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "str",
+                                    "i"
+                                ],
+                                "type": "object"
+                            },
+                            "Def2": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "b": {
+                                        "type": "boolean"
+                                    },
+                                    "str": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "str",
+                                    "b"
+                                ],
+                                "type": "object"
+                            },
+                            "OperatorState": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "TestKind": {
+                                "properties": {
+                                    "secure": {
+                                        "type": "object",
+                                        "properties": {
+                                            "apiKey": {
+                                                "description": "note this only exists in the v2 schema!",
+                                                "allOf": [
+                                                    {
+                                                        "$ref": "#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue"
+                                                    }
+                                                ]
+                                            },
+                                            "token": {
+                                                "$ref": "#/components/schemas/com.github.grafana.grafana-app-sdk.resource.InlineSecureValue"
+                                            }
+                                        },
+                                        "additionalProperties": false
+                                    },
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
+                            "com.github.grafana.grafana-app-sdk.resource.InlineSecureValue": {
+                                "type": "object",
+                                "oneOf": [
+                                    {
+                                        "required": [
+                                            "create"
+                                        ]
+                                    },
+                                    {
+                                        "required": [
+                                            "name"
+                                        ]
+                                    },
+                                    {
+                                        "required": [
+                                            "remove"
+                                        ]
+                                    }
+                                ],
+                                "not": {
+                                    "required": [
+                                        "description"
+                                    ],
+                                    "not": {
+                                        "required": [
+                                            "create"
+                                        ]
+                                    }
+                                },
+                                "properties": {
+                                    "create": {
+                                        "description": "Plaintext value to create in the secret service. Used only in create or update requests.",
+                                        "type": "string",
+                                        "maxLength": 24576,
+                                        "minLength": 1
+                                    },
+                                    "description": {
+                                        "description": "Optional description for a newly created secret. Only valid when create is set.",
+                                        "type": "string"
+                                    },
+                                    "name": {
+                                        "description": "Reference to an existing value in the secret service.",
+                                        "type": "string",
+                                        "maxLength": 253,
+                                        "minLength": 1
+                                    },
+                                    "remove": {
+                                        "description": "Remove this entry from the secure value map, deleting the secret if it is owned by this resource.",
+                                        "type": "boolean"
+                                    }
+                                },
+                                "additionalProperties": false
+                            },
                             "spec": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "intField": {
                                         "type": "integer"
@@ -196,98 +415,24 @@
                                     "unionNull": {
                                         "allOf": [
                                             {
-                                                "required": [
-                                                    "str",
-                                                    "i"
-                                                ]
+                                                "$ref": "#/components/schemas/Def"
                                             }
                                         ],
                                         "description": "This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction",
-                                        "nullable": true,
-                                        "properties": {
-                                            "i": {
-                                                "type": "integer"
-                                            },
-                                            "str": {
-                                                "type": "string"
-                                            }
-                                        },
-                                        "type": "object"
+                                        "nullable": true
                                     },
                                     "unionNull2": {
                                         "description": "null variant should be ignore in disjunction when generating the selectable field",
                                         "oneOf": [
                                             {
-                                                "not": {
-                                                    "anyOf": [
-                                                        {
-                                                            "required": [
-                                                                "b"
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                "required": [
-                                                    "str",
-                                                    "i"
-                                                ]
+                                                "$ref": "#/components/schemas/Def"
                                             },
                                             {
-                                                "not": {
-                                                    "anyOf": [
-                                                        {
-                                                            "required": [
-                                                                "i"
-                                                            ]
-                                                        }
-                                                    ]
-                                                },
-                                                "required": [
-                                                    "str",
-                                                    "b"
-                                                ]
+                                                "$ref": "#/components/schemas/Def2"
                                             },
                                             {
-                                                "not": {
-                                                    "anyOf": [
-                                                        {
-                                                            "required": [
-                                                                "str"
-                                                            ]
-                                                        },
-                                                        {
-                                                            "required": [
-                                                                "i"
-                                                            ]
-                                                        },
-                                                        {
-                                                            "required": [
-                                                                "str"
-                                                            ]
-                                                        },
-                                                        {
-                                                            "required": [
-                                                                "b"
-                                                            ]
-                                                        }
-                                                    ]
-                                                }
+                                                "type": "null"
                                             }
-                                        ],
-                                        "properties": {
-                                            "b": {
-                                                "type": "boolean"
-                                            },
-                                            "i": {
-                                                "type": "integer"
-                                            },
-                                            "str": {
-                                                "type": "string"
-                                            }
-                                        },
-                                        "type": [
-                                            "object",
-                                            "null"
                                         ]
                                     }
                                 },
@@ -299,43 +444,16 @@
                                 "type": "object"
                             },
                             "status": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
-                                        "type": "object",
-                                        "x-kubernetes-preserve-unknown-fields": true
+                                        "type": "object"
                                     },
                                     "operatorStates": {
                                         "additionalProperties": {
-                                            "properties": {
-                                                "descriptiveState": {
-                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                                    "type": "string"
-                                                },
-                                                "details": {
-                                                    "description": "details contains any extra information that is operator-specific",
-                                                    "type": "object",
-                                                    "x-kubernetes-preserve-unknown-fields": true
-                                                },
-                                                "lastEvaluation": {
-                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                                    "type": "string"
-                                                },
-                                                "state": {
-                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                                    "enum": [
-                                                        "success",
-                                                        "in_progress",
-                                                        "failed"
-                                                    ],
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "required": [
-                                                "lastEvaluation",
-                                                "state"
-                                            ],
-                                            "type": "object"
+                                            "$ref": "#/components/schemas/OperatorState"
                                         },
                                         "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
                                         "type": "object"
@@ -344,12 +462,56 @@
                                 "type": "object"
                             }
                         },
+                        "secure": [
+                            {
+                                "key": "apiKey",
+                                "description": "note this only exists in the v2 schema!"
+                            },
+                            {
+                                "key": "token"
+                            }
+                        ],
                         "selectableFields": [
                             ".spec.stringField",
                             ".spec.intField",
                             ".spec.unionNull.str",
                             ".spec.unionNull2.str"
                         ],
+                        "searchFields": [
+                            {
+                                "name": "stringField",
+                                "path": "spec.stringField",
+                                "type": "string",
+                                "capabilities": [
+                                    "filter",
+                                    "text",
+                                    "sort",
+                                    "retrieve"
+                                ],
+                                "description": "The string field"
+                            },
+                            {
+                                "name": "intField",
+                                "path": "spec.intField",
+                                "type": "int64",
+                                "capabilities": [
+                                    "filter",
+                                    "retrieve"
+                                ],
+                                "emitZeroIfAbsent": true
+                            }
+                        ],
+                        "search": {
+                            "hybrid": true
+                        },
+                        "embed": {
+                            "fields": [
+                                {
+                                    "name": "details",
+                                    "path": "spec.unionNull.str"
+                                }
+                            ]
+                        },
                         "conversion": true
                     }
                 ]
@@ -362,6 +524,7 @@
                         "kind": "TestKind",
                         "plural": "TestKinds",
                         "scope": "Namespaced",
+                        "userReadable": false,
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -376,8 +539,54 @@
                                 ]
                             }
                         },
-                        "schema": {
+                        "schemas": {
+                            "OperatorState": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
+                                        ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "TestKind": {
+                                "properties": {
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
                             "spec": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "boolField": {
                                         "type": "boolean"
@@ -402,43 +611,16 @@
                                 "type": "object"
                             },
                             "status": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
-                                        "type": "object",
-                                        "x-kubernetes-preserve-unknown-fields": true
+                                        "type": "object"
                                     },
                                     "operatorStates": {
                                         "additionalProperties": {
-                                            "properties": {
-                                                "descriptiveState": {
-                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                                    "type": "string"
-                                                },
-                                                "details": {
-                                                    "description": "details contains any extra information that is operator-specific",
-                                                    "type": "object",
-                                                    "x-kubernetes-preserve-unknown-fields": true
-                                                },
-                                                "lastEvaluation": {
-                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                                    "type": "string"
-                                                },
-                                                "state": {
-                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                                    "enum": [
-                                                        "success",
-                                                        "in_progress",
-                                                        "failed"
-                                                    ],
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "required": [
-                                                "lastEvaluation",
-                                                "state"
-                                            ],
-                                            "type": "object"
+                                            "$ref": "#/components/schemas/OperatorState"
                                         },
                                         "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
                                         "type": "object"
@@ -451,6 +633,40 @@
                             ".spec.stringField",
                             ".spec.intField",
                             ".spec.boolField"
+                        ],
+                        "searchFields": [
+                            {
+                                "name": "stringField",
+                                "path": "spec.stringField",
+                                "type": "string",
+                                "capabilities": [
+                                    "filter",
+                                    "text",
+                                    "sort",
+                                    "retrieve"
+                                ],
+                                "description": "The string field"
+                            },
+                            {
+                                "name": "intField",
+                                "path": "spec.intField",
+                                "type": "int64",
+                                "capabilities": [
+                                    "filter",
+                                    "retrieve"
+                                ],
+                                "emitZeroIfAbsent": true
+                            },
+                            {
+                                "name": "boolField",
+                                "path": "spec.boolField",
+                                "type": "boolean",
+                                "capabilities": [
+                                    "filter",
+                                    "retrieve"
+                                ],
+                                "emitZeroIfAbsent": true
+                            }
                         ],
                         "conversion": true,
                         "routes": {
@@ -652,7 +868,90 @@
                             }
                         }
                     }
-                ]
+                ],
+                "routes": {
+                    "namespaced": {
+                        "/foobar": {
+                            "post": {
+                                "operationId": "createFoobar",
+                                "requestBody": {
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "required": [
+                                                    "keys"
+                                                ],
+                                                "properties": {
+                                                    "keys": {
+                                                        "type": "array",
+                                                        "items": {
+                                                            "$ref": "#/components/schemas/createFoobarKey"
+                                                        }
+                                                    }
+                                                },
+                                                "additionalProperties": false
+                                            }
+                                        }
+                                    },
+                                    "required": true
+                                },
+                                "responses": {
+                                    "default": {
+                                        "description": "Default OK response",
+                                        "content": {
+                                            "application/json": {
+                                                "schema": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "altered",
+                                                        "apiVersion",
+                                                        "kind"
+                                                    ],
+                                                    "properties": {
+                                                        "altered": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "$ref": "#/components/schemas/createFoobarKey"
+                                                            }
+                                                        },
+                                                        "apiVersion": {
+                                                            "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+                                                            "type": "string"
+                                                        },
+                                                        "kind": {
+                                                            "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "schemas": {
+                        "createFoobarKey": {
+                            "description": "Key identifies a foobar entry.\nIt is referenced by a custom route, so its multi-line\ndescription exercises the route schema codegen path.",
+                            "type": "object",
+                            "required": [
+                                "name"
+                            ],
+                            "properties": {
+                                "match": {
+                                    "type": "string"
+                                },
+                                "name": {
+                                    "type": "string"
+                                }
+                            },
+                            "additionalProperties": false
+                        }
+                    }
+                }
             },
             {
                 "name": "v4",
@@ -662,6 +961,7 @@
                         "kind": "TestKind",
                         "plural": "TestKinds",
                         "scope": "Namespaced",
+                        "userReadable": false,
                         "admission": {
                             "validation": {
                                 "operations": [
@@ -670,42 +970,120 @@
                                 ]
                             }
                         },
-                        "schema": {
-                            "spec": {
+                        "schemas": {
+                            "OperatorState": {
+                                "additionalProperties": false,
                                 "properties": {
-                                    "union": {
-                                        "description": "Supported union variants.\nThe kind field selects the variant's spec.",
-                                        "oneOf": [
-                                            {
-                                                "required": [
-                                                    "kind",
-                                                    "spec"
-                                                ]
-                                            },
-                                            {
-                                                "required": [
-                                                    "kind",
-                                                    "spec"
-                                                ]
-                                            }
+                                    "descriptiveState": {
+                                        "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                        "type": "string"
+                                    },
+                                    "details": {
+                                        "additionalProperties": true,
+                                        "description": "details contains any extra information that is operator-specific",
+                                        "type": "object"
+                                    },
+                                    "lastEvaluation": {
+                                        "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                        "type": "string"
+                                    },
+                                    "state": {
+                                        "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                        "enum": [
+                                            "success",
+                                            "in_progress",
+                                            "failed"
                                         ],
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "lastEvaluation",
+                                    "state"
+                                ],
+                                "type": "object"
+                            },
+                            "TestKind": {
+                                "properties": {
+                                    "spec": {
+                                        "$ref": "#/components/schemas/spec"
+                                    },
+                                    "status": {
+                                        "$ref": "#/components/schemas/status"
+                                    }
+                                },
+                                "required": [
+                                    "spec"
+                                ]
+                            },
+                            "Union": {
+                                "description": "Supported union variants.\nThe kind field selects the variant's spec.",
+                                "oneOf": [
+                                    {
+                                        "$ref": "#/components/schemas/UnionVariantA"
+                                    },
+                                    {
+                                        "$ref": "#/components/schemas/UnionVariantB"
+                                    }
+                                ]
+                            },
+                            "UnionVariantA": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "const": "VariantA",
+                                        "type": "string"
+                                    },
+                                    "spec": {
+                                        "additionalProperties": false,
                                         "properties": {
-                                            "kind": {
+                                            "name": {
                                                 "type": "string"
-                                            },
-                                            "spec": {
-                                                "properties": {
-                                                    "name": {
-                                                        "type": "string"
-                                                    }
-                                                },
-                                                "required": [
-                                                    "name"
-                                                ],
-                                                "type": "object"
                                             }
                                         },
+                                        "required": [
+                                            "name"
+                                        ],
                                         "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "spec"
+                                ],
+                                "type": "object"
+                            },
+                            "UnionVariantB": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "kind": {
+                                        "const": "VariantB",
+                                        "type": "string"
+                                    },
+                                    "spec": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "name": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "required": [
+                                            "name"
+                                        ],
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "kind",
+                                    "spec"
+                                ],
+                                "type": "object"
+                            },
+                            "spec": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "union": {
+                                        "$ref": "#/components/schemas/Union"
                                     }
                                 },
                                 "required": [
@@ -714,43 +1092,16 @@
                                 "type": "object"
                             },
                             "status": {
+                                "additionalProperties": false,
                                 "properties": {
                                     "additionalFields": {
+                                        "additionalProperties": true,
                                         "description": "additionalFields is reserved for future use",
-                                        "type": "object",
-                                        "x-kubernetes-preserve-unknown-fields": true
+                                        "type": "object"
                                     },
                                     "operatorStates": {
                                         "additionalProperties": {
-                                            "properties": {
-                                                "descriptiveState": {
-                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
-                                                    "type": "string"
-                                                },
-                                                "details": {
-                                                    "description": "details contains any extra information that is operator-specific",
-                                                    "type": "object",
-                                                    "x-kubernetes-preserve-unknown-fields": true
-                                                },
-                                                "lastEvaluation": {
-                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
-                                                    "type": "string"
-                                                },
-                                                "state": {
-                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
-                                                    "enum": [
-                                                        "success",
-                                                        "in_progress",
-                                                        "failed"
-                                                    ],
-                                                    "type": "string"
-                                                }
-                                            },
-                                            "required": [
-                                                "lastEvaluation",
-                                                "state"
-                                            ],
-                                            "type": "object"
+                                            "$ref": "#/components/schemas/OperatorState"
                                         },
                                         "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
                                         "type": "object"

@@ -1200,6 +1200,45 @@ func TestVersionSchema_AsKubeOpenAPI_SecureValues(t *testing.T) {
 	}
 }
 
+func TestVersionSchema_AsKubeOpenAPI_ExactKindBeforeQualifiedDefinition(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "test.grafana.app", Version: "v1", Kind: "InlineSecureValue"}
+	vs, err := VersionSchemaFromMap(map[string]any{
+		"components": map[string]any{"schemas": map[string]any{
+			"InlineSecureValue": map[string]any{
+				"type":       "object",
+				"properties": map[string]any{"spec": map[string]any{"type": "object"}},
+			},
+			"com.github.grafana.grafana-app-sdk.resource.InlineSecureValue": map[string]any{
+				"type": "object",
+				"oneOf": []any{
+					map[string]any{"required": []string{"create"}},
+					map[string]any{"required": []string{"name"}},
+				},
+			},
+		}},
+	}, gvk.Kind)
+	require.NoError(t, err)
+	// Map iteration must never select a qualified definition before the exact kind.
+	for range 100 {
+		definitions, err := vs.AsKubeOpenAPI(gvk, spec.MustCreateRef, "example")
+		require.NoError(t, err)
+		require.Contains(t, definitions["example.InlineSecureValue"].Schema.Properties, "spec")
+	}
+}
+
+func TestSecureValuesOpenAPISchema_IndependentValues(t *testing.T) {
+	schema := SecureValuesOpenAPISchema([]ManifestVersionKindSecureValue{
+		{Key: "apiKey"}, {Key: "token"}, {Key: "*"},
+	})
+	apiKey := schema.Properties["apiKey"]
+	delete(apiKey.Properties, "create")
+	apiKey.OneOf[0].Required[0] = "changed"
+	for _, other := range []spec.Schema{schema.Properties["token"], *schema.AdditionalProperties.Schema} {
+		assert.Contains(t, other.Properties, "create")
+		assert.Equal(t, []string{"create"}, other.OneOf[0].Required)
+	}
+}
+
 func TestGetCRDOpenAPISchema(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -1269,6 +1308,14 @@ func TestGetCRDOpenAPISchema(t *testing.T) {
 		schemaName: "foo",
 		jsonData:   []byte(`{"components":{"schemas":{"duration":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration"},"foo":{"type":"object","properties":{"interval":{"allOf":[{"$ref":"#/components/schemas/duration"}],"default":"30s"}}}}}}`),
 		outputJSON: []byte(`{"type":"object","properties":{"interval":{"type":"string","pattern":"^[0-9]+s$","minLength":2,"description":"a duration","default":"30s"}}}`),
+	}, {
+		name:       "allOf with shared ref keeps nested validation",
+		schemaName: "foo",
+		jsonData: []byte(`{"components":{"schemas":{
+			"choice":{"type":"object","properties":{"a":{"type":"string"},"b":{"type":"string"}},"anyOf":[{"required":["a"]},{"required":["b"]}],"not":{"required":["a","b"]}},
+			"foo":{"allOf":[{"$ref":"#/components/schemas/choice"}],"description":"Choose one"}
+		}}}`),
+		outputJSON: []byte(`{"type":"object","description":"Choose one","properties":{"a":{"type":"string"},"b":{"type":"string"}},"allOf":[{"anyOf":[{"required":["a"]},{"required":["b"]}],"not":{"required":["a","b"]}}]}`),
 	}}
 
 	for _, test := range tests {
