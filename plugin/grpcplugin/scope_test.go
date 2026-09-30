@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
+	clientv3 "github.com/grafana/grafana-app-sdk/plugin/client/v3"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
@@ -36,8 +37,8 @@ func TestClientV3ExchangeScope(t *testing.T) {
 	user := &testCallerInfo{AuthInfo: authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{Rest: authn.AccessTokenClaims{Namespace: "stacks-1"}}), id: "user-id"}
 	service := &testCallerInfo{AuthInfo: authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{Rest: authn.AccessTokenClaims{Namespace: "*"}})}
 	object := func(ns string) []byte { return fmt.Appendf(nil, `{"metadata":{"namespace":%q}}`, ns) }
-	admission := func(objects ...[]byte) func(context.Context, *clientV3) error {
-		return func(ctx context.Context, c *clientV3) error {
+	admission := func(objects ...[]byte) func(context.Context, clientv3.Client) error {
+		return func(ctx context.Context, c clientv3.Client) error {
 			req := pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), ObjectBytes: objects[0]}.Build()
 			if len(objects) > 1 {
 				req.SetOldObjectBytes(objects[1])
@@ -46,8 +47,8 @@ func TestClientV3ExchangeScope(t *testing.T) {
 			return err
 		}
 	}
-	conversion := func(objects ...[]byte) func(context.Context, *clientV3) error {
-		return func(ctx context.Context, c *clientV3) error {
+	conversion := func(objects ...[]byte) func(context.Context, clientv3.Client) error {
+		return func(ctx context.Context, c clientv3.Client) error {
 			req := &pluginv3.ConvertObjectsRequest{}
 			for _, raw := range objects {
 				req.SetObjects(append(req.GetObjects(), pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), Raw: raw}.Build()))
@@ -56,8 +57,8 @@ func TestClientV3ExchangeScope(t *testing.T) {
 			return err
 		}
 	}
-	route := func(group, namespace string) func(context.Context, *clientV3) error {
-		return func(ctx context.Context, c *clientV3) error {
+	route := func(group, namespace string) func(context.Context, clientv3.Client) error {
+		return func(ctx context.Context, c clientv3.Client) error {
 			_, err := c.CallRoute(ctx, pluginv3.CallRouteRequest_builder{Group: new(group), Namespace: new(namespace)}.Build())
 			return err
 		}
@@ -67,7 +68,7 @@ func TestClientV3ExchangeScope(t *testing.T) {
 		name          string
 		info          types.AuthInfo
 		isService     func(context.Context) bool
-		call          func(context.Context, *clientV3) error
+		call          func(context.Context, clientv3.Client) error
 		wantNamespace string
 		wantSubject   string
 		wantErr       string
@@ -88,7 +89,7 @@ func TestClientV3ExchangeScope(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			exchanged := false
 			// Nil RPC clients stop each call after the exchange.
-			client := &clientV3{groups: []string{delegationGroup}, isServiceIdentity: tt.isService, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+			client := &authenticatedClientV3{next: &clientV3{}, groups: []string{delegationGroup}, isServiceIdentity: tt.isService, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 				exchanged = true
 				require.Equal(t, tt.wantNamespace, req.Namespace)
 				require.Equal(t, tt.wantSubject, req.SubjectToken)
@@ -108,6 +109,40 @@ func TestClientV3ExchangeScope(t *testing.T) {
 }
 
 var errStopAfterExchange = fmt.Errorf("stop after exchange")
+
+func TestClientV3PluginIDAudience(t *testing.T) {
+	caller := &testCallerInfo{AuthInfo: authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{Rest: authn.AccessTokenClaims{Namespace: "stacks-1"}}), access: "access"}
+	for _, tt := range []struct {
+		name    string
+		groups  []string
+		group   string
+		wantErr string
+	}{
+		{name: "any group without an allowlist", group: "second.grafana.app"},
+		{name: "allowlisted group", groups: []string{delegationGroup}, group: delegationGroup},
+		{name: "group outside the allowlist", groups: []string{delegationGroup}, group: "second.grafana.app", wantErr: "is not served by this plugin"},
+		{name: "missing group", wantErr: "API group is required"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			exchanged := false
+			client, err := WithAuthentication(&clientV3{}, ClientV3Options{PluginID: "example-app", Groups: tt.groups, TokenExchanger: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+				exchanged = true
+				require.Equal(t, []string{"example-app"}, req.Audiences, "the plugin ID is the audience for every group")
+				require.Equal(t, "stacks-1", req.Namespace)
+				return nil, errStopAfterExchange
+			})})
+			require.NoError(t, err)
+			_, err = client.CallRoute(types.WithAuthInfo(context.Background(), caller), pluginv3.CallRouteRequest_builder{Group: new(tt.group), Namespace: new("stacks-1")}.Build())
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				require.False(t, exchanged)
+				return
+			}
+			require.ErrorIs(t, err, errStopAfterExchange)
+			require.True(t, exchanged)
+		})
+	}
+}
 
 func TestServerObjectNamespaces(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)

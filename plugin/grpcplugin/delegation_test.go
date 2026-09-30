@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	clientv3 "github.com/grafana/grafana-app-sdk/plugin/client/v3"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
 
@@ -155,7 +156,7 @@ func TestDelegationFailsBeforeRPC(t *testing.T) {
 			t.Run(method+"/"+tt.name, func(t *testing.T) {
 				exchanged := false
 				// Nil RPC clients panic if failure accidentally falls through to an RPC.
-				client := &clientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+				client := &authenticatedClientV3{next: &clientV3{}, groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(_ context.Context, req authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 					exchanged = true
 					require.Equal(t, "access", req.SubjectToken, "access token takes precedence over ID token")
 					return tt.response, tt.err
@@ -183,7 +184,7 @@ func TestConversionAudienceValidation(t *testing.T) {
 		{name: "empty batch"}, {name: "missing group", groups: []string{""}}, {name: "mixed groups", groups: []string{delegationGroup, "other.app"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			client := &clientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+			client := &authenticatedClientV3{next: &clientV3{}, groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 				t.Fatal("invalid conversion must not exchange tokens")
 				return nil, nil
 			})}
@@ -197,14 +198,40 @@ func TestConversionAudienceValidation(t *testing.T) {
 	}
 }
 
-func TestDelegationDisabledPreservesContext(t *testing.T) {
-	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", "existing"))
-	got, err := (&clientV3{}).addMetadataToContext(ctx, "", "")
+func TestDelegationDisabledSendsRequestsUnchanged(t *testing.T) {
+	protocol := &testClientProtocol{plugins: map[string]any{
+		pluginKeyAdmission:  pluginv3.NewAdmissionServiceClient(nil),
+		pluginKeyConversion: pluginv3.NewConversionServiceClient(nil),
+		pluginKeyRouter:     pluginv3.NewRouteServiceClient(nil),
+	}}
+	client, err := NewClientV3(protocol, ClientV3Options{})
 	require.NoError(t, err)
-	require.Same(t, ctx, got)
+	_, ok := client.(*clientV3)
+	require.True(t, ok, "without a token exchanger, requests are not authenticated")
 }
 
-func callDelegationMethod(ctx context.Context, client ClientV3, method string) error {
+func TestWithAuthenticationValidatesOptions(t *testing.T) {
+	exchanger := authn.NewStaticTokenExchanger("token")
+	for _, tt := range []struct {
+		name string
+		next clientv3.Client
+		opts ClientV3Options
+		want string
+	}{
+		{name: "no client", opts: ClientV3Options{TokenExchanger: exchanger, PluginID: "example-app"}, want: "a client is required"},
+		{name: "no exchanger", next: &clientV3{}, opts: ClientV3Options{PluginID: "example-app"}, want: "a token exchanger is required"},
+		{name: "no audience", next: &clientV3{}, opts: ClientV3Options{TokenExchanger: exchanger}, want: "the plugin ID or the plugin's API groups are required"},
+		{name: "empty group", next: &clientV3{}, opts: ClientV3Options{TokenExchanger: exchanger, PluginID: "example-app", Groups: []string{""}}, want: "API groups must not be empty"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := WithAuthentication(tt.next, tt.opts)
+			require.Nil(t, client)
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
+func callDelegationMethod(ctx context.Context, client clientv3.Client, method string) error {
 	switch method {
 	case pluginKeyAdmission:
 		_, err := client.AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), ObjectBytes: delegationObject}.Build())
@@ -277,7 +304,7 @@ func signDelegationToken(t *testing.T, key *ecdsa.PrivateKey, typ, subject, audi
 }
 
 func TestDelegationRequiresResourceGroup(t *testing.T) {
-	client := &clientV3{groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
+	client := &authenticatedClientV3{next: &clientV3{}, groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
 		t.Fatal("missing audience must not exchange tokens")
 		return nil, nil
 	})}

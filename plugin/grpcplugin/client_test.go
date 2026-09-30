@@ -4,7 +4,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/grafana/authlib/authn"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 )
@@ -64,3 +67,25 @@ func (c *testClientProtocol) Dispense(key string) (any, error) {
 }
 
 func (*testClientProtocol) Ping() error { return nil }
+
+func TestNewClientV3FromConn(t *testing.T) {
+	_, err := NewClientV3FromConn(nil, ClientV3Options{})
+	require.ErrorContains(t, err, "a gRPC connection is required")
+
+	conn, err := grpc.NewClient("passthrough:///unused", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	client, err := NewClientV3FromConn(conn, ClientV3Options{})
+	require.NoError(t, err)
+	_, ok := client.(*clientV3)
+	require.True(t, ok, "without a token exchanger, requests are not authenticated")
+
+	client, err = NewClientV3FromConn(conn, ClientV3Options{TokenExchanger: authn.NewStaticTokenExchanger("token"), PluginID: "example-app"})
+	require.NoError(t, err)
+	_, ok = client.(*authenticatedClientV3)
+	require.True(t, ok)
+
+	_, err = NewClientV3FromConn(conn, ClientV3Options{TokenExchanger: authn.NewStaticTokenExchanger("token")})
+	require.ErrorContains(t, err, "the plugin ID or the plugin's API groups are required")
+}
