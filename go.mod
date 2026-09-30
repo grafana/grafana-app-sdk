@@ -16,6 +16,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
+	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/codejen v0.0.4
 	github.com/grafana/cog v0.2.1
 	github.com/grafana/grafana-app-sdk/logging v0.60.2
@@ -93,7 +94,6 @@ require (
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 // indirect
 	github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.1.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.4 // indirect
