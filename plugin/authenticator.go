@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"os"
 
@@ -43,8 +42,8 @@ var ErrNoSigningKeys = errors.New("no signing keys provided: set " + EnvVarGrafa
 //
 // Access tokens must be signed by one of those keys and have the plugin ID or
 // the manifest's API group as an audience. The host requests the API group
-// when it exchanges the caller's token. The URL must use https, except on a loopback host for local
-// development, as the keys decide which tokens the plugin trusts. An explicit
+// when it exchanges the caller's token. The URL must be an absolute http or
+// https URL, so in-cluster endpoints served over plain http work. An explicit
 // JWKS must contain only public signing keys, each with a key ID.
 func buildAuthenticator(pluginID string, manifestData *app.ManifestData) (authn.Authenticator, error) {
 	keysURL := os.Getenv(EnvVarGrafanaJWKSURL)
@@ -96,13 +95,8 @@ func validateSigningKeysURL(raw string) error {
 		return errors.New("an absolute URL is required")
 	}
 	switch u.Scheme {
-	case "https":
+	case "http", "https":
 		return nil
-	case "http":
-		if host := u.Hostname(); host == "localhost" || net.ParseIP(host).IsLoopback() {
-			return nil
-		}
-		return errors.New("https is required for non-loopback hosts")
 	default:
 		return fmt.Errorf("unsupported scheme %q", u.Scheme)
 	}
