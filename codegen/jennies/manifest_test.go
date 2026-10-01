@@ -208,6 +208,11 @@ func TestProcessKindVersion_Search(t *testing.T) {
 		name:     "hybrid opt-in with trash opt-out",
 		search:   codegen.KindSearch{Endpoint: true, Trash: false, Hybrid: true},
 		expected: &app.ManifestVersionKindSearch{Trash: new(false), Hybrid: new(true)},
+	}, {
+		// Global defaults off, so it is written only when true.
+		name:     "global opt-in",
+		search:   codegen.KindSearch{Endpoint: true, Trash: true, Global: true},
+		expected: &app.ManifestVersionKindSearch{Global: new(true)},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			mver, err := processKindVersion(codegen.VersionedKind{

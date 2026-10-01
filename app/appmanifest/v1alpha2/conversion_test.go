@@ -230,6 +230,8 @@ func TestSearchEndpointsConversion(t *testing.T) {
 		{name: "hybrid opt-in", search: &app.ManifestVersionKindSearch{Hybrid: boolPtr(true)}},
 		{name: "hybrid explicit false", search: &app.ManifestVersionKindSearch{Hybrid: boolPtr(false)}},
 		{name: "hybrid opt-in with search opt-out", search: &app.ManifestVersionKindSearch{Endpoint: boolPtr(false), Hybrid: boolPtr(true)}},
+		{name: "global opt-in", search: &app.ManifestVersionKindSearch{Global: boolPtr(true)}},
+		{name: "global explicit false", search: &app.ManifestVersionKindSearch{Global: boolPtr(false)}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			md := app.ManifestData{

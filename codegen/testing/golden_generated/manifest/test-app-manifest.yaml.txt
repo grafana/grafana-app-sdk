@@ -361,6 +361,7 @@ spec:
           type: object
       scope: Namespaced
       search:
+        global: true
         hybrid: true
       searchFields:
       - capabilities:

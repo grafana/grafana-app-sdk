@@ -448,6 +448,10 @@ type ManifestVersionKindSearch struct {
 	// defaults to false: serving it requires embeddings for the kind, so kinds opt in
 	// rather than out.
 	Hybrid *bool `json:"hybrid,omitempty" yaml:"hybrid,omitempty"`
+	// Global declares whether the kind is included in the namespace-wide search index.
+	// A nil value defaults to false: each kind must check how its documents are
+	// authorized before they can be returned next to other kinds.
+	Global *bool `json:"global,omitempty" yaml:"global,omitempty"`
 }
 
 // ManifestVersionKindEmbed defines the embedding document independently of search fields.
@@ -497,6 +501,12 @@ func (m *ManifestVersionKind) HasTrashEndpoint() bool {
 // it needs embeddings for the kind, which are neither free nor automatic.
 func (m *ManifestVersionKind) HasHybridEndpoint() bool {
 	return m.Search != nil && m.Search.Hybrid != nil && *m.Search.Hybrid
+}
+
+// InGlobalSearchIndex reports whether the kind is included in the namespace-wide search index.
+// Kinds are not included unless they explicitly opt in.
+func (m *ManifestVersionKind) InGlobalSearchIndex() bool {
+	return m.Search != nil && m.Search.Global != nil && *m.Search.Global
 }
 
 // isFolderScoped returns the effective folderScoped value for a kind, treating a nil pointer

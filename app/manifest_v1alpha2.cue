@@ -105,7 +105,7 @@ appManifestv1alpha2: appManifestKind & {
 			// storage declares storage-related behavior for this kind.
 			storage?: #ManifestVersionKindStorage
 			// search declares which search endpoints are served for this kind.
-			// /search and /trash default to enabled; /search/hybrid defaults to disabled.
+			// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 			search?: #ManifestVersionKindSearch
 			// embed defines the embedding document independently of search fields.
 			embed?: #ManifestVersionKindEmbed
@@ -134,6 +134,8 @@ appManifestv1alpha2: appManifestKind & {
 			trash?: bool | *true
 			// hybrid declares whether the kind serves the /search/hybrid endpoint.
 			hybrid?: bool | *false
+			// global declares whether the kind is included in the namespace-wide search index.
+			global?: bool | *false
 		}
 		// Kinds with a custom embedding builder omit this section.
 		#ManifestVersionKindEmbed: {

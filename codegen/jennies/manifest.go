@@ -585,9 +585,9 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 // manifestKindSearch translates a kind's search endpoint choices into the manifest.
 // Only choices that differ from the endpoint's default are written out, keeping the
 // manifest data clean; a nil pointer is interpreted as the default downstream.
-// /search and /trash default to served, /search/hybrid to not served.
+// /search and /trash default to served, /search/hybrid and global index inclusion to off.
 func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearch {
-	if search.Endpoint && search.Trash && !search.Hybrid {
+	if search.Endpoint && search.Trash && !search.Hybrid && !search.Global {
 		return nil
 	}
 	out := &app.ManifestVersionKindSearch{}
@@ -599,6 +599,9 @@ func manifestKindSearch(search codegen.KindSearch) *app.ManifestVersionKindSearc
 	}
 	if search.Hybrid {
 		out.Hybrid = &search.Hybrid
+	}
+	if search.Global {
+		out.Global = &search.Global
 	}
 	return out
 }
