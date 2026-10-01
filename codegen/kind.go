@@ -113,6 +113,9 @@ type KindSearch struct {
 	// Hybrid controls whether the kind serves the /search/hybrid endpoint.
 	// Unlike the other two it is off unless the kind opts in.
 	Hybrid bool `json:"hybrid"`
+	// Global controls whether the kind is included in the namespace-wide search index.
+	// Off unless the kind opts in.
+	Global bool `json:"global"`
 }
 
 // KindEmbed defines the embedding document independently of search fields.

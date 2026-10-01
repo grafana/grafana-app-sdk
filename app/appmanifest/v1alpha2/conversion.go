@@ -143,6 +143,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 					Endpoint: kind.Search.Endpoint,
 					Trash:    kind.Search.Trash,
 					Hybrid:   kind.Search.Hybrid,
+					Global:   kind.Search.Global,
 				}
 			}
 			if kind.Embed != nil {
@@ -457,6 +458,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 					Endpoint: kind.Search.Endpoint,
 					Trash:    kind.Search.Trash,
 					Hybrid:   kind.Search.Hybrid,
+					Global:   kind.Search.Global,
 				}
 			}
 			if kind.Embed != nil {

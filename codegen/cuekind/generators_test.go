@@ -199,6 +199,7 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 							assert.Nil(t, kind.Embed)
 						}
 						assert.False(t, kind.HasHybridEndpoint())
+						assert.False(t, kind.InGlobalSearchIndex())
 						continue
 					}
 
@@ -210,6 +211,7 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 						},
 					}, kind.Embed)
 					assert.True(t, kind.HasHybridEndpoint())
+					assert.True(t, kind.InGlobalSearchIndex())
 					require.Len(t, kind.SearchFields, 2)
 					assert.Equal(t, "stringField", kind.SearchFields[0].Name)
 					assert.Equal(t, "intField", kind.SearchFields[1].Name)

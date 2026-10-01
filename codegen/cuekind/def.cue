@@ -245,6 +245,12 @@ SchemaWithOperatorState: Schema & {
 	// Defaults off, unlike the two above: serving it requires embeddings for the
 	// kind, which cost money to generate and must also be enabled on the server.
 	hybrid: bool | *false
+	// global controls whether the kind is included in the namespace-wide search index,
+	// which searches across all included kinds at once.
+	//
+	// Defaults off: before opting in, check how the kind's documents are authorized,
+	// since they are returned next to documents of other kinds.
+	global: bool | *false
 }
 
 // #KindEmbed defines the embedding document independently of search fields.
@@ -360,7 +366,7 @@ Kind: S={
 	listKeys: bool | *true
 	// search controls which search endpoints are served for this kind.
 	// /search and /trash are served unless the kind opts out here; /search/hybrid
-	// is not served unless the kind opts in.
+	// is not served and the kind is not in the global index unless the kind opts in.
 	search: #KindSearch
 	// embed defines the embedding document independently of search fields.
 	embed?: #KindEmbed

@@ -502,7 +502,8 @@
                             }
                         ],
                         "search": {
-                            "hybrid": true
+                            "hybrid": true,
+                            "global": true
                         },
                         "embed": {
                             "fields": [
