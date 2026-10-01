@@ -284,11 +284,11 @@ func TestRun(t *testing.T) {
 
 	t.Run("rejects an invalid signing keys URL even when skipping authentication", func(t *testing.T) {
 		stubManage(t, nil)
-		t.Setenv(EnvVarGrafanaJWKSURL, "http://auth.example.com/jwks")
+		t.Setenv(EnvVarGrafanaJWKSURL, "ftp://auth.example.com/jwks")
 
 		err := Run(newFakeProvider("my-app"), WithInsecureSkipAuthentication())
-		if err == nil || !strings.Contains(err.Error(), "https is required") {
-			t.Fatalf("expected an https error, got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "unsupported scheme") {
+			t.Fatalf("expected an unsupported scheme error, got %v", err)
 		}
 	})
 

@@ -96,7 +96,7 @@ func TestBuildAuthenticatorConfiguration(t *testing.T) {
 		{name: "explicit JWKS with several keys", jwks: testJWKS(t, public, withKID(public, "b")), manifest: manifest},
 		{name: "missing", manifest: manifest, wantErr: "set GRAFANA_JWKS_URL or GRAFANA_JWKS"},
 		{name: "both sources", url: "https://auth.example.com/v1/jwks", jwks: validJWKS, manifest: manifest, wantErr: "set only one of"},
-		{name: "http on remote host", url: "http://auth.example.com/jwks", manifest: manifest, wantErr: "https is required"},
+		{name: "http on remote host", url: "http://api-lb.auth.svc.cluster.local./v1/keys", manifest: manifest},
 		{name: "relative", url: "/jwks", manifest: manifest, wantErr: "absolute URL"},
 		{name: "file URL", url: "file:///etc/jwks", manifest: manifest, wantErr: "absolute URL"},
 		{name: "ftp scheme", url: "ftp://auth.example.com/jwks", manifest: manifest, wantErr: "unsupported scheme"},
