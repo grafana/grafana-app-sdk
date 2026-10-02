@@ -7,7 +7,6 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"strings"
 
 	"github.com/emicklei/go-restful/v3"
 	"google.golang.org/grpc"
@@ -15,6 +14,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/logging"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -129,16 +129,13 @@ type restfulRouteAdapter struct {
 	handler http.Handler
 }
 
-// CallRoute dispatches the scope-relative request through the selected go-restful
-// service, preserving its filters and streaming the HTTP response over gRPC.
+// CallRoute dispatches the original request URL, including its /apis/group/version
+// prefix, through the handler and streams the HTTP response over gRPC.
 func (a *restfulRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
+		return sendError(stream, int32(http.StatusBadRequest), err.Error())
 	}
-	// Dispatch with the protocol's scope-relative path, keeping the original query.
-	u.Path = "/" + strings.TrimPrefix(req.GetPath(), "/")
-	u.RawPath = ""
 	info := &resource.RouteRequestInfo{FullIdentifier: resource.FullIdentifier{
 		Group:     req.GetGroup(),
 		Version:   req.GetVersion(),
@@ -159,9 +156,11 @@ func (a *restfulRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream g
 	ctx := resource.WithRouteRequestInfo(stream.Context(), info)
 	httpReq, err := http.NewRequestWithContext(ctx, req.GetMethod(), u.String(), bytes.NewReader(req.GetBody()))
 	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
+		return sendError(stream, int32(http.StatusBadRequest), err.Error())
 	}
 	httpReq.Header = routeHeaders(req.GetHeaders())
+
+	logging.FromContext(ctx).Info("ROUTE", "url", u.String())
 
 	rec := newResponseRecorder(stream)
 	a.handler.ServeHTTP(rec, httpReq)
