@@ -4,56 +4,57 @@ import (
 	"net/http"
 
 	"github.com/emicklei/go-restful/v3"
+	authlib "github.com/grafana/authlib/types"
 
-	"github.com/grafana/grafana-app-sdk/app"
+	"github.com/grafana/grafana-app-sdk/resource"
 )
 
 // Dummy is a sample response type used to generate an OpenAPI schema.
 type Dummy struct {
-	ID   string `json:"id" description:"identifier of the thing"`
-	Name string `json:"name" description:"name of the thing" default:"john"`
-	Age  int    `json:"age" description:"age of the thing" default:"21"`
+	ID   string                     `json:"id" description:"identifier of the thing"`
+	Auth any                        `json:"auth,omitempty" description:"authentication information (from context)"`
+	Info *resource.RouteRequestInfo `json:"info" description:"request info"`
 }
 
 // handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
-func (*ManagedApp) ProvideRoutes(version string) (*app.RestfulRoutes, error) {
-	routes := &app.RestfulRoutes{}
+func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
+	prefix := "/apis/group/v1"
+	ws := new(restful.WebService)
+	ws.Path(prefix).
+		Consumes(restful.MIME_JSON).
+		Produces(restful.MIME_JSON)
 
 	// Cluster Scoped routes setup
-	ws := new(restful.WebService)
-	ws.Path("/things").
-		Consumes(restful.MIME_JSON).
-		Produces(restful.MIME_JSON)
-
-	ws.Route(ws.GET("/{thing-id}").To(findThings).
-		Operation("getClusterThing").
-		Doc("get a thing").
+	ws.Route(ws.GET("/foo").To(findThings).
+		Operation("getFoo").
+		Doc("get foo").
 		AddExtension("x-grafana-requires-role", "some-role").
-		Param(ws.PathParameter("thing-id", "identifier of the thing").DataType("string")).
+		Param(ws.QueryParameter("input", "query").DataType("string")).
 		Writes(Dummy{}).
-		Returns(http.StatusOK, "The requested cluster thing", Dummy{}))
-	routes.Cluster = ws
+		Returns(http.StatusOK, "cluster request for foo", Dummy{}))
 
 	// Namespaced Scoped routes setup
-	ws = new(restful.WebService)
-	ws.Path("/things").
-		Consumes(restful.MIME_JSON).
-		Produces(restful.MIME_JSON)
-
-	ws.Route(ws.GET("/{thing-id}").To(findThings).
-		Operation("getNamespacedThing").
-		Doc("get a thing").
-		Param(ws.PathParameter("thing-id", "identifier of the thing").DataType("string")).
+	ws.Path(prefix + "/namespaces/{namespace}/things")
+	ws.Route(ws.GET("/bar").To(findThings).
+		Operation("getBar").
+		Doc("get bar").
 		Writes(Dummy{}).
 		Returns(http.StatusOK, "The requested namespaced thing", Dummy{}))
-	routes.Namespaced = ws
 
 	// someday... the kinds flavor
 
-	return routes, nil
+	return ws, nil
 }
 
 func findThings(request *restful.Request, response *restful.Response) {
-	id := request.PathParameter("thing-id")
-	_ = response.WriteEntity(Dummy{ID: id, Name: "dumb dumb (cluster)", Age: 49})
+	ctx := request.Request.Context()
+	auth, _ := authlib.AuthInfoFrom(ctx)
+
+	dummy := Dummy{
+		ID:   request.QueryParameter("input"),
+		Auth: auth,
+		Info: resource.RouteRequestInfoFrom(ctx),
+	}
+
+	_ = response.WriteEntity(dummy)
 }
