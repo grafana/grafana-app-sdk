@@ -328,3 +328,48 @@ func TestExternalOpenAPIErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenAPIDefaultResponseAndExamples(t *testing.T) {
+	routes, err := parseOpenAPIRoutes([]byte(`{
+  "openapi": "3.0.3",
+  "paths": {"x-description": {"$ref": "literal extension data"}, "/reports": {"get": {"responses": {
+    "default": {"$ref": "#/components/responses/Problem"}
+  }}}},
+  "components": {
+    "responses": {"Problem": {
+      "description": "A failure",
+      "content": {"application/json": {
+        "schema": {"type": "object"},
+        "examples": {"failure": {"$ref": "#/components/examples/Failure"}}
+      }}
+    }},
+    "examples": {"Failure": {"value": {"$ref": "literal example data"}}}
+  }
+}`), "example.test", "v1")
+	require.NoError(t, err)
+	response := routes.Cluster["/reports"].Get.Responses.Default
+	require.NotNil(t, response)
+	assert.Empty(t, response.Ref.String())
+	assert.Equal(t, "A failure", response.Description)
+	example := response.Content["application/json"].Examples["failure"]
+	require.NotNil(t, example)
+	assert.Empty(t, example.Ref.String())
+	assert.Equal(t, map[string]any{"$ref": "literal example data"}, example.Value)
+}
+
+func TestOpenAPIPropertyNamesAreNotKeywords(t *testing.T) {
+	for _, name := range []string{"default", "example", "enum", "x-field"} {
+		t.Run(name, func(t *testing.T) {
+			// These names are legal object properties, not literal schema values
+			// or extensions. Their references must still be checked.
+			doc := strings.ReplaceAll(`{
+  "openapi": "3.0.3",
+  "components": {"schemas": {"Result": {
+    "type": "object", "properties": {"PROPERTY": {"$ref": "#/components/schemas/Missing"}}
+  }}}
+}`, "PROPERTY", name)
+			_, err := parseOpenAPIRoutes([]byte(doc), "example.test", "v1")
+			require.ErrorContains(t, err, "unresolved reference")
+		})
+	}
+}

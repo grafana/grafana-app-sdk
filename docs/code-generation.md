@@ -200,3 +200,12 @@ sub-resource routes alongside [CUE definitions](../codegen/cuekind/testing/integ
 Code generation for both kinds and project components is done as part of the [issue tracker tutorial](./tutorials/issue-tracker/README.md) ([kind code generation](./tutorials/issue-tracker/03-generate-kind-code.md), [project component generation](./tutorials/issue-tracker/04-boilerplate.md)).
 
 Automated testing of kind code generation is done using the files in [codegen/cuekind/testing/](../codegen/cuekind/testing/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).
+
+The combined CUE/OpenAPI integration manifest has separate JSON and YAML snapshots
+in [codegen/cuekind/testing/golden](../codegen/cuekind/testing/golden/). These are
+checked by `TestManifestGenerator_IntegrationOpenAPI` and are intentionally outside
+the CLI comparison fixtures. To update them after an intentional output change:
+
+```sh
+UPDATE_INTEGRATION_GOLDEN=1 go test ./codegen/cuekind -run '^TestManifestGenerator_IntegrationOpenAPI$' -count=1
+```
