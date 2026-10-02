@@ -75,6 +75,7 @@ func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream gr
 	if err != nil {
 		return sendError(stream, http.StatusBadRequest, err.Error())
 	}
+
 	rec := newResponseRecorder(stream)
 	customReq := &app.CustomRouteRequest{
 		ResourceIdentifier: routeResourceIdentifier(req),
