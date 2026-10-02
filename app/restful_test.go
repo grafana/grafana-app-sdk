@@ -48,20 +48,20 @@ func TestRestfulRoutesWebService(t *testing.T) {
 		} {
 			t.Run(version+tc.path, func(t *testing.T) {
 				response := httptest.NewRecorder()
-				container.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/apis/example.grafana.app/"+version+tc.path, nil))
+				container.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tc.path, nil))
 				require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 				require.Equal(t, "true", response.Header().Get("X-Filtered"))
 				require.JSONEq(t, `{"namespace":"`+tc.namespace+`","name":"`+tc.name+`"}`, response.Body.String())
 			})
 		}
 	}
-	// A requested version is mounted once; other versions must not be exposed.
+	// The API prefix is supplied by the caller; this service exposes relative paths.
 	response := httptest.NewRecorder()
 	container.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/apis/example.grafana.app/v2/reports", nil))
 	require.Equal(t, http.StatusNotFound, response.Code)
 	v2, err := routes.WebService("v2", manifest)
 	require.NoError(t, err)
-	require.Equal(t, "/apis/example.grafana.app/v2/reports/", v2.Routes()[0].Path)
+	require.Equal(t, "/reports/", v2.Routes()[0].Path)
 	_, err = routes.WebService("v0", manifest)
 	require.Error(t, err)
 	for _, route := range ws.Routes() {
@@ -87,7 +87,7 @@ func TestRestfulRoutesWebServiceErrors(t *testing.T) {
 	}{
 		{"nil routes", nil, &ManifestData{}},
 		{"nil manifest", &RestfulRoutes{}, nil},
-		{"missing group", &RestfulRoutes{}, &ManifestData{}},
+		{"missing versions", &RestfulRoutes{}, &ManifestData{}},
 		{"no served versions", &RestfulRoutes{}, &ManifestData{Group: "example.app"}},
 		{"unknown kind", &RestfulRoutes{Kinds: map[string]*restful.WebService{"Missing": {}}}, &ManifestData{Group: "example.app", Versions: []ManifestVersion{{Name: "v1", Served: true}}}},
 	} {
@@ -117,11 +117,11 @@ func TestRestfulRoutesMountAllKindRoutes(t *testing.T) {
 	container := restful.NewContainer()
 	container.Add(parent)
 	for i, action := range []string{"start", "stop"} {
-		path := "/apis/example.app/v1/namespaces/{namespace}/widgets/{name}/actions/" + action
+		path := "/namespaces/{namespace}/widgets/{name}/actions/" + action
 		require.Equal(t, path, parent.Routes()[i].Path)
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest(http.MethodPost,
-			"/apis/example.app/v1/namespaces/team/widgets/example/actions/"+action, nil)
+			"/namespaces/team/widgets/example/actions/"+action, nil)
 		request.Header.Set("Content-Type", restful.MIME_JSON)
 		container.ServeHTTP(response, request)
 		require.Equal(t, http.StatusOK, response.Code, response.Body.String())

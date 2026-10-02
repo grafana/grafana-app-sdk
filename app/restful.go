@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -24,22 +25,22 @@ type RestfulRoutes struct {
 	Kinds map[string]*restful.WebService
 }
 
-// WebService combines routes under the full API prefix for the requested served
-// manifest version. Source service paths are relative to their cluster, namespace, or kind
-// prefix. The source services are not modified.
+// WebService combines routes for the requested served manifest version. Paths
+// are relative to /apis/{group}/{version}, with namespace and kind prefixes
+// added as needed. The source services are not modified.
 //
 // Use route-level filters on the source services: go-restful does not expose
 // service-level filters for copying. Private per-route transport settings are
 // likewise not copied; the resulting service uses go-restful's defaults.
 func (r *RestfulRoutes) WebService(version string, manifest *ManifestData) (*restful.WebService, error) {
 	if r == nil {
-		return nil, fmt.Errorf("routes and manifest must not be nil")
+		return nil, errors.New("routes and manifest must not be nil")
 	}
 	if version == "" || strings.Contains(version, "/") {
-		return nil, fmt.Errorf("a valid API version is required")
+		return nil, errors.New("a valid API version is required")
 	}
 	if manifest == nil {
-		return nil, fmt.Errorf("manifest must not be nil")
+		return nil, errors.New("manifest must not be nil")
 	}
 
 	var selected *ManifestVersion
