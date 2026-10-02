@@ -1,0 +1,105 @@
+{
+  "components": {
+    "schemas": {
+      "plugin.Dummy": {
+        "properties": {
+          "age": {
+            "default": 21,
+            "description": "age of the thing",
+            "format": "int32",
+            "type": "integer"
+          },
+          "id": {
+            "description": "identifier of the thing",
+            "type": "string"
+          },
+          "name": {
+            "default": "john",
+            "description": "name of the thing",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "age"
+        ]
+      }
+    }
+  },
+  "info": {
+    "title": "Plugin cluster routes",
+    "version": "v1"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/namespaces/{namespace}/things/{thing-id}": {
+      "get": {
+        "operationId": "getNamespacedThing",
+        "parameters": [
+          {
+            "description": "identifier of the thing",
+            "in": "path",
+            "name": "thing-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "namespace",
+            "in": "path",
+            "name": "namespace",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "The requested namespaced thing"
+          }
+        },
+        "summary": "get a thing"
+      }
+    },
+    "/things/{thing-id}": {
+      "get": {
+        "operationId": "getClusterThing",
+        "parameters": [
+          {
+            "description": "identifier of the thing",
+            "in": "path",
+            "name": "thing-id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "The requested cluster thing"
+          }
+        },
+        "summary": "get a thing",
+        "x-grafana-requires-role": "some-role"
+      }
+    }
+  }
+}
