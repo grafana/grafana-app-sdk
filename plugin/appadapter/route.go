@@ -41,15 +41,15 @@ func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
 		return &restfulRouteAdapter{handler: h}
 	}
 
+	// Check if a full handler gets returned
 	if p, ok := a.(app.RouteHandlerProvider); ok {
 		h, err := p.ProvideRouteHandler()
 		if err != nil {
 			panic(err)
 		}
-		if h == nil {
-			return &notFoundAdapter{}
+		if h != nil {
+			return &restfulRouteAdapter{handler: h}
 		}
-		return &restfulRouteAdapter{handler: h}
 	}
 
 	if true {
