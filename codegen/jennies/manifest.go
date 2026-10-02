@@ -80,6 +80,12 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	apiVersion := v1alpha2.GroupVersion
 	switch m.ManifestVersion {
 	case VersionV1Alpha1:
+		for _, version := range appManifest.Versions() {
+			routes := externalRoutes(version)
+			if len(routes.Cluster)+len(routes.Namespaced)+len(routes.Schemas) > 0 {
+				return nil, errors.New("imported OpenAPI routes and schemas require manifestVersion v1alpha2")
+			}
+		}
 		manifestSpec, err = v1alpha1.SpecFromManifestData(*manifestData)
 		apiVersion = v1alpha1.GroupVersion
 	case VersionV1Alpha2:
@@ -148,12 +154,15 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	}
 
 	buf := bytes.Buffer{}
+	typeVersions, openAPIVersions := manifestTypeVersions(appManifest, manifestData)
 	err = templates.WriteManifestGoFile(templates.ManifestGoFileMetadata{
 		Package:              g.Package,
 		Repo:                 g.ProjectRepo,
 		CodegenPath:          g.CodegenPath,
 		KindsAreGrouped:      !g.GroupByKind,
 		ManifestData:         *manifestData,
+		TypeVersions:         typeVersions,
+		OpenAPIVersions:      openAPIVersions,
 		CodegenManifestGroup: appManifest.Properties().Group,
 	}, &buf)
 	if err != nil {
@@ -266,6 +275,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 					SchemaProps: val,
 				}
 			}
+		}
+		if err := mergeExternalVersionRoutes(&ver, externalRoutes(version)); err != nil {
+			return nil, fmt.Errorf("external routes for version %s: %w", version.Name(), err)
 		}
 		manifest.Versions = append(manifest.Versions, ver)
 	}

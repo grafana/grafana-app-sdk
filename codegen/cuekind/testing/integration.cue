@@ -8,6 +8,7 @@ integrationManifest: {
 }
 
 integrationV1: {
+	openAPI: "integration.openapi.json"
 	kinds: [{
 		kind:   "Foo"
 		plural: "foos"
