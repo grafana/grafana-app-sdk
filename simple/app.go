@@ -110,6 +110,7 @@ type App struct {
 	customRoutes       map[string]AppCustomRouteHandler
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
+	handler            http.Handler
 
 	// Admission metrics (validate/mutate)
 	admissionLatency  *prometheus.HistogramVec
@@ -530,6 +531,10 @@ func (a *App) ManagedKinds() []resource.Kind {
 		kinds = append(kinds, k.Kind)
 	}
 	return kinds
+}
+
+func (a *App) ProvideRouteHandler() (http.Handler, error) {
+	return a.handler, nil
 }
 
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
