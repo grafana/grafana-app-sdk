@@ -7,7 +7,9 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"strings"
 
+	"github.com/emicklei/go-restful/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -20,32 +22,59 @@ import (
 // Make sure RouteAdapter implements the service interface. This is important to
 // do since otherwise we will only get a not implemented error response from
 // the plugin at runtime.
-var _ pluginv3.RouteServiceServer = (*RouteAdapter)(nil)
+var _ pluginv3.RouteServiceServer = (*customRouteAdapter)(nil)
+var _ pluginv3.RouteServiceServer = (*restfulRouteAdapter)(nil)
+
+// NewRouteAdapter returns a [pluginv3.RouteServiceServer] backed by a.
+func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
+	if p, ok := a.(app.RestfulRoutesProvider); ok {
+		r, err := p.ProvideRoutes()
+		if err != nil {
+			panic(err)
+		}
+		if r == nil || len(r.Routes()) < 1 {
+			return &notFoundAdapter{}
+		}
+
+		h := restful.NewContainer().Add(r)
+
+		return &restfulRouteAdapter{handler: h}
+	}
+
+	if p, ok := a.(app.RouteHandlerProvider); ok {
+		h, err := p.ProvideRouteHandler()
+		if err != nil {
+			panic(err)
+		}
+		if h == nil {
+			return &notFoundAdapter{}
+		}
+		return &restfulRouteAdapter{handler: h}
+	}
+
+	if true {
+		return &customRouteAdapter{app: a}
+	}
+
+	return &pluginv3.UnimplementedRouteServiceServer{}
+}
 
 // RouteAdapter implements the v3 route service in terms of an app-sdk App.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-type RouteAdapter struct {
-	pluginv3.UnimplementedRouteServiceServer
-
+type customRouteAdapter struct {
 	app app.App
-}
-
-// NewRouteAdapter returns a [pluginv3.RouteServiceServer] backed by a.
-func NewRouteAdapter(a app.App) *RouteAdapter {
-	return &RouteAdapter{app: a}
 }
 
 // CallRoute implements [pluginv3.RouteServiceServer] by translating the
 // request into an app.CustomRouteRequest and delegating to the app-sdk App's
 // CallCustomRoute.
-func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
-
 	rec := newResponseRecorder(stream)
 	customReq := &app.CustomRouteRequest{
 		ResourceIdentifier: routeResourceIdentifier(req),
@@ -54,6 +83,11 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 		Method:             req.GetMethod(),
 		Headers:            routeHeaders(req.GetHeaders()),
 		Body:               io.NopCloser(bytes.NewReader(req.GetBody())),
+	}
+
+	// Passed in context to nested http handlers
+	info := &resource.RouteRequestInfo{
+		FullIdentifier: customReq.ResourceIdentifier,
 	}
 
 	if parent := req.GetParent(); parent != nil {
@@ -68,9 +102,14 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 				customReq.DecryptedSecureValues[key] = resource.RawSecureValue(value)
 			}
 		}
+
+		info.ResourceVersion = parent.GetRv()
+		info.RawParentResource = parent.GetRaw()
+		info.DecryptedSecureValues = customReq.DecryptedSecureValues
 	}
 
-	if err := a.app.CallCustomRoute(stream.Context(), rec, customReq); err != nil {
+	ctx := resource.WithRouteRequestInfo(stream.Context(), info)
+	if err := a.app.CallCustomRoute(ctx, rec, customReq); err != nil {
 		if errors.Is(err, app.ErrCustomRouteNotFound) && !rec.sentHeader {
 			return status.Error(codes.NotFound, err.Error())
 		}
@@ -79,6 +118,54 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 
 	// Send whatever the handler has not flushed. For a handler that never
 	// flushes, this is the whole response in a single message.
+	rec.Flush()
+	return rec.sendErr
+}
+
+// RouteAdapter implements the v3 route service in terms of an app-sdk App.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
+type restfulRouteAdapter struct {
+	handler http.Handler
+}
+
+// CallRoute dispatches the scope-relative request through the selected go-restful
+// service, preserving its filters and streaming the HTTP response over gRPC.
+func (a *restfulRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+	u, err := url.Parse(req.GetUrl())
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	// Dispatch with the protocol's scope-relative path, keeping the original query.
+	u.Path = "/" + strings.TrimPrefix(req.GetPath(), "/")
+	u.RawPath = ""
+	info := &resource.RouteRequestInfo{FullIdentifier: resource.FullIdentifier{
+		Group:     req.GetGroup(),
+		Version:   req.GetVersion(),
+		Namespace: req.GetNamespace(),
+	}}
+	if parent := req.GetParent(); parent != nil {
+		info.Plural = parent.GetResource()
+		info.Name = parent.GetName()
+		info.ResourceVersion = parent.GetRv()
+		info.RawParentResource = parent.GetRaw()
+		if values := parent.GetDecryptedSecureValues(); len(values) > 0 {
+			info.DecryptedSecureValues = make(resource.DecryptedSecureValues, len(values))
+			for key, value := range values {
+				info.DecryptedSecureValues[key] = resource.RawSecureValue(value)
+			}
+		}
+	}
+	ctx := resource.WithRouteRequestInfo(stream.Context(), info)
+	httpReq, err := http.NewRequestWithContext(ctx, req.GetMethod(), u.String(), bytes.NewReader(req.GetBody()))
+	if err != nil {
+		return status.Error(codes.InvalidArgument, err.Error())
+	}
+	httpReq.Header = routeHeaders(req.GetHeaders())
+
+	rec := newResponseRecorder(stream)
+	a.handler.ServeHTTP(rec, httpReq)
 	rec.Flush()
 	return rec.sendErr
 }
@@ -189,4 +276,10 @@ func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
 	rsp.SetHeaders(headers)
 	r.sentHeader = true
 	return rsp
+}
+
+type notFoundAdapter struct{}
+
+func (*notFoundAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+	return stream.Send(pluginv3.CallRouteResponse_builder{Code: new(int32(http.StatusNotFound))}.Build())
 }

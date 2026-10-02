@@ -11,6 +11,7 @@ require (
 	github.com/emicklei/go-restful-openapi/v2 v2.12.1
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.149.0
+	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/grafana-app-sdk v0.60.8
 	github.com/grafana/grafana-app-sdk/plugin v0.60.8
 	github.com/grafana/grafana-plugin-sdk-go v0.296.5
@@ -56,7 +57,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d // indirect
-	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 // indirect
 	github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 // indirect
 	github.com/grafana/grafana-app-sdk/logging v0.60.5 // indirect
 	github.com/grafana/otel-profiling-go v0.6.0 // indirect

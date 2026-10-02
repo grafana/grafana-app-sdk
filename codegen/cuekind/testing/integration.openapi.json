@@ -3,26 +3,66 @@
     "schemas": {
       "plugin.Dummy": {
         "properties": {
-          "age": {
-            "default": 21,
-            "description": "age of the thing",
-            "format": "int32",
-            "type": "integer"
+          "auth": {
+            "$ref": "#/components/schemas/plugin.Dummy.auth"
           },
           "id": {
             "description": "identifier of the thing",
             "type": "string"
           },
-          "name": {
-            "default": "john",
-            "description": "name of the thing",
-            "type": "string"
+          "info": {
+            "$ref": "#/components/schemas/resource.RouteRequestInfo"
           }
         },
         "required": [
           "id",
-          "name",
-          "age"
+          "info"
+        ]
+      },
+      "plugin.Dummy.auth": {},
+      "resource.RouteRequestInfo": {
+        "properties": {
+          "DecryptedSecureValues": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "Group": {
+            "type": "string"
+          },
+          "Kind": {
+            "type": "string"
+          },
+          "Name": {
+            "type": "string"
+          },
+          "Namespace": {
+            "type": "string"
+          },
+          "Plural": {
+            "type": "string"
+          },
+          "RawParentResource": {
+            "type": "string"
+          },
+          "ResourceVersion": {
+            "type": "string"
+          },
+          "Version": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "Namespace",
+          "Name",
+          "Group",
+          "Version",
+          "Kind",
+          "Plural",
+          "ResourceVersion",
+          "RawParentResource",
+          "DecryptedSecureValues"
         ]
       }
     }
@@ -33,29 +73,38 @@
   },
   "openapi": "3.0.3",
   "paths": {
-    "/namespaces/{namespace}/things/{thing-id}": {
+    "/foo": {
       "get": {
-        "operationId": "getNamespacedThing",
+        "operationId": "getFoo",
         "parameters": [
           {
-            "description": "identifier of the thing",
-            "in": "path",
-            "name": "thing-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "description": "namespace",
-            "in": "path",
-            "name": "namespace",
-            "required": true,
+            "description": "query",
+            "in": "query",
+            "name": "input",
             "schema": {
               "type": "string"
             }
           }
         ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "cluster request for foo"
+          }
+        },
+        "summary": "get foo",
+        "x-grafana-requires-role": "some-role"
+      }
+    },
+    "/namespaces/{namespace}/things/bar": {
+      "get": {
+        "operationId": "getBar",
         "responses": {
           "200": {
             "content": {
@@ -68,37 +117,7 @@
             "description": "The requested namespaced thing"
           }
         },
-        "summary": "get a thing"
-      }
-    },
-    "/things/{thing-id}": {
-      "get": {
-        "operationId": "getClusterThing",
-        "parameters": [
-          {
-            "description": "identifier of the thing",
-            "in": "path",
-            "name": "thing-id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/plugin.Dummy"
-                }
-              }
-            },
-            "description": "The requested cluster thing"
-          }
-        },
-        "summary": "get a thing",
-        "x-grafana-requires-role": "some-role"
+        "summary": "get bar"
       }
     }
   }
