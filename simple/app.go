@@ -110,6 +110,7 @@ type App struct {
 	customRoutes       map[string]AppCustomRouteHandler
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
+	handler            http.Handler
 
 	// Admission metrics (validate/mutate)
 	admissionLatency  *prometheus.HistogramVec
@@ -138,9 +139,12 @@ type AppConfig struct {
 	ManagedKinds    []AppManagedKind
 	UnmanagedKinds  []AppUnmanagedKind
 	Converters      map[schema.GroupKind]Converter
+	// Process non resource routes
+	Handler http.Handler
 	// VersionedCustomRoutes is a map of version string => custom route handlers for
 	// custom routes attached at the version level rather than attached to a specific kind.
 	// Custom route paths for each version should not conflict with plural names of kinds for the version.
+	// Deprecated -- will be replaced with the raw htt handler above
 	VersionedCustomRoutes map[string]AppVersionRouteHandlers
 	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
 	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
@@ -359,6 +363,7 @@ func NewApp(config AppConfig) (*App, error) {
 		customRoutes:       make(map[string]AppCustomRouteHandler),
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
+		handler:            config.Handler,
 	}
 	if provider, ok := clients.(metrics.Provider); ok {
 		a.collectors = append(a.collectors, provider.PrometheusCollectors()...)
@@ -530,6 +535,10 @@ func (a *App) ManagedKinds() []resource.Kind {
 		kinds = append(kinds, k.Kind)
 	}
 	return kinds
+}
+
+func (a *App) ProvideRouteHandler() (http.Handler, error) {
+	return a.handler, nil
 }
 
 // Runner returns a resource.Runnable() that runs the underlying operator.InformerController and all custom runners
