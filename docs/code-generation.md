@@ -103,8 +103,109 @@ grafana-app-sdk project init <project go module name>
 ```
 This sets up your project with a go module, a `kinds` directory with a CUE module, a `Makefile` with some sample targets, and a `local` directory that can be used with `grafana-app-sdk project local` commands (see [Local Development & Testing](./local-development.md)).
 
+## Adding routes from a saved OpenAPI document
+
+Manifest generation with `definitions.manifestVersion: "v1alpha2"` (the default)
+can combine CUE with an OpenAPI 3.0 document for each API version.
+Place `openapi.v1.json`, `openapi.v1.yaml`, or `openapi.v1.yml` beside
+`manifest.cue` in the CUE source directory. Repeat for other versions declared in
+the manifest, such as `openapi.v2.json`. Existing CUE-only projects need no changes.
+
+To use a different filename, specify it on the version:
+
+```cue
+manifest: {
+    appName: "example"
+    versions: v1: {
+        openAPI: "saved-api.yaml"
+        kinds: []
+    }
+}
+```
+
+Paths are relative to the CUE source directory, including when using `--source`.
+An explicit `openAPI` value takes precedence over automatic discovery. If multiple
+conventional filenames exist for one version, select one explicitly.
+
+For example, `saved-api.yaml` can introduce a route and a response type absent
+from CUE:
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Example API
+  version: v1
+  x-grafana-api-group: example.ext.grafana.app
+paths:
+  /namespaces/{namespace}/reports:
+    get:
+      operationId: getReports
+      responses:
+        '200':
+          description: A report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+components:
+  schemas:
+    Report:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+```
+
+The generated JSON/YAML manifest and embedded Go manifest include these custom
+routes and schemas. They do not cause Go or TypeScript types, clients, or handlers
+to be generated. Resource kinds and their metadata continue to be declared in CUE;
+OpenAPI components describe the custom routes' request and response types.
+
+Route paths are relative to `/apis/<manifest-group>/<version>`. The processing
+engine derives this prefix from the CUE manifest and the version importing the
+document, so it does not need to appear in each path. `info.version` and the
+optional `info.x-grafana-api-group` document this context; they do not override CUE.
+
+- `/reports` becomes a cluster-scoped route.
+- `/namespaces/{namespace}/reports` becomes the namespaced route `/reports`.
+- `{namespace}` and `{name}` automatically receive required string path parameters
+  on each operation. Explicit path-level or operation-level parameters are
+  preserved. Other path placeholders still need explicit parameter definitions.
+- Full paths beginning `/apis/<manifest-group>/<version>/` are also accepted;
+  that prefix is removed. A mismatched group or version is an error.
+- Paths such as `/namespaces/{namespace}/foos/{name}/report` attach `/report`
+  to the matching CUE kind's sub-resource routes. Cluster-scoped kinds use
+  `/foos/{name}/report`. The kind's scope must match the path's scope.
+- OpenAPI replaces a matching CUE path/method. Other methods on that CUE path
+  remain. A same-named component schema is replaced by its OpenAPI definition.
+- Local schema references, including recursive references, are preserved. Local
+  references to parameters, request bodies, responses, and other components are
+  expanded because manifests only store the schemas component map. References to
+  other files or URLs are rejected.
+- Route schemas remain included when `definitions.manifestSchemas` is false;
+  that setting controls resource-kind schemas, including kind sub-resource schemas.
+
+Only the document's paths and their supporting components are imported. Document
+metadata, servers, and global security configuration do not configure the app's
+deployment or authorization. Use the existing manifest authorization configuration
+and route authorization extensions where applicable.
+
+The [integration OpenAPI fixture](../codegen/cuekind/testing/integration.openapi.json)
+demonstrates a shared response type used by cluster, namespaced, and kind
+sub-resource routes alongside [CUE definitions](../codegen/cuekind/testing/integration.cue).
+
 ## Examples & Testing
 
 Code generation for both kinds and project components is done as part of the [issue tracker tutorial](./tutorials/issue-tracker/README.md) ([kind code generation](./tutorials/issue-tracker/03-generate-kind-code.md), [project component generation](./tutorials/issue-tracker/04-boilerplate.md)).
 
 Automated testing of kind code generation is done using the files in [codegen/cuekind/testing/](../codegen/cuekind/testing/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).
+
+The combined CUE/OpenAPI integration manifest has separate JSON and YAML snapshots
+in [codegen/cuekind/testing/golden](../codegen/cuekind/testing/golden/). These are
+checked by `TestManifestGenerator_IntegrationOpenAPI` and are intentionally outside
+the CLI comparison fixtures. To update them after an intentional output change:
+
+```sh
+UPDATE_INTEGRATION_GOLDEN=1 go test ./codegen/cuekind -run '^TestManifestGenerator_IntegrationOpenAPI$' -count=1
+```
