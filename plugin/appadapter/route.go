@@ -280,6 +280,6 @@ func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
 
 type notFoundAdapter struct{}
 
-func (*notFoundAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+func (*notFoundAdapter) CallRoute(_ *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	return stream.Send(pluginv3.CallRouteResponse_builder{Code: new(int32(http.StatusNotFound))}.Build())
 }

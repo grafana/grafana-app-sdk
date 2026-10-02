@@ -22,48 +22,37 @@
       "plugin.Dummy.auth": {},
       "resource.RouteRequestInfo": {
         "properties": {
-          "DecryptedSecureValues": {
+          "decryptedSecureValues": {
             "additionalProperties": {
               "type": "string"
             },
             "type": "object"
           },
-          "Group": {
+          "group": {
             "type": "string"
           },
-          "Kind": {
+          "kind": {
             "type": "string"
           },
-          "Name": {
+          "name": {
             "type": "string"
           },
-          "Namespace": {
+          "namespace": {
             "type": "string"
           },
-          "Plural": {
+          "plural": {
             "type": "string"
           },
-          "RawParentResource": {
+          "rawParentResource": {
             "type": "string"
           },
-          "ResourceVersion": {
+          "resourceVersion": {
             "type": "string"
           },
-          "Version": {
+          "version": {
             "type": "string"
           }
-        },
-        "required": [
-          "Namespace",
-          "Name",
-          "Group",
-          "Version",
-          "Kind",
-          "Plural",
-          "ResourceVersion",
-          "RawParentResource",
-          "DecryptedSecureValues"
-        ]
+        }
       }
     }
   },

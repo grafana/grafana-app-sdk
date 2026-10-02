@@ -8,13 +8,13 @@ type RouteRequestInfo struct {
 	FullIdentifier
 
 	// The resource version for the parent object.  It will change when values change
-	ResourceVersion string
+	ResourceVersion string `json:"resourceVersion,omitempty"`
 
 	// For sub-resource requests -- this is the body o
-	RawParentResource []byte
+	RawParentResource []byte `json:"rawParentResource,omitempty"`
 
 	// When the parent resource contains secure values
-	DecryptedSecureValues DecryptedSecureValues
+	DecryptedSecureValues DecryptedSecureValues `json:"decryptedSecureValues,omitempty"`
 }
 
 // The key type is unexported to prevent collisions
