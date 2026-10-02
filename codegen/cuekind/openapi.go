@@ -83,7 +83,7 @@ func parseOpenAPIRoutes(data []byte, group, version string) (app.ManifestVersion
 	}
 	// The manifest retains components.schemas, but has no other component maps.
 	// Inline references to parameters, responses, etc. while preserving schema refs.
-	expanded, err := expandOpenAPIRefs(raw, raw, nil)
+	expanded, err := expandOpenAPIRefs(raw, raw, nil, openAPIObject)
 	if err != nil {
 		return routes, err
 	}
@@ -182,10 +182,54 @@ func openAPIRoutePath(source, group, version string) (string, bool, error) {
 	return target, namespaced, nil
 }
 
-func expandOpenAPIRefs(value any, root map[string]any, stack []string) (any, error) {
+type openAPIRefContext uint8
+
+const (
+	openAPIObject openAPIRefContext = iota
+	openAPINamedObjects
+	openAPIExtendedMap
+	openAPIExamples
+	openAPIExample
+)
+
+// Names in maps such as responses and properties are user-defined. A response
+// named "default" is not a schema default, nor is a property named "example"
+// literal example data. Example Objects, in turn, contain literal data in value.
+func (context openAPIRefContext) child(key string) openAPIRefContext {
+	switch context {
+	case openAPINamedObjects, openAPIExtendedMap:
+		return openAPIObject
+	case openAPIExamples:
+		return openAPIExample
+	default:
+		switch key {
+		case "examples":
+			return openAPIExamples
+		case "paths", "responses":
+			return openAPIExtendedMap
+		case "schemas", "properties", "parameters", "requestBodies", "headers", "links", "callbacks", "securitySchemes", "content", "encoding":
+			return openAPINamedObjects
+		default:
+			return openAPIObject
+		}
+	}
+}
+
+func (context openAPIRefContext) literal(key string) bool {
+	if context == openAPIExtendedMap {
+		return strings.HasPrefix(key, "x-")
+	}
+	if context == openAPINamedObjects || context == openAPIExamples {
+		return false
+	}
+	return key == "example" || key == "default" || key == "enum" || strings.HasPrefix(key, "x-") ||
+		(context == openAPIExample && key == "value")
+}
+
+func expandOpenAPIRefs(value any, root map[string]any, stack []string, context openAPIRefContext) (any, error) {
 	switch value := value.(type) {
 	case map[string]any:
-		if ref, ok := value["$ref"].(string); ok {
+		if ref, ok := value["$ref"].(string); ok && (context == openAPIObject || context == openAPIExample) {
 			if !strings.HasPrefix(ref, "#/") {
 				return nil, fmt.Errorf("reference %q must be local to the OpenAPI document", ref)
 			}
@@ -207,16 +251,16 @@ func expandOpenAPIRefs(value any, root map[string]any, stack []string) (any, err
 			if slices.Contains(stack, ref) {
 				return nil, fmt.Errorf("cyclic non-schema reference %q", ref)
 			}
-			return expandOpenAPIRefs(target, root, append(stack, ref))
+			return expandOpenAPIRefs(target, root, append(stack, ref), context)
 		}
 		result := make(map[string]any, len(value))
 		for key, item := range value {
 			// These values are instance data, not OpenAPI references.
-			if key == "example" || key == "default" || key == "enum" || strings.HasPrefix(key, "x-") {
+			if context.literal(key) {
 				result[key] = item
 				continue
 			}
-			expanded, err := expandOpenAPIRefs(item, root, stack)
+			expanded, err := expandOpenAPIRefs(item, root, stack, context.child(key))
 			if err != nil {
 				return nil, err
 			}
@@ -226,7 +270,7 @@ func expandOpenAPIRefs(value any, root map[string]any, stack []string) (any, err
 	case []any:
 		result := make([]any, len(value))
 		for idx, item := range value {
-			expanded, err := expandOpenAPIRefs(item, root, stack)
+			expanded, err := expandOpenAPIRefs(item, root, stack, openAPIObject)
 			if err != nil {
 				return nil, err
 			}
