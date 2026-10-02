@@ -219,7 +219,13 @@ var appManifestData = app.ManifestData{
                         Description: {{ goString .Description }},{{ end }}
                     },{{ end }}
                 },{{end}}{{ if .Routes }}
-                Routes: map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}
+                Routes: {{ if index $.OpenAPIVersions $v.Name }}func() map[string]spec3.PathProps {
+                    var routes map[string]spec3.PathProps
+                    if err := json.Unmarshal([]byte({{ goString ($.ToJSONString .Routes) }}), &routes); err != nil {
+                        panic(err)
+                    }
+                    return routes
+                }(),{{ else }}map[string]spec3.PathProps{ {{ range $path, $props := .Routes }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
                         Description: {{ goString $props.Description }},{{ end }}{{ if $props.Parameters }}
@@ -237,10 +243,16 @@ var appManifestData = app.ManifestData{
                         Patch: &spec3.Operation{ {{ template "operation" $props.Patch }}
                         },{{ end }}
                     },{{ end }}{{ end }}
-                },{{end}}
+                },{{end}}{{end}}
             },
             {{ end }} },
-            Routes: app.ManifestVersionRoutes{
+            Routes: {{ if index $.OpenAPIVersions .Name }}func() app.ManifestVersionRoutes {
+                var routes app.ManifestVersionRoutes
+                if err := json.Unmarshal([]byte({{ goString ($.ToJSONString .Routes) }}), &routes); err != nil {
+                    panic(err)
+                }
+                return routes
+            }(),{{ else }}app.ManifestVersionRoutes{
                 Namespaced: map[string]spec3.PathProps{ {{ range $path, $props := .Routes.Namespaced }}{{ if $props }}
                     "{{$path}}": { {{ if $props.Summary }}
                         Summary: "{{$props.Summary}}",{{ end }}{{ if $props.Description }}
@@ -283,7 +295,7 @@ var appManifestData = app.ManifestData{
                     "{{ $refName }}": { {{ template "schema" $schema }}
                     },{{ end }}
                 },
-            },
+            },{{ end }}
         },
         {{ end }} },{{ if .ManifestData.ExtraPermissions }}
         ExtraPermissions: &app.Permissions{
@@ -344,7 +356,7 @@ func RemoteManifest() app.Manifest {
     return app.NewAPIServerManifest("{{ .ManifestData.AppName }}")
 }
 
-var kindVersionToGoType = map[string]resource.Kind { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}
+var kindVersionToGoType = map[string]resource.Kind { {{ range .GeneratedTypeVersions }}{{$v:=.}}{{ range .Kinds }}
     "{{ .Kind }}/{{ $v.Name }}": {{ if $.KindsAreGrouped }}{{ $.ToPackageName $v.Name}}.{{ $.GoKindName .Kind }}Kind(){{ else }}{{ $.KindToPackageName .Kind }}{{ $.ToPackageName $v.Name }}.Kind(){{ end }},{{ end }}{{ end }}
 }
 
@@ -355,7 +367,7 @@ func ManifestGoTypeAssociator(kind, version string) (goType resource.Kind, exist
     return goType, exists
 }
 
-var customRouteToGoResponseType = map[string]any { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if $resp.Get }}
+var customRouteToGoResponseType = map[string]any { {{ range .GeneratedTypeVersions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if $resp.Get }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": {{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}Response{},{{end}}{{ if $resp.Post }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}Response{},{{end}}{{ if $resp.Put }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}Response{},{{end}}{{ if $resp.Patch }}
@@ -393,7 +405,7 @@ func ManifestCustomRouteResponsesAssociator(kind, version, path, verb string) (g
     return goType, exists
 }
 
-var customRouteToGoParamsType = map[string]runtime.Object { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.Parameters }}
+var customRouteToGoParamsType = map[string]runtime.Object { {{ range .GeneratedTypeVersions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.Parameters }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": &{{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestParamsObject{},{{end}}{{ if and $resp.Post $resp.Post.Parameters }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": {{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestParamsObject{},{{end}}{{ if and $resp.Put $resp.Put.Parameters }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": {{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestParamsObject{},{{end}}{{ if and $resp.Patch $resp.Patch.Parameters }}
@@ -412,7 +424,7 @@ func ManifestCustomRouteQueryAssociator(kind, version, path, verb string) (goTyp
     return goType, exists
 }
 
-var customRouteToGoRequestBodyType = map[string]any { {{ range .ManifestData.Versions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.RequestBody }}
+var customRouteToGoRequestBodyType = map[string]any { {{ range .GeneratedTypeVersions }}{{$v:=.}}{{ range .Kinds }}{{$k := .}}{{ range $path, $resp := .Routes }}{{ if and $resp.Get $resp.Get.RequestBody }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|GET": &{{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Get.OperationId }}RequestBody{},{{end}}{{ if and $resp.Post $resp.Post.RequestBody }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|POST": &{{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Post.OperationId }}RequestBody{},{{end}}{{ if and $resp.Put $resp.Put.RequestBody }}
     "{{ $v.Name }}|{{ $k.Kind }}|{{ $.StripLeadingSlash $path }}|PUT": &{{ $.GetPackageName $k.Kind $v.Name}}.{{ $.ExportedFieldName $resp.Put.OperationId }}RequestBody{},{{end}}{{ if and $resp.Patch $resp.Patch.RequestBody }}

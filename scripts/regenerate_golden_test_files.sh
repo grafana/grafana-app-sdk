@@ -20,6 +20,10 @@ mv ${testdir}/crd/custom-app-manifest.* "${testdir}/manifest/"
 # Group by kind (only customKind)
 go run ./cmd/grafana-app-sdk generate -s="${rootdir}/codegen/cuekind/testing" --config "configKind"
 
+# The integration fixture combines CUE and OpenAPI. Generate its manifest snapshots
+# without adding integration Go/TypeScript output to the other golden directories.
+UPDATE_GOLDEN=1 go test ./codegen/cuekind -run '^TestManifestGenerator_IntegrationOpenAPI$' -count=1
+
 # Rename files to append .txt
 find "${testdir}" -depth -name "*.go" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;
 find "${testdir}" -depth -name "*.ts" -exec sh -c 'mv "$1" "${1}.txt"' _ {} \;
