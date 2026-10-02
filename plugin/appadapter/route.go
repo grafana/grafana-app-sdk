@@ -73,8 +73,9 @@ type customRouteAdapter struct {
 func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
-		return sendError(stream, int32(http.StatusBadRequest), err.Error())
+		return status.Error(codes.InvalidArgument, err.Error())
 	}
+
 	rec := newResponseRecorder(stream)
 	customReq := &app.CustomRouteRequest{
 		ResourceIdentifier: routeResourceIdentifier(req),
@@ -83,11 +84,6 @@ func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream gr
 		Method:             req.GetMethod(),
 		Headers:            routeHeaders(req.GetHeaders()),
 		Body:               io.NopCloser(bytes.NewReader(req.GetBody())),
-	}
-
-	// Passed in context to nested http handlers
-	info := &resource.RouteRequestInfo{
-		FullIdentifier: customReq.ResourceIdentifier,
 	}
 
 	if parent := req.GetParent(); parent != nil {
@@ -102,14 +98,9 @@ func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream gr
 				customReq.DecryptedSecureValues[key] = resource.RawSecureValue(value)
 			}
 		}
-
-		info.ResourceVersion = parent.GetRv()
-		info.RawParentResource = parent.GetRaw()
-		info.DecryptedSecureValues = customReq.DecryptedSecureValues
 	}
 
-	ctx := resource.WithRouteRequestInfo(stream.Context(), info)
-	if err := a.app.CallCustomRoute(ctx, rec, customReq); err != nil {
+	if err := a.app.CallCustomRoute(stream.Context(), rec, customReq); err != nil {
 		if errors.Is(err, app.ErrCustomRouteNotFound) && !rec.sentHeader {
 			return status.Error(codes.NotFound, err.Error())
 		}
@@ -146,7 +137,7 @@ func (a *restfulRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream g
 		info.Plural = parent.GetResource()
 		info.Name = parent.GetName()
 		info.ResourceVersion = parent.GetRv()
-		info.RawParentResource = parent.GetRaw()
+		info.Parent = parent.GetRaw()
 		if values := parent.GetDecryptedSecureValues(); len(values) > 0 {
 			info.DecryptedSecureValues = make(resource.DecryptedSecureValues, len(values))
 			for key, value := range values {

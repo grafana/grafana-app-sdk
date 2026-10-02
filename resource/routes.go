@@ -2,6 +2,7 @@ package resource
 
 import (
 	"context"
+	"encoding/json"
 )
 
 type RouteRequestInfo struct {
@@ -11,7 +12,7 @@ type RouteRequestInfo struct {
 	ResourceVersion string `json:"resourceVersion,omitempty"`
 
 	// For sub-resource requests -- this is the body o
-	RawParentResource []byte `json:"rawParentResource,omitempty"`
+	Parent json.RawMessage `json:"parent,omitempty"`
 
 	// When the parent resource contains secure values
 	DecryptedSecureValues DecryptedSecureValues `json:"decryptedSecureValues,omitempty"`
