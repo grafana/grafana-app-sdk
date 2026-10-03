@@ -4,18 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	"k8s.io/apiserver/pkg/admission"
 	"k8s.io/apiserver/pkg/authentication/user"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
+	"github.com/grafana/grafana-app-sdk/k8s"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
@@ -110,6 +114,30 @@ func TestAppAdmission_Admit(t *testing.T) {
 		manifestData:  manifestWithMutation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
 		req:           defaultReq(),
 		expectedError: admission.NewForbidden(defaultReq(), errors.New("I AM ERROR")),
+	}, {
+		name: "app mutation status error",
+		appGetter: func() app.App {
+			return &MockApp{
+				MutateFunc: func(ctx context.Context, request *app.AdmissionRequest) (*app.MutatingResponse, error) {
+					return nil, testInvalidError()
+				},
+			}
+		},
+		manifestData:  manifestWithMutation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
+		req:           defaultReq(),
+		expectedError: testInvalidError(),
+	}, {
+		name: "app mutation admission error",
+		appGetter: func() app.App {
+			return &MockApp{
+				MutateFunc: func(ctx context.Context, request *app.AdmissionRequest) (*app.MutatingResponse, error) {
+					return nil, k8s.NewAdmissionError(errors.New("I AM ERROR"), http.StatusUnprocessableEntity, string(metav1.StatusReasonInvalid))
+				},
+			}
+		},
+		manifestData:  manifestWithMutation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
+		req:           defaultReq(),
+		expectedError: testAdmissionStatusError(),
 	}, {
 		name: "successful mutation",
 		appGetter: func() app.App {
@@ -232,6 +260,42 @@ func TestAppAdmission_Validate(t *testing.T) {
 		manifestData:  manifestWithValidation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
 		req:           defaultReq(),
 		expectedError: admission.NewForbidden(defaultReq(), errors.New("I AM ERROR")),
+	}, {
+		name: "app validation status error",
+		appGetter: func() app.App {
+			return &MockApp{
+				ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
+					return testInvalidError()
+				},
+			}
+		},
+		manifestData:  manifestWithValidation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
+		req:           defaultReq(),
+		expectedError: testInvalidError(),
+	}, {
+		name: "app validation wrapped status error",
+		appGetter: func() app.App {
+			return &MockApp{
+				ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
+					return fmt.Errorf("wrapped: %w", testInvalidError())
+				},
+			}
+		},
+		manifestData:  manifestWithValidation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
+		req:           defaultReq(),
+		expectedError: testInvalidError(),
+	}, {
+		name: "app validation admission error",
+		appGetter: func() app.App {
+			return &MockApp{
+				ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
+					return k8s.NewAdmissionError(errors.New("I AM ERROR"), http.StatusUnprocessableEntity, string(metav1.StatusReasonInvalid))
+				},
+			}
+		},
+		manifestData:  manifestWithValidation([]app.AdmissionOperation{app.AdmissionOperationUpdate}),
+		req:           defaultReq(),
+		expectedError: testAdmissionStatusError(),
 	}, {
 		name: "successful validation",
 		appGetter: func() app.App {
@@ -575,6 +639,57 @@ func TestTranslateAdmissionOperation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func testInvalidError() error {
+	return apierrors.NewInvalid(TestKind.GroupVersionKind().GroupKind(), "foo", field.ErrorList{
+		field.Invalid(field.NewPath("spec", "foo"), "bar", "foo cannot be bar"),
+	})
+}
+
+func testAdmissionStatusError() error {
+	return &apierrors.StatusError{ErrStatus: metav1.Status{
+		Status:  metav1.StatusFailure,
+		Code:    http.StatusUnprocessableEntity,
+		Reason:  metav1.StatusReasonInvalid,
+		Message: "I AM ERROR",
+	}}
+}
+
+func TestAppAdmission_ValidateErrorStatus(t *testing.T) {
+	adm := newAppAdmission(app.ManifestData{
+		Group: TestKind.Group(),
+		Versions: []app.ManifestVersion{{
+			Name:   TestKind.Version(),
+			Served: true,
+			Kinds: []app.ManifestVersionKind{{
+				Kind:   TestKind.Kind(),
+				Plural: TestKind.Plural(),
+				Admission: &app.AdmissionCapabilities{
+					Validation: &app.ValidationCapability{
+						Operations: []app.AdmissionOperation{app.AdmissionOperationAny},
+					},
+				},
+			}},
+		}},
+	}, func() app.App {
+		return &MockApp{
+			ValidateFunc: func(ctx context.Context, request *app.AdmissionRequest) error {
+				return testInvalidError()
+			},
+		}
+	})
+	req := admission.NewAttributesRecord(&resource.UntypedObject{}, nil, TestKind.GroupVersionKind(), "default", "foo", TestKind.GroupVersionResource(), "", admission.Create, &metav1.CreateOptions{}, false, nil)
+
+	err := adm.Validate(context.Background(), req, nil)
+	require.Error(t, err)
+	assert.True(t, apierrors.IsInvalid(err))
+	var status apierrors.APIStatus
+	require.ErrorAs(t, err, &status)
+	assert.Equal(t, int32(http.StatusUnprocessableEntity), status.Status().Code)
+	require.NotNil(t, status.Status().Details)
+	require.Len(t, status.Status().Details.Causes, 1)
+	assert.Equal(t, "spec.foo", status.Status().Details.Causes[0].Field)
 }
 
 var TestKind = resource.Kind{

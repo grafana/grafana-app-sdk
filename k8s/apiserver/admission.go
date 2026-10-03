@@ -7,6 +7,8 @@ import (
 	"reflect"
 	"slices"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/admission"
 
@@ -74,7 +76,7 @@ func (ad *appAdmission) Admit(ctx context.Context, a admission.Attributes, _ adm
 		if errors.Is(err, app.ErrNotImplemented) {
 			return nil
 		}
-		return admission.NewForbidden(a, err)
+		return admissionError(a, err)
 	}
 
 	obj := a.GetObject()
@@ -116,9 +118,29 @@ func (ad *appAdmission) Validate(ctx context.Context, a admission.Attributes, _ 
 		if errors.Is(err, app.ErrNotImplemented) {
 			return nil
 		}
-		return admission.NewForbidden(a, err)
+		return admissionError(a, err)
 	}
 	return nil
+}
+
+// admissionError converts an error returned by an app's Validate or Mutate into the error returned to the apiserver.
+// Errors which already carry a kubernetes status (such as those created by apierrors.NewInvalid) are returned
+// with that status intact, and errors which implement resource.AdmissionError keep their status code and reason.
+// All other errors are returned as a 403 Forbidden.
+func admissionError(a admission.Attributes, err error) error {
+	var apiStatus apierrors.APIStatus
+	if errors.As(err, &apiStatus) {
+		return &apierrors.StatusError{ErrStatus: apiStatus.Status()}
+	}
+	if admErr, ok := errors.AsType[resource.AdmissionError](err); ok {
+		return &apierrors.StatusError{ErrStatus: metav1.Status{
+			Status:  metav1.StatusFailure,
+			Code:    int32(admErr.StatusCode()), //nolint:gosec // HTTP status codes fit in an int32
+			Reason:  metav1.StatusReason(admErr.Reason()),
+			Message: err.Error(),
+		}}
+	}
+	return admission.NewForbidden(a, err)
 }
 
 func (ad *appAdmission) Handles(op admission.Operation) bool {
