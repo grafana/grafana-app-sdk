@@ -400,6 +400,7 @@ func (c ManifestVersionOpenAPIComponents) IsZero() bool {
 	return len(c.Schemas) == 0 && len(c.Responses) == 0 && len(c.Examples) == 0
 }
 
+// Deprecated: routes now live in ManifestVersion#openapi
 type ManifestVersionRoutes struct {
 	Namespaced map[string]spec3.PathProps `json:"namespaced,omitempty" yaml:"namespaced,omitempty"`
 	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`

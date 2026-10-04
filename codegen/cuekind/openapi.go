@@ -85,8 +85,8 @@ func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
 	return nil
 }
 
-func parseOpenAPIRoutes(data []byte, group, version string) (app.ManifestVersionRoutes, error) {
-	routes := app.ManifestVersionRoutes{}
+func parseOpenAPIRoutes(data []byte, group, version string) (app.ManifestVersionRoutes, error) { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
+	routes := app.ManifestVersionRoutes{} //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	var raw map[string]any
 	if err := yaml.UnmarshalStrict(data, &raw); err != nil {
 		return routes, err

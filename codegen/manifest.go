@@ -195,11 +195,11 @@ type SimpleVersion struct {
 	AllKinds     []VersionedKind      `json:"kinds"`
 	CustomRoutes *VersionCustomRoutes `json:"routes,omitempty"`
 	// ImportedRoutes contribute to manifests only, not source code generation.
-	ImportedRoutes app.ManifestVersionRoutes `json:"-"`
+	ImportedRoutes app.ManifestVersionRoutes `json:"-"` //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 }
 
 // ExternalRoutes returns routes and schemas loaded from a saved OpenAPI document.
-func (v *SimpleVersion) ExternalRoutes() app.ManifestVersionRoutes {
+func (v *SimpleVersion) ExternalRoutes() app.ManifestVersionRoutes { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	return v.ImportedRoutes
 }
 

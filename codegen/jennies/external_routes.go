@@ -16,19 +16,19 @@ import (
 // Keep external documents optional without extending the Version interface for
 // parsers that do not support them.
 type externalRouteVersion interface {
-	ExternalRoutes() app.ManifestVersionRoutes
+	ExternalRoutes() app.ManifestVersionRoutes //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 }
 
-func externalRoutes(version codegen.Version) app.ManifestVersionRoutes {
+func externalRoutes(version codegen.Version) app.ManifestVersionRoutes { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	if source, ok := version.(externalRouteVersion); ok {
 		return source.ExternalRoutes()
 	}
-	return app.ManifestVersionRoutes{}
+	return app.ManifestVersionRoutes{} //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 }
 
 // Resource paths belong to the kind's routes, whose paths are relative to an
 // individual object. Other paths remain version-level custom routes.
-func externalKindRoutes(kind app.ManifestVersionKind, source app.ManifestVersionRoutes) map[string]spec3.PathProps {
+func externalKindRoutes(kind app.ManifestVersionKind, source app.ManifestVersionRoutes) map[string]spec3.PathProps { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	paths := source.Namespaced
 	if kind.Scope == "Cluster" {
 		paths = source.Cluster
@@ -43,7 +43,7 @@ func externalKindRoutes(kind app.ManifestVersionKind, source app.ManifestVersion
 	return result
 }
 
-func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.ManifestVersionRoutes) error {
+func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.ManifestVersionRoutes) error { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	// Work on copies so repeated generation sees the same imported document.
 	source.Cluster = maps.Clone(source.Cluster)
 	source.Namespaced = maps.Clone(source.Namespaced)
@@ -81,7 +81,7 @@ func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.Manifes
 	return mergeExternalRoutes(&version.Routes, source) //nolint:staticcheck // Routes is deprecated but still emitted alongside OpenAPI
 }
 
-func mergeExternalRoutes(target *app.ManifestVersionRoutes, source app.ManifestVersionRoutes) error {
+func mergeExternalRoutes(target *app.ManifestVersionRoutes, source app.ManifestVersionRoutes) error { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
 	var err error
 	target.Cluster, err = openapiutil.MergePaths(target.Cluster, source.Cluster)
 	if err != nil {
