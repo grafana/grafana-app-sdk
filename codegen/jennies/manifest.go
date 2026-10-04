@@ -193,7 +193,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive,gocognit,funlen,gocyclo,staticcheck // Preserve deprecated route fields for manifest compatibility.
+//nolint:revive,gocognit,funlen,gocyclo
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
@@ -242,37 +242,38 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			ver.Kinds[i] = mvkind
 		}
 		// routes
+		routes := &ver.Routes //nolint:staticcheck // Routes is deprecated but still emitted alongside OpenAPI
 		routesAdditionalSchemas := make(map[string]spec.SchemaProps)
 		if len(version.Routes().Namespaced) > 0 {
-			ver.Routes.Namespaced = make(map[string]spec3.PathProps)
+			routes.Namespaced = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
 				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for namespaced path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
-				ver.Routes.Namespaced[sourcePath] = targetPathProps
+				routes.Namespaced[sourcePath] = targetPathProps
 				if len(additional) > 0 {
 					maps.Copy(routesAdditionalSchemas, additional)
 				}
 			}
 		}
 		if len(version.Routes().Cluster) > 0 {
-			ver.Routes.Cluster = make(map[string]spec3.PathProps)
+			routes.Cluster = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Cluster {
 				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for cluster path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
-				ver.Routes.Cluster[sourcePath] = targetPathProps
+				routes.Cluster[sourcePath] = targetPathProps
 				if len(additional) > 0 {
 					maps.Copy(routesAdditionalSchemas, additional)
 				}
 			}
 		}
 		if len(routesAdditionalSchemas) > 0 {
-			ver.Routes.Schemas = make(map[string]spec.Schema)
+			routes.Schemas = make(map[string]spec.Schema)
 			for key, val := range routesAdditionalSchemas {
-				ver.Routes.Schemas[key] = spec.Schema{
+				routes.Schemas[key] = spec.Schema{
 					SchemaProps: val,
 				}
 			}
@@ -549,7 +550,7 @@ func getRouteNames(p *spec3.PathProps) []string {
 	return routes
 }
 
-//nolint:revive,staticcheck // Preserve deprecated route fields for manifest compatibility.
+//nolint:revive
 func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) error {
 	kinds := make(map[string]struct{})
 	routes := make(map[string]struct{})
@@ -565,12 +566,13 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 				}
 			}
 		}
-		for _, r := range v.Routes.Namespaced {
+		versionRoutes := v.Routes //nolint:staticcheck // Routes is deprecated but still registers version-level handlers
+		for _, r := range versionRoutes.Namespaced {
 			for _, rr := range getRouteNames(&r) {
 				routes[rr] = struct{}{}
 			}
 		}
-		for _, r := range v.Routes.Cluster {
+		for _, r := range versionRoutes.Cluster {
 			for _, rr := range getRouteNames(&r) {
 				routes[rr] = struct{}{}
 			}

@@ -522,13 +522,13 @@ func (ManifestGoFileMetadata) ExportedFieldName(name string) string {
 	return strings.ToUpper(sanitized)
 }
 
-//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func (m ManifestGoFileMetadata) Packages() []string {
 	pkgs := make([]string, 0)
 	if m.KindsAreGrouped {
 		gvs := make(map[string]string)
 		for _, v := range m.GeneratedTypeVersions() {
-			if m.OpenAPIVersions[v.Name] && len(v.Kinds)+len(v.Routes.Cluster)+len(v.Routes.Namespaced) == 0 {
+			routes := v.Routes //nolint:staticcheck // Routes is deprecated but still decides which version packages are imported
+			if m.OpenAPIVersions[v.Name] && len(v.Kinds)+len(routes.Cluster)+len(routes.Namespaced) == 0 {
 				continue
 			}
 			gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))] = ToPackageName(v.Name)
@@ -541,7 +541,8 @@ func (m ManifestGoFileMetadata) Packages() []string {
 			for _, k := range v.Kinds {
 				pkgs = append(pkgs, fmt.Sprintf("%s%s \"%s\"", m.KindToPackageName(k.Kind), ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.KindToPackageName(k.Kind), ToPackageName(v.Name))))
 			}
-			if len(v.Routes.Namespaced) > 0 || len(v.Routes.Cluster) > 0 {
+			routes := v.Routes //nolint:staticcheck // Routes is deprecated but still decides which version packages are imported
+			if len(routes.Namespaced) > 0 || len(routes.Cluster) > 0 {
 				pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))))
 			}
 		}

@@ -15,8 +15,7 @@ import (
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha2)
 // to the generic app.ManifestData type for usage with an app.Manifest.
-// Preserve deprecated route fields for compatibility with existing manifests.
-// nolint:gocognit,funlen,gocyclo,staticcheck
+// nolint:gocognit,funlen,gocyclo
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
 		AppName:        s.AppName,
@@ -188,35 +187,36 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 
 		// Routes
 		if version.Routes != nil {
+			routes := &v.Routes //nolint:staticcheck // Routes is deprecated but still populated for existing consumers
 			if len(version.Routes.Namespaced) > 0 {
-				v.Routes.Namespaced = make(map[string]spec3.PathProps)
+				routes.Namespaced = make(map[string]spec3.PathProps)
 				marshaled, err := json.Marshal(version.Routes.Namespaced)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &v.Routes.Namespaced)
+				err = json.Unmarshal(marshaled, &routes.Namespaced)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
 			}
 			if len(version.Routes.Cluster) > 0 {
-				v.Routes.Cluster = make(map[string]spec3.PathProps)
+				routes.Cluster = make(map[string]spec3.PathProps)
 				marshaled, err := json.Marshal(version.Routes.Cluster)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &v.Routes.Cluster)
+				err = json.Unmarshal(marshaled, &routes.Cluster)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
 			}
 			if len(version.Routes.Schemas) > 0 {
-				v.Routes.Schemas = make(map[string]spec.Schema)
+				routes.Schemas = make(map[string]spec.Schema)
 				marshaled, err := json.Marshal(version.Routes.Schemas)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
-				err = json.Unmarshal(marshaled, &v.Routes.Schemas)
+				err = json.Unmarshal(marshaled, &routes.Schemas)
 				if err != nil {
 					return app.ManifestData{}, err
 				}
@@ -355,8 +355,7 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 
 // SpecFromManifestData is a function which converts an instance of app.ManifestData
 // to this specific version of the AppManifestSpec (v1alpha1).
-// Preserve deprecated route fields for compatibility with existing manifests.
-// nolint:gocognit,funlen,gocyclo,staticcheck
+// nolint:gocognit,funlen,gocyclo
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	manifestSpec := AppManifestSpec{
 		AppName:        data.AppName,
@@ -502,24 +501,25 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		}
 
 		// Routes
-		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 || len(version.Routes.Schemas) > 0 {
+		routes := version.Routes //nolint:staticcheck // Routes is deprecated but still serialized for existing manifests
+		if len(routes.Namespaced) > 0 || len(routes.Cluster) > 0 || len(routes.Schemas) > 0 {
 			ver.Routes = NewAppManifestManifestVersionRoutes()
-			if len(version.Routes.Namespaced) > 0 {
+			if len(routes.Namespaced) > 0 {
 				ver.Routes.Namespaced = make(map[string]any)
-				for path := range version.Routes.Namespaced {
-					ver.Routes.Namespaced[path] = version.Routes.Namespaced[path]
+				for path := range routes.Namespaced {
+					ver.Routes.Namespaced[path] = routes.Namespaced[path]
 				}
 			}
-			if len(version.Routes.Cluster) > 0 {
+			if len(routes.Cluster) > 0 {
 				ver.Routes.Cluster = make(map[string]any)
-				for path := range version.Routes.Cluster {
-					ver.Routes.Cluster[path] = version.Routes.Cluster[path]
+				for path := range routes.Cluster {
+					ver.Routes.Cluster[path] = routes.Cluster[path]
 				}
 			}
-			if len(version.Routes.Schemas) > 0 {
+			if len(routes.Schemas) > 0 {
 				ver.Routes.Schemas = make(map[string]any)
-				for path := range version.Routes.Schemas {
-					ver.Routes.Schemas[path] = version.Routes.Schemas[path]
+				for path := range routes.Schemas {
+					ver.Routes.Schemas[path] = routes.Schemas[path]
 				}
 			}
 		}

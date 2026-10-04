@@ -12,8 +12,6 @@ import (
 )
 
 // buildVersionOpenAPI collects custom routes at paths relative to the version root.
-//
-//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func buildVersionOpenAPI(version *app.ManifestVersion, kindRouteSchemas map[string]spec.SchemaProps) {
 	paths := make(map[string]spec3.PathProps)
 	schemas := make(map[string]spec.Schema)
@@ -37,8 +35,9 @@ func buildVersionOpenAPI(version *app.ManifestVersion, kindRouteSchemas map[stri
 			paths[fullPath] = props
 		}
 	}
-	add("", version.Routes.Cluster)
-	add("/namespaces/{namespace}", version.Routes.Namespaced)
+	routes := version.Routes //nolint:staticcheck // Routes is deprecated; this is where it is translated to OpenAPI paths
+	add("", routes.Cluster)
+	add("/namespaces/{namespace}", routes.Namespaced)
 	for _, kind := range version.Kinds {
 		prefix := "/" + kind.Resource() + "/{name}"
 		if kind.Scope != "Cluster" {
@@ -49,7 +48,7 @@ func buildVersionOpenAPI(version *app.ManifestVersion, kindRouteSchemas map[stri
 	for name, props := range kindRouteSchemas {
 		schemas[name] = spec.Schema{SchemaProps: props}
 	}
-	maps.Copy(schemas, version.Routes.Schemas)
+	maps.Copy(schemas, routes.Schemas)
 	version.OpenAPI = app.ManifestVersionOpenAPI{
 		Paths:      paths,
 		Components: app.ManifestVersionOpenAPIComponents{Schemas: schemas},

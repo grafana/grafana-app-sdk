@@ -43,7 +43,6 @@ func externalKindRoutes(kind app.ManifestVersionKind, source app.ManifestVersion
 	return result
 }
 
-//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.ManifestVersionRoutes) error {
 	// Work on copies so repeated generation sees the same imported document.
 	source.Cluster = maps.Clone(source.Cluster)
@@ -79,7 +78,7 @@ func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.Manifes
 			delete(remaining, "/"+kind.Resource()+"/{name}"+path)
 		}
 	}
-	return mergeExternalRoutes(&version.Routes, source)
+	return mergeExternalRoutes(&version.Routes, source) //nolint:staticcheck // Routes is deprecated but still emitted alongside OpenAPI
 }
 
 func mergeExternalRoutes(target *app.ManifestVersionRoutes, source app.ManifestVersionRoutes) error {
@@ -141,8 +140,6 @@ func mergeExternalPaths(target, source map[string]spec3.PathProps) (map[string]s
 
 // Imported operations have no generated request/response types. Exclude them
 // from Go associations, including operations that override a CUE definition.
-//
-//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func manifestTypeVersions(manifest codegen.AppManifest, data *app.ManifestData) ([]app.ManifestVersion, map[string]bool) {
 	versions := make([]app.ManifestVersion, len(data.Versions))
 	copy(versions, data.Versions)
@@ -158,8 +155,9 @@ func manifestTypeVersions(manifest codegen.AppManifest, data *app.ManifestData) 
 			kind := &versions[idx].Kinds[kindIdx]
 			kind.Routes = withoutExternalOperations(kind.Routes, externalKindRoutes(*kind, routes))
 		}
-		versions[idx].Routes.Cluster = withoutExternalOperations(versions[idx].Routes.Cluster, routes.Cluster)
-		versions[idx].Routes.Namespaced = withoutExternalOperations(versions[idx].Routes.Namespaced, routes.Namespaced)
+		versionRoutes := &versions[idx].Routes //nolint:staticcheck // Routes is deprecated but still drives generated Go associations
+		versionRoutes.Cluster = withoutExternalOperations(versionRoutes.Cluster, routes.Cluster)
+		versionRoutes.Namespaced = withoutExternalOperations(versionRoutes.Namespaced, routes.Namespaced)
 	}
 	return versions, imported
 }
