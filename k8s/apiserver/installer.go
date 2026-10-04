@@ -335,6 +335,7 @@ func (r *defaultInstaller) ManifestData() *app.ManifestData {
 	return r.appProvider.Manifest().ManifestData
 }
 
+//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
 	hasCustomRoutes := false
@@ -422,7 +423,7 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
-//nolint:gocognit,funlen,gocyclo
+//nolint:gocognit,funlen,gocyclo,staticcheck // Preserve deprecated route fields for manifest compatibility.
 func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
 	if r.scheme == nil {

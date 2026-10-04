@@ -6,9 +6,9 @@
     "x-grafana-api-group": "integration.ext.grafana.app"
   },
   "paths": {
-    "/reports": {
+    "/foo-from-oas": {
       "get": {
-        "operationId": "getClusterReport",
+        "operationId": "getFooFromOpenAPI",
         "responses": {
           "200": {
             "$ref": "#/components/responses/Report"
@@ -16,19 +16,9 @@
         }
       }
     },
-    "/namespaces/{namespace}/reports": {
+    "/namespaces/{namespace}/bar-from-oas": {
       "get": {
         "operationId": "getNamespacedReport",
-        "responses": {
-          "200": {
-            "$ref": "#/components/responses/Report"
-          }
-        }
-      }
-    },
-    "/namespaces/{namespace}/foos/{name}/report": {
-      "get": {
-        "operationId": "getFooReport",
         "responses": {
           "200": {
             "$ref": "#/components/responses/Report"

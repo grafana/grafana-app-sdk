@@ -117,6 +117,7 @@ appManifestv1alpha2: appManifestKind & {
 			// Routes is a map of subresource route path to spec3.PathProps description of the route.
 			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
 			// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+			// Deprecated: routes now live in ManifestVersion#openapi
 			routes?: {
 				[string]: _
 			}
@@ -155,6 +156,7 @@ appManifestv1alpha2: appManifestKind & {
 			// dot-separated paths and [*] projections as searchFields.
 			path: string & strings.MinRunes(1)
 		}
+		// Deprecated: custom routes are moved to the openapi section
 		#ManifestVersionRoutes: {
 			// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
 			// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
@@ -175,6 +177,20 @@ appManifestv1alpha2: appManifestKind & {
 				[string]: _
 			}
 		}
+		#ManifestVersionOpenAPI: {
+			// The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})
+			paths: {
+				[string]: _ // follows the openapi 3.0 spec implemented by k8s
+			}
+			components?: {
+				schemas?: {
+					[string]: _ // follows the openapi 3.0 spec implemented by k8s
+				}
+				responses?: {
+					[string]: _
+				}
+			}
+		}
 		#ManifestVersion: {
 			// Name is the version name string, such as "v1" or "v1alpha1"
 			name: string
@@ -187,7 +203,10 @@ appManifestv1alpha2: appManifestKind & {
 			kinds: [...#ManifestVersionKind]
 			// Routes is a section defining version-level custom resource routes.
 			// These routes are registered at the same level as kinds, and thus should not conflict with existing kinds.
+			// Deprecated: routes are now exposed under the openapi property
 			routes?: #ManifestVersionRoutes
+			// Define custom routes (cluster, namespaced, and sub-resources) and additional schemas
+			openapi?: #ManifestVersionOpenAPI
 		}
 		#KindPermission: {
 			group: string

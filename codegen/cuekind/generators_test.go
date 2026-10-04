@@ -1,6 +1,7 @@
 package cuekind
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,7 +23,7 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 	require.NoError(t, err)
 	manifest, err := parser.ParseManifest("integrationManifest")
 	require.NoError(t, err)
-	assert.Equal(t, "integration.openapi.json", manifest.Versions()[0].Properties().OpenAPI)
+	assert.Equal(t, "integration.openapi.json", manifest.Versions()[0].Properties().ImportOpenAPIFile)
 
 	for _, encoding := range []string{"json", "yaml"} {
 		t.Run(encoding, func(t *testing.T) {
@@ -61,10 +62,10 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 			assert.Contains(t, report.Properties["message"].Type, "string")
 			assert.Equal(t, "int64", report.Properties["count"].Format)
 
-			cluster := version.Routes.Cluster["/reports"]
+			cluster := version.Routes.Cluster["/foo-from-oas"]
 			require.NotNil(t, cluster.Get)
-			assert.Equal(t, "getClusterReport", cluster.Get.OperationId)
-			namespaced := version.Routes.Namespaced["/reports"]
+			assert.Equal(t, "getFooFromOpenAPI", cluster.Get.OperationId)
+			namespaced := version.Routes.Namespaced["/bar-from-oas"]
 			require.NotNil(t, namespaced.Get)
 			assert.Equal(t, "getNamespacedReport", namespaced.Get.OperationId)
 			assert.Contains(t, version.Routes.Cluster, "/bar")
@@ -72,17 +73,47 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 
 			foo := version.Kinds[0]
 			require.Equal(t, "Foo", foo.Kind)
-			require.Contains(t, foo.Routes, "/report")
-			assert.Equal(t, "getFooReport", foo.Routes["/report"].Get.OperationId)
 			assert.Contains(t, foo.Routes, "/details")
-			assert.NotContains(t, version.Routes.Namespaced, "/foos/{name}/report")
+			require.NotNil(t, version.OpenAPI.Paths)
+			for _, path := range []string{"/bar", "/namespaces/{namespace}/foo", "/namespaces/{namespace}/foos/{name}/details", "/foo-from-oas", "/namespaces/{namespace}/bar-from-oas", "/foo-from-cue"} {
+				assert.Contains(t, version.OpenAPI.Paths, path)
+			}
+			assert.Equal(t, "getFooFromCue", version.OpenAPI.Paths["/foo-from-cue"].Get.OperationId)
+			require.False(t, version.OpenAPI.Components.IsZero())
+			assert.Contains(t, version.OpenAPI.Components.Schemas, "Report")
+			raw, err := json.Marshal(version.OpenAPI)
+			require.NoError(t, err)
+			var document any
+			require.NoError(t, json.Unmarshal(raw, &document))
+			var checkRefs func(any)
+			checkRefs = func(value any) {
+				switch value := value.(type) {
+				case map[string]any:
+					if ref, ok := value["$ref"].(string); ok {
+						require.True(t, strings.HasPrefix(ref, "#/components/schemas/"), ref)
+						assert.Contains(t, version.OpenAPI.Components.Schemas, strings.TrimPrefix(ref, "#/components/schemas/"))
+					}
+					for _, child := range value {
+						checkRefs(child)
+					}
+				case []any:
+					for _, child := range value {
+						checkRefs(child)
+					}
+				}
+			}
+			checkRefs(document)
+			details := version.OpenAPI.Paths["/namespaces/{namespace}/foos/{name}/details"]
+			require.Len(t, details.Parameters, 2)
+			assert.Equal(t, "namespace", details.Parameters[0].Name)
+			assert.Equal(t, "name", details.Parameters[1].Name)
+
 			assert.Empty(t, cluster.Get.Parameters)
 			for _, check := range []struct {
 				parameters []*spec3.Parameter
 				names      []string
 			}{
 				{namespaced.Get.Parameters, []string{"namespace"}},
-				{foo.Routes["/report"].Get.Parameters, []string{"namespace", "name"}},
 			} {
 				require.Len(t, check.parameters, len(check.names))
 				for idx, parameter := range check.parameters {
@@ -93,15 +124,10 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 					assert.Contains(t, parameter.Schema.Type, "string")
 				}
 			}
-			for _, route := range []spec3.PathProps{cluster, namespaced, foo.Routes["/report"]} {
+			for _, route := range []spec3.PathProps{cluster, namespaced} {
 				response := route.Get.Responses.StatusCodeResponses[200]
 				assert.Equal(t, "#/components/schemas/Report", response.Content["application/json"].Schema.Ref.String())
 			}
-			// Kind sub-resource references must resolve in the kind's schema document.
-			components, err := foo.Schema.AsOpenAPI3()
-			require.NoError(t, err)
-			require.Contains(t, components.Schemas, "Report")
-			require.NotNil(t, components.Schemas["Report"].Value)
 		})
 	}
 
@@ -114,7 +140,8 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 	for _, file := range files {
 		if strings.HasSuffix(file.RelativePath, "_manifest.go") {
 			source := string(file.Data)
-			assert.Contains(t, source, "getFooReport")
+			assert.Contains(t, source, "getFooFromCue")
+			assert.Contains(t, source, "getFooFromOpenAPI")
 			assert.Contains(t, source, "GetDetailsResponse{}")
 			assert.NotContains(t, source, "GetFooReportResponse{}")
 			assert.NotContains(t, source, "GetClusterReportResponse{}")

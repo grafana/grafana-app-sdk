@@ -43,6 +43,7 @@ func externalKindRoutes(kind app.ManifestVersionKind, source app.ManifestVersion
 	return result
 }
 
+//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.ManifestVersionRoutes) error {
 	// Work on copies so repeated generation sees the same imported document.
 	source.Cluster = maps.Clone(source.Cluster)
@@ -140,6 +141,8 @@ func mergeExternalPaths(target, source map[string]spec3.PathProps) (map[string]s
 
 // Imported operations have no generated request/response types. Exclude them
 // from Go associations, including operations that override a CUE definition.
+//
+//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func manifestTypeVersions(manifest codegen.AppManifest, data *app.ManifestData) ([]app.ManifestVersion, map[string]bool) {
 	versions := make([]app.ManifestVersion, len(data.Versions))
 	copy(versions, data.Versions)

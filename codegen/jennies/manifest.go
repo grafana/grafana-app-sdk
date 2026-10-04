@@ -193,7 +193,7 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	return files, nil
 }
 
-//nolint:revive,gocognit,funlen,gocyclo
+//nolint:revive,gocognit,funlen,gocyclo,staticcheck // Preserve deprecated route fields for manifest compatibility.
 func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.ManifestData, error) {
 	manifest := app.ManifestData{
 		AppName:          m.Properties().AppName,
@@ -222,12 +222,13 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			Served: version.Properties().Served,
 			Kinds:  make([]app.ManifestVersionKind, len(version.Kinds())),
 		}
+		kindRouteSchemas := make(map[string]spec.SchemaProps)
 		for i, kind := range version.Kinds() {
 			if kind.Conversion {
 				hasAnyConversion = true
 			}
 
-			mvkind, err := processKindVersion(kind, version.Name(), includeSchemas)
+			mvkind, err := processKindVersion(kind, version.Name(), includeSchemas, kindRouteSchemas)
 			if err != nil {
 				return nil, err
 			}
@@ -279,6 +280,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		if err := mergeExternalVersionRoutes(&ver, externalRoutes(version)); err != nil {
 			return nil, fmt.Errorf("external routes for version %s: %w", version.Name(), err)
 		}
+		buildVersionOpenAPI(&ver, kindRouteSchemas)
 		manifest.Versions = append(manifest.Versions, ver)
 	}
 
@@ -547,7 +549,7 @@ func getRouteNames(p *spec3.PathProps) []string {
 	return routes
 }
 
-//nolint:revive
+//nolint:revive,staticcheck // Preserve deprecated route fields for manifest compatibility.
 func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) error {
 	kinds := make(map[string]struct{})
 	routes := make(map[string]struct{})
@@ -637,7 +639,7 @@ type simpleOpenAPIDoc[T any] struct {
 }
 
 //nolint:revive,funlen,unparam,gocognit,gocyclo
-func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool, routeSchemas ...map[string]spec.SchemaProps) (app.ManifestVersionKind, error) {
 	if err := validateSearchFields(vk, version); err != nil {
 		return app.ManifestVersionKind{}, err
 	}
@@ -697,6 +699,9 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			mver.Routes[sourcePath] = targetPathProps
 			maps.Copy(additionalSchemas, newAdditionalSchemas)
 		}
+	}
+	for _, schemas := range routeSchemas {
+		maps.Copy(schemas, additionalSchemas)
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
 	if includeSchema {

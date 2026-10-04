@@ -19,10 +19,23 @@ import (
 
 func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
 	for _, version := range manifest.Versions() {
-		name := version.Properties().OpenAPI
+		if inline := version.Properties().InlineOpenAPI; inline != nil {
+			doc := maps.Clone(inline)
+			doc["openapi"] = "3.0.3"
+			data, err := json.Marshal(doc)
+			if err != nil {
+				return err
+			}
+			routes, err := parseOpenAPIRoutes(data, manifest.Properties().FullGroup, version.Name())
+			if err != nil {
+				return fmt.Errorf("inline OpenAPI (version %s): %w", version.Name(), err)
+			}
+			manifest.AllVersions[version.Name()].ImportedRoutes = routes
+		}
+		name := version.Properties().ImportOpenAPIFile
 		if p.files == nil {
 			if name != "" {
-				return fmt.Errorf("version %s: openAPI requires a filesystem; use LoadCue", version.Name())
+				return fmt.Errorf("version %s: importOpenAPIFile requires a filesystem; use LoadCue", version.Name())
 			}
 			continue
 		}
@@ -37,7 +50,7 @@ func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
 					return fmt.Errorf("OpenAPI %s: %w", candidate, err)
 				}
 				if name != "" {
-					return fmt.Errorf("version %s: multiple OpenAPI files found (%s, %s); set openAPI explicitly", version.Name(), name, candidate)
+					return fmt.Errorf("version %s: multiple OpenAPI files found (%s, %s); set importOpenAPIFile explicitly", version.Name(), name, candidate)
 				}
 				name = candidate
 			}
@@ -53,7 +66,20 @@ func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
 		if err != nil {
 			return fmt.Errorf("OpenAPI %s (version %s): %w", name, version.Name(), err)
 		}
-		manifest.AllVersions[version.Name()].ImportedRoutes = routes
+		target := &manifest.AllVersions[version.Name()].ImportedRoutes
+		target.Cluster, err = mergeOpenAPIPaths(target.Cluster, routes.Cluster)
+		if err != nil {
+			return err
+		}
+		target.Namespaced, err = mergeOpenAPIPaths(target.Namespaced, routes.Namespaced)
+		if err != nil {
+			return err
+		}
+		if target.Schemas == nil {
+			target.Schemas = routes.Schemas
+		} else {
+			maps.Copy(target.Schemas, routes.Schemas)
+		}
 	}
 	return nil
 }
@@ -280,4 +306,38 @@ func expandOpenAPIRefs(value any, root map[string]any, stack []string, context o
 	default:
 		return value, nil
 	}
+}
+
+// External operations override inline operations at the same path and method.
+func mergeOpenAPIPaths(target, source map[string]spec3.PathProps) (map[string]spec3.PathProps, error) {
+	if target == nil {
+		return source, nil
+	}
+	for path, props := range source {
+		base, err := json.Marshal(target[path])
+		if err != nil {
+			return nil, err
+		}
+		override, err := json.Marshal(props)
+		if err != nil {
+			return nil, err
+		}
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(base, &fields); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(override, &fields); err != nil {
+			return nil, err
+		}
+		merged, err := json.Marshal(fields)
+		if err != nil {
+			return nil, err
+		}
+		var result spec3.PathProps
+		if err := json.Unmarshal(merged, &result); err != nil {
+			return nil, err
+		}
+		target[path] = result
+	}
+	return target, nil
 }

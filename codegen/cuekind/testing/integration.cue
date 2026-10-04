@@ -8,7 +8,11 @@ integrationManifest: {
 }
 
 integrationV1: {
-	openAPI: "integration.openapi.json"
+	openapi: paths: "/foo-from-cue": get: {
+		operationId: "getFooFromCue"
+		responses: "200": description: "OK"
+	}
+	importOpenAPIFile: "integration.openapi.json"
 	kinds: [{
 		kind:   "Foo"
 		plural: "foos"

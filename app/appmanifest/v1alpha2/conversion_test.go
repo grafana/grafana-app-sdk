@@ -13,6 +13,32 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 )
 
+func TestManifestVersionOpenAPIConversion(t *testing.T) {
+	for _, document := range []string{
+		`{}`,
+		`{"paths":{},"components":{"schemas":{},"responses":{}}}`,
+		`{"paths":{"/test":{"get":{"operationId":"test"}}}}`,
+		`{"components":{"schemas":{"Test":{"type":"string"}}}}`,
+		`{"components":{"responses":{"OK":{"description":"success"}}}}`,
+	} {
+		t.Run(document, func(t *testing.T) {
+			var openAPI app.ManifestVersionOpenAPI
+			require.NoError(t, json.Unmarshal([]byte(document), &openAPI))
+			data := app.ManifestData{Versions: []app.ManifestVersion{{Name: "v1", OpenAPI: openAPI}}}
+			converted, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			if openAPI.IsZero() {
+				assert.Nil(t, converted.Versions[0].Openapi)
+				return
+			}
+			require.NotNil(t, converted.Versions[0].Openapi)
+			restored, err := converted.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, openAPI, restored.Versions[0].OpenAPI)
+		})
+	}
+}
+
 func TestSearchFieldsConversion(t *testing.T) {
 	ptr := func(s string) *string { return &s }
 	truePtr := func() *bool { b := true; return &b }

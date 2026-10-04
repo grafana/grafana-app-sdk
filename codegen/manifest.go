@@ -171,8 +171,11 @@ type VersionProperties struct {
 	Served  bool                  `json:"served"`
 	Codegen KindCodegenProperties `json:"codegen"`
 
-	// OpenAPI is an optional OpenAPI document path relative to the CUE source directory.
-	OpenAPI string `json:"openAPI,omitempty"`
+	// ImportOpenAPIFile is an optional OpenAPI document path relative to the CUE source directory.
+	ImportOpenAPIFile string `json:"importOpenAPIFile,omitempty"`
+
+	// InlineOpenAPI supplies version-relative paths and components in CUE.
+	InlineOpenAPI map[string]any `json:"openapi,omitempty"`
 }
 
 type VersionCustomRoutes struct {

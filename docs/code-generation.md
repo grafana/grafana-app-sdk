@@ -117,14 +117,14 @@ To use a different filename, specify it on the version:
 manifest: {
     appName: "example"
     versions: v1: {
-        openAPI: "saved-api.yaml"
+        importOpenAPIFile: "saved-api.yaml"
         kinds: []
     }
 }
 ```
 
 Paths are relative to the CUE source directory, including when using `--source`.
-An explicit `openAPI` value takes precedence over automatic discovery. If multiple
+An explicit `importOpenAPIFile` value takes precedence over automatic discovery. If multiple
 conventional filenames exist for one version, select one explicitly.
 
 For example, `saved-api.yaml` can introduce a route and a response type absent

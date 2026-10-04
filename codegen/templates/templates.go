@@ -522,6 +522,7 @@ func (ManifestGoFileMetadata) ExportedFieldName(name string) string {
 	return strings.ToUpper(sanitized)
 }
 
+//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func (m ManifestGoFileMetadata) Packages() []string {
 	pkgs := make([]string, 0)
 	if m.KindsAreGrouped {

@@ -2,6 +2,7 @@ package cuekind
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -232,11 +233,11 @@ func TestExternalOpenAPIFileSelection(t *testing.T) {
 		wantErr string
 	}{
 		{name: "no external file"},
-		{name: "explicit file", setting: `openAPI: "saved.yaml"`, files: []string{"saved.yaml"}},
+		{name: "explicit file", setting: `importOpenAPIFile: "saved.yaml"`, files: []string{"saved.yaml"}},
 		{name: "yml", files: []string{"openapi.v1.yml"}},
-		{name: "missing explicit file", setting: `openAPI: "missing.json"`, wantErr: "missing.json"},
+		{name: "missing explicit file", setting: `importOpenAPIFile: "missing.json"`, wantErr: "missing.json"},
 		{name: "ambiguous", files: []string{"openapi.v1.json", "openapi.v1.yaml"}, wantErr: "multiple OpenAPI files"},
-		{name: "explicit resolves ambiguity", setting: `openAPI: "openapi.v1.yaml"`, files: []string{"openapi.v1.json", "openapi.v1.yaml"}},
+		{name: "explicit resolves ambiguity", setting: `importOpenAPIFile: "openapi.v1.yaml"`, files: []string{"openapi.v1.json", "openapi.v1.yaml"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			files := externalTestFiles(`package test
@@ -370,6 +371,65 @@ func TestOpenAPIPropertyNamesAreNotKeywords(t *testing.T) {
 }`, "PROPERTY", name)
 			_, err := parseOpenAPIRoutes([]byte(doc), "example.test", "v1")
 			require.ErrorContains(t, err, "unresolved reference")
+		})
+	}
+}
+
+func TestManifestInlineOpenAPI(t *testing.T) {
+	for _, external := range []bool{false, true} {
+		t.Run(fmt.Sprintf("external=%t", external), func(t *testing.T) {
+			source := `package test
+manifest: {
+ appName: "external"
+ versions: v1: {
+  kinds: [{kind: "Widget", scope: "Cluster", schema: spec: title: string,
+   routes: "/details": GET: {name: "getDetails", response: {value: string}}}]
+  openapi: {
+   paths: "/query": {
+    get: {operationId: "inlineGet", responses: "200": {$ref: "#/components/responses/Result"}}
+    post: {operationId: "inlinePost", responses: "200": {description: "OK"}}
+   }
+   components: {
+    responses: Result: {description: "Result", content: "application/json": schema: {$ref: "#/components/schemas/InlineResult"}}
+    schemas: InlineResult: {type: "string"}
+   }
+  }
+ }
+}`
+			files := externalTestFiles(source)
+			if external {
+				files["openapi.v1.yaml"] = &fstest.MapFile{Data: []byte(externalOpenAPI)}
+			}
+			c, err := LoadCue(files)
+			require.NoError(t, err)
+			parser, err := NewParser(c, true)
+			require.NoError(t, err)
+			manifest, err := parser.ParseManifest("manifest")
+			require.NoError(t, err)
+			for _, includeSchemas := range []bool{false, true} {
+				generator := &jennies.ManifestGenerator{Encoder: json.Marshal, IncludeSchemas: includeSchemas, ManifestVersion: "v1alpha2"}
+				generated, err := generator.Generate(manifest)
+				require.NoError(t, err)
+				var output struct {
+					Spec v1alpha2.AppManifestSpec `json:"spec"`
+				}
+				require.NoError(t, json.Unmarshal(generated[0].Data, &output))
+				data, err := output.Spec.ToManifestData()
+				require.NoError(t, err)
+				doc := data.Versions[0].OpenAPI
+				require.NotNil(t, doc.Paths)
+				require.Contains(t, doc.Paths, "/widgets/{name}/details")
+				require.Contains(t, doc.Paths, "/query")
+				query := doc.Paths["/query"]
+				assert.Equal(t, "inlinePost", query.Post.OperationId)
+				if external {
+					assert.Equal(t, "externalQuery", query.Get.OperationId)
+				} else {
+					assert.Equal(t, "inlineGet", query.Get.OperationId)
+					assert.Equal(t, "#/components/schemas/InlineResult", query.Get.Responses.StatusCodeResponses[200].Content["application/json"].Schema.Ref.String())
+				}
+				assert.Contains(t, doc.Components.Schemas, "InlineResult")
+			}
 		})
 	}
 }

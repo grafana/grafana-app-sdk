@@ -143,6 +143,8 @@ func (s *simpleConverter) Convert(obj RawKind, targetAPIVersion string) ([]byte,
 
 // manifestHasCustomRoutes reports whether the manifest declares any kind subresource routes
 // or any version-level routes.
+//
+//nolint:staticcheck // Preserve deprecated route fields for manifest compatibility.
 func manifestHasCustomRoutes(md *app.ManifestData) bool {
 	for _, version := range md.Versions {
 		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 {

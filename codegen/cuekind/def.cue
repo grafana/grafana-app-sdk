@@ -379,9 +379,11 @@ Kind: S={
 
 Version: S={
 	name: string
-	// openAPI optionally names a saved OpenAPI 3.0 document relative to the CUE source directory.
+	// importOpenAPIFile optionally names a saved OpenAPI 3.0 document relative to the CUE source directory.
 	// Its routes and schemas are included in manifests only; OpenAPI takes precedence over CUE.
-	openAPI?: string & !=""
+	importOpenAPIFile?: string & !=""
+	// Inline OpenAPI paths and components, relative to the version root.
+	openapi?: {paths: [string]: _, components?: [string]: _}
 	// served dictates whether this version is served by the apiserver
 	served: bool | *true
 	// codegen contains properties specific to generating code using tooling. At the root level of the version, it sets

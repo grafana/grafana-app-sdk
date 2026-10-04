@@ -15,7 +15,8 @@ import (
 
 // ToManifestData is a function which converts this specific version of the AppManifestSpec (v1alpha2)
 // to the generic app.ManifestData type for usage with an app.Manifest.
-// nolint:gocognit,funlen,gocyclo
+// Preserve deprecated route fields for compatibility with existing manifests.
+// nolint:gocognit,funlen,gocyclo,staticcheck
 func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 	data := app.ManifestData{
 		AppName:        s.AppName,
@@ -222,6 +223,15 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			}
 		}
 
+		if version.Openapi != nil {
+			raw, err := json.Marshal(version.Openapi)
+			if err != nil {
+				return app.ManifestData{}, err
+			}
+			if err := json.Unmarshal(raw, &v.OpenAPI); err != nil {
+				return app.ManifestData{}, err
+			}
+		}
 		data.Versions[idx] = v
 	}
 	if s.PreferredVersion != nil {
@@ -345,7 +355,8 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 
 // SpecFromManifestData is a function which converts an instance of app.ManifestData
 // to this specific version of the AppManifestSpec (v1alpha1).
-// nolint:gocognit,funlen,gocyclo
+// Preserve deprecated route fields for compatibility with existing manifests.
+// nolint:gocognit,funlen,gocyclo,staticcheck
 func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 	manifestSpec := AppManifestSpec{
 		AppName:        data.AppName,
@@ -480,6 +491,16 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 			ver.Kinds = append(ver.Kinds, k)
 		}
+		if !version.OpenAPI.IsZero() {
+			raw, err := json.Marshal(version.OpenAPI)
+			if err != nil {
+				return nil, err
+			}
+			if err := json.Unmarshal(raw, &ver.Openapi); err != nil {
+				return nil, err
+			}
+		}
+
 		// Routes
 		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 {
 			ver.Routes = NewAppManifestManifestVersionRoutes()

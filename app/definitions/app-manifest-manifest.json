@@ -745,9 +745,13 @@
                                         "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
                                         "type": "string"
                                     },
+                                    "openapi": {
+                                        "$ref": "#/components/schemas/ManifestVersionOpenAPI",
+                                        "description": "Define custom routes (cluster, namespaced, and sub-resources) and additional schemas"
+                                    },
                                     "routes": {
                                         "$ref": "#/components/schemas/ManifestVersionRoutes",
-                                        "description": "Routes is a section defining version-level custom resource routes.\nThese routes are registered at the same level as kinds, and thus should not conflict with existing kinds."
+                                        "description": "Routes is a section defining version-level custom resource routes.\nThese routes are registered at the same level as kinds, and thus should not conflict with existing kinds.\nDeprecated: routes are now exposed under the openapi property"
                                     },
                                     "served": {
                                         "default": true,
@@ -797,7 +801,7 @@
                                     },
                                     "routes": {
                                         "additionalProperties": true,
-                                        "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                        "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.\nDeprecated: routes now live in ManifestVersion#openapi",
                                         "type": "object"
                                     },
                                     "schemas": {
@@ -926,8 +930,37 @@
                                 },
                                 "type": "object"
                             },
+                            "ManifestVersionOpenAPI": {
+                                "additionalProperties": false,
+                                "properties": {
+                                    "components": {
+                                        "additionalProperties": false,
+                                        "properties": {
+                                            "responses": {
+                                                "additionalProperties": true,
+                                                "type": "object"
+                                            },
+                                            "schemas": {
+                                                "additionalProperties": true,
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "paths": {
+                                        "additionalProperties": true,
+                                        "description": "The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})",
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "paths"
+                                ],
+                                "type": "object"
+                            },
                             "ManifestVersionRoutes": {
                                 "additionalProperties": false,
+                                "description": "Deprecated: custom routes are moved to the openapi section",
                                 "properties": {
                                     "cluster": {
                                         "additionalProperties": true,
