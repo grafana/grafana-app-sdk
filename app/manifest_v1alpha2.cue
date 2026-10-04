@@ -189,6 +189,9 @@ appManifestv1alpha2: appManifestKind & {
 				responses?: {
 					[string]: _
 				}
+				examples?: {
+					[string]: _
+				}
 			}
 		}
 		#ManifestVersion: {

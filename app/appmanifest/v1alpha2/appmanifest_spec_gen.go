@@ -578,6 +578,7 @@ func (AppManifestSpec) OpenAPIModelName() string {
 type AppManifestV1alpha2ManifestVersionOpenAPIComponents struct {
 	Schemas   map[string]interface{} `json:"schemas,omitempty"`
 	Responses map[string]interface{} `json:"responses,omitempty"`
+	Examples  map[string]interface{} `json:"examples,omitempty"`
 }
 
 // NewAppManifestV1alpha2ManifestVersionOpenAPIComponents creates a new AppManifestV1alpha2ManifestVersionOpenAPIComponents object.

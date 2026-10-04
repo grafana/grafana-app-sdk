@@ -386,8 +386,8 @@ type ManifestVersionOpenAPIComponents struct {
 	// Responses holds reusable Responses Objects
 	Responses map[string]*spec3.Response `json:"responses,omitempty" yaml:"responses,omitempty"`
 
-	// Example holds reusable Example objects
-	Examples map[string]*spec3.Example `json:"examples,omitempty"`
+	// Examples holds reusable Example objects
+	Examples map[string]*spec3.Example `json:"examples,omitempty" yaml:"examples,omitempty"`
 }
 
 // IsZero reports whether there are no paths or reusable components.

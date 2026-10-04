@@ -8,11 +8,26 @@ integrationManifest: {
 }
 
 integrationV1: {
-	openapi: paths: "/foo-from-cue": get: {
-		operationId: "getFooFromCue"
-		responses: "200": description: "OK"
+	// Inline OpenAPI
+	openapi: {
+		paths: {
+			"/foo-from-cue": {
+				get: {
+					operationId: "getFooFromCue"
+					responses: {
+						"200": {
+							description: "OK"
+						}
+					}
+				}
+			}
+		}
 	}
+
+	// Load OpenAPI from an external source
 	importOpenAPIFile: "integration.openapi.json"
+
+	// CRUD++ for managed kinds
 	kinds: [{
 		kind:   "Foo"
 		plural: "foos"
@@ -69,6 +84,7 @@ integrationV1: {
 			".spec.nullable.target",
 		]
 	}]
+	// Deprecated -- this should be moved to the openapi docs above
 	routes: {
 		namespaced: {
 			"/foo": {

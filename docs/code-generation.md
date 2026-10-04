@@ -127,6 +127,22 @@ Paths are relative to the CUE source directory, including when using `--source`.
 An explicit `importOpenAPIFile` value takes precedence over automatic discovery. If multiple
 conventional filenames exist for one version, select one explicitly.
 
+You can also declare OpenAPI paths and components inline on a version:
+
+```cue
+versions: v1: {
+    kinds: []
+    openapi: paths: "/health": get: {
+        operationId: "getHealth"
+        responses: "200": description: "Healthy"
+    }
+}
+```
+
+Inline OpenAPI overrides matching CUE route operations. If a saved document is
+also loaded, it overrides matching inline operations and schemas. Other
+operations remain. Each OpenAPI source must resolve its own local references.
+
 For example, `saved-api.yaml` can introduce a route and a response type absent
 from CUE:
 
@@ -166,34 +182,6 @@ Route paths are relative to `/apis/<manifest-group>/<version>`. The processing
 engine derives this prefix from the CUE manifest and the version importing the
 document, so it does not need to appear in each path. `info.version` and the
 optional `info.x-grafana-api-group` document this context; they do not override CUE.
-
-- `/reports` becomes a cluster-scoped route.
-- `/namespaces/{namespace}/reports` becomes the namespaced route `/reports`.
-- `{namespace}` and `{name}` automatically receive required string path parameters
-  on each operation. Explicit path-level or operation-level parameters are
-  preserved. Other path placeholders still need explicit parameter definitions.
-- Full paths beginning `/apis/<manifest-group>/<version>/` are also accepted;
-  that prefix is removed. A mismatched group or version is an error.
-- Paths such as `/namespaces/{namespace}/foos/{name}/report` attach `/report`
-  to the matching CUE kind's sub-resource routes. Cluster-scoped kinds use
-  `/foos/{name}/report`. The kind's scope must match the path's scope.
-- OpenAPI replaces a matching CUE path/method. Other methods on that CUE path
-  remain. A same-named component schema is replaced by its OpenAPI definition.
-- Local schema references, including recursive references, are preserved. Local
-  references to parameters, request bodies, responses, and other components are
-  expanded because manifests only store the schemas component map. References to
-  other files or URLs are rejected.
-- Route schemas remain included when `definitions.manifestSchemas` is false;
-  that setting controls resource-kind schemas, including kind sub-resource schemas.
-
-Only the document's paths and their supporting components are imported. Document
-metadata, servers, and global security configuration do not configure the app's
-deployment or authorization. Use the existing manifest authorization configuration
-and route authorization extensions where applicable.
-
-The [integration OpenAPI fixture](../codegen/cuekind/testing/integration.openapi.json)
-demonstrates a shared response type used by cluster, namespaced, and kind
-sub-resource routes alongside [CUE definitions](../codegen/cuekind/testing/integration.cue).
 
 ## Examples & Testing
 

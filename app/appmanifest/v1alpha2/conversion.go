@@ -502,7 +502,7 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 		}
 
 		// Routes
-		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 {
+		if len(version.Routes.Namespaced) > 0 || len(version.Routes.Cluster) > 0 || len(version.Routes.Schemas) > 0 {
 			ver.Routes = NewAppManifestManifestVersionRoutes()
 			if len(version.Routes.Namespaced) > 0 {
 				ver.Routes.Namespaced = make(map[string]any)

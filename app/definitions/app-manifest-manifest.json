@@ -936,6 +936,10 @@
                                     "components": {
                                         "additionalProperties": false,
                                         "properties": {
+                                            "examples": {
+                                                "additionalProperties": true,
+                                                "type": "object"
+                                            },
                                             "responses": {
                                                 "additionalProperties": true,
                                                 "type": "object"
