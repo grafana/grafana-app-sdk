@@ -1,0 +1,181 @@
+{
+  "components": {
+    "schemas": {
+      "plugin.Dummy": {
+        "properties": {
+          "auth": {
+            "$ref": "#/components/schemas/plugin.Dummy.auth"
+          },
+          "id": {
+            "description": "identifier of the thing",
+            "type": "string"
+          },
+          "info": {
+            "$ref": "#/components/schemas/resource.RouteRequestInfo"
+          }
+        },
+        "required": [
+          "id",
+          "info"
+        ]
+      },
+      "plugin.Dummy.auth": {},
+      "resource.RouteRequestInfo": {
+        "properties": {
+          "decryptedSecureValues": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "group": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "namespace": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "string"
+          },
+          "plural": {
+            "type": "string"
+          },
+          "resourceVersion": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "info": {
+    "title": "Plugin cluster routes",
+    "version": "v1"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/foo": {
+      "get": {
+        "operationId": "getFoo",
+        "parameters": [
+          {
+            "description": "query",
+            "in": "query",
+            "name": "input",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "cluster request for foo"
+          }
+        },
+        "summary": "get foo",
+        "x-grafana-requires-role": "viewer"
+      },
+      "post": {
+        "operationId": "postFoo",
+        "parameters": [
+          {
+            "description": "query",
+            "in": "query",
+            "name": "input",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "cluster request for foo"
+          }
+        },
+        "summary": "post foo",
+        "x-grafana-requires-role": "editor"
+      },
+      "x-grafana-requires-role": "some-role"
+    },
+    "/foo/{path}": {
+      "get": {
+        "operationId": "getFooPath",
+        "parameters": [
+          {
+            "description": "Remaining path, including slashes",
+            "in": "path",
+            "name": "path",
+            "required": true,
+            "schema": {
+              "pattern": ".*",
+              "type": "string"
+            }
+          },
+          {
+            "description": "query",
+            "in": "query",
+            "name": "input",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "cluster request with"
+          }
+        },
+        "summary": "cluster request matching any path",
+        "x-grafana-catch-all": "path",
+        "x-grafana-requires-role": "viewer"
+      }
+    },
+    "/namespaces/{namespace}/things/bar": {
+      "get": {
+        "operationId": "getBar",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/plugin.Dummy"
+                }
+              }
+            },
+            "description": "The requested namespaced thing"
+          }
+        },
+        "summary": "get bar"
+      }
+    }
+  }
+}

@@ -96,7 +96,7 @@ func newDirectOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, 
 }
 
 func TestDirectOpenAPIHandler(t *testing.T) {
-	snapshot := filepath.Join("..", "..", "..", "codegen", "cuekind", "testing", "integration.openapi.json")
+	snapshot := filepath.Join("testdata", "routes.openapi.json")
 	doc, err := openapi3.NewLoader().LoadFromFile(snapshot)
 	require.NoError(t, err)
 	doc.Extensions = map[string]any{"x-grafana-require-role": "signed-in"}
@@ -155,7 +155,7 @@ func TestDirectOpenAPIHandler(t *testing.T) {
 }
 
 func TestOpenAPIHandler(t *testing.T) {
-	snapshot := filepath.Join("..", "..", "..", "codegen", "cuekind", "testing", "integration.openapi.json")
+	snapshot := filepath.Join("testdata", "routes.openapi.json")
 	doc, err := openapi3.NewLoader().LoadFromFile(snapshot)
 	require.NoError(t, err)
 
@@ -253,7 +253,7 @@ func TestPluginRoutes(t *testing.T) {
 	data = canonicalOpenAPISnapshot(t, data)
 
 	// Go runs tests from the package directory (examples/plugin/plugin).
-	snapshot := filepath.Join("..", "..", "..", "codegen", "cuekind", "testing", "integration.openapi.json")
+	snapshot := filepath.Join("testdata", "routes.openapi.json")
 	data = append(data, '\n')
 	previous, err := os.ReadFile(snapshot)
 	if err != nil && !os.IsNotExist(err) {
