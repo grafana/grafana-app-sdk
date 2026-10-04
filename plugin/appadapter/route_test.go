@@ -553,3 +553,16 @@ func TestRestfulRouteAdapter_FullURL(t *testing.T) {
 		})
 	}
 }
+
+func TestRestfulRouteAdapter_InvalidURL(t *testing.T) {
+	adapter := &restfulRouteAdapter{handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("handler must not be called for an invalid URL")
+	})}
+	req := &pluginv3.CallRouteRequest{}
+	req.SetUrl("://not-a-url")
+
+	stream := newStream()
+	require.NoError(t, adapter.CallRoute(req, stream))
+	require.Len(t, stream.sent, 1)
+	require.Equal(t, int32(http.StatusBadRequest), stream.sent[0].GetCode())
+}
