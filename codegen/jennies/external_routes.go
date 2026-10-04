@@ -1,7 +1,6 @@
 package jennies
 
 import (
-	"encoding/json"
 	"maps"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/internal/openapiutil"
 )
 
 // Keep external documents optional without extending the Version interface for
@@ -54,7 +54,7 @@ func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.Manifes
 			continue
 		}
 		var err error
-		kind.Routes, err = mergeExternalPaths(kind.Routes, paths)
+		kind.Routes, err = openapiutil.MergePaths(kind.Routes, paths)
 		if err != nil {
 			return err
 		}
@@ -83,11 +83,11 @@ func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.Manifes
 
 func mergeExternalRoutes(target *app.ManifestVersionRoutes, source app.ManifestVersionRoutes) error {
 	var err error
-	target.Cluster, err = mergeExternalPaths(target.Cluster, source.Cluster)
+	target.Cluster, err = openapiutil.MergePaths(target.Cluster, source.Cluster)
 	if err != nil {
 		return err
 	}
-	target.Namespaced, err = mergeExternalPaths(target.Namespaced, source.Namespaced)
+	target.Namespaced, err = openapiutil.MergePaths(target.Namespaced, source.Namespaced)
 	if err != nil {
 		return err
 	}
@@ -98,44 +98,6 @@ func mergeExternalRoutes(target *app.ManifestVersionRoutes, source app.ManifestV
 		maps.Copy(target.Schemas, source.Schemas)
 	}
 	return nil
-}
-
-// Merge at the path-field level: an imported operation replaces the same CUE
-// operation, while methods absent from the document are retained.
-func mergeExternalPaths(target, source map[string]spec3.PathProps) (map[string]spec3.PathProps, error) {
-	if len(source) == 0 {
-		return target, nil
-	}
-	if target == nil {
-		target = make(map[string]spec3.PathProps)
-	}
-	for path, props := range source {
-		base, err := json.Marshal(target[path])
-		if err != nil {
-			return nil, err
-		}
-		override, err := json.Marshal(props)
-		if err != nil {
-			return nil, err
-		}
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(base, &fields); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(override, &fields); err != nil {
-			return nil, err
-		}
-		merged, err := json.Marshal(fields)
-		if err != nil {
-			return nil, err
-		}
-		var result spec3.PathProps
-		if err := json.Unmarshal(merged, &result); err != nil {
-			return nil, err
-		}
-		target[path] = result
-	}
-	return target, nil
 }
 
 // Imported operations have no generated request/response types. Exclude them

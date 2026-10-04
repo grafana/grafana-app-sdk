@@ -15,6 +15,7 @@ import (
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/codegen/internal/openapiutil"
 )
 
 func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
@@ -67,11 +68,11 @@ func (p *Parser) loadManifestOpenAPI(manifest *codegen.SimpleManifest) error {
 			return fmt.Errorf("OpenAPI %s (version %s): %w", name, version.Name(), err)
 		}
 		target := &manifest.AllVersions[version.Name()].ImportedRoutes
-		target.Cluster, err = mergeOpenAPIPaths(target.Cluster, routes.Cluster)
+		target.Cluster, err = openapiutil.MergePaths(target.Cluster, routes.Cluster)
 		if err != nil {
 			return err
 		}
-		target.Namespaced, err = mergeOpenAPIPaths(target.Namespaced, routes.Namespaced)
+		target.Namespaced, err = openapiutil.MergePaths(target.Namespaced, routes.Namespaced)
 		if err != nil {
 			return err
 		}
@@ -306,38 +307,4 @@ func expandOpenAPIRefs(value any, root map[string]any, stack []string, context o
 	default:
 		return value, nil
 	}
-}
-
-// External operations override inline operations at the same path and method.
-func mergeOpenAPIPaths(target, source map[string]spec3.PathProps) (map[string]spec3.PathProps, error) {
-	if target == nil {
-		return source, nil
-	}
-	for path, props := range source {
-		base, err := json.Marshal(target[path])
-		if err != nil {
-			return nil, err
-		}
-		override, err := json.Marshal(props)
-		if err != nil {
-			return nil, err
-		}
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(base, &fields); err != nil {
-			return nil, err
-		}
-		if err := json.Unmarshal(override, &fields); err != nil {
-			return nil, err
-		}
-		merged, err := json.Marshal(fields)
-		if err != nil {
-			return nil, err
-		}
-		var result spec3.PathProps
-		if err := json.Unmarshal(merged, &result); err != nil {
-			return nil, err
-		}
-		target[path] = result
-	}
-	return target, nil
 }
