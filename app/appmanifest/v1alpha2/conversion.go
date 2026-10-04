@@ -231,6 +231,10 @@ func (s *AppManifestSpec) ToManifestData() (app.ManifestData, error) {
 			if err := json.Unmarshal(raw, &v.OpenAPI); err != nil {
 				return app.ManifestData{}, err
 			}
+			// paths is always serialized (it is required), so normalize an empty map back to nil
+			if len(v.OpenAPI.Paths) == 0 {
+				v.OpenAPI.Paths = nil
+			}
 		}
 		data.Versions[idx] = v
 	}
@@ -497,6 +501,10 @@ func SpecFromManifestData(data app.ManifestData) (*AppManifestSpec, error) {
 			}
 			if err := json.Unmarshal(raw, &ver.Openapi); err != nil {
 				return nil, err
+			}
+			// paths is required by the schema, so never serialize it as null
+			if ver.Openapi.Paths == nil {
+				ver.Openapi.Paths = map[string]any{}
 			}
 		}
 

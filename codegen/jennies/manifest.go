@@ -222,7 +222,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			Served: version.Properties().Served,
 			Kinds:  make([]app.ManifestVersionKind, len(version.Kinds())),
 		}
-		kindRouteSchemas := make(map[string]spec.SchemaProps)
+		kindRouteSchemas := newRouteSchemaSet()
 		for i, kind := range version.Kinds() {
 			if kind.Conversion {
 				hasAnyConversion = true
@@ -281,7 +281,9 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		if err := mergeExternalVersionRoutes(&ver, externalRoutes(version)); err != nil {
 			return nil, fmt.Errorf("external routes for version %s: %w", version.Name(), err)
 		}
-		buildVersionOpenAPI(&ver, kindRouteSchemas)
+		if err := buildVersionOpenAPI(&ver, kindRouteSchemas); err != nil {
+			return nil, fmt.Errorf("version %s: %w", version.Name(), err)
+		}
 		manifest.Versions = append(manifest.Versions, ver)
 	}
 
@@ -641,7 +643,7 @@ type simpleOpenAPIDoc[T any] struct {
 }
 
 //nolint:revive,funlen,unparam,gocognit,gocyclo
-func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool, routeSchemas ...map[string]spec.SchemaProps) (app.ManifestVersionKind, error) {
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool, routeSchemas ...*routeSchemaSet) (app.ManifestVersionKind, error) {
 	if err := validateSearchFields(vk, version); err != nil {
 		return app.ManifestVersionKind{}, err
 	}
@@ -703,7 +705,11 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 		}
 	}
 	for _, schemas := range routeSchemas {
-		maps.Copy(schemas, additionalSchemas)
+		for name, props := range additionalSchemas {
+			if err := schemas.add("kind "+vk.Kind, name, spec.Schema{SchemaProps: props}); err != nil {
+				return app.ManifestVersionKind{}, err
+			}
+		}
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)
 	if includeSchema {

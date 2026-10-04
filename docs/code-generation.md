@@ -127,21 +127,102 @@ Paths are relative to the CUE source directory, including when using `--source`.
 An explicit `importOpenAPIFile` value takes precedence over automatic discovery. If multiple
 conventional filenames exist for one version, select one explicitly.
 
-You can also declare OpenAPI paths and components inline on a version:
+You can also declare OpenAPI paths and components inline on a version. The
+`openapi` block uses the same structure as the `paths` and `components` sections
+of an OpenAPI 3.0 document, written as CUE:
 
 ```cue
 versions: v1: {
     kinds: []
-    openapi: paths: "/health": get: {
-        operationId: "getHealth"
-        responses: "200": description: "Healthy"
+    openapi: {
+        paths: {
+            "/namespaces/{namespace}/reports/{report}": {
+                get: {
+                    operationId: "getReport"
+                    summary:     "Fetch a single report"
+                    parameters: [{
+                        name:     "report"
+                        in:       "path"
+                        required: true
+                        schema: type: "string"
+                    }]
+                    responses: {
+                        "200": {
+                            description: "The requested report"
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        "$ref": "#/components/schemas/Report"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        components: {
+            schemas: {
+                Report: {
+                    type: "object"
+                    required: ["title"]
+                    properties: {
+                        title: type: "string"
+                        count: {
+                            type:   "integer"
+                            format: "int64"
+                        }
+                    }
+                }
+            }
+        }
     }
 }
+```
+
+This is equivalent to the following OpenAPI YAML (the `{namespace}` path
+parameter is added automatically):
+
+```yaml
+paths:
+  /namespaces/{namespace}/reports/{report}:
+    get:
+      operationId: getReport
+      summary: Fetch a single report
+      parameters:
+        - name: report
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+components:
+  schemas:
+    Report:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        count:
+          type: integer
+          format: int64
 ```
 
 Inline OpenAPI overrides matching CUE route operations. If a saved document is
 also loaded, it overrides matching inline operations and schemas. Other
 operations remain. Each OpenAPI source must resolve its own local references.
+
+All custom route schemas for a version share one `components.schemas` map. If two
+kinds (or a kind and the version-level routes) define a schema with the same name
+but different contents, generation fails; move the shared type to the inline
+`openapi.components.schemas` section and reference it from each route.
 
 For example, `saved-api.yaml` can introduce a route and a response type absent
 from CUE:
