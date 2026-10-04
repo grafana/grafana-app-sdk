@@ -3,6 +3,9 @@ package plugin
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,8 +16,213 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/getkin/kin-openapi/openapi2"
 	"github.com/getkin/kin-openapi/openapi2conv"
+	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/stretchr/testify/require"
 )
+
+// newOpenAPIHandler registers the document's paths and methods and passes the
+// matched path and operation (including vendor extensions) to the plugin callback.
+// This prototype uses paths relative to /; it does not apply OpenAPI servers,
+// validate request/response schemas, or enforce authorization itself.
+func newOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, *openapi3.Operation, *restful.Request, *restful.Response)) http.Handler {
+	ws := new(restful.WebService).Path("/").Produces(restful.MIME_JSON)
+	for path, item := range doc.Paths.Map() {
+		for method, operation := range item.Operations() {
+			routePath := path
+			// OpenAPI exports {path:*} as {path}; this extension preserves the
+			// go-restful catch-all semantics when reconstructing the route.
+			if parameter, ok := operation.Extensions["x-grafana-catch-all"].(string); ok {
+				routePath = strings.TrimSuffix(path, "{"+parameter+"}") + "{" + parameter + ":*}"
+			}
+			ws.Route(ws.Method(method).Path(routePath).Operation(operation.OperationID).
+				To(func(request *restful.Request, response *restful.Response) {
+					callback(item, operation, request, response)
+				}))
+		}
+	}
+	container := restful.NewContainer()
+	container.Add(ws)
+	return container
+}
+
+// newDirectOpenAPIHandler builds standard-library routes directly from OpenAPI.
+// Roles accumulate along the document hierarchy, not URL prefixes. Both extension
+// spellings are accepted; each occurrence must be a string, and duplicates remain.
+// Paths are relative to /, using ServeMux routing semantics (including GET matching
+// HEAD). Servers and request/response validation are outside this prototype.
+func newDirectOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, *openapi3.Operation, []string, http.ResponseWriter, *http.Request)) (http.Handler, error) {
+	if doc == nil || doc.Paths == nil {
+		return nil, fmt.Errorf("OpenAPI document must contain paths")
+	}
+	mux := http.NewServeMux()
+	for path, item := range doc.Paths.Map() {
+		for method, operation := range item.Operations() {
+			var roles []string
+			for _, level := range []struct {
+				name       string
+				extensions map[string]any
+			}{
+				{"document", doc.Extensions},
+				{"paths", doc.Paths.Extensions},
+				{"path " + path, item.Extensions},
+				{method + " " + path, operation.Extensions},
+			} {
+				for _, key := range []string{"x-grafana-require-role", "x-grafana-requires-role"} {
+					if value, exists := level.extensions[key]; exists {
+						role, ok := value.(string)
+						if !ok || role == "" {
+							return nil, fmt.Errorf("%s: %s must be a nonempty string", level.name, key)
+						}
+						roles = append(roles, role)
+					}
+				}
+			}
+			routePath := path
+			if value, exists := operation.Extensions["x-grafana-catch-all"]; exists {
+				parameter, ok := value.(string)
+				prefix, matches := strings.CutSuffix(path, "{"+parameter+"}")
+				if !ok || parameter == "" || !matches {
+					return nil, fmt.Errorf("%s %s: x-grafana-catch-all must name the final path parameter", method, path)
+				}
+				routePath = prefix + "{" + parameter + "...}"
+			}
+			mux.HandleFunc(method+" "+routePath, func(w http.ResponseWriter, r *http.Request) {
+				// The callback may mutate its list without affecting future requests.
+				callback(item, operation, slices.Clone(roles), w, r)
+			})
+		}
+	}
+	return mux, nil
+}
+
+func TestDirectOpenAPIHandler(t *testing.T) {
+	snapshot := filepath.Join("..", "..", "..", "codegen", "cuekind", "testing", "integration.openapi.json")
+	doc, err := openapi3.NewLoader().LoadFromFile(snapshot)
+	require.NoError(t, err)
+	doc.Extensions = map[string]any{"x-grafana-require-role": "signed-in"}
+	doc.Paths.Extensions = map[string]any{"x-grafana-require-role": "api-user"}
+	// Unrelated metadata is not an ancestor of an operation.
+	doc.Info.Extensions = map[string]any{"x-grafana-require-role": "ignored"}
+
+	for _, tc := range []struct {
+		name, method, path, operation, parameter, value string
+		roles                                           []string
+		status                                          int
+	}{
+		{name: "all levels", method: http.MethodGet, path: "/foo", operation: "getFoo",
+			roles: []string{"signed-in", "api-user", "some-role", "viewer"}, status: http.StatusOK},
+		{name: "POST accumulates instead of overriding", method: http.MethodPost, path: "/foo", operation: "postFoo",
+			roles: []string{"signed-in", "api-user", "some-role", "editor"}, status: http.StatusOK},
+		{name: "catch-all is a sibling path", method: http.MethodGet, path: "/foo/a/b/file.json", operation: "getFooPath", parameter: "path", value: "a/b/file.json",
+			roles: []string{"signed-in", "api-user", "viewer"}, status: http.StatusOK},
+		{name: "path parameter with ancestor roles only", method: http.MethodGet, path: "/namespaces/default/things/bar", operation: "getBar", parameter: "namespace", value: "default",
+			roles: []string{"signed-in", "api-user"}, status: http.StatusOK},
+		{name: "unknown path", method: http.MethodGet, path: "/missing", status: http.StatusNotFound},
+		{name: "unsupported method", method: http.MethodDelete, path: "/foo", status: http.StatusMethodNotAllowed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			handler, err := newDirectOpenAPIHandler(doc, func(item *openapi3.PathItem, operation *openapi3.Operation, roles []string, w http.ResponseWriter, r *http.Request) {
+				calls++
+				require.Equal(t, tc.operation, operation.OperationID)
+				require.Same(t, item.GetOperation(tc.method), operation)
+				require.Equal(t, tc.roles, roles)
+				require.Equal(t, tc.value, r.PathValue(tc.parameter))
+				require.Equal(t, "hello", r.URL.Query().Get("input"))
+				roles[0] = "changed by callback"
+				w.WriteHeader(http.StatusOK)
+			})
+			require.NoError(t, err)
+			// Repeating the request also verifies callback mutation isolation.
+			for range 2 {
+				response := httptest.NewRecorder()
+				handler.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path+"?input=hello", nil))
+				require.Equal(t, tc.status, response.Code)
+			}
+			if tc.operation != "" {
+				require.Equal(t, 2, calls)
+			} else {
+				require.Zero(t, calls)
+			}
+		})
+	}
+
+	t.Run("invalid role fails construction", func(t *testing.T) {
+		doc.Extensions["x-grafana-require-role"] = 123
+		_, err := newDirectOpenAPIHandler(doc, nil)
+		require.ErrorContains(t, err, "document: x-grafana-require-role must be a nonempty string")
+	})
+}
+
+func TestOpenAPIHandler(t *testing.T) {
+	snapshot := filepath.Join("..", "..", "..", "codegen", "cuekind", "testing", "integration.openapi.json")
+	doc, err := openapi3.NewLoader().LoadFromFile(snapshot)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name         string
+		method       string
+		path         string
+		status       int
+		operation    string
+		role         string
+		namespace    string
+		input        string
+		capturedPath string
+	}{
+		{
+			name: "GET operation role", method: http.MethodGet, path: "/foo?input=hello",
+			status: http.StatusOK, operation: "getFoo", role: "viewer", input: "hello",
+		},
+		{
+			name: "path parameter", method: http.MethodGet, path: "/namespaces/default/things/bar",
+			status: http.StatusOK, operation: "getBar", namespace: "default",
+		},
+		{
+			name: "operation override", method: http.MethodPost, path: "/foo?input=hello",
+			status: http.StatusOK, operation: "postFoo", role: "editor", input: "hello",
+		},
+		{
+			name: "catch-all single segment", method: http.MethodGet, path: "/foo/a",
+			status: http.StatusOK, operation: "getFooPath", role: "viewer", capturedPath: "a",
+		},
+		{
+			name: "catch-all multiple segments", method: http.MethodGet, path: "/foo/a/b/file.json?input=hello",
+			status: http.StatusOK, operation: "getFooPath", role: "viewer", capturedPath: "a/b/file.json", input: "hello",
+		},
+		{name: "unknown path", method: http.MethodGet, path: "/missing", status: http.StatusNotFound},
+		{name: "unsupported method", method: http.MethodDelete, path: "/foo", status: http.StatusMethodNotAllowed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			called := false
+			handler := newOpenAPIHandler(doc, func(item *openapi3.PathItem, operation *openapi3.Operation, request *restful.Request, response *restful.Response) {
+				called = true
+				require.Equal(t, tc.operation, operation.OperationID)
+				// A plugin callback can use this metadata to perform its role check.
+				role, hasRole := operation.Extensions["x-grafana-requires-role"]
+				if !hasRole {
+					role, hasRole = item.Extensions["x-grafana-requires-role"]
+				}
+				if tc.role != "" {
+					require.Equal(t, tc.role, role)
+				} else {
+					require.False(t, hasRole)
+				}
+				require.Equal(t, tc.capturedPath, request.PathParameter("path"))
+				require.Equal(t, tc.namespace, request.PathParameter("namespace"))
+				require.Equal(t, tc.input, request.QueryParameter("input"))
+				require.NoError(t, response.WriteEntity(map[string]string{"operation": operation.OperationID}))
+			})
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path, nil))
+			require.Equal(t, tc.status, response.Code)
+			require.Equal(t, tc.operation != "", called)
+			if called {
+				require.JSONEq(t, `{"operation":"`+tc.operation+`"}`, response.Body.String())
+			}
+		})
+	}
+}
 
 func TestPluginRoutes(t *testing.T) {
 	p := &ManagedApp{}
@@ -39,6 +247,7 @@ func TestPluginRoutes(t *testing.T) {
 	v2.Info.Version = "v1"
 	doc, err := openapi2conv.ToV3(&v2)
 	require.NoError(t, err)
+	customizeRouteOpenAPI(doc)
 	data, err = json.Marshal(doc)
 	require.NoError(t, err)
 	data = canonicalOpenAPISnapshot(t, data)

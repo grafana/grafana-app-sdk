@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/getkin/kin-openapi/openapi3"
 	authlib "github.com/grafana/authlib/types"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -16,7 +17,7 @@ type Dummy struct {
 	Info *resource.RouteRequestInfo `json:"info" description:"request info"`
 }
 
-// handlePing is an example HTTP GET resource that returns a {"message": "ok"} JSON response.
+// ProvideRoutes describes the example plugin callbacks and their operations.
 func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 	prefix := "/apis/group/v1"
 	ws := new(restful.WebService)
@@ -28,10 +29,32 @@ func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 	ws.Route(ws.GET("/foo").To(findThings).
 		Operation("getFoo").
 		Doc("get foo").
-		AddExtension("x-grafana-requires-role", "some-role").
+		Param(ws.QueryParameter("input", "query").DataType("string")).
+		AddExtension("x-grafana-requires-role", "viewer").
+		Writes(Dummy{}).
+		Returns(http.StatusOK, "cluster request for foo", Dummy{}))
+
+	// POST overrides the shared path role added by customizeRouteOpenAPI.
+	// This example echoes input; it does not persist a new resource.
+	ws.Route(ws.POST("/foo").To(findThings).
+		Operation("postFoo").
+		Doc("post foo").
+		AddExtension("x-grafana-requires-role", "editor").
 		Param(ws.QueryParameter("input", "query").DataType("string")).
 		Writes(Dummy{}).
 		Returns(http.StatusOK, "cluster request for foo", Dummy{}))
+
+	// The catch-all captures slashes, e.g. /foo/a/b -> PathParameter("path") == "a/b".
+	// Preserve this router-specific behavior when exporting and reloading OpenAPI.
+	ws.Route(ws.GET("/foo/{path:*}").To(findThings).
+		Operation("getFooPath").
+		AddExtension("x-grafana-catch-all", "path").
+		Param(ws.PathParameter("path", "Remaining path, including slashes").DataType("string")).
+		Doc("cluster request matching any path").
+		Param(ws.QueryParameter("input", "query").DataType("string")).
+		AddExtension("x-grafana-requires-role", "viewer").
+		Writes(Dummy{}).
+		Returns(http.StatusOK, "cluster request with", Dummy{}))
 
 	// Namespaced Scoped routes setup
 	ws.Path(prefix + "/namespaces/{namespace}/things")
@@ -44,6 +67,21 @@ func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 	// someday... the kinds flavor
 
 	return ws, nil
+}
+
+// customizeRouteOpenAPI runs after generating the OpenAPI 3 document with the
+// /apis/group/v1 prefix removed. go-restful's AddExtension targets operations,
+// so shared path extensions must be added to the generated Path Item instead.
+// Callbacks interpret this as a default; OpenAPI does not define inheritance.
+func customizeRouteOpenAPI(doc *openapi3.T) {
+	item := doc.Paths.Value("/foo")
+	if item == nil {
+		return
+	}
+	if item.Extensions == nil {
+		item.Extensions = make(map[string]any)
+	}
+	item.Extensions["x-grafana-requires-role"] = "some-role"
 }
 
 func findThings(request *restful.Request, response *restful.Response) {
