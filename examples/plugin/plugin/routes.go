@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/getkin/kin-openapi/openapi3"
 	authlib "github.com/grafana/authlib/types"
 
 	"github.com/grafana/grafana-app-sdk/resource"
@@ -67,21 +66,6 @@ func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 	// someday... the kinds flavor
 
 	return ws, nil
-}
-
-// customizeRouteOpenAPI runs after generating the OpenAPI 3 document with the
-// /apis/group/v1 prefix removed. go-restful's AddExtension targets operations,
-// so shared path extensions must be added to the generated Path Item instead.
-// Callbacks interpret this as a default; OpenAPI does not define inheritance.
-func customizeRouteOpenAPI(doc *openapi3.T) {
-	item := doc.Paths.Value("/foo")
-	if item == nil {
-		return
-	}
-	if item.Extensions == nil {
-		item.Extensions = make(map[string]any)
-	}
-	item.Extensions["x-grafana-requires-role"] = "some-role"
 }
 
 func findThings(request *restful.Request, response *restful.Response) {
