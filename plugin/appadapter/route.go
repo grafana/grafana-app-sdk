@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/grafana/grafana-app-sdk/app"
-	"github.com/grafana/grafana-app-sdk/logging"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
@@ -37,11 +36,7 @@ func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
 		}
 	}
 
-	if true {
-		return &deprecatedRouteAdapter{app: a}
-	}
-
-	return &pluginv3.UnimplementedRouteServiceServer{}
+	return &deprecatedRouteAdapter{app: a}
 }
 
 // RouteAdapter implements the v3 route service in terms of an app-sdk App.
@@ -145,8 +140,7 @@ func (a *routeAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 		return sendError(stream, int32(http.StatusBadRequest), err.Error())
 	}
 	httpReq.Header = routeHeaders(req.GetHeaders())
-
-	logging.FromContext(ctx).Info("ROUTE", "url", u.String())
+	httpReq.RequestURI = u.RequestURI()
 
 	rec := newResponseRecorder(stream)
 	a.handler.ServeHTTP(rec, httpReq)

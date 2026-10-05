@@ -139,12 +139,12 @@ type AppConfig struct {
 	ManagedKinds    []AppManagedKind
 	UnmanagedKinds  []AppUnmanagedKind
 	Converters      map[schema.GroupKind]Converter
-	// Process non resource routes
+	// Handler serves custom routes through the plugin adapter using full API paths.
+	// When nil, the adapter uses CallCustomRoute.
 	Handler http.Handler
 	// VersionedCustomRoutes is a map of version string => custom route handlers for
 	// custom routes attached at the version level rather than attached to a specific kind.
 	// Custom route paths for each version should not conflict with plural names of kinds for the version.
-	// Deprecated -- will be replaced with the raw htt handler above
 	VersionedCustomRoutes map[string]AppVersionRouteHandlers
 	// DiscoveryRefreshInterval is the interval at which the API discovery cache should be refreshed.
 	// This is primarily used by the DynamicPatcher in the OpinionatedWatcher/OpinionatedReconciler
@@ -537,6 +537,7 @@ func (a *App) ManagedKinds() []resource.Kind {
 	return kinds
 }
 
+// ProvideRouteHandler returns the optional custom route handler from AppConfig.
 func (a *App) ProvideRouteHandler() (http.Handler, error) {
 	return a.handler, nil
 }

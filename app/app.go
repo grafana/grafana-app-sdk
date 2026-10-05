@@ -140,8 +140,7 @@ type App interface {
 	// If the route doesn't exist, the implementer MAY return ErrCustomRouteNotFound to signal to the runner,
 	// or may choose to write a not found status code and custom body.
 	// It returns an error if the functionality is not supported by the app.
-	// NOTE: When RouteHandlerProvider is implemented, this function is never called
-	// this will be deprecated soon
+	// The plugin route adapter uses RouteHandlerProvider instead when it returns a non-nil handler.
 	CallCustomRoute(ctx context.Context, responseWriter CustomRouteResponseWriter, request *CustomRouteRequest) error
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
 	// If there are multiple versions of a Kind, each one SHOULD be returned by this method,
@@ -153,7 +152,13 @@ type App interface {
 	Runner() Runnable
 }
 
-// RouteHandlerProvider use raw HTTP handler
+// RouteHandlerProvider optionally supplies an HTTP handler for plugin custom routes.
 type RouteHandlerProvider interface {
+	// Provide a standard http.Handler that will process custom routes.
+	// Paths will be sent with the full URL, including /apis/{group}/{version}
+	// Parsed request properties can be obtained in the request context using:
+	// resource.RouteRequestInfoFrom(ctx) and authlib.AuthInfoFrom(ctx)
+	// Returning nil, nil falls back to CallCustomRoute. The plugin adapter calls
+	// this method during initialization and panics if it returns an error.
 	ProvideRouteHandler() (http.Handler, error)
 }
