@@ -39,6 +39,8 @@ type TokenExchangeCredentials struct {
 	// IDTokenFromContext), exchange on behalf of that caller. Prefer AuthInfo's
 	// access token over its ID token to preserve the delegation chain, and act
 	// as the service only for in-process service identities.
+	// Custom exchangers must also replace a wildcard namespace with AuthInfo's
+	// concrete namespace when exchanging on behalf of a caller, as shown below.
 	//
 	// Use this to bring your own authlib version or a custom token source:
 	//
@@ -52,6 +54,11 @@ type TokenExchangeCredentials struct {
 	//               subjectToken = info.GetAccessToken()
 	//               if subjectToken == "" { subjectToken = info.GetIDToken() }
 	//               if subjectToken == "" { return "", errors.New("caller has no signed token") }
+	//               if namespace == "*" {
+	//                   if callerNamespace := info.GetNamespace(); callerNamespace != "" && callerNamespace != "*" {
+	//                       namespace = callerNamespace
+	//                   }
+	//               }
 	//           }
 	//           resp, err := exchanger.Exchange(ctx, authnlib.TokenExchangeRequest{
 	//               Audiences:    audiences,
@@ -183,6 +190,11 @@ func newTokenExchangeFunc(creds TokenExchangeCredentials) (func(ctx context.Cont
 			}
 			if subjectToken == "" {
 				return "", errors.New("caller auth info has no access or ID token; set TokenExchangeCredentials.IsServiceIdentity to let service identities act as the service")
+			}
+			if namespace == "*" {
+				if callerNamespace := info.GetNamespace(); callerNamespace != "" && callerNamespace != "*" {
+					namespace = callerNamespace
+				}
 			}
 		}
 		resp, err := exchanger.Exchange(ctx, authnlib.TokenExchangeRequest{
