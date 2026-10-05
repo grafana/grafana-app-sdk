@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/emicklei/go-restful/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -22,25 +21,11 @@ import (
 // Make sure RouteAdapter implements the service interface. This is important to
 // do since otherwise we will only get a not implemented error response from
 // the plugin at runtime.
-var _ pluginv3.RouteServiceServer = (*customRouteAdapter)(nil)
-var _ pluginv3.RouteServiceServer = (*restfulRouteAdapter)(nil)
+var _ pluginv3.RouteServiceServer = (*deprecatedRouteAdapter)(nil)
+var _ pluginv3.RouteServiceServer = (*routeAdapter)(nil)
 
 // NewRouteAdapter returns a [pluginv3.RouteServiceServer] backed by a.
 func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
-	if p, ok := a.(app.RestfulRoutesProvider); ok {
-		r, err := p.ProvideRoutes()
-		if err != nil {
-			panic(err)
-		}
-		if r == nil || len(r.Routes()) < 1 {
-			return &notFoundAdapter{}
-		}
-
-		h := restful.NewContainer().Add(r)
-
-		return &restfulRouteAdapter{handler: h}
-	}
-
 	// Check if a full handler gets returned
 	if p, ok := a.(app.RouteHandlerProvider); ok {
 		h, err := p.ProvideRouteHandler()
@@ -48,12 +33,12 @@ func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
 			panic(err)
 		}
 		if h != nil {
-			return &restfulRouteAdapter{handler: h}
+			return &routeAdapter{handler: h}
 		}
 	}
 
 	if true {
-		return &customRouteAdapter{app: a}
+		return &deprecatedRouteAdapter{app: a}
 	}
 
 	return &pluginv3.UnimplementedRouteServiceServer{}
@@ -63,14 +48,14 @@ func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-type customRouteAdapter struct {
+type deprecatedRouteAdapter struct {
 	app app.App
 }
 
 // CallRoute implements [pluginv3.RouteServiceServer] by translating the
 // request into an app.CustomRouteRequest and delegating to the app-sdk App's
 // CallCustomRoute.
-func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+func (a *deprecatedRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
 		return sendError(stream, http.StatusBadRequest, err.Error())
@@ -126,13 +111,13 @@ func (a *customRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream gr
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-type restfulRouteAdapter struct {
+type routeAdapter struct {
 	handler http.Handler
 }
 
 // CallRoute dispatches the original request URL, including its /apis/group/version
 // prefix, through the handler and streams the HTTP response over gRPC.
-func (a *restfulRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+func (a *routeAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
 		return sendError(stream, int32(http.StatusBadRequest), err.Error())

@@ -224,6 +224,19 @@ func TestOpenAPIHandler(t *testing.T) {
 	}
 }
 
+// customizeRouteOpenAPI adds path-level metadata to the test snapshot so the
+// handler tests cover both role accumulation and operation-level overrides.
+func customizeRouteOpenAPI(doc *openapi3.T) {
+	item := doc.Paths.Value("/foo")
+	if item == nil {
+		return
+	}
+	if item.Extensions == nil {
+		item.Extensions = make(map[string]any)
+	}
+	item.Extensions["x-grafana-requires-role"] = "some-role"
+}
+
 func TestPluginRoutes(t *testing.T) {
 	p := &ManagedApp{}
 

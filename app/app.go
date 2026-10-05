@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/emicklei/go-restful/v3"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
 
@@ -141,7 +140,7 @@ type App interface {
 	// If the route doesn't exist, the implementer MAY return ErrCustomRouteNotFound to signal to the runner,
 	// or may choose to write a not found status code and custom body.
 	// It returns an error if the functionality is not supported by the app.
-	// NOTE: When RestfulRoutesProvider or RouteHandlerProvider are implemented, this function is never called
+	// NOTE: When RouteHandlerProvider is implemented, this function is never called
 	// this will be deprecated soon
 	CallCustomRoute(ctx context.Context, responseWriter CustomRouteResponseWriter, request *CustomRouteRequest) error
 	// ManagedKinds returns a slice of Kinds which are managed by this App.
@@ -157,9 +156,4 @@ type App interface {
 // RouteHandlerProvider use raw HTTP handler
 type RouteHandlerProvider interface {
 	ProvideRouteHandler() (http.Handler, error)
-}
-
-// RestfulRoutesProvider uses go-restful to service custom routes
-type RestfulRoutesProvider interface {
-	ProvideRoutes() (*restful.WebService, error)
 }

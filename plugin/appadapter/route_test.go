@@ -15,6 +15,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -537,7 +541,7 @@ func TestRestfulRouteAdapter_FullURL(t *testing.T) {
 				_, err = w.Write([]byte("ok"))
 				require.NoError(t, err)
 			}))
-			adapter := &restfulRouteAdapter{handler: restful.NewContainer().Add(ws)}
+			adapter := &routeAdapter{handler: restful.NewContainer().Add(ws)}
 			req := pluginv3.CallRouteRequest_builder{
 				Group: new("test.grafana.app"), Version: new("v1alpha1"),
 				Namespace: &tt.namespace, Parent: tt.parent, Path: &tt.path,
@@ -555,7 +559,7 @@ func TestRestfulRouteAdapter_FullURL(t *testing.T) {
 }
 
 func TestRestfulRouteAdapter_InvalidURL(t *testing.T) {
-	adapter := &restfulRouteAdapter{handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+	adapter := &routeAdapter{handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("handler must not be called for an invalid URL")
 	})}
 	req := &pluginv3.CallRouteRequest{}
