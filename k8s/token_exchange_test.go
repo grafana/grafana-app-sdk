@@ -401,26 +401,32 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 	// isService marks contexts carrying serviceIdentityKey as in-process service identities.
 	isService := func(ctx context.Context) bool { return ctx.Value(serviceIdentityKey{}) != nil }
 	service := func(ctx context.Context) context.Context {
-		return context.WithValue(types.WithAuthInfo(ctx, &tokenExchangeAuthInfo{}), serviceIdentityKey{}, true)
+		return context.WithValue(types.WithAuthInfo(ctx, &tokenExchangeAuthInfo{namespace: "stacks-11"}), serviceIdentityKey{}, true)
 	}
 	tests := []struct {
 		name             string
 		ctx              context.Context
+		namespace        string
 		wantSubjectToken string
+		wantNamespace    string
 	}{
-		{name: "service identity acts as the service", ctx: service(context.Background())},
-		{name: "service identity ignores legacy token", ctx: service(ContextWithIDToken(context.Background(), "stale-id"))},
-		{name: "caller", ctx: ContextWithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token"},
-		{name: "no caller", ctx: context.Background()},
-		{name: "empty caller", ctx: ContextWithIDToken(context.Background(), "")},
-		{name: "verified access token", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access", id: "id"}), wantSubjectToken: "verified-access"},
-		{name: "verified ID token", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{id: "verified-id"}), wantSubjectToken: "verified-id"},
-		{name: "verified caller overrides legacy token", ctx: types.WithAuthInfo(ContextWithIDToken(context.Background(), "stale-id"), &tokenExchangeAuthInfo{access: "verified-access"}), wantSubjectToken: "verified-access"},
+		{name: "service identity acts as the service", ctx: service(context.Background()), wantNamespace: "*"},
+		{name: "service identity ignores legacy token", ctx: service(ContextWithIDToken(context.Background(), "stale-id")), wantNamespace: "*"},
+		{name: "legacy caller", ctx: ContextWithIDToken(context.Background(), "caller-id-token"), wantSubjectToken: "caller-id-token", wantNamespace: "*"},
+		{name: "no caller", ctx: context.Background(), wantNamespace: "*"},
+		{name: "empty caller", ctx: ContextWithIDToken(context.Background(), ""), wantNamespace: "*"},
+		{name: "verified access token uses caller namespace", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access", id: "id", namespace: "stacks-11"}), wantSubjectToken: "verified-access", wantNamespace: "stacks-11"},
+		{name: "verified access token without caller namespace uses wildcard", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access"}), wantSubjectToken: "verified-access", wantNamespace: "*"},
+		{name: "verified access token with wildcard caller namespace uses wildcard", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access", namespace: "*"}), wantSubjectToken: "verified-access", wantNamespace: "*"},
+		{name: "verified ID token uses caller namespace", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{id: "verified-id", namespace: "stacks-11"}), wantSubjectToken: "verified-id", wantNamespace: "stacks-11"},
+		{name: "explicit namespace is preserved", ctx: types.WithAuthInfo(context.Background(), &tokenExchangeAuthInfo{access: "verified-access", namespace: "stacks-11"}), namespace: "stacks-2", wantSubjectToken: "verified-access", wantNamespace: "stacks-2"},
+		{name: "verified caller overrides legacy token", ctx: types.WithAuthInfo(ContextWithIDToken(context.Background(), "stale-id"), &tokenExchangeAuthInfo{access: "verified-access", namespace: "stacks-11"}), wantSubjectToken: "verified-access", wantNamespace: "stacks-11"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotReq struct {
 				SubjectToken string `json:"subjectToken"`
+				Namespace    string `json:"namespace"`
 			}
 			signer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				assert.NoError(t, json.NewDecoder(r.Body).Decode(&gotReq))
@@ -431,11 +437,15 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 			exchangeFunc, err := newTokenExchangeFunc(TokenExchangeCredentials{TokenExchangeURL: signer.URL, Token: "cap", IsServiceIdentity: isService})
 			require.NoError(t, err)
 			base := &capturingRoundTripper{}
+			namespace := tt.namespace
+			if namespace == "" {
+				namespace = "*"
+			}
 			transport := &tokenExchangeTransport{
 				exchangeFunc: exchangeFunc,
 				base:         base,
 				audiences:    []string{"aud"},
-				namespace:    "*",
+				namespace:    namespace,
 			}
 
 			req, err := http.NewRequestWithContext(tt.ctx, http.MethodGet, "https://host/apis", nil)
@@ -444,6 +454,7 @@ func TestTokenExchangeExchangesOnBehalfOfCaller(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.wantSubjectToken, gotReq.SubjectToken)
+			assert.Equal(t, tt.wantNamespace, gotReq.Namespace)
 			assert.Equal(t, "tok", base.lastReq.Header.Get("X-Access-Token"))
 			// The caller is carried in the access token, not sent separately.
 			assert.Empty(t, base.lastReq.Header.Values("X-Grafana-Id"))
@@ -456,11 +467,12 @@ type serviceIdentityKey struct{}
 // Only token accessors are needed by the transport.
 type tokenExchangeAuthInfo struct {
 	types.AuthInfo
-	access, id string
+	access, id, namespace string
 }
 
 func (i *tokenExchangeAuthInfo) GetAccessToken() string { return i.access }
 func (i *tokenExchangeAuthInfo) GetIDToken() string     { return i.id }
+func (i *tokenExchangeAuthInfo) GetNamespace() string   { return i.namespace }
 
 func TestTokenExchangeRejectsCallerWithoutSignedToken(t *testing.T) {
 	exchange, err := newTokenExchangeFunc(TokenExchangeCredentials{Token: "cap", TokenExchangeURL: "http://unused.invalid"})
