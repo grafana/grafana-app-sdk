@@ -816,7 +816,7 @@
                                     },
                                     "search": {
                                         "$ref": "#/components/schemas/ManifestVersionKindSearch",
-                                        "description": "search declares which search endpoints are served for this kind.\n/search and /trash default to enabled; /search/hybrid defaults to disabled."
+                                        "description": "search declares which search endpoints are served for this kind.\n/search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled."
                                     },
                                     "searchFields": {
                                         "items": {
@@ -896,6 +896,11 @@
                                     "endpoint": {
                                         "default": true,
                                         "description": "endpoint declares whether the kind serves the /search endpoint.",
+                                        "type": "boolean"
+                                    },
+                                    "global": {
+                                        "default": false,
+                                        "description": "global declares whether the kind is included in the namespace-wide search index.",
                                         "type": "boolean"
                                     },
                                     "hybrid": {

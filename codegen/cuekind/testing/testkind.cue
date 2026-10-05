@@ -151,7 +151,10 @@ testKind: {
 					emitZeroIfAbsent: true
 				},
 			]
-			search: hybrid: true
+			search: {
+				hybrid: true
+				global: true
+			}
 			embed: {
 				fields: [
 					{name: "details", path: "spec.unionNull.str"},

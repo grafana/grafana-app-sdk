@@ -161,6 +161,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 
 	// Each API version declares its own inputs while sharing one resource re-embedding version.
 	assert.True(t, v2Kind.Search.Hybrid)
+	assert.True(t, v2Kind.Search.Global)
 	require.NotNil(t, v2Kind.Embed)
 	assert.Equal(t, &codegen.KindEmbed{
 		Fields: []codegen.EmbedField{
@@ -168,6 +169,7 @@ func TestParseManifestKindProperties(t *testing.T) {
 		},
 	}, v2Kind.Embed)
 	assert.False(t, testKind.Search.Hybrid)
+	assert.False(t, testKind.Search.Global)
 	assert.Equal(t, &codegen.KindEmbed{
 		Fields: []codegen.EmbedField{{Name: "details", Path: "spec.stringField"}},
 	}, testKind.Embed)

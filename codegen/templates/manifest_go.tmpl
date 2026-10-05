@@ -179,7 +179,8 @@ var appManifestData = app.ManifestData{
                 Search: &app.ManifestVersionKindSearch{ {{ if .Search.Endpoint }}
                     Endpoint: {{ goBoolPtr .Search.Endpoint }},{{ end }}{{ if .Search.Trash }}
                     Trash: {{ goBoolPtr .Search.Trash }},{{ end }}{{ if .Search.Hybrid }}
-                    Hybrid: {{ goBoolPtr .Search.Hybrid }},{{ end }}
+                    Hybrid: {{ goBoolPtr .Search.Hybrid }},{{ end }}{{ if .Search.Global }}
+                    Global: {{ goBoolPtr .Search.Global }},{{ end }}
                 }, {{ end }}{{ if .Embed }}
                 Embed: &app.ManifestVersionKindEmbed{
                     Fields: []app.ManifestVersionKindEmbedField{ {{ range .Embed.Fields }}

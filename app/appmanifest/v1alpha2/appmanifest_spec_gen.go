@@ -79,7 +79,7 @@ type AppManifestManifestVersionKind struct {
 	// storage declares storage-related behavior for this kind.
 	Storage *AppManifestManifestVersionKindStorage `json:"storage,omitempty"`
 	// search declares which search endpoints are served for this kind.
-	// /search and /trash default to enabled; /search/hybrid defaults to disabled.
+	// /search and /trash default to enabled; /search/hybrid and global index inclusion default to disabled.
 	Search *AppManifestManifestVersionKindSearch `json:"search,omitempty"`
 	// embed defines the embedding document independently of search fields.
 	Embed *AppManifestManifestVersionKindEmbed `json:"embed,omitempty"`
@@ -296,6 +296,8 @@ type AppManifestManifestVersionKindSearch struct {
 	Trash *bool `json:"trash,omitempty"`
 	// hybrid declares whether the kind serves the /search/hybrid endpoint.
 	Hybrid *bool `json:"hybrid,omitempty"`
+	// global declares whether the kind is included in the namespace-wide search index.
+	Global *bool `json:"global,omitempty"`
 }
 
 // NewAppManifestManifestVersionKindSearch creates a new AppManifestManifestVersionKindSearch object.
@@ -304,6 +306,7 @@ func NewAppManifestManifestVersionKindSearch() *AppManifestManifestVersionKindSe
 		Endpoint: (func(input bool) *bool { return &input })(true),
 		Trash:    (func(input bool) *bool { return &input })(true),
 		Hybrid:   (func(input bool) *bool { return &input })(false),
+		Global:   (func(input bool) *bool { return &input })(false),
 	}
 }
 

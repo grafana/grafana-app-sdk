@@ -1444,9 +1444,10 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 		expectedSearch bool
 		expectedTrash  bool
 		expectedHybrid bool
+		expectedGlobal bool
 	}{
-		// search and trash are served unless the kind opts out. hybrid is the
-		// reverse: not served unless the kind opts in.
+		// search and trash are served unless the kind opts out. hybrid and global
+		// are the reverse: off unless the kind opts in.
 		{name: "unset", search: nil, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
 		{name: "empty block", search: &ManifestVersionKindSearch{}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
 		{name: "search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false)}, expectedSearch: false, expectedTrash: true, expectedHybrid: false},
@@ -1455,12 +1456,15 @@ func TestManifestVersionKind_SearchEndpoints(t *testing.T) {
 		{name: "hybrid opt-in", search: &ManifestVersionKindSearch{Hybrid: new(true)}, expectedSearch: true, expectedTrash: true, expectedHybrid: true},
 		{name: "hybrid explicit false", search: &ManifestVersionKindSearch{Hybrid: new(false)}, expectedSearch: true, expectedTrash: true, expectedHybrid: false},
 		{name: "hybrid opt-in with search opt-out", search: &ManifestVersionKindSearch{Endpoint: new(false), Hybrid: new(true)}, expectedSearch: false, expectedTrash: true, expectedHybrid: true},
+		{name: "global opt-in", search: &ManifestVersionKindSearch{Global: new(true)}, expectedSearch: true, expectedTrash: true, expectedGlobal: true},
+		{name: "global explicit false", search: &ManifestVersionKindSearch{Global: new(false)}, expectedSearch: true, expectedTrash: true, expectedGlobal: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			kind := ManifestVersionKind{Kind: "Foo", Search: tc.search}
 			assert.Equal(t, tc.expectedSearch, kind.HasSearchEndpoint())
 			assert.Equal(t, tc.expectedTrash, kind.HasTrashEndpoint())
 			assert.Equal(t, tc.expectedHybrid, kind.HasHybridEndpoint())
+			assert.Equal(t, tc.expectedGlobal, kind.InGlobalSearchIndex())
 		})
 	}
 }
