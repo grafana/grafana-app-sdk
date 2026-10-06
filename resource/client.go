@@ -21,12 +21,12 @@ type Identifier struct {
 // FullIdentifier is a globally-unique identifier, consisting of Schema identity information
 // (Group, Version, Kind, Plural) and within-schema identity information (Namespace, Name)
 type FullIdentifier struct {
-	Namespace string
-	Name      string
-	Group     string
-	Version   string
-	Kind      string
-	Plural    string
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Group     string `json:"group,omitempty"`
+	Version   string `json:"version,omitempty"`
+	Kind      string `json:"kind,omitempty"`
+	Plural    string `json:"plural,omitempty"`
 }
 
 // CreateOptions are the options passed to a Client.Create call
