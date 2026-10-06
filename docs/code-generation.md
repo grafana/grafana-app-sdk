@@ -218,11 +218,18 @@ components:
 Inline OpenAPI overrides matching CUE route operations. If a saved document is
 also loaded, it overrides matching inline operations and schemas. Other
 operations remain. Each OpenAPI source must resolve its own local references.
+Shared path-level parameters are copied into each operation before merging;
+operation-level parameters override shared parameters with the same name and
+location. This preserves the parameters of retained operations and makes them
+available to the legacy route installer.
 
 All custom route schemas for a version share one `components.schemas` map. If two
 kinds (or a kind and the version-level routes) define a schema with the same name
 but different contents, generation fails; move the shared type to the inline
 `openapi.components.schemas` section and reference it from each route.
+Imported subresource schemas must also avoid conflicting with the kind's resource
+schemas, including `spec` and the root kind name. Identical schemas can be shared;
+different schemas must use different names.
 
 For example, `saved-api.yaml` can introduce a route and a response type absent
 from CUE:

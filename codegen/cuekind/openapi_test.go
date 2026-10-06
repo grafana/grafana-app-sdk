@@ -321,6 +321,8 @@ func TestExternalOpenAPIErrors(t *testing.T) {
 		{"external ref", strings.ReplaceAll(externalOpenAPI, "#/components/schemas/Result", "other.json#/Result"), "must be local"},
 		{"wrong version", strings.ReplaceAll(externalOpenAPI, "/v1/query", "/v2/query"), "does not belong"},
 		{"null path", "openapi: 3.0.3\npaths: { /query: null }", "must be an object"},
+		{"null shared parameter", `{"openapi":"3.0.3","paths":{"/query":{"parameters":[null],"get":{}}}}`, "parameter must be an object"},
+		{"null operation parameter", `{"openapi":"3.0.3","paths":{"/query":{"get":{"parameters":[null]}}}}`, "parameter must be an object"},
 		{"cyclic response", "openapi: 3.0.3\ncomponents: { responses: { Loop: { $ref: '#/components/responses/Loop' } } }", "cyclic non-schema reference"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -431,5 +433,60 @@ manifest: {
 				assert.Contains(t, doc.Components.Schemas, "InlineResult")
 			}
 		})
+	}
+}
+
+func TestOpenAPISharedParameters(t *testing.T) {
+	files := externalTestFiles(`package test
+manifest: {
+ appName: "external"
+ versions: v1: {
+  kinds: []
+  openapi: paths: "/query": {
+   parameters: [{name: "q", in: "query", schema: {type: "string"}}]
+   get: {operationId: "inlineGet"}
+   post: {operationId: "inlinePost"}
+  }
+ }
+}`)
+	files["openapi.v1.json"] = &fstest.MapFile{Data: []byte(`{
+ "openapi": "3.0.3",
+ "paths": {"/query": {
+  "parameters": [{"$ref": "#/components/parameters/Limit"}],
+  "get": {"operationId": "externalGet"},
+  "put": {"operationId": "externalPut", "parameters": [
+   {"name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 10}},
+   {"name": "limit", "in": "header", "schema": {"type": "string"}}
+  ]}
+ }},
+ "components": {"parameters": {"Limit": {
+  "name": "limit", "in": "query", "schema": {"type": "integer", "maximum": 100}
+ }}}
+}`)}
+	c, err := LoadCue(files)
+	require.NoError(t, err)
+	parser, err := NewParser(c, false)
+	require.NoError(t, err)
+	manifest, err := parser.ParseManifest("manifest")
+	require.NoError(t, err)
+	generator := &jennies.ManifestGenerator{Encoder: json.Marshal, ManifestVersion: "v1alpha2"}
+	generated, err := generator.Generate(manifest)
+	require.NoError(t, err)
+	var output struct {
+		Spec v1alpha2.AppManifestSpec `json:"spec"`
+	}
+	require.NoError(t, json.Unmarshal(generated[0].Data, &output))
+	data, err := output.Spec.ToManifestData()
+	require.NoError(t, err)
+	for _, route := range []spec3.PathProps{data.Versions[0].Routes.Cluster["/query"], data.Versions[0].OpenAPI.Paths["/query"]} {
+		assert.Empty(t, route.Parameters)
+		require.Len(t, route.Get.Parameters, 1)
+		assert.Equal(t, "limit", route.Get.Parameters[0].Name)
+		assert.Equal(t, float64(100), *route.Get.Parameters[0].Schema.Maximum)
+		require.Len(t, route.Post.Parameters, 1)
+		assert.Equal(t, "q", route.Post.Parameters[0].Name)
+		require.Len(t, route.Put.Parameters, 2)
+		assert.Equal(t, float64(10), *route.Put.Parameters[0].Schema.Maximum)
+		assert.Equal(t, "header", route.Put.Parameters[1].In)
 	}
 }

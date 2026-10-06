@@ -1,7 +1,10 @@
 package jennies
 
 import (
+	"encoding/json"
+	"fmt"
 	"maps"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -63,9 +66,33 @@ func mergeExternalVersionRoutes(version *app.ManifestVersion, source app.Manifes
 		if kind.Schema != nil {
 			schemas := maps.Clone(kind.Schema.AsOpenAPI3SchemasMap())
 			for name, schema := range source.Schemas {
+				if existing, ok := schemas[name]; ok {
+					existingJSON, err := json.Marshal(existing)
+					if err != nil {
+						return err
+					}
+					schemaJSON, err := json.Marshal(schema)
+					if err != nil {
+						return err
+					}
+					// Compare JSON values, since kind schemas may use maps while
+					// imported schemas use structs with a different field order.
+					var existingValue, importedValue any
+					if err := json.Unmarshal(existingJSON, &existingValue); err != nil {
+						return err
+					}
+					if err := json.Unmarshal(schemaJSON, &importedValue); err != nil {
+						return err
+					}
+					if !reflect.DeepEqual(existingValue, importedValue) {
+						return fmt.Errorf("imported schema %q conflicts with schema on kind %s", name, kind.Kind)
+					}
+				}
 				schemas[name] = schema
 			}
-			kind.Schema, err = app.VersionSchemaFromMap(schemas, kind.Kind)
+			kind.Schema, err = app.VersionSchemaFromMap(map[string]any{
+				"components": map[string]any{"schemas": schemas},
+			}, kind.Kind)
 			if err != nil {
 				return err
 			}

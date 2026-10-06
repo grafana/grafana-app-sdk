@@ -156,10 +156,43 @@ func parseOpenAPIRoutes(data []byte, group, version string) (app.ManifestVersion
 		if _, exists := destination[target]; exists {
 			return routes, fmt.Errorf("multiple paths resolve to manifest route %q", target)
 		}
+		if err := inheritPathParameters(&path.PathProps); err != nil {
+			return routes, fmt.Errorf("path %q: %w", source, err)
+		}
 		addImplicitPathParameters(source, &path.PathProps)
 		destination[target] = path.PathProps
 	}
 	return routes, nil
+}
+
+// Materialize shared parameters before merging documents. The legacy route
+// installer reads operation parameters only, and retaining shared parameters
+// would also apply one document's defaults to another document's operations.
+func inheritPathParameters(path *spec3.PathProps) error {
+	for _, parameter := range path.Parameters {
+		if parameter == nil {
+			return errors.New("parameter must be an object")
+		}
+	}
+	for _, operation := range []*spec3.Operation{path.Get, path.Put, path.Post, path.Delete, path.Options, path.Head, path.Patch, path.Trace} {
+		if operation == nil {
+			continue
+		}
+		for _, parameter := range operation.Parameters {
+			if parameter == nil {
+				return errors.New("parameter must be an object")
+			}
+		}
+		for _, parameter := range path.Parameters {
+			if !slices.ContainsFunc(operation.Parameters, func(existing *spec3.Parameter) bool {
+				return existing.Name == parameter.Name && existing.In == parameter.In
+			}) {
+				operation.Parameters = append(operation.Parameters, parameter)
+			}
+		}
+	}
+	path.Parameters = nil
+	return nil
 }
 
 // Use the source path before namespace and resource prefixes are removed.

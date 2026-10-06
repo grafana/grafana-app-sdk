@@ -67,3 +67,60 @@ func TestMergeExternalVersionSubresources(t *testing.T) {
 		})
 	}
 }
+
+func TestMergeExternalVersionPreservesKindSchemas(t *testing.T) {
+	for _, name := range []string{"Widget", "spec"} {
+		t.Run(name, func(t *testing.T) {
+			schema, err := app.VersionSchemaFromMap(map[string]any{
+				"Widget": map[string]any{"type": "object", "properties": map[string]any{
+					"spec": map[string]any{"$ref": "#/components/schemas/spec"},
+				}},
+				"spec": map[string]any{"type": "object"},
+			}, "Widget")
+			require.NoError(t, err)
+			version := app.ManifestVersion{Kinds: []app.ManifestVersionKind{{
+				Kind: "Widget", Plural: "widgets", Scope: "Cluster", Schema: schema,
+			}}}
+			err = mergeExternalVersionRoutes(&version, app.ManifestVersionRoutes{
+				Cluster: map[string]spec3.PathProps{"/widgets/{name}/details": {Get: &spec3.Operation{}}},
+				Schemas: map[string]spec.Schema{name: {SchemaProps: spec.SchemaProps{Type: []string{"string"}}}},
+			})
+			require.ErrorContains(t, err, "conflicts with schema")
+			assert.Same(t, schema, version.Kinds[0].Schema)
+		})
+	}
+}
+
+func TestMergeExternalVersionSharedKindSchemas(t *testing.T) {
+	// "components" is a valid schema name; it must not be interpreted as
+	// the wrapper of an OpenAPI document when rebuilding the kind schema.
+	for _, name := range []string{"Shared", "components"} {
+		t.Run(name, func(t *testing.T) {
+			schemas := map[string]any{
+				"Widget": map[string]any{"type": "object"},
+				name:     map[string]any{"type": "string", "description": "Shared schema"},
+			}
+			kindSchema, err := app.VersionSchemaFromMap(map[string]any{
+				"components": map[string]any{"schemas": schemas},
+			}, "Widget")
+			require.NoError(t, err)
+			version := app.ManifestVersion{Kinds: []app.ManifestVersionKind{{
+				Kind: "Widget", Plural: "widgets", Scope: "Cluster", Schema: kindSchema,
+			}}}
+			source := app.ManifestVersionRoutes{
+				Cluster: map[string]spec3.PathProps{"/widgets/{name}/details": {Get: &spec3.Operation{}}},
+				Schemas: map[string]spec.Schema{
+					name:  {SchemaProps: spec.SchemaProps{Type: []string{"string"}, Description: "Shared schema"}},
+					"New": {SchemaProps: spec.SchemaProps{Type: []string{"boolean"}}},
+				},
+			}
+			// Repeated generation must also accept an existing schema stored as a struct.
+			for range 2 {
+				require.NoError(t, mergeExternalVersionRoutes(&version, source))
+				assert.Contains(t, version.Kinds[0].Schema.AsOpenAPI3SchemasMap(), "New")
+				assert.Equal(t, schemas["Widget"], version.Kinds[0].Schema.AsOpenAPI3SchemasMap()["Widget"])
+			}
+			assert.NotContains(t, kindSchema.AsOpenAPI3SchemasMap(), "New")
+		})
+	}
+}
