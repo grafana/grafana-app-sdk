@@ -9,31 +9,22 @@ import (
 	"net/url"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
-// Make sure RouteAdapter implements the service interface. This is important to
-// do since otherwise we will only get a not implemented error response from
-// the plugin at runtime.
-var _ pluginv3.RouteServiceServer = (*RouteAdapter)(nil)
-
 // RouteAdapter implements the v3 route service in terms of an app-sdk App.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
 type RouteAdapter struct {
-	pluginv3.UnimplementedRouteServiceServer
-
 	app app.App
 }
 
 // NewRouteAdapter returns a [pluginv3.RouteServiceServer] backed by a.
-func NewRouteAdapter(a app.App) *RouteAdapter {
+func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
 	return &RouteAdapter{app: a}
 }
 
@@ -43,7 +34,7 @@ func NewRouteAdapter(a app.App) *RouteAdapter {
 func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
-		return status.Error(codes.InvalidArgument, err.Error())
+		return sendError(stream, http.StatusBadRequest, err.Error())
 	}
 
 	rec := newResponseRecorder(stream)
@@ -54,6 +45,10 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 		Method:             req.GetMethod(),
 		Headers:            routeHeaders(req.GetHeaders()),
 		Body:               io.NopCloser(bytes.NewReader(req.GetBody())),
+	}
+
+	info := &resource.RouteRequestInfo{
+		FullIdentifier: customReq.ResourceIdentifier,
 	}
 
 	if parent := req.GetParent(); parent != nil {
@@ -68,11 +63,16 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 				customReq.DecryptedSecureValues[key] = resource.RawSecureValue(value)
 			}
 		}
+
+		info.Parent = parent.GetRaw()
+		info.ResourceVersion = parent.GetRv()
+		info.DecryptedSecureValues = customReq.DecryptedSecureValues
 	}
 
-	if err := a.app.CallCustomRoute(stream.Context(), rec, customReq); err != nil {
+	ctx := resource.WithRouteRequestInfo(stream.Context(), info)
+	if err := a.app.CallCustomRoute(ctx, rec, customReq); err != nil {
 		if errors.Is(err, app.ErrCustomRouteNotFound) && !rec.sentHeader {
-			return status.Error(codes.NotFound, err.Error())
+			return sendError(stream, http.StatusNotFound, "not found")
 		}
 		return err
 	}
@@ -98,15 +98,16 @@ func routeResourceIdentifier(req *pluginv3.CallRouteRequest) resource.FullIdenti
 	return id
 }
 
-// routeHeaders flattens the v3 StringList header representation into an
-// http.Header.
+// routeHeaders flattens the v3 StringList header representation into an http.Header.
 func routeHeaders(headers map[string]*pluginv3.StringList) http.Header {
 	h := make(http.Header, len(headers))
 	for k, v := range headers {
 		if v == nil {
 			continue
 		}
-		h[k] = v.GetValues()
+		for _, value := range v.GetValues() {
+			h.Add(k, value)
+		}
 	}
 	return h
 }
@@ -114,14 +115,16 @@ func routeHeaders(headers map[string]*pluginv3.StringList) http.Header {
 // responseRecorder is an app.CustomRouteResponseWriter that translates the
 // response into CallRouteResponse messages. It buffers the body until Flush is
 // called, then sends it as one message. The status code and headers are sent
-// only in the first message, so they are fixed once the response is flushed.
+// only in the first message. They are fixed by the first WriteHeader, Write, or Flush.
 type responseRecorder struct {
-	stream     grpc.ServerStreamingServer[pluginv3.CallRouteResponse]
-	header     http.Header
-	body       bytes.Buffer
-	statusCode int
-	sentHeader bool
-	sendErr    error
+	stream          grpc.ServerStreamingServer[pluginv3.CallRouteResponse]
+	header          http.Header
+	committedHeader http.Header
+	wroteHeader     bool
+	body            bytes.Buffer
+	statusCode      int
+	sentHeader      bool
+	sendErr         error
 }
 
 var _ http.Flusher = (*responseRecorder)(nil)
@@ -144,13 +147,18 @@ func (r *responseRecorder) Write(b []byte) (int, error) {
 	if r.sendErr != nil {
 		return 0, r.sendErr
 	}
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
+	}
 	return r.body.Write(b)
 }
 
 func (r *responseRecorder) WriteHeader(statusCode int) {
-	if r.sentHeader {
+	if r.wroteHeader {
 		return
 	}
+	r.wroteHeader = true
+	r.committedHeader = r.header.Clone()
 	r.statusCode = statusCode
 }
 
@@ -159,6 +167,9 @@ func (r *responseRecorder) WriteHeader(statusCode int) {
 func (r *responseRecorder) Flush() {
 	if r.sendErr != nil || r.sentHeader && r.body.Len() == 0 {
 		return
+	}
+	if !r.wroteHeader {
+		r.WriteHeader(http.StatusOK)
 	}
 	r.sendErr = r.stream.Send(r.toCallRouteResponse())
 	r.body.Reset()
@@ -173,8 +184,8 @@ func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
 		return rsp
 	}
 
-	headers := make(map[string]*pluginv3.StringList, len(r.header))
-	for k, v := range r.header {
+	headers := make(map[string]*pluginv3.StringList, len(r.committedHeader))
+	for k, v := range r.committedHeader {
 		sl := &pluginv3.StringList{}
 		sl.SetValues(v)
 		headers[k] = sl
@@ -189,4 +200,13 @@ func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
 	rsp.SetHeaders(headers)
 	r.sentHeader = true
 	return rsp
+}
+
+func sendError(stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse], code int32, msg string) error {
+	rsp := &pluginv3.CallRouteResponse{}
+	rsp.SetCode(code)
+	if len(msg) > 0 {
+		rsp.SetBody([]byte(msg))
+	}
+	return stream.Send(rsp)
 }
