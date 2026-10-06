@@ -590,6 +590,7 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 
 		var status metav1.Status
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
@@ -610,6 +611,7 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 		require.NoError(t, err)
 		defer resp.Body.Close()
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
 
 		var status metav1.Status
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&status))
