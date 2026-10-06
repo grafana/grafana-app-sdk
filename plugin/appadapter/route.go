@@ -202,12 +202,6 @@ func (r *responseRecorder) toCallRouteResponse() *pluginv3.CallRouteResponse {
 	return rsp
 }
 
-type notFoundAdapter struct{}
-
-func (*notFoundAdapter) CallRoute(_ *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
-	return sendError(stream, int32(http.StatusNotFound), "")
-}
-
 func sendError(stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse], code int32, msg string) error {
 	rsp := &pluginv3.CallRouteResponse{}
 	rsp.SetCode(code)

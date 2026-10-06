@@ -336,21 +336,6 @@ func TestRouteAdapter_ErrorResponseSendFailure(t *testing.T) {
 	}
 }
 
-func TestNotFoundAdapter_CallRoute(t *testing.T) {
-	adapter := &notFoundAdapter{}
-	stream := newStream()
-	require.NoError(t, adapter.CallRoute(&pluginv3.CallRouteRequest{}, stream))
-	require.Len(t, stream.sent, 1)
-	require.Equal(t, int32(http.StatusNotFound), stream.sent[0].GetCode())
-	require.Empty(t, stream.sent[0].GetBody())
-	require.Empty(t, stream.sent[0].GetHeaders())
-
-	stream = newStream()
-	stream.sendErr = errors.New("stream closed")
-	require.ErrorIs(t, adapter.CallRoute(&pluginv3.CallRouteRequest{}, stream), stream.sendErr)
-	require.Empty(t, stream.sent)
-}
-
 func TestRouteAdapter_RequestInfo(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
