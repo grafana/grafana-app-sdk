@@ -65,23 +65,38 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 			assert.Contains(t, report.Properties["message"].Type, "string")
 			assert.Equal(t, "int64", report.Properties["count"].Format)
 
-			cluster := version.Routes.Cluster["/foo-from-oas"]
+			cluster := version.Routes.Cluster["/foo-from-openapi-file"]
 			require.NotNil(t, cluster.Get)
 			assert.Equal(t, "getFooFromOpenAPI", cluster.Get.OperationId)
-			namespaced := version.Routes.Namespaced["/bar-from-oas"]
+			namespaced := version.Routes.Namespaced["/bar-from-openapi-file"]
 			require.NotNil(t, namespaced.Get)
 			assert.Equal(t, "getNamespacedReport", namespaced.Get.OperationId)
-			assert.Contains(t, version.Routes.Cluster, "/bar")
-			assert.Contains(t, version.Routes.Namespaced, "/foo")
+			assert.Contains(t, version.Routes.Cluster, "/bar-from-routes-cluster-cue")
+			assert.Contains(t, version.Routes.Namespaced, "/foo-from-routes-namespaced-cue")
 
 			foo := version.Kinds[0]
 			require.Equal(t, "Foo", foo.Kind)
-			assert.Contains(t, foo.Routes, "/details")
+			assert.Contains(t, foo.Routes, "/sub-kind-from-cue")
 			require.NotNil(t, version.OpenAPI.Paths)
-			for _, path := range []string{"/bar", "/namespaces/{namespace}/foo", "/namespaces/{namespace}/foos/{name}/details", "/foo-from-oas", "/namespaces/{namespace}/bar-from-oas", "/foo-from-cue"} {
+			// The output openapi section is the union of all custom route sources,
+			// not just the inline openapi block in integration.cue. All paths here
+			// are relative to the version root, including namespace and kind prefixes.
+			require.Len(t, version.OpenAPI.Paths, 6)
+			for _, path := range []string{
+				// Legacy version-level CUE routes.
+				"/bar-from-routes-cluster-cue",
+				"/namespaces/{namespace}/foo-from-routes-namespaced-cue",
+				// Kind-level CUE subresource route.
+				"/namespaces/{namespace}/foos/{name}/sub-kind-from-cue",
+				// Paths imported from integration.openapi.json.
+				"/foo-from-openapi-file",
+				"/namespaces/{namespace}/bar-from-openapi-file",
+				// Inline OpenAPI in integration.cue.
+				"/foo-from-inline-openapi-cue",
+			} {
 				assert.Contains(t, version.OpenAPI.Paths, path)
 			}
-			assert.Equal(t, "getFooFromCue", version.OpenAPI.Paths["/foo-from-cue"].Get.OperationId)
+			assert.Equal(t, "getFooFromCue", version.OpenAPI.Paths["/foo-from-inline-openapi-cue"].Get.OperationId)
 			require.False(t, version.OpenAPI.Components.IsZero())
 			assert.Contains(t, version.OpenAPI.Components.Schemas, "Report")
 			raw, err := json.Marshal(version.OpenAPI)
@@ -106,7 +121,7 @@ func TestManifestGenerator_IntegrationOpenAPI(t *testing.T) {
 				}
 			}
 			checkRefs(document)
-			details := version.OpenAPI.Paths["/namespaces/{namespace}/foos/{name}/details"]
+			details := version.OpenAPI.Paths["/namespaces/{namespace}/foos/{name}/sub-kind-from-cue"]
 			require.Len(t, details.Parameters, 2)
 			assert.Equal(t, "namespace", details.Parameters[0].Name)
 			assert.Equal(t, "name", details.Parameters[1].Name)

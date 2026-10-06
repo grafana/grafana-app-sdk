@@ -7,24 +7,11 @@ integrationManifest: {
 	}
 }
 
+// The generated manifest's openapi section combines custom routes from four
+// sources: kind routes, version-level routes, inline OpenAPI, and an OpenAPI file.
+// Route names identify their source so the integration snapshot shows the merge.
 integrationV1: {
-	// Inline OpenAPI
-	openapi: {
-		paths: {
-			"/foo-from-cue": {
-				get: {
-					operationId: "getFooFromCue"
-					responses: {
-						"200": {
-							description: "OK"
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// Load OpenAPI from an external source
+	// File-based OpenAPI contributes cluster and namespaced paths and the Report schema.
 	importOpenAPIFile: "integration.openapi.json"
 
 	// CRUD++ for managed kinds
@@ -42,8 +29,9 @@ integrationV1: {
 				list: #LinkedListNode
 			}
 		}
+		// Kind routes become /namespaces/{namespace}/foos/{name}/... in openapi.paths.
 		routes: {
-			"/details": {
+			"/sub-kind-from-cue": {
 				"GET": {
 					name: "getDetails"
 					response: {
@@ -84,10 +72,11 @@ integrationV1: {
 			".spec.nullable.target",
 		]
 	}]
-	// Deprecated -- this should be moved to the openapi docs above
+	// Legacy version-level routes also populate openapi.paths. Keep these here
+	// to verify that they are combined with the inline and file-based definitions.
 	routes: {
 		namespaced: {
-			"/foo": {
+			"/foo-from-routes-namespaced-cue": {
 				"GET": {
 					name: "getFoo"
 					response: {
@@ -98,11 +87,27 @@ integrationV1: {
 			}
 		}
 		cluster: {
-			"/bar": {
+			"/bar-from-routes-cluster-cue": {
 				"POST": {
 					name: "createBar"
 					response: {
 						bar: int
+					}
+				}
+			}
+		}
+	}
+
+	// Inline OpenAPI contributes another path to the same generated openapi section.
+	openapi: {
+		paths: {
+			"/foo-from-inline-openapi-cue": {
+				get: {
+					operationId: "getFooFromCue"
+					responses: {
+						"200": {
+							description: "OK"
+						}
 					}
 				}
 			}

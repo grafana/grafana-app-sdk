@@ -120,7 +120,7 @@
                         },
                         "conversion": false,
                         "routes": {
-                            "/details": {
+                            "/sub-kind-from-cue": {
                                 "get": {
                                     "operationId": "getDetails",
                                     "responses": {
@@ -453,7 +453,7 @@
                 ],
                 "routes": {
                     "namespaced": {
-                        "/bar-from-oas": {
+                        "/bar-from-openapi-file": {
                             "get": {
                                 "operationId": "getNamespacedReport",
                                 "parameters": [
@@ -480,7 +480,7 @@
                                 }
                             }
                         },
-                        "/foo": {
+                        "/foo-from-routes-namespaced-cue": {
                             "get": {
                                 "operationId": "getFoo",
                                 "responses": {
@@ -508,7 +508,7 @@
                         }
                     },
                     "cluster": {
-                        "/bar": {
+                        "/bar-from-routes-cluster-cue": {
                             "post": {
                                 "operationId": "createBar",
                                 "responses": {
@@ -544,7 +544,7 @@
                                 }
                             }
                         },
-                        "/foo-from-cue": {
+                        "/foo-from-inline-openapi-cue": {
                             "get": {
                                 "operationId": "getFooFromCue",
                                 "responses": {
@@ -554,7 +554,7 @@
                                 }
                             }
                         },
-                        "/foo-from-oas": {
+                        "/foo-from-openapi-file": {
                             "get": {
                                 "operationId": "getFooFromOpenAPI",
                                 "responses": {
@@ -595,7 +595,7 @@
                 },
                 "openapi": {
                     "paths": {
-                        "/bar": {
+                        "/bar-from-routes-cluster-cue": {
                             "post": {
                                 "operationId": "createBar",
                                 "responses": {
@@ -631,7 +631,7 @@
                                 }
                             }
                         },
-                        "/foo-from-cue": {
+                        "/foo-from-inline-openapi-cue": {
                             "get": {
                                 "operationId": "getFooFromCue",
                                 "responses": {
@@ -641,7 +641,7 @@
                                 }
                             }
                         },
-                        "/foo-from-oas": {
+                        "/foo-from-openapi-file": {
                             "get": {
                                 "operationId": "getFooFromOpenAPI",
                                 "responses": {
@@ -658,7 +658,7 @@
                                 }
                             }
                         },
-                        "/namespaces/{namespace}/bar-from-oas": {
+                        "/namespaces/{namespace}/bar-from-openapi-file": {
                             "get": {
                                 "operationId": "getNamespacedReport",
                                 "parameters": [
@@ -695,7 +695,7 @@
                                 }
                             ]
                         },
-                        "/namespaces/{namespace}/foo": {
+                        "/namespaces/{namespace}/foo-from-routes-namespaced-cue": {
                             "get": {
                                 "operationId": "getFoo",
                                 "responses": {
@@ -731,7 +731,7 @@
                                 }
                             ]
                         },
-                        "/namespaces/{namespace}/foos/{name}/details": {
+                        "/namespaces/{namespace}/foos/{name}/sub-kind-from-cue": {
                             "get": {
                                 "operationId": "getDetails",
                                 "responses": {

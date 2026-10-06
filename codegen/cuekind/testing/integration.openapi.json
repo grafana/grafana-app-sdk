@@ -6,7 +6,7 @@
     "x-grafana-api-group": "integration.ext.grafana.app"
   },
   "paths": {
-    "/foo-from-oas": {
+    "/foo-from-openapi-file": {
       "get": {
         "operationId": "getFooFromOpenAPI",
         "responses": {
@@ -16,7 +16,7 @@
         }
       }
     },
-    "/namespaces/{namespace}/bar-from-oas": {
+    "/namespaces/{namespace}/bar-from-openapi-file": {
       "get": {
         "operationId": "getNamespacedReport",
         "responses": {
