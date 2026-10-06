@@ -15,10 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
-
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -637,7 +633,7 @@ func TestNewRouteAdapter_HandlerProvider(t *testing.T) {
 	})
 }
 
-func TestRouteAdapter_ResponseCommit(t *testing.T) {
+func TestHTTPRouteAdapter_ResponseCommit(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		write  func(http.ResponseWriter)

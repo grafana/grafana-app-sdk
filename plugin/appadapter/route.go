@@ -9,8 +9,6 @@ import (
 	"net/url"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -274,10 +272,4 @@ func sendError(stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse], co
 		rsp.SetBody([]byte(msg))
 	}
 	return stream.Send(rsp)
-}
-
-type notFoundAdapter struct{}
-
-func (*notFoundAdapter) CallRoute(_ *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
-	return sendError(stream, http.StatusNotFound, "not found")
 }
