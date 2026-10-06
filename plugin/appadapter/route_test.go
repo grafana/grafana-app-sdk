@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"net/http"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/health"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
 	"github.com/grafana/grafana-app-sdk/resource"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
 )
 
 // fakeApp is a minimal app.App used to exercise CallRoute without depending
@@ -136,28 +137,30 @@ func TestRouteAdapter_CallRoute(t *testing.T) {
 		}
 	})
 
-	t.Run("maps ErrCustomRouteNotFound to a NotFound gRPC status", func(t *testing.T) {
-		a := NewRouteAdapter(&fakeApp{
-			callCustomRoute: func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error {
-				return app.ErrCustomRouteNotFound
-			},
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"route not found", app.ErrCustomRouteNotFound},
+		{"wrapped route not found", fmt.Errorf("lookup route: %w", app.ErrCustomRouteNotFound)},
+	} {
+		t.Run(tc.name+" returns an HTTP 404 response", func(t *testing.T) {
+			a := NewRouteAdapter(&fakeApp{
+				callCustomRoute: func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error {
+					return tc.err
+				},
+			})
+			req := &pluginv3.CallRouteRequest{}
+			req.SetUrl("https://example.com/foo")
+
+			stream := newStream()
+			require.NoError(t, a.CallRoute(req, stream))
+			require.Len(t, stream.sent, 1)
+			require.Equal(t, int32(http.StatusNotFound), stream.sent[0].GetCode())
+			require.Equal(t, "not found", string(stream.sent[0].GetBody()))
+			require.Empty(t, stream.sent[0].GetHeaders())
 		})
-
-		req := &pluginv3.CallRouteRequest{}
-		req.SetUrl("https://example.com/foo")
-
-		stream := newStream()
-		err := a.CallRoute(req, stream)
-		if err == nil {
-			t.Fatal("expected an error")
-		}
-		if status.Code(err) != codes.NotFound {
-			t.Fatalf("expected NotFound status, got %v", err)
-		}
-		if len(stream.sent) != 0 {
-			t.Fatalf("expected no streamed response, got %d", len(stream.sent))
-		}
-	})
+	}
 
 	t.Run("propagates other errors from CallCustomRoute", func(t *testing.T) {
 		wantErr := errors.New("boom")
@@ -281,21 +284,229 @@ func TestRouteAdapter_CallRoute(t *testing.T) {
 
 		stream := newStream()
 		err := a.CallRoute(req, stream)
-		if !errors.Is(err, app.ErrCustomRouteNotFound) || status.Code(err) == codes.NotFound {
-			t.Fatalf("expected the unmapped error, got %v", err)
-		}
+		require.ErrorIs(t, err, app.ErrCustomRouteNotFound)
+		// An already-streamed response cannot be replaced with an HTTP error.
+		require.Len(t, stream.sent, 1)
+		require.Equal(t, int32(http.StatusOK), stream.sent[0].GetCode())
+		require.Equal(t, "partial", string(stream.sent[0].GetBody()))
 	})
 
-	t.Run("rejects an unparsable URL", func(t *testing.T) {
-		a := NewRouteAdapter(&fakeApp{})
+	t.Run("returns an HTTP 400 response for an unparsable URL", func(t *testing.T) {
+		a := NewRouteAdapter(&fakeApp{
+			callCustomRoute: func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error {
+				t.Fatal("app must not be called for an invalid URL")
+				return nil
+			},
+		})
 
 		req := &pluginv3.CallRouteRequest{}
 		req.SetUrl("://not-a-url")
 
 		stream := newStream()
-		err := a.CallRoute(req, stream)
-		if status.Code(err) != codes.InvalidArgument {
-			t.Fatalf("expected InvalidArgument status, got %v", err)
-		}
+		require.NoError(t, a.CallRoute(req, stream))
+		require.Len(t, stream.sent, 1)
+		require.Equal(t, int32(http.StatusBadRequest), stream.sent[0].GetCode())
+		require.Contains(t, string(stream.sent[0].GetBody()), "://not-a-url")
+		require.Contains(t, string(stream.sent[0].GetBody()), "missing protocol scheme")
+		require.Empty(t, stream.sent[0].GetHeaders())
 	})
+}
+
+func TestRouteAdapter_ErrorResponseSendFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		url  string
+	}{
+		{"invalid URL", "://not-a-url"},
+		{"route not found", "https://example.com/missing"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := NewRouteAdapter(&fakeApp{
+				callCustomRoute: func(context.Context, app.CustomRouteResponseWriter, *app.CustomRouteRequest) error {
+					return app.ErrCustomRouteNotFound
+				},
+			})
+			req := &pluginv3.CallRouteRequest{}
+			req.SetUrl(tc.url)
+			stream := newStream()
+			stream.sendErr = errors.New("stream closed")
+			require.ErrorIs(t, a.CallRoute(req, stream), stream.sendErr)
+			require.Empty(t, stream.sent)
+		})
+	}
+}
+
+func TestNotFoundAdapter_CallRoute(t *testing.T) {
+	adapter := &notFoundAdapter{}
+	stream := newStream()
+	require.NoError(t, adapter.CallRoute(&pluginv3.CallRouteRequest{}, stream))
+	require.Len(t, stream.sent, 1)
+	require.Equal(t, int32(http.StatusNotFound), stream.sent[0].GetCode())
+	require.Empty(t, stream.sent[0].GetBody())
+	require.Empty(t, stream.sent[0].GetHeaders())
+
+	stream = newStream()
+	stream.sendErr = errors.New("stream closed")
+	require.ErrorIs(t, adapter.CallRoute(&pluginv3.CallRouteRequest{}, stream), stream.sendErr)
+	require.Empty(t, stream.sent)
+}
+
+func TestRouteAdapter_RequestInfo(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		parent bool
+		secure map[string]string
+	}{
+		{name: "no parent"},
+		{name: "parent without secure values", parent: true},
+		{name: "parent with secure values", parent: true, secure: map[string]string{"token": "secret", "password": "another-secret"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := &pluginv3.CallRouteRequest{}
+			req.SetGroup("test.grafana.app")
+			req.SetVersion("v1alpha1")
+			req.SetNamespace("default")
+			want := &resource.RouteRequestInfo{
+				FullIdentifier: resource.FullIdentifier{Group: "test.grafana.app", Version: "v1alpha1", Namespace: "default"},
+			}
+			if tc.parent {
+				parent := &pluginv3.RouteResource{}
+				parent.SetResource("things")
+				parent.SetName("example")
+				parent.SetRv("42")
+				parent.SetRaw([]byte(`{"spec":{"value":"example"}}`))
+				parent.SetDecryptedSecureValues(tc.secure)
+				req.SetParent(parent)
+				want.Plural = "things"
+				want.Name = "example"
+				want.ResourceVersion = "42"
+				want.Parent = parent.GetRaw()
+				if tc.secure != nil {
+					want.DecryptedSecureValues = resource.DecryptedSecureValues{
+						"token": "secret", "password": "another-secret",
+					}
+				}
+			}
+
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			called := false
+			a := NewRouteAdapter(&fakeApp{
+				callCustomRoute: func(ctx context.Context, _ app.CustomRouteResponseWriter, req *app.CustomRouteRequest) error {
+					called = true
+					require.Equal(t, want, resource.RouteRequestInfoFrom(ctx))
+					require.Equal(t, want.FullIdentifier, req.ResourceIdentifier)
+					require.Equal(t, want.DecryptedSecureValues, req.DecryptedSecureValues)
+					if tc.parent {
+						require.NotNil(t, req.Parent)
+						require.Equal(t, []byte(want.Parent), req.Parent.Raw)
+					} else {
+						require.Nil(t, req.Parent)
+					}
+					cancel()
+					require.ErrorIs(t, ctx.Err(), context.Canceled)
+					return nil
+				},
+			})
+			stream := newStream()
+			stream.ctx = ctx
+			require.NoError(t, a.CallRoute(req, stream))
+			require.True(t, called)
+			require.Len(t, stream.sent, 1)
+			require.Equal(t, int32(http.StatusOK), stream.sent[0].GetCode())
+		})
+	}
+}
+
+func TestRouteAdapter_StatusCodeBounds(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		code int64
+		want int32
+	}{
+		{"negative", -1, http.StatusInternalServerError},
+		{"maximum int32", math.MaxInt32, math.MaxInt32},
+		{"overflow", int64(math.MaxInt32) + 1, http.StatusInternalServerError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.code > math.MaxInt {
+				t.Skip("status code cannot be represented by int on this platform")
+			}
+			a := NewRouteAdapter(&fakeApp{
+				callCustomRoute: func(_ context.Context, w app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+					w.WriteHeader(int(tc.code))
+					_, err := w.Write([]byte("response"))
+					return err
+				},
+			})
+			stream := newStream()
+			require.NoError(t, a.CallRoute(&pluginv3.CallRouteRequest{}, stream))
+			require.Len(t, stream.sent, 1)
+			require.Equal(t, tc.want, stream.sent[0].GetCode())
+			require.Equal(t, "response", string(stream.sent[0].GetBody()))
+		})
+	}
+}
+
+func TestRouteAdapter_RequestHeaders(t *testing.T) {
+	called := false
+	a := NewRouteAdapter(&fakeApp{
+		callCustomRoute: func(_ context.Context, writer app.CustomRouteResponseWriter, req *app.CustomRouteRequest) error {
+			called = true
+			require.Equal(t, "application/json", req.Headers.Get("Content-Type"))
+			require.Equal(t, []string{"one", "two"}, req.Headers.Values("X-Test"))
+			require.NotContains(t, req.Headers, "X-Nil")
+			// Mutating the handler's headers must not change the protocol request.
+			req.Headers["Content-Type"][0] = "text/plain"
+			req.Headers["X-Test"][0] = "changed"
+			writer.WriteHeader(http.StatusNoContent)
+			return nil
+		},
+	})
+	header := &pluginv3.StringList{}
+	header.SetValues([]string{"application/json"})
+	values := &pluginv3.StringList{}
+	values.SetValues([]string{"one", "two"})
+	req := &pluginv3.CallRouteRequest{}
+	req.SetHeaders(map[string]*pluginv3.StringList{
+		"content-type": header,
+		"x-test":       values,
+		"X-Nil":        nil,
+	})
+	stream := newStream()
+	require.NoError(t, a.CallRoute(req, stream))
+	require.True(t, called)
+	require.Equal(t, []string{"application/json"}, header.GetValues())
+	require.Equal(t, []string{"one", "two"}, values.GetValues())
+	require.Len(t, stream.sent, 1)
+	require.Equal(t, int32(http.StatusNoContent), stream.sent[0].GetCode())
+}
+
+func TestRouteAdapter_ResponseCommit(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		write  func(http.ResponseWriter)
+		status int
+	}{
+		{"explicit status", func(w http.ResponseWriter) { w.WriteHeader(http.StatusCreated) }, http.StatusCreated},
+		{"implicit status", func(w http.ResponseWriter) { _, _ = w.Write([]byte("body")) }, http.StatusOK},
+		{"flush", func(w http.ResponseWriter) { w.(http.Flusher).Flush() }, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := NewRouteAdapter(&fakeApp{
+				callCustomRoute: func(_ context.Context, w app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+					w.Header().Set("X-Test", "original")
+					tc.write(w)
+					w.Header().Set("X-Test", "changed")
+					w.WriteHeader(http.StatusInternalServerError)
+					return nil
+				},
+			})
+			stream := newStream()
+			require.NoError(t, a.CallRoute(&pluginv3.CallRouteRequest{}, stream))
+			require.Len(t, stream.sent, 1)
+			require.Equal(t, int32(tc.status), stream.sent[0].GetCode())
+			require.Equal(t, []string{"original"}, stream.sent[0].GetHeaders()["X-Test"].GetValues())
+		})
+	}
 }
