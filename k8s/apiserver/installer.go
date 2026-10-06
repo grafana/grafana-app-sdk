@@ -780,6 +780,7 @@ func writeCustomRouteError(resp *restful.Response, err error) {
 			message = st.Message
 		}
 	}
+	resp.Header().Set("Content-Type", "application/json")
 	resp.WriteHeader(int(code))
 	_ = json.NewEncoder(resp).Encode(metav1.Status{
 		Status:  metav1.StatusFailure,
