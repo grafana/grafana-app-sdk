@@ -182,7 +182,7 @@ func TestRun(t *testing.T) {
 		p := newFakeProvider("my-app")
 		runner := p.app.runner.(*fakeRunner)
 
-		if err := Run(p, WithInsecureSkipAuthentication()); err != nil {
+		if err := Run(p, WithKubeConfig(rest.Config{Host: "https://example.com"}), WithInsecureSkipAuthentication()); err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
 
@@ -195,6 +195,24 @@ func TestRun(t *testing.T) {
 		case <-runner.done:
 		default:
 			t.Error("expected the app runner to have been stopped before Run returned")
+		}
+	})
+
+	t.Run("does not start the app runner without a kube config", func(t *testing.T) {
+		stubManage(t, nil)
+		// BuildKubeConfig needs a router URL.
+		t.Setenv("API_ACCESS_ROUTER_URL", "")
+		p := newFakeProvider("my-app")
+		runner := p.app.runner.(*fakeRunner)
+
+		if err := Run(p, WithInsecureSkipAuthentication()); err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+
+		select {
+		case <-runner.started:
+			t.Error("expected the app runner not to be started")
+		default:
 		}
 	})
 
@@ -304,12 +322,35 @@ func TestRun(t *testing.T) {
 		}
 	})
 
-	t.Run("only \"true\" skips authentication", func(t *testing.T) {
-		stubManage(t, nil)
-		t.Setenv(EnvVarInsecureSkipAuthentication, "1")
+	t.Run("starts without an authenticator, rejecting plugin v3 requests", func(t *testing.T) {
+		for _, tt := range []struct {
+			name      string
+			skipValue string
+		}{
+			{name: "nothing configured"},
+			// Only "true" skips authentication.
+			{name: "skip not \"true\"", skipValue: "1"},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				call := stubManage(t, nil)
+				t.Setenv(EnvVarInsecureSkipAuthentication, tt.skipValue)
 
-		if err := Run(newFakeProvider("my-app")); err == nil {
-			t.Fatal("expected an error without an authenticator")
+				if err := Run(newFakeProvider("my-app")); err != nil {
+					t.Fatalf("Run returned error: %v", err)
+				}
+				admission := serveAdmission(t, call.opts.ExtraPlugins)
+
+				for _, md := range []metadata.MD{nil, metadata.Pairs("x-access-token", "token")} {
+					ctx := metadata.NewOutgoingContext(context.Background(), md)
+					req := pluginv3.AdmissionReviewRequest_builder{
+						Kind: pluginv3.GroupVersionKind_builder{Group: new("my-app.grafana.app")}.Build(),
+					}.Build()
+					_, err := admission.AdmissionReview(ctx, req)
+					if got := status.Code(err); got != codes.FailedPrecondition {
+						t.Errorf("metadata %v: expected %v, got %v (%v)", md, codes.FailedPrecondition, got, err)
+					}
+				}
+			})
 		}
 	})
 
@@ -338,7 +379,6 @@ func TestRun(t *testing.T) {
 			manageErr error
 			wantErr   error
 			wantMsg   string
-			noAuth    bool
 		}{
 			{
 				name:    "nil provider",
@@ -363,12 +403,6 @@ func TestRun(t *testing.T) {
 				wantMsg: "ExtraPlugins cannot be overridden",
 			},
 			{
-				name:     "no authenticator",
-				provider: newFakeProvider("my-app"),
-				noAuth:   true,
-				wantMsg:  "an authenticator is required: set GRAFANA_JWKS_URL or GRAFANA_JWKS, or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true",
-			},
-			{
 				name:      "Manage fails",
 				provider:  newFakeProvider("my-app"),
 				manageErr: manageErr,
@@ -378,11 +412,7 @@ func TestRun(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				stubManage(t, tt.manageErr)
 
-				opts := tt.opts
-				if !tt.noAuth {
-					opts = append(opts, WithInsecureSkipAuthentication())
-				}
-				err := Run(tt.provider, opts...)
+				err := Run(tt.provider, append(tt.opts, WithInsecureSkipAuthentication())...)
 				if err == nil {
 					t.Fatal("expected an error")
 				}
