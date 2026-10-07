@@ -26,11 +26,13 @@ import (
 // Plugin protocol v3 requests are authenticated with the authenticator from
 // WithAuthenticator or, without one, from GRAFANA_JWKS_URL or
 // GRAFANA_JWKS. Tokens must have the plugin ID or the manifest's
-// API group as an audience. Run fails if
-// neither is available, unless authentication is skipped for local development
+// API group as an audience. If neither is available, every plugin protocol v3
+// request is rejected, unless authentication is skipped for local development
 // with WithInsecureSkipAuthentication or GF_PLUGIN_INSECURE_SKIP_AUTHENTICATION=true,
 // which Grafana sets from insecure_skip_authentication = true in the plugin's
-// [plugin.<id>] settings. When the host sets any of these, no options are needed:
+// [plugin.<id>] settings. The plugin still starts, so a host that sends it no
+// plugin protocol v3 requests needs none of these. When the host sets any of
+// them, no options are needed:
 //
 //	func main() {
 //		if err := plugin.Run(myapp.Provider()); err != nil {
@@ -40,7 +42,9 @@ import (
 //	}
 //
 // If the App needs to talk to the Kubernetes API server, the rest.Config
-// can be overridden via WithKubeConfig:
+// can be overridden via WithKubeConfig. Without one from WithKubeConfig or
+// BuildKubeConfig, the App's runner is not started, since its informers and
+// other runnables have no API server to talk to:
 //
 //	err = plugin.Run(myapp.Provider(), plugin.WithKubeConfig(kubeConfig))
 //
@@ -108,7 +112,11 @@ func Run(provider app.Provider, opts ...RunOption) error {
 		case !errors.Is(err, ErrNoSigningKeys):
 			return err
 		case !cfg.insecureSkipAuthentication:
-			return errors.New("an authenticator is required: set " + EnvVarGrafanaJWKSURL + " or " + EnvVarGrafanaJWKS + ", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set " + EnvVarInsecureSkipAuthentication + "=true")
+			// Without an authenticator, the plugin v3 servers reject every request.
+			// Start anyway: hosts that never send plugin v3 requests, such as a
+			// Grafana that routes the App's API elsewhere, need not configure one.
+			logging.DefaultLogger.Warn("no authenticator configured: plugin protocol v3 requests will be rejected; set "+EnvVarGrafanaJWKSURL+" or "+EnvVarGrafanaJWKS+", or use WithAuthenticator; for local development, use WithInsecureSkipAuthentication or set "+EnvVarInsecureSkipAuthentication+"=true",
+				"pluginId", cfg.pluginID)
 		default:
 			// Authentication is explicitly skipped. Anything that can reach the
 			// plugin can then claim any identity, so make that visible.
@@ -156,20 +164,25 @@ func Run(provider app.Provider, opts ...RunOption) error {
 	serveOpts.InsecureSkipAuthentication = cfg.insecureSkipAuthentication
 	cfg.manageOpts.ExtraPlugins = serveOpts.PluginSet()
 
-	// Start any background operations that the App requires.
-	runner := a.Runner()
-	var runnerWait sync.WaitGroup
-	runnerCtx, runnerCancel := context.WithCancel(context.Background())
-	defer func() {
-		runnerCancel()
-		runnerWait.Wait()
-	}()
-	runnerWait.Go(func() {
-		err := runner.Run(runnerCtx)
-		if err != nil && !errors.Is(err, context.Canceled) {
-			backendlog.DefaultLogger.Error(err.Error())
-		}
-	})
+	// Start any background operations that the App requires, if it can reach
+	// the API server. Without a kube config, they would only fail repeatedly.
+	if cfg.kubeConfig != nil {
+		runner := a.Runner()
+		var runnerWait sync.WaitGroup
+		runnerCtx, runnerCancel := context.WithCancel(context.Background())
+		defer func() {
+			runnerCancel()
+			runnerWait.Wait()
+		}()
+		runnerWait.Go(func() {
+			err := runner.Run(runnerCtx)
+			if err != nil && !errors.Is(err, context.Canceled) {
+				backendlog.DefaultLogger.Error(err.Error())
+			}
+		})
+	} else {
+		logging.DefaultLogger.Info("not starting the app runner: no kube config for api access", "pluginId", cfg.pluginID)
+	}
 
 	return manage(cfg.pluginID, cfg.appFunc, cfg.manageOpts)
 }
@@ -178,7 +191,8 @@ func Run(provider app.Provider, opts ...RunOption) error {
 var manage = backendapp.Manage
 
 // WithKubeConfig sets the rest.Config used to communicate with the Kubernetes API server.
-// If not provided, Run will attempt to build one via BuildKubeConfig.
+// If not provided, Run will attempt to build one via BuildKubeConfig, and
+// without either, the App's runner is not started.
 func WithKubeConfig(kubeConfig rest.Config) RunOption {
 	return func(cfg *runConfig) {
 		cfg.kubeConfig = &kubeConfig
