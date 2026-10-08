@@ -408,6 +408,11 @@ type ManifestVersionRoutes struct {
 	Schemas map[string]spec.Schema `json:"schemas,omitempty" yaml:"schemas,omitempty"`
 }
 
+// IsZero reports whether there are no defined routes
+func (r ManifestVersionRoutes) IsZero() bool {
+	return len(r.Namespaced) == 0 && len(r.Cluster) == 0 && len(r.Schemas) == 0
+}
+
 // ManifestVersionKind contains details for a version of a kind in a Manifest
 type ManifestVersionKind struct {
 	// Kind is the name of the kind. This should begin with a capital letter and be CamelCased
