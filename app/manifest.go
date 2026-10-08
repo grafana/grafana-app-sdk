@@ -364,9 +364,43 @@ type ManifestVersion struct {
 	Kinds []ManifestVersionKind `json:"kinds" yaml:"kinds"`
 	// Routes is a map of path patterns to custom routes for this version.
 	// Routes should not conflict with the plural name of any kinds for this version.
+	//
+	// Deprecated: this information is also represented in the OpenAPI paths
 	Routes ManifestVersionRoutes `json:"routes,omitempty" yaml:"routes,omitempty"`
+	// Defines the non-kind CRUD routes and any additional required schemas
+	OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero" yaml:"openapi,omitzero"`
 }
 
+type ManifestVersionOpenAPI struct {
+	// Paths are relative to the version
+	// They do NOT include /apis/{group}/{version}
+	Paths map[string]spec3.PathProps `json:"paths,omitempty,omitzero" yaml:"paths,omitempty,omitzero"`
+	// Additional schemas and responses referenced by the above paths
+	Components ManifestVersionOpenAPIComponents `json:"components,omitzero" yaml:"components,omitzero"`
+}
+
+type ManifestVersionOpenAPIComponents struct {
+	// Schemas holds reusable Schema Objects
+	Schemas map[string]spec.Schema `json:"schemas,omitempty" yaml:"schemas,omitempty"`
+
+	// Responses holds reusable Responses Objects
+	Responses map[string]*spec3.Response `json:"responses,omitempty" yaml:"responses,omitempty"`
+
+	// Examples holds reusable Example objects
+	Examples map[string]*spec3.Example `json:"examples,omitempty" yaml:"examples,omitempty"`
+}
+
+// IsZero reports whether there are no paths or reusable components.
+func (o ManifestVersionOpenAPI) IsZero() bool {
+	return len(o.Paths) == 0 && o.Components.IsZero()
+}
+
+// IsZero reports whether there are no reusable schemas, responses, or examples.
+func (c ManifestVersionOpenAPIComponents) IsZero() bool {
+	return len(c.Schemas) == 0 && len(c.Responses) == 0 && len(c.Examples) == 0
+}
+
+// Deprecated: routes now live in ManifestVersion#openapi
 type ManifestVersionRoutes struct {
 	Namespaced map[string]spec3.PathProps `json:"namespaced,omitempty" yaml:"namespaced,omitempty"`
 	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`

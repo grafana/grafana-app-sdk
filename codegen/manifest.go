@@ -170,6 +170,12 @@ type VersionProperties struct {
 	Name    string                `json:"name"`
 	Served  bool                  `json:"served"`
 	Codegen KindCodegenProperties `json:"codegen"`
+
+	// ImportOpenAPIFile is an optional OpenAPI document path relative to the CUE source directory.
+	ImportOpenAPIFile string `json:"importOpenAPIFile,omitempty"`
+
+	// InlineOpenAPI supplies version-relative paths and components in CUE.
+	InlineOpenAPI map[string]any `json:"openapi,omitempty"`
 }
 
 type VersionCustomRoutes struct {
@@ -188,6 +194,13 @@ type SimpleVersion struct {
 	VersionProperties
 	AllKinds     []VersionedKind      `json:"kinds"`
 	CustomRoutes *VersionCustomRoutes `json:"routes,omitempty"`
+	// ImportedRoutes contribute to manifests only, not source code generation.
+	ImportedRoutes app.ManifestVersionRoutes `json:"-"` //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
+}
+
+// ExternalRoutes returns routes and schemas loaded from a saved OpenAPI document.
+func (v *SimpleVersion) ExternalRoutes() app.ManifestVersionRoutes { //nolint:staticcheck // ManifestVersionRoutes is deprecated; imported routes still use it until manifests read openapi
+	return v.ImportedRoutes
 }
 
 func (v *SimpleVersion) Name() string {

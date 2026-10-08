@@ -17,6 +17,68 @@ import (
 	"k8s.io/kube-openapi/pkg/validation/spec"
 )
 
+func TestManifestVersionOpenAPI_OmitZero(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		doc  ManifestVersionOpenAPI
+		want string
+	}{
+		{name: "zero", want: `{}`},
+		{
+			name: "empty maps",
+			doc: ManifestVersionOpenAPI{
+				Paths: map[string]spec3.PathProps{},
+				Components: ManifestVersionOpenAPIComponents{
+					Schemas: map[string]spec.Schema{}, Responses: map[string]*spec3.Response{},
+				},
+			},
+			want: `{}`,
+		},
+		{
+			name: "paths only",
+			doc:  ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{"/test": {}}},
+			want: `{"openapi":{"paths":{"/test":{}}}}`,
+		},
+		{
+			name: "schemas only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Schemas: map[string]spec.Schema{"Test": {}},
+			}},
+			want: `{"openapi":{"components":{"schemas":{"Test":{}}}}}`,
+		},
+		{
+			name: "responses only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Responses: map[string]*spec3.Response{"OK": {ResponseProps: spec3.ResponseProps{Description: "success"}}},
+			}},
+			want: `{"openapi":{"components":{"responses":{"OK":{"description":"success"}}}}}`,
+		},
+		{
+			name: "response reference",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Responses: map[string]*spec3.Response{"OK": {Refable: spec.Refable{Ref: spec.MustCreateRef("#/components/responses/Success")}}},
+			}},
+			want: `{"openapi":{"components":{"responses":{"OK":{"$ref":"#/components/responses/Success"}}}}}`,
+		},
+		{
+			name: "examples only",
+			doc: ManifestVersionOpenAPI{Components: ManifestVersionOpenAPIComponents{
+				Examples: map[string]*spec3.Example{"Example": {ExampleProps: spec3.ExampleProps{Value: "sample"}}},
+			}},
+			want: `{"openapi":{"components":{"examples":{"Example":{"value":"sample"}}}}}`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			value := struct {
+				OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero"`
+			}{OpenAPI: tc.doc}
+			data, err := json.Marshal(value)
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(data))
+		})
+	}
+}
+
 func TestManifestData_Validate(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -374,10 +374,11 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 			}
 		}
 		// TODO: improve this, it's a bit wonky
+		routes := v.Routes //nolint:staticcheck // Routes is deprecated but still registers version-level handlers
 		customRoutePkgPrefix := ""
-		if len(v.Routes.Namespaced) > 0 {
+		if len(routes.Namespaced) > 0 {
 			hasCustomRoutes = true
-			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Namespaced, "<namespace>", "", callback)
+			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, routes.Namespaced, "<namespace>", "", callback)
 			maps.Copy(res, entries)
 			for k := range entries {
 				parts := strings.Split(k, ".") // Everything before the final . is the prefix
@@ -385,9 +386,9 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 				break
 			}
 		}
-		if len(v.Routes.Cluster) > 0 {
+		if len(routes.Cluster) > 0 {
 			hasCustomRoutes = true
-			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, v.Routes.Cluster, "", "", callback)
+			entries := r.getManifestCustomRoutesOpenAPI("", v.Name, routes.Cluster, "", "", callback)
 			maps.Copy(res, entries)
 			for k := range entries {
 				parts := strings.Split(k, ".") // Everything before the final . is the prefix
@@ -395,9 +396,9 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 				break
 			}
 		}
-		if len(v.Routes.Schemas) > 0 {
+		if len(routes.Schemas) > 0 {
 			replFunc := app.KubeOpenAPIReferenceReplacerFunc(customRoutePkgPrefix, schema.GroupVersionKind{Group: r.appConfig.ManifestData.Group, Version: v.Name})
-			for key, sch := range v.Routes.Schemas {
+			for key, sch := range routes.Schemas {
 				// copy the schema so we don't modify the original
 				cpy := copySpecSchema(&sch)
 				deps := r.replaceReferencesInSchema(&cpy, callback, replFunc)
@@ -512,13 +513,14 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	hasEnabledRoutes := make(map[string]bool)
 	for _, v := range r.appConfig.ManifestData.Versions {
 		gv := schema.GroupVersion{Group: r.appConfig.ManifestData.Group, Version: v.Name}
-		for routePath := range v.Routes.Namespaced {
+		routes := v.Routes //nolint:staticcheck // Routes is deprecated but still registers version-level handlers
+		for routePath := range routes.Namespaced {
 			if r.isCustomRouteEnabled(gv, routePath) {
 				hasEnabledRoutes[gv.Version] = true
 				break
 			}
 		}
-		for routePath := range v.Routes.Cluster {
+		for routePath := range routes.Cluster {
 			if r.isCustomRouteEnabled(gv, routePath) {
 				hasEnabledRoutes[gv.Version] = true
 				break
@@ -544,7 +546,8 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 	// version custom routes
 	hasResourceRoutes := false
 	for _, v := range r.ManifestData().Versions {
-		if len(v.Routes.Namespaced) > 0 || len(v.Routes.Cluster) > 0 {
+		routes := v.Routes //nolint:staticcheck // Routes is deprecated but still registers version-level handlers
+		if len(routes.Namespaced) > 0 || len(routes.Cluster) > 0 {
 			hasResourceRoutes = true
 			break
 		}
@@ -563,7 +566,8 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 			for _, ws := range webServices {
 				if ws.RootPath() == fmt.Sprintf("/apis/%s/%s", group, ver.Name) {
 					found = true
-					for rpath, route := range ver.Routes.Namespaced {
+					routes := ver.Routes //nolint:staticcheck // Routes is deprecated but still registers version-level handlers
+					for rpath, route := range routes.Namespaced {
 						if !r.isCustomRouteEnabled(schema.GroupVersion{Group: group, Version: ver.Name}, rpath) {
 							logging.DefaultLogger.Info("Skipping namespaced custom route based on provided ResourceConfig", "path", rpath, "version", ver.Name, "group", group)
 							continue
@@ -573,7 +577,7 @@ func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter gener
 							return fmt.Errorf("failed to register namespaced custom route '%s' for version %s: %w", rpath, ver.Name, err)
 						}
 					}
-					for rpath, route := range ver.Routes.Cluster {
+					for rpath, route := range routes.Cluster {
 						if !r.isCustomRouteEnabled(schema.GroupVersion{Group: group, Version: ver.Name}, rpath) {
 							logging.DefaultLogger.Info("Skipping cluster custom route based on provided ResourceConfig", "path", rpath, "version", ver.Name, "group", group)
 							continue

@@ -32,7 +32,10 @@ type AppManifestManifestVersion struct {
 	Kinds []AppManifestManifestVersionKind `json:"kinds"`
 	// Routes is a section defining version-level custom resource routes.
 	// These routes are registered at the same level as kinds, and thus should not conflict with existing kinds.
+	// Deprecated: routes are now exposed under the openapi property
 	Routes *AppManifestManifestVersionRoutes `json:"routes,omitempty"`
+	// Define custom routes (cluster, namespaced, and sub-resources) and additional schemas
+	Openapi *AppManifestManifestVersionOpenAPI `json:"openapi,omitempty"`
 }
 
 // NewAppManifestManifestVersion creates a new AppManifestManifestVersion object.
@@ -91,6 +94,7 @@ type AppManifestManifestVersionKind struct {
 	// Routes is a map of subresource route path to spec3.PathProps description of the route.
 	// Currently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.
 	// Invalid payloads will not be parsed correctly and may cause undefined behavior.
+	// Deprecated: routes now live in ManifestVersion#openapi
 	Routes map[string]interface{} `json:"routes,omitempty"`
 }
 
@@ -354,6 +358,7 @@ func (AppManifestManifestVersionKindEmbedField) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionKindEmbedField"
 }
 
+// Deprecated: custom routes are moved to the openapi section
 // +k8s:openapi-gen=true
 type AppManifestManifestVersionRoutes struct {
 	// Namespaced is a map of namespace-scoped route paths to spec3.PathProps description of the route.
@@ -378,6 +383,25 @@ func NewAppManifestManifestVersionRoutes() *AppManifestManifestVersionRoutes {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionRoutes.
 func (AppManifestManifestVersionRoutes) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionRoutes"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestManifestVersionOpenAPI struct {
+	// The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})
+	Paths      map[string]interface{}                               `json:"paths"`
+	Components *AppManifestV1alpha2ManifestVersionOpenAPIComponents `json:"components,omitempty"`
+}
+
+// NewAppManifestManifestVersionOpenAPI creates a new AppManifestManifestVersionOpenAPI object.
+func NewAppManifestManifestVersionOpenAPI() *AppManifestManifestVersionOpenAPI {
+	return &AppManifestManifestVersionOpenAPI{
+		Paths: map[string]interface{}{},
+	}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestManifestVersionOpenAPI.
+func (AppManifestManifestVersionOpenAPI) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestManifestVersionOpenAPI"
 }
 
 // +k8s:openapi-gen=true
@@ -548,6 +572,23 @@ func NewAppManifestSpec() *AppManifestSpec {
 // OpenAPIModelName returns the OpenAPI model name for AppManifestSpec.
 func (AppManifestSpec) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestSpec"
+}
+
+// +k8s:openapi-gen=true
+type AppManifestV1alpha2ManifestVersionOpenAPIComponents struct {
+	Schemas   map[string]interface{} `json:"schemas,omitempty"`
+	Responses map[string]interface{} `json:"responses,omitempty"`
+	Examples  map[string]interface{} `json:"examples,omitempty"`
+}
+
+// NewAppManifestV1alpha2ManifestVersionOpenAPIComponents creates a new AppManifestV1alpha2ManifestVersionOpenAPIComponents object.
+func NewAppManifestV1alpha2ManifestVersionOpenAPIComponents() *AppManifestV1alpha2ManifestVersionOpenAPIComponents {
+	return &AppManifestV1alpha2ManifestVersionOpenAPIComponents{}
+}
+
+// OpenAPIModelName returns the OpenAPI model name for AppManifestV1alpha2ManifestVersionOpenAPIComponents.
+func (AppManifestV1alpha2ManifestVersionOpenAPIComponents) OpenAPIModelName() string {
+	return "com.github.grafana.grafana-app-sdk.app.appmanifest.v1alpha2.AppManifestV1alpha2ManifestVersionOpenAPIComponents"
 }
 
 // +k8s:openapi-gen=true
