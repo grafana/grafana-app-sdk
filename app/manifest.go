@@ -366,7 +366,7 @@ type ManifestVersion struct {
 	// Routes should not conflict with the plural name of any kinds for this version.
 	//
 	// Deprecated: this information is also represented in the OpenAPI paths
-	Routes ManifestVersionRoutes `json:"routes,omitempty" yaml:"routes,omitempty"`
+	Routes ManifestVersionRoutes `json:"routes,omitzero" yaml:"routes,omitzero"`
 	// Defines the non-kind CRUD routes and any additional required schemas
 	OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero" yaml:"openapi,omitzero"`
 }
@@ -406,6 +406,11 @@ type ManifestVersionRoutes struct {
 	Cluster    map[string]spec3.PathProps `json:"cluster,omitempty" yaml:"cluster,omitempty"`
 	// Schemas is the map of #/components/schemas references used by requests and responses in Namespaced and Cluster.
 	Schemas map[string]spec.Schema `json:"schemas,omitempty" yaml:"schemas,omitempty"`
+}
+
+// IsZero reports whether there are no defined routes
+func (r ManifestVersionRoutes) IsZero() bool {
+	return len(r.Namespaced) == 0 && len(r.Cluster) == 0 && len(r.Schemas) == 0
 }
 
 // ManifestVersionKind contains details for a version of a kind in a Manifest

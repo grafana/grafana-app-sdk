@@ -246,7 +246,8 @@ var appManifestData = app.ManifestData{
                     },{{ end }}{{ end }}
                 },{{end}}{{end}}
             },
-            {{ end }} },
+            {{ end }} },{{ if not .Routes.IsZero }}
+            // nolint:staticcheck
             Routes: {{ if index $.OpenAPIVersions .Name }}func() app.ManifestVersionRoutes {
                 var routes app.ManifestVersionRoutes
                 if err := json.Unmarshal([]byte({{ goString ($.ToJSONString .Routes) }}), &routes); err != nil {
@@ -296,7 +297,7 @@ var appManifestData = app.ManifestData{
                     "{{ $refName }}": { {{ template "schema" $schema }}
                     },{{ end }}
                 },
-            },{{ end }}{{ if not .OpenAPI.IsZero }}
+            },{{ end }}{{ end }}{{ if not .OpenAPI.IsZero }}
             OpenAPI: func() app.ManifestVersionOpenAPI {
                 var openAPI app.ManifestVersionOpenAPI
                 if err := json.Unmarshal([]byte({{ goString ($.ToJSONString .OpenAPI) }}), &openAPI); err != nil {
