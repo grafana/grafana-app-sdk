@@ -15,23 +15,40 @@ import (
 	"github.com/grafana/grafana-app-sdk/resource"
 )
 
+// Make sure RouteAdapter implements the service interface. This is important to
+// do since otherwise we will only get a not implemented error response from
+// the plugin at runtime.
+var _ pluginv3.RouteServiceServer = (*deprecatedRouteAdapter)(nil)
+var _ pluginv3.RouteServiceServer = (*routeAdapter)(nil)
+
+// NewRouteAdapter returns a [pluginv3.RouteServiceServer] backed by a.
+func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
+	// Check if a full handler gets returned
+	if p, ok := a.(app.RouteHandlerProvider); ok {
+		h, err := p.ProvideRouteHandler()
+		if err != nil {
+			panic(err)
+		}
+		if h != nil {
+			return &routeAdapter{handler: h}
+		}
+	}
+
+	return &deprecatedRouteAdapter{app: a}
+}
+
 // RouteAdapter implements the v3 route service in terms of an app-sdk App.
 //
 // Experimental: Plugin protocol v3 is a work in progress and may change or be
 // removed without notice.
-type RouteAdapter struct {
+type deprecatedRouteAdapter struct {
 	app app.App
-}
-
-// NewRouteAdapter returns a [pluginv3.RouteServiceServer] backed by a.
-func NewRouteAdapter(a app.App) pluginv3.RouteServiceServer {
-	return &RouteAdapter{app: a}
 }
 
 // CallRoute implements [pluginv3.RouteServiceServer] by translating the
 // request into an app.CustomRouteRequest and delegating to the app-sdk App's
 // CallCustomRoute.
-func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+func (a *deprecatedRouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
 	u, err := url.Parse(req.GetUrl())
 	if err != nil {
 		return sendError(stream, http.StatusBadRequest, err.Error())
@@ -79,6 +96,52 @@ func (a *RouteAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.Ser
 
 	// Send whatever the handler has not flushed. For a handler that never
 	// flushes, this is the whole response in a single message.
+	rec.Flush()
+	return rec.sendErr
+}
+
+// RouteAdapter implements the v3 route service in terms of an app-sdk App.
+//
+// Experimental: Plugin protocol v3 is a work in progress and may change or be
+// removed without notice.
+type routeAdapter struct {
+	handler http.Handler
+}
+
+// CallRoute dispatches the original request URL, including its /apis/group/version
+// prefix, through the handler and streams the HTTP response over gRPC.
+func (a *routeAdapter) CallRoute(req *pluginv3.CallRouteRequest, stream grpc.ServerStreamingServer[pluginv3.CallRouteResponse]) error {
+	u, err := url.Parse(req.GetUrl())
+	if err != nil {
+		return sendError(stream, int32(http.StatusBadRequest), err.Error())
+	}
+	info := &resource.RouteRequestInfo{FullIdentifier: resource.FullIdentifier{
+		Group:     req.GetGroup(),
+		Version:   req.GetVersion(),
+		Namespace: req.GetNamespace(),
+	}}
+	if parent := req.GetParent(); parent != nil {
+		info.Plural = parent.GetResource()
+		info.Name = parent.GetName()
+		info.ResourceVersion = parent.GetRv()
+		info.Parent = parent.GetRaw()
+		if values := parent.GetDecryptedSecureValues(); len(values) > 0 {
+			info.DecryptedSecureValues = make(resource.DecryptedSecureValues, len(values))
+			for key, value := range values {
+				info.DecryptedSecureValues[key] = resource.RawSecureValue(value)
+			}
+		}
+	}
+	ctx := resource.WithRouteRequestInfo(stream.Context(), info)
+	httpReq, err := http.NewRequestWithContext(ctx, req.GetMethod(), u.String(), bytes.NewReader(req.GetBody()))
+	if err != nil {
+		return sendError(stream, int32(http.StatusBadRequest), err.Error())
+	}
+	httpReq.Header = routeHeaders(req.GetHeaders())
+	httpReq.RequestURI = u.RequestURI()
+
+	rec := newResponseRecorder(stream)
+	a.handler.ServeHTTP(rec, httpReq)
 	rec.Flush()
 	return rec.sendErr
 }

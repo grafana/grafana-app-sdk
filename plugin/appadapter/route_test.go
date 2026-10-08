@@ -5,10 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"testing"
 
+	"github.com/emicklei/go-restful/v3"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
@@ -489,6 +491,167 @@ func TestRouteAdapter_ResponseCommit(t *testing.T) {
 			})
 			stream := newStream()
 			require.NoError(t, a.CallRoute(&pluginv3.CallRouteRequest{}, stream))
+			require.Len(t, stream.sent, 1)
+			require.Equal(t, int32(tc.status), stream.sent[0].GetCode())
+			require.Equal(t, []string{"original"}, stream.sent[0].GetHeaders()["X-Test"].GetValues())
+		})
+	}
+}
+
+func TestRestfulRouteAdapter_FullURL(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		route     string
+		url       string
+		path      string
+		namespace string
+		parent    *pluginv3.RouteResource
+	}{
+		{name: "cluster", route: "/foo", url: "/apis/test.grafana.app/v1alpha1/foo?query=a%2Bb&query=c", path: "foo"},
+		{name: "namespaced", route: "/namespaces/{namespace}/bar", url: "/apis/test.grafana.app/v1alpha1/namespaces/default/bar?query=a%2Bb&query=c", path: "bar", namespace: "default"},
+		{name: "resource", route: "/namespaces/{namespace}/things/{name}/baz", url: "/apis/test.grafana.app/v1alpha1/namespaces/default/things/example/baz?query=a%2Bb&query=c", path: "baz", namespace: "default", parent: pluginv3.RouteResource_builder{Resource: new("things"), Name: new("example")}.Build()},
+		{name: "escaped path", route: "/foo/{value}", url: "/apis/test.grafana.app/v1alpha1/foo/a%2Bb?query=a%2Bb&query=c", path: "foo/{value}"},
+		{name: "absolute URL", route: "/foo", url: "https://example.com/apis/test.grafana.app/v1alpha1/foo?query=a%2Bb&query=c", path: "foo"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			ws := new(restful.WebService).Path("/apis/test.grafana.app/v1alpha1")
+			ws.Route(ws.POST(tt.route).To(func(r *restful.Request, w *restful.Response) {
+				called = true
+				require.Equal(t, tt.url, r.Request.URL.String())
+				require.Equal(t, []string{"a+b", "c"}, r.Request.URL.Query()["query"])
+				require.Equal(t, "example", r.Request.Header.Get("X-Test"))
+				body, err := io.ReadAll(r.Request.Body)
+				require.NoError(t, err)
+				require.Equal(t, "payload", string(body))
+				info := resource.RouteRequestInfoFrom(r.Request.Context())
+				require.NotNil(t, info)
+				require.Equal(t, "test.grafana.app", info.Group)
+				require.Equal(t, "v1alpha1", info.Version)
+				require.Equal(t, tt.namespace, info.Namespace)
+				if tt.parent != nil {
+					require.Equal(t, tt.parent.GetName(), info.Name)
+					require.Equal(t, tt.parent.GetResource(), info.Plural)
+				}
+				w.WriteHeader(http.StatusCreated)
+				_, err = w.Write([]byte("ok"))
+				require.NoError(t, err)
+			}))
+			adapter := &routeAdapter{handler: restful.NewContainer().Add(ws)}
+			req := pluginv3.CallRouteRequest_builder{
+				Group: new("test.grafana.app"), Version: new("v1alpha1"),
+				Namespace: &tt.namespace, Parent: tt.parent, Path: &tt.path,
+				Method: new(http.MethodPost), Url: &tt.url, Body: []byte("payload"),
+				Headers: map[string]*pluginv3.StringList{"X-Test": pluginv3.StringList_builder{Values: []string{"example"}}.Build()},
+			}.Build()
+			stream := newStream()
+			require.NoError(t, adapter.CallRoute(req, stream))
+			require.True(t, called, "full API route was not reached")
+			require.Len(t, stream.sent, 1)
+			require.Equal(t, int32(http.StatusCreated), stream.sent[0].GetCode())
+			require.Equal(t, "ok", string(stream.sent[0].GetBody()))
+		})
+	}
+}
+
+func TestRestfulRouteAdapter_InvalidURL(t *testing.T) {
+	adapter := &routeAdapter{handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("handler must not be called for an invalid URL")
+	})}
+	req := &pluginv3.CallRouteRequest{}
+	req.SetUrl("://not-a-url")
+
+	stream := newStream()
+	require.NoError(t, adapter.CallRoute(req, stream))
+	require.Len(t, stream.sent, 1)
+	require.Equal(t, int32(http.StatusBadRequest), stream.sent[0].GetCode())
+}
+
+type handlerProviderApp struct {
+	fakeApp
+	handler http.Handler
+}
+
+func (a *handlerProviderApp) ProvideRouteHandler() (http.Handler, error) {
+	return a.handler, nil
+}
+
+func TestNewRouteAdapter_HandlerProvider(t *testing.T) {
+	t.Run("handler receives server request and context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		called := false
+		a := &handlerProviderApp{handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			require.Equal(t, "/apis/group/v1/foo?input=a%2Bb", r.RequestURI)
+			require.Equal(t, "application/json", r.Header.Get("Content-Type"))
+			r.Header.Set("Content-Type", "text/plain")
+			info := resource.RouteRequestInfoFrom(r.Context())
+			require.NotNil(t, info)
+			require.Equal(t, "things", info.Plural)
+			require.Equal(t, "parent", info.Name)
+			require.Equal(t, "42", info.ResourceVersion)
+			require.JSONEq(t, `{"spec":{}}`, string(info.Parent))
+			require.Equal(t, resource.RawSecureValue("secret"), info.DecryptedSecureValues["token"])
+			cancel()
+			require.ErrorIs(t, r.Context().Err(), context.Canceled)
+			w.WriteHeader(http.StatusNoContent)
+		})}
+		req := &pluginv3.CallRouteRequest{}
+		req.SetMethod(http.MethodGet)
+		req.SetUrl("/apis/group/v1/foo?input=a%2Bb")
+		header := &pluginv3.StringList{}
+		header.SetValues([]string{"application/json"})
+		req.SetHeaders(map[string]*pluginv3.StringList{"content-type": header})
+		parent := &pluginv3.RouteResource{}
+		parent.SetResource("things")
+		parent.SetName("parent")
+		parent.SetRv("42")
+		parent.SetRaw([]byte(`{"spec":{}}`))
+		parent.SetDecryptedSecureValues(map[string]string{"token": "secret"})
+		req.SetParent(parent)
+		stream := newStream()
+		stream.ctx = ctx
+		require.NoError(t, NewRouteAdapter(a).CallRoute(req, stream))
+		require.True(t, called)
+		require.Equal(t, []string{"application/json"}, header.GetValues())
+		require.Len(t, stream.sent, 1)
+		require.Equal(t, int32(http.StatusNoContent), stream.sent[0].GetCode())
+	})
+
+	t.Run("nil handler falls back to custom routes", func(t *testing.T) {
+		called := false
+		a := &handlerProviderApp{fakeApp: fakeApp{callCustomRoute: func(_ context.Context, w app.CustomRouteResponseWriter, _ *app.CustomRouteRequest) error {
+			called = true
+			w.WriteHeader(http.StatusAccepted)
+			return nil
+		}}}
+		stream := newStream()
+		require.NoError(t, NewRouteAdapter(a).CallRoute(&pluginv3.CallRouteRequest{}, stream))
+		require.True(t, called)
+		require.Equal(t, int32(http.StatusAccepted), stream.sent[0].GetCode())
+	})
+}
+
+func TestHTTPRouteAdapter_ResponseCommit(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		write  func(http.ResponseWriter)
+		status int
+	}{
+		{"explicit status", func(w http.ResponseWriter) { w.WriteHeader(http.StatusCreated) }, http.StatusCreated},
+		{"implicit status", func(w http.ResponseWriter) { _, _ = w.Write([]byte("body")) }, http.StatusOK},
+		{"flush", func(w http.ResponseWriter) { w.(http.Flusher).Flush() }, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a := &handlerProviderApp{handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("X-Test", "original")
+				tc.write(w)
+				w.Header().Set("X-Test", "changed")
+				w.WriteHeader(http.StatusInternalServerError)
+			})}
+			stream := newStream()
+			require.NoError(t, NewRouteAdapter(a).CallRoute(&pluginv3.CallRouteRequest{}, stream))
 			require.Len(t, stream.sent, 1)
 			require.Equal(t, int32(tc.status), stream.sent[0].GetCode())
 			require.Equal(t, []string{"original"}, stream.sent[0].GetHeaders()["X-Test"].GetValues())
