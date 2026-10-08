@@ -650,6 +650,253 @@ spec:
       - .spec.boolField
       userReadable: false
     name: v3
+    openapi:
+      components:
+        schemas:
+          createFoobarKey:
+            additionalProperties: false
+            description: |-
+              Key identifies a foobar entry.
+              It is referenced by a custom route, so its multi-line
+              description exercises the route schema codegen path.
+            properties:
+              match:
+                type: string
+              name:
+                type: string
+            required:
+            - name
+            type: object
+      paths:
+        /namespaces/{namespace}/foobar:
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          post:
+            operationId: createFoobar
+            requestBody:
+              content:
+                application/json:
+                  schema:
+                    additionalProperties: false
+                    properties:
+                      keys:
+                        items:
+                          $ref: '#/components/schemas/createFoobarKey'
+                        type: array
+                    required:
+                    - keys
+                    type: object
+              required: true
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        altered:
+                          items:
+                            $ref: '#/components/schemas/createFoobarKey'
+                          type: array
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - altered
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+        /namespaces/{namespace}/testkinds/{name}/emptyresp:
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
+          post:
+            operationId: createEmptyResp
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: {}
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                      required:
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+        /namespaces/{namespace}/testkinds/{name}/reconcile:
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
+          post:
+            operationId: createReconcileRequest
+            requestBody:
+              content:
+                application/json:
+                  schema:
+                    additionalProperties: false
+                    properties:
+                      force:
+                        default: false
+                        type: boolean
+                      reason:
+                        type: string
+                    required:
+                    - force
+                    type: object
+              required: true
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        message:
+                          description: A comment containing "quotes" should not break
+                            anything
+                          type: string
+                        status:
+                          enum:
+                          - success
+                          - failure
+                          type: string
+                      required:
+                      - status
+                      - message
+                      type: object
+                description: Default OK response
+            x-grafana-declared-authz-resource: testkinds
+            x-grafana-declared-authz-subresource: reconcile
+            x-grafana-declared-authz-verb: create
+        /namespaces/{namespace}/testkinds/{name}/search:
+          get:
+            operationId: getTestKindSearchResult
+            parameters:
+            - in: query
+              name: limit
+              schema:
+                default: 10
+                type: integer
+            - in: query
+              name: offset
+              schema:
+                default: 0
+                type: integer
+            - in: query
+              name: q
+              required: true
+              schema:
+                type: string
+            responses:
+              default:
+                content:
+                  application/json:
+                    schema:
+                      additionalProperties: false
+                      properties:
+                        apiVersion:
+                          description: 'APIVersion defines the versioned schema of
+                            this representation of an object. Servers should convert
+                            recognized schemas to the latest internal value, and may
+                            reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+                          type: string
+                        items:
+                          items:
+                            additionalProperties: false
+                            properties:
+                              list:
+                                items:
+                                  additionalProperties: false
+                                  properties:
+                                    foo:
+                                      type: string
+                                  required:
+                                  - foo
+                                  type: object
+                                type: array
+                              name:
+                                type: string
+                              score:
+                                type: number
+                            required:
+                            - name
+                            - score
+                            - list
+                            type: object
+                          type: array
+                        kind:
+                          description: 'Kind is a string value representing the REST
+                            resource this object represents. Servers may infer this
+                            from the endpoint the client submits requests to. Cannot
+                            be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+                          type: string
+                        total:
+                          type: integer
+                      required:
+                      - items
+                      - total
+                      - apiVersion
+                      - kind
+                      type: object
+                description: Default OK response
+            x-grafana-declared-authz-resource: testkinds
+            x-grafana-test: true
+            x-grafana-test-value:
+              val: "1"
+          parameters:
+          - in: path
+            name: namespace
+            required: true
+            schema:
+              type: string
+          - in: path
+            name: name
+            required: true
+            schema:
+              type: string
     routes:
       namespaced:
         /foobar:

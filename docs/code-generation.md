@@ -103,8 +103,186 @@ grafana-app-sdk project init <project go module name>
 ```
 This sets up your project with a go module, a `kinds` directory with a CUE module, a `Makefile` with some sample targets, and a `local` directory that can be used with `grafana-app-sdk project local` commands (see [Local Development & Testing](./local-development.md)).
 
+## Adding routes from a saved OpenAPI document
+
+Manifest generation with `definitions.manifestVersion: "v1alpha2"` (the default)
+can combine CUE with an OpenAPI 3.0 document for each API version.
+Place `openapi.v1.json`, `openapi.v1.yaml`, or `openapi.v1.yml` beside
+`manifest.cue` in the CUE source directory. Repeat for other versions declared in
+the manifest, such as `openapi.v2.json`. Existing CUE-only projects need no changes.
+
+To use a different filename, specify it on the version:
+
+```cue
+manifest: {
+    appName: "example"
+    versions: v1: {
+        importOpenAPIFile: "saved-api.yaml"
+        kinds: []
+    }
+}
+```
+
+Paths are relative to the CUE source directory, including when using `--source`.
+An explicit `importOpenAPIFile` value takes precedence over automatic discovery. If multiple
+conventional filenames exist for one version, select one explicitly.
+
+You can also declare OpenAPI paths and components inline on a version. The
+`openapi` block uses the same structure as the `paths` and `components` sections
+of an OpenAPI 3.0 document, written as CUE:
+
+```cue
+versions: v1: {
+    kinds: []
+    openapi: {
+        paths: {
+            "/namespaces/{namespace}/reports/{report}": {
+                get: {
+                    operationId: "getReport"
+                    summary:     "Fetch a single report"
+                    parameters: [{
+                        name:     "report"
+                        in:       "path"
+                        required: true
+                        schema: type: "string"
+                    }]
+                    responses: {
+                        "200": {
+                            description: "The requested report"
+                            content: {
+                                "application/json": {
+                                    schema: {
+                                        "$ref": "#/components/schemas/Report"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        components: {
+            schemas: {
+                Report: {
+                    type: "object"
+                    required: ["title"]
+                    properties: {
+                        title: type: "string"
+                        count: {
+                            type:   "integer"
+                            format: "int64"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+This is equivalent to the following OpenAPI YAML (the `{namespace}` path
+parameter is added automatically):
+
+```yaml
+paths:
+  /namespaces/{namespace}/reports/{report}:
+    get:
+      operationId: getReport
+      summary: Fetch a single report
+      parameters:
+        - name: report
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+components:
+  schemas:
+    Report:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        count:
+          type: integer
+          format: int64
+```
+
+Inline OpenAPI overrides matching CUE route operations. If a saved document is
+also loaded, it overrides matching inline operations and schemas. Other
+operations remain. Each OpenAPI source must resolve its own local references.
+Shared path-level parameters are copied into each operation before merging;
+operation-level parameters override shared parameters with the same name and
+location. This preserves the parameters of retained operations and makes them
+available to the legacy route installer.
+
+All custom route schemas for a version share one `components.schemas` map. If two
+kinds (or a kind and the version-level routes) define a schema with the same name
+but different contents, generation fails; move the shared type to the inline
+`openapi.components.schemas` section and reference it from each route.
+Imported subresource schemas must also avoid conflicting with the kind's resource
+schemas, including `spec` and the root kind name. Identical schemas can be shared;
+different schemas must use different names.
+
+For example, `saved-api.yaml` can introduce a route and a response type absent
+from CUE:
+
+```yaml
+openapi: 3.0.3
+info:
+  title: Example API
+  version: v1
+  x-grafana-api-group: example.ext.grafana.app
+paths:
+  /namespaces/{namespace}/reports:
+    get:
+      operationId: getReports
+      responses:
+        '200':
+          description: A report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+components:
+  schemas:
+    Report:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+```
+
+The generated JSON/YAML manifest and embedded Go manifest include these custom
+routes and schemas. They do not cause Go or TypeScript types, clients, or handlers
+to be generated. Resource kinds and their metadata continue to be declared in CUE;
+OpenAPI components describe the custom routes' request and response types.
+
+Route paths are relative to `/apis/<manifest-group>/<version>`. The processing
+engine derives this prefix from the CUE manifest and the version importing the
+document, so it does not need to appear in each path. `info.version` and the
+optional `info.x-grafana-api-group` document this context; they do not override CUE.
+
 ## Examples & Testing
 
 Code generation for both kinds and project components is done as part of the [issue tracker tutorial](./tutorials/issue-tracker/README.md) ([kind code generation](./tutorials/issue-tracker/03-generate-kind-code.md), [project component generation](./tutorials/issue-tracker/04-boilerplate.md)).
 
 Automated testing of kind code generation is done using the files in [codegen/cuekind/testing/](../codegen/cuekind/testing/), with generated files compared against [codegen/testing/golden_generated](../codegen/testing/golden_generated/).
+
+The combined CUE/OpenAPI integration manifest has a JSON snapshot in
+[codegen/cuekind/testing/golden](../codegen/cuekind/testing/golden/). It is
+checked by `TestManifestGenerator_IntegrationOpenAPI` (which also decodes and
+verifies the YAML output) and is intentionally outside the CLI comparison fixtures.
+To update it after an intentional output change:
+
+```sh
+UPDATE_INTEGRATION_GOLDEN=1 go test ./codegen/cuekind -run '^TestManifestGenerator_IntegrationOpenAPI$' -count=1
+```

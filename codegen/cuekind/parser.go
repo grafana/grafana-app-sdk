@@ -3,6 +3,7 @@ package cuekind
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 
 	"cuelang.org/go/cue"
 
@@ -14,6 +15,7 @@ const DefaultManifestSelector = "manifest"
 type Parser struct {
 	root        cue.Value
 	manifestDef cue.Value
+	files       fs.FS
 }
 
 type parser[T any] struct {
@@ -30,6 +32,7 @@ func NewParser(c *Cue, enableOperatorStatusGeneration bool) (*Parser, error) {
 	return &Parser{
 		root:        c.Root,
 		manifestDef: manifestDef,
+		files:       c.files,
 	}, nil
 }
 
@@ -70,6 +73,9 @@ func (p *Parser) ParseManifest(manifestSelector string) (codegen.AppManifest, er
 	}
 	manifest := &codegen.SimpleManifest{}
 	if err := val.Decode(&manifest); err != nil {
+		return nil, err
+	}
+	if err := p.loadManifestOpenAPI(manifest); err != nil {
 		return nil, err
 	}
 

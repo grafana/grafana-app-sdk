@@ -80,6 +80,12 @@ func (m *ManifestGenerator) Generate(appManifest codegen.AppManifest) (codejen.F
 	apiVersion := v1alpha2.GroupVersion
 	switch m.ManifestVersion {
 	case VersionV1Alpha1:
+		for _, version := range appManifest.Versions() {
+			routes := externalRoutes(version)
+			if len(routes.Cluster)+len(routes.Namespaced)+len(routes.Schemas) > 0 {
+				return nil, errors.New("imported OpenAPI routes and schemas require manifestVersion v1alpha2")
+			}
+		}
 		manifestSpec, err = v1alpha1.SpecFromManifestData(*manifestData)
 		apiVersion = v1alpha1.GroupVersion
 	case VersionV1Alpha2:
@@ -148,12 +154,15 @@ func (g *ManifestGoGenerator) Generate(appManifest codegen.AppManifest) (codejen
 	}
 
 	buf := bytes.Buffer{}
+	typeVersions, openAPIVersions := manifestTypeVersions(appManifest, manifestData)
 	err = templates.WriteManifestGoFile(templates.ManifestGoFileMetadata{
 		Package:              g.Package,
 		Repo:                 g.ProjectRepo,
 		CodegenPath:          g.CodegenPath,
 		KindsAreGrouped:      !g.GroupByKind,
 		ManifestData:         *manifestData,
+		TypeVersions:         typeVersions,
+		OpenAPIVersions:      openAPIVersions,
 		CodegenManifestGroup: appManifest.Properties().Group,
 	}, &buf)
 	if err != nil {
@@ -213,12 +222,13 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			Served: version.Properties().Served,
 			Kinds:  make([]app.ManifestVersionKind, len(version.Kinds())),
 		}
+		kindRouteSchemas := newRouteSchemaSet()
 		for i, kind := range version.Kinds() {
 			if kind.Conversion {
 				hasAnyConversion = true
 			}
 
-			mvkind, err := processKindVersion(kind, version.Name(), includeSchemas)
+			mvkind, err := processKindVersion(kind, version.Name(), includeSchemas, kindRouteSchemas)
 			if err != nil {
 				return nil, err
 			}
@@ -232,40 +242,47 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 			ver.Kinds[i] = mvkind
 		}
 		// routes
+		routes := &ver.Routes //nolint:staticcheck // Routes is deprecated but still emitted alongside OpenAPI
 		routesAdditionalSchemas := make(map[string]spec.SchemaProps)
 		if len(version.Routes().Namespaced) > 0 {
-			ver.Routes.Namespaced = make(map[string]spec3.PathProps)
+			routes.Namespaced = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Namespaced {
 				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for namespaced path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
-				ver.Routes.Namespaced[sourcePath] = targetPathProps
+				routes.Namespaced[sourcePath] = targetPathProps
 				if len(additional) > 0 {
 					maps.Copy(routesAdditionalSchemas, additional)
 				}
 			}
 		}
 		if len(version.Routes().Cluster) > 0 {
-			ver.Routes.Cluster = make(map[string]spec3.PathProps)
+			routes.Cluster = make(map[string]spec3.PathProps)
 			for sourcePath, sourceMethodsMap := range version.Routes().Cluster {
 				targetPathProps, additional, err := buildPathPropsFromMethods(sourcePath, sourceMethodsMap)
 				if err != nil {
 					return nil, fmt.Errorf("custom routes error for cluster path '%s' on version %s: %w", sourcePath, version.Name(), err)
 				}
-				ver.Routes.Cluster[sourcePath] = targetPathProps
+				routes.Cluster[sourcePath] = targetPathProps
 				if len(additional) > 0 {
 					maps.Copy(routesAdditionalSchemas, additional)
 				}
 			}
 		}
 		if len(routesAdditionalSchemas) > 0 {
-			ver.Routes.Schemas = make(map[string]spec.Schema)
+			routes.Schemas = make(map[string]spec.Schema)
 			for key, val := range routesAdditionalSchemas {
-				ver.Routes.Schemas[key] = spec.Schema{
+				routes.Schemas[key] = spec.Schema{
 					SchemaProps: val,
 				}
 			}
+		}
+		if err := mergeExternalVersionRoutes(&ver, externalRoutes(version)); err != nil {
+			return nil, fmt.Errorf("external routes for version %s: %w", version.Name(), err)
+		}
+		if err := buildVersionOpenAPI(&ver, kindRouteSchemas); err != nil {
+			return nil, fmt.Errorf("version %s: %w", version.Name(), err)
 		}
 		manifest.Versions = append(manifest.Versions, ver)
 	}
@@ -551,12 +568,13 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 				}
 			}
 		}
-		for _, r := range v.Routes.Namespaced {
+		versionRoutes := v.Routes //nolint:staticcheck // Routes is deprecated but still registers version-level handlers
+		for _, r := range versionRoutes.Namespaced {
 			for _, rr := range getRouteNames(&r) {
 				routes[rr] = struct{}{}
 			}
 		}
-		for _, r := range v.Routes.Cluster {
+		for _, r := range versionRoutes.Cluster {
 			for _, rr := range getRouteNames(&r) {
 				routes[rr] = struct{}{}
 			}
@@ -625,7 +643,7 @@ type simpleOpenAPIDoc[T any] struct {
 }
 
 //nolint:revive,funlen,unparam,gocognit,gocyclo
-func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool) (app.ManifestVersionKind, error) {
+func processKindVersion(vk codegen.VersionedKind, version string, includeSchema bool, routeSchemas ...*routeSchemaSet) (app.ManifestVersionKind, error) {
 	if err := validateSearchFields(vk, version); err != nil {
 		return app.ManifestVersionKind{}, err
 	}
@@ -684,6 +702,13 @@ func processKindVersion(vk codegen.VersionedKind, version string, includeSchema 
 			}
 			mver.Routes[sourcePath] = targetPathProps
 			maps.Copy(additionalSchemas, newAdditionalSchemas)
+		}
+	}
+	for _, schemas := range routeSchemas {
+		for name, props := range additionalSchemas {
+			if err := schemas.add("kind "+vk.Kind, name, spec.Schema{SchemaProps: props}); err != nil {
+				return app.ManifestVersionKind{}, err
+			}
 		}
 	}
 	// Only include CRD schemas if told to (there is a bug with recursive schemas and CRDs)

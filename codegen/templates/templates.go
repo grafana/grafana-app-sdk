@@ -449,7 +449,16 @@ type ManifestGoFileMetadata struct {
 	CodegenPath          string
 	KindsAreGrouped      bool
 	ManifestData         app.ManifestData
+	TypeVersions         []app.ManifestVersion
+	OpenAPIVersions      map[string]bool
 	CodegenManifestGroup string
+}
+
+func (m ManifestGoFileMetadata) GeneratedTypeVersions() []app.ManifestVersion {
+	if m.TypeVersions != nil {
+		return m.TypeVersions
+	}
+	return m.ManifestData.Versions
 }
 
 func (ManifestGoFileMetadata) ToAdmissionOperationName(input app.AdmissionOperation) string {
@@ -517,18 +526,23 @@ func (m ManifestGoFileMetadata) Packages() []string {
 	pkgs := make([]string, 0)
 	if m.KindsAreGrouped {
 		gvs := make(map[string]string)
-		for _, v := range m.ManifestData.Versions {
+		for _, v := range m.GeneratedTypeVersions() {
+			routes := v.Routes //nolint:staticcheck // Routes is deprecated but still decides which version packages are imported
+			if m.OpenAPIVersions[v.Name] && len(v.Kinds)+len(routes.Cluster)+len(routes.Namespaced) == 0 {
+				continue
+			}
 			gvs[fmt.Sprintf("%s/%s", m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))] = ToPackageName(v.Name)
 		}
 		for pkg, alias := range gvs {
 			pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", alias, filepath.Join(m.Repo, m.CodegenPath, pkg)))
 		}
 	} else {
-		for _, v := range m.ManifestData.Versions {
+		for _, v := range m.GeneratedTypeVersions() {
 			for _, k := range v.Kinds {
 				pkgs = append(pkgs, fmt.Sprintf("%s%s \"%s\"", m.KindToPackageName(k.Kind), ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.KindToPackageName(k.Kind), ToPackageName(v.Name))))
 			}
-			if len(v.Routes.Namespaced) > 0 || len(v.Routes.Cluster) > 0 {
+			routes := v.Routes //nolint:staticcheck // Routes is deprecated but still decides which version packages are imported
+			if len(routes.Namespaced) > 0 || len(routes.Cluster) > 0 {
 				pkgs = append(pkgs, fmt.Sprintf("%s \"%s\"", ToPackageName(v.Name), filepath.Join(m.Repo, m.CodegenPath, m.GroupToPackageName(m.CodegenManifestGroup), ToPackageName(v.Name))))
 			}
 		}

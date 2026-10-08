@@ -225,23 +225,25 @@ func TestParseManifestRoutes(t *testing.T) {
 
 		assert.Equal(t, "integration", manifest.Properties().AppName)
 
+		// The parser keeps CUE routes in their original scopes. Manifest generation
+		// combines them with inline and file-based OpenAPI in the output openapi section.
 		v1 := manifest.Versions()[0]
 		routes := v1.Routes()
 
 		// Namespaced route
-		require.Contains(t, routes.Namespaced, "/foo")
-		assert.Equal(t, "getFoo", routes.Namespaced["/foo"]["GET"].Name)
+		require.Contains(t, routes.Namespaced, "/foo-from-routes-namespaced-cue")
+		assert.Equal(t, "getFoo", routes.Namespaced["/foo-from-routes-namespaced-cue"]["GET"].Name)
 
 		// Cluster route
-		require.Contains(t, routes.Cluster, "/bar")
-		assert.Equal(t, "createBar", routes.Cluster["/bar"]["POST"].Name)
+		require.Contains(t, routes.Cluster, "/bar-from-routes-cluster-cue")
+		assert.Equal(t, "createBar", routes.Cluster["/bar-from-routes-cluster-cue"]["POST"].Name)
 
 		// Kind-level route
 		v1Kind := v1.Kinds()[0]
 		assert.Equal(t, "Foo", v1Kind.Kind)
-		require.Contains(t, v1Kind.Routes, "/details")
-		assert.Equal(t, "getDetails", v1Kind.Routes["/details"]["GET"].Name)
-		assert.True(t, v1Kind.Routes["/details"]["GET"].ResponseMetadata.ObjectMeta)
+		require.Contains(t, v1Kind.Routes, "/sub-kind-from-cue")
+		assert.Equal(t, "getDetails", v1Kind.Routes["/sub-kind-from-cue"]["GET"].Name)
+		assert.True(t, v1Kind.Routes["/sub-kind-from-cue"]["GET"].ResponseMetadata.ObjectMeta)
 	})
 }
 

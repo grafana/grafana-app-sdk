@@ -874,7 +874,7 @@
                                                                 "type": "string"
                                                             },
                                                             "routes": {
-                                                                "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",
+                                                                "description": "Routes is a map of subresource route path to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.\nDeprecated: routes now live in ManifestVersion#openapi",
                                                                 "type": "object",
                                                                 "x-kubernetes-preserve-unknown-fields": true
                                                             },
@@ -1034,7 +1034,38 @@
                                                     "description": "Name is the version name string, such as \"v1\" or \"v1alpha1\"",
                                                     "type": "string"
                                                 },
+                                                "openapi": {
+                                                    "properties": {
+                                                        "components": {
+                                                            "properties": {
+                                                                "examples": {
+                                                                    "type": "object",
+                                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                                },
+                                                                "responses": {
+                                                                    "type": "object",
+                                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                                },
+                                                                "schemas": {
+                                                                    "type": "object",
+                                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                                }
+                                                            },
+                                                            "type": "object"
+                                                        },
+                                                        "paths": {
+                                                            "description": "The path values are relative to the version root (eg, they do NOT include /apis/{group}/{version})",
+                                                            "type": "object",
+                                                            "x-kubernetes-preserve-unknown-fields": true
+                                                        }
+                                                    },
+                                                    "required": [
+                                                        "paths"
+                                                    ],
+                                                    "type": "object"
+                                                },
                                                 "routes": {
+                                                    "description": "Deprecated: custom routes are moved to the openapi section",
                                                     "properties": {
                                                         "cluster": {
                                                             "description": "Cluster is a map of cluster-scoped route paths to spec3.PathProps description of the route.\nCurrently the spec3.PathProps is not explicitly typed, but typing will be enfoced in the future.\nInvalid payloads will not be parsed correctly and may cause undefined behavior.",

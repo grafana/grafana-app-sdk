@@ -9,9 +9,55 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 )
+
+func TestManifestVersionOpenAPIConversion(t *testing.T) {
+	for _, document := range []string{
+		`{}`,
+		`{"paths":{},"components":{"schemas":{},"responses":{}}}`,
+		`{"paths":{"/test":{"get":{"operationId":"test"}}}}`,
+		`{"components":{"schemas":{"Test":{"type":"string"}}}}`,
+		`{"components":{"responses":{"OK":{"description":"success"}}}}`,
+		`{"components":{"examples":{"Sample":{"value":{"message":"hello"}}}}}`,
+		`{"components":{"examples":{"Alias":{"$ref":"#/components/examples/Sample"},"Sample":{"value":{"$ref":"literal data"}}}}}`,
+	} {
+		t.Run(document, func(t *testing.T) {
+			var openAPI app.ManifestVersionOpenAPI
+			require.NoError(t, json.Unmarshal([]byte(document), &openAPI))
+			data := app.ManifestData{Versions: []app.ManifestVersion{{Name: "v1", OpenAPI: openAPI}}}
+			converted, err := SpecFromManifestData(data)
+			require.NoError(t, err)
+			if openAPI.IsZero() {
+				assert.Nil(t, converted.Versions[0].Openapi)
+				return
+			}
+			require.NotNil(t, converted.Versions[0].Openapi)
+			restored, err := converted.ToManifestData()
+			require.NoError(t, err)
+			assert.Equal(t, openAPI, restored.Versions[0].OpenAPI)
+		})
+	}
+}
+
+//nolint:staticcheck // Legacy route schemas must survive conversion.
+func TestManifestVersionRouteSchemasConversion(t *testing.T) {
+	data := app.ManifestData{Versions: []app.ManifestVersion{{
+		Name: "v1",
+		Routes: app.ManifestVersionRoutes{Schemas: map[string]spec.Schema{
+			"Result": {SchemaProps: spec.SchemaProps{Type: []string{"string"}}},
+		}},
+	}}}
+	converted, err := SpecFromManifestData(data)
+	require.NoError(t, err)
+	require.NotNil(t, converted.Versions[0].Routes)
+	assert.Contains(t, converted.Versions[0].Routes.Schemas, "Result")
+	restored, err := converted.ToManifestData()
+	require.NoError(t, err)
+	assert.Equal(t, data.Versions[0].Routes, restored.Versions[0].Routes)
+}
 
 func TestSearchFieldsConversion(t *testing.T) {
 	ptr := func(s string) *string { return &s }
