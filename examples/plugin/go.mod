@@ -12,7 +12,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
-	github.com/grafana/grafana-app-sdk v0.60.8
+	github.com/grafana/grafana-app-sdk v0.60.9
 	github.com/grafana/grafana-app-sdk/plugin v0.60.8
 	github.com/grafana/grafana-plugin-sdk-go v0.296.5
 	github.com/stretchr/testify v1.12.1
