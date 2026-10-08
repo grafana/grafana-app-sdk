@@ -366,7 +366,7 @@ type ManifestVersion struct {
 	// Routes should not conflict with the plural name of any kinds for this version.
 	//
 	// Deprecated: this information is also represented in the OpenAPI paths
-	Routes ManifestVersionRoutes `json:"routes,omitempty" yaml:"routes,omitempty"`
+	Routes ManifestVersionRoutes `json:"routes,omitzero" yaml:"routes,omitzero"`
 	// Defines the non-kind CRUD routes and any additional required schemas
 	OpenAPI ManifestVersionOpenAPI `json:"openapi,omitzero" yaml:"openapi,omitzero"`
 }
