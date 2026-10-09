@@ -159,7 +159,7 @@ func (s *authenticatedRouteServer) CallRoute(req *pluginv3.CallRouteRequest, str
 		if err := s.auth.checkAudience(ctx, req.GetGroup()); err != nil {
 			return err
 		}
-		if err := checkNamespace(ctx, req.GetNamespace()); err != nil {
+		if err := checkRouteNamespace(ctx, req.GetNamespace()); err != nil {
 			return err
 		}
 	}
@@ -221,6 +221,22 @@ func checkNamespace(ctx context.Context, namespace string) error {
 		return status.Error(codes.PermissionDenied, "access token does not cover the requested namespace")
 	}
 	return nil
+}
+
+// checkRouteNamespace also lets a tenant's token call a cluster-scoped route.
+// The client scopes such calls to the caller's namespace, and the handler acts
+// with that identity, so the token grants no access beyond its own tenant.
+// Cluster-scoped objects in admission and conversion still need a wildcard
+// token, as those requests carry the objects themselves.
+func checkRouteNamespace(ctx context.Context, namespace string) error {
+	if namespace == "" {
+		info, _ := types.AuthInfoFrom(ctx)
+		if info.GetNamespace() == "" {
+			return status.Error(codes.PermissionDenied, "access token does not cover the requested namespace")
+		}
+		return nil
+	}
+	return checkNamespace(ctx, namespace)
 }
 
 // checkObjectNamespaces requires at least one object and a token that covers
