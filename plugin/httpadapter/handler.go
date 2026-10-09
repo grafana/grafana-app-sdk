@@ -157,7 +157,7 @@ func writeError(w http.ResponseWriter, prefix string, err error) {
 		if code, reason, ok := httpStatusFromGRPC(st.Code()); ok {
 			writeStatus(w, metav1.Status{
 				Status:  metav1.StatusFailure,
-				Code:    int32(code),
+				Code:    code,
 				Reason:  reason,
 				Message: st.Message(),
 			})
@@ -176,7 +176,7 @@ func writeStatus(w http.ResponseWriter, s metav1.Status) {
 // httpStatusFromGRPC maps the codes that describe the caller's request.
 // Codes such as FailedPrecondition and Internal describe a misconfigured or
 // failing plugin, which the caller cannot fix, and are left as a 500.
-func httpStatusFromGRPC(code codes.Code) (int, metav1.StatusReason, bool) {
+func httpStatusFromGRPC(code codes.Code) (int32, metav1.StatusReason, bool) {
 	switch code {
 	case codes.InvalidArgument, codes.OutOfRange:
 		return http.StatusBadRequest, metav1.StatusReasonBadRequest, true
