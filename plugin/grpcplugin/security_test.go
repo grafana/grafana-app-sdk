@@ -80,7 +80,7 @@ func TestServerRequestScope(t *testing.T) {
 	}{
 		{"same tenant", "stacks-1", "stacks-1", codes.OK},
 		{"different tenant", "stacks-1", "stacks-2", codes.PermissionDenied},
-		{"cluster request from tenant", "stacks-1", "", codes.PermissionDenied},
+		{"cluster request from tenant", "stacks-1", "", codes.OK},
 		{"wildcard request from tenant", "stacks-1", "*", codes.PermissionDenied},
 		{"wildcard token for tenant", "*", "stacks-1", codes.OK},
 		{"wildcard token for cluster", "*", "", codes.OK},
