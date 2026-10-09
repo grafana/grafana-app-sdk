@@ -7,7 +7,10 @@ import (
 	"net/http"
 	"strings"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	clientv3 "github.com/grafana/grafana-app-sdk/plugin/client/v3"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -38,15 +41,7 @@ func HandlerFunc(client clientv3.RouteClient) http.HandlerFunc {
 
 		stream, err := client.CallRoute(r.Context(), req)
 		if err != nil {
-			k8s, ok := err.(apierrors.APIStatus)
-			if ok {
-				status := k8s.Status()
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(int(status.Code))
-				_ = json.NewEncoder(w).Encode(status)
-				return
-			}
-			http.Error(w, "call route: "+err.Error(), http.StatusInternalServerError)
+			writeError(w, "call route: ", err)
 			return
 		}
 
@@ -128,7 +123,7 @@ func forwardResponse(w http.ResponseWriter, stream pluginv3.RouteService_CallRou
 		}
 		if err != nil {
 			if !wroteHeader {
-				http.Error(w, "receive route response: "+err.Error(), http.StatusInternalServerError)
+				writeError(w, "receive route response: ", err)
 			}
 			return
 		}
@@ -147,6 +142,64 @@ func forwardResponse(w http.ResponseWriter, stream pluginv3.RouteService_CallRou
 		// Flushing is best effort: a writer that can't flush still receives
 		// the whole response, just not incrementally.
 		_ = controller.Flush()
+	}
+}
+
+// writeError keeps the status of Kubernetes API and gRPC errors, so that, for
+// example, a plugin rejecting the caller's token is a 403 rather than a 500.
+// Other errors are the host's or plugin's fault and report a 500.
+func writeError(w http.ResponseWriter, prefix string, err error) {
+	if k8s, ok := err.(apierrors.APIStatus); ok {
+		writeStatus(w, k8s.Status())
+		return
+	}
+	if st, ok := status.FromError(err); ok {
+		if code, reason, ok := httpStatusFromGRPC(st.Code()); ok {
+			writeStatus(w, metav1.Status{
+				Status:  metav1.StatusFailure,
+				Code:    code,
+				Reason:  reason,
+				Message: st.Message(),
+			})
+			return
+		}
+	}
+	http.Error(w, prefix+err.Error(), http.StatusInternalServerError)
+}
+
+func writeStatus(w http.ResponseWriter, s metav1.Status) {
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(int(s.Code))
+	_ = json.NewEncoder(w).Encode(s)
+}
+
+// httpStatusFromGRPC maps the codes that describe the caller's request.
+// Codes such as FailedPrecondition and Internal describe a misconfigured or
+// failing plugin, which the caller cannot fix, and are left as a 500.
+func httpStatusFromGRPC(code codes.Code) (int32, metav1.StatusReason, bool) {
+	switch code {
+	case codes.InvalidArgument, codes.OutOfRange:
+		return http.StatusBadRequest, metav1.StatusReasonBadRequest, true
+	case codes.Unauthenticated:
+		return http.StatusUnauthorized, metav1.StatusReasonUnauthorized, true
+	case codes.PermissionDenied:
+		return http.StatusForbidden, metav1.StatusReasonForbidden, true
+	case codes.NotFound:
+		return http.StatusNotFound, metav1.StatusReasonNotFound, true
+	case codes.AlreadyExists:
+		return http.StatusConflict, metav1.StatusReasonAlreadyExists, true
+	case codes.Aborted:
+		return http.StatusConflict, metav1.StatusReasonConflict, true
+	case codes.ResourceExhausted:
+		return http.StatusTooManyRequests, metav1.StatusReasonTooManyRequests, true
+	case codes.Unimplemented:
+		return http.StatusNotImplemented, metav1.StatusReasonMethodNotAllowed, true
+	case codes.Unavailable:
+		return http.StatusServiceUnavailable, metav1.StatusReasonServiceUnavailable, true
+	case codes.DeadlineExceeded:
+		return http.StatusGatewayTimeout, metav1.StatusReasonTimeout, true
+	default:
+		return 0, "", false
 	}
 }
 

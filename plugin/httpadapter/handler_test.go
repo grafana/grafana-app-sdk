@@ -12,6 +12,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -106,6 +108,19 @@ func TestHandlerFuncCallError(t *testing.T) {
 		require.Equal(t, "invalid route request", status.Message)
 	})
 
+	t.Run("gRPC error", func(t *testing.T) {
+		grpcClient := &testRouteServiceClient{err: grpcstatus.Error(codes.Unauthenticated, "invalid access token")}
+		recorder := httptest.NewRecorder()
+
+		HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+		require.Equal(t, http.StatusUnauthorized, recorder.Code)
+		var status metav1.Status
+		require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+		require.Equal(t, metav1.StatusReasonUnauthorized, status.Reason)
+		require.Equal(t, "invalid access token", status.Message)
+	})
+
 	t.Run("generic error", func(t *testing.T) {
 		grpcClient := &testRouteServiceClient{err: errors.New("call failed")}
 		recorder := httptest.NewRecorder()
@@ -150,6 +165,52 @@ func TestHandlerFuncErrors(t *testing.T) {
 
 		require.Equal(t, http.StatusInternalServerError, recorder.Code)
 		require.Contains(t, recorder.Body.String(), "receive failed")
+	})
+
+	t.Run("response rejected with gRPC status before headers", func(t *testing.T) {
+		for _, tt := range []struct {
+			code   codes.Code
+			want   int
+			reason metav1.StatusReason
+		}{
+			{codes.PermissionDenied, http.StatusForbidden, metav1.StatusReasonForbidden},
+			{codes.Unauthenticated, http.StatusUnauthorized, metav1.StatusReasonUnauthorized},
+			{codes.InvalidArgument, http.StatusBadRequest, metav1.StatusReasonBadRequest},
+			{codes.NotFound, http.StatusNotFound, metav1.StatusReasonNotFound},
+		} {
+			t.Run(tt.code.String(), func(t *testing.T) {
+				grpcClient := &testRouteServiceClient{
+					stream: &testCallRouteResponseReceiver{err: grpcstatus.Error(tt.code, "access token does not cover the requested namespace")},
+				}
+				recorder := httptest.NewRecorder()
+
+				HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+				require.Equal(t, tt.want, recorder.Code)
+				require.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
+				var status metav1.Status
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &status))
+				require.Equal(t, tt.reason, status.Reason)
+				require.Equal(t, int32(tt.want), status.Code)
+				require.Equal(t, "access token does not cover the requested namespace", status.Message)
+			})
+		}
+	})
+
+	t.Run("plugin failure with gRPC status is a server error", func(t *testing.T) {
+		for _, code := range []codes.Code{codes.Internal, codes.FailedPrecondition, codes.Unknown} {
+			t.Run(code.String(), func(t *testing.T) {
+				grpcClient := &testRouteServiceClient{
+					stream: &testCallRouteResponseReceiver{err: grpcstatus.Error(code, "authentication failed")},
+				}
+				recorder := httptest.NewRecorder()
+
+				HandlerFunc(grpcClient)(recorder, httptest.NewRequest(http.MethodGet, "/route", nil))
+
+				require.Equal(t, http.StatusInternalServerError, recorder.Code)
+				require.Contains(t, recorder.Body.String(), "receive route response: ")
+			})
+		}
 	})
 
 	t.Run("response cannot be received after headers", func(t *testing.T) {
