@@ -25,6 +25,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
 	"github.com/grafana/grafana-app-sdk/resource"
+	sdkroutes "github.com/grafana/grafana-app-sdk/routes"
 )
 
 const (
@@ -366,7 +367,11 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 		}
 	}
 
-	return &manifest, errors.Join(validateManifestRoles(manifest, includeSchemas), manifest.Validate())
+	return &manifest, errors.Join(
+		validateManifestRoles(manifest, includeSchemas),
+		manifest.Validate(),
+		sdkroutes.Validate(&manifest, sdkroutes.Options{}),
+	)
 }
 
 // resolveOperatorURL determines the operator URL from the manifest properties.
@@ -851,13 +856,6 @@ func toKindPermissionActions(actions []string) []app.KindPermissionAction {
 	return a
 }
 
-// openAPI extension keys used for the declared authz attributes of a custom route.
-const (
-	extDeclaredAuthzResource    = "x-grafana-declared-authz-resource"
-	extDeclaredAuthzSubresource = "x-grafana-declared-authz-subresource"
-	extDeclaredAuthzVerb        = "x-grafana-declared-authz-verb"
-)
-
 // customRouteExtensions returns the openAPI extensions for a custom route, which are the route's
 // explicitly-declared extensions plus any extensions derived from the route's authz section.
 // It returns nil if the route has no extensions.
@@ -868,12 +866,12 @@ func customRouteExtensions(route codegen.CustomRoute) spec.Extensions {
 	extensions := make(spec.Extensions, len(route.Extensions))
 	maps.Copy(extensions, route.Extensions)
 	if route.Authz != nil {
-		extensions[extDeclaredAuthzResource] = route.Authz.Resource
+		extensions[sdkroutes.ExtensionAuthzResource] = route.Authz.Resource
 		if route.Authz.Subresource != nil {
-			extensions[extDeclaredAuthzSubresource] = *route.Authz.Subresource
+			extensions[sdkroutes.ExtensionAuthzSubresource] = *route.Authz.Subresource
 		}
 		if route.Authz.Verb != nil {
-			extensions[extDeclaredAuthzVerb] = *route.Authz.Verb
+			extensions[sdkroutes.ExtensionAuthzVerb] = *route.Authz.Verb
 		}
 	}
 	return extensions

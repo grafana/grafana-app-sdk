@@ -7,6 +7,7 @@ import (
 	authlib "github.com/grafana/authlib/types"
 
 	"github.com/grafana/grafana-app-sdk/resource"
+	"github.com/grafana/grafana-app-sdk/routes"
 )
 
 // Dummy is a sample response type used to generate an OpenAPI schema.
@@ -47,7 +48,7 @@ func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 	// Preserve this router-specific behavior when exporting and reloading OpenAPI.
 	ws.Route(ws.GET("/foo/{path:*}").To(findThings).
 		Operation("getFooPath").
-		AddExtension("x-grafana-catch-all", "path").
+		AddExtension(routes.ExtensionCatchAll, "path").
 		Param(ws.PathParameter("path", "Remaining path, including slashes").DataType("string")).
 		Doc("cluster request matching any path").
 		Param(ws.QueryParameter("input", "query").DataType("string")).

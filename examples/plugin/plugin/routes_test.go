@@ -17,6 +17,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi2"
 	"github.com/getkin/kin-openapi/openapi2conv"
 	"github.com/getkin/kin-openapi/openapi3"
+	"github.com/grafana/grafana-app-sdk/routes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +32,7 @@ func newOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, *opena
 			routePath := path
 			// OpenAPI exports {path:*} as {path}; this extension preserves the
 			// go-restful catch-all semantics when reconstructing the route.
-			if parameter, ok := operation.Extensions["x-grafana-catch-all"].(string); ok {
+			if parameter, ok := operation.Extensions[routes.ExtensionCatchAll].(string); ok {
 				routePath = strings.TrimSuffix(path, "{"+parameter+"}") + "{" + parameter + ":*}"
 			}
 			ws.Route(ws.Method(method).Path(routePath).Operation(operation.OperationID).
@@ -78,7 +79,7 @@ func newDirectOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, 
 				}
 			}
 			routePath := path
-			if value, exists := operation.Extensions["x-grafana-catch-all"]; exists {
+			if value, exists := operation.Extensions[routes.ExtensionCatchAll]; exists {
 				parameter, ok := value.(string)
 				prefix, matches := strings.CutSuffix(path, "{"+parameter+"}")
 				if !ok || parameter == "" || !matches {

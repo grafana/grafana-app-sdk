@@ -18,6 +18,7 @@ import (
 	"github.com/grafana/grafana-app-sdk/app/appmanifest/v1alpha2"
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
+	"github.com/grafana/grafana-app-sdk/routes"
 )
 
 const externalManifestCUE = `package test
@@ -42,6 +43,7 @@ paths:
   /apis/external.ext.grafana.app/v1/query:
     get:
       operationId: externalQuery
+      x-grafana-declared-authz-resource: query
       x-grafana-declared-authz-verb: get
       parameters:
         - $ref: '#/components/parameters/Query'
@@ -202,22 +204,22 @@ func TestExternalOpenAPIVersions(t *testing.T) {
 	assert.NotContains(t, string(goFiles[0].Data), `"example.com/test/generated/external/v2"`)
 }
 
-func assertExternalRoutes(t *testing.T, routes app.ManifestVersionRoutes) {
+func assertExternalRoutes(t *testing.T, versionRoutes app.ManifestVersionRoutes) {
 	t.Helper()
-	cluster := routes.Cluster["/query"]
+	cluster := versionRoutes.Cluster["/query"]
 	require.NotNil(t, cluster.Get)
 	assert.Equal(t, "externalQuery", cluster.Get.OperationId)
 	require.NotNil(t, cluster.Post)
 	assert.Equal(t, "createCuePost", cluster.Post.OperationId)
-	assert.Equal(t, "get", cluster.Get.Extensions["x-grafana-declared-authz-verb"])
+	assert.Equal(t, "get", cluster.Get.Extensions[routes.ExtensionAuthzVerb])
 	require.Len(t, cluster.Get.Parameters, 1)
 	assert.Equal(t, "q", cluster.Get.Parameters[0].Name)
 	assert.Equal(t, "#/components/schemas/Result", cluster.Get.Responses.StatusCodeResponses[200].Content["application/json"].Schema.Ref.String())
-	namespaced := routes.Namespaced["/query"]
+	namespaced := versionRoutes.Namespaced["/query"]
 	require.NotNil(t, namespaced.Post)
 	require.NotNil(t, namespaced.Post.RequestBody)
 	assert.Equal(t, "#/components/schemas/Result", namespaced.Post.RequestBody.Content["application/json"].Schema.Ref.String())
-	schema := routes.Schemas["Result"]
+	schema := versionRoutes.Schemas["Result"]
 	assert.Equal(t, []string{"message"}, schema.Required)
 	assert.Equal(t, "A message", schema.Properties["message"].Description)
 	assert.Equal(t, true, schema.Extensions["x-kubernetes-preserve-unknown-fields"])
