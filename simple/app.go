@@ -108,6 +108,7 @@ type App struct {
 	cfg                AppConfig
 	converters         map[string]Converter
 	customRoutes       map[string]AppCustomRouteHandler
+	routeTemplates     map[string][]routeTemplate
 	patcher            *k8s.DynamicPatcher
 	collectors         []prometheus.Collector
 	handler            http.Handler
@@ -361,6 +362,7 @@ func NewApp(config AppConfig) (*App, error) {
 		internalKinds:      make(map[string]resource.Kind),
 		converters:         make(map[string]Converter),
 		customRoutes:       make(map[string]AppCustomRouteHandler),
+		routeTemplates:     make(map[string][]routeTemplate),
 		cfg:                config,
 		collectors:         make([]prometheus.Collector, 0),
 		handler:            config.Handler,
@@ -478,13 +480,12 @@ func NewApp(config AppConfig) (*App, error) {
 			if !info.Namespaced {
 				scope = resource.ClusterScope
 			}
-			key := a.customRouteHandlerKey(schema.GroupVersionKind{
-				Version: version,
-			}, string(info.Method), info.Path, scope)
+			gvk := schema.GroupVersionKind{Version: version}
+			key := a.customRouteHandlerKey(gvk, string(info.Method), info.Path, scope)
 			if _, ok := a.customRoutes[key]; ok {
 				return nil, fmt.Errorf("custom route '%s %s' already exists for version %s", info.Method, info.Path, version)
 			}
-			a.customRoutes[key] = handler
+			a.addCustomRoute(key, a.customRouteTemplatesKey(gvk, string(info.Method), scope), info.Path, handler)
 		}
 	}
 	for gk, converter := range config.Converters {
@@ -579,7 +580,7 @@ func (a *App) manageKind(kind AppManagedKind) error {
 		if _, ok := a.customRoutes[key]; ok {
 			return fmt.Errorf("custom route '%s %s' already exists", route.Method, route.Path)
 		}
-		a.customRoutes[key] = handler
+		a.addCustomRoute(key, a.customRouteTemplatesKey(kind.Kind.GroupVersionKind(), string(route.Method), kind.Kind.Scope()), route.Path, handler)
 	}
 	if kind.Reconciler != nil || kind.Watcher != nil {
 		return a.watchKind(AppUnmanagedKind{
@@ -847,9 +848,9 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		if req.ResourceIdentifier.Namespace == "" {
 			scope = resource.ClusterScope
 		}
-		if handler, ok := a.customRoutes[a.customRouteHandlerKey(schema.GroupVersionKind{
+		if handler, ok := a.lookupCustomRoute(schema.GroupVersionKind{
 			Version: req.ResourceIdentifier.Version,
-		}, req.Method, req.Path, scope)]; ok {
+		}, req.Method, req.Path, scope); ok {
 			inflightLabels := a.customRouteInflightLabels(req)
 			a.customRouteInflight.With(inflightLabels).Inc()
 			start := time.Now()
@@ -868,7 +869,7 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		// TODO: still return the not found, or just return NotImplemented?
 		return app.ErrCustomRouteNotFound
 	}
-	if handler, ok := a.customRoutes[a.customRouteHandlerKey(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope())]; ok {
+	if handler, ok := a.lookupCustomRoute(k.Kind.GroupVersionKind(), req.Method, req.Path, k.Kind.Scope()); ok {
 		inflightLabels := a.customRouteInflightLabels(req)
 		a.customRouteInflight.With(inflightLabels).Inc()
 		start := time.Now()
@@ -920,11 +921,41 @@ func (a *App) getInProgressFinalizer(sch resource.Schema) string {
 	return fmt.Sprintf("%s-wip", sch.Plural())
 }
 
-func (*App) customRouteHandlerKey(gvk schema.GroupVersionKind, method string, path string, scope resource.SchemaScope) string {
+func (a *App) customRouteHandlerKey(gvk schema.GroupVersionKind, method string, path string, scope resource.SchemaScope) string {
 	if len(path) > 0 && path[0] == '/' {
 		path = path[1:]
 	}
-	return fmt.Sprintf("%s|%s|%s|%s|%s|%s", scope, gvk.Group, gvk.Version, gvk.Kind, strings.ToUpper(method), path)
+	return a.customRouteTemplatesKey(gvk, method, scope) + "|" + path
+}
+
+// customRouteTemplatesKey identifies the routes a request path is matched
+// against: those for the same scope, group, version, kind and method.
+func (*App) customRouteTemplatesKey(gvk schema.GroupVersionKind, method string, scope resource.SchemaScope) string {
+	return fmt.Sprintf("%s|%s|%s|%s|%s", scope, gvk.Group, gvk.Version, gvk.Kind, strings.ToUpper(method))
+}
+
+func (a *App) addCustomRoute(key, templatesKey, path string, handler AppCustomRouteHandler) {
+	a.customRoutes[key] = handler
+	if t, ok := newRouteTemplate(path, handler); ok {
+		a.routeTemplates[templatesKey] = insertRouteTemplate(a.routeTemplates[templatesKey], t)
+	}
+}
+
+// lookupCustomRoute finds the handler for a request. The path is the concrete
+// one the route was called with, so a route declared with parameters, such as
+// files/{path:*}, is matched against it when no route has that exact path. An
+// exact match is still tried first, which also serves hosts that send the
+// declared path instead.
+func (a *App) lookupCustomRoute(gvk schema.GroupVersionKind, method string, path string, scope resource.SchemaScope) (AppCustomRouteHandler, bool) {
+	if handler, ok := a.customRoutes[a.customRouteHandlerKey(gvk, method, path, scope)]; ok {
+		return handler, true
+	}
+	for _, t := range a.routeTemplates[a.customRouteTemplatesKey(gvk, method, scope)] {
+		if t.match(path) {
+			return t.handler, true
+		}
+	}
+	return nil, false
 }
 
 type syncWatcher interface {

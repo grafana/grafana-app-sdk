@@ -185,6 +185,28 @@ func TestServeMuxHandler(t *testing.T) {
 	})
 }
 
+// The host sends the path the route was called with, so a handler can match
+// its own patterns, including a catch-all, against it.
+func TestServeMuxHandlerReceivesRequestPath(t *testing.T) {
+	mux := http.NewServeMux()
+	var gotPath, gotQuery string
+	mux.HandleFunc("GET /files/{path...}", func(_ http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery = r.PathValue("path"), r.URL.Query().Get("download")
+	})
+
+	req := pluginv3.CallRouteRequest_builder{
+		Group:     new("my-plugin"),
+		Version:   new("v1"),
+		Namespace: new("default"),
+		Method:    new(http.MethodGet),
+		Path:      new("files/reports/2026/q3.csv"),
+		Url:       new("/apis/my-plugin/v1/namespaces/default/files/reports/2026/q3.csv?download=true"),
+	}.Build()
+	require.NoError(t, NewServer(mux).CallRoute(req, newTestCallRouteResponseSender()))
+	require.Equal(t, "reports/2026/q3.csv", gotPath)
+	require.Equal(t, "true", gotQuery)
+}
+
 func TestCallRouteErrors(t *testing.T) {
 	tests := []struct {
 		name string

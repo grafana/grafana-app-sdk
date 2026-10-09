@@ -639,6 +639,25 @@ func (r *defaultInstaller) registerResourceRoute(ws *restful.WebService, gv sche
 	return nil
 }
 
+// versionRouteRequestPath returns the path a version route was called with,
+// relative to the version or, for a namespaced route, to the namespace, as
+// app.CustomRouteRequest.Path documents. For a route declared with parameters,
+// such as files/{path:*}, this is the concrete path, files/a/b.txt, not the
+// declared one. A URL outside the group version, which a route on this web
+// service cannot be called with, falls back to the declared path.
+func versionRouteRequestPath(urlPath string, gv schema.GroupVersion, namespace, declared string) string {
+	relative, ok := strings.CutPrefix(urlPath, "/apis/"+gv.String()+"/")
+	if !ok {
+		return declared
+	}
+	if namespace != "" {
+		if relative, ok = strings.CutPrefix(relative, "namespaces/"+namespace+"/"); !ok {
+			return declared
+		}
+	}
+	return relative
+}
+
 func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService, gv schema.GroupVersion, rpath string, op *spec3.Operation, scope resource.SchemaScope, method string) error {
 	lookup := rpath
 	if scope == resource.NamespacedScope {
@@ -707,7 +726,7 @@ func (r *defaultInstaller) registerResourceRouteOperation(ws *restful.WebService
 		}
 		err = a.CallCustomRoute(req.Request.Context(), resp, &app.CustomRouteRequest{
 			ResourceIdentifier: identifier,
-			Path:               rpath,
+			Path:               versionRouteRequestPath(req.Request.URL.Path, gv, identifier.Namespace, rpath),
 			URL:                req.Request.URL,
 			Method:             req.Request.Method,
 			Headers:            req.Request.Header,

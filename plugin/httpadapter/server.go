@@ -79,7 +79,10 @@ func (h *httpRouteHandler) CallRoute(req *pluginv3.CallRouteRequest, sender grpc
 type routeInfoKey struct{}
 
 // RouteInfo contains the App Platform routing metadata associated with an HTTP
-// request. Path is relative to the route registered in the app manifest.
+// request. Path is the path the route was called with, relative to where it is
+// mounted: the version, the namespace, or the parent object. For a route
+// declared as files/{path:*}, a call to .../files/a/b.txt has the Path
+// files/a/b.txt, and that is also the URL path NewServer gives the handler.
 type RouteInfo struct {
 	Group     string
 	Version   string

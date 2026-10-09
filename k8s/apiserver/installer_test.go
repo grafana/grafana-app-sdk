@@ -540,6 +540,31 @@ func TestDefaultInstaller_RegisterResourceRouteOperation(t *testing.T) {
 		return counts
 	}
 
+	// CustomRouteRequest.Path is the path the route was called with, so a route
+	// declared with parameters gets the values, not its own declaration.
+	t.Run("sends the concrete request path", func(t *testing.T) {
+		for _, tc := range []struct{ rpath, request, want string }{
+			{"items/{id}", "items/abc", "items/abc"},
+			{"files/{path:*}", "files/a/b/c.txt", "files/a/b/c.txt"},
+			{"plain", "plain", "plain"},
+		} {
+			var got string
+			installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
+				got = r.Path
+				assert.Equal(t, "ns", r.ResourceIdentifier.Namespace)
+				w.WriteHeader(http.StatusOK)
+				return nil
+			})
+			srv, _ := newServer(t, installer, tc.rpath)
+			resp, err := http.Get(srv.URL + "/apis/" + group + "/" + version + "/namespaces/ns/" + tc.request)
+			require.NoError(t, err)
+			_ = resp.Body.Close()
+			srv.Close()
+			assert.Equal(t, http.StatusOK, resp.StatusCode, tc.rpath)
+			assert.Equal(t, tc.want, got, tc.rpath)
+		}
+	})
+
 	t.Run("records apiserver_request_total on success", func(t *testing.T) {
 		rpath := "instrument-success"
 		installer := newInstaller(t, func(ctx context.Context, w app.CustomRouteResponseWriter, r *app.CustomRouteRequest) error {
@@ -673,4 +698,12 @@ func (m *mockGoTypeResolver) CustomRouteRequestBodyGoType(kind, version, path, v
 		return m.CustomRouteRequestBodyGoTypeFunc(kind, version, path, verb)
 	}
 	return nil, false
+}
+
+func TestVersionRouteRequestPath(t *testing.T) {
+	gv := schema.GroupVersion{Group: "g.ext.grafana.com", Version: "v1"}
+	assert.Equal(t, "files/a/b", versionRouteRequestPath("/apis/g.ext.grafana.com/v1/files/a/b", gv, "", "files/{path:*}"))
+	assert.Equal(t, "files/a/b", versionRouteRequestPath("/apis/g.ext.grafana.com/v1/namespaces/ns/files/a/b", gv, "ns", "files/{path:*}"))
+	assert.Equal(t, "files/{path:*}", versionRouteRequestPath("/other/files/a/b", gv, "", "files/{path:*}"))
+	assert.Equal(t, "files/{path:*}", versionRouteRequestPath("/apis/g.ext.grafana.com/v1/namespaces/other/files/a", gv, "ns", "files/{path:*}"))
 }
