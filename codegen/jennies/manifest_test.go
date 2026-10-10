@@ -6,10 +6,12 @@ import (
 	"cuelang.org/go/cue/cuecontext"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/kube-openapi/pkg/spec3"
 	"k8s.io/kube-openapi/pkg/validation/spec"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	"github.com/grafana/grafana-app-sdk/codegen"
+	"github.com/grafana/grafana-app-sdk/routes"
 )
 
 func TestResolveOperatorURL(t *testing.T) {
@@ -366,6 +368,37 @@ func TestBuildManifestData_GlobalEmbedReembedVersion(t *testing.T) {
 	}
 }
 
+func TestBuildManifestData_ValidateRoutes(t *testing.T) {
+	for _, tt := range []struct {
+		name    string
+		path    string
+		wantErr string
+	}{
+		{name: "valid route", path: "/query/{id}"},
+		{name: "invalid route", path: "/{resource}/query", wantErr: "v1 /{resource}/query: a route must start with a literal segment"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := &codegen.SimpleManifest{
+				AppManifestProperties: codegen.AppManifestProperties{AppName: "test", FullGroup: "test.grafana.app"},
+				AllVersions: map[string]*codegen.SimpleVersion{
+					"v1": {
+						VersionProperties: codegen.VersionProperties{Name: "v1"},
+						ImportedRoutes: app.ManifestVersionRoutes{ //nolint:staticcheck // ImportedRoutes uses the legacy route representation.
+							Cluster: map[string]spec3.PathProps{tt.path: {Get: &spec3.Operation{}}},
+						},
+					},
+				},
+			}
+			_, err := buildManifestData(manifest, false)
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 func TestBuildManifestData_RejectsReservedKindRoutes(t *testing.T) {
 	schema := cuecontext.New().CompileString("{}")
 	manifest := &codegen.SimpleManifest{
@@ -415,7 +448,7 @@ func TestCustomRouteExtensions(t *testing.T) {
 			route: codegen.CustomRoute{
 				Authz: &codegen.CustomRouteAuthz{Resource: "foos"},
 			},
-			want: spec.Extensions{"x-grafana-declared-authz-resource": "foos"},
+			want: spec.Extensions{routes.ExtensionAuthzResource: "foos"},
 		},
 		{
 			name: "full authz",
@@ -427,9 +460,9 @@ func TestCustomRouteExtensions(t *testing.T) {
 				},
 			},
 			want: spec.Extensions{
-				"x-grafana-declared-authz-resource":    "foos",
-				"x-grafana-declared-authz-subresource": "reconcile",
-				"x-grafana-declared-authz-verb":        "create",
+				routes.ExtensionAuthzResource:    "foos",
+				routes.ExtensionAuthzSubresource: "reconcile",
+				routes.ExtensionAuthzVerb:        "create",
 			},
 		},
 		{
@@ -442,9 +475,9 @@ func TestCustomRouteExtensions(t *testing.T) {
 				},
 			},
 			want: spec.Extensions{
-				"x-foo":                             true,
-				"x-grafana-declared-authz-resource": "foos",
-				"x-grafana-declared-authz-verb":     "get",
+				"x-foo":                       true,
+				routes.ExtensionAuthzResource: "foos",
+				routes.ExtensionAuthzVerb:     "get",
 			},
 		},
 	}

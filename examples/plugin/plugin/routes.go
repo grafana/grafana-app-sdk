@@ -44,10 +44,9 @@ func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 		Returns(http.StatusOK, "cluster request for foo", Dummy{}))
 
 	// The catch-all captures slashes, e.g. /foo/a/b -> PathParameter("path") == "a/b".
-	// Preserve this router-specific behavior when exporting and reloading OpenAPI.
+	// The final parameter name path preserves catch-all behavior in OpenAPI.
 	ws.Route(ws.GET("/foo/{path:*}").To(findThings).
 		Operation("getFooPath").
-		AddExtension("x-grafana-catch-all", "path").
 		Param(ws.PathParameter("path", "Remaining path, including slashes").DataType("string")).
 		Doc("cluster request matching any path").
 		Param(ws.QueryParameter("input", "query").DataType("string")).

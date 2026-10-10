@@ -155,7 +155,6 @@
           }
         },
         "summary": "cluster request matching any path",
-        "x-grafana-catch-all": "path",
         "x-grafana-requires-role": "viewer"
       }
     },

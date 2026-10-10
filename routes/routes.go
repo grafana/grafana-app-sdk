@@ -1,0 +1,540 @@
+// Package routes validates manifest routes and resolves their mounting metadata,
+// ServeMux patterns, and declared authorization checks. A final parameter named
+// path matches the remaining path, with or without a trailing slash. Other
+// ordinary parameters match a single segment.
+package routes
+
+import (
+	"errors"
+	"fmt"
+	"maps"
+	"net/http"
+	"net/url"
+	"slices"
+	"strings"
+
+	authlib "github.com/grafana/authlib/types"
+	"k8s.io/kube-openapi/pkg/spec3"
+
+	"github.com/grafana/grafana-app-sdk/app"
+)
+
+const (
+	// NamespaceParameter is the path parameter carrying the namespace on routes
+	// mounted under namespaces/{namespace}.
+	NamespaceParameter = "namespace"
+
+	// NameParameter is the path parameter carrying the parent object's name on
+	// a kind subresource route.
+	NameParameter = "name"
+
+	// ExtensionAuthzResource, ExtensionAuthzSubresource and ExtensionAuthzVerb
+	// declare, on an operation, the access check a request must pass. They are
+	// written by app-sdk codegen from a route's authz section.
+	ExtensionAuthzResource    = "x-grafana-declared-authz-resource"
+	ExtensionAuthzSubresource = "x-grafana-declared-authz-subresource"
+	ExtensionAuthzVerb        = "x-grafana-declared-authz-verb"
+
+	// NamespacedPrefix is the version-relative path namespaced routes mount
+	// under.
+	NamespacedPrefix = "namespaces/{" + NamespaceParameter + "}"
+
+	// The root cluster scope
+	clusterScope = "Cluster"
+)
+
+// reservedSubresources are reserved for every kind, so a kind route may not claim them.
+var reservedSubresources = map[string]bool{"status": true}
+
+// Options adapt the rules to the server hosting the routes.
+type Options struct {
+	// ReservedResources are path roots the server serves itself in every
+	// version, in addition to the version's own kinds.
+	ReservedResources []string
+
+	// UnservedMethods are methods the server does not serve. An operation for
+	// one is reported and left out of the route. Excluding HEAD also excludes
+	// GET, whose ServeMux pattern would otherwise answer HEAD requests.
+	UnservedMethods []string
+}
+
+// Route is one declared path, resolved to where it mounts.
+type Route struct {
+	// Declared is the path as the manifest declares it, relative to the version.
+	Declared string
+
+	// Path is relative to where the route mounts
+	Path string
+
+	// Path is relative to /namespaces/{namespace}
+	Namespaced bool
+
+	// Kind is set for a subresource route of a single object of that kind, and
+	// Subresource is the part of the path below {name}.
+	Kind *app.ManifestVersionKind
+
+	// Path under the declared kind (eg /count)
+	Subresource string
+
+	// Pattern is the net/http ServeMux pattern matching the route, relative to
+	// the version, without a method.
+	Pattern string
+
+	// SpecPath is the path to publish in an OpenAPI document, relative to the
+	// version. A catch-all is published as an ordinary parameter.
+	SpecPath string
+
+	// Operations are the declared operations, without unserved methods.
+	Operations spec3.PathProps
+
+	// Authz holds the access check each operation declares, by method. Group,
+	// Namespace and Name are left for the server to fill in for each request.
+	// Verb is always set: the declared one, or the one the method implies.
+	Authz map[string]authlib.CheckRequest
+}
+
+// VersionPath is the route's path relative to the version.
+func (r Route) VersionPath() string {
+	if r.Namespaced {
+		return NamespacedPrefix + "/" + r.Path
+	}
+	return r.Path
+}
+
+// Problem is a declared path, or one of its methods, that cannot be served.
+type Problem struct {
+	Version string
+	Path    string
+	// Method is set when only that operation is left out.
+	Method string
+	Reason string
+}
+
+func (p Problem) Error() string {
+	at := p.Path
+	if p.Method != "" {
+		at = p.Method + " " + at
+	}
+	if p.Version != "" {
+		at = p.Version + " " + at
+	}
+	return at + ": " + p.Reason
+}
+
+// Validate reports every problem in every version of a manifest.
+func Validate(manifest *app.ManifestData, opts Options) error {
+	if manifest == nil {
+		return nil
+	}
+	var errs []error
+	for _, version := range manifest.Versions {
+		_, problems := Parse(version, opts)
+		for _, p := range problems {
+			errs = append(errs, p)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// Parse resolves the paths in a version's OpenAPI section, in path order. A
+// path that cannot be served is reported and left out, and of two paths
+// matching the same requests the first is kept.
+func Parse(version app.ManifestVersion, opts Options) ([]Route, []Problem) {
+	reserved := map[string]bool{}
+	for _, name := range opts.ReservedResources {
+		reserved[strings.ToLower(name)] = true
+	}
+	kinds := map[string]*app.ManifestVersionKind{}
+	for i := range version.Kinds {
+		if plural := strings.ToLower(version.Kinds[i].Plural); plural != "" {
+			kinds[plural] = &version.Kinds[i]
+		}
+	}
+
+	var problems []Problem
+	report := func(path, method, reason string) {
+		problems = append(problems, Problem{Version: version.Name, Path: path, Method: method, Reason: reason})
+	}
+
+	declared := version.OpenAPI.Paths
+	routes := make([]Route, 0, len(declared))
+	// shapes holds each accepted route's published path with its parameter
+	// names blanked, since OpenAPI does not allow two templated paths that
+	// differ only in parameter names.
+	shapes := map[string]string{}
+	probe := http.NewServeMux()
+	withoutHead := slices.ContainsFunc(opts.UnservedMethods, func(method string) bool {
+		return strings.EqualFold(method, http.MethodHead)
+	})
+	for _, full := range slices.Sorted(maps.Keys(declared)) {
+		ops := withoutMethods(declared[full], opts.UnservedMethods, func(method string) {
+			report(full, method, "the method is not served")
+		})
+		if withoutHead && ops.Get != nil {
+			report(full, http.MethodGet, "it would also answer HEAD, which is not served")
+			ops.Get = nil
+		}
+		authz := authzChecks(&ops, func(method, reason string) {
+			report(full, method, reason)
+		})
+		if len(Operations(&ops)) == 0 {
+			report(full, "", "no operation is served")
+			continue
+		}
+		route := Route{Declared: full, Path: strings.TrimPrefix(full, "/"), Operations: ops, Authz: authz}
+		if rest, ok := strings.CutPrefix(route.Path, NamespacedPrefix+"/"); ok {
+			route.Path = rest
+			route.Namespaced = true
+		}
+
+		if err := route.resolve(kinds, reserved); err != nil {
+			report(full, "", err.Error())
+			continue
+		}
+		if err := route.parsePattern(); err != nil {
+			report(full, "", err.Error())
+			continue
+		}
+		shape := pathShape(route.SpecPath)
+		if other, ok := shapes[shape]; ok {
+			report(full, "", "differs from "+other+" only in parameter names, which OpenAPI does not allow")
+			continue
+		}
+		if err := mountable(probe, route, routes); err != nil {
+			report(full, "", err.Error())
+			// The methods registered before the one that failed would otherwise
+			// stay on the probe and reject later routes that are valid.
+			probe = probeFor(routes)
+			continue
+		}
+		shapes[shape] = full
+		routes = append(routes, route)
+	}
+	return routes, problems
+}
+
+// impliedVerbs are the verbs an operation that declares no verb is checked
+// with. The verb depends only on the method, so the check a route makes is
+// known from the manifest alone, whatever URL or query string it is called
+// with.
+var impliedVerbs = map[string]string{
+	http.MethodGet: "get", http.MethodHead: "get", http.MethodPost: "create",
+	http.MethodPut: "update", http.MethodPatch: "patch", http.MethodDelete: "delete",
+}
+
+// authzVerbs are the verbs a declared check may use.
+var authzVerbs = []string{
+	// Standard verbs
+	"get", "list", "watch", "create", "update", "patch", "delete", "deletecollection",
+	// Custom admin verbs
+	"get_permissions", "set_permissions",
+}
+
+// authzChecks reads the access check each operation declares. An operation
+// whose declaration cannot be read is removed and reported, rather than served
+// without the check it asked for.
+func authzChecks(props *spec3.PathProps, drop func(method, reason string)) map[string]authlib.CheckRequest {
+	var checks map[string]authlib.CheckRequest
+	ops := Operations(props)
+	for _, method := range slices.Sorted(maps.Keys(ops)) {
+		check, declared, err := authzCheck(method, ops[method])
+		if err != nil {
+			drop(method, err.Error())
+			*props = withoutMethods(*props, []string{method}, func(string) {})
+			continue
+		}
+		if !declared {
+			continue
+		}
+		if checks == nil {
+			checks = map[string]authlib.CheckRequest{}
+		}
+		checks[method] = check
+	}
+	// A ServeMux GET pattern also matches HEAD, so with the HEAD operation gone
+	// its requests would reach the GET operation and its check instead.
+	if ops[http.MethodHead] != nil && props.Head == nil && props.Get != nil {
+		drop(http.MethodGet, "it would also answer HEAD, whose access declaration cannot be read")
+		*props = withoutMethods(*props, []string{http.MethodGet}, func(string) {})
+		delete(checks, http.MethodGet)
+	}
+	return checks
+}
+
+func authzCheck(method string, op *spec3.Operation) (authlib.CheckRequest, bool, error) {
+	resource, hasResource, err := stringExtension(op, ExtensionAuthzResource)
+	if err != nil {
+		return authlib.CheckRequest{}, false, err
+	}
+	subresource, hasSubresource, err := stringExtension(op, ExtensionAuthzSubresource)
+	if err != nil {
+		return authlib.CheckRequest{}, false, err
+	}
+	verb, hasVerb, err := stringExtension(op, ExtensionAuthzVerb)
+	if err != nil {
+		return authlib.CheckRequest{}, false, err
+	}
+	if !hasResource {
+		if hasSubresource || hasVerb {
+			return authlib.CheckRequest{}, false, fmt.Errorf("an authz subresource or verb needs %s", ExtensionAuthzResource)
+		}
+		return authlib.CheckRequest{}, false, nil
+	}
+	if !hasVerb {
+		if verb = impliedVerbs[method]; verb == "" {
+			return authlib.CheckRequest{}, false, fmt.Errorf("%s implies no verb, so %s must be set", method, ExtensionAuthzVerb)
+		}
+	}
+	if !slices.Contains(authzVerbs, verb) {
+		return authlib.CheckRequest{}, false, fmt.Errorf("%s must be one of %s, not %q",
+			ExtensionAuthzVerb, strings.Join(authzVerbs, ", "), verb)
+	}
+	return authlib.CheckRequest{Verb: verb, Resource: resource, Subresource: subresource}, true, nil
+}
+
+// stringExtension returns an extension that must be a non-empty string when set.
+func stringExtension(op *spec3.Operation, name string) (string, bool, error) {
+	value, ok := op.Extensions[name]
+	if !ok {
+		return "", false, nil
+	}
+	s, ok := value.(string)
+	if !ok || s == "" {
+		return "", false, fmt.Errorf("%s must be a non-empty string", name)
+	}
+	return s, true, nil
+}
+
+// pathShape blanks the parameter names in a published path.
+func pathShape(specPath string) string {
+	segments := strings.Split(specPath, "/")
+	for i, segment := range segments {
+		if _, ok := parameterName(segment); ok {
+			segments[i] = "{}"
+		}
+	}
+	return strings.Join(segments, "/")
+}
+
+// probeFor registers the accepted routes on a new probe.
+func probeFor(routes []Route) *http.ServeMux {
+	probe := http.NewServeMux()
+	for _, route := range routes {
+		for method := range Operations(&route.Operations) {
+			_ = handle(probe, method+" /"+route.Pattern)
+		}
+	}
+	return probe
+}
+
+// resolve decides what the route mounts under, returning why it cannot be
+// served if it would shadow something the server serves.
+func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[string]bool) error {
+	root, below, _ := strings.Cut(r.Path, "/")
+	// ServeMux unescapes literal segments before matching. Use the same
+	// interpretation for reservations so escaped aliases cannot shadow them.
+	literalRoot, err := url.PathUnescape(root)
+	if err != nil {
+		return fmt.Errorf("invalid resource path: %w", err)
+	}
+	if kind := kinds[literalRoot]; kind != nil {
+		sub, ok := strings.CutPrefix(below, "{"+NameParameter+"}/")
+		first, _, _ := strings.Cut(sub, "/")
+		literalFirst, err := url.PathUnescape(first)
+		if err != nil {
+			return fmt.Errorf("invalid subresource path: %w", err)
+		}
+		switch {
+		case !ok:
+			return errors.New("shadows the " + root + " resource; a kind route must be below " + root + "/{" + NameParameter + "}/")
+		case r.Namespaced == (kind.Scope == clusterScope):
+			if r.Namespaced {
+				return errors.New(kind.Kind + " is cluster scoped, so its routes cannot be under " + NamespacedPrefix)
+			}
+			return errors.New(kind.Kind + " is namespaced, so its routes must be under " + NamespacedPrefix)
+		case first == "":
+			return errors.New("a kind route needs a subresource below " + root + "/{" + NameParameter + "}/")
+		case isParameter(first):
+			// A parameter would also match status, which every kind serves.
+			return errors.New("a kind route's subresource must start with a literal segment, not " + first)
+		case reservedSubresources[literalFirst]:
+			return errors.New("shadows the " + literalFirst + " subresource every kind has")
+		}
+		r.Kind = kind
+		r.Subresource = sub
+		return nil
+	}
+	switch {
+	case root == "":
+		return errors.New("shadows the version root")
+	case isParameter(root):
+		// A parameter would also match the kinds' own paths, and the reserved
+		// resources'.
+		return errors.New("a route must start with a literal segment, not " + root)
+	case reserved[literalRoot]:
+		return errors.New("shadows the " + root + " resource")
+	case !r.Namespaced && literalRoot == "namespaces":
+		return errors.New("only a route under " + NamespacedPrefix + "/ may start with namespaces")
+	}
+	return nil
+}
+
+// parsePattern sets the ServeMux pattern and published path, returning why the
+// path cannot be matched. A final parameter named path matches the rest of
+// the path, including slashes, with or without a trailing slash.
+//
+// ServeMux only accepts wildcard names that are Go identifiers, and each name
+// once, which OpenAPI does not require ({flag-key} is a valid parameter). Only
+// the namespace and the parent's name are read back from a match, and the
+// handler gets the raw URL, so every other wildcard is renamed by position.
+func (r *Route) parsePattern() error {
+	versionPath := r.VersionPath()
+	segments := strings.Split(versionPath, "/")
+	trailingParameter := len(segments) > 1 && segments[len(segments)-1] == "" && isParameter(segments[len(segments)-2])
+	if trailingParameter {
+		segments = segments[:len(segments)-1]
+	}
+	last := len(segments) - 1
+	matchesRest := false
+
+	pattern := make([]string, len(segments))
+	published := make([]string, len(segments))
+	for i, segment := range segments {
+		pattern[i], published[i] = segment, segment
+		if segment == "." || segment == ".." || (segment == "" && i != last) {
+			return errors.New("is not a clean path")
+		}
+		name, isParam := parameterName(segment)
+		if !isParam {
+			if strings.ContainsAny(segment, "{}") {
+				return errors.New("a parameter must be a whole path segment: " + segment)
+			}
+			continue
+		}
+		catchAll, isCatchAll := strings.CutSuffix(name, ":*")
+		if !isCatchAll {
+			catchAll, isCatchAll = strings.CutSuffix(name, "...")
+		}
+		if !isCatchAll && name == "path" && i == last {
+			catchAll, isCatchAll = name, true
+		}
+		switch {
+		case name == "" || (isCatchAll && catchAll == ""):
+			return errors.New("a parameter must have a non-empty name: " + segment)
+		case strings.ContainsAny(name, "{}"):
+			return errors.New("a parameter must be a whole path segment: " + segment)
+		case !isCatchAll && strings.Contains(name, ":"):
+			return errors.New("a parameter cannot constrain its value: " + segment)
+		case isCatchAll && i != last:
+			return errors.New("only the last segment can match the rest of the path: " + segment)
+		case isCatchAll:
+			matchesRest = true
+			pattern[i] = fmt.Sprintf("{p%d...}", i)
+			published[i] = "{" + catchAll + "}"
+		case name == NamespaceParameter || name == NameParameter:
+		default:
+			pattern[i] = fmt.Sprintf("{p%d}", i)
+		}
+	}
+
+	r.Pattern = strings.Join(pattern, "/")
+	if trailingParameter && !matchesRest {
+		r.Pattern += "/"
+	}
+	if strings.HasSuffix(r.Pattern, "/") {
+		r.Pattern += "{$}" // otherwise the pattern matches the whole subtree
+	}
+	r.SpecPath = strings.Join(published, "/")
+	if trailingParameter {
+		r.SpecPath += "/"
+	}
+	return nil
+}
+
+func isParameter(segment string) bool {
+	_, ok := parameterName(segment)
+	return ok
+}
+
+func parameterName(segment string) (string, bool) {
+	if len(segment) < 2 || segment[0] != '{' || segment[len(segment)-1] != '}' {
+		return "", false
+	}
+	return segment[1 : len(segment)-1], true
+}
+
+// mountable registers the route on probe, returning why ServeMux refuses it.
+// A conflict is reported against the earlier path it conflicts with.
+func mountable(probe *http.ServeMux, route Route, earlier []Route) error {
+	for _, method := range slices.Sorted(maps.Keys(Operations(&route.Operations))) {
+		err := handle(probe, method+" /"+route.Pattern)
+		if err == nil {
+			continue
+		}
+		for _, other := range earlier {
+			if handle(probeFor([]Route{other}), method+" /"+route.Pattern) != nil {
+				return errors.New("matches the same " + method + " requests as " + other.Declared)
+			}
+		}
+		return fmt.Errorf("cannot be matched: %w", err)
+	}
+	return nil
+}
+
+func handle(mux *http.ServeMux, pattern string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+	mux.Handle(pattern, http.NotFoundHandler())
+	return nil
+}
+
+// Operations returns the declared operations of a path by method.
+func Operations(props *spec3.PathProps) map[string]*spec3.Operation {
+	ops := map[string]*spec3.Operation{}
+	for method, op := range map[string]*spec3.Operation{
+		http.MethodGet: props.Get, http.MethodHead: props.Head, http.MethodPost: props.Post,
+		http.MethodPut: props.Put, http.MethodPatch: props.Patch, http.MethodDelete: props.Delete,
+		http.MethodOptions: props.Options, http.MethodTrace: props.Trace,
+	} {
+		if op != nil {
+			ops[method] = op
+		}
+	}
+	return ops
+}
+
+// withoutMethods returns a copy of props without the operations for methods,
+// so the loaded manifest is untouched.
+func withoutMethods(props spec3.PathProps, methods []string, removed func(method string)) spec3.PathProps {
+	for _, method := range methods {
+		var op **spec3.Operation
+		switch strings.ToUpper(method) {
+		case http.MethodGet:
+			op = &props.Get
+		case http.MethodHead:
+			op = &props.Head
+		case http.MethodPost:
+			op = &props.Post
+		case http.MethodPut:
+			op = &props.Put
+		case http.MethodPatch:
+			op = &props.Patch
+		case http.MethodDelete:
+			op = &props.Delete
+		case http.MethodOptions:
+			op = &props.Options
+		case http.MethodTrace:
+			op = &props.Trace
+		default:
+			continue
+		}
+		if *op != nil {
+			removed(strings.ToUpper(method))
+			*op = nil
+		}
+	}
+	return props
+}
