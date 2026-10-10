@@ -362,7 +362,7 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		assert.Equal(t, fmt.Errorf("new cannot be nil"), err)
 	})
 
-	t.Run("same generation", func(t *testing.T) {
+	t.Run("same generation status update", func(t *testing.T) {
 		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
 			assert.Fail(t, "update should not be called")
 			return nil
@@ -375,8 +375,137 @@ func TestOpinionatedWatcher_Update(t *testing.T) {
 		new := schema.ZeroValue()
 		old.SetGeneration(1)
 		new.SetGeneration(1)
+		old.SetResourceVersion("1")
+		new.SetResourceVersion("2")
+		old.SetFinalizers([]string{o.finalizer})
+		new.SetFinalizers([]string{o.finalizer})
+		o.SyncFunc = func(ctx context.Context, object resource.Object) error {
+			assert.Fail(t, "sync should not be called for a status update")
+			return nil
+		}
 		err := o.Update(context.TODO(), old, new)
 		assert.Nil(t, err)
+	})
+
+	t.Run("same generation deletion", func(t *testing.T) {
+		old := schema.ZeroValue()
+		old.SetGeneration(1)
+		old.SetResourceVersion("1")
+		old.SetFinalizers([]string{o.finalizer})
+
+		new := schema.ZeroValue()
+		new.SetGeneration(1)
+		new.SetResourceVersion("2")
+		new.SetFinalizers([]string{o.finalizer})
+		deletionTimestamp := metav1.Now()
+		new.SetDeletionTimestamp(&deletionTimestamp)
+
+		deleteCalls := 0
+		o.DeleteFunc = func(ctx context.Context, object resource.Object) error {
+			deleteCalls++
+			assert.Equal(t, new, object)
+			return nil
+		}
+		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
+			assert.Fail(t, "update should not be called")
+			return nil
+		}
+		o.SyncFunc = func(ctx context.Context, object resource.Object) error {
+			assert.Fail(t, "sync should not be called")
+			return nil
+		}
+		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+			assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
+			return nil
+		}
+
+		err := o.Update(context.TODO(), old, new)
+		require.NoError(t, err)
+		assert.Equal(t, 1, deleteCalls)
+	})
+
+	t.Run("cache resync", func(t *testing.T) {
+		old := schema.ZeroValue()
+		old.SetGeneration(1)
+		old.SetResourceVersion("7")
+		old.SetFinalizers([]string{o.finalizer})
+		new := schema.ZeroValue()
+		new.SetGeneration(1)
+		new.SetResourceVersion("7")
+		new.SetFinalizers([]string{o.finalizer})
+
+		syncCalls := 0
+		o.SyncFunc = func(ctx context.Context, object resource.Object) error {
+			syncCalls++
+			assert.Equal(t, new, object)
+			return nil
+		}
+		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
+			assert.Fail(t, "update should not be called")
+			return nil
+		}
+		o.DeleteFunc = func(ctx context.Context, object resource.Object) error {
+			assert.Fail(t, "delete should not be called")
+			return nil
+		}
+		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+			assert.Fail(t, "patch should not be called")
+			return nil
+		}
+
+		err := o.Update(context.TODO(), old, new)
+		require.NoError(t, err)
+		assert.Equal(t, 1, syncCalls)
+	})
+
+	t.Run("same generation missing finalizer", func(t *testing.T) {
+		old := schema.ZeroValue()
+		old.SetGeneration(1)
+		old.SetResourceVersion("1")
+		new := schema.ZeroValue()
+		new.SetGeneration(1)
+		new.SetResourceVersion("2")
+
+		addCalls := 0
+		o.AddFunc = func(ctx context.Context, object resource.Object) error {
+			addCalls++
+			assert.Equal(t, new, object)
+			assert.Contains(t, object.GetFinalizers(), o.addPendingFinalizer)
+			return nil
+		}
+		o.UpdateFunc = func(ctx context.Context, old resource.Object, new resource.Object) error {
+			assert.Fail(t, "update should not be called")
+			return nil
+		}
+		o.DeleteFunc = func(ctx context.Context, object resource.Object) error {
+			assert.Fail(t, "delete should not be called")
+			return nil
+		}
+		o.SyncFunc = func(ctx context.Context, object resource.Object) error {
+			assert.Fail(t, "sync should not be called")
+			return nil
+		}
+		patchCalls := 0
+		client.PatchIntoFunc = func(ctx context.Context, identifier resource.Identifier, request resource.PatchRequest, options resource.PatchOptions, object resource.Object) error {
+			patchCalls++
+			switch patchCalls {
+			case 1:
+				assert.Equal(t, resource.PatchOpAdd, request.Operations[0].Operation)
+				object.SetFinalizers([]string{o.addPendingFinalizer})
+			case 2:
+				assert.Equal(t, resource.PatchOpReplace, request.Operations[0].Operation)
+				assert.Equal(t, o.finalizer, request.Operations[0].Value)
+				object.SetFinalizers([]string{o.finalizer})
+			default:
+				assert.Fail(t, "unexpected patch")
+			}
+			return nil
+		}
+
+		err := o.Update(context.TODO(), old, new)
+		require.NoError(t, err)
+		assert.Equal(t, 1, addCalls)
+		assert.Equal(t, 2, patchCalls)
 	})
 
 	t.Run("delete, not waiting on us", func(t *testing.T) {
@@ -534,6 +663,86 @@ func TestOpinionatedWatcher_Delete(t *testing.T) {
 		return nil
 	}
 	assert.Nil(t, o.Delete(context.TODO(), schema.ZeroValue()))
+}
+
+func TestOpinionatedWatcher_DeletionRetries(t *testing.T) {
+	for _, event := range []string{"startup", "same generation update"} {
+		for _, owned := range []string{"normal", "pending", "both"} {
+			t.Run(event+"/"+owned, func(t *testing.T) {
+				schema := resource.NewSimpleSchema("group", "version", &resource.TypedSpecObject[string]{}, &resource.TypedList[*resource.TypedSpecObject[string]]{})
+				client := &mockPatchClient{}
+				watcher, err := NewOpinionatedWatcher(schema, client, OpinionatedWatcherConfig{})
+				require.NoError(t, err)
+				obj := schema.ZeroValue()
+				obj.SetGeneration(1)
+				obj.SetResourceVersion("2")
+				now := metav1.Now()
+				obj.SetDeletionTimestamp(&now)
+				finalizers := []string{"other.example/cleanup", "finished.example/cleanup"}
+				if owned != "pending" {
+					finalizers = append(finalizers, watcher.finalizer)
+				}
+				if owned != "normal" {
+					finalizers = append(finalizers, watcher.addPendingFinalizer)
+				}
+				obj.SetFinalizers(finalizers)
+				old := schema.ZeroValue()
+				old.SetGeneration(1)
+				old.SetResourceVersion("1")
+				handle := func() error {
+					if event == "startup" {
+						return watcher.Add(t.Context(), obj)
+					}
+					return watcher.Update(t.Context(), old, obj)
+				}
+
+				deleteErr := fmt.Errorf("downstream unavailable")
+				patchErr := fmt.Errorf("apiserver unavailable")
+				deleteCalls, patchCalls := 0, 0
+				watcher.DeleteFunc = func(context.Context, resource.Object) error {
+					deleteCalls++
+					if deleteCalls == 1 {
+						return deleteErr
+					}
+					return nil
+				}
+				client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, _ resource.PatchRequest, _ resource.PatchOptions, _ resource.Object) error {
+					patchCalls++
+					return patchErr
+				}
+
+				require.ErrorIs(t, handle(), deleteErr)
+				require.Zero(t, patchCalls)
+				require.Equal(t, finalizers, obj.GetFinalizers())
+				require.ErrorIs(t, handle(), patchErr)
+				require.Equal(t, finalizers, obj.GetFinalizers())
+
+				// A concurrent owner finishes cleanup before our patch.
+				conflicted := false
+				client.PatchIntoFunc = func(_ context.Context, _ resource.Identifier, req resource.PatchRequest, _ resource.PatchOptions, into resource.Object) error {
+					if !conflicted {
+						conflicted = true
+						return &apierrors.StatusError{ErrStatus: metav1.Status{Code: http.StatusConflict}}
+					}
+					require.Equal(t, "3", req.Operations[1].Value)
+					into.SetFinalizers(req.Operations[0].Value.([]string))
+					return nil
+				}
+				client.GetIntoFunc = func(_ context.Context, _ resource.Identifier, into resource.Object) error {
+					current := append([]string(nil), finalizers[:1]...)
+					into.SetFinalizers(append(current, finalizers[2:]...))
+					into.SetResourceVersion("3")
+					return nil
+				}
+				require.NoError(t, handle())
+				require.True(t, conflicted)
+				require.Equal(t, []string{"other.example/cleanup"}, obj.GetFinalizers())
+				require.Equal(t, 3, deleteCalls)
+				require.NoError(t, handle())
+				require.Equal(t, 3, deleteCalls, "a completed finalizer must not repeat cleanup")
+			})
+		}
+	}
 }
 
 type mockPatchClient struct {
