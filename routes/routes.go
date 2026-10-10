@@ -66,10 +66,6 @@ type Route struct {
 	Kind        *app.ManifestVersionKind
 	Subresource string
 
-	// CatchAll names the final parameter when it matches the rest of the path.
-	// A final parameter named path declares a catch-all, with or without a trailing slash.
-	CatchAll string
-
 	// Pattern is the net/http ServeMux pattern matching the route, relative to
 	// the version, without a method.
 	Pattern string
@@ -372,6 +368,7 @@ func (r *Route) parsePattern() error {
 		segments = segments[:len(segments)-1]
 	}
 	last := len(segments) - 1
+	matchesRest := false
 
 	pattern := make([]string, len(segments))
 	published := make([]string, len(segments))
@@ -404,7 +401,7 @@ func (r *Route) parsePattern() error {
 		case isCatchAll && i != last:
 			return errors.New("only the last segment can match the rest of the path: " + segment)
 		case isCatchAll:
-			r.CatchAll = catchAll
+			matchesRest = true
 			pattern[i] = fmt.Sprintf("{p%d...}", i)
 			published[i] = "{" + catchAll + "}"
 		case name == NamespaceParameter || name == NameParameter:
@@ -414,7 +411,7 @@ func (r *Route) parsePattern() error {
 	}
 
 	r.Pattern = strings.Join(pattern, "/")
-	if trailingParameter && r.CatchAll == "" {
+	if trailingParameter && !matchesRest {
 		r.Pattern += "/"
 	}
 	if strings.HasSuffix(r.Pattern, "/") {

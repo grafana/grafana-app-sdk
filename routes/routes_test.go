@@ -163,7 +163,6 @@ func TestParseCatchAll(t *testing.T) {
 			require.Empty(t, problems)
 			require.Len(t, accepted, 1)
 			route := accepted[0]
-			require.Equal(t, "path", route.CatchAll)
 			require.Regexp(t, `/\{p[0-9]+\.\.\.\}$`, route.Pattern)
 			published := strings.ReplaceAll(strings.ReplaceAll(declared, ":*", ""), "...", "")
 			require.Equal(t, strings.TrimPrefix(published, "/"), route.SpecPath)
@@ -200,7 +199,7 @@ func TestParseTrailingSlash(t *testing.T) {
 	require.Equal(t, "literal/{$}", got["/literal/"].Pattern)
 	require.Equal(t, "middle/{p1}/more/{$}", got["/middle/{path}/more/"].Pattern)
 	for _, route := range accepted {
-		require.Empty(t, route.CatchAll)
+		require.NotContains(t, route.Pattern, "...")
 	}
 }
 
