@@ -1,0 +1,24 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+/**
+ * Key identifies a foobar entry.
+ * It is referenced by a custom route, so its multi-line
+ * description exercises the route schema codegen path.
+ */
+export interface Key {
+	name: string;
+	match?: string;
+}
+
+export const defaultKey = (): Key => ({
+	name: "",
+});
+
+export interface CreateFoobarRequestBody {
+	keys: Key[];
+}
+
+export const defaultCreateFoobarRequestBody = (): CreateFoobarRequestBody => ({
+	keys: [],
+});
+

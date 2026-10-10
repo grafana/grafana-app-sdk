@@ -1,0 +1,13 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+export interface CreateReconcileRequestResponse {
+	status: "success" | "failure";
+	// A comment containing "quotes" should not break anything
+	message: string;
+}
+
+export const defaultCreateReconcileRequestResponse = (): CreateReconcileRequestResponse => ({
+	status: "success",
+	message: "",
+});
+

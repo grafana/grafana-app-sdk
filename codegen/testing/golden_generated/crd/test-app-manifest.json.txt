@@ -1,0 +1,777 @@
+{
+    "apiVersion": "apps.grafana.app/v1alpha1",
+    "kind": "AppManifest",
+    "metadata": {
+        "name": "test-app"
+    },
+    "spec": {
+        "appName": "test-app",
+        "appDisplayName": "test-app",
+        "group": "testapp.ext.grafana.app",
+        "versions": [
+            {
+                "name": "v1",
+                "served": true,
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "stringField": {
+                                        "pattern": "^[a-zA-Z_][a-zA-Z0-9_-]*$",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "stringField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "selectableFields": [
+                            ".spec.stringField"
+                        ],
+                        "conversion": true
+                    },
+                    {
+                        "kind": "TestKind2",
+                        "plural": "TestKind2s",
+                        "scope": "Namespaced",
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "testField": {
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "testField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "conversion": false
+                    }
+                ]
+            },
+            {
+                "name": "v2",
+                "served": true,
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            },
+                            "mutation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "intField": {
+                                        "type": "integer"
+                                    },
+                                    "stringField": {
+                                        "type": "string"
+                                    },
+                                    "timeField": {
+                                        "format": "date-time",
+                                        "type": "string"
+                                    },
+                                    "unionNull": {
+                                        "allOf": [
+                                            {
+                                                "required": [
+                                                    "str",
+                                                    "i"
+                                                ]
+                                            }
+                                        ],
+                                        "description": "This generates a normal go pointer field, but needs to be handled correctly as a selectable field, as the schema logic registers it as a disjunction",
+                                        "nullable": true,
+                                        "properties": {
+                                            "i": {
+                                                "type": "integer"
+                                            },
+                                            "str": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": "object"
+                                    },
+                                    "unionNull2": {
+                                        "description": "null variant should be ignore in disjunction when generating the selectable field",
+                                        "oneOf": [
+                                            {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "b"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "required": [
+                                                    "str",
+                                                    "i"
+                                                ]
+                                            },
+                                            {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "i"
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "required": [
+                                                    "str",
+                                                    "b"
+                                                ]
+                                            },
+                                            {
+                                                "not": {
+                                                    "anyOf": [
+                                                        {
+                                                            "required": [
+                                                                "str"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "required": [
+                                                                "i"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "required": [
+                                                                "str"
+                                                            ]
+                                                        },
+                                                        {
+                                                            "required": [
+                                                                "b"
+                                                            ]
+                                                        }
+                                                    ]
+                                                }
+                                            }
+                                        ],
+                                        "properties": {
+                                            "b": {
+                                                "type": "boolean"
+                                            },
+                                            "i": {
+                                                "type": "integer"
+                                            },
+                                            "str": {
+                                                "type": "string"
+                                            }
+                                        },
+                                        "type": [
+                                            "object",
+                                            "null"
+                                        ]
+                                    }
+                                },
+                                "required": [
+                                    "stringField",
+                                    "intField",
+                                    "timeField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "selectableFields": [
+                            ".spec.stringField",
+                            ".spec.intField",
+                            ".spec.unionNull.str",
+                            ".spec.unionNull2.str"
+                        ],
+                        "conversion": true
+                    }
+                ]
+            },
+            {
+                "name": "v3",
+                "served": true,
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            },
+                            "mutation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "boolField": {
+                                        "type": "boolean"
+                                    },
+                                    "intField": {
+                                        "type": "integer"
+                                    },
+                                    "stringField": {
+                                        "type": "string"
+                                    },
+                                    "timeField": {
+                                        "format": "date-time",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "stringField",
+                                    "intField",
+                                    "timeField",
+                                    "boolField"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "selectableFields": [
+                            ".spec.stringField",
+                            ".spec.intField",
+                            ".spec.boolField"
+                        ],
+                        "conversion": true,
+                        "routes": {
+                            "/reconcile": {
+                                "post": {
+                                    "operationId": "createReconcileRequest",
+                                    "requestBody": {
+                                        "content": {
+                                            "application/json": {
+                                                "schema": {
+                                                    "type": "object",
+                                                    "required": [
+                                                        "force"
+                                                    ],
+                                                    "properties": {
+                                                        "force": {
+                                                            "type": "boolean",
+                                                            "default": false
+                                                        },
+                                                        "reason": {
+                                                            "type": "string"
+                                                        }
+                                                    },
+                                                    "additionalProperties": false
+                                                }
+                                            }
+                                        },
+                                        "required": true
+                                    },
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "status",
+                                                            "message"
+                                                        ],
+                                                        "properties": {
+                                                            "message": {
+                                                                "description": "A comment containing \"quotes\" should not break anything",
+                                                                "type": "string"
+                                                            },
+                                                            "status": {
+                                                                "type": "string",
+                                                                "enum": [
+                                                                    "success",
+                                                                    "failure"
+                                                                ]
+                                                            }
+                                                        },
+                                                        "additionalProperties": false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "x-grafana-declared-authz-resource": "testkinds",
+                                    "x-grafana-declared-authz-subresource": "reconcile",
+                                    "x-grafana-declared-authz-verb": "create"
+                                }
+                            },
+                            "/search": {
+                                "get": {
+                                    "operationId": "getTestKindSearchResult",
+                                    "parameters": [
+                                        {
+                                            "name": "limit",
+                                            "in": "query",
+                                            "schema": {
+                                                "type": "integer",
+                                                "default": 10
+                                            }
+                                        },
+                                        {
+                                            "name": "offset",
+                                            "in": "query",
+                                            "schema": {
+                                                "type": "integer",
+                                                "default": 0
+                                            }
+                                        },
+                                        {
+                                            "name": "q",
+                                            "in": "query",
+                                            "required": true,
+                                            "schema": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    ],
+                                    "responses": {
+                                        "default": {
+                                            "description": "Default OK response",
+                                            "content": {
+                                                "application/json": {
+                                                    "schema": {
+                                                        "type": "object",
+                                                        "required": [
+                                                            "items",
+                                                            "total",
+                                                            "apiVersion",
+                                                            "kind"
+                                                        ],
+                                                        "properties": {
+                                                            "apiVersion": {
+                                                                "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+                                                                "type": "string"
+                                                            },
+                                                            "items": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "type": "object",
+                                                                    "required": [
+                                                                        "name",
+                                                                        "score",
+                                                                        "list"
+                                                                    ],
+                                                                    "properties": {
+                                                                        "list": {
+                                                                            "type": "array",
+                                                                            "items": {
+                                                                                "type": "object",
+                                                                                "required": [
+                                                                                    "foo"
+                                                                                ],
+                                                                                "properties": {
+                                                                                    "foo": {
+                                                                                        "type": "string"
+                                                                                    }
+                                                                                },
+                                                                                "additionalProperties": false
+                                                                            }
+                                                                        },
+                                                                        "name": {
+                                                                            "type": "string"
+                                                                        },
+                                                                        "score": {
+                                                                            "type": "number"
+                                                                        }
+                                                                    },
+                                                                    "additionalProperties": false
+                                                                }
+                                                            },
+                                                            "kind": {
+                                                                "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+                                                                "type": "string"
+                                                            },
+                                                            "total": {
+                                                                "type": "integer"
+                                                            }
+                                                        },
+                                                        "additionalProperties": false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "x-grafana-declared-authz-resource": "testkinds",
+                                    "x-grafana-test": true,
+                                    "x-grafana-test-value": {
+                                        "val": "1"
+                                    }
+                                }
+                            }
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "v4",
+                "served": true,
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "plural": "TestKinds",
+                        "scope": "Namespaced",
+                        "admission": {
+                            "validation": {
+                                "operations": [
+                                    "CREATE",
+                                    "UPDATE"
+                                ]
+                            }
+                        },
+                        "schema": {
+                            "spec": {
+                                "properties": {
+                                    "union": {
+                                        "oneOf": [
+                                            {
+                                                "required": [
+                                                    "kind",
+                                                    "spec"
+                                                ]
+                                            },
+                                            {
+                                                "required": [
+                                                    "kind",
+                                                    "spec"
+                                                ]
+                                            }
+                                        ],
+                                        "properties": {
+                                            "kind": {
+                                                "type": "string"
+                                            },
+                                            "spec": {
+                                                "properties": {
+                                                    "name": {
+                                                        "type": "string"
+                                                    }
+                                                },
+                                                "required": [
+                                                    "name"
+                                                ],
+                                                "type": "object"
+                                            }
+                                        },
+                                        "type": "object"
+                                    }
+                                },
+                                "required": [
+                                    "union"
+                                ],
+                                "type": "object"
+                            },
+                            "status": {
+                                "properties": {
+                                    "additionalFields": {
+                                        "description": "additionalFields is reserved for future use",
+                                        "type": "object",
+                                        "x-kubernetes-preserve-unknown-fields": true
+                                    },
+                                    "operatorStates": {
+                                        "additionalProperties": {
+                                            "properties": {
+                                                "descriptiveState": {
+                                                    "description": "descriptiveState is an optional more descriptive state field which has no requirements on format",
+                                                    "type": "string"
+                                                },
+                                                "details": {
+                                                    "description": "details contains any extra information that is operator-specific",
+                                                    "type": "object",
+                                                    "x-kubernetes-preserve-unknown-fields": true
+                                                },
+                                                "lastEvaluation": {
+                                                    "description": "lastEvaluation is the ResourceVersion last evaluated",
+                                                    "type": "string"
+                                                },
+                                                "state": {
+                                                    "description": "state describes the state of the lastEvaluation.\nIt is limited to three possible states for machine evaluation.",
+                                                    "enum": [
+                                                        "success",
+                                                        "in_progress",
+                                                        "failed"
+                                                    ],
+                                                    "type": "string"
+                                                }
+                                            },
+                                            "required": [
+                                                "lastEvaluation",
+                                                "state"
+                                            ],
+                                            "type": "object"
+                                        },
+                                        "description": "operatorStates is a map of operator ID to operator state evaluations.\nAny operator which consumes this kind SHOULD add its state evaluation information to this field.",
+                                        "type": "object"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "selectableFields": [
+                            ".spec.union.spec.name"
+                        ],
+                        "conversion": true
+                    }
+                ]
+            }
+        ],
+        "preferredVersion": "v1",
+        "extraPermissions": {
+            "accessKinds": [
+                {
+                    "group": "foo.bar",
+                    "resource": "foos",
+                    "actions": [
+                        "get",
+                        "list",
+                        "watch"
+                    ]
+                }
+            ]
+        },
+        "operator": {
+            "url": "https://foo.bar:8443",
+            "webhooks": {
+                "conversionPath": "/convert",
+                "validationPath": "/validate/test-app.ext.grafana.app/v1",
+                "mutationPath": "/mutate"
+            }
+        },
+        "roles": {
+            "test-app:reader": {
+                "title": "Test App Viewer",
+                "description": "View Test App Resources",
+                "kinds": [
+                    {
+                        "kind": "TestKind",
+                        "permissionSet": "viewer"
+                    }
+                ],
+                "routes": [
+                    "createFoobar"
+                ]
+            }
+        },
+        "roleBindings": {
+            "viewer": [
+                "test-app:reader"
+            ]
+        }
+    }
+}

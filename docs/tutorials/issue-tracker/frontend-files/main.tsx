@@ -1,8 +1,13 @@
-import React, { useState, useEffect }  from 'react';
+import React from 'react';
 import { useForm } from 'react-hook-form';
 import {  Button, IconButton, Field, Input, Card, TagList } from '@grafana/ui';
-import { IssueClient } from '../api/issue_client';
-import { Issue } from '../generated/issue/v1/issue_object_gen';
+import { Issue } from '../generated/issue/v1alpha1/issue_object_gen';
+import {
+    useListIssueQuery,
+    useCreateIssueMutation,
+    useReplaceIssueMutation,
+    useDeleteIssueMutation,
+} from '../generated/issuetrackerproject/v1alpha1/api_gen';
 import { PluginPage } from '@grafana/runtime';
 
 // This is used for the create new issue form
@@ -12,42 +17,29 @@ type ReactHookFormProps = {
 };
 
 function PageOne() {
-    let issues: Issue[] = [];
-    const [issuesData, setIssuesData] = useState(issues);
-    useEffect(() => {
-        const fetchData = async () => {
-            const client = new IssueClient()
-            const issues = await client.list();
-            setIssuesData(issues.data.items);
-        }
-
-        fetchData().catch(console.error);
-    }, []);
-
-    // IssueClient to share for all our functions
-    const ic = new IssueClient();
-
-    const listIssues = async() => {
-        const issues = await ic.list();
-        setIssuesData(issues.data.items);
-    }
+    // The list refetches automatically after every mutation below, as they all invalidate the 'Issue' tag.
+    const { data } = useListIssueQuery();
+    const issuesData = data?.items ?? [];
+    const [create] = useCreateIssueMutation();
+    const [replace] = useReplaceIssueMutation();
+    const [remove] = useDeleteIssueMutation();
 
     const createIssue = async (title: string, description: string) => {
-        await ic.create(title, description);
-        await listIssues();
+        await create({
+            issue: {
+                metadata: { name: 'issue-' + Math.random().toString(36).slice(2, 12) },
+                spec: { title, description, status: 'open' },
+            } as Issue,
+        });
     };
 
-    const deleteIssue = async (id: string) => {
-        await ic.delete(id);
-        await listIssues();
+    const deleteIssue = async (name: string) => {
+        await remove({ name });
     };
 
     const updateStatus = async (issue: Issue, newStatus: string) => {
-        issue.spec.status = newStatus;
-        await ic.update(issue.metadata.name, issue);
-        await listIssues();
+        await replace({ name: issue.metadata.name, issue: { ...issue, spec: { ...issue.spec, status: newStatus } } });
     }
-
 
     // Form handling
     const { handleSubmit, register } = useForm<ReactHookFormProps>({
@@ -88,7 +80,7 @@ function PageOne() {
                 <h1>Issue list</h1>
                 {issuesData.length > 0 && (
                     <ul>
-                        {issuesData.map((issue: any) => (
+                        {issuesData.map((issue) => (
                             <li key={issue.metadata.name}>
                                 <Card>
                                     <Card.Heading>{issue.spec.title}</Card.Heading>

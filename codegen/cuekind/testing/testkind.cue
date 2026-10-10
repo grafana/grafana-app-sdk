@@ -56,7 +56,7 @@ testManifestV2: {
 }
 
 testManifestV3: {
-	codegen: ts: enabled: false
+	codegen: ts: enabled: true
 	kinds: [testKind & testKind.versions["v3"]]
 	routes: namespaced: {
 		"/foobar": {

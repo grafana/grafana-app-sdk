@@ -6,13 +6,31 @@ We're still going to keep our front-end pretty simple, so all we're going to do 
 
 ## API Client
 
-In the future, the `project add frontend` will auto-generate this boilerplate client, but for now, we have to write it ourselves. 
-For this tutorial, we have one pre-written, that we'll discuss a few parts of. Either create a new file called `plugin/src/api/issue_client.ts` and [copy the contents of this file into it](frontend-files/issue-client.ts), or run the following to do it automatically:
-```bash
-mkdir -p plugin/src/api && curl -o plugin/src/api/issue_client.ts https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/issue-client.ts
+`grafana-app-sdk generate` already gave us an [RTK Query](https://redux-toolkit.js.org/rtk-query/overview) API alongside the generated types: `plugin/src/generated/issuetrackerproject/v1alpha1/api_gen.ts` (one API per app version, covering every kind and custom route in it). It has the same shape as the clients core Grafana generates for its own APIs in `@grafana/api-clients`, with a React hook per operation:
+
+```TypeScript
+const { data, isLoading } = useListIssueQuery({ labelSelector: 'team=foo' });
+const [create] = useCreateIssueMutation();   // POST
+const [replace] = useReplaceIssueMutation(); // PUT
+const [update] = useUpdateIssueMutation();   // PATCH
+const [remove] = useDeleteIssueMutation();   // DELETE
 ```
 
-The client uses grafana libraries to make fetch requests to perform relevant actions, and uses the generated `Issue` type in `generated/issue/v1/issue_object_gen.ts` that mirrors our generated go `v1alpha1.Issue` type. We have methods for `get`, `list`, `create`, `update`, and `delete`. We'll use these methods in our update to the main page of the plugin.
+Every mutation invalidates the `Issue` cache tag, so any mounted list refetches on its own. Requests go through `getBackendSrv()` from `@grafana/runtime` with the user's session, and the namespace is resolved from the current Grafana instance (`config.namespace`), so the same code works locally and on Grafana Cloud.
+
+RTK Query needs a redux store. Add `@reduxjs/toolkit` and `react-redux` to `plugin/package.json`, create `plugin/src/store.ts` from [this file](frontend-files/store.ts):
+```bash
+curl -o plugin/src/store.ts https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/frontend-files/store.ts
+```
+and wrap the app in a provider in `plugin/src/components/App/App.tsx`:
+```TypeScript
+import { Provider } from 'react-redux';
+import { store } from '../../store';
+// ...
+<Provider store={store}>
+    {/* existing routes */}
+</Provider>
+```
 
 ## Main Page
 
