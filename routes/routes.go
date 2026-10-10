@@ -178,12 +178,12 @@ func Parse(version app.ManifestVersion, opts Options) ([]Route, []Problem) {
 			route.Namespaced = true
 		}
 
-		if reason := route.resolve(kinds, reserved); reason != "" {
-			report(full, "", reason)
+		if err := route.resolve(kinds, reserved); err != nil {
+			report(full, "", err.Error())
 			continue
 		}
-		if reason := route.parsePattern(); reason != "" {
-			report(full, "", reason)
+		if err := route.parsePattern(); err != nil {
+			report(full, "", err.Error())
 			continue
 		}
 		shape := pathShape(route.SpecPath)
@@ -191,8 +191,8 @@ func Parse(version app.ManifestVersion, opts Options) ([]Route, []Problem) {
 			report(full, "", "differs from "+other+" only in parameter names, which OpenAPI does not allow")
 			continue
 		}
-		if reason := mountable(probe, route, routes); reason != "" {
-			report(full, "", reason)
+		if err := mountable(probe, route, routes); err != nil {
+			report(full, "", err.Error())
 			// The methods registered before the one that failed would otherwise
 			// stay on the probe and reject later routes that are valid.
 			probe = probeFor(routes)
@@ -320,44 +320,44 @@ func probeFor(routes []Route) *http.ServeMux {
 
 // resolve decides what the route mounts under, returning why it cannot be
 // served if it would shadow something the server serves.
-func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[string]bool) string {
+func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[string]bool) error {
 	root, below, _ := strings.Cut(r.Path, "/")
 	if kind := kinds[root]; kind != nil {
 		sub, ok := strings.CutPrefix(below, "{"+NameParameter+"}/")
 		first, _, _ := strings.Cut(sub, "/")
 		switch {
 		case !ok:
-			return "shadows the " + root + " resource; a kind route must be below " + root + "/{" + NameParameter + "}/"
+			return errors.New("shadows the " + root + " resource; a kind route must be below " + root + "/{" + NameParameter + "}/")
 		case r.Namespaced == (kind.Scope == clusterScope):
 			if r.Namespaced {
-				return kind.Kind + " is cluster scoped, so its routes cannot be under " + NamespacedPrefix
+				return errors.New(kind.Kind + " is cluster scoped, so its routes cannot be under " + NamespacedPrefix)
 			}
-			return kind.Kind + " is namespaced, so its routes must be under " + NamespacedPrefix
+			return errors.New(kind.Kind + " is namespaced, so its routes must be under " + NamespacedPrefix)
 		case first == "":
-			return "a kind route needs a subresource below " + root + "/{" + NameParameter + "}/"
+			return errors.New("a kind route needs a subresource below " + root + "/{" + NameParameter + "}/")
 		case isParameter(first):
 			// A parameter would also match status, which every kind serves.
-			return "a kind route's subresource must start with a literal segment, not " + first
+			return errors.New("a kind route's subresource must start with a literal segment, not " + first)
 		case reservedSubresources[first]:
-			return "shadows the " + first + " subresource every kind has"
+			return errors.New("shadows the " + first + " subresource every kind has")
 		}
 		r.Kind = kind
 		r.Subresource = sub
-		return ""
+		return nil
 	}
 	switch {
 	case root == "":
-		return "shadows the version root"
+		return errors.New("shadows the version root")
 	case isParameter(root):
 		// A parameter would also match the kinds' own paths, and the reserved
 		// resources'.
-		return "a route must start with a literal segment, not " + root
+		return errors.New("a route must start with a literal segment, not " + root)
 	case reserved[root]:
-		return "shadows the " + root + " resource"
+		return errors.New("shadows the " + root + " resource")
 	case !r.Namespaced && root == "namespaces":
-		return "only a route under " + NamespacedPrefix + "/ may start with namespaces"
+		return errors.New("only a route under " + NamespacedPrefix + "/ may start with namespaces")
 	}
-	return ""
+	return nil
 }
 
 // parsePattern sets the ServeMux pattern and published path, returning why the
@@ -367,14 +367,14 @@ func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[
 // once, which OpenAPI does not require ({flag-key} is a valid parameter). Only
 // the namespace and the parent's name are read back from a match, and the
 // handler gets the raw URL, so every other wildcard is renamed by position.
-func (r *Route) parsePattern() string {
+func (r *Route) parsePattern() error {
 	versionPath := r.VersionPath()
 	segments := strings.Split(versionPath, "/")
 	last := len(segments) - 1
 
 	extension, err := catchAllExtension(&r.Operations)
 	if err != nil {
-		return err.Error()
+		return err
 	}
 
 	pattern := make([]string, len(segments))
@@ -382,12 +382,12 @@ func (r *Route) parsePattern() string {
 	for i, segment := range segments {
 		pattern[i], published[i] = segment, segment
 		if segment == "." || segment == ".." || (segment == "" && i != last) {
-			return "is not a clean path"
+			return errors.New("is not a clean path")
 		}
 		name, isParam := parameterName(segment)
 		if !isParam {
 			if strings.ContainsAny(segment, "{}") {
-				return "a parameter must be a whole path segment: " + segment
+				return errors.New("a parameter must be a whole path segment: " + segment)
 			}
 			continue
 		}
@@ -400,13 +400,13 @@ func (r *Route) parsePattern() string {
 		}
 		switch {
 		case name == "" || (isCatchAll && catchAll == ""):
-			return "a parameter must have a non-empty name: " + segment
+			return errors.New("a parameter must have a non-empty name: " + segment)
 		case strings.ContainsAny(name, "{}"):
-			return "a parameter must be a whole path segment: " + segment
+			return errors.New("a parameter must be a whole path segment: " + segment)
 		case !isCatchAll && strings.Contains(name, ":"):
-			return "a parameter cannot constrain its value: " + segment
+			return errors.New("a parameter cannot constrain its value: " + segment)
 		case isCatchAll && i != last:
-			return "only the last segment can match the rest of the path: " + segment
+			return errors.New("only the last segment can match the rest of the path: " + segment)
 		case isCatchAll:
 			r.CatchAll = catchAll
 			pattern[i] = fmt.Sprintf("{p%d...}", i)
@@ -417,7 +417,7 @@ func (r *Route) parsePattern() string {
 		}
 	}
 	if extension != "" && r.CatchAll != extension {
-		return ExtensionCatchAll + " names " + extension + ", which is not the last path segment"
+		return errors.New(ExtensionCatchAll + " names " + extension + ", which is not the last path segment")
 	}
 
 	r.Pattern = strings.Join(pattern, "/")
@@ -425,7 +425,7 @@ func (r *Route) parsePattern() string {
 		r.Pattern += "{$}" // otherwise the pattern matches the whole subtree
 	}
 	r.SpecPath = strings.Join(published, "/")
-	return ""
+	return nil
 }
 
 func isParameter(segment string) bool {
@@ -464,7 +464,7 @@ func catchAllExtension(props *spec3.PathProps) (string, error) {
 
 // mountable registers the route on probe, returning why ServeMux refuses it.
 // A conflict is reported against the earlier path it conflicts with.
-func mountable(probe *http.ServeMux, route Route, earlier []Route) string {
+func mountable(probe *http.ServeMux, route Route, earlier []Route) error {
 	for _, method := range slices.Sorted(maps.Keys(Operations(&route.Operations))) {
 		err := handle(probe, method+" /"+route.Pattern)
 		if err == nil {
@@ -472,12 +472,12 @@ func mountable(probe *http.ServeMux, route Route, earlier []Route) string {
 		}
 		for _, other := range earlier {
 			if handle(probeFor([]Route{other}), method+" /"+route.Pattern) != nil {
-				return "matches the same " + method + " requests as " + other.Declared
+				return errors.New("matches the same " + method + " requests as " + other.Declared)
 			}
 		}
-		return "cannot be matched: " + err.Error()
+		return fmt.Errorf("cannot be matched: %w", err)
 	}
-	return ""
+	return nil
 }
 
 func handle(mux *http.ServeMux, pattern string) (err error) {
