@@ -2,6 +2,8 @@ package routes
 
 import (
 	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	authlib "github.com/grafana/authlib/types"
@@ -140,7 +142,7 @@ func TestParseRenamesParameters(t *testing.T) {
 }
 
 func TestParseRejectsMalformedParameterNames(t *testing.T) {
-	for _, segment := range []string{"{}", "{:*}", "{...}", "{{id}}", "{id}{other}"} {
+	for _, segment := range []string{"{}", "{:*}", "{...}", "{{id}}", "{id}{other}", "{}/", "{:*}/", "{...}/", "{{id}}/", "{id}{other}/"} {
 		t.Run(segment, func(t *testing.T) {
 			accepted, problems := Parse(testVersion(map[string]spec3.PathProps{
 				"/files/" + segment: get(),
@@ -153,40 +155,53 @@ func TestParseRejectsMalformedParameterNames(t *testing.T) {
 }
 
 // A catch-all can be written in the go-restful form, the ServeMux form, or as
-// an ordinary parameter named by x-grafana-catch-all, which is how app-sdk
-// writes it in OpenAPI. All three publish the same path.
+// a final parameter named path, with or without a trailing slash.
 func TestParseCatchAll(t *testing.T) {
-	marked := func(name string) spec3.PathProps {
-		op := &spec3.Operation{}
-		op.AddExtension(ExtensionCatchAll, name)
-		return spec3.PathProps{Get: op}
+	for _, declared := range []string{"/files/{path}", "/files/{path:*}", "/files/{path...}", "/files/{path}/", "/files/{path:*}/", "/files/{path...}/", "/namespaces/{namespace}/things/{name}/files/{path}/"} {
+		t.Run(declared, func(t *testing.T) {
+			accepted, problems := Parse(testVersion(map[string]spec3.PathProps{declared: get()}), Options{})
+			require.Empty(t, problems)
+			require.Len(t, accepted, 1)
+			route := accepted[0]
+			require.Equal(t, "path", route.CatchAll)
+			require.Regexp(t, `/\{p[0-9]+\.\.\.\}$`, route.Pattern)
+			published := strings.ReplaceAll(strings.ReplaceAll(declared, ":*", ""), "...", "")
+			require.Equal(t, strings.TrimPrefix(published, "/"), route.SpecPath)
+			_, wildcard, _ := strings.Cut(route.Pattern[strings.LastIndex(route.Pattern, "/")+1:], "{")
+			parameter := strings.TrimSuffix(wildcard, "...}")
+			mux := http.NewServeMux()
+			mux.HandleFunc("GET /"+route.Pattern, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Captured-Path", r.PathValue(parameter))
+				w.WriteHeader(http.StatusNoContent)
+			})
+			prefix := strings.Split(declared, "/files/")[0] + "/files/"
+			prefix = strings.ReplaceAll(strings.ReplaceAll(prefix, "{namespace}", "ns"), "{name}", "thing")
+			for _, suffix := range []string{"", "a", "a/b", "a/b/"} {
+				response := httptest.NewRecorder()
+				mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, prefix+suffix, nil))
+				require.Equal(t, http.StatusNoContent, response.Code, suffix)
+				require.Equal(t, suffix, response.Header().Get("Captured-Path"))
+			}
+		})
 	}
-	routes, problems := Parse(testVersion(map[string]spec3.PathProps{
-		"/restful/{path:*}": get(),
-		"/mux/{path...}":    get(),
-		"/extension/{path}": marked("path"),
-		"/namespaces/{namespace}/things/{name}/files/{path:*}": get(),
-		"/misnamed/{path}":     marked("other"),
-		"/notlast/{path}/more": marked("path"),
-		"/empty/{path}":        marked(""),
+}
+
+func TestParseTrailingSlash(t *testing.T) {
+	accepted, problems := Parse(testVersion(map[string]spec3.PathProps{
+		"/files/{id}":          get(),
+		"/files/{id}/":         get(),
+		"/literal/":            get(),
+		"/middle/{path}/more/": get(),
 	}), Options{})
-
-	got := byDeclared(routes)
-	for _, declared := range []string{"/restful/{path:*}", "/mux/{path...}", "/extension/{path}"} {
-		route := got[declared]
-		require.Equal(t, "path", route.CatchAll, declared)
-		require.Regexp(t, `/\{p1\.\.\.\}$`, route.Pattern, declared)
-		require.Regexp(t, `/\{path\}$`, route.SpecPath, declared)
+	require.Empty(t, problems)
+	got := byDeclared(accepted)
+	require.Equal(t, "files/{p1}", got["/files/{id}"].Pattern)
+	require.Equal(t, "files/{p1}/{$}", got["/files/{id}/"].Pattern)
+	require.Equal(t, "literal/{$}", got["/literal/"].Pattern)
+	require.Equal(t, "middle/{p1}/more/{$}", got["/middle/{path}/more/"].Pattern)
+	for _, route := range accepted {
+		require.Empty(t, route.CatchAll)
 	}
-	files := got["/namespaces/{namespace}/things/{name}/files/{path:*}"]
-	require.Equal(t, "files/{path:*}", files.Subresource)
-	require.Equal(t, "namespaces/{namespace}/things/{name}/files/{path}", files.SpecPath)
-
-	require.Equal(t, map[string]string{
-		"/misnamed/{path}":     "x-grafana-catch-all names other, which is not the last path segment",
-		"/notlast/{path}/more": "only the last segment can match the rest of the path: {path}",
-		"/empty/{path}":        "x-grafana-catch-all on GET must name a path parameter",
-	}, reasons(problems))
 }
 
 // Paths that match the same requests cannot both be served, so the later one
@@ -368,22 +383,6 @@ func TestParseKindRouteNeedsASubresource(t *testing.T) {
 	}), Options{})
 	require.Equal(t, map[string]string{
 		"/namespaces/{namespace}/things/{name}/": "a kind route needs a subresource below things/{name}/",
-	}, reasons(problems))
-}
-
-// The operations of one path share it, so they must agree on which parameter
-// catches the rest of it.
-func TestParseExtensionCatchAllsMustAgree(t *testing.T) {
-	marked := func(name string) *spec3.Operation {
-		o := &spec3.Operation{}
-		o.AddExtension(ExtensionCatchAll, name)
-		return o
-	}
-	_, problems := Parse(testVersion(map[string]spec3.PathProps{
-		"/files/{path}": {Get: marked("path"), Put: marked("other")},
-	}), Options{})
-	require.Equal(t, map[string]string{
-		"/files/{path}": "operations disagree on x-grafana-catch-all: path and other",
 	}, reasons(problems))
 }
 

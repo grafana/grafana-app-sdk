@@ -17,7 +17,6 @@ import (
 	"github.com/getkin/kin-openapi/openapi2"
 	"github.com/getkin/kin-openapi/openapi2conv"
 	"github.com/getkin/kin-openapi/openapi3"
-	"github.com/grafana/grafana-app-sdk/routes"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,10 +29,9 @@ func newOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, *opena
 	for path, item := range doc.Paths.Map() {
 		for method, operation := range item.Operations() {
 			routePath := path
-			// OpenAPI exports {path:*} as {path}; this extension preserves the
-			// go-restful catch-all semantics when reconstructing the route.
-			if parameter, ok := operation.Extensions[routes.ExtensionCatchAll].(string); ok {
-				routePath = strings.TrimSuffix(path, "{"+parameter+"}") + "{" + parameter + ":*}"
+			// A final parameter named path captures the rest of the path.
+			if base := strings.TrimSuffix(path, "/"); strings.HasSuffix(base, "/{path}") {
+				routePath = strings.TrimSuffix(base, "}") + ":*}"
 			}
 			ws.Route(ws.Method(method).Path(routePath).Operation(operation.OperationID).
 				To(func(request *restful.Request, response *restful.Response) {
@@ -79,13 +77,8 @@ func newDirectOpenAPIHandler(doc *openapi3.T, callback func(*openapi3.PathItem, 
 				}
 			}
 			routePath := path
-			if value, exists := operation.Extensions[routes.ExtensionCatchAll]; exists {
-				parameter, ok := value.(string)
-				prefix, matches := strings.CutSuffix(path, "{"+parameter+"}")
-				if !ok || parameter == "" || !matches {
-					return nil, fmt.Errorf("%s %s: x-grafana-catch-all must name the final path parameter", method, path)
-				}
-				routePath = prefix + "{" + parameter + "...}"
+			if base := strings.TrimSuffix(path, "/"); strings.HasSuffix(base, "/{path}") {
+				routePath = strings.TrimSuffix(base, "}") + "...}"
 			}
 			mux.HandleFunc(method+" "+routePath, func(w http.ResponseWriter, r *http.Request) {
 				// The callback may mutate its list without affecting future requests.

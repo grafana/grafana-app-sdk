@@ -23,11 +23,6 @@ const (
 	// a kind subresource route.
 	NameParameter = "name"
 
-	// ExtensionCatchAll names the final path parameter of an operation that
-	// matches the rest of the path, including slashes. It is how a catch-all is
-	// written in OpenAPI, which has no syntax for one.
-	ExtensionCatchAll = "x-grafana-catch-all"
-
 	// ExtensionAuthzResource, ExtensionAuthzSubresource and ExtensionAuthzVerb
 	// declare, on an operation, the access check a request must pass. They are
 	// written by app-sdk codegen from a route's authz section.
@@ -72,6 +67,7 @@ type Route struct {
 	Subresource string
 
 	// CatchAll names the final parameter when it matches the rest of the path.
+	// A final parameter named path declares a catch-all, with or without a trailing slash.
 	CatchAll string
 
 	// Pattern is the net/http ServeMux pattern matching the route, relative to
@@ -361,7 +357,8 @@ func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[
 }
 
 // parsePattern sets the ServeMux pattern and published path, returning why the
-// path cannot be matched.
+// path cannot be matched. A final parameter named path matches the rest of
+// the path, including slashes, with or without a trailing slash.
 //
 // ServeMux only accepts wildcard names that are Go identifiers, and each name
 // once, which OpenAPI does not require ({flag-key} is a valid parameter). Only
@@ -370,12 +367,11 @@ func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[
 func (r *Route) parsePattern() error {
 	versionPath := r.VersionPath()
 	segments := strings.Split(versionPath, "/")
-	last := len(segments) - 1
-
-	extension, err := catchAllExtension(&r.Operations)
-	if err != nil {
-		return err
+	trailingParameter := len(segments) > 1 && segments[len(segments)-1] == "" && isParameter(segments[len(segments)-2])
+	if trailingParameter {
+		segments = segments[:len(segments)-1]
 	}
+	last := len(segments) - 1
 
 	pattern := make([]string, len(segments))
 	published := make([]string, len(segments))
@@ -395,7 +391,7 @@ func (r *Route) parsePattern() error {
 		if !isCatchAll {
 			catchAll, isCatchAll = strings.CutSuffix(name, "...")
 		}
-		if !isCatchAll && extension != "" && name == extension {
+		if !isCatchAll && name == "path" && i == last {
 			catchAll, isCatchAll = name, true
 		}
 		switch {
@@ -416,15 +412,18 @@ func (r *Route) parsePattern() error {
 			pattern[i] = fmt.Sprintf("{p%d}", i)
 		}
 	}
-	if extension != "" && r.CatchAll != extension {
-		return errors.New(ExtensionCatchAll + " names " + extension + ", which is not the last path segment")
-	}
 
 	r.Pattern = strings.Join(pattern, "/")
+	if trailingParameter && r.CatchAll == "" {
+		r.Pattern += "/"
+	}
 	if strings.HasSuffix(r.Pattern, "/") {
 		r.Pattern += "{$}" // otherwise the pattern matches the whole subtree
 	}
 	r.SpecPath = strings.Join(published, "/")
+	if trailingParameter {
+		r.SpecPath += "/"
+	}
 	return nil
 }
 
@@ -438,28 +437,6 @@ func parameterName(segment string) (string, bool) {
 		return "", false
 	}
 	return segment[1 : len(segment)-1], true
-}
-
-// catchAllExtension returns the parameter the operations name as a catch-all.
-// The operations of one path share their path, so they must agree.
-func catchAllExtension(props *spec3.PathProps) (string, error) {
-	name := ""
-	ops := Operations(props)
-	for _, method := range slices.Sorted(maps.Keys(ops)) {
-		value, ok := ops[method].Extensions[ExtensionCatchAll]
-		if !ok {
-			continue
-		}
-		s, ok := value.(string)
-		if !ok || s == "" {
-			return "", fmt.Errorf("%s on %s must name a path parameter", ExtensionCatchAll, method)
-		}
-		if name != "" && name != s {
-			return "", fmt.Errorf("operations disagree on %s: %s and %s", ExtensionCatchAll, name, s)
-		}
-		name = s
-	}
-	return name, nil
 }
 
 // mountable registers the route on probe, returning why ServeMux refuses it.

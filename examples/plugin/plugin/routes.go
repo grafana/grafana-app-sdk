@@ -7,7 +7,6 @@ import (
 	authlib "github.com/grafana/authlib/types"
 
 	"github.com/grafana/grafana-app-sdk/resource"
-	"github.com/grafana/grafana-app-sdk/routes"
 )
 
 // Dummy is a sample response type used to generate an OpenAPI schema.
@@ -45,10 +44,9 @@ func (*ManagedApp) ProvideRoutes() (*restful.WebService, error) {
 		Returns(http.StatusOK, "cluster request for foo", Dummy{}))
 
 	// The catch-all captures slashes, e.g. /foo/a/b -> PathParameter("path") == "a/b".
-	// Preserve this router-specific behavior when exporting and reloading OpenAPI.
+	// The final parameter name path preserves catch-all behavior in OpenAPI.
 	ws.Route(ws.GET("/foo/{path:*}").To(findThings).
 		Operation("getFooPath").
-		AddExtension(routes.ExtensionCatchAll, "path").
 		Param(ws.PathParameter("path", "Remaining path, including slashes").DataType("string")).
 		Doc("cluster request matching any path").
 		Param(ws.QueryParameter("input", "query").DataType("string")).
