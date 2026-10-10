@@ -1,3 +1,7 @@
+// Package routes validates manifest routes and resolves their mounting metadata,
+// ServeMux patterns, and declared authorization checks. A final parameter named
+// path matches the remaining path, with or without a trailing slash. Other
+// ordinary parameters match a single segment.
 package routes
 
 import (
@@ -5,6 +9,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 
@@ -34,6 +39,7 @@ const (
 	// under.
 	NamespacedPrefix = "namespaces/{" + NamespaceParameter + "}"
 
+	// The root cluster scope
 	clusterScope = "Cluster"
 )
 
@@ -47,7 +53,8 @@ type Options struct {
 	ReservedResources []string
 
 	// UnservedMethods are methods the server does not serve. An operation for
-	// one is reported and left out of the route.
+	// one is reported and left out of the route. Excluding HEAD also excludes
+	// GET, whose ServeMux pattern would otherwise answer HEAD requests.
 	UnservedMethods []string
 }
 
@@ -56,14 +63,17 @@ type Route struct {
 	// Declared is the path as the manifest declares it, relative to the version.
 	Declared string
 
-	// Path is relative to where the route mounts: the version, or
-	// namespaces/{namespace} when Namespaced.
-	Path       string
+	// Path is relative to where the route mounts
+	Path string
+
+	// Path is relative to /namespaces/{namespace}
 	Namespaced bool
 
 	// Kind is set for a subresource route of a single object of that kind, and
 	// Subresource is the part of the path below {name}.
-	Kind        *app.ManifestVersionKind
+	Kind *app.ManifestVersionKind
+
+	// Path under the declared kind (eg /count)
 	Subresource string
 
 	// Pattern is the net/http ServeMux pattern matching the route, relative to
@@ -153,10 +163,17 @@ func Parse(version app.ManifestVersion, opts Options) ([]Route, []Problem) {
 	// differ only in parameter names.
 	shapes := map[string]string{}
 	probe := http.NewServeMux()
+	withoutHead := slices.ContainsFunc(opts.UnservedMethods, func(method string) bool {
+		return strings.EqualFold(method, http.MethodHead)
+	})
 	for _, full := range slices.Sorted(maps.Keys(declared)) {
 		ops := withoutMethods(declared[full], opts.UnservedMethods, func(method string) {
 			report(full, method, "the method is not served")
 		})
+		if withoutHead && ops.Get != nil {
+			report(full, http.MethodGet, "it would also answer HEAD, which is not served")
+			ops.Get = nil
+		}
 		authz := authzChecks(&ops, func(method, reason string) {
 			report(full, method, reason)
 		})
@@ -314,9 +331,19 @@ func probeFor(routes []Route) *http.ServeMux {
 // served if it would shadow something the server serves.
 func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[string]bool) error {
 	root, below, _ := strings.Cut(r.Path, "/")
-	if kind := kinds[root]; kind != nil {
+	// ServeMux unescapes literal segments before matching. Use the same
+	// interpretation for reservations so escaped aliases cannot shadow them.
+	literalRoot, err := url.PathUnescape(root)
+	if err != nil {
+		return fmt.Errorf("invalid resource path: %w", err)
+	}
+	if kind := kinds[literalRoot]; kind != nil {
 		sub, ok := strings.CutPrefix(below, "{"+NameParameter+"}/")
 		first, _, _ := strings.Cut(sub, "/")
+		literalFirst, err := url.PathUnescape(first)
+		if err != nil {
+			return fmt.Errorf("invalid subresource path: %w", err)
+		}
 		switch {
 		case !ok:
 			return errors.New("shadows the " + root + " resource; a kind route must be below " + root + "/{" + NameParameter + "}/")
@@ -330,8 +357,8 @@ func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[
 		case isParameter(first):
 			// A parameter would also match status, which every kind serves.
 			return errors.New("a kind route's subresource must start with a literal segment, not " + first)
-		case reservedSubresources[first]:
-			return errors.New("shadows the " + first + " subresource every kind has")
+		case reservedSubresources[literalFirst]:
+			return errors.New("shadows the " + literalFirst + " subresource every kind has")
 		}
 		r.Kind = kind
 		r.Subresource = sub
@@ -344,9 +371,9 @@ func (r *Route) resolve(kinds map[string]*app.ManifestVersionKind, reserved map[
 		// A parameter would also match the kinds' own paths, and the reserved
 		// resources'.
 		return errors.New("a route must start with a literal segment, not " + root)
-	case reserved[root]:
+	case reserved[literalRoot]:
 		return errors.New("shadows the " + root + " resource")
-	case !r.Namespaced && root == "namespaces":
+	case !r.Namespaced && literalRoot == "namespaces":
 		return errors.New("only a route under " + NamespacedPrefix + "/ may start with namespaces")
 	}
 	return nil

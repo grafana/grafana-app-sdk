@@ -449,3 +449,61 @@ func TestParseMalformedHeadCheckDropsGet(t *testing.T) {
 		"GET /report":  "it would also answer HEAD, whose access declaration cannot be read",
 	}, reasons(problems))
 }
+
+func TestParseRejectsEscapedReservedPaths(t *testing.T) {
+	for _, path := range []string{
+		"/%61pp/config",
+		"/%74hings",
+		"/%6eodes/{name}",
+		"/%6eamespaces/{namespace}/reports",
+		"/namespaces/{namespace}/things/{name}/%73tatus",
+		"/namespaces/{namespace}/%74hings/{name}/status",
+	} {
+		t.Run(path, func(t *testing.T) {
+			accepted, problems := Parse(testVersion(map[string]spec3.PathProps{path: get()}), Options{
+				ReservedResources: []string{"app"},
+			})
+			require.Empty(t, accepted)
+			require.Len(t, problems, 1)
+		})
+	}
+}
+
+func TestParseEscapedKindRoute(t *testing.T) {
+	accepted, problems := Parse(testVersion(map[string]spec3.PathProps{
+		"/namespaces/{namespace}/%74hings/{name}/%72ebuild": get(),
+	}), Options{})
+	require.Empty(t, problems)
+	require.Len(t, accepted, 1)
+	route := accepted[0]
+	require.True(t, route.Namespaced)
+	require.Equal(t, "Thing", route.Kind.Kind)
+	require.Equal(t, "%72ebuild", route.Subresource)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /"+route.Pattern, func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "default", r.PathValue(NamespaceParameter))
+		require.Equal(t, "example", r.PathValue(NameParameter))
+		w.WriteHeader(http.StatusNoContent)
+	})
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/namespaces/default/things/example/rebuild", nil))
+	require.Equal(t, http.StatusNoContent, response.Code)
+}
+
+func TestParseUnservedHeadDoesNotFallBackToGet(t *testing.T) {
+	for _, head := range []*spec3.Operation{nil, {}} {
+		version := testVersion(map[string]spec3.PathProps{
+			"/report": {Get: &spec3.Operation{}, Head: head, Post: &spec3.Operation{}},
+		})
+		accepted, problems := Parse(version, Options{UnservedMethods: []string{"head"}})
+		require.Len(t, accepted, 1)
+		require.Nil(t, accepted[0].Operations.Get)
+		require.Nil(t, accepted[0].Operations.Head)
+		require.Contains(t, reasons(problems), "GET /report")
+		require.NotNil(t, version.OpenAPI.Paths["/report"].Get, "the manifest is not modified")
+		mux := probeFor(accepted)
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodHead, "/report", nil))
+		require.Equal(t, http.StatusMethodNotAllowed, response.Code)
+	}
+}
