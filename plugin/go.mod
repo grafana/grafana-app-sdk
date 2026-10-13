@@ -8,15 +8,15 @@ retract (
 )
 
 require (
-	github.com/emicklei/go-restful/v3 v3.13.0
+	github.com/emicklei/go-restful/v3 v3.14.0
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/grafana-app-sdk v0.60.10
 	github.com/grafana/grafana-app-sdk/logging v0.60.10
-	github.com/grafana/grafana-plugin-sdk-go v0.296.5
+	github.com/grafana/grafana-plugin-sdk-go v0.297.0
 	github.com/hashicorp/go-plugin v1.8.0
-	github.com/prometheus/client_golang v1.24.1
+	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
