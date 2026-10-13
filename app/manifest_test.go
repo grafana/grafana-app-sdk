@@ -925,6 +925,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				"spec": {
 					Type: spec.StringOrArray{"object"},
 					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
 						Schema: &spec.Schema{
 							SchemaProps: spec.SchemaProps{
 								Type: spec.StringOrArray{"object"},
@@ -952,6 +953,7 @@ func TestVersionSchema_AsKubeOpenAPI(t *testing.T) {
 				"spec": {
 					Type: spec.StringOrArray{"object"},
 					AdditionalProperties: &spec.SchemaOrBool{
+						Allows: true,
 						Schema: &spec.Schema{
 							SchemaProps: spec.SchemaProps{
 								Type: spec.StringOrArray{"object"},

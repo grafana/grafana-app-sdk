@@ -1230,6 +1230,7 @@ func oapi3SchemaToKubeSchema(sch *openapi3.SchemaRef, ref common.ReferenceCallba
 	if sch.Value.AdditionalProperties.Schema != nil {
 		s, deps := oapi3SchemaToKubeSchema(sch.Value.AdditionalProperties.Schema, ref, gvk, refReplacer)
 		resSchema.AdditionalProperties = &spec.SchemaOrBool{
+			Allows: true,
 			Schema: &s,
 		}
 		dependencies = updateDependencies(dependencies, deps)
