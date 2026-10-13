@@ -36,7 +36,7 @@ An important component of the SDK is the use of the operator pattern. Using the 
 
 Finally, there is also layering on top of the grafana backend plugin SDK, allowing you to create a REST API backend which can tie into your kinds, 
 to create a proxy to the back-end API server. This package will eventually become deprecated in favor of direct API server access from the front-end, 
-and the use of a custom API server if additional non-standard routes are needed (see [Applications with Custom APIs](./application-design/README.md#applications-with-custom-apis)).
+and the use of app custom routes if additional non-standard routes are needed (see [Applications with Custom APIs](./application-design/README.md#applications-with-custom-apis)).
 
 ## Documentation Improvements
 

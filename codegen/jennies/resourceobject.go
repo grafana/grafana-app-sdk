@@ -61,7 +61,7 @@ type ResourceObjectGenerator struct {
 	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
 	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
 	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
-	// apiservers if using the default apiserver.AppInstaller.
+	// apiservers which build OpenAPI definitions from the generated types.
 	OpenAPINamer func(OpenAPINamerInfo) string
 }
 
