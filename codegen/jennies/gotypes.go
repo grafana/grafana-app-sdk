@@ -69,7 +69,7 @@ type GoTypes struct {
 	// OpenAPINamer will be called on each generated type's name to create an OpenAPIModelName() function
 	// for the type to implement k8s.io/kube-openapi/pkg/util/OpenAPIModelNamer.
 	// If nil, types will not implement OpenAPIModelNamer, which will cause problems with
-	// apiservers if using the default apiserver.AppInstaller.
+	// apiservers which build OpenAPI definitions from the generated types.
 	OpenAPINamer func(OpenAPINamerInfo) string
 }
 
@@ -79,6 +79,26 @@ type OpenAPINamerInfo struct {
 	ShortGroup string
 	Version    string
 	Kind       string
+}
+
+// ToOpenAPIName converts a go package path and type name (such as "github.com/foo/bar/pkg.MyType")
+// into the OpenAPI definition name kube-openapi expects (such as "com.github.foo.bar.pkg.MyType").
+// It is copied from k8s.io/apimachinery/pkg/runtime/scheme.go's toOpenAPIDefinitionName.
+func ToOpenAPIName(name string) string {
+	nameParts := strings.Split(name, "/")
+	// Reverse first part. e.g., io.k8s... instead of k8s.io...
+	if len(nameParts) > 0 && strings.Contains(nameParts[0], ".") {
+		nameParts[0] = reverseParts(nameParts[0])
+	}
+	return strings.Join(nameParts, ".")
+}
+
+func reverseParts(dotSeparatedName string) string {
+	parts := strings.Split(dotSeparatedName, ".")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return strings.Join(parts, ".")
 }
 
 func (*GoTypes) JennyName() string {

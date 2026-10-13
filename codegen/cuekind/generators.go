@@ -11,7 +11,6 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
@@ -38,7 +37,7 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 			ExcludeFields:        []string{"metadata"}, // We don't want an object generated for the metadata, as we use the k8s metadata objects
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return jennies.ToOpenAPIName(path)
 			},
 		},
 		&jennies.ResourceObjectGenerator{
@@ -46,7 +45,7 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 			GroupByKind:                 !groupKinds,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return jennies.ToOpenAPIName(path)
 			},
 		},
 		&jennies.SchemaGenerator{
@@ -202,7 +201,7 @@ func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codeg
 			SkipImportsProcess:   cfg.SkipImportsProcess,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(cfg.ProjectRepo, cfg.GoGenPath, jennies.GetGeneratedGoTypePath(!cfg.GroupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return jennies.ToOpenAPIName(path)
 			},
 		},
 		&jennies.ClientJenny{

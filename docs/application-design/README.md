@@ -48,20 +48,11 @@ Your logic (e.g. provisioning dashboards and alerts) should normally be part of 
 
 ## Applications with custom APIs
 
-While previous two options work for a lot of applications, there are of course some apps which may require custom API endpoints for one reason or another. To support those, you can ship your backend as an "extension" API server, rather than an operator.
+While previous two options work for a lot of applications, there are of course some apps which may require custom API endpoints for one reason or another. To support those, you can declare custom routes in your app's manifest, either as subresources of one of your Kinds, or as resource-level routes for an API version. The platform exposes these routes alongside your Kinds' regular CRUD endpoints and calls your app's backend to handle them, while authentication, authorization and storage of your Kinds' objects are still handled by the platform.
 
-In practice this means that rather than routing API requests through the API server's internal logic and directly the storage (and your app's hooks, if present), the API server would instead proxy them to your app's backend. The API server would still take care of authenticating the request and taking care of rate-limiting and similar request handling tasks, but otherwise your app has full control over how the request is processed, including things like:
+Inside a custom route handler your app has full control over how the request is processed, and can read or write objects of its Kinds through the platform API like any other client. See [Adding routes from a saved OpenAPI document](../code-generation.md#adding-routes-from-a-saved-openapi-document) for how routes are declared and generated.
 
-* **Authorization**. You are free to authorize the request yourself, although by default you can delegate it back to the API server.
-* **Validation and mutation**. Same as with hooks, you can perform custom validation rules and set default values or modify data in-flight.
-* **Data migration**. Same as with a conversion hook, you can convert your data between schema versions.
-* **Storage**. Unlike two previous options, here you have to handle the storage yourself. This is helpful, when you already need custom storage, e.g. you're handling data that doesn't work well within the limitations of the provided storage or you don't need storage at all (maybe your data is read-only system metrics). If you want to add only a few custom API endpoints and still use the platform-provided storage, you can achieve that by using different names for the APIs you expose to the user vs. the ones that you use to store your data.
-
-Continuing with our examples from previous sections, let's say that we want to extend our application with a custom route that would let users rollback services to older versions, e.g. as an action to a service failing and firing an alert.
-
-![Diagram of a custom API app](./img/api-service.excalidraw.png)
-
-In this example, your application takes full control over handling the `/api/v1/services`, splitting the logic between regular CRUD actions (which were previously handled by the API server) and the custom API endpoint for service rollback. Keep in mind that despite this diagram has different authorization and validation for different requests, they may as well be the same, depending on the app. This example also stores services back to the API server, like previous ones but other apps may choose different storage options.
+Continuing with our examples from previous sections, let's say that we want to extend our application with a custom route that would let users rollback services to older versions, e.g. as an action to a service failing and firing an alert. The regular CRUD actions for `/api/v1/services` are still handled by the platform, while the rollback route is handled by your app, which then updates the service object through the API.
 
 **It is important to keep in mind** that your custom API endpoints still have to follow the API server standards, i.e. they need to be RESTful and follow the resource-subresource patterns. In the example above, the rollback endpoint can be implemented via a subresource, e.g.:
 ```bash
