@@ -272,8 +272,7 @@ func (m *ManifestData) validateRoles() error {
 			resources[strings.ToLower(kind.Kind)] = kind.Resource()
 		}
 	}
-	routeSubresources := m.routeSubresources()
-	var errs error
+	routeSubresources, errs := m.routeSubresources()
 	for _, name := range slices.Sorted(maps.Keys(m.Roles)) {
 		for _, k := range m.Roles[name].Kinds {
 			kind, sub, isSub := strings.Cut(k.Kind, "/")
@@ -297,7 +296,9 @@ func (m *ManifestData) validateRoles() error {
 
 // routeSubresources returns, by resource, the subresources custom routes are authorized against:
 // the first path segment of each kind route, or the subresource a route's authz declares.
-func (m *ManifestData) routeSubresources() map[string]map[string]bool {
+// It reports declared resources and subresources that contain a slash, as neither can name a real check.
+func (m *ManifestData) routeSubresources() (map[string]map[string]bool, error) {
+	var errs error
 	subresources := make(map[string]map[string]bool)
 	add := func(resource, sub string) {
 		if resource == "" || sub == "" {
@@ -309,7 +310,7 @@ func (m *ManifestData) routeSubresources() map[string]map[string]bool {
 		}
 		subresources[resource][sub] = true
 	}
-	visit := func(resource, sub string, props spec3.PathProps) {
+	visit := func(where, resource, sub string, props spec3.PathProps) {
 		add(resource, sub)
 		for _, op := range []*spec3.Operation{props.Get, props.Put, props.Post, props.Delete, props.Options, props.Head, props.Patch, props.Trace} {
 			if op == nil {
@@ -317,6 +318,16 @@ func (m *ManifestData) routeSubresources() map[string]map[string]bool {
 			}
 			declared, _ := op.Extensions.GetString(OpenAPIExtensionAuthzResource)
 			declaredSub, ok := op.Extensions.GetString(OpenAPIExtensionAuthzSubresource)
+			if strings.Contains(declared, "/") {
+				errs = multierror.Append(errs, fmt.Errorf("%s: %s must be a resource name, not %q; declare the subresource in %s",
+					where, OpenAPIExtensionAuthzResource, declared, OpenAPIExtensionAuthzSubresource))
+				continue
+			}
+			if strings.Contains(declaredSub, "/") {
+				errs = multierror.Append(errs, fmt.Errorf("%s: %s must be a single path segment, not %q",
+					where, OpenAPIExtensionAuthzSubresource, declaredSub))
+				continue
+			}
 			if !ok {
 				declaredSub = sub
 			}
@@ -325,19 +336,19 @@ func (m *ManifestData) routeSubresources() map[string]map[string]bool {
 	}
 	for _, version := range m.Versions {
 		for _, kind := range version.Kinds {
-			for rpath, props := range kind.Routes {
-				visit(kind.Resource(), firstSegment(rpath), props)
+			for _, rpath := range slices.Sorted(maps.Keys(kind.Routes)) {
+				visit(fmt.Sprintf("kind %q version %q route %q", kind.Kind, version.Name, rpath), kind.Resource(), firstSegment(rpath), kind.Routes[rpath])
 			}
 		}
 		routes := version.Routes //nolint:staticcheck // Routes is deprecated but older manifests still declare routes there
 		for _, paths := range []map[string]spec3.PathProps{version.OpenAPI.Paths, routes.Namespaced, routes.Cluster} {
-			for rpath, props := range paths {
+			for _, rpath := range slices.Sorted(maps.Keys(paths)) {
 				resource, sub := kindRouteSubresource(rpath)
-				visit(resource, sub, props)
+				visit(fmt.Sprintf("version %q route %q", version.Name, rpath), resource, sub, paths[rpath])
 			}
 		}
 	}
-	return subresources
+	return subresources, errs
 }
 
 // kindRouteSubresource returns the resource and subresource of a version-relative kind route path,

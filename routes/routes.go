@@ -280,6 +280,14 @@ func authzCheck(method string, op *spec3.Operation) (authlib.CheckRequest, bool,
 		}
 		return authlib.CheckRequest{}, false, nil
 	}
+	// A slash separates a resource from its subresource, so neither may contain one.
+	if strings.Contains(resource, "/") {
+		return authlib.CheckRequest{}, false, fmt.Errorf("%s must be a resource name, not %q; declare the subresource in %s",
+			ExtensionAuthzResource, resource, ExtensionAuthzSubresource)
+	}
+	if strings.Contains(subresource, "/") {
+		return authlib.CheckRequest{}, false, fmt.Errorf("%s must be a single path segment, not %q", ExtensionAuthzSubresource, subresource)
+	}
 	if !hasVerb {
 		if verb = impliedVerbs[method]; verb == "" {
 			return authlib.CheckRequest{}, false, fmt.Errorf("%s implies no verb, so %s must be set", method, ExtensionAuthzVerb)

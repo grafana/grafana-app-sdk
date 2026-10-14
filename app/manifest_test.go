@@ -384,6 +384,30 @@ func TestManifestData_Validate(t *testing.T) {
 			errors.New(`invalid role b-role: kind "Foo/Render" names "Render", which is not a custom route of Foo`),
 			errors.New(`invalid role b-role: kind "Baz" does not exist in manifest`)),
 	}, {
+		name: "declared authz resource and subresource cannot contain a slash",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+					Routes: map[string]spec3.PathProps{
+						"/render": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource: "foos/render",
+						}}}},
+					},
+				}},
+				OpenAPI: ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+					"/namespaces/{namespace}/foos/{name}/preview": {Get: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+						OpenAPIExtensionAuthzResource:    "foos",
+						OpenAPIExtensionAuthzSubresource: "preview/large",
+					}}}},
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`kind "Foo" version "v1" route "/render": x-grafana-declared-authz-resource must be a resource name, not "foos/render"; declare the subresource in x-grafana-declared-authz-subresource`),
+			errors.New(`version "v1" route "/namespaces/{namespace}/foos/{name}/preview": x-grafana-declared-authz-subresource must be a single path segment, not "preview/large"`)),
+	}, {
 		name: "kind routes conflicting with built-in subresources",
 		data: ManifestData{
 			Versions: []ManifestVersion{{
