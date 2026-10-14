@@ -448,7 +448,9 @@ Version: S={
 }
 
 #RoleKind: {
-	kind: string
+	// kind is a kind name, or a kind and one of its custom routes ("Kind/route").
+	// The built-in status and scale subresources are not grantable.
+	kind: =~"^([A-Z][a-zA-Z0-9-]{0,61}[a-zA-Z0-9])(/[^/]+)?$" & !~"(?i)/(status|scale)$"
 	// permissionSet is a permission set (viewer, editor, admin) to associate with the kind.
 	// It is mutually exclusive with verbs
 	permissionSet?: string

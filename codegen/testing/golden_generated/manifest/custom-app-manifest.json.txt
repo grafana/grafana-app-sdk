@@ -408,10 +408,6 @@
                     {
                         "kind": "CustomKind",
                         "permissionSet": "admin"
-                    },
-                    {
-                        "kind": "CustomKind/status",
-                        "permissionSet": "admin"
                     }
                 ]
             },

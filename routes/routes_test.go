@@ -376,6 +376,28 @@ func TestParseAuthzExtensionTypes(t *testing.T) {
 	}, reasons(problems))
 }
 
+// A declared resource or subresource containing a slash names no real check,
+// so the operation is not served.
+func TestParseAuthzRejectsSlashes(t *testing.T) {
+	op := func(ext map[string]any) spec3.PathProps {
+		o := &spec3.Operation{}
+		for k, v := range ext {
+			o.AddExtension(k, v)
+		}
+		return spec3.PathProps{Get: o}
+	}
+	_, problems := Parse(testVersion(map[string]spec3.PathProps{
+		"/namespaces/{namespace}/things/{name}/a": op(map[string]any{ExtensionAuthzResource: "things/a"}),
+		"/namespaces/{namespace}/things/{name}/b": op(map[string]any{ExtensionAuthzResource: "things", ExtensionAuthzSubresource: "b/c"}),
+	}), Options{})
+	require.Equal(t, map[string]string{
+		"GET /namespaces/{namespace}/things/{name}/a": `x-grafana-declared-authz-resource must be a resource name, not "things/a"; declare the subresource in x-grafana-declared-authz-subresource`,
+		"/namespaces/{namespace}/things/{name}/a":     "no operation is served",
+		"GET /namespaces/{namespace}/things/{name}/b": `x-grafana-declared-authz-subresource must be a single path segment, not "b/c"`,
+		"/namespaces/{namespace}/things/{name}/b":     "no operation is served",
+	}, reasons(problems))
+}
+
 func TestParseKindRouteNeedsASubresource(t *testing.T) {
 	_, problems := Parse(testVersion(map[string]spec3.PathProps{
 		"/namespaces/{namespace}/things/{name}/": get(),

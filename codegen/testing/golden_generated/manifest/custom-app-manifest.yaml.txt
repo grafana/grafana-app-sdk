@@ -20,8 +20,6 @@ spec:
       kinds:
       - kind: CustomKind
         permissionSet: admin
-      - kind: CustomKind/status
-        permissionSet: admin
       title: custom-app Admin
     custom-app:editor:
       description: Create, Read, Update, and Delete CustomKinds

@@ -70,10 +70,6 @@ var appManifestData = app.ManifestData{
 					Kind:          "CustomKind",
 					PermissionSet: new("admin"),
 				},
-				{
-					Kind:          "CustomKind/status",
-					PermissionSet: new("admin"),
-				},
 			},
 			Routes: []string{},
 		},
