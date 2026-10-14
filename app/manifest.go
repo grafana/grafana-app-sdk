@@ -26,6 +26,11 @@ const (
 	OpenAPIExtensionUsesKubernetesObjectMeta = OpenAPIExtensionPrefix + "-uses-kubernetes-object-metadata"
 	OpenAPIExtensionUsesKubernetesListMeta   = OpenAPIExtensionPrefix + "-uses-kubernetes-list-metadata"
 
+	// OpenAPIExtensionAuthzResource and OpenAPIExtensionAuthzSubresource declare, on a route operation,
+	// the resource and subresource its access check is made against.
+	OpenAPIExtensionAuthzResource    = "x-grafana-declared-authz-resource"
+	OpenAPIExtensionAuthzSubresource = "x-grafana-declared-authz-subresource"
+
 	ManifestRolePermissionSetViewer = "viewer"
 	ManifestRolePermissionSetEditor = "editor"
 	ManifestRolePermissionSetAdmin  = "admin"
@@ -242,7 +247,118 @@ func (m *ManifestData) Validate() error {
 			}
 		}
 	}
-	return multierror.Append(errs, m.validateEmbed()).ErrorOrNil()
+	return multierror.Append(errs, m.validateKindRoutes(), m.validateRoles(), m.validateEmbed()).ErrorOrNil()
+}
+
+func (m *ManifestData) validateKindRoutes() error {
+	var errs error
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			for _, rpath := range slices.Sorted(maps.Keys(kind.Routes)) {
+				if sub := firstSegment(rpath); isBuiltinSubresource(sub) {
+					errs = multierror.Append(errs, fmt.Errorf("kind %q version %q: custom route %q conflicts with the built-in %q subresource", kind.Kind, version.Name, rpath, strings.ToLower(sub)))
+				}
+			}
+		}
+	}
+	return errs
+}
+
+// validateRoles checks that each role kind is either a kind, or a kind and the subresource one of its custom routes is authorized against.
+func (m *ManifestData) validateRoles() error {
+	resources := make(map[string]string)
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			resources[strings.ToLower(kind.Kind)] = kind.Resource()
+		}
+	}
+	routeSubresources := m.routeSubresources()
+	var errs error
+	for _, name := range slices.Sorted(maps.Keys(m.Roles)) {
+		for _, k := range m.Roles[name].Kinds {
+			kind, sub, isSub := strings.Cut(k.Kind, "/")
+			resource, ok := resources[strings.ToLower(kind)]
+			var err error
+			switch {
+			case isSub && isBuiltinSubresource(sub):
+				err = fmt.Errorf("invalid role %s: kind %q names the built-in %q subresource, which is not grantable", name, k.Kind, strings.ToLower(sub))
+			case !ok:
+				err = fmt.Errorf("invalid role %s: kind %q does not exist in manifest", name, kind)
+			case isSub && !routeSubresources[resource][sub]:
+				err = fmt.Errorf("invalid role %s: kind %q names %q, which is not a custom route of %s", name, k.Kind, sub, kind)
+			default:
+				continue
+			}
+			errs = multierror.Append(errs, err)
+		}
+	}
+	return errs
+}
+
+// routeSubresources returns, by resource, the subresources custom routes are authorized against:
+// the first path segment of each kind route, or the subresource a route's authz declares.
+func (m *ManifestData) routeSubresources() map[string]map[string]bool {
+	subresources := make(map[string]map[string]bool)
+	add := func(resource, sub string) {
+		if resource == "" || sub == "" {
+			return
+		}
+		resource = strings.ToLower(resource)
+		if subresources[resource] == nil {
+			subresources[resource] = make(map[string]bool)
+		}
+		subresources[resource][sub] = true
+	}
+	visit := func(resource, sub string, props spec3.PathProps) {
+		add(resource, sub)
+		for _, op := range []*spec3.Operation{props.Get, props.Put, props.Post, props.Delete, props.Options, props.Head, props.Patch, props.Trace} {
+			if op == nil {
+				continue
+			}
+			declared, _ := op.Extensions.GetString(OpenAPIExtensionAuthzResource)
+			declaredSub, ok := op.Extensions.GetString(OpenAPIExtensionAuthzSubresource)
+			if !ok {
+				declaredSub = sub
+			}
+			add(declared, declaredSub)
+		}
+	}
+	for _, version := range m.Versions {
+		for _, kind := range version.Kinds {
+			for rpath, props := range kind.Routes {
+				visit(kind.Resource(), firstSegment(rpath), props)
+			}
+		}
+		routes := version.Routes //nolint:staticcheck // Routes is deprecated but older manifests still declare routes there
+		for _, paths := range []map[string]spec3.PathProps{version.OpenAPI.Paths, routes.Namespaced, routes.Cluster} {
+			for rpath, props := range paths {
+				resource, sub := kindRouteSubresource(rpath)
+				visit(resource, sub, props)
+			}
+		}
+	}
+	return subresources
+}
+
+// kindRouteSubresource returns the resource and subresource of a version-relative kind route path,
+// such as namespaces/{namespace}/widgets/{name}/render, or empty strings for any other path.
+func kindRouteSubresource(path string) (resource, subresource string) {
+	resource, rest, _ := strings.Cut(strings.TrimPrefix(strings.Trim(path, "/"), "namespaces/{namespace}/"), "/")
+	if rest, ok := strings.CutPrefix(rest, "{name}/"); ok {
+		return resource, firstSegment(rest)
+	}
+	return "", ""
+}
+
+// firstSegment returns the first segment of a path, which is the subresource of a kind route.
+func firstSegment(path string) string {
+	segment, _, _ := strings.Cut(strings.Trim(path, "/"), "/")
+	return segment
+}
+
+// isBuiltinSubresource reports whether sub is served for every kind, so it is neither a custom route nor grantable.
+func isBuiltinSubresource(sub string) bool {
+	return strings.EqualFold(sub, "status") || strings.EqualFold(sub, "scale")
 }
 
 func (m *ManifestData) validateEmbed() error {
@@ -278,8 +394,8 @@ func (m *ManifestData) validateEmbed() error {
 func reservedKindRoute(route string) (resource, endpoint string, ok bool) {
 	// These paths remain reserved for kinds that opt out of the built-in endpoints.
 	// Opting out controls which endpoints are served; it does not make their paths
-	// available for custom routes.
-	for _, endpoint = range []string{"search", "trash", "search/hybrid"} {
+	// available for custom routes. status and scale are built-in subresources.
+	for _, endpoint = range []string{"search", "trash", "search/hybrid", "status", "scale"} {
 		suffix := "/" + endpoint
 		if before, ok0 := strings.CutSuffix(route, suffix); ok0 {
 			resource = before

@@ -31,8 +31,8 @@ const (
 	// ExtensionAuthzResource, ExtensionAuthzSubresource and ExtensionAuthzVerb
 	// declare, on an operation, the access check a request must pass. They are
 	// written by app-sdk codegen from a route's authz section.
-	ExtensionAuthzResource    = "x-grafana-declared-authz-resource"
-	ExtensionAuthzSubresource = "x-grafana-declared-authz-subresource"
+	ExtensionAuthzResource    = app.OpenAPIExtensionAuthzResource
+	ExtensionAuthzSubresource = app.OpenAPIExtensionAuthzSubresource
 	ExtensionAuthzVerb        = "x-grafana-declared-authz-verb"
 
 	// NamespacedPrefix is the version-relative path namespaced routes mount

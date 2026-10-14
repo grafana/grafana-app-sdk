@@ -320,3 +320,25 @@ invalidPluralName: {
 	}
 }
 
+
+// #RoleKind.kind must be a plain kind name, not a subresource
+invalidRoleKindSubresource: {
+	appName: "role-app"
+	versions: {
+		"v1": {
+			kinds: [{
+				kind: "RoleKind"
+				schema: spec: field: string
+			}]
+		}
+	}
+	roles: {
+		"role-app:writer": {
+			title: "Status Writer"
+			kinds: [{
+				kind: "RoleKind/status"
+				verbs: ["update"]
+			}]
+		}
+	}
+}

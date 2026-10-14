@@ -359,6 +359,11 @@ func TestParseManifestInvalidCases(t *testing.T) {
 			selector:    "invalidRoleEmptyTitle",
 			errContains: `roles."role-app:reader".title: invalid value ""`,
 		},
+		{
+			name:        "role kind subresource",
+			selector:    "invalidRoleKindSubresource",
+			errContains: `roles."role-app:writer".kinds.0.kind: invalid value "RoleKind/status"`,
+		},
 		// Version-level route validation
 		{
 			name:        "version namespaced route bad name",

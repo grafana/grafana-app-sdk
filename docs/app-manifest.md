@@ -152,6 +152,10 @@ The `webhooks` paths are only emitted for the webhook types your kinds actually 
 
 > These path overrides configure the generated manifest only. The webhook servers the SDK runs for you (`k8s.WebhookHandler`/`k8s.WebhookServer`, and the `simple` App/Operator runners) always serve at the default `/validate`, `/mutate`, and `/convert` paths. Overriding the paths is intended for apps that serve webhooks with their own HTTP routing.
 
+## Roles
+
+`roles` grant users access to your app's kinds, and `roleBindings` assign them to the basic `viewer`, `editor`, and `admin` groups. If you define no roles, a reader, editor, and admin role covering every kind is generated. A role kind is either a kind name, such as `Issue`, or a kind and one of its custom routes, such as `Issue/render`, which grants the access check that route is authorized against: the route's first path segment, or the `subresource` its `authz` declares. The built-in `status` and `scale` subresources are not grantable: `Issue/status` is rejected, as is a kind custom route named `status` or `scale`. `status` is written by your app's own service identity using its permission on the parent resource (for example `issues:update`).
+
 ## Versions
 
 Versions exposed by a manifest should adhere to the scheme `v([0-9]+)((alpha|beta)[0-9]+)?`. Examples include:

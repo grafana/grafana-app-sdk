@@ -330,12 +330,8 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	roles := m.Properties().Roles
 	bindings := m.Properties().RoleBindings
 	if m.Properties().Roles == nil {
-		var err error
 		var defaultBindings codegen.AppManifestPropertiesRoleBindings
-		roles, defaultBindings, err = buildDefaultManifestRolesAndBindings(m)
-		if err != nil {
-			return nil, err
-		}
+		roles, defaultBindings = buildDefaultManifestRolesAndBindings(m)
 		if bindings == nil {
 			bindings = &defaultBindings
 		}
@@ -368,7 +364,7 @@ func buildManifestData(m codegen.AppManifest, includeSchemas bool) (*app.Manifes
 	}
 
 	return &manifest, errors.Join(
-		validateManifestRoles(manifest, includeSchemas),
+		validateManifestRoles(manifest),
 		manifest.Validate(),
 		sdkroutes.Validate(&manifest, sdkroutes.Options{}),
 	)
@@ -439,7 +435,7 @@ func joinKindNames(names []string) string {
 	return b.String()
 }
 
-func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings, error) {
+func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]codegen.AppManifestPropertiesRole, codegen.AppManifestPropertiesRoleBindings) {
 	viewer := app.ManifestRolePermissionSetViewer
 	editor := app.ManifestRolePermissionSetEditor
 	admin := app.ManifestRolePermissionSetAdmin
@@ -473,25 +469,6 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 					PermissionSet: &admin,
 				})
 			}
-			// subresources
-			it, err := k.Schema.Fields()
-			if err != nil {
-				return nil, codegen.AppManifestPropertiesRoleBindings{}, err
-			}
-			for it.Next() {
-				if it.Selector().String() == keySpec || it.Selector().String() == keyMetadata {
-					continue
-				}
-				sr := fmt.Sprintf("%s/%s", k.Kind, it.Selector().String())
-				if _, ok := adminKinds[sr]; !ok {
-					adminKinds[sr] = struct{}{}
-					adminRoleKinds = append(adminRoleKinds, codegen.AppManifestPropertiesRoleKind{
-						Kind:          sr,
-						PermissionSet: &admin,
-					})
-				}
-			}
-
 			kindListMap[k.PluralName] = struct{}{}
 		}
 	}
@@ -528,7 +505,7 @@ func buildDefaultManifestRolesAndBindings(m codegen.AppManifest) (map[string]cod
 		Admin:  []string{adminKey},
 	}
 
-	return roles, bindings, nil
+	return roles, bindings
 }
 
 func getRouteNames(p *spec3.PathProps) []string {
@@ -557,16 +534,10 @@ func getRouteNames(p *spec3.PathProps) []string {
 	return routes
 }
 
-//nolint:revive
-func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) error {
-	kinds := make(map[string]struct{})
+func validateManifestRoles(manifest app.ManifestData) error {
 	routes := make(map[string]struct{})
 	for _, v := range manifest.Versions {
 		for _, k := range v.Kinds {
-			kinds[strings.ToLower(k.Kind)] = struct{}{}
-			for _, sr := range k.Subresources() {
-				kinds[fmt.Sprintf("%s/%s", strings.ToLower(k.Kind), strings.ToLower(sr))] = struct{}{}
-			}
 			for _, r := range k.Routes {
 				for _, rr := range getRouteNames(&r) {
 					routes[rr] = struct{}{}
@@ -587,15 +558,6 @@ func validateManifestRoles(manifest app.ManifestData, checkSubresources bool) er
 	}
 	var errs error
 	for name, role := range manifest.Roles {
-		for _, k := range role.Kinds {
-			// If this is a subresource of a kind and we're not checking subresources, skip
-			if idx := strings.Index(k.Kind, "/"); idx > 0 && idx < len(k.Kind) && !checkSubresources {
-				continue
-			}
-			if _, ok := kinds[strings.ToLower(k.Kind)]; !ok {
-				errs = errors.Join(errs, fmt.Errorf("invalid role %s: kind %s does not exist in manifest", name, k.Kind))
-			}
-		}
 		for _, r := range role.Routes {
 			if _, ok := routes[r]; !ok {
 				errs = errors.Join(errs, fmt.Errorf("invalid role %s: route %s does not exist in manifest", name, r))

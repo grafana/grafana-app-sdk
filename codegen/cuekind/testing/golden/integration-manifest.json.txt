@@ -952,15 +952,7 @@
                         "permissionSet": "admin"
                     },
                     {
-                        "kind": "Foo/status",
-                        "permissionSet": "admin"
-                    },
-                    {
                         "kind": "Notification",
-                        "permissionSet": "admin"
-                    },
-                    {
-                        "kind": "Notification/status",
                         "permissionSet": "admin"
                     }
                 ]

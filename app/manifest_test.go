@@ -288,6 +288,10 @@ func TestManifestData_Validate(t *testing.T) {
 		name: "rolebindings for missing roles (no matching role)",
 		data: ManifestData{
 			AppName: "myapp",
+			Versions: []ManifestVersion{{
+				Name:  "v1",
+				Kinds: []ManifestVersionKind{{Kind: "Foo"}},
+			}},
 			Roles: map[string]ManifestRole{
 				"viewer-role": {
 					Title: "Viewer Role",
@@ -332,6 +336,102 @@ func TestManifestData_Validate(t *testing.T) {
 			errors.New("editor: cannot bind role 'other-editor-role' as it is not present in manifest roles"),
 			errors.New("admin: cannot bind role 'other-admin-role' as it is not present in manifest roles"),
 			errors.New("extra: cannot bind role 'other-extra-role' as it is not present in manifest roles")),
+	}, {
+		name: "role kinds must be kinds or their custom routes",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+					Routes: map[string]spec3.PathProps{
+						"/render": {Get: &spec3.Operation{}},
+						"/approve-request": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource:    "foos",
+							OpenAPIExtensionAuthzSubresource: "approve",
+						}}}},
+					},
+				}, {
+					Kind:  "Bar",
+					Scope: "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/bulk": {Post: &spec3.Operation{VendorExtensible: spec.VendorExtensible{Extensions: spec.Extensions{
+							OpenAPIExtensionAuthzResource:    "foos",
+							OpenAPIExtensionAuthzSubresource: "bulk",
+						}}}},
+					},
+				},
+				OpenAPI: ManifestVersionOpenAPI{Paths: map[string]spec3.PathProps{
+					"/namespaces/{namespace}/foos/{name}/preview/{id}": {Get: &spec3.Operation{}},
+					"bars/{name}/count": {Get: &spec3.Operation{}},
+				}},
+			}},
+			Roles: map[string]ManifestRole{
+				"a-role": {
+					Kinds: []ManifestRoleKind{{Kind: "Foo"}, {Kind: "foo"}, {Kind: "Foo/render"}, {Kind: "Foo/preview"}, {Kind: "Foo/approve"}, {Kind: "Foo/bulk"}, {Kind: "Bar/count"}},
+				},
+				"b-role": {
+					Kinds: []ManifestRoleKind{{Kind: "Foo/status"}, {Kind: "Foo/Scale"}, {Kind: "Foo/missing"}, {Kind: "Foo/render/x"}, {Kind: "Foo/Render"}, {Kind: "Baz"}},
+				},
+			},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`invalid role b-role: kind "Foo/status" names the built-in "status" subresource, which is not grantable`),
+			errors.New(`invalid role b-role: kind "Foo/Scale" names the built-in "scale" subresource, which is not grantable`),
+			errors.New(`invalid role b-role: kind "Foo/missing" names "missing", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Foo/render/x" names "render/x", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Foo/Render" names "Render", which is not a custom route of Foo`),
+			errors.New(`invalid role b-role: kind "Baz" does not exist in manifest`)),
+	}, {
+		name: "kind routes conflicting with built-in subresources",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind: "Foo",
+					Routes: map[string]spec3.PathProps{
+						"/status":       {},
+						"status":        {},
+						"/status/foo":   {},
+						"/SCALE":        {},
+						"/statusreport": {},
+					},
+				}},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New(`kind "Foo" version "v1": custom route "/SCALE" conflicts with the built-in "scale" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "/status" conflicts with the built-in "status" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "/status/foo" conflicts with the built-in "status" subresource`),
+			errors.New(`kind "Foo" version "v1": custom route "status" conflicts with the built-in "status" subresource`)),
+	}, {
+		name: "status and scale version routes are reserved",
+		data: ManifestData{
+			Versions: []ManifestVersion{{
+				Name: "v1",
+				Kinds: []ManifestVersionKind{{
+					Kind:   "Foo",
+					Plural: "foos",
+					Scope:  "Namespaced",
+				}, {
+					Kind:   "Bar",
+					Plural: "bars",
+					Scope:  "Cluster",
+				}},
+				Routes: ManifestVersionRoutes{
+					Namespaced: map[string]spec3.PathProps{
+						"/foos/status": {},
+					},
+					Cluster: map[string]spec3.PathProps{
+						"bars/scale": {},
+					},
+				},
+			}},
+		},
+		expectedErr: multierror.Append(nil,
+			errors.New("namespaced custom route '/foos/status' conflicts with reserved 'status' route for kind 'foos'"),
+			errors.New("cluster-scoped custom route 'bars/scale' conflicts with reserved 'scale' route for kind 'bars'")),
 	}}
 
 	for _, test := range tests {

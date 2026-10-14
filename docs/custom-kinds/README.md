@@ -9,7 +9,7 @@ A Kind is composed of several components:
 * A Group it belongs to
 * A Version, and a schema for the `spec` and any subresources for that version
 
-(a `spec` is essentially the body of the resource: for a resource like a grafana dashboard, it would be the panels. Subresources are additional payloads that are not considered part of the main body of the resource, but may be used by applications for their purposes. They are returned alongside the `spec` in reads, but must be updated via a separate call, and can have different RBAC associated with them. In kubernetes, `status` is considered a subresource).
+(a `spec` is essentially the body of the resource: for a resource like a grafana dashboard, it would be the panels. Subresources are additional payloads that are not considered part of the main body of the resource, but may be used by applications for their purposes. They are returned alongside the `spec` in reads, but must be updated via a separate call. In kubernetes, `status` is considered a subresource).
 
 You may have multiple versions of a kind, and they should share the same name and other metadata attributes, and each version should be convertable to each other version.
 

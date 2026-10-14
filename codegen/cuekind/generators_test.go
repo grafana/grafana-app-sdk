@@ -2,6 +2,7 @@ package cuekind
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -373,6 +374,50 @@ func TestManifestGenerator_EmbeddingSettings(t *testing.T) {
 				}
 			}
 			require.True(t, foundEmbeddedKind)
+		})
+	}
+}
+
+func TestManifestGenerator_RoleKinds(t *testing.T) {
+	for _, tc := range []struct {
+		name, roleKind, errContains string
+	}{
+		{name: "kind", roleKind: "Foo"},
+		{name: "kind route", roleKind: "Foo/reconcile"},
+		{name: "declared authz subresource", roleKind: "Foo/render"},
+		{name: "unknown route", roleKind: "Foo/missing", errContains: `kind "Foo/missing" names "missing", which is not a custom route of Foo`},
+		{name: "status", roleKind: "Foo/status", errContains: `invalid value "Foo/status"`},
+		{name: "scale", roleKind: "Foo/Scale", errContains: `invalid value "Foo/Scale"`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c := testingCue(t)
+			c.Root = c.Root.Context().CompileString(fmt.Sprintf(`
+				manifest: {
+					appName: "roles-app"
+					versions: v1: kinds: [{
+						kind: "Foo"
+						schema: spec: title: string
+						routes: {
+							"/reconcile": POST: {name: "createReconcile", request: {}, response: {}}
+							"/preview": GET: {name: "getPreview", request: {}, response: {}, authz: {resource: "foos", subresource: "render"}}
+						}
+					}]
+					roles: "roles-app:custom": {
+						title: "Custom"
+						kinds: [{kind: %q, permissionSet: "viewer"}]
+					}
+				}`, tc.roleKind))
+			parser, err := NewParser(c, false)
+			require.NoError(t, err)
+			manifests, err := parser.ManifestParser().Parse("manifest")
+			if err == nil {
+				_, err = ManifestGenerator(ManifestGeneratorConfig{Extension: "json", Version: jennies.VersionV1Alpha2}).Generate(manifests...)
+			}
+			if tc.errContains == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, tc.errContains)
+			}
 		})
 	}
 }
