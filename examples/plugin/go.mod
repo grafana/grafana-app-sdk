@@ -9,12 +9,12 @@ replace (
 
 require (
 	github.com/emicklei/go-restful-openapi/v2 v2.12.1
-	github.com/emicklei/go-restful/v3 v3.13.0
+	github.com/emicklei/go-restful/v3 v3.14.0
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/grafana-app-sdk v0.60.10
 	github.com/grafana/grafana-app-sdk/plugin v0.60.10
-	github.com/grafana/grafana-plugin-sdk-go v0.296.5
+	github.com/grafana/grafana-plugin-sdk-go v0.297.0
 	github.com/stretchr/testify v1.12.1
 )
 
@@ -85,7 +85,7 @@ require (
 	github.com/olekukonko/tablewriter v1.1.5 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
-	github.com/prometheus/client_golang v1.24.1 // indirect
+	github.com/prometheus/client_golang v1.25.0 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
 	github.com/prometheus/common v0.72.0 // indirect
 	github.com/prometheus/procfs v0.22.0 // indirect
@@ -109,10 +109,10 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
-	golang.org/x/net v0.60.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
-	golang.org/x/text v0.42.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20261005182115-fad411399dd8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 // indirect
 	google.golang.org/grpc v1.84.0 // indirect
