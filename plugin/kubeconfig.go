@@ -19,7 +19,7 @@ const (
 type KubeConfigOptions struct {
 	// AdditionalTokenAudiences are added to the audiences derived from the manifest.
 	// Empty additions and duplicates are ignored. The Cloud Access Policy (CAP) must allow all
-	// requested audiences. These values are unused with basic or bearer authentication.
+	// requested audiences. These values are unused with bearer authentication.
 	AdditionalTokenAudiences []string
 }
 
@@ -41,9 +41,8 @@ type KubeConfigOptions struct {
 // they were called with, provided the plugin authenticates requests (see
 // grpcplugin.ServeOpts.Authenticator). Other requests act as the plugin.
 //
-// Otherwise falls back to standard auth, using either:
-// - API_ACCESS_BEARER_TOKEN or
-// - API_ACCESS_USERNAME/API_ACCESS_PASSWORD
+// Otherwise falls back to standard auth, using:
+// - API_ACCESS_BEARER_TOKEN
 func BuildKubeConfig(manifestData app.ManifestData) (*rest.Config, error) {
 	return BuildKubeConfigWithOptions(manifestData, KubeConfigOptions{})
 }
@@ -74,30 +73,20 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 		)
 	}
 
-	// Fall back to auth without token exchange: either a bearer token or basic auth.
-	cfg := &rest.Config{
-		Host:    routerURL,
-		APIPath: "/apis",
-		TLSClientConfig: rest.TLSClientConfig{
-			Insecure: os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
-			CAFile:   os.Getenv("API_ACCESS_CA_FILE"),
-		},
-	}
-
+	// Fall back to auth without token exchange: a bearer token.
 	if bearerToken := os.Getenv("API_ACCESS_BEARER_TOKEN"); bearerToken != "" {
-		cfg.BearerToken = bearerToken
-		return cfg, nil
+		return &rest.Config{
+			Host:        routerURL,
+			APIPath:     "/apis",
+			BearerToken: bearerToken,
+			TLSClientConfig: rest.TLSClientConfig{
+				Insecure: os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
+				CAFile:   os.Getenv("API_ACCESS_CA_FILE"),
+			},
+		}, nil
 	}
 
-	username := os.Getenv("API_ACCESS_USERNAME")
-	password := os.Getenv("API_ACCESS_PASSWORD")
-	if username != "" && password != "" {
-		cfg.Username = username
-		cfg.Password = password
-		return cfg, nil
-	}
-
-	return nil, errors.New("no credentials provided: set API_ACCESS_BEARER_TOKEN or API_ACCESS_USERNAME/API_ACCESS_PASSWORD")
+	return nil, errors.New("no credentials provided: set API_ACCESS_TOKEN_EXCHANGE_URL+API_ACCESS_CAP_TOKEN or API_ACCESS_BEARER_TOKEN")
 }
 
 // TokenExchangeAudiences returns the manifest's API-group audiences followed by
