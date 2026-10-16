@@ -13,9 +13,9 @@ jobs:
   check:
     name: Go Workspace Check
     runs-on: ubuntu-latest
-    # Exlude dependabot from this check--it can't run make update-workspace, 
+    # Exlude dependency bots from this check--they can't run make update-workspace, 
     # We'll just force the next PR author to do it instead for now
-    if: ${{ github.actor != 'dependabot[bot]' }}
+    if: ${{ github.actor != 'dependabot[bot]' && github.actor != 'renovate[bot]' }}
 
     steps:
       - name: Checkout repository
