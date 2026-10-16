@@ -72,7 +72,7 @@ func TestTokenExchangeAudiences(t *testing.T) {
 
 func setKubeConfigEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"API_ACCESS_ROUTER_URL", "API_ACCESS_CAP_TOKEN", "API_ACCESS_TOKEN_EXCHANGE_URL", "API_ACCESS_BEARER_TOKEN", "API_ACCESS_USERNAME", "API_ACCESS_PASSWORD", "API_ACCESS_CA_FILE", "API_ACCESS_INSECURE_TLS"} {
+	for _, key := range []string{"API_ACCESS_ROUTER_URL", "API_ACCESS_CAP_TOKEN", "API_ACCESS_TOKEN_EXCHANGE_URL", "API_ACCESS_BEARER_TOKEN", "API_ACCESS_CA_FILE", "API_ACCESS_INSECURE_TLS"} {
 		t.Setenv(key, "")
 	}
 	t.Setenv("API_ACCESS_ROUTER_URL", "https://router.test")
@@ -91,16 +91,6 @@ func TestBuildKubeConfigWithOptions(t *testing.T) {
 			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token"},
 		},
 		{
-			name: "basic authentication",
-			env:  map[string]string{"API_ACCESS_USERNAME": "user", "API_ACCESS_PASSWORD": "password"},
-			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", Username: "user", Password: "password"},
-		},
-		{
-			name: "bearer takes precedence over basic authentication",
-			env:  map[string]string{"API_ACCESS_BEARER_TOKEN": "test-token", "API_ACCESS_USERNAME": "user", "API_ACCESS_PASSWORD": "password"},
-			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token"},
-		},
-		{
 			name: "CA file is preserved",
 			env:  map[string]string{"API_ACCESS_BEARER_TOKEN": "test-token", "API_ACCESS_CA_FILE": "/example/ca.pem"},
 			want: &rest.Config{Host: "https://router.test", APIPath: "/apis", BearerToken: "test-token", TLSClientConfig: rest.TLSClientConfig{CAFile: "/example/ca.pem"}},
@@ -112,7 +102,7 @@ func TestBuildKubeConfigWithOptions(t *testing.T) {
 		},
 		{
 			name:    "missing credentials",
-			wantErr: "no credentials provided: set API_ACCESS_BEARER_TOKEN or API_ACCESS_USERNAME/API_ACCESS_PASSWORD",
+			wantErr: "no credentials provided: set API_ACCESS_TOKEN_EXCHANGE_URL+API_ACCESS_CAP_TOKEN or API_ACCESS_BEARER_TOKEN",
 		},
 		{
 			name:    "partial exchange credentials do not fall back to bearer",
