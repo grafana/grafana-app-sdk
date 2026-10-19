@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	authnlib "github.com/grafana/authlib/authn"
@@ -35,6 +36,9 @@ type TokenExchangeCredentials struct {
 	// creating an internal authlib TokenExchangeClient from TokenExchangeURL/Token.
 	// The function receives the request context plus the audiences and namespace
 	// from the RemoteServiceTarget, and should return a valid signed access token.
+	// The audiences are narrowed to the request's API group and the target's
+	// BaseAudiences when that group is one of the target's Audiences (see
+	// RemoteServiceTarget.Audiences).
 	// When the context carries AuthInfo or a legacy caller ID token (see
 	// IDTokenFromContext), exchange on behalf of that caller. Prefer AuthInfo's
 	// access token over its ID token to preserve the delegation chain, and act
@@ -78,7 +82,15 @@ type RemoteServiceTarget struct {
 	Host string
 	// Audiences is the set of intended audiences for the token
 	// (e.g. []string{"apiextensions.k8s.io"} or []string{"dashboard.grafana.app", "provisioning.grafana.app"}).
+	// A request to /apis/<group>/... whose group is one of Audiences gets a
+	// token for that group and BaseAudiences only, so the token is not valid
+	// on the target's other groups. Other requests, such as discovery, get a
+	// token for all of Audiences.
 	Audiences []string
+	// BaseAudiences are added to the token for a request to one of Audiences'
+	// groups (e.g. []string{"grafana"} while verifiers still require it).
+	// They should also be in Audiences.
+	BaseAudiences []string
 	// Namespace is the token exchange namespace.
 	// Defaults to "*" (all namespaces) if empty.
 	Namespace string
@@ -115,10 +127,11 @@ func NewTokenExchangeRestConfig(creds TokenExchangeCredentials, target RemoteSer
 		},
 		WrapTransport: func(rt http.RoundTripper) http.RoundTripper {
 			return &tokenExchangeTransport{
-				exchangeFunc: exchangeFunc,
-				base:         rt,
-				audiences:    target.Audiences,
-				namespace:    ns,
+				exchangeFunc:  exchangeFunc,
+				base:          rt,
+				audiences:     target.Audiences,
+				baseAudiences: target.BaseAudiences,
+				namespace:     ns,
 			}
 		},
 	}, nil
@@ -150,10 +163,11 @@ func NewTokenExchangeRemoteRestConfig(creds TokenExchangeCredentials, target Rem
 		},
 		WrapTransport: func(rt http.RoundTripper) http.RoundTripper {
 			return &tokenExchangeTransport{
-				exchangeFunc: exchangeFunc,
-				base:         rt,
-				audiences:    target.Audiences,
-				namespace:    ns,
+				exchangeFunc:  exchangeFunc,
+				base:          rt,
+				audiences:     target.Audiences,
+				baseAudiences: target.BaseAudiences,
+				namespace:     ns,
 			}
 		},
 		OverrideAuth: true,
@@ -246,11 +260,13 @@ type tokenExchangeTransport struct {
 	exchangeFunc func(ctx context.Context, audiences []string, namespace string) (string, error)
 	base         http.RoundTripper
 	audiences    []string
-	namespace    string
+	// baseAudiences are added to a token narrowed to the request's group.
+	baseAudiences []string
+	namespace     string
 }
 
 func (t *tokenExchangeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	token, err := t.exchangeFunc(req.Context(), t.audiences, t.namespace)
+	token, err := t.exchangeFunc(req.Context(), t.audiencesFor(req), t.namespace)
 	if err != nil {
 		return nil, fmt.Errorf("token exchange failed: %w", err)
 	}
@@ -268,4 +284,24 @@ func (t *tokenExchangeTransport) RoundTrip(req *http.Request) (*http.Response, e
 	req.Header.Set("X-Access-Token", token)
 	req.Header.Set("Authorization", "Bearer "+token)
 	return t.base.RoundTrip(req)
+}
+
+// audiencesFor returns the audiences to request a token for req. A request to
+// /apis/<group>/... whose group is one of the configured audiences gets a
+// token for that group and the base audiences, so the token is not valid on
+// the other groups. Any other request, such as discovery or a group not
+// configured, gets every configured audience.
+func (t *tokenExchangeTransport) audiencesFor(req *http.Request) []string {
+	group := authnlib.APIGroupFromRequest(req)
+	if group == "" || !slices.Contains(t.audiences, group) {
+		return t.audiences
+	}
+	audiences := make([]string, 0, 1+len(t.baseAudiences))
+	audiences = append(audiences, group)
+	for _, audience := range t.baseAudiences {
+		if audience != "" && !slices.Contains(audiences, audience) {
+			audiences = append(audiences, audience)
+		}
+	}
+	return audiences
 }

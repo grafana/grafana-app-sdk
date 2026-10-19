@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -515,4 +516,73 @@ func TestTokenExchangeTransportRejectsEmptyToken(t *testing.T) {
 	_, err = transport.RoundTrip(req)
 	require.Error(t, err)
 	require.Nil(t, base.lastReq)
+}
+
+func TestTokenExchangeTransportNarrowsAudienceToRequestGroup(t *testing.T) {
+	configured := []string{"dashboard.grafana.app", "folder.grafana.app", "grafana"}
+	for path, want := range map[string][]string{
+		"/apis/folder.grafana.app/v1beta1/namespaces/stacks-1/folders": {"folder.grafana.app", "grafana"},
+		"/apis/dashboard.grafana.app/v1/namespaces/default/dashboards": {"dashboard.grafana.app", "grafana"},
+		"/apis/iam.grafana.app/v0alpha1/whoami":                        configured,
+		"/apis":                                                        configured,
+		"/openapi/v3/apis/folder.grafana.app/v1beta1":                  configured,
+		"/apis/dashboard.grafana.app/../folder.grafana.app/v1":         configured,
+	} {
+		t.Run(path, func(t *testing.T) {
+			var got []string
+			transport := &tokenExchangeTransport{
+				exchangeFunc: func(_ context.Context, audiences []string, _ string) (string, error) {
+					got = audiences
+					return "tok", nil
+				},
+				base:          &capturingRoundTripper{},
+				audiences:     configured,
+				baseAudiences: []string{"grafana"},
+				namespace:     "*",
+			}
+			req := &http.Request{Method: http.MethodGet, URL: &url.URL{Scheme: "https", Host: "host", Path: path}, Header: http.Header{}}
+			_, err := transport.RoundTrip(req.WithContext(context.Background()))
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
+		})
+	}
+}
+
+func TestTokenExchangeTransportNarrowsWithoutBaseAudiences(t *testing.T) {
+	var got []string
+	transport := &tokenExchangeTransport{
+		exchangeFunc: func(_ context.Context, audiences []string, _ string) (string, error) {
+			got = audiences
+			return "tok", nil
+		},
+		base:      &capturingRoundTripper{},
+		audiences: []string{"dashboard.grafana.app", "folder.grafana.app"},
+		namespace: "*",
+	}
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://host/apis/folder.grafana.app/v1beta1/folders", nil)
+	require.NoError(t, err)
+	_, err = transport.RoundTrip(req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"folder.grafana.app"}, got)
+}
+
+func TestNewTokenExchangeRestConfigNarrowsAudience(t *testing.T) {
+	var got []string
+	cfg, err := NewTokenExchangeRestConfig(TokenExchangeCredentials{
+		ExchangerFunc: func(_ context.Context, audiences []string, _ string) (string, error) {
+			got = audiences
+			return "tok", nil
+		},
+	}, RemoteServiceTarget{
+		Host:          "https://host",
+		Audiences:     []string{"dashboard.grafana.app", "provisioning.grafana.app", "grafana"},
+		BaseAudiences: []string{"grafana"},
+	})
+	require.NoError(t, err)
+	transport := cfg.WrapTransport(&capturingRoundTripper{})
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "https://host/apis/provisioning.grafana.app/v0alpha1/repositories", nil)
+	require.NoError(t, err)
+	_, err = transport.RoundTrip(req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"provisioning.grafana.app", "grafana"}, got)
 }

@@ -17,9 +17,10 @@ const (
 // KubeConfigOptions configures token exchange for a plugin's resource client.
 // The zero value preserves BuildKubeConfig's authentication behavior.
 type KubeConfigOptions struct {
-	// AdditionalTokenAudiences are added to the audiences derived from the manifest.
-	// Empty additions and duplicates are ignored. The Cloud Access Policy (CAP) must allow all
-	// requested audiences. These values are unused with bearer authentication.
+	// AdditionalTokenAudiences are added to the audiences derived from the manifest,
+	// and are kept when a token is narrowed to the request's API group (see
+	// k8s.RemoteServiceTarget.BaseAudiences). Empty additions and duplicates are
+	// ignored. The Cloud Access Policy (CAP) must allow all requested audiences. These values are unused with bearer authentication.
 	AdditionalTokenAudiences []string
 }
 
@@ -65,10 +66,13 @@ func BuildKubeConfigWithOptions(manifestData app.ManifestData, options KubeConfi
 				TokenExchangeURL: tokenExchangeURL,
 			},
 			k8s.RemoteServiceTarget{
-				Host:        routerURL,
-				Audiences:   TokenExchangeAudiences(manifestData, options.AdditionalTokenAudiences...),
-				InsecureTLS: os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
-				CAFile:      os.Getenv("API_ACCESS_CA_FILE"),
+				Host:      routerURL,
+				Audiences: TokenExchangeAudiences(manifestData, options.AdditionalTokenAudiences...),
+				// A token narrowed to the request's API group keeps grafana and
+				// the additional audiences, which deployments may still verify.
+				BaseAudiences: append([]string{grafanaAudience}, options.AdditionalTokenAudiences...),
+				InsecureTLS:   os.Getenv("API_ACCESS_INSECURE_TLS") == "true",
+				CAFile:        os.Getenv("API_ACCESS_CA_FILE"),
 			},
 		)
 	}

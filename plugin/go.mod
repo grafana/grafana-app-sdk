@@ -9,8 +9,8 @@ retract (
 
 require (
 	github.com/emicklei/go-restful/v3 v3.14.0
-	github.com/go-jose/go-jose/v4 v4.1.5
-	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
+	github.com/go-jose/go-jose/v4 v4.1.6
+	github.com/grafana/authlib v0.0.0-20261019063604-48dd5da49e01
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/grafana-app-sdk v0.60.10
 	github.com/grafana/grafana-app-sdk/logging v0.60.10

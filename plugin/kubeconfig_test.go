@@ -144,13 +144,18 @@ func TestBuildKubeConfigWithOptions(t *testing.T) {
 func TestBuildKubeConfigWithOptions_TokenExchange(t *testing.T) {
 	tests := []struct {
 		name          string
+		path          string
 		additions     []string
 		wantAudiences []string
 		deny          bool
 	}{
+		// A request to the app's group gets a token for that group, grafana and the additions only.
 		{name: "manifest audiences", wantAudiences: []string{"example.test", "grafana"}},
-		{name: "additional audience", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "grafana", "router.test"}},
+		{name: "additional audience", additions: []string{"router.test", ""}, wantAudiences: []string{"example.test", "grafana", "router.test"}},
 		{name: "unauthorized audience", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "grafana", "router.test"}, deny: true},
+		{name: "other manifest group", path: "/apis/other.test/v1/others", additions: []string{"router.test"}, wantAudiences: []string{"other.test", "grafana", "router.test"}},
+		// A request to no API group gets every audience.
+		{name: "discovery", path: "/apis", additions: []string{"router.test"}, wantAudiences: []string{"example.test", "grafana", "other.test", "router.test"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -191,11 +196,19 @@ func TestBuildKubeConfigWithOptions_TokenExchange(t *testing.T) {
 			t.Setenv("API_ACCESS_TOKEN_EXCHANGE_URL", signer.URL)
 			t.Setenv("API_ACCESS_CAP_TOKEN", "test-cap")
 
-			cfg, err := BuildKubeConfigWithOptions(app.ManifestData{Group: "example.test"}, KubeConfigOptions{AdditionalTokenAudiences: tt.additions})
+			manifest := app.ManifestData{
+				Group:            "example.test",
+				ExtraPermissions: &app.Permissions{AccessKinds: []app.KindPermission{{Group: "other.test"}}},
+			}
+			cfg, err := BuildKubeConfigWithOptions(manifest, KubeConfigOptions{AdditionalTokenAudiences: tt.additions})
 			require.NoError(t, err)
 			client, err := rest.HTTPClientFor(cfg)
 			require.NoError(t, err)
-			response, err := client.Get(backend.URL + "/apis/example.test/v1/examples")
+			path := tt.path
+			if path == "" {
+				path = "/apis/example.test/v1/examples"
+			}
+			response, err := client.Get(backend.URL + path)
 			assert.Equal(t, int32(1), signerCalls.Load())
 			if tt.deny {
 				require.ErrorContains(t, err, "audience not allowed")
