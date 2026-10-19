@@ -159,6 +159,7 @@ type CustomRouteAuthz struct {
 // CustomRoute represents a single custom route definition for a specific HTTP method.
 type CustomRoute struct {
 	Name             string                      `json:"name"`
+	Description      string                      `json:"description,omitempty"`
 	Request          CustomRouteRequest          `json:"request"`
 	Response         cue.Value                   `json:"response"`
 	ResponseMetadata CustomRouteResponseMetadata `json:"responseMetadata"`
