@@ -31,6 +31,9 @@ import (
 // for that exact GroupVersionResource.
 //
 // Implementing it is optional: a getter that does not is used unchanged.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type RESTOptionsGetterForResource interface {
 	generic.RESTOptionsGetter
 
@@ -152,6 +155,9 @@ func newStatusREST(store *genericregistry.Store, strategy rest.UpdateResetFields
 }
 
 // StatusREST implements the REST endpoint for changing the status of a resource.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type StatusREST struct {
 	Store *genericregistry.Store
 }
@@ -162,22 +168,34 @@ var (
 )
 
 // New creates a new runtime.Object.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *StatusREST) New() runtime.Object {
 	return r.Store.NewFunc()
 }
 
 // Destroy cleans up resources on shutdown.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (*StatusREST) Destroy() {
 	// Given that underlying store is shared with REST,
 	// we don't destroy it here explicitly.
 }
 
 // Get retrieves the object from the storage. It is required to support Patch.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *StatusREST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	return r.Store.Get(ctx, name, options)
 }
 
 // Update alters the status subset of an object.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, _ bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
 	// We are explicitly setting forceAllowCreate to false in the call to the underlying storage because
 	// subresources should never allow create on update.
@@ -185,6 +203,9 @@ func (r *StatusREST) Update(ctx context.Context, name string, objInfo rest.Updat
 }
 
 // GetResetFields implements rest.ResetFieldsStrategy
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *StatusREST) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	return r.Store.GetResetFields()
 }
@@ -215,6 +236,9 @@ func newSubresourceRESTWithStrategy(store *genericregistry.Store, strategy rest.
 }
 
 // SubresourceREST implements the REST endpoint for changing the status of a resource.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type SubresourceREST struct {
 	Store *genericregistry.Store
 }
@@ -225,22 +249,34 @@ var (
 )
 
 // New creates a new runtime.Object.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *SubresourceREST) New() runtime.Object {
 	return r.Store.NewFunc()
 }
 
 // Destroy cleans up resources on shutdown.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (*SubresourceREST) Destroy() {
 	// Given that underlying store is shared with REST,
 	// we don't destroy it here explicitly.
 }
 
 // Get retrieves the object from the storage. It is required to support Patch.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *SubresourceREST) Get(ctx context.Context, name string, options *metav1.GetOptions) (runtime.Object, error) {
 	return r.Store.Get(ctx, name, options)
 }
 
 // Update alters the status subset of an object.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *SubresourceREST) Update(ctx context.Context, name string, objInfo rest.UpdatedObjectInfo, createValidation rest.ValidateObjectFunc, updateValidation rest.ValidateObjectUpdateFunc, _ bool, options *metav1.UpdateOptions) (runtime.Object, bool, error) {
 	// We are explicitly setting forceAllowCreate to false in the call to the underlying storage because
 	// subresources should never allow create on update.
@@ -248,6 +284,9 @@ func (r *SubresourceREST) Update(ctx context.Context, name string, objInfo rest.
 }
 
 // GetResetFields implements rest.ResetFieldsStrategy
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *SubresourceREST) GetResetFields() map[fieldpath.APIVersion]*fieldpath.Set {
 	return r.Store.GetResetFields()
 }

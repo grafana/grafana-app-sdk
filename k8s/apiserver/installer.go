@@ -45,15 +45,24 @@ import (
 
 // ManagedKindResolver resolves a kind and version into a resource.Kind instance.
 // group is not provided as a ManagedKindResolver function is expected to exist on a per-group basis.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type ManagedKindResolver func(kind, ver string) (resource.Kind, bool)
 
 // CustomRouteResponseResolver resolves the kind, version, path, and method into a go type which is returned
 // from that custom route call. kind may be empty for resource routes.
 // group is not provided as a CustomRouteResponseResolver function is expected to exist on a per-group basis.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type CustomRouteResponseResolver func(kind, ver, routePath, method string) (any, bool)
 
 // AppInstaller represents an App which can be installed on a kubernetes API server.
 // It provides all the methods needed to configure and install an App onto an API server.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type AppInstaller interface {
 	// AddToScheme registers all the kinds provided by the App to the runtime.Scheme.
 	// Other functionality which relies on a runtime.Scheme may use the last scheme provided in AddToScheme for this purpose.
@@ -79,6 +88,9 @@ type AppInstaller interface {
 }
 
 // GenericAPIServer describes a generic API server which can have an API Group installed onto it
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type GenericAPIServer interface {
 	// InstallAPIGroup installs the provided APIGroupInfo onto the API Server
 	InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error
@@ -89,17 +101,25 @@ type GenericAPIServer interface {
 var _ GenericAPIServer = &KubernetesGenericAPIServer{}
 
 // KubernetesGenericAPIServer implements GenericAPIServer for a kubernetes *server.GenericAPIServer
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type KubernetesGenericAPIServer struct {
 	*genericapiserver.GenericAPIServer
 }
 
 // NewKubernetesGenericAPIServer creates a new KubernetesGenericAPIServer wrapping the provided *server.GenericAPIServer
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func NewKubernetesGenericAPIServer(apiserver *genericapiserver.GenericAPIServer) *KubernetesGenericAPIServer {
 	return &KubernetesGenericAPIServer{
 		GenericAPIServer: apiserver,
 	}
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (k *KubernetesGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiserver.APIGroupInfo) error {
 	err := k.GenericAPIServer.InstallAPIGroup(apiGroupInfo)
 	if err != nil {
@@ -133,6 +153,9 @@ func (k *KubernetesGenericAPIServer) InstallAPIGroup(apiGroupInfo *genericapiser
 
 // RegisteredWebServices returns the result of the underlying apiserver's Handler.GoRestfulContainer.RegisteredWebServices(),
 // or nil if either Handler or Handler.GoRestfulContainer is nil
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (k *KubernetesGenericAPIServer) RegisteredWebServices() []*restful.WebService {
 	if k.Handler != nil && k.Handler.GoRestfulContainer != nil {
 		return k.Handler.GoRestfulContainer.RegisteredWebServices()
@@ -142,6 +165,9 @@ func (k *KubernetesGenericAPIServer) RegisteredWebServices() []*restful.WebServi
 
 // GoTypeResolver is an interface which describes an object which catalogs the relationship between different aspects of an app
 // and its go types which need to be used by the API server.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type GoTypeResolver interface {
 	// KindToGoType resolves a kind and version into a resource.Kind instance.
 	// group is not provided as a KindToGoType function is expected to exist on a per-group basis.
@@ -166,8 +192,14 @@ type GoTypeResolver interface {
 
 var (
 	// ErrAppNotInitialized is returned if the app.App has not been initialized
+	//
+	// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+	// This package will be removed in the next minor release of grafana-app-sdk.
 	ErrAppNotInitialized = errors.New("app not initialized")
 	// ErrAppAlreadyInitialized is returned if the app.App has already been initialized and cannot be initialized again
+	//
+	// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+	// This package will be removed in the next minor release of grafana-app-sdk.
 	ErrAppAlreadyInitialized = errors.New("app already initialized")
 )
 
@@ -186,6 +218,9 @@ type defaultInstaller struct {
 }
 
 // NewDefaultAppInstaller creates a new AppInstaller with default behavior for an app.Provider and app.Config.
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 //
 //nolint:revive
 func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, resolver GoTypeResolver) (*defaultInstaller, error) {
@@ -210,10 +245,16 @@ func NewDefaultAppInstaller(appProvider app.Provider, appConfig app.Config, reso
 // SetResourceConfig sets a ResourceConfig for the installer, which will be used to check each kind and route
 // when installing the APIs. Custom routes will be matched using the first slash-separated segment of their path as the resource.
 // Providing a `nil` ResourceConfig will remove any resourceConfig checking (this is the default behavior).
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) SetResourceConfig(resourceConfig *serverstorage.ResourceConfig) {
 	r.resourceConfig = resourceConfig
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
+//
 //nolint:gocognit,gocyclo,funlen
 func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	if scheme == nil {
@@ -331,10 +372,14 @@ func (r *defaultInstaller) AddToScheme(scheme *runtime.Scheme) error {
 	return nil
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) ManifestData() *app.ManifestData {
 	return r.appProvider.Manifest().ManifestData
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	res := map[string]common.OpenAPIDefinition{}
 	hasCustomRoutes := false
@@ -423,6 +468,9 @@ func (r *defaultInstaller) GetOpenAPIDefinitions(callback common.ReferenceCallba
 	return res
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
+//
 //nolint:gocognit,funlen,gocyclo
 func (r *defaultInstaller) InstallAPIs(server GenericAPIServer, optsGetter genericregistry.RESTOptionsGetter) error {
 	group := r.appConfig.ManifestData.Group
@@ -818,6 +866,8 @@ func prefixRouteIDWithK8sVerbIfNotPresent(operationID string, method string) str
 	return fmt.Sprintf("%s%s", httpMethodToK8sVerb[strings.ToUpper(method)], operationID)
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 	supportsMutation := false
 	supportsValidation := false
@@ -842,6 +892,8 @@ func (r *defaultInstaller) AdmissionPlugin() admission.Factory {
 	return nil
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) InitializeApp(cfg clientrest.Config) error {
 	r.appMux.Lock()
 	defer r.appMux.Unlock()
@@ -860,6 +912,8 @@ func (r *defaultInstaller) InitializeApp(cfg clientrest.Config) error {
 	return nil
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) App() (app.App, error) {
 	if r.app == nil {
 		return nil, ErrAppNotInitialized
@@ -867,6 +921,8 @@ func (r *defaultInstaller) App() (app.App, error) {
 	return r.app, nil
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (r *defaultInstaller) GroupVersions() []schema.GroupVersion {
 	groupVersions := make([]schema.GroupVersion, 0, len(r.appConfig.ManifestData.Versions))
 	for _, gv := range r.appConfig.ManifestData.Versions {
@@ -1194,6 +1250,8 @@ func (r *defaultInstaller) getOperationRequestBodyOpenAPI(kind, ver, opPath, met
 	}
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type KindAndManifestKind struct {
 	Kind         resource.Kind
 	ManifestKind app.ManifestVersionKind
@@ -1287,6 +1345,8 @@ func spec3PropsToConnectorMethods(props spec3.PathProps, kind, ver, routePath st
 	return methods
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func NewDefaultScheme() *runtime.Scheme {
 	return newScheme()
 }
@@ -1634,8 +1694,12 @@ func copySpec3MediaType(mt *spec3.MediaType) *spec3.MediaType {
 	return &cpy
 }
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 type EmptyObject struct{}
 
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func (EmptyObject) OpenAPIModelName() string {
 	return "com.github.grafana.grafana-app-sdk.k8s.apiserver.EmptyObject"
 }
@@ -1660,6 +1724,9 @@ func fieldLabelConversionFuncForKind(kind resource.Kind) func(label, value strin
 // ToOpenAPIName is copied from k8s.io/apimachinery/pkg/runtime/scheme.go's toOpenAPIDefinitionName
 // To ensure we use the same naming definition as kubernetes expects
 // TODO: @IfSentient we should start using OpenAPIModelName() on all go types generated, this will likely need to be done in grafana/cog
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func ToOpenAPIName(name string) string {
 	nameParts := strings.Split(name, "/")
 	// Reverse first part. e.g., io.k8s... instead of k8s.io...
