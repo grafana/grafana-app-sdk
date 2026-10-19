@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 
-	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
+	"github.com/grafana/grafana-app-sdk/k8s/apiserver" //nolint:staticcheck // This deprecated runner depends on apiserver until both are removed.
 )
 
 // Deprecated: The standalone server runner will be removed in the next minor
