@@ -475,6 +475,7 @@ spec:
                       - message
                       type: object
                 description: Default OK response
+            summary: Reconcile a TestKind
             x-grafana-declared-authz-resource: testkinds
             x-grafana-declared-authz-subresource: reconcile
             x-grafana-declared-authz-verb: create
@@ -814,6 +815,7 @@ spec:
                       - message
                       type: object
                 description: Default OK response
+            summary: Reconcile a TestKind
             x-grafana-declared-authz-resource: testkinds
             x-grafana-declared-authz-subresource: reconcile
             x-grafana-declared-authz-verb: create

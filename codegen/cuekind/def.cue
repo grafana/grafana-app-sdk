@@ -153,6 +153,7 @@ SchemaWithOperatorState: Schema & {
 }
 #CustomRoute: {
 	name:     =~"^(get|log|read|replace|patch|delete|deletecollection|watch|connect|proxy|list|create|patch)([A-Za-z0-9]+)$"
+	summary?: string
 	description?: string
 	request:  #CustomRouteRequest
 	response: #CustomRouteResponse

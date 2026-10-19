@@ -215,6 +215,7 @@ testKind: {
 				"/reconcile": {
 					POST: {
 						name: "createReconcileRequest"
+						summary: "Reconcile a TestKind"
 						description: "Triggers a reconcile of the TestKind.\nSet force to reconcile even if nothing changed."
 						request: {
 							body: {
