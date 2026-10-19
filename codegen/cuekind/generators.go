@@ -11,12 +11,11 @@ import (
 	"github.com/grafana/grafana-app-sdk/codegen"
 	"github.com/grafana/grafana-app-sdk/codegen/jennies"
 	"github.com/grafana/grafana-app-sdk/codegen/templates"
-	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
 )
 
 // CRDGenerator returns a Generator which will create a CRD file
 func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string) *codejen.JennyList[codegen.AppManifest] {
-	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(jennies.CRDGenerator(outputEncoder, outputExtension))
 	return g
 }
@@ -28,7 +27,7 @@ func CRDGenerator(outputEncoder jennies.CRDOutputEncoder, outputExtension string
 // When combined with `versioned`, each version package will contain all kinds in the group
 // which have a schema for that version.
 func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
-	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(
 		&jennies.GoTypes{
 			Depth:                1,
@@ -38,7 +37,7 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 			ExcludeFields:        []string{"metadata"}, // We don't want an object generated for the metadata, as we use the k8s metadata objects
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return ToOpenAPIName(path)
 			},
 		},
 		&jennies.ResourceObjectGenerator{
@@ -46,7 +45,7 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 			GroupByKind:                 !groupKinds,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return ToOpenAPIName(path)
 			},
 		},
 		&jennies.SchemaGenerator{
@@ -89,7 +88,7 @@ func BackendPluginGenerator(projectRepo, generatedAPIPath string, groupKinds boo
 
 // TypeScriptResourceGenerator returns a Generator which generates TypeScript resource code.
 func TypeScriptResourceGenerator() *codejen.JennyList[codegen.AppManifest] {
-	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(&jennies.TypeScriptTypes{
 		Depth: 1,
 	}, &jennies.TypeScriptResourceTypes{})
@@ -99,7 +98,7 @@ func TypeScriptResourceGenerator() *codejen.JennyList[codegen.AppManifest] {
 // OperatorGenerator returns a Generator which will build out watcher boilerplate for each resource,
 // and a main func to run an operator for the watchers.
 func OperatorGenerator(projectRepo, codegenPath string, groupKinds bool) *codejen.JennyList[codegen.AppManifest] {
-	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(
 		&jennies.OperatorKubeConfigJenny{},
 		jennies.OperatorMainJenny(projectRepo, codegenPath, !groupKinds),
@@ -113,7 +112,7 @@ func AppGenerator(projectRepo, codegenPath string, manifestGoFilePath string, gr
 	if len(parts) == 0 {
 		parts = []string{""}
 	}
-	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(
 		jennies.WatcherJenny(projectRepo, codegenPath, !groupKinds),
 		&jennies.AppGenerator{
@@ -185,7 +184,7 @@ type ManifestGoGeneratorConfig struct {
 }
 
 func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codegen.AppManifest] {
-	g := codejen.JennyListWithNamer[codegen.AppManifest](namerFuncManifest)
+	g := codejen.JennyListWithNamer(namerFuncManifest)
 	g.Append(&jennies.ManifestGoGenerator{
 		Package:            cfg.Package,
 		IncludeSchemas:     cfg.IncludeSchemas,
@@ -202,7 +201,7 @@ func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codeg
 			SkipImportsProcess:   cfg.SkipImportsProcess,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(cfg.ProjectRepo, cfg.GoGenPath, jennies.GetGeneratedGoTypePath(!cfg.GroupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return ToOpenAPIName(path)
 			},
 		},
 		&jennies.ClientJenny{
@@ -210,6 +209,26 @@ func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codeg
 			SkipImportsProcess: cfg.SkipImportsProcess,
 		})
 	return g
+}
+
+// ToOpenAPIName is copied from k8s.io/apimachinery/pkg/runtime/scheme.go's toOpenAPIDefinitionName
+// To ensure we use the same naming definition as kubernetes expects
+// TODO: @IfSentient we should start using OpenAPIModelName() on all go types generated, this will likely need to be done in grafana/cog
+func ToOpenAPIName(name string) string {
+	nameParts := strings.Split(name, "/")
+	// Reverse first part. e.g., io.k8s... instead of k8s.io...
+	if len(nameParts) > 0 && strings.Contains(nameParts[0], ".") {
+		nameParts[0] = reverseParts(nameParts[0])
+	}
+	return strings.Join(nameParts, ".")
+}
+
+func reverseParts(dotSeparatedName string) string {
+	parts := strings.Split(dotSeparatedName, ".")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return strings.Join(parts, ".")
 }
 
 func namerFuncManifest(m codegen.AppManifest) string {

@@ -16,6 +16,10 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 type Options struct {
 	RecommendedOptions *genericoptions.RecommendedOptions
 	scheme             *runtime.Scheme
@@ -25,6 +29,10 @@ type Options struct {
 
 var defaultEtcdPathPrefix = "/registry/grafana.app"
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func NewOptions(installers []AppInstaller) *Options {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
@@ -42,16 +50,28 @@ func NewOptions(installers []AppInstaller) *Options {
 	}
 }
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func (o *Options) AddFlags(fs *pflag.FlagSet) {
 	o.RecommendedOptions.AddFlags(fs)
 }
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func (o *Options) Validate() error {
 	errs := []error{} //nolint:prealloc
 	errs = append(errs, o.RecommendedOptions.Validate()...)
 	return utilerrors.NewAggregate(errs)
 }
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func (o *Options) ApplyTo(cfg *Config) error {
 	// Ensure the config's scheme matches the options' scheme. Otherwise there can be problems with codecs
 	cfg.scheme = o.scheme
@@ -91,6 +111,11 @@ func (o *Options) ApplyTo(cfg *Config) error {
 }
 
 // Config creates a config
+//
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func (o *Options) Config() (*Config, error) {
 	cfg := &Config{
 		Generic:    genericapiserver.NewRecommendedConfig(o.codecs),

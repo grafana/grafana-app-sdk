@@ -6,9 +6,13 @@ import (
 	"github.com/spf13/cobra"
 	genericapiserver "k8s.io/apiserver/pkg/server"
 
-	"github.com/grafana/grafana-app-sdk/k8s/apiserver"
+	"github.com/grafana/grafana-app-sdk/k8s/apiserver" //nolint:staticcheck // This deprecated runner depends on apiserver until both are removed.
 )
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func NewCommandStartServer(ctx context.Context, o *apiserver.Options) *cobra.Command {
 	cmd := &cobra.Command{
 		Short: "Launch a API server",

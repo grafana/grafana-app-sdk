@@ -15,6 +15,9 @@ import (
 // GetCommonOpenAPIDefinitions returns a map of the kubernetes common OpenAPI definitions copied from
 // https://raw.githubusercontent.com/kubernetes/sample-apiserver/refs/heads/master/pkg/generated/openapi/zz_generated.openapi.go
 // TODO: can we automate this and use the kube-codegen tooling to make this function?
+//
+// Deprecated: Use github.com/grafana/grafana/pkg/apiserver/appsdk instead.
+// This package will be removed in the next minor release of grafana-app-sdk.
 func GetCommonOpenAPIDefinitions(ref common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 	return map[string]common.OpenAPIDefinition{
 		resource.Quantity{}.OpenAPIModelName():             schema_apimachinery_pkg_api_resource_Quantity(ref),

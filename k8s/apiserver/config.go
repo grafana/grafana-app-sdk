@@ -14,6 +14,10 @@ import (
 	"github.com/grafana/grafana-app-sdk/app"
 )
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 type Config struct {
 	Generic    *genericapiserver.RecommendedConfig
 	scheme     *runtime.Scheme
@@ -22,6 +26,11 @@ type Config struct {
 }
 
 // NewConfig returns a new Config for the provided installers
+//
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func NewConfig(installers []AppInstaller) (*Config, error) {
 	scheme := newScheme()
 	codecs := serializer.NewCodecFactory(scheme)
@@ -30,6 +39,11 @@ func NewConfig(installers []AppInstaller) (*Config, error) {
 
 // NewConfigWithScheme creates a new Config with a provided runtime.Scheme and serializer.CodecFactory.
 // This can be used for more fine-grained control of the scheme.
+//
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func NewConfigWithScheme(installers []AppInstaller, scheme *runtime.Scheme, codecs serializer.CodecFactory) (*Config, error) {
 	c := &Config{
 		scheme:     scheme,
@@ -52,6 +66,10 @@ func (c *Config) addToScheme() error {
 	return nil
 }
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func (c *Config) UpdateOpenAPIConfig() {
 	defGetter := func(callback common.ReferenceCallback) map[string]common.OpenAPIDefinition {
 		res := make(map[string]common.OpenAPIDefinition)
@@ -71,6 +89,10 @@ func (c *Config) UpdateOpenAPIConfig() {
 	c.Generic.OpenAPIV3Config.Info.Version = "1.0"
 }
 
+// Deprecated: The standalone server runner will be removed in the next minor
+// release of grafana-app-sdk. It was not moved to
+// github.com/grafana/grafana/pkg/apiserver/appsdk.
+// See the k8s/apiserver README for migration details.
 func (c *Config) NewServer(delegate genericapiserver.DelegationTarget) (*genericapiserver.GenericAPIServer, error) {
 	loopbackConfig := *c.Generic.LoopbackClientConfig
 	loopbackConfig.APIPath = "/apis"
