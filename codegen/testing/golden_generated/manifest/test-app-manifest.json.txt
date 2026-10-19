@@ -705,6 +705,8 @@
                             },
                             "/reconcile": {
                                 "post": {
+                                    "summary": "Reconcile a TestKind",
+                                    "description": "Triggers a reconcile of the TestKind.\nSet force to reconcile even if nothing changed.",
                                     "operationId": "createReconcileRequest",
                                     "requestBody": {
                                         "content": {
@@ -1096,6 +1098,7 @@
                                 }
                             ],
                             "post": {
+                                "description": "Triggers a reconcile of the TestKind.\nSet force to reconcile even if nothing changed.",
                                 "operationId": "createReconcileRequest",
                                 "requestBody": {
                                     "content": {
@@ -1150,6 +1153,7 @@
                                         "description": "Default OK response"
                                     }
                                 },
+                                "summary": "Reconcile a TestKind",
                                 "x-grafana-declared-authz-resource": "testkinds",
                                 "x-grafana-declared-authz-subresource": "reconcile",
                                 "x-grafana-declared-authz-verb": "create"

@@ -215,6 +215,12 @@ func TestParseManifestRoutes(t *testing.T) {
 			Resource: "testkinds",
 		}, *v3Kind.Routes["/search"]["GET"].Authz)
 
+		// Route summary and description
+		assert.Equal(t, "Reconcile a TestKind", v3Kind.Routes["/reconcile"]["POST"].Summary)
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].Summary)
+		assert.Equal(t, "Triggers a reconcile of the TestKind.\nSet force to reconcile even if nothing changed.", v3Kind.Routes["/reconcile"]["POST"].Description)
+		assert.Empty(t, v3Kind.Routes["/search"]["GET"].Description)
+
 		// Routes with no authz section have no authz information
 		assert.Nil(t, routes.Namespaced["/foobar"]["POST"].Authz)
 	})

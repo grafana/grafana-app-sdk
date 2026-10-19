@@ -870,8 +870,8 @@ func buildPathPropsFromMethods(sourcePath string, sourceMethodsMap map[string]co
 
 		targetOperation := &spec3.Operation{
 			OperationProps: spec3.OperationProps{
-				Summary:     "",
-				Description: "",
+				Summary:     sourceRoute.Summary,
+				Description: sourceRoute.Description,
 				Parameters:  targetParameters,
 				RequestBody: targetRequestBody,
 				Responses:   targetResponses,

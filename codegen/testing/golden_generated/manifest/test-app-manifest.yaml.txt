@@ -435,6 +435,9 @@ spec:
                 description: Default OK response
         /reconcile:
           post:
+            description: |-
+              Triggers a reconcile of the TestKind.
+              Set force to reconcile even if nothing changed.
             operationId: createReconcileRequest
             requestBody:
               content:
@@ -472,6 +475,7 @@ spec:
                       - message
                       type: object
                 description: Default OK response
+            summary: Reconcile a TestKind
             x-grafana-declared-authz-resource: testkinds
             x-grafana-declared-authz-subresource: reconcile
             x-grafana-declared-authz-verb: create
@@ -771,6 +775,9 @@ spec:
             schema:
               type: string
           post:
+            description: |-
+              Triggers a reconcile of the TestKind.
+              Set force to reconcile even if nothing changed.
             operationId: createReconcileRequest
             requestBody:
               content:
@@ -808,6 +815,7 @@ spec:
                       - message
                       type: object
                 description: Default OK response
+            summary: Reconcile a TestKind
             x-grafana-declared-authz-resource: testkinds
             x-grafana-declared-authz-subresource: reconcile
             x-grafana-declared-authz-verb: create
