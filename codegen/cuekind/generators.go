@@ -38,7 +38,7 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 			ExcludeFields:        []string{"metadata"}, // We don't want an object generated for the metadata, as we use the k8s metadata objects
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return ToOpenAPIName(path)
 			},
 		},
 		&jennies.ResourceObjectGenerator{
@@ -46,7 +46,7 @@ func ResourceGenerator(projectRepo, generatedAPIPath string, groupKinds bool) *c
 			GroupByKind:                 !groupKinds,
 			OpenAPINamer: func(info jennies.OpenAPINamerInfo) string {
 				path := filepath.Join(projectRepo, generatedAPIPath, jennies.GetGeneratedGoTypePath(!groupKinds, info.ShortGroup, info.Version, strings.ToLower(info.Kind)), info.TypeName)
-				return apiserver.ToOpenAPIName(path)
+				return ToOpenAPIName(path)
 			},
 		},
 		&jennies.SchemaGenerator{
@@ -210,6 +210,26 @@ func ManifestGoGenerator(cfg ManifestGoGeneratorConfig) *codejen.JennyList[codeg
 			SkipImportsProcess: cfg.SkipImportsProcess,
 		})
 	return g
+}
+
+// ToOpenAPIName is copied from k8s.io/apimachinery/pkg/runtime/scheme.go's toOpenAPIDefinitionName
+// To ensure we use the same naming definition as kubernetes expects
+// TODO: @IfSentient we should start using OpenAPIModelName() on all go types generated, this will likely need to be done in grafana/cog
+func ToOpenAPIName(name string) string {
+	nameParts := strings.Split(name, "/")
+	// Reverse first part. e.g., io.k8s... instead of k8s.io...
+	if len(nameParts) > 0 && strings.Contains(nameParts[0], ".") {
+		nameParts[0] = reverseParts(nameParts[0])
+	}
+	return strings.Join(nameParts, ".")
+}
+
+func reverseParts(dotSeparatedName string) string {
+	parts := strings.Split(dotSeparatedName, ".")
+	for i, j := 0, len(parts)-1; i < j; i, j = i+1, j-1 {
+		parts[i], parts[j] = parts[j], parts[i]
+	}
+	return strings.Join(parts, ".")
 }
 
 func namerFuncManifest(m codegen.AppManifest) string {
