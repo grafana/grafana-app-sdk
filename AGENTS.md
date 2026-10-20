@@ -282,7 +282,6 @@ k8s Watch Event → Reflector → DeltaFIFO → Controller →
 - `cache/controller.go` - Cache controller managing reflector + DeltaFIFO
 - `webhooks.go` - Admission webhook handlers
 - `conversion.go` - Multi-version conversion webhook
-- `apiserver/` - Extension API server support for custom endpoints
 
 **Key Pattern**: Watch-list protocol for memory efficiency:
 - Traditional: LIST all objects (high memory), then WATCH for changes
