@@ -14,23 +14,22 @@ service ConversionService {
   rpc ConvertObjects(ConvertObjectsRequest) returns (ConvertObjectsResponse);
 }
 
-// ConvertObjectsRequest supports converting objects from one version to
-// another.
+// ConvertObjectsRequest supports converting objects to a new version
 message ConvertObjectsRequest {
   // Target GroupVersionKind
-  GroupVersionKind target = 1;
+  GroupVersionKind target = 10;
 
   // When the request is all in one namespace -- this is used for authentication
-  string namespace = 2;
+  string namespace = 20;
 
   // uid is an identifier for the individual request/response. It allows
   // distinguishing instances of requests which are otherwise identical
   // (parallel requests, etc). It is meant to track the round trip between the
   // Kubernetes API server and the webhook, not the user request.
-  string uid = 3;
+  string uid = 30;
 
   // objects contains the objects to convert.
-  repeated bytes objects = 4;
+  repeated bytes objects = 40;
 }
 
 // ConvertObjectsResponse contains the converted objects.

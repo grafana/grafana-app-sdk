@@ -23,14 +23,13 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// ConvertObjectsRequest supports converting objects from one version to
-// another.
+// ConvertObjectsRequest supports converting objects to a new version
 type ConvertObjectsRequest struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
-	xxx_hidden_Target      *GroupVersionKind      `protobuf:"bytes,1,opt,name=target"`
-	xxx_hidden_Namespace   *string                `protobuf:"bytes,2,opt,name=namespace"`
-	xxx_hidden_Uid         *string                `protobuf:"bytes,3,opt,name=uid"`
-	xxx_hidden_Objects     [][]byte               `protobuf:"bytes,4,rep,name=objects"`
+	xxx_hidden_Target      *GroupVersionKind      `protobuf:"bytes,10,opt,name=target"`
+	xxx_hidden_Namespace   *string                `protobuf:"bytes,20,opt,name=namespace"`
+	xxx_hidden_Uid         *string                `protobuf:"bytes,30,opt,name=uid"`
+	xxx_hidden_Objects     [][]byte               `protobuf:"bytes,40,rep,name=objects"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -407,10 +406,11 @@ const file_grafana_plugin_v3_conversion_proto_rawDesc = "" +
 	"\n" +
 	"\"grafana/plugin/v3/conversion.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\x1a\x1egrafana/plugin/v3/status.proto\"\x9e\x01\n" +
 	"\x15ConvertObjectsRequest\x12;\n" +
-	"\x06target\x18\x01 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x06target\x12\x1c\n" +
-	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x10\n" +
-	"\x03uid\x18\x03 \x01(\tR\x03uid\x12\x18\n" +
-	"\aobjects\x18\x04 \x03(\fR\aobjects\"\xe9\x01\n" +
+	"\x06target\x18\n" +
+	" \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x06target\x12\x1c\n" +
+	"\tnamespace\x18\x14 \x01(\tR\tnamespace\x12\x10\n" +
+	"\x03uid\x18\x1e \x01(\tR\x03uid\x12\x18\n" +
+	"\aobjects\x18( \x03(\fR\aobjects\"\xe9\x01\n" +
 	"\x16ConvertObjectsResponse\x125\n" +
 	"\x05error\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.StatusResultR\x05error\x12\x10\n" +
 	"\x03uid\x18\x02 \x01(\tR\x03uid\x12N\n" +
