@@ -4,8 +4,8 @@ edition = "2024";
 
 package grafana.plugin.v3;
 
-import "grafana/plugin/v3/status.proto";
 import "grafana/plugin/v3/common.proto";
+import "grafana/plugin/v3/status.proto";
 
 // ConversionService can be used to convert resources between versions.
 // See: https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definition-versioning/#webhook-request-and-response
@@ -20,14 +20,17 @@ message ConvertObjectsRequest {
   // Target GroupVersionKind
   GroupVersionKind target = 1;
 
+  // When the request is all in one namespace -- this is used for authentication
+  string namespace = 2;
+
   // uid is an identifier for the individual request/response. It allows
   // distinguishing instances of requests which are otherwise identical
   // (parallel requests, etc). It is meant to track the round trip between the
   // Kubernetes API server and the webhook, not the user request.
-  string uid = 2;
+  string uid = 3;
 
   // objects contains the objects to convert.
-  repeated bytes objects = 3;
+  repeated bytes objects = 4;
 }
 
 // ConvertObjectsResponse contains the converted objects.

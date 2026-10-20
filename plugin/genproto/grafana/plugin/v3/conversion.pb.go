@@ -28,8 +28,9 @@ const (
 type ConvertObjectsRequest struct {
 	state                  protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Target      *GroupVersionKind      `protobuf:"bytes,1,opt,name=target"`
-	xxx_hidden_Uid         *string                `protobuf:"bytes,2,opt,name=uid"`
-	xxx_hidden_Objects     [][]byte               `protobuf:"bytes,3,rep,name=objects"`
+	xxx_hidden_Namespace   *string                `protobuf:"bytes,2,opt,name=namespace"`
+	xxx_hidden_Uid         *string                `protobuf:"bytes,3,opt,name=uid"`
+	xxx_hidden_Objects     [][]byte               `protobuf:"bytes,4,rep,name=objects"`
 	XXX_raceDetectHookData protoimpl.RaceDetectHookData
 	XXX_presence           [1]uint32
 	unknownFields          protoimpl.UnknownFields
@@ -68,6 +69,16 @@ func (x *ConvertObjectsRequest) GetTarget() *GroupVersionKind {
 	return nil
 }
 
+func (x *ConvertObjectsRequest) GetNamespace() string {
+	if x != nil {
+		if x.xxx_hidden_Namespace != nil {
+			return *x.xxx_hidden_Namespace
+		}
+		return ""
+	}
+	return ""
+}
+
 func (x *ConvertObjectsRequest) GetUid() string {
 	if x != nil {
 		if x.xxx_hidden_Uid != nil {
@@ -89,9 +100,14 @@ func (x *ConvertObjectsRequest) SetTarget(v *GroupVersionKind) {
 	x.xxx_hidden_Target = v
 }
 
+func (x *ConvertObjectsRequest) SetNamespace(v string) {
+	x.xxx_hidden_Namespace = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 4)
+}
+
 func (x *ConvertObjectsRequest) SetUid(v string) {
 	x.xxx_hidden_Uid = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 3)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 4)
 }
 
 func (x *ConvertObjectsRequest) SetObjects(v [][]byte) {
@@ -105,19 +121,31 @@ func (x *ConvertObjectsRequest) HasTarget() bool {
 	return x.xxx_hidden_Target != nil
 }
 
-func (x *ConvertObjectsRequest) HasUid() bool {
+func (x *ConvertObjectsRequest) HasNamespace() bool {
 	if x == nil {
 		return false
 	}
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 1)
 }
 
+func (x *ConvertObjectsRequest) HasUid() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 2)
+}
+
 func (x *ConvertObjectsRequest) ClearTarget() {
 	x.xxx_hidden_Target = nil
 }
 
-func (x *ConvertObjectsRequest) ClearUid() {
+func (x *ConvertObjectsRequest) ClearNamespace() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 1)
+	x.xxx_hidden_Namespace = nil
+}
+
+func (x *ConvertObjectsRequest) ClearUid() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 2)
 	x.xxx_hidden_Uid = nil
 }
 
@@ -126,6 +154,8 @@ type ConvertObjectsRequest_builder struct {
 
 	// Target GroupVersionKind
 	Target *GroupVersionKind
+	// When the request is all in one namespace -- this is used for authentication
+	Namespace *string
 	// uid is an identifier for the individual request/response. It allows
 	// distinguishing instances of requests which are otherwise identical
 	// (parallel requests, etc). It is meant to track the round trip between the
@@ -140,8 +170,12 @@ func (b0 ConvertObjectsRequest_builder) Build() *ConvertObjectsRequest {
 	b, x := &b0, m0
 	_, _ = b, x
 	x.xxx_hidden_Target = b.Target
+	if b.Namespace != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 4)
+		x.xxx_hidden_Namespace = b.Namespace
+	}
 	if b.Uid != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 3)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 4)
 		x.xxx_hidden_Uid = b.Uid
 	}
 	x.xxx_hidden_Objects = b.Objects
@@ -371,11 +405,12 @@ var File_grafana_plugin_v3_conversion_proto protoreflect.FileDescriptor
 
 const file_grafana_plugin_v3_conversion_proto_rawDesc = "" +
 	"\n" +
-	"\"grafana/plugin/v3/conversion.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/status.proto\x1a\x1egrafana/plugin/v3/common.proto\"\x80\x01\n" +
+	"\"grafana/plugin/v3/conversion.proto\x12\x11grafana.plugin.v3\x1a\x1egrafana/plugin/v3/common.proto\x1a\x1egrafana/plugin/v3/status.proto\"\x9e\x01\n" +
 	"\x15ConvertObjectsRequest\x12;\n" +
-	"\x06target\x18\x01 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x06target\x12\x10\n" +
-	"\x03uid\x18\x02 \x01(\tR\x03uid\x12\x18\n" +
-	"\aobjects\x18\x03 \x03(\fR\aobjects\"\xe9\x01\n" +
+	"\x06target\x18\x01 \x01(\v2#.grafana.plugin.v3.GroupVersionKindR\x06target\x12\x1c\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x12\x10\n" +
+	"\x03uid\x18\x03 \x01(\tR\x03uid\x12\x18\n" +
+	"\aobjects\x18\x04 \x03(\fR\aobjects\"\xe9\x01\n" +
 	"\x16ConvertObjectsResponse\x125\n" +
 	"\x05error\x18\x01 \x01(\v2\x1f.grafana.plugin.v3.StatusResultR\x05error\x12\x10\n" +
 	"\x03uid\x18\x02 \x01(\tR\x03uid\x12N\n" +
@@ -413,8 +448,8 @@ func file_grafana_plugin_v3_conversion_proto_init() {
 	if File_grafana_plugin_v3_conversion_proto != nil {
 		return
 	}
-	file_grafana_plugin_v3_status_proto_init()
 	file_grafana_plugin_v3_common_proto_init()
+	file_grafana_plugin_v3_status_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
