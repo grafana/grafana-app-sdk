@@ -14,11 +14,11 @@ require (
 	github.com/bradfitz/gomemcache v0.0.0-20260422231931-4d751bb6e37c
 	github.com/cespare/xxhash/v2 v2.3.0
 	github.com/emicklei/go-restful/v3 v3.14.0
-	github.com/getkin/kin-openapi v0.149.0
+	github.com/getkin/kin-openapi v0.151.0
 	github.com/grafana/authlib v0.0.0-20260922202713-e3b571f7135d
 	github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815
 	github.com/grafana/codejen v0.0.4
-	github.com/grafana/cog v0.2.1
+	github.com/grafana/cog v0.2.2
 	github.com/grafana/grafana-app-sdk/logging v0.60.10
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/prometheus/client_golang v1.25.0
@@ -56,7 +56,7 @@ require (
 
 require (
 	cel.dev/expr v0.25.3 // indirect
-	cuelabs.dev/go/oci/ociregistry v0.0.0-20260911133901-a89591e98079 // indirect
+	cuelabs.dev/go/oci/ociregistry v0.0.0-20261008151123-94f4aa6e0087 // indirect
 	github.com/NYTimes/gziphandler v1.1.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -71,7 +71,7 @@ require (
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.4 // indirect
-	github.com/go-jose/go-jose/v4 v4.1.5 // indirect
+	github.com/go-jose/go-jose/v4 v4.1.6 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v1.0.2 // indirect
@@ -106,7 +106,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
-	github.com/mattn/go-colorable v0.1.15 // indirect
+	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
