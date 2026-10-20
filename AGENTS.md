@@ -123,14 +123,13 @@ The SDK supports three application architectures:
 
 1. **Frontend-only**: Custom Kinds with basic validation, no backend
 2. **Operator-based**: Backend with validation, mutation, conversion, and reconciliation hooks
-3. **Custom API**: Full control with extension API server for custom endpoints
+3. **Custom API**: Custom routes declared in the app manifest, served alongside platform-managed kinds
 
 All patterns assume resources can be modified outside your UI (kubectl, gitops tools like Flux, backup tools like Velero).
 
 ### Kubernetes Integration
 
 - Built on `k8s.io/client-go` and `k8s.io/apimachinery`
-- Uses `k8s.io/apiserver` for extension API servers
 - Implements controller-runtime-like informers and reconcilers
 - Supports watch-list streaming via `WatchListClient` feature gate
 - Compatible with CRDs (Custom Resource Definitions)
@@ -398,20 +397,19 @@ The SDK supports three architectural patterns:
 
 #### 3. Custom API Applications
 
-**Use case**: Apps needing custom endpoints or storage strategies
+**Use case**: Apps needing custom endpoints beyond CRUD
 
 **Components**:
-- Extension API server (implements k8s aggregation API)
-- Custom routing and storage logic
+- Custom routes declared in the app manifest (kind subresources or version-level routes)
+- App backend handling the routes (`app.App` custom route handlers)
 - Optional frontend plugin
 
 **Capabilities**:
 - Custom subresources (e.g., `/rollback`, `/scale`)
-- Custom storage backends
-- Full control over authorization
 - Non-standard API patterns (within RESTful constraints)
+- Storage remains platform-managed; the SDK does not ship an API server or custom storage integration
 
-**Trade-off**: Highest complexity, most flexibility
+**Trade-off**: Most flexibility, but routes must follow RESTful resource/subresource conventions
 
 ### Event-Driven Execution Flow
 
