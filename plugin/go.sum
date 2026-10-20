@@ -41,8 +41,8 @@ github.com/fxamacker/cbor/v2 v2.9.4 h1:xwjVlxEMR3S605oUlgBjKLTTeGFciYPGYCtF/35LK
 github.com/fxamacker/cbor/v2 v2.9.4/go.mod h1:vM4b+DJCtHn+zz7h3FFp/hDAI9WNWCsZj23V5ytsSxQ=
 github.com/getkin/kin-openapi v0.149.0 h1:ZbhmVJ4yq5RZDUsyP8lcBcGMsjsaTqXEFt6isdtMDfA=
 github.com/getkin/kin-openapi v0.149.0/go.mod h1:1+BHDzstro+P5CKtPy1X4PfofnFgmRe6uvMy9+r9fKY=
-github.com/go-jose/go-jose/v4 v4.1.5 h1:RjgjO2LOtWOJKUC5wpwY9LR3B3vwVAz6JS2YHfYU6eA=
-github.com/go-jose/go-jose/v4 v4.1.5/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
+github.com/go-jose/go-jose/v4 v4.1.6 h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=
+github.com/go-jose/go-jose/v4 v4.1.6/go.mod h1:x4oUasVrzR7071A4TnHLGSPpNOm2a21K9Kf04k1rs08=
 github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
 github.com/go-logr/logr v1.4.4 h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8=
 github.com/go-logr/logr v1.4.4/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
@@ -107,10 +107,10 @@ github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815 h1:jKXYY/6zw
 github.com/grafana/authlib/types v0.0.0-20260814184937-0d62418c2815/go.mod h1:L+zFm3lz5Y61gLgMMfKgHZ+863BwVfkLpJLqB/BZvlk=
 github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745 h1:kGigNSum3b7XJjemhtDMPko6IW5PBJLxoASR+Qzo6Rc=
 github.com/grafana/dskit v0.0.0-20260814134254-4a836a70f745/go.mod h1:dLUEt5k1Zv21//kvSk8ZR4kXjCq5oALBLu2LupLhj5k=
-github.com/grafana/grafana-app-sdk v0.60.10 h1:uCNGpAMqHXiRajjEB++QwmkWTyo+K8TlbuPVg5LJK5o=
-github.com/grafana/grafana-app-sdk v0.60.10/go.mod h1:cdSayNCfBtb0u4mp086ypQar50TUHk60jGQNCKqUYQQ=
-github.com/grafana/grafana-app-sdk/logging v0.60.10 h1:PE9IkTkxgdIC3/OlvilUhrHTUvxder7/lTRPTK3mHwI=
-github.com/grafana/grafana-app-sdk/logging v0.60.10/go.mod h1:uOj20cIKXKJccxLN/ahBK+VJ1p59Bxzf4Gyasrq+aSc=
+github.com/grafana/grafana-app-sdk v0.60.16 h1:p+UjbTkHU3bVl2lJKxNAjv75HCP+z95vYpBpRLELlqM=
+github.com/grafana/grafana-app-sdk v0.60.16/go.mod h1:QjWAA/NTGtEsS1ATA6M46qgqH4LLfN8zLjXWqCKYy+0=
+github.com/grafana/grafana-app-sdk/logging v0.60.16 h1:gWDSdXzfBR/jed/j0RckA67tJcp1yT7l454f53TboO4=
+github.com/grafana/grafana-app-sdk/logging v0.60.16/go.mod h1:AvOi0e4Vh1J6wUAhGRI+4y5bv+vHcrVhWOwQjZ6vIJ0=
 github.com/grafana/grafana-plugin-sdk-go v0.297.0 h1:uZlnm720OGH0VaaF3NuuOaJDrxTYx4qu3UHkzKZ+VPM=
 github.com/grafana/grafana-plugin-sdk-go v0.297.0/go.mod h1:OpS1VRORuEz7nFM+bZY+G/pKR1SO8rLARecM+7QaXGE=
 github.com/grafana/otel-profiling-go v0.6.0 h1:W7lOZaJj4IJISXMcM1UBk3fJF3tzF2OD6MJBJaQp1H8=
@@ -217,6 +217,7 @@ github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+
 github.com/stretchr/objx v0.5.3 h1:jmXUvGomnU1o3W/V5h2VEradbpJDwGrzugQQvL0POH4=
 github.com/stretchr/objx v0.5.3/go.mod h1:rDQraq+vQZU7Fde9LOZLr8Tax6zZvy4kuNKF+QYS+U0=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
+github.com/stretchr/testify v1.4.0/go.mod h1:j7eGeouHqKxXV5pUuKE4zz7dFj8WfuZ+81PSLYec5m4=
 github.com/stretchr/testify v1.7.2/go.mod h1:R6va5+xMeoiuVRoj+gSkQ7d3FALtqAAGI1FQKckRals=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
@@ -310,8 +311,10 @@ golang.org/x/xerrors v0.0.0-20190717185122-a985d3407aa7/go.mod h1:I/5z698sn9Ka8T
 golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20191204190536-9bdfabe68543/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
 golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-gomodules.xyz/jsonpatch/v2 v2.5.0 h1:JELs8RLM12qJGXU4u/TO3V25KW8GreMKl9pdkk14RM0=
-gomodules.xyz/jsonpatch/v2 v2.5.0/go.mod h1:AH3dM2RI6uoBZxn3LVrfvJ3E0/9dG4cSrbuBJT4moAY=
+gomodules.xyz/jsonpatch/v3 v3.0.1 h1:Te7hKxV52TKCbNYq3t84tzKav3xhThdvSsSp/W89IyI=
+gomodules.xyz/jsonpatch/v3 v3.0.1/go.mod h1:CBhndykehEwTOlEfnsfJwvkFQbSN8YZFr9M+cIHAJto=
+gomodules.xyz/orderedmap v0.1.0 h1:fM/+TGh/O1KkqGR5xjTKg6bU8OKBkg7p0Y+x/J9m8Os=
+gomodules.xyz/orderedmap v0.1.0/go.mod h1:g9/TPUCm1t2gwD3j3zfV8uylyYhVdCNSi+xCEIu7yTU=
 gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
 gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
 google.golang.org/genproto/googleapis/api v0.0.0-20261005182115-fad411399dd8 h1:cFbkNigDInw+wVTXc+CyhUsoHGJCw0BR6mlNoRVfre0=
@@ -329,6 +332,7 @@ gopkg.in/evanphx/json-patch.v4 v4.13.0 h1:czT3CmqEaQ1aanPc5SdlgQrrEIb8w/wwCvWWnf
 gopkg.in/evanphx/json-patch.v4 v4.13.0/go.mod h1:p8EYWUEYMpynmqDbY58zCKCFZw8pRWMG4EsWvDvM72M=
 gopkg.in/inf.v0 v0.9.1 h1:73M5CoZyi3ZLMOyDlQh031Cx6N9NDJ2Vvfl76EDAgDc=
 gopkg.in/inf.v0 v0.9.1/go.mod h1:cWUDdTG/fYaXco+Dcufb5Vnc6Gp2YChqWtbxRZE0mXw=
+gopkg.in/yaml.v2 v2.2.2/go.mod h1:hI93XBmqTisBFMUTm0b8Fm+jr3Dg1NNxqwp+5A1VGuI=
 gopkg.in/yaml.v3 v3.0.1 h1:fxVm/GzAzEWqLHuvctI91KS9hhNmmWOoWu0XTYJS7CA=
 gopkg.in/yaml.v3 v3.0.1/go.mod h1:K4uyk7z7BCEPqu6E+C64Yfv1cQ7kz7rIZviUmN+EgEM=
 k8s.io/api v0.37.1 h1:l6N77U7tjwB5L056bgrBTJIEdevac/naBZ3iSvDNfpM=
