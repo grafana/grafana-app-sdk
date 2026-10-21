@@ -94,11 +94,10 @@ func TestServerAuthentication(t *testing.T) {
 					admissionReq := &pluginv3.AdmissionReviewRequest{}
 					admissionReq.SetKind(kind)
 					admissionReq.SetObjectBytes(delegationObject)
-					object := &pluginv3.ConvertObjectsRequest_Object{}
-					object.SetGvk(kind)
-					object.SetRaw(delegationObject)
 					conversionReq := &pluginv3.ConvertObjectsRequest{}
-					conversionReq.SetObjects([]*pluginv3.ConvertObjectsRequest_Object{object})
+					conversionReq.SetTarget(kind)
+					conversionReq.SetNamespace("stacks-1")
+					conversionReq.SetObjects([][]byte{delegationObject})
 					routeReq := &pluginv3.CallRouteRequest{}
 					routeReq.SetGroup(delegationGroup)
 					routeReq.SetNamespace("stacks-1")

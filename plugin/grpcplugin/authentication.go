@@ -127,18 +127,12 @@ func (s *authenticatedConversionServer) ConvertObjects(ctx context.Context, req 
 		return nil, err
 	}
 	if verified {
-		group, err := conversionGroup(req)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		if err := s.auth.checkAudience(ctx, group); err != nil {
+		target := req.GetTarget()
+		if err := s.auth.checkAudience(ctx, target.GetGroup()); err != nil {
 			return nil, err
 		}
-		raws := make([][]byte, 0, len(req.GetObjects()))
-		for _, obj := range req.GetObjects() {
-			raws = append(raws, obj.GetRaw())
-		}
-		if err := checkObjectNamespaces(ctx, raws...); err != nil {
+
+		if err := checkNamespace(ctx, req.GetNamespace()); err != nil {
 			return nil, err
 		}
 	}
