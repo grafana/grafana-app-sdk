@@ -179,9 +179,11 @@ func TestDelegationFailsBeforeRPC(t *testing.T) {
 func TestConversionAudienceValidation(t *testing.T) {
 	for _, tt := range []struct {
 		name   string
-		groups []string
+		target *pluginv3.GroupVersionKind
 	}{
-		{name: "empty batch"}, {name: "missing group", groups: []string{""}}, {name: "mixed groups", groups: []string{delegationGroup, "other.app"}},
+		{name: "missing target"},
+		{name: "missing target group", target: &pluginv3.GroupVersionKind{}},
+		{name: "target group not served", target: pluginv3.GroupVersionKind_builder{Group: new("other.app")}.Build()},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			client := &authenticatedClientV3{next: &clientV3{}, groups: []string{delegationGroup}, tokenExchange: tokenExchangerFunc(func(context.Context, authn.TokenExchangeRequest) (*authn.TokenExchangeResponse, error) {
@@ -189,9 +191,8 @@ func TestConversionAudienceValidation(t *testing.T) {
 				return nil, nil
 			})}
 			req := &pluginv3.ConvertObjectsRequest{}
-			for _, group := range tt.groups {
-				req.SetObjects(append(req.GetObjects(), pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(group)}.Build()}.Build()))
-			}
+			req.SetTarget(tt.target)
+			req.SetObjects([][]byte{delegationObject})
 			_, err := client.ConvertObjects(context.Background(), req)
 			require.ErrorContains(t, err, "API group")
 		})
@@ -238,8 +239,9 @@ func callDelegationMethod(ctx context.Context, client clientv3.Client, method st
 		return err
 	case pluginKeyConversion:
 		_, err := client.ConvertObjects(ctx, pluginv3.ConvertObjectsRequest_builder{
-			Api:     pluginv3.GroupVersion_builder{Group: new("apiextensions.k8s.io"), Version: new("v1")}.Build(),
-			Objects: []*pluginv3.ConvertObjectsRequest_Object{pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), Raw: delegationObject}.Build()},
+			Target:    pluginv3.GroupVersionKind_builder{Group: new(delegationGroup), Version: new("v2"), Kind: new("Example")}.Build(),
+			Namespace: new("stacks-1"),
+			Objects:   [][]byte{delegationObject},
 		}.Build())
 		return err
 	default:

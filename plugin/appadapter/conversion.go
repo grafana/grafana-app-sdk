@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/runtime/serializer/json"
 
 	"github.com/grafana/grafana-app-sdk/app"
 	pluginv3 "github.com/grafana/grafana-app-sdk/plugin/genproto/grafana/plugin/v3"
@@ -38,23 +39,26 @@ func (a *ConversionAdapter) ConvertObjects(ctx context.Context, req *pluginv3.Co
 	rsp := &pluginv3.ConvertObjectsResponse{}
 	rsp.SetUid(req.GetUid())
 
-	targetVersion := req.GetTargetVersion()
+	target := req.GetTarget()
+	gvk := schema.GroupVersionKind{
+		Group:   target.GetGroup(),
+		Version: target.GetVersion(),
+		Kind:    target.GetKind(),
+	}
 	converted := make([]*pluginv3.ConvertObjectsResponse_Object, 0, len(req.GetObjects()))
 	for _, obj := range req.GetObjects() {
-		gvk := obj.GetGvk()
+		sourceGVK, err := json.DefaultMetaFactory.Interpret(obj)
+		if err != nil {
+			rsp.SetError(conversionErrorStatus(err))
+			rsp.SetConverted(nil)
+			return rsp, nil
+		}
+
 		convReq := app.ConversionRequest{
-			SourceGVK: schema.GroupVersionKind{
-				Group:   gvk.GetGroup(),
-				Version: gvk.GetVersion(),
-				Kind:    gvk.GetKind(),
-			},
-			TargetGVK: schema.GroupVersionKind{
-				Group:   gvk.GetGroup(),
-				Version: targetVersion,
-				Kind:    gvk.GetKind(),
-			},
+			SourceGVK: *sourceGVK,
+			TargetGVK: gvk,
 			Raw: app.RawObject{
-				Raw:      obj.GetRaw(),
+				Raw:      obj,
 				Encoding: resource.KindEncodingJSON,
 			},
 		}

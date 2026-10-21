@@ -22,7 +22,7 @@ func (*App) ConvertObjects(_ context.Context, req *pluginv3.ConvertObjectsReques
 	converted := make([]*pluginv3.ConvertObjectsResponse_Object, len(req.GetObjects()))
 	for i, obj := range req.GetObjects() {
 		tmp := &pluginv3.ConvertObjectsResponse_Object{}
-		tmp.SetRaw(obj.GetRaw())
+		tmp.SetRaw(obj)
 		tmp.SetWarnings([]string{"noop for now"})
 		converted[i] = tmp
 	}
