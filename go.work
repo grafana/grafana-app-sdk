@@ -4,5 +4,4 @@ use (
 	.
 	./examples/plugin
 	./logging
-	./plugin
 )
