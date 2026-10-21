@@ -1,0 +1,13 @@
+// Code generated - EDITING IS FUTILE. DO NOT EDIT.
+
+package {{.PackageName}}
+
+import {{.ImportAlias}} "{{.ImportPath}}"
+
+// {{.TypeName}} is a type alias to an externally-defined, shared type.
+type {{.TypeName}} = {{.ImportAlias}}.{{.ExternalType}}
+
+// New{{.TypeName}} creates a new {{.TypeName}} object.
+func New{{.TypeName}}() *{{.TypeName}} {
+	return &{{.TypeName}}{}
+}

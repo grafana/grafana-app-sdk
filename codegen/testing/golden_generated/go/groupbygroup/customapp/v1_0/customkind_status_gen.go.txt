@@ -2,59 +2,12 @@
 
 package v1_0
 
-// +k8s:openapi-gen=true
-type CustomKindstatusOperatorState struct {
-	// lastEvaluation is the ResourceVersion last evaluated
-	LastEvaluation string `json:"lastEvaluation"`
-	// state describes the state of the lastEvaluation.
-	// It is limited to three possible states for machine evaluation.
-	State CustomKindStatusOperatorStateState `json:"state"`
-	// descriptiveState is an optional more descriptive state field which has no requirements on format
-	DescriptiveState *string `json:"descriptiveState,omitempty"`
-	// details contains any extra information that is operator-specific
-	Details map[string]interface{} `json:"details,omitempty"`
-}
+import shared "codegen-tests/pkg/generated/shared"
 
-// NewCustomKindstatusOperatorState creates a new CustomKindstatusOperatorState object.
-func NewCustomKindstatusOperatorState() *CustomKindstatusOperatorState {
-	return &CustomKindstatusOperatorState{}
-}
-
-// OpenAPIModelName returns the OpenAPI model name for CustomKindstatusOperatorState.
-func (CustomKindstatusOperatorState) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindstatusOperatorState"
-}
-
-// +k8s:openapi-gen=true
-type CustomKindStatus struct {
-	StatusField1 string `json:"statusField1"`
-	// operatorStates is a map of operator ID to operator state evaluations.
-	// Any operator which consumes this kind SHOULD add its state evaluation information to this field.
-	OperatorStates map[string]CustomKindstatusOperatorState `json:"operatorStates,omitempty"`
-	// additionalFields is reserved for future use
-	AdditionalFields map[string]interface{} `json:"additionalFields,omitempty"`
-}
+// CustomKindStatus is a type alias to an externally-defined, shared type.
+type CustomKindStatus = shared.Status
 
 // NewCustomKindStatus creates a new CustomKindStatus object.
 func NewCustomKindStatus() *CustomKindStatus {
 	return &CustomKindStatus{}
-}
-
-// OpenAPIModelName returns the OpenAPI model name for CustomKindStatus.
-func (CustomKindStatus) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindStatus"
-}
-
-// +k8s:openapi-gen=true
-type CustomKindStatusOperatorStateState string
-
-const (
-	CustomKindStatusOperatorStateStateSuccess    CustomKindStatusOperatorStateState = "success"
-	CustomKindStatusOperatorStateStateInProgress CustomKindStatusOperatorStateState = "in_progress"
-	CustomKindStatusOperatorStateStateFailed     CustomKindStatusOperatorStateState = "failed"
-)
-
-// OpenAPIModelName returns the OpenAPI model name for CustomKindStatusOperatorStateState.
-func (CustomKindStatusOperatorStateState) OpenAPIModelName() string {
-	return "codegen-tests.pkg.generated.customapp.v1_0.CustomKindStatusOperatorStateState"
 }
