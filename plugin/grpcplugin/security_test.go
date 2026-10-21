@@ -109,11 +109,12 @@ func TestServerRequestScope(t *testing.T) {
 
 	for _, tt := range []struct {
 		name   string
-		groups []string
+		target *pluginv3.GroupVersionKind
+		want   codes.Code
 	}{
-		{name: "empty conversion"},
-		{name: "missing object group", groups: []string{""}},
-		{name: "mixed object groups", groups: []string{delegationGroup, "other.app"}},
+		{name: "missing conversion target", want: codes.InvalidArgument},
+		{name: "missing target group", target: &pluginv3.GroupVersionKind{}, want: codes.InvalidArgument},
+		{name: "target group outside token audience", target: pluginv3.GroupVersionKind_builder{Group: new("other.app")}.Build(), want: codes.PermissionDenied},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			received := make(chan struct{}, 1)
@@ -124,15 +125,11 @@ func TestServerRequestScope(t *testing.T) {
 			ctx, cancel := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", token)), 5*time.Second)
 			defer cancel()
 			req := &pluginv3.ConvertObjectsRequest{}
-			for _, group := range tt.groups {
-				kind := &pluginv3.GroupVersionKind{}
-				kind.SetGroup(group)
-				obj := &pluginv3.ConvertObjectsRequest_Object{}
-				obj.SetGvk(kind)
-				req.SetObjects(append(req.GetObjects(), obj))
-			}
+			req.SetTarget(tt.target)
+			req.SetNamespace("stacks-1")
+			req.SetObjects([][]byte{delegationObject})
 			_, err := client.ConvertObjects(ctx, req)
-			require.Equal(t, codes.InvalidArgument, status.Code(err))
+			require.Equal(t, tt.want, status.Code(err))
 			require.Empty(t, received)
 		})
 	}
