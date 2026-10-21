@@ -275,14 +275,8 @@ func (c *authenticatedClientV3) CallRoute(ctx context.Context, in *pluginv3.Call
 
 // ConvertObjects implements [clientv3.Client].
 func (c *authenticatedClientV3) ConvertObjects(ctx context.Context, in *pluginv3.ConvertObjectsRequest) (*pluginv3.ConvertObjectsResponse, error) {
-	group, err := conversionGroup(in)
-	if err != nil {
-		return nil, err
-	}
-	raws := make([][]byte, 0, len(in.GetObjects()))
-	for _, obj := range in.GetObjects() {
-		raws = append(raws, obj.GetRaw())
-	}
+	group := in.GetTarget().GetGroup()
+	raws := in.GetObjects()
 	namespace, err := singleNamespace(raws...)
 	if err != nil {
 		return nil, err
@@ -292,22 +286,6 @@ func (c *authenticatedClientV3) ConvertObjects(ctx context.Context, in *pluginv3
 		return nil, err
 	}
 	return c.next.ConvertObjects(ctx, in)
-}
-
-func conversionGroup(req *pluginv3.ConvertObjectsRequest) (string, error) {
-	// The envelope's API describes the conversion protocol, not the resources.
-	group := ""
-	for i, obj := range req.GetObjects() {
-		objectGroup := obj.GetGvk().GetGroup()
-		if objectGroup == "" || (i > 0 && objectGroup != group) {
-			return "", errors.New("conversion objects must have the same non-empty API group")
-		}
-		group = objectGroup
-	}
-	if group == "" {
-		return "", errors.New("conversion requires objects with a non-empty API group")
-	}
-	return group, nil
 }
 
 // singleNamespace returns the namespace shared by all non-empty objects, or ""

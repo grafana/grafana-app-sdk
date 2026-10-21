@@ -12,17 +12,13 @@ import (
 func TestConvertObjectsReturnsUnchangedObjectsWithWarning(t *testing.T) {
 	raw := []byte(`{"apiVersion":"example.grafana.app/v1alpha1","kind":"Example"}`)
 	req := pluginv3.ConvertObjectsRequest_builder{
-		Api: pluginv3.GroupVersion_builder{
+		Target: pluginv3.GroupVersionKind_builder{
 			Group:   new("example.grafana.app"),
-			Version: new("v1alpha1"),
+			Version: new("v1beta1"),
+			Kind:    new("Example"),
 		}.Build(),
-		Uid:           new("request-id"),
-		TargetVersion: new("v1beta1"),
-		Objects: []*pluginv3.ConvertObjectsRequest_Object{
-			pluginv3.ConvertObjectsRequest_Object_builder{
-				Raw: raw,
-			}.Build(),
-		},
+		Uid:     new("request-id"),
+		Objects: [][]byte{raw},
 	}.Build()
 
 	response, err := (&App{}).ConvertObjects(context.Background(), req)

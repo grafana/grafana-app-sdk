@@ -14,44 +14,22 @@ service ConversionService {
   rpc ConvertObjects(ConvertObjectsRequest) returns (ConvertObjectsResponse);
 }
 
-// RawObject contains a serialized resource and its kind.
-message RawObject {
-  // gvk identifies the object's kind.
-  GroupVersionKind gvk = 1;
-
-  // raw is the complete JSON-encoded object.
-  bytes raw = 2;
-
-  // warnings contains non-fatal issues encountered during conversion.
-  repeated string warnings = 3;
-}
-
-// ConvertObjectsRequest supports converting objects from one version to
-// another.
+// ConvertObjectsRequest supports converting objects to a new version
 message ConvertObjectsRequest {
-  // Object is a serialized object to convert.
-  message Object {
-    // gvk identifies the object's kind.
-    GroupVersionKind gvk = 1;
+  // Target GroupVersionKind
+  GroupVersionKind target = 10;
 
-    // raw is the complete JSON-encoded object.
-    bytes raw = 2;
-  }
-
-  // api is the API group and version of the conversion request.
-  GroupVersion api = 1;
+  // When the request is all in one namespace -- this is used for authentication
+  string namespace = 20;
 
   // uid is an identifier for the individual request/response. It allows
   // distinguishing instances of requests which are otherwise identical
   // (parallel requests, etc). It is meant to track the round trip between the
   // Kubernetes API server and the webhook, not the user request.
-  string uid = 2;
+  string uid = 30;
 
   // objects contains the objects to convert.
-  repeated Object objects = 3;
-
-  // target_version is the version to convert to.
-  string target_version = 4;
+  repeated bytes objects = 40;
 }
 
 // ConvertObjectsResponse contains the converted objects.

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/grafana/authlib/authn"
 	"github.com/grafana/authlib/types"
 	"github.com/stretchr/testify/require"
@@ -50,9 +51,8 @@ func TestClientV3ExchangeScope(t *testing.T) {
 	conversion := func(objects ...[]byte) func(context.Context, clientv3.Client) error {
 		return func(ctx context.Context, c clientv3.Client) error {
 			req := &pluginv3.ConvertObjectsRequest{}
-			for _, raw := range objects {
-				req.SetObjects(append(req.GetObjects(), pluginv3.ConvertObjectsRequest_Object_builder{Gvk: pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(), Raw: raw}.Build()))
-			}
+			req.SetTarget(pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build())
+			req.SetObjects(objects)
 			_, err := c.ConvertObjects(ctx, req)
 			return err
 		}
@@ -144,7 +144,7 @@ func TestClientV3PluginIDAudience(t *testing.T) {
 	}
 }
 
-func TestServerObjectNamespaces(t *testing.T) {
+func TestServerAdmissionObjectNamespaces(t *testing.T) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	keys := testSigningKey{key: &jose.JSONWebKey{Key: &key.PublicKey, KeyID: "test"}}
@@ -165,34 +165,66 @@ func TestServerObjectNamespaces(t *testing.T) {
 		{"no objects", "stacks-1", [][]byte{nil}, codes.InvalidArgument},
 		{"malformed object", "stacks-1", [][]byte{[]byte("not json")}, codes.InvalidArgument},
 	} {
-		for _, method := range []string{pluginKeyAdmission, pluginKeyConversion} {
-			t.Run(method+"/"+tt.name, func(t *testing.T) {
-				received := make(chan struct{}, 1)
-				server := &authenticationTestServer{check: func(context.Context) error { received <- struct{}{}; return nil }}
-				protocol := delegationProtocol(t, ServeOpts{AdmissionServer: server, ConversionServer: server, Authenticator: authenticator})
-				token := signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:plugin", delegationGroup, authn.AccessTokenClaims{Namespace: tt.tokenNamespace})
-				ctx, cancel := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", token)), 5*time.Second)
-				defer cancel()
-				kind := pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build()
-				if method == pluginKeyAdmission {
-					req := pluginv3.AdmissionReviewRequest_builder{Kind: kind, ObjectBytes: tt.objects[0]}.Build()
-					if len(tt.objects) > 1 {
-						req.SetOldObjectBytes(tt.objects[1])
-					}
-					_, err = protocol.plugins[pluginKeyAdmission].(pluginv3.AdmissionServiceClient).AdmissionReview(ctx, req)
-				} else {
-					req := &pluginv3.ConvertObjectsRequest{}
-					for _, raw := range tt.objects {
-						req.SetObjects(append(req.GetObjects(), pluginv3.ConvertObjectsRequest_Object_builder{Gvk: kind, Raw: raw}.Build()))
-					}
-					_, err = protocol.plugins[pluginKeyConversion].(pluginv3.ConversionServiceClient).ConvertObjects(ctx, req)
-				}
-				require.Equal(t, tt.want, status.Code(err))
-				if tt.want != codes.OK {
-					require.Empty(t, received, "rejected requests must not invoke handlers")
-				}
-			})
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			received := make(chan struct{}, 1)
+			server := &authenticationTestServer{check: func(context.Context) error { received <- struct{}{}; return nil }}
+			protocol := delegationProtocol(t, ServeOpts{AdmissionServer: server, Authenticator: authenticator})
+			token := signDelegationToken(t, key, authn.TokenTypeAccess, "access-policy:plugin", delegationGroup, authn.AccessTokenClaims{Namespace: tt.tokenNamespace})
+			ctx, cancel := context.WithTimeout(metadata.NewOutgoingContext(context.Background(), metadata.Pairs("x-access-token", token)), 5*time.Second)
+			defer cancel()
+			kind := pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build()
+			req := pluginv3.AdmissionReviewRequest_builder{Kind: kind, ObjectBytes: tt.objects[0]}.Build()
+			if len(tt.objects) > 1 {
+				req.SetOldObjectBytes(tt.objects[1])
+			}
+			_, err = protocol.plugins[pluginKeyAdmission].(pluginv3.AdmissionServiceClient).AdmissionReview(ctx, req)
+			require.Equal(t, tt.want, status.Code(err))
+			if tt.want != codes.OK {
+				require.Empty(t, received, "rejected requests must not invoke handlers")
+			}
+		})
+	}
+}
+
+func TestServerConversionNamespaces(t *testing.T) {
+	for _, tt := range []struct {
+		name, tokenNamespace, requestNamespace string
+		objects                                [][]byte
+		want                                   codes.Code
+	}{
+		{name: "same tenant", tokenNamespace: "stacks-1", requestNamespace: "stacks-1", objects: [][]byte{delegationObject}, want: codes.OK},
+		{name: "other tenant", tokenNamespace: "stacks-1", requestNamespace: "stacks-2", objects: [][]byte{delegationObject}, want: codes.PermissionDenied},
+		{name: "missing request namespace from tenant", tokenNamespace: "stacks-1", objects: [][]byte{delegationObject}, want: codes.PermissionDenied},
+		{name: "wildcard request from tenant", tokenNamespace: "stacks-1", requestNamespace: "*", want: codes.PermissionDenied},
+		{name: "wildcard token for tenant", tokenNamespace: "*", requestNamespace: "stacks-1", objects: [][]byte{delegationObject}, want: codes.OK},
+		{name: "wildcard token without request namespace", tokenNamespace: "*", objects: [][]byte{delegationObject}, want: codes.OK},
+		{name: "missing token namespace", want: codes.PermissionDenied},
+		{name: "empty batch with namespace", tokenNamespace: "stacks-1", requestNamespace: "stacks-1", want: codes.OK},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+			server := &authenticatedConversionServer{
+				ConversionServiceServer: &authenticationTestServer{check: func(context.Context) error {
+					called = true
+					return nil
+				}},
+				auth: serverAuth{authenticator: authenticatorFunc(func(context.Context, authn.TokenProvider) (types.AuthInfo, error) {
+					return authn.NewAccessTokenAuthInfo(authn.Claims[authn.AccessTokenClaims]{
+						Claims: jwt.Claims{Audience: jwt.Audience{delegationGroup}},
+						Rest:   authn.AccessTokenClaims{Namespace: tt.tokenNamespace},
+					}), nil
+				})},
+			}
+			req := pluginv3.ConvertObjectsRequest_builder{
+				Target:    pluginv3.GroupVersionKind_builder{Group: new(delegationGroup)}.Build(),
+				Namespace: new(tt.requestNamespace),
+				Objects:   tt.objects,
+			}.Build()
+			ctx := metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-access-token", "valid"))
+			_, err := server.ConvertObjects(ctx, req)
+			require.Equal(t, tt.want, status.Code(err))
+			require.Equal(t, tt.want == codes.OK, called)
+		})
 	}
 }
 
@@ -244,7 +276,9 @@ func TestServerPluginIDAudience(t *testing.T) {
 					_, err = protocol.plugins[method].(pluginv3.AdmissionServiceClient).AdmissionReview(ctx, pluginv3.AdmissionReviewRequest_builder{Kind: kind, ObjectBytes: object}.Build())
 				case pluginKeyConversion:
 					_, err = protocol.plugins[method].(pluginv3.ConversionServiceClient).ConvertObjects(ctx, pluginv3.ConvertObjectsRequest_builder{
-						Objects: []*pluginv3.ConvertObjectsRequest_Object{pluginv3.ConvertObjectsRequest_Object_builder{Gvk: kind, Raw: object}.Build()},
+						Target:    kind,
+						Namespace: new(tt.namespace),
+						Objects:   [][]byte{object},
 					}.Build())
 				default:
 					var stream grpc.ServerStreamingClient[pluginv3.CallRouteResponse]
