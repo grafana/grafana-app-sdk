@@ -296,11 +296,8 @@ spec:
   status: open
   title: Test
 ```
-Here we can note that the non-kubernetes metadata which is part of common metadata is encapsulated in `metadata.annotations` when stored in kubernetes. 
-The SDK does a transform between our go/CUE representation of the object and the implementation-specific storage representation of the object.
-
-In future versions of the SDK, pre-built mutating webhooks for kubernetes will be available to automatically deal with the common metadata on admission, 
-with the option to extend them for custom metadata.
+Here we can note that the grafana-specific metadata which is part of common metadata is encapsulated in `metadata.annotations`. 
+The SDK does a transform between our go/CUE representation of the object and how it is represented in the API.
 
 We can also see that the operator is monitoring adds/updates/deletes to our issues if we take a look at its logs, either through the Tilt console, or via kubectl:
 ```

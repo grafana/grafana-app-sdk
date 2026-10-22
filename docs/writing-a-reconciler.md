@@ -1,6 +1,6 @@
 # Writing a Reconciler (or Watcher)
 
-A Reconciler is a logical pattern which takes the state of a set of objects in the API server, and propagates changes to other components based on that state. 
+A Reconciler is a logical pattern which takes the state of a set of objects in the platform API, and propagates changes to other components based on that state. 
 This logic is asynchronous, and works by having a function which is called when a change occurs in the set of resources the reconciler is watching, 
 which provides the current state of the object, and the type of change that occurred (Create, Update, Delete). 
 For more information, see the [Asynchronous Business Logic section in Platform Concepts](application-design/platform-concepts.md#asynchronous-business-logic).
@@ -15,7 +15,7 @@ They both have an `Opinionated` variant that can wrap the interface as well. Not
 The major difference between a `Reconciler` and a `Watcher` is that a `Reconciler` has a single function, `Reconcile`, which is called for every event for a kind, while a `Watcher` has a function for each event type (`Add`, `Update`, `Delete`). There are more minor differences in how these events are handled as well:
 * A `Reconciler` can return a response with an explicit "retry after this time period" message, while a `Watcher` will only return success/fail (`nil` or `error`).
 * A `Watcher` will give you the previous state of the resource on an update event, while a Reconcile event will not.
-* A `Reconciler` can pass state between retries in-memory if storing state in the API server is failing, however, this will only persist until the operator is restarted and should not be relied upon excepting situations where the API server cannot be reached.
+* A `Reconciler` can pass state between retries in-memory if storing state in the API is failing, however, this will only persist until the operator is restarted and should not be relied upon excepting situations where the API cannot be reached.
 
 ## Considerations When Writing a Reconciler
 
@@ -25,9 +25,9 @@ When writing a reconciler, it's important to take a few things into consideratio
 * All objects for the kind(s) you are watching are cached to memory by default. This can be customized by using a different informer implementation, such as `operator.CustomCacheInformer`. Custom informers can be used in `simple.App` with `AppConfig.InformerConfig.InformerSupplier`, or by using your own custom `app.App` implementation.
 * Don't rely on retries to track operator state; use the `status` subresource to track operator success/failure, so that your operator can work out state from a fresh start (a restart will remove all pending retries, which are stored purely in-memory). This also allows a user to track operator status by viewing the `status` subresource.
 * If your reconcile process makes requests for other resources, consider caching, as high-traffic objects may cause your application to have to make these requests extremely frequently.
-* If your operator has a watcher or reconciler that updates the resource in a deterministic way (such as adding a label based on the spec), consider adding mutation for the kind on your App instead, as it makes that process synchronous and will never leave the object in an intermediate state (and reduces calls to the API server from your operator). Mutation can be added for a kind in `simple.App` with `AppConfig.ManagedKinds[].Mutator`, or by implementing the behavior in `Mutate` if you're using a custom `app.App` implementation (don't forget to add mutation in your manifest as well).
+* If your operator has a watcher or reconciler that updates the resource in a deterministic way (such as adding a label based on the spec), consider adding mutation for the kind on your App instead, as it makes that process synchronous and will never leave the object in an intermediate state (and reduces API calls from your operator). Mutation can be added for a kind in `simple.App` with `AppConfig.ManagedKinds[].Mutator`, or by implementing the behavior in `Mutate` if you're using a custom `app.App` implementation (don't forget to add mutation in your manifest as well).
 * When you have multiple versions of a kind, your reconciliation should only deal with one of them (typically the latest), as events are always issued for any version as the version requested by the operator's watch (so a user creating a `v1` version of a resource will still produce a `v2` version of that resource in a watch request for the `v2` of the kind).
-* CRD's have a built-in conversion mechanism that is roughly equivalent to running `json.Marshal` on the stored version and then `json.Unmarshal` into the requested version. If this is not good enough for your purposes, add conversion to your app (for `simple.App`, use `AppConfig.Converters`, or implement `Convert` if you're implementing `app.App` yourself. Don't forget to add conversion in your manifest as well).
+* The default conversion between versions is roughly equivalent to running `json.Marshal` on the stored version and then `json.Unmarshal` into the requested version. If this is not good enough for your purposes, add conversion to your app (for `simple.App`, use `AppConfig.Converters`, or implement `Convert` if you're implementing `app.App` yourself. Don't forget to add conversion in your manifest as well).
 
 ## An Example Reconciler
 
@@ -53,7 +53,7 @@ Let's consider an example reconciler for a kind defined by the CUE:
 ```
 We want to build a reconciler that will send `someInfo` and `otherInfo` to some other system, but we only need to do this if `someInfo` or `otherInfo` change. 
 Since there are ways a resource can change without the contents of `spec` being altered, we need a way to track if the current `spec` has been applied. 
-To do this here, we track `lastAppliedGeneration` in the `status`. `generation` is a kubernetes API object metadata property which increments when the spec changes, 
+To do this here, we track `lastAppliedGeneration` in the `status`. `generation` is an object metadata property which increments when the spec changes, 
 so we can use it to check if a given request has a different version of the spec than one we've already processed. 
 ```go
 func NewMyKindReconciler(infoClient InfoClient, store *resource.TypedStore[*v1.MyKind]) operator.Reconciler {

@@ -1,6 +1,6 @@
 # Adding Admission Control
 
-One thing we can do with our operator is add in _admission control_. In the grafana-app-sdk, admission control refers to performing validation and/or mutation on incoming requests to the API server. Since our operator doesn't receive these requests, we have to expose a webhook for the API server to call when it receives a request, and then register that webhook with the API server. Luckily, this is not quite so complicated as it sounds. Let's add some validation and some mutation to our `Issue` kind using our operator. We want to do the following when an `Issue` is created or updated:
+One thing we can do with our operator is add in _admission control_. In the grafana-app-sdk, admission control refers to performing validation and/or mutation on incoming create and update requests for our kinds, before they are stored. The platform calls our app to do this, so all we need to do is add the logic and declare it in our manifest. Let's add some validation and some mutation to our `Issue` kind using our operator. We want to do the following when an `Issue` is created or updated:
 1. Check that the `title` isn't empty
 2. Add a `status` label that matches the `spec.status`, to allow us to filter our list requests by `status`
 For (1), we need to perform validation, and for (2), we need to do a mutation. So lets add validating and mutating controllers to our operator.
@@ -54,9 +54,7 @@ Basically, it consumes an admission request and produces a validation error if v
 The `simple` package has a ready-to-go implementation for this: `simple.Validator`, which calls `ValidateFunc` when `Validate` is called. 
 That's what we're using here, but you can always define your own type to implement `KindValidator`, too. 
 
-Just like with `runner.WatchKind`, `runner.ValidateKind` takes the kind, and then the object to apply to it. In this case, to validate a kind, we need a `ValidatingAdmissionController`. This is a simple one-method interface, which we could define a type for ourselves, but we can also use `resource.SimpleValidatingAdmissionController` as a default implementation. In `SimpleValidatingAdmissionController`, `ValidateFunc` is called by the `Validate` function, so we just need to define our validation function in `ValidateFunc`.
-
-`Validate` receives a context, and a request or type `*resource.AdmissionRequest`. The request contains some meta information that we can ignore for now (including action type, user information, and GroupVersionKind), and the `Object` from the request (and an `OldObject` which may be nil if there was not a previous state of the object, depending on the action). We can use this `Object` value to check if the updated or created object has an empty title, and return an error. An important thing to note is that  text of the `error` returned by `Validate` will be returned to the end-user, so make sure it's as descriptive as necessary for the user to fix their request. If no error is returned by `Validate`, the validation passes.
+`Validate` receives a context, and a request of type `*app.AdmissionRequest`. The request contains some meta information that we can ignore for now (including action type, user information, and GroupVersionKind), and the `Object` from the request (and an `OldObject` which may be nil if there was not a previous state of the object, depending on the action). We can use this `Object` value to check if the updated or created object has an empty title, and return an error. An important thing to note is that  text of the `error` returned by `Validate` will be returned to the end-user, so make sure it's as descriptive as necessary for the user to fix their request. If no error is returned by `Validate`, the validation passes.
 
 If we re-built our operator now and attempted to run it locally, our validation wouldn't occur, and we'd actually get a startup error:
 ```bash
@@ -69,7 +67,7 @@ What does this mean? Well, it comes from this line in `pkg/app/app.go`:
 err = a.ValidateManifest(cfg.ManifestData)
 ```
 What happened here, is that we added a validator, but our app's manifest doesn't list validation as supported for that kind. 
-This means that the operator runner wouldn't expose a validation webhook, and we'd have to deal with a lot more debugging attempting to find out what is going on. 
+This means that the platform would never call our validator, and we'd have to deal with a lot more debugging attempting to find out what is going on. 
 So the `ValidateManifest` call makes it easy to see if there's a mismatch between our _claimed_ capabilities (the app manifest), 
 and the ones we have declared in-code.
 
@@ -143,9 +141,9 @@ kubectl get issues -l status=open
 ```
 Will give you only issues with a status of `open`, for example.
 
-The neat part about this validation and mutation is that it occurs irrespective of how the user decides to create or update their issues. Since the webhooks are called by the API server, if the user uses `kubectl`, `flux`, or the plugin UI, they all will route to the same API server backend, which will call our validating and mutating webhooks.
+The neat part about this validation and mutation is that it occurs irrespective of how the user decides to create or update their issues. Since they are called by the platform, if the user uses `kubectl`, `flux`, or the plugin UI, all requests go through the same API, which calls our validation and mutation.
 
-For more details on webhooks and admission control, see [Admission Control](../../admission-control.md).
+For more details on admission control, see [Admission Control](../../admission-control.md).
 
 ### Prev: [Writing Operator Code](07-operator-watcher.md)
 ### Next: [Wrap-Up and Further Reading](09-wrap-up.md)

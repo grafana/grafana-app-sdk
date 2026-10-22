@@ -38,7 +38,7 @@ foov1: fooKind & {
 }
 ```
 
-What is the `schema`? It's the template for the data. If you're familiar with OpenAPI, the schema is rendered into a subset of OpenAPI when converted into a Custom Resource Definition for the kubernetes API server. In CUE, a schema follows the pattern of [a definition](https://cuelang.org/docs/tour/types/defs/), which declares field names and types. Something like:
+What is the `schema`? It's the template for the data. If you're familiar with OpenAPI, the schema is rendered into a subset of OpenAPI in your app manifest. In CUE, a schema follows the pattern of [a definition](https://cuelang.org/docs/tour/types/defs/), which declares field names and types. Something like:
 ```cue
 {
     field1: string
@@ -54,7 +54,7 @@ Is the format of a definition. The declarative style is similar to TypeScript, a
 }
 ```
 
-The `schema` of an API resource also has a few restrictions on it: there _MUST_ be a `spec` field (and this field _SHOULD_ be a struct type), and any other top-level field in the `schema` will be considered to be a subresource within the kubernetes API. At present, only `status` and `scale` are supported for Custom Resource Definitions (CRDs), so other subresource fields will not be supported in your CRD.
+The `schema` of an API resource also has a few restrictions on it: there _MUST_ be a `spec` field (and this field _SHOULD_ be a struct type), and any other top-level field in the `schema` will be considered to be a subresource. At present, only `status` and `scale` subresources are supported.
 
 With all that, let's complete our simple kind:
 ```cue
@@ -92,7 +92,7 @@ foov1: fooKind & {
 
 Kinds are **namespaced** by default. Set `scope: "Cluster"` on the kind metadata when the resource should exist once per cluster (no namespace in the API path).
 
-Cluster-scoped CRDs are normally not intended for users to be able to access them, so they are denied access to those resources on the Grafana API Extensions server unless you explicitly opt in.
+Cluster-scoped kinds are normally not intended for users to access, so users are denied access to them unless you explicitly opt in.
 
 To allow users to **get** and **list** instances of a cluster-scoped kind (but not watch, mutate, or access subresources such as `/status` through this fast path), set **`userReadable: true`** alongside `scope: "Cluster"` in your CUE kind and in **App Manifest v1alpha2** (`userReadable` on the kind entry).
 
@@ -100,7 +100,7 @@ Service identities are not limited by this gate; they continue through the norma
 
 ## Generating Code
 
-We now have a valid kind! If you save this as a CUE file (`.cue`) in your project (the default directory for parsing kinds is `./kinds`), you can now generate code and a CRD file for your kind.
+We now have a valid kind! If you save this as a CUE file (`.cue`) in your project (the default directory for parsing kinds is `./kinds`), you can now generate code and a manifest for your kind.
 To do so, make sure you have the `grafana-app-sdk` CLI installed (you can download a binary for your distribution on the [releases](https://github.com/grafana/grafana-app-sdk/releases) page, build the binary from the repo with `make build`, or use `go install` with the cloned repo (there is a known issue with `replace` in the `go.mod` that prevents `go install` working from a remote source)). 
 Make sure your kind is added to your [**manifest**](../app-manifest.md). If you set up your project with `grafana-app-sdk project init`, you'll already have a `kind/manifest.cue` file, but if you don't, a simple manifest looks like this:
 ```cue
@@ -145,7 +145,7 @@ To use this generated code in your project, see [Using Kinds](./using-kinds.md),
 ### `plugin/src/generated`
 
 All generated TypeScript code ends up in `plugin/src/generated/<kind name>/<kind version>`. For each kind, there are at least three files that are generated (at least three, because each subresource generates its own TypeScript file):
-* `foo_object_gen.ts` contains the `Foo` interface, which is compatible with the kubernetes API server definition of the `Foo` kind for that version. 
+* `foo_object_gen.ts` contains the `Foo` interface, which matches the API representation of the `Foo` kind for that version. 
 * `types.spec.gen.ts` contains the `Spec` interface, defined by our CUE `spec` field
 * `types.status.gen.ts` contains the `Status` interface, defined by our CUE `status` field
 
@@ -153,8 +153,8 @@ Additional `types.x.gen.ts` files will be generated for each subresource in your
 
 ### `definitions`
 
-The `definitions` directory holds a JSON (or YAML, depending on your configuration) Custom Resource Definition (CRD) file for each of your kinds. These files can be applied to a kubernetes API server to generate CRDs for your kinds, which you can then use the other generated code to interface with. For more about CRDs see [Kubernetes Concepts](../kubernetes.md). 
-This directory also holds a generated JSON (or YAML) **manifest** for your app. This is a file which will be used in the future to register your app with the grafana API server, without needing to work with CRD's and RBAC.
+The `definitions` directory holds the generated JSON (or YAML, depending on your configuration) **[manifest](../app-manifest.md)** for your app, which is used to register your app and its kinds with the platform. 
+It also contains a Custom Resource Definition (CRD) file for each of your kinds, which the [local development environment](../local-development.md) uses.
 
 ### Toggling TypeScript/Go Codegen
 
@@ -220,7 +220,7 @@ manifest: {
 
 ### Optional Fields
 
-To mark a field as optional, like in TypeScript, we use a `?` before the `:`. This results in it not being listed as `required` in the OpenAPI specification used for the CRD, and the field type in go uses a pointer. For example:
+To mark a field as optional, like in TypeScript, we use a `?` before the `:`. This results in it not being listed as `required` in the generated OpenAPI schema, and the field type in go uses a pointer. For example:
 ```cue
 {
     foo?: string
@@ -307,13 +307,13 @@ foov1: fooKind & {
 
 ### Constraints
 
-[Bounds](https://cuelang.org/docs/tour/types/bounds/) can be added to your types, such as numerical bounds, or non-nil checks. These will only apply to the generated OpenAPI spec for your CRD, and will not be checked in your go or TypeScript types themselves (or in the generated Codecs). As such, the validation of the bounds is only checked on admission by the kubernetes API (via the apiextensions server that manages CRDs).
+[Bounds](https://cuelang.org/docs/tour/types/bounds/) can be added to your types, such as numerical bounds, or non-nil checks. These will only apply to the generated OpenAPI schema for your kind, and will not be checked in your go or TypeScript types themselves (or in the generated Codecs). As such, the bounds are only checked by the platform when a resource is created or updated.
 
-You can define further, more complex validation and admission control via your operator using admission webhooks, see [Admission Control](../admission-control.md).
+You can define further, more complex validation and mutation in your app, see [Admission Control](../admission-control.md).
 
 ### Custom columns when using `kubectl`. aka `additionalPrinterColumns`
 
-The `kind` format allows for configuring the `additionalPrinterColumns` parameter on a [CRD](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns). The format is the same as a CRD, and you add this config as part of "version", next to the `schema`:
+You can configure extra columns shown by `kubectl get` with `additionalPrinterColumns` (the format matches [kubernetes `additionalPrinterColumns`](https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#additional-printer-columns)). Add this config as part of the version, next to the `schema`:
 
 ```cue
 foov1: fooKind & {

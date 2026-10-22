@@ -117,7 +117,7 @@ import (
 
 var OtherAppKindUntyped = resource.Kind{
 	Schema: resource.NewSimpleSchema("other-kind-group", "other-kind-version", &resource.UntypedObject{}, &resource.UntypedList{}, 
-		resource.WithKind("OtherAppKind")), // Important! Make sure you add the WithKind here using the Kind's name, as otherwise it will default to the wrong name for the kind and be unable to look it up in the API server
+		resource.WithKind("OtherAppKind")), // Important! Make sure you add the WithKind here using the Kind's name, as otherwise it will default to the wrong name for the kind and be unable to look it up in the API
 }
 
 func Provider(appCfg app.SpecificConfig) app.Provider {
@@ -213,4 +213,4 @@ manifest: extraPermissions: accessKinds: [{
 ### Local Deployment
 
 By default, the local environment set up by the CLI won't include the other app's kind(s). 
-You'll have to add them by adding the CRD(s) for those kind(s) to `local/additional` as YAML file(s).
+You'll have to add their definitions to `local/additional` as YAML file(s) (see [Local Development](./local-development.md)).

@@ -8,8 +8,8 @@ The operator is a logical pattern that runs one or more controllers. The typical
 * One or more informers, which subscribe to events for a particular resource kind and namespace
 * One or more watchers, which consume events for particular kinds
 
-Your app can be run as a standalone operator by making use of the `operator.Runner`. This takes the functionality exposed by your app, and runs it as a standard kubernetes operator, 
-including exposing webhooks for the kubernetes API server to hook into. Other means of running the app (runners) will be introduced at a later date.
+Your app can be run as a standalone operator by making use of the `operator.Runner`. This takes the functionality exposed by your app, and runs it as a standalone operator, 
+including exposing webhooks for the platform to call for admission control and conversion.
 
 In our case, the boilerplate code uses the `simple.App` to build our app, and the `operator.Runner` as the runner. 
 Since the runner only exposes behavior from the app in an expected way for the runner type, the watcher for our `Issue` type is where we build the App, 
@@ -205,7 +205,7 @@ There's an example dashboard using the issue metrics [here](./issue-dashboard.js
 
 ## Using the `status` Subresource
 
-Good practice for an operator is that we use the `status` subresource to track operator processing. In our case, with only metrics, we don't need `status` for much, but if we were to do something else, such as create a resource in another system (or even within the API server), we would want a means to track it. Sometimes, it can also be useful for debugging our operator to simply just track the last time the operator processed an object (and how that turned out). The default `status` type for any generated resource has an operator- and kind-agnostic way of tracking this via `operatorStates`, but we can also customize our `status` subresource for our operator's behavior, since we're the kind author (`operatorStates` allows non-kind-authors who work with your kinds (and have permission to do so) to log their status information). Let's update our kind CUE to include some custom `status` information. All we really care about right now is knowing _when_ we last processed, so we'll add a field to track that.
+Good practice for an operator is that we use the `status` subresource to track operator processing. In our case, with only metrics, we don't need `status` for much, but if we were to do something else, such as create a resource in another system (or even another resource in the API), we would want a means to track it. Sometimes, it can also be useful for debugging our operator to simply just track the last time the operator processed an object (and how that turned out). The default `status` type for any generated resource has an operator- and kind-agnostic way of tracking this via `operatorStates`, but we can also customize our `status` subresource for our operator's behavior, since we're the kind author (`operatorStates` allows non-kind-authors who work with your kinds (and have permission to do so) to log their status information). Let's update our kind CUE to include some custom `status` information. All we really care about right now is knowing _when_ we last processed, so we'll add a field to track that.
 ```shell
 curl -o kinds/issue.cue https://raw.githubusercontent.com/grafana/grafana-app-sdk/main/docs/tutorials/issue-tracker/cue/issue-v2.cue
 ```
@@ -250,7 +250,7 @@ func NewIssueWatcher(clientGenerator resource.ClientGenerator) (*IssueWatcher, e
 	}, nil
 }
 ```
-What is `resource.TypedStore`? It's a type which will let us interact with our `issuev1.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API server. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
+What is `resource.TypedStore`? It's a type which will let us interact with our `issuev1.Issue` objects directly as if they were stored in a key/value storage system. It is an abstraction over the `resource.Client` which interacts directly with the API. The capability it has here that we're interested in is the `UpdateSubresource` function, which will, as the name suggests, allow us to update a subresource.
 
 > [!IMPORTANT]
 > Note that updating the resource inside a watcher or reconciler event will trigger _another_ event based on the update. Updating a subresource (such as `status`) will not update the resource's `Generation` value, so if you use the opinionated logic (which `simple.Operator` wraps your watchers and reconcilers in) these events won't propagate to your watchers/reconcilers. If you don't use the opinionated logic, you'll need to be aware of and handle these subresource updates properly in your business logic.

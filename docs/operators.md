@@ -1,6 +1,6 @@
 # Operators and Event-Based Design
 
-The SDK embraces the event-driven design of kubernetes operators, without explicit reliance on kubernetes as machinery. 
+The SDK embraces the event-driven design of kubernetes operators. 
 Simply put, an operator is an application or process that watches for changes to some resource or set of resources. 
 When changes occur, it may take some action based on those changes.
 
@@ -15,20 +15,20 @@ Within the `operator` package, an operator consists, broadly, of collections of 
 but a user can easily extend this by having a new controller which implements the `operator.Controller` interface.
 
 The controller offered by the SDK is the `operator.InformerController`, which is a controller that is composed of three sets of objects:
-* **Informers**, which are given a particular CRD and will notify the controller on changes - when resources change, Watchers and Reconcilers will be triggered, performing the according actions;
-* **Watchers**, which subscribe to changes for a particular CRD kind and will be notified about any changes from a relevant Informer. Multiple Watchers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.;
-* **Reconcilers**, which subscribe to changes in the state of a particular CRD kind and will be notified about any changes from a relevant Informer, its objective is to ensure that the current state of resources matches the desired state. Multiple Reconcilers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.
+* **Informers**, which are given a particular kind and will notify the controller on changes - when resources change, Watchers and Reconcilers will be triggered, performing the according actions;
+* **Watchers**, which subscribe to changes for a particular kind and will be notified about any changes from a relevant Informer. Multiple Watchers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.;
+* **Reconcilers**, which subscribe to changes in the state of a particular kind and will be notified about any changes from a relevant Informer, its objective is to ensure that the current state of resources matches the desired state. Multiple Reconcilers can watch the same resource kind, and when a change occurs, they will be called in the order they were added to the controller.
 
 A Watcher has three hooks for reacting to changes: `Add`, `Update`, and `Delete`. 
 When the relevant change occurs for the resource they watch, the appropriate hook is called. 
-The SDK also offers an _Opinionated_ watcher, designed for kubernetes-like storage layers, called `operator.OpinionatedWatcher`. 
+The SDK also offers an _Opinionated_ watcher, called `operator.OpinionatedWatcher` (used by default in `simple.App`). 
 This watcher adds some internal finalizer logic to make sure events cannot be missed during operator downtime, 
 and adds a fourth hook: `Sync`, which is called when a resource _may_ have been changed during operator downtime, 
-but there isn't a way to be sure (with a vanilla Watcher in a kubernetes-like environment, these events would be called as `Add`).
+but there isn't a way to be sure (with a vanilla Watcher, these events would be called as `Add`).
 
 A Reconciler has its reconciling logic described under the `Reconcile` function.
 The `Reconcile` flow allows for explicit failure (returning an error), which uses the normal retry policy of the `operator.InformerController`, or supplying a `RetryAfter` time in response explicitly telling the `operator.InformerController` to try this exact same Reconcile action again after the request interval has passed.
-As for the reconciler, the SDK also offers an _Opinionated_ reconciler, designed for kubernetes-like storage layers, called `operator.OpinionatedReconciler`, and adds some internal finalizer logic to make sure events cannot be missed during operator downtime.
+As for the reconciler, the SDK also offers an _Opinionated_ reconciler, called `operator.OpinionatedReconciler`, and adds some internal finalizer logic to make sure events cannot be missed during operator downtime.
 
 Please note that it's enough to specify a Watcher or a Reconciler for a resource. The choice between the two depends on operator needs. 
 

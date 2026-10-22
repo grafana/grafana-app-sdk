@@ -1,9 +1,9 @@
 # Writing an App
 
-Within the context of the `grafana-app-sdk`, an **App** is a collection of behaviors which can be run by a runner, typically as a kubernetes operator. 
+Within the context of the `grafana-app-sdk`, an **App** is a collection of behaviors which can be run by a runner. 
 An **App** and the way which it is run are decoupled, such that an **App** can be run in any supported runner format. 
-Currently, the only out-of-the-box support in the `grafana-app-sdk` is for running an **App** as a standalone kubernetes operator, 
-but additional runners are expected to be added in the future.
+The `grafana-app-sdk` currently provides a standalone operator runner (`operator.Runner`), 
+and an experimental runner for Grafana app plugin backends (`plugin.Run`).
 
 ## Quickstart
 
@@ -58,8 +58,8 @@ All of these behaviors (except `Runner()` and `ManagedKinds()`) are actions take
 For example, when a new resource is created for a kind which the app manages, `Mutate` and `Validate` will both be called if supported. 
 `Convert` may be called if the stored version is different from the version used in the create request.
 
-`CallResourceCustomRoute` is currently unsupported in the operator runner (as it is not a supported action for a standalone kubernetes operator), 
-but is to be used on custom subroutes for resources (unsupported by kubernetes CRDs). This will be further elaborated on when new runners are released.
+`CallResourceCustomRoute` handles the [custom routes](./application-design/README.md#applications-with-custom-apis) declared in your manifest. 
+The platform routes those requests to your app through the plugin runner; the standalone operator runner does not serve them.
 
 `ManagedKinds()` is used by the runner to get the go types for kinds managed by the app (as the manifest is data and does not contain the go types used).
 
@@ -119,13 +119,12 @@ If you use `grafana-app-sdk project component add operator`, this is automatical
 
 ## App Runner
 
-Finally, we need to run our app. As mentioned previously, the only currently supported runner in the `grafana-app-sdk` 
-is a standalone kubernetes operator. However, because the `app.App` and `app.Provider` interfaces are what are used to run an app, 
-app runners can be build outside of the `grafana-app-sdk` which will run any valid app. 
+Finally, we need to run our app. Because the `app.App` and `app.Provider` interfaces are what are used to run an app, 
+any runner can run any valid app. 
 
-In this case, though, to run as a standalone kubernetes operator, we use the `operator.Runner` type 
-(instantiated with `operator.NewRunner`). This runner takes configuration necessary for running as a standalone operator
-(kubeconfig, webhook configuration, etc.), and then runs any apps given to its `Run` method via their `AppProvider`.
+To run as a standalone operator, we use the `operator.Runner` type (instantiated with `operator.NewRunner`). 
+This runner takes the configuration necessary for running as a standalone operator (kubeconfig, webhook configuration, etc.), 
+and then runs any apps given to its `Run` method via their `AppProvider`.
 
 ## An Example
 
@@ -196,10 +195,7 @@ func NewApp(cfg app.Config) (app.App, error) {
 	})
 }
 ```
-You can connect this to a kubernetes API server by changing `"local.kubeconfig"` (or populating that file), 
-and making sure the `MyKind` CRD exists by applying the generated `definitions/mykind.testapp.ext.grafana.app.json` file.
+Point `"local.kubeconfig"` at your Grafana instance (the [local development environment](local-development.md) sets this up for you) to run it.
 
-You can expand on this to add Validation or Mutation (or conversion), but keep in mind you'll need to add a WebhookConfig 
-to the `operator.RunnerConfig`, and set up the webhook configurations in your kubernetes API server. 
-Unless you're already familiar with how to set up webhooks, the easier way to do this is to 
-[follow the tutorial](tutorials/issue-tracker/README.md) which [sets up validation and mutation in part 8](tutorials/issue-tracker/08-adding-admission-control.md).
+You can expand on this to add [validation or mutation](admission-control.md) (or conversion). 
+The [tutorial](tutorials/issue-tracker/README.md) [sets up validation and mutation in part 8](tutorials/issue-tracker/08-adding-admission-control.md).

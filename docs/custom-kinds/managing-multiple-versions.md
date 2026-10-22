@@ -60,8 +60,8 @@ v2: {
 }
 ```
 
-However, now that you have two versions, you'll need to be able to support both of them, since any user can request either version from the API server.
-By default, the API server will convert between these versions by simply taking the JSON schema from one and pushing it into the other (depending on what is stored),
+However, now that you have two versions, you'll need to be able to support both of them, since any user can request either version from the API.
+By default, the platform will convert between these versions by simply taking the JSON from one and pushing it into the other (depending on what is stored),
 but often that is not a good enough conversion, and you'll need to define how to convert between versions yourself.
 
 To do this, you'll need to add **Conversion** capability to your app. This must be done both in your app's manifest (where you'll indicate that conversion is supported for the kind),
