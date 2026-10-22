@@ -13,9 +13,9 @@ A Kind is composed of several components:
 
 You may have multiple versions of a kind, and they should share the same name and other metadata attributes, and each version should be convertable to each other version.
 
-In a kubernetes-compatible API server, a kind is identified by the top-level attributes `kind` and `apiVersion` (where the `apiVersion` consists of the `group` and `version`--the group is used to identify the kind, and the version the specific schema). A kind is sometimes referenced as the Group and Kind combination (called GroupKind), or as the totality of Group, Kind, and Version (called GroupVersionKind, or GVK), which is the way to uniquely identify the schema of a resource.
+In the platform API, a kind is identified by the top-level attributes `kind` and `apiVersion` (where the `apiVersion` consists of the `group` and `version`--the group is used to identify the kind, and the version the specific schema). A kind is sometimes referenced as the Group and Kind combination (called GroupKind), or as the totality of Group, Kind, and Version (called GroupVersionKind, or GVK), which is the way to uniquely identify the schema of a resource.
 
-Kinds are the core of apps, as they are the data structure for all app data. Apps interact with an API server to read, write, update, delete, list and watch kinds. For more on this, see [Operators and Event-Based Design](../operators.md).
+Kinds are the core of apps, as they are the data structure for all app data. Apps interact with the platform API to read, write, update, delete, list and watch kinds. For more on this, see [Operators and Event-Based Design](../operators.md).
 
 Kinds belong to groups, which generally correlate to apps. In kubernetes, your kind's identifier when quering the API is `<group>/<version>/<plural>`, with `group` being the kind's full group (excepting very specific circumstances, this is your app name + `.ext.grafana.app`), `version` being the version you wish to use, and `plural` being the plural name of the kind (unless changed, this defaults to `LOWER(<kind>) + 's')`).
 
@@ -28,9 +28,7 @@ Kinds belong to groups, which generally correlate to apps. In kubernetes, your k
 
 ## Writing Kinds
 
-In a typical app, kinds are created in the API server as a Custom Resource Definition, and in-code as instances of `resource.Kind` (containing implementations of `resource.Codec` and `resource.Object`). An app author can write out a kind in CUE and use the `grafana-app-sdk` CLI to turn that CUE into a Custom Resource Definition JSON (or YAML) file for applying to an API server, go code to use in their operator, and TypeScript code to use in their front-end. The document [Writing Kinds](./writing-kinds.md) discusses how to write kinds in CUE to use with the `grafana-app-sdk` CLI.
-
-Alternatively, an author can write a Custom Resource Definition (CRD) themselves, and write the go and TypeScript types needed to work with the SDK and API server on their own, implementing the relevant interfaces, but this method incurs much more toil and does not guarantee that all three representations of the kind are kept synchronized.
+Kinds are written in CUE, and the `grafana-app-sdk` CLI turns that CUE into your app manifest, go code to use in your operator, and TypeScript code to use in your front-end, keeping all of them in sync. The document [Writing Kinds](./writing-kinds.md) discusses how to write kinds in CUE to use with the `grafana-app-sdk` CLI.
 
 ## Kinds in-code
 

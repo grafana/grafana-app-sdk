@@ -490,8 +490,6 @@ Understanding the event flow is critical for debugging and optimization.
 - Line 5: `JSONCodec.Write()` in metrics/logging - map allocations
 - Line 8: Context creation per event - allocation overhead
 
-**See detailed architecture**: `/docs/architecture/reconciliation.md` (contains complete call graphs with file:line references)
-
 ### Configuration Patterns
 
 #### Kubeconfig Loading
@@ -924,8 +922,6 @@ The codebase is actively being optimized for production scale (10k-50k resources
 - Admission control: `/docs/admission-control.md`
 - CUE kinds: `/docs/custom-kinds/writing-kinds.md`
 - Code generation: `/docs/code-generation.md`
-- Kubernetes primer: `/docs/kubernetes.md`
-- Architecture diagrams: `/docs/architecture/reconciliation.md`
 
 **Examples**:
 - Simple operator: `/examples/operator/simple/`
