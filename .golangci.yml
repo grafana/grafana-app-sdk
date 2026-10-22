@@ -40,6 +40,8 @@ linters:
     modernize:
       disable:
         - omitzero
+        # Flattening embedded TypeMeta/ObjectMeta fields hurts readability of k8s-style literals.
+        - embedlit
     mnd:
       checks:
         - argument
@@ -92,6 +94,9 @@ linters:
         - name: nested-structs
           disabled: true
         - name: use-errors-new
+          disabled: true
+        # Switching MarshalJSON/MarshalYAML to value receivers changes how non-pointer values are encoded.
+        - name: marshal-receiver
           disabled: true
   exclusions:
     generated: lax

@@ -39,9 +39,10 @@ func main() {
 	}
 
 	// Start both the managed app and the process-wide v3 services.
-	if err := app.Manage("sdk-example-app", plugin.NewManagedApp, app.ManageOpts{
+	err := app.Manage("sdk-example-app", plugin.NewManagedApp, app.ManageOpts{
 		ExtraPlugins: opts.PluginSet(), // attach the extra plugins
-	}); err != nil {
+	})
+	if err != nil {
 		log.DefaultLogger.Error(err.Error())
 		os.Exit(1)
 	}

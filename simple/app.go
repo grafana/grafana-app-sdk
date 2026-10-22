@@ -847,9 +847,8 @@ func (a *App) CallCustomRoute(ctx context.Context, writer app.CustomRouteRespons
 		if req.ResourceIdentifier.Namespace == "" {
 			scope = resource.ClusterScope
 		}
-		if handler, ok := a.customRoutes[a.customRouteHandlerKey(schema.GroupVersionKind{
-			Version: req.ResourceIdentifier.Version,
-		}, req.Method, req.Path, scope)]; ok {
+		key := a.customRouteHandlerKey(schema.GroupVersionKind{Version: req.ResourceIdentifier.Version}, req.Method, req.Path, scope)
+		if handler, ok := a.customRoutes[key]; ok {
 			inflightLabels := a.customRouteInflightLabels(req)
 			a.customRouteInflight.With(inflightLabels).Inc()
 			start := time.Now()
