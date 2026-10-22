@@ -184,9 +184,8 @@ func (o *finalizerUpdater) doRemoveFinalizer(ctx context.Context, object resourc
 		},
 	}
 
-	if err := o.client.PatchInto(
-		ctx, object.GetStaticMetadata().Identifier(), req, resource.PatchOptions{}, object,
-	); err != nil {
+	err := o.client.PatchInto(ctx, object.GetStaticMetadata().Identifier(), req, resource.PatchOptions{}, object)
+	if err != nil {
 		return NewFinalizerOperationError(err, req)
 	}
 

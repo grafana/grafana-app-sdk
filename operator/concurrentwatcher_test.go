@@ -418,7 +418,7 @@ func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
 		defer cancel()
 		go ci.Run(ctx)
 
-		assert.Equal(t, float64(0), ci.sumQueueDepth())
+		assert.Equal(t, float64(0), ci.QueueDepth())
 
 		ex := &resource.TypedSpecObject[string]{}
 		schema := resource.NewSimpleSchema("group", "version", ex, &resource.TypedList[*resource.TypedSpecObject[string]]{})
@@ -432,13 +432,13 @@ func TestConcurrentInformer_PrometheusCollectors(t *testing.T) {
 		ci.watchers[0].Add(ctx, obj2)
 
 		assert.Eventually(t, func() bool {
-			return ci.sumQueueDepth() > 0
+			return ci.QueueDepth() > 0
 		}, time.Second, 10*time.Millisecond)
 
 		close(blockCh)
 
 		assert.Eventually(t, func() bool {
-			return ci.sumQueueDepth() == 0
+			return ci.QueueDepth() == 0
 		}, time.Second, 10*time.Millisecond)
 	})
 
