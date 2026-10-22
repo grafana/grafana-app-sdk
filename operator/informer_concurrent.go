@@ -71,7 +71,7 @@ func NewConcurrentInformer(inf Informer, opts ConcurrentInformerOptions) (
 		Name:        "queue_depth",
 		Help:        "Current number of pending events across all concurrent watcher worker queues.",
 		ConstLabels: prometheus.Labels{"kind": opts.ResourceKind},
-	}, ci.sumQueueDepth)
+	}, ci.QueueDepth)
 
 	return ci, nil
 }
@@ -98,7 +98,7 @@ func NewConcurrentInformerFromOptions(inf Informer, opts InformerOptions) (
 		Name:        "queue_depth",
 		Help:        "Current number of pending events across all concurrent watcher worker queues.",
 		ConstLabels: prometheus.Labels{"kind": opts.ResourceKind},
-	}, ci.sumQueueDepth)
+	}, ci.QueueDepth)
 
 	return ci, nil
 }
@@ -160,7 +160,9 @@ func (ci *ConcurrentInformer) PrometheusCollectors() []prometheus.Collector {
 	return []prometheus.Collector{ci.queueDepth}
 }
 
-func (ci *ConcurrentInformer) sumQueueDepth() float64 {
+// QueueDepth returns the number of events waiting in the worker queues.
+// Retries scheduled by an InformerController are not counted.
+func (ci *ConcurrentInformer) QueueDepth() float64 {
 	ci.mtx.RLock()
 	defer ci.mtx.RUnlock()
 	var total int64
