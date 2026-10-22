@@ -58,8 +58,7 @@ Please see [Writing Kinds](./custom-kinds/writing-kinds.md) for a more detailed 
 ## Project Component Generation
 
 Project component generation is used to add boilerplate code for a "component" of your app. Components understood by the SDK are:
-* `frontend` - a frontend plugin for your app, written in TypeScript. This is deployed in grafana as a standard app plugin, and is coupled with the `backend` component (if it exists) when deployed.
-* `backend` - a backend component to an app plugin, written in go. This is deployed in grafana as a standard app plugin, and is coupled with the `frontend` component when deployed.
+* `frontend` - a frontend plugin for your app, written in TypeScript. This is deployed in grafana as a standard app plugin.
 * `operator` - a standalone operator, written in go (see [Operator-based applications](./application-design/README.md#operator-based-applications) in [Application design patterns](./application-design/README.md)).
 
 Multiple components can be specified in the same command. The full syntax is:
@@ -77,12 +76,9 @@ Without any components to add
 
 The frontend component generates TypeScript code and configuration for a grafana plugin in `plugin`, similar to the output of the npm [grafana/create-plugin](https://www.npmjs.com/package/@grafana/create-plugin) tool (if you would like to use `create-plugin` instead, see the [Get started](https://grafana.com/developers/plugin-tools/) docs, and create an app plugin).
 
-### backend
-
-The backend component generates plugin backend code in `pkg/plugin` for setting up a set of HTTP handlers to proxy Create, Read, Update, Delete, and List requests to the API server, using a `TypedStore`, and pulling kube config information for the API server from the `secureJsonData` of the plugin. It also adds a `main.go` to `plugin/pkg`, which is the entrypoint for the back-end component of the grafana app plugin.
-
 > [!NOTE]
-> `backend` component generation will eventually be deprecated in favor of the frontend component communicating directly with the API server, rather than through a back-end proxy.
+> The `backend` component, which generated a `pkg/plugin` proxy to the API server, was removed in v0.61.
+> The frontend can call the API server directly. See the [v0.61 migration guide](./migrations/v0.61.md).
 
 ### operator
 

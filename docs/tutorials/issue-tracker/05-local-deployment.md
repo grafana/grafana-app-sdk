@@ -6,41 +6,21 @@ and our APIs function, so let's do that.
 
 ## Building Everything
 
-First of all, we need to build our project. Luckily, the Makefile created by our `grafana-app-sdk project init` has us covered. All we need to do is run a `make build`.
-```shell
-$ make build
-Error parsing magefiles: error running "go list -f {{.Dir}}||{{.Name}} github.com/grafana/grafana-plugin-sdk-go/build": exit status 1
-no required module provides package github.com/grafana/grafana-plugin-sdk-go/build; to add it:
-	go get github.com/grafana/grafana-plugin-sdk-go/build
-make: *** [build/plugin-backend] Error 1
-```
+First of all, we need to build our project. Luckily, the Makefile created by our `grafana-app-sdk project init` has us covered.
 
-Hang on, something isn't right. We generated the code and built out the boilerplate, but Go doesn't know about any of the libraries that our boilerplate and generated code need to import. You could run `go get` for all the Go files manually, but our Makefile, once again, has us covered:
+Go doesn't yet know about the libraries that our boilerplate and generated code import. You could run `go get` for them manually, but our Makefile, once again, has us covered:
 ```shell
 make deps
 ```
 This will `go get` all the go modules we use, and then vendor them in the `vendor` directory.
 
-Now we can run our build successfully:
+Now we can run our build:
 ```shell
 make build
 ```
 We get _a lot_ of output for this command:
 ```shell
 $ make build
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.GenerateManifestFile-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Windows-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Darwin-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.LinuxARM-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.LinuxARM64-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.Linux-fm
-Running dependency: github.com/grafana/grafana-plugin-sdk-go/build.Build.DarwinARM64-fm
-exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_darwin_amd64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397066,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_windows_amd64.exe" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397067,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_linux_arm64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397069,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_darwin_arm64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397069,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_linux_arm" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397068,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
-exec: go "build" "-o" "dist/gpx_issuetrackerproject-app_linux_amd64" "-tags" "arrow_json_stdlib" "-ldflags" "-w -s -extldflags \"-static\" -X 'github.com/grafana/grafana-plugin-sdk-go/build.buildInfoJSON={\"time\":1738255397067,\"pluginID\":\"issuetrackerproject-app\",\"version\":\"1.0.0\"}' -X 'main.pluginID=issuetrackerproject-app' -X 'main.version=1.0.0'" "./pkg"
 yarn install v1.22.19
 info No lockfile found.
 [1/5] 🔍  Validating package.json...
@@ -112,15 +92,13 @@ Successfully tagged localhost/issue-tracker-project:latest
 ```
 (some parts of this trimmed for readability)
 
-So what's with all the output? Well, `make build` is doing three separate things, just chained together.
-1. Build the backend plugin binary (using `Magefile`)
-2. Build the frontend plugin (using `yarn`)
-3. Build the operator docker image (using `docker`)
+So what's with all the output? Well, `make build` is doing two separate things, just chained together.
+1. Build the frontend plugin (using `yarn`)
+2. Build the operator docker image (using `docker`)
 
 If you only want to build one of those pieces at a time, there are default make targets for each:
-1. `make build/plugin-backend`
-2. `make build/plugin-frontend`
-3. `make build/operator`
+1. `make build/plugin-frontend`
+2. `make build/operator`
 
 ## Local Deployment
 
@@ -231,30 +209,14 @@ Note that if you do, you'll need to modify the cURL commands used later in this 
 Since our plugin is automatically installed, we can go to [grafana.k3d.localhost:9999/a/issuetrackerproject-app/](http://grafana.k3d.localhost:9999/a/issuetrackerproject-app/) and see the simple landing page that got generated for us, 
 and we can now interact with our exposed API at [grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues](http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues).
 
-Right now, if I do a curl to our plugin list endpoint, we'll get back a response with an empty list:
+Our kinds are available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
+Right now, if we list our issues, we'll get back a response with an empty list:
 ```shell
-curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues
+curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 ```
 > [!NOTE]
 > If you updated the password for your grafana instance, you'll need to change `-u admin:admin` to `-u admin:<your_new_password>`
 
-```shell
-$ curl -u admin:admin http://grafana.k3d.localhost:9999/api/plugins/issuetrackerproject-app/resources/v1/issues | jq .
-{
-  "kind": "IssueList",
-  "apiVersion": "issuetrackerproject.ext.grafana.app/v1alpha1",
-  "metadata": {
-    "resourceVersion": "1552"
-  },
-  "items": []
-}
-```
-
-Our kinds are also available via the grafana API server, located at [http://grafana.k3d.localhost:9999/apis]. This is a kubernetes-compatible API server, and we can interact with it via cURL, or kubectl. 
-Let's also list our issues that way:
-```shell
-curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
-```
 ```shell
 $ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 {
@@ -267,8 +229,7 @@ $ curl -u admin:admin http://grafana.k3d.localhost:9999/apis/issuetrackerproject
   }
 }
 ```
-We can see the output is nearly identical, as the plugin backend is just a proxy to the API server. From this point, we could use the plugin backend or API server API, 
-but seeing as the plugin backend will eventually be phased out of the default path, let's use the API server here, and create an Issue:
+Now let's create an Issue:
 ```shell
 curl -u admin:admin -X POST -H "content-type:application/json" -d '{"kind":"Issue","apiVersion":"issuetrackerproject.ext.grafana.app/v1alpha1","metadata":{"name":"test-issue","namespace":"default"},"spec":{"title":"Test","description":"A test issue","status":"open"}}' http://grafana.k3d.localhost:9999/apis/issuetrackerproject.ext.grafana.app/v1alpha1/namespaces/default/issues
 ```

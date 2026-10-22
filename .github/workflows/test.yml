@@ -149,13 +149,11 @@ jobs:
           rm -rf kinds/config.cue
           printf "\nreplace github.com/grafana/grafana-app-sdk => $(readlink -f ../grafana-app-sdk)\n" >> go.mod
           printf "\nreplace github.com/grafana/grafana-app-sdk/logging => $(readlink -f ../grafana-app-sdk/logging)\n" >> go.mod
-          printf "\nreplace github.com/grafana/grafana-app-sdk/plugin => $(readlink -f ../grafana-app-sdk/plugin)\n" >> go.mod
           go mod edit -require=github.com/grafana/grafana-app-sdk@v0.0.0
           cp ../grafana-app-sdk/codegen/cuekind/testing/integration.cue kinds/integration.cue
           cp ../grafana-app-sdk/codegen/cuekind/testing/integration.openapi.json kinds/integration.openapi.json
           cp ../grafana-app-sdk/codegen/cuekind/testing/config.cue kinds/config.cue
           grafana-app-sdk generate --config configIntegrationGen3
-          grafana-app-sdk project component add frontend backend operator --config configIntegrationGen3
+          grafana-app-sdk project component add frontend operator --config configIntegrationGen3
           go mod tidy
           go build cmd/operator/*.go
-          go build plugin/pkg/*.go

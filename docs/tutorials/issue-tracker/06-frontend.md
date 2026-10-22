@@ -112,7 +112,7 @@ We'll use this information in the display output to show the current issue statu
 
 ## Redeploy
 
-Now we want to redeploy our plugin front-end to see the changes. Since we don't need to rebuild the operator or the plugin's backend, we can just do
+Now we want to redeploy our plugin front-end to see the changes. Since we don't need to rebuild the operator, we can just do
 ```bash
 make build/plugin-frontend
 ```

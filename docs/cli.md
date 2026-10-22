@@ -94,10 +94,12 @@ grafana-app-sdk project component add <component>
 ``` 
 allows you to add boilerplate code for a project component. Allowed components are:
 * `frontend`
-* `backend`
 * `operator`
 
-The boilerplate code will use the kinds defined in `-s|--source` (defaults to `./schemas`) for defining watchers, API routes, and other bits of code that deal woth the kinds.
+The boilerplate code will use the kinds defined in `-s|--source` (defaults to `./schemas`) for defining watchers and other bits of code that deal with the kinds.
+
+> [!NOTE]
+> The `backend` component was removed in v0.61. See the [v0.61 migration guide](./migrations/v0.61.md).
 
 Boilerplate code generation is typically expected to be run once, and then modified (the code may contain `TODO` or `FIXME` comments to prompt you as to where you need to modify it).
 
