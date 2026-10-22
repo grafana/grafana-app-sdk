@@ -325,9 +325,10 @@ func (o *WrappedObject[T]) GetSecureValues() InlineSecureValues {
 	return nil
 }
 func (o *WrappedObject[T]) SetSecureValues(values InlineSecureValues) error {
-	if secure, ok := any(o.Object).(interface {
+	type secureValuesSetter interface {
 		SetSecureValues(InlineSecureValues) error
-	}); ok {
+	}
+	if secure, ok := any(o.Object).(secureValuesSetter); ok {
 		return secure.SetSecureValues(values)
 	}
 	return errors.New("wrapped object does not support secure values")

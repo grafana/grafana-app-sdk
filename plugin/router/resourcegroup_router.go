@@ -171,10 +171,11 @@ func (router *ResourceGroupRouter) deleteResource(cr resource.Schema) JSONHandle
 			return nil, plugin.NewError(http.StatusBadRequest, "must provide resource name")
 		}
 
-		if err := router.store.Delete(ctx, cr.Kind(), resource.Identifier{
+		err := router.store.Delete(ctx, cr.Kind(), resource.Identifier{
 			Namespace: router.namespace,
 			Name:      name,
-		}); err != nil {
+		})
+		if err != nil {
 			return nil, plugin.WrapError(http.StatusInternalServerError, err)
 		}
 
