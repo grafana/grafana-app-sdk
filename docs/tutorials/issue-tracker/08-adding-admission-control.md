@@ -52,7 +52,7 @@ type KindValidator interface {
 ```
 Basically, it consumes an admission request and produces a validation error if validation fails, or returns nil on success. 
 The `simple` package has a ready-to-go implementation for this: `simple.Validator`, which calls `ValidateFunc` when `Validate` is called. 
-That's what we're using here, but you can always define your own type to implement `KindValidator`, too. 
+We use the `simple.Validator` struct here to validate, but you can use any type that implements `simple.KindValidator`.
 
 `Validate` receives a context, and a request of type `*app.AdmissionRequest`. The request contains some meta information that we can ignore for now (including action type, user information, and GroupVersionKind), and the `Object` from the request (and an `OldObject` which may be nil if there was not a previous state of the object, depending on the action). We can use this `Object` value to check if the updated or created object has an empty title, and return an error. An important thing to note is that  text of the `error` returned by `Validate` will be returned to the end-user, so make sure it's as descriptive as necessary for the user to fix their request. If no error is returned by `Validate`, the validation passes.
 

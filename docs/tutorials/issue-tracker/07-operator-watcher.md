@@ -63,7 +63,7 @@ Each method does a check to see if the provided `resource.Object` is of type `*i
 
 So what else can we do in our watcher?
 
-Well, right now, we could integrate with some third-party service, maybe you want to sync the issues created in you plugin with GitHub, or some internal issue-tracking tool. You may have some other task which should be performed when an issue is added, or updated, or deleted, which you should do in the operator. As more of grafana begins to use a kubernetes-like storage system, you could even create a resource of another kind in response to an add event, which some other operator would pick up and do something with. Why not do these things in the plugin backend?
+Well, right now, we could integrate with some third-party service, maybe you want to sync the issues created in your plugin with GitHub, or some internal issue-tracking tool. You may have some other task which should be performed when an issue is added, or updated, or deleted, which you should do in the operator. As more of grafana begins to use a kubernetes-like storage system, you could even create a resource of another kind in response to an add event, which some other operator would pick up and do something with. Why not do these things in the plugin backend?
 
 Well, as we saw before, your plugin API isn't the only way to interact with Issues. You can create, update, or delete them via `kubectl`. But even if you restrict `kubectl` access, perhaps another plugin operator may want to create an Issue in response to one of _their_ events. If they did that via directly interfacing with the storage layer, you wouldn't notice that it happened. The operator ensures that no matter _how_ the mutation in the storage layer occurred (API, kubectl, other access), you are informed and can take action.
 
@@ -71,6 +71,8 @@ Well, as we saw before, your plugin API isn't the only way to interact with Issu
 
 Let's add some simple behavior to our issue watcher to export metrics on issue counts by status. To do this, we'll want to export an additional metric from our operator, which we'll have to track in our watcher. Let's update our watcher code to add a `prometheus.GaugeVec` that we can use to track issue counts by status as a gauge (a gauge represents numbers which can increase or decrease, as opposed to a counter, which will only increase):
 ```go
+// pkg/watchers/watcher_issue.go
+
 import (
 	// ...Existing imports omitted for brevity
 	"github.com/prometheus/client_golang/prometheus"
